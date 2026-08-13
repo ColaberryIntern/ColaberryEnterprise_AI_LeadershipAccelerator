@@ -18,6 +18,7 @@ import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
+import { redactForLogs } from '../utils/piiRedaction';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
@@ -29,7 +30,17 @@ import {
   getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
   detectAbsentParticipants, computeAllReadinessScores,
 } from './acceleratorService';
+import { finalizeSessionAttendance } from './liveSessionAttendanceService';
+import { generateSessionRecap } from './sessionRecapService';
+import { ensureSessionMeetLink } from './meetingService';
+import { postLiveClassQrToRoom } from './liveClassQrService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
+import LiveSession from '../models/LiveSession';
+import RoomBooking from '../models/RoomBooking';
+import CommunityRoom from '../models/CommunityRoom';
+import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom } from './sessionRecordingService';
+import { attachClassNotesForSession } from './sessionClassNotesService';
+import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 
 /**
  * Instrumentation wrapper for cron jobs.
@@ -1761,10 +1772,89 @@ async function checkPhaseGraduation(): Promise<void> {
 }
 
 export function startScheduler(): void {
+  // Reese Phase 1 — presence heartbeat. Touches ONLY Reese's own CommunityMember
+  // row's last_active_at, on the same ~60s cadence a real student's browser uses
+  // (pingPresence()), so the People panel's existing derivePresence() logic
+  // (90s online threshold) reads Reese as online without any new real-time
+  // infrastructure. Untracked in AiAgent run stats (not the same identity as
+  // Reese's own registry row — a heartbeat touch is not a "Reese ran" event).
+  cron.schedule('*/1 * * * *', () => {
+    instrumentCronJob('ReesePresenceHeartbeat', async () => {
+      const { runReesePresenceHeartbeat } = await import('./reese/reesePresenceHeartbeat');
+      await runReesePresenceHeartbeat();
+    }).catch((err) => {
+      console.error('[Scheduler] Reese presence heartbeat error:', err);
+    });
+  });
+
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {
       console.error('[Scheduler] Unexpected error:', err);
+    });
+  });
+
+  // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
+  // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see
+  // reliabilityAlertingService.ts). Cadence matches the check's own window.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('ReliabilityAlerting', async () => {
+      const { runReliabilityAlertCheck } = await import('./reliabilityAlertingService');
+      await runReliabilityAlertCheck();
+    }).catch((err) => {
+      console.error('[Scheduler] Reliability alerting error:', err);
+    });
+  });
+
+  // ProofDesk Outcomes & Learning (Milestone 5, spec 20.4): once a day, resolve any
+  // outcome_measurements row whose 7-day observation window has elapsed (scheduled by
+  // ticketService.ts's done-hook). Daily cadence is enough for a 7-day window — no
+  // need for the 5/15-min cadences used above.
+  cron.schedule('0 4 * * *', () => {
+    instrumentCronJob('ProofDeskOutcomeMeasurements', async () => {
+      const { processDueOutcomeMeasurements } = await import('./outcomes/outcomeMeasurementService');
+      const result = await processDueOutcomeMeasurements();
+      if (result.processed > 0) {
+        console.log('[Scheduler] ProofDesk outcome measurements processed:', result);
+      }
+    }).catch((err) => {
+      console.error('[Scheduler] ProofDesk outcome measurements error:', err);
+    });
+  });
+
+  // Reese Phase 2 (Autonomous Outreach) — daily scan of the approved pilot
+  // cohort for two real risk signals; on a real, non-duplicate,
+  // non-cadence-capped hit, sends one real autonomous DM + opens a ProofDesk
+  // ticket (R3, shadow-mode governance). Registered in agentRegistrySeed.ts
+  // ('ReeseAutonomousOutreachSweep') so instrumentCronJob()'s enabled/paused
+  // gate actually applies — pause from Admin > Agents, no redeploy needed.
+  cron.schedule('0 15 * * *', () => {
+    instrumentCronJob('ReeseAutonomousOutreachSweep', async () => {
+      const { runReeseAutonomousOutreachSweep } = await import('./reese/reeseAutonomousOutreachService');
+      const result = await runReeseAutonomousOutreachSweep();
+      console.log('[Scheduler] Reese autonomous outreach sweep:', {
+        evaluated: result.evaluated, sent: result.sent, skipped: result.skipped,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese autonomous outreach sweep error:', err);
+    });
+  });
+
+  // Reese Phase 2 (Autonomous Outreach) — daily follow-up/closure sweep for
+  // already-open autonomous-outreach threads. Runs an hour after the sweep
+  // above so a same-day new send's next_follow_up_due_at (+7 days) never
+  // collides with this run. Registered as 'ReeseOutreachFollowUps' for the
+  // same pause/kill-switch reason as the sweep above.
+  cron.schedule('0 16 * * *', () => {
+    instrumentCronJob('ReeseOutreachFollowUps', async () => {
+      const { processDueReeseOutreachFollowUps } = await import('./reese/reeseOutreachFollowUpService');
+      const result = await processDueReeseOutreachFollowUps();
+      console.log('[Scheduler] Reese outreach follow-ups:', {
+        processed: result.processed, signalCleared: result.signalCleared, goalMet: result.goalMet,
+        followUpSent: result.followUpSent, escalated: result.escalated, dailyCapDeferred: result.dailyCapDeferred,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese outreach follow-ups error:', err);
     });
   });
 
@@ -1795,6 +1885,68 @@ export function startScheduler(): void {
       }).catch((err) => {
         console.error('[Scheduler] Blog refresh error:', err);
       });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Feed Control — publish scheduled timeline cards whose release_date has arrived
+  // (every 15 min). Idempotent; a no-op unless a card is scheduled with a date.
+  cron.schedule(
+    '*/15 * * * *',
+    () => {
+      instrumentCronJob('FeedReleaseTick', async () => {
+        const { publishDueCards } = await import('./timeline/feedControlService');
+        await publishDueCards();
+      }).catch((err) => {
+        console.error('[Scheduler] Feed release tick error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Daily content lifecycle (03:15 America/Chicago). AI News Flash: fetch free
+  // AI-lab RSS feeds, dedup-upsert the library, and (when AI_NEWS_INGEST_ENABLED
+  // =true) materialize up to AI_NEWS_MAX_PER_RUN fresh news cards (prod=3, code
+  // floor 1 → ~3 LLM calls/day). Then prune: archive any generated (*_pipeline)
+  // card older than 30 days out of the feed, so each generator holds a rolling
+  // ~30-day window and cost stays bounded. Idempotent + cost-gated; see
+  // aiNewsIngestionService + generatedContentRetention.
+  cron.schedule(
+    '15 3 * * *',
+    () => {
+      instrumentCronJob('AiNewsRefresh', async () => {
+        const { refreshAiNews } = await import('./intel/aiNewsIngestionService');
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await refreshAiNews(); // maxCards defaults to AI_NEWS_MAX_PER_RUN (prod=3)
+        await pruneGeneratedContent(); // discard generated cards older than 30 days
+      }).catch((err) => {
+        console.error('[Scheduler] AI News refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Intelligence pipelines — the 9 generators beyond AI News Flash (arXiv research,
+  // tools, YouTube, quotes, eng-blogs, GitHub builds, MCP servers, Claude Code
+  // techniques, market intel). Daily 03:45 CT, staggered 30 min after AiNewsRefresh
+  // to spread LLM load. Each source self-registers via the sources barrel, is
+  // cost-gated by its own <SLUG>_INGEST_ENABLED flag (default OFF → ships dark),
+  // and is tracked per-source via instrumentCronJob(`Intel_<slug>`). Prune runs once
+  // after the loop (shared 30-day generated-content retention).
+  cron.schedule(
+    '45 3 * * *',
+    () => {
+      (async () => {
+        await import('./intel/sources'); // register all adapters (idempotent)
+        const { listIntelSources, runIntelPipeline } = await import('./intel/intelPipeline');
+        for (const src of listIntelSources()) {
+          await instrumentCronJob(`Intel_${src.slug}`, async () => {
+            await runIntelPipeline(src.slug);
+          }).catch((err) => console.error(`[Scheduler] Intel ${src.slug} error:`, err));
+        }
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await pruneGeneratedContent();
+      })().catch((err) => console.error('[Scheduler] Intel pipelines error:', err));
     },
     { timezone: 'America/Chicago' }
   );
@@ -1838,12 +1990,64 @@ export function startScheduler(): void {
     cron.schedule('*/20 * * * *', () => {
       instrumentCronJob('AppPaymentReconcile', async () => {
         const { reconcileAppPayments } = await import('./appPaymentReconcileService');
-        await reconcileAppPayments({});
+        const summary = await reconcileAppPayments({});
+
+        // Healing via the checkout-window path means the WEBHOOK missed those payments.
+        // The reconcile succeeding is exactly why that stays invisible, so say it out
+        // loud rather than letting a broken primary path hide behind its safety net.
+        if (summary.linkedByCheckoutWindow > 0) {
+          const { emitAlert } = await import('./alertService');
+          await emitAlert({
+            type: 'warning',
+            severity: 6,
+            sourceType: 'system',
+            impactArea: 'revenue',
+            urgency: 'high',
+            title: 'PaySimple payments are being healed by reconcile, not the webhook',
+            description:
+              `The reconcile job linked ${summary.linkedByCheckoutWindow} payment(s) ` +
+              `($${(summary.linkedTotalCents / 100).toFixed(2)}) that the PaySimple webhook should have ` +
+              `activated on its own. Students were briefly left on the wrong access level. ` +
+              `Check webhook delivery and signature verification.`,
+            metadata: {
+              linked: summary.linked,
+              linkedByCheckoutWindow: summary.linkedByCheckoutWindow,
+              linkedTotalCents: summary.linkedTotalCents,
+            },
+          }).catch(() => {}); // alerting must never fail the reconcile
+        }
       }).catch((err) => {
         console.error('[Scheduler] App payment reconcile error:', err);
       });
     });
     console.log('[Scheduler] AppPaymentReconcile scheduled (*/20 * * * *)');
+
+    // Watch the webhook itself every 15 minutes. The reconcile above only notices a
+    // problem once a payment is already late; this catches a total rejection run
+    // (the 2026-08-12 shape) within minutes of it starting.
+    cron.schedule('*/15 * * * *', () => {
+      instrumentCronJob('PaySimpleWebhookHealth', async () => {
+        const { webhookHealthSnapshot, evaluateWebhookHealth } = await import('./paysimpleWebhookHealth');
+        const snapshot = webhookHealthSnapshot();
+        const verdict = evaluateWebhookHealth(snapshot);
+        if (!verdict.alert) return;
+
+        const { emitAlert } = await import('./alertService');
+        await emitAlert({
+          type: verdict.type,
+          severity: verdict.severity,
+          sourceType: 'system',
+          impactArea: 'revenue',
+          urgency: verdict.type === 'critical' ? 'immediate' : 'high',
+          title: verdict.title,
+          description: verdict.description,
+          metadata: { ...snapshot },
+        });
+      }).catch((err) => {
+        console.error('[Scheduler] PaySimple webhook health check error:', err);
+      });
+    });
+    console.log('[Scheduler] PaySimpleWebhookHealth scheduled (*/15 * * * *)');
   }
 
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
@@ -2111,6 +2315,25 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Campaign graduation: every 6 hours');
 
+  // -- Inbox Intel Case Auto-Sync: hourly, on the hour --
+  // Turns Ali's real inbox (email + Basecamp, filtered through Inbox COS's
+  // classification) into Cases without him having to search a person/topic
+  // first. Read-only against mail/Basecamp/Inbox COS; only creates Case/
+  // CaseItem rows in ASSESSING state, same as manual "Discover Related
+  // Work" — never auto-approves or auto-executes anything.
+  cron.schedule('0 * * * *', () => {
+    instrumentCronJob('InboxCaseAutoSync', async () => {
+      const { runAutoSync } = require('./inboxCase/caseAutoSyncService');
+      const result = await runAutoSync('cron', 'system');
+      console.log(
+        `[Scheduler] Inbox case auto-sync: ${result.newCasesCreated} new case(s), ${result.itemsAdded} item(s), ${result.emailsSkippedUnclassified} unclassified skipped`
+      );
+    }).catch((err: any) => {
+      console.error('[Scheduler] Inbox case auto-sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Inbox case auto-sync: hourly, on the hour');
+
   // -- Inbox Chief of Staff --
   try {
     const { startInboxScheduler } = require('./inbox/inboxScheduler');
@@ -2158,6 +2381,11 @@ export function startScheduler(): void {
       // 24-hour reminders
       const upcoming24h = await getUpcomingSessions(24);
       for (const session of upcoming24h) {
+        // Ensure a teaching Meet link exists before reminding (idempotent; retries
+        // each tick until it succeeds, so a transient Google failure self-heals).
+        await ensureSessionMeetLink(session).catch((err: any) =>
+          console.error(`[Scheduler] Meet link ensure failed for session ${session.id}:`, err.message)
+        );
         const dedupKey = `${session.id}-24h`;
         if (sentReminders.has(dedupKey)) continue; // Already sent this reminder
         const enrollments = await Enrollment.findAll({
@@ -2174,7 +2402,7 @@ export function startScheduler(): void {
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: false,
-          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${e.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
           sentReminders.add(dedupKey);
@@ -2201,7 +2429,7 @@ export function startScheduler(): void {
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: true,
-          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${e.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
           sentReminders.add(dedupKey1h);
@@ -2220,12 +2448,32 @@ export function startScheduler(): void {
       for (const session of toLive) {
         await session.update({ status: 'live' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as live`);
+
+        // Post the check-in QR into the session's Colaberry Commons waiting
+        // room (ensureRoomForSession provisions one per session) so a student
+        // already in the room sees it the moment class goes live. Best-effort
+        // and idempotent (marker) — a missing room or a cron re-run must never
+        // block/duplicate the status flip above.
+        await postLiveClassQrToRoom(session).catch((err: any) =>
+          console.error(`[Scheduler] Live-class QR post failed for session ${session.id}:`, err.message)
+        );
       }
 
       const toComplete = await getSessionsToMarkCompleted();
       for (const session of toComplete) {
         await session.update({ status: 'completed' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as completed`);
+
+        // Generate the AI recap (best-effort) — surfaced to absentees in the Today
+        // "you missed it" replay card. (Wiring it into the recap email is a follow-up.)
+        await generateSessionRecap(session).catch((err: any) =>
+          console.error(`[Scheduler] Recap generation failed for session ${session.id}:`, err.message)
+        );
+
+        // Fill leave_time/duration for anyone who self-joined but never left.
+        await finalizeSessionAttendance(session.id).catch((err: any) =>
+          console.error(`[Scheduler] Attendance finalize failed for session ${session.id}:`, err.message)
+        );
 
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);
@@ -2240,7 +2488,7 @@ export function startScheduler(): void {
             recordingUrl: session.recording_url || null,
             materialsJson: session.materials_json || null,
             consecutiveMisses,
-          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${enrollment.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${redactForLogs(enrollment.email)}:`, err.message));
 
           // Alert admin if 2+ consecutive absences
           if (consecutiveMisses >= 2) {
@@ -2274,6 +2522,113 @@ export function startScheduler(): void {
   console.log('[Scheduler] Accelerator: session reminders every 30 min (24h + 1h before)');
   console.log('[Scheduler] Accelerator: session lifecycle (live/completed) every 5 min');
   console.log('[Scheduler] Accelerator: post-session absence detection + readiness recompute');
+
+  // Session Recordings — poll Drive for a completed session's Meet recording
+  // and ingest it into that session's Room as a downloadable resource.
+  // Proven on the July 2026 pilot cohort (per the staged rollout plan) and
+  // widened to every cohort going forward — no more cohort_id filter.
+  // Bounded retry: only sessions completed in the last 7 days are considered,
+  // then we give up automatically and fall back to the existing manual
+  // PATCH .../sessions/:id { recording_url } path.
+  cron.schedule('12,42 * * * *', () => {
+    instrumentCronJob('SessionRecordingIngest', async () => {
+      const candidates = await LiveSession.findAll({
+        where: {
+          status: 'completed',
+          session_date: { [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) },
+        },
+      });
+      // One at a time — a multi-hundred-MB stream-to-disk download alongside
+      // every other cron in this same 512MB-heap process is not something to
+      // run concurrently.
+      for (const session of candidates) {
+        try {
+          const result = await ingestRecordingForSession(session);
+          if (result.status === 'ingested') {
+            console.log(`[Scheduler] Recording ingested for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for session ${session.id}:`, err.message);
+        }
+
+        // Class Notes — snapshot the standalone teaching deck into the Room.
+        // Independent of the recording above ON PURPOSE: Sessions 1-4 were
+        // taught on Google Meet and have no recoverable video at all, so notes
+        // must not be conditional on a recording existing. Cheap (renders HTML,
+        // no download) and idempotent, so it is safe on every sweep.
+        try {
+          const notes = await attachClassNotesForSession(session);
+          if (notes.status === 'attached') {
+            console.log(`[Scheduler] Class Notes attached for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Class Notes failed for session ${session.id}:`, err.message);
+        }
+      }
+
+      // Same sweep, for general Room bookings (the "+ Book a session" flow) —
+      // Zoom-only, and excludes class-session-derived bookings (owned by the
+      // loop above). "Completed" here means the booking's own scheduled end
+      // has passed, not that a host clicked Complete — that's a manual,
+      // easily-forgotten step this shouldn't depend on. Always-open
+      // persistent video rooms are swept separately below (no "completed"
+      // state applies to them).
+      const bookingCandidates = await RoomBooking.findAll({
+        where: {
+          meeting_provider: 'zoom',
+          related_live_session_id: null,
+          google_event_id: { [Op.ne]: null },
+          end_at: {
+            [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            [Op.lte]: new Date(),
+          },
+          state: { [Op.notIn]: ['cancelled', 'draft', 'pending_approval'] },
+        },
+      });
+      for (const booking of bookingCandidates) {
+        try {
+          const result = await ingestRecordingForBooking(booking);
+          if (result.status === 'ingested') {
+            console.log(`[Scheduler] Recording ingested for booking ${booking.id} "${booking.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for booking ${booking.id}:`, err.message);
+        }
+      }
+
+      // Same sweep, for always-open persistent video Rooms (e.g. a cohort's
+      // main class room — is_video + always_open). No "completed" state to
+      // filter on here (the room never closes), so this just re-scans a
+      // 7-day recordings window per room every tick — bounded work since
+      // there are only ever a handful of these rooms, unlike bookings/sessions.
+      // Found live 2026-08-05: a cohort's actual teaching happens in one of
+      // these, not a scheduled LiveSession, so this sweep exists to cover
+      // real classes, not just drop-in social use.
+      const alwaysOpenRooms = await CommunityRoom.findAll({
+        where: { is_video: true, always_open: true, meeting_link: { [Op.ne]: null } },
+      });
+      const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const to = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      for (const room of alwaysOpenRooms) {
+        const meetingId = extractZoomMeetingId(room.meeting_link);
+        if (!meetingId) continue;
+        try {
+          const instances = await findRecordingInstancesByMeetingId(meetingId, from, to, room.name);
+          for (const instance of instances) {
+            const result = await ingestRecordingForRoom(room, instance.uuid, instance.match);
+            if (result.status === 'ingested') {
+              console.log(`[Scheduler] Recording ingested for room ${room.id} "${room.name}" (instance ${instance.uuid})`);
+            }
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for room ${room.id}:`, err.message);
+        }
+      }
+    }).catch((err: any) => {
+      console.error('[Scheduler] Session recording ingest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Accelerator: session + room-booking + always-open-room recording ingestion every 30 min');
 
   // ── Alumni Lifecycle Processor (daily 6 AM CT / 11 UTC) ──────────────
   const { detectInactiveLeads, detectReengagementComplete } = require('./campaignLifecycleService');
@@ -2365,7 +2720,7 @@ export function startScheduler(): void {
 
           // Skip voice call if no phone — still mark as hot
           if (!lead.phone) {
-            console.log(`[HotLead] Marked ${lead.name} as hot (no phone — email-only lead)`);
+            console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot (no phone — email-only lead)`);
             continue;
           }
 
@@ -2381,7 +2736,7 @@ export function startScheduler(): void {
               LIMIT 1
             `, { replacements: { leadId: lead.lead_id }, type: QueryTypes.SELECT }) as any[];
             if (recentAliEmail) {
-              console.log(`[HotLead] Skipping ${lead.name} — Ali emailed in last 48h (Maya/Ali coordination)`);
+              console.log(`[HotLead] Skipping ${redactForLogs(lead.name)} — Ali emailed in last 48h (Maya/Ali coordination)`);
               continue;
             }
           } catch { /* non-critical — proceed with call if check fails */ }
@@ -2499,12 +2854,12 @@ export function startScheduler(): void {
                 goal: 'Book 30-min strategy call with Business Development team',
               },
             }).catch(() => {});
-            console.log(`[HotLead] 📞 Called ${lead.name} (${lead.phone})`);
+            console.log(`[HotLead] 📞 Called ${redactForLogs(lead.name)} (${redactForLogs(lead.phone)})`);
             callsToday++;
             await settingsSvc.setSetting('hot_lead_calls_today', String(callsToday));
           }
         } catch (err: any) {
-          console.warn(`[HotLead] Failed to call ${lead.name}: ${err.message}`);
+          console.warn(`[HotLead] Failed to call ${redactForLogs(lead.name)}: ${err.message}`);
         }
 
         // 60s between calls — spread calls throughout the cycle
@@ -2682,6 +3037,20 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] System health monitor: every 15 min (weekdays 7AM-6PM CT, Cory voice + email alerts)');
 
+  // ── Build-log -> social drafter (BC #9985689786, weekly, Mon 6AM CT = 11:00 UTC) ──
+  // Scans completed Tier-A build weeks and AI-drafts a #Colaberry post per
+  // project/week. Draft-only — never auto-posts (see buildLogDraftService.ts).
+  cron.schedule('0 11 * * 1', () => {
+    instrumentCronJob('BuildLogDraftGenerator', async () => {
+      const { generateBuildLogDraftsForCompletedWeeks } = require('./buildLogDraftService');
+      const result = await generateBuildLogDraftsForCompletedWeeks();
+      console.log(`[BuildLogDraft] scanned=${result.scanned} drafted=${result.drafted} skipped=${result.skipped} failed=${result.failed}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Build-log draft generator error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Build-log social drafter: weekly Mon 6AM CT (11:00 UTC)');
+
   // ── Cold Outbound startup reactivation ──────────────────────────────
   // Cold Outbound reverts to draft on container restart — fix on startup
   (async () => {
@@ -2831,6 +3200,26 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Architect evaluation agent: weekly Saturday at 06:00 UTC');
+
+  // ── Community Digest (daily, 08:00 UTC) ──────────────────────────────────────
+  // Deduped per (member, date) via CommunityDigestLog — safe to re-run; a
+  // second fire the same day is a no-op for every member already sent.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('CommunityDigest', async () => {
+      const { runDailyDigest } = await import('./communityDigestService');
+      const result = await runDailyDigest();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'community_digest_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Community digest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Community digest: daily at 08:00 UTC');
 }
 
 // ---------------------------------------------------------------------------

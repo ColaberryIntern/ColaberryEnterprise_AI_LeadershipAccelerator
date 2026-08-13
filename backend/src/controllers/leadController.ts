@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { leadSchema, createLead } from '../services/leadService';
 import { ZodError } from 'zod';
+import { redactForLogs } from '../utils/piiRedaction';
 
 export async function submitLead(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -28,7 +29,7 @@ export async function submitLead(req: Request, res: Response, next: NextFunction
 
     // All automation (email, voice calls, CRM sync, campaigns) is deferred to
     // post-payment via PaySimple webhook. No pre-payment communication.
-    console.log(`[LeadController] Lead ${lead.id} created (${data.email}). Automation deferred to payment.`);
+    console.log(`[LeadController] Lead ${lead.id} created (${redactForLogs(data.email)}). Automation deferred to payment.`);
   } catch (error) {
     if (error instanceof ZodError) {
       res.status(400).json({

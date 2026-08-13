@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { PageHeader, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
@@ -17,6 +18,7 @@ import HealthDashboardTab from './orchestration/HealthDashboardTab';
 import ExperienceStudioTab from './orchestration/ExperienceStudioTab';
 import CurriculumComposerTab from './orchestration/composer/CurriculumComposerTab';
 import TimelineEditorTab from './orchestration/TimelineEditorTab';
+import FeedControlTab from './orchestration/FeedControlTab';
 import WorkstationTab from './orchestration/WorkstationTab';
 import '../../styles/orchestration.css';
 
@@ -31,13 +33,20 @@ const TABS = [
   { id: 'composer', label: 'Curriculum Composer' },
   { id: 'types', label: 'Experience Studio' },
   { id: 'timeline', label: 'Timeline' },
+  { id: 'feed-control', label: 'Feed Control' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'health', label: 'Health' },
 ];
 
 export default function AdminOrchestrationPage() {
   const { token } = useAuth();
-  const [activeTab, setActiveTab] = useState('composer');
+  // Deep-link support: another surface (e.g. the Timeline editor's Edit-card
+  // drawer) can open this page in a new tab focused on a specific tab + Experience
+  // Studio type, via ?tab=<id>&type=<slug>. Read once on mount.
+  const [params] = useSearchParams();
+  const urlTab = params.get('tab');
+  const urlType = params.get('type');
+  const [activeTab, setActiveTab] = useState(() => (urlTab && TABS.some((t) => t.id === urlTab) ? urlTab : 'composer'));
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
   const handleNavigateToMiniSections = (lessonId: string) => {
@@ -99,10 +108,11 @@ export default function AdminOrchestrationPage() {
           {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
           {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
           {activeTab === 'timeline' && <TimelineEditorTab />}
+          {activeTab === 'feed-control' && <FeedControlTab />}
           {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
           {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
           {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
-          {activeTab === 'types' && <ExperienceStudioTab />}
+          {activeTab === 'types' && <ExperienceStudioTab initialSlug={urlType} />}
           {activeTab === 'composer' && <CurriculumComposerTab />}
           {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
           {activeTab === 'skills' && <SkillControlTab {...tabProps} />}

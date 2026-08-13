@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import { Enrollment, Cohort, Subscription } from '../models';
 import { env } from '../config/env';
 import { findOrCreateCustomer, createPaymentLink } from './paysimpleService';
@@ -6,6 +7,7 @@ import {
   availableCreditRows, getAvailableCreditCents, selectCreditsUpTo, creditApplyTarget,
   consumeCreditsForSubscription,
 } from './accountCreditService';
+import { retireRedundantExplorerAccounts } from './enrollmentService';
 import type { SubscriptionPlan } from '../models/Subscription';
 
 /**
@@ -50,10 +52,18 @@ function makePlan(id: SubscriptionPlan, label: string, per_month: number, cadenc
   return { id, label, per_month, cadence, period_days, blurb, price, amount_cents: Math.round(price * 100) };
 }
 
+// A comped seat's billing period — ~10 years, so an admin grant never lapses on
+// its own (revoked explicitly via revokeFreeAccess).
+const COMP_PERIOD_DAYS = 3650;
+
 // Real prices: annual $149/mo → $1,788/yr (per_month × 12), monthly $199/mo.
 export const PLANS: Record<SubscriptionPlan, PlanConfig> = {
   annual: makePlan('annual', 'Annual', 149, 'year', 365, 'Best value — pay once a year for full access to the program.'),
   monthly: makePlan('monthly', 'Monthly', 199, 'month', 30, 'Month-to-month. Cancel anytime.'),
+  // Admin-only comped seat (Free Access). $0, ~10-year period so it never lapses
+  // on its own. Never listed for self-serve checkout (see getSubscription /
+  // startCheckout) — granted only via grantFreeAccess().
+  comp: makePlan('comp', 'Free Access', 0, 'year', COMP_PERIOD_DAYS, 'Comped seat — full program access at no charge.'),
 };
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -111,7 +121,9 @@ async function resolveTargetCohort(): Promise<Cohort | null> {
     if (c) return c;
   }
   const open = (await Cohort.findAll({ where: { status: 'open' }, order: [['start_date', 'ASC']], limit: 10 })) || [];
-  return open.find((c: any) => !isNonPayingCohortName(c.name)) || null;
+  // Never route a paying subscriber into the free Explorer/demo buckets OR a private
+  // business/owner workspace (cohort_type='business').
+  return open.find((c: any) => !isNonPayingCohortName(c.name) && String(c.cohort_type ?? '').toLowerCase() !== 'business') || null;
 }
 
 /**
@@ -132,14 +144,30 @@ async function resolvePaidCohortFor(enrollment: { cohort_id?: string | null } | 
   return resolveTargetCohort();
 }
 
-/** The student's current subscription = newest non-failed row. */
+/**
+ * The student's current subscription.
+ *
+ * An ACTIVE row always wins, no matter how many checkout rows were created after it.
+ * Previously this returned the newest non-failed row, which two real conditions break:
+ *
+ *  - A student who clicks checkout again after paying leaves a newer 'pending' row,
+ *    and the portal rendered "no subscription" for someone who had paid.
+ *  - Retiring those duplicates as 'canceled' (what reconcileAppPayments does, and what
+ *    the 2026-08-12 repair did) made it worse: the newest row was then a CANCELED one,
+ *    so a paying student rendered as canceled. Found live 2026-08-12 across 7 students.
+ *
+ * The `limit: 5` was a second, independent trap: one student had 14 checkout rows, so
+ * the active one could sit outside the window and be invisible regardless of status.
+ * These sets are tiny per enrollment, so there is no reason to cap them.
+ */
 async function currentSubscription(enrollmentId: string): Promise<Subscription | null> {
   const rows = await Subscription.findAll({
     where: { enrollment_id: enrollmentId },
     order: [['created_at', 'DESC']],
-    limit: 5,
   });
-  return rows.find((r) => r.status !== 'failed') || null;
+  return rows.find((r) => r.status === 'active')
+      || rows.find((r) => r.status !== 'failed')
+      || null;
 }
 
 export interface SubscriptionView {
@@ -221,9 +249,49 @@ export type CheckoutResult =
   | { ok: true; payment_link: string; plan: SubscriptionPlan; amount: number; full_amount: number; applied_credit: number }
   | { ok: false; reason: 'unknown_plan' | 'enrollment_not_found' | 'billing_unconfigured' | 'checkout_failed'; message?: string };
 
+/**
+ * The PaySimple customer to bill this checkout against, reusing one we already
+ * created for this person before minting another.
+ *
+ * PaySimple's `GET /v4/customer?email=` filter is not honored server-side — it returns
+ * page 1 of the whole merchant account — so findCustomerByEmail's correctness guard
+ * (added after a shared customer id leaked across people) rejects every result and
+ * reports "not found". That is right, but it turns findOrCreateCustomer into
+ * create-every-time: Arinze Ohagwu's four checkout attempts on 2026-08-10 minted four
+ * duplicate customers. Checking what WE already stored fixes the repeat-attempt case
+ * without depending on a broken upstream filter.
+ */
+async function resolveCheckoutCustomerId(enrollment: Enrollment): Promise<string> {
+  if (enrollment.paysimple_customer_id) return String(enrollment.paysimple_customer_id);
+
+  // Best-effort: a failed lookup just means we mint a fresh customer, never that the
+  // student can't check out.
+  try {
+    const prior = await Subscription.findOne({
+      where: { enrollment_id: enrollment.id, paysimple_customer_id: { [Op.ne]: null } },
+      order: [['created_at', 'DESC']],
+      attributes: ['paysimple_customer_id'],
+    });
+    if (prior?.paysimple_customer_id) return String(prior.paysimple_customer_id);
+  } catch (err: any) {
+    console.error('[Subscription] prior customer lookup failed (non-fatal):', err?.message);
+  }
+
+  const customer = await findOrCreateCustomer({
+    fullName: enrollment.full_name || 'Student',
+    email: enrollment.email,
+    company: enrollment.company || 'Individual',
+    phone: enrollment.phone || undefined,
+  });
+  return String(customer.Id);
+}
+
 /** Start a hosted checkout for a plan. Creates a pending subscription keyed on
  *  the PaySimple external_id and returns the payment link to redirect to. */
 export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan, nowMs: number = Date.now()): Promise<CheckoutResult> {
+  // Only the two self-serve paid plans are checkout-able. 'comp' (Free Access) is
+  // admin-granted, never chargeable, so it must never reach a hosted checkout.
+  if (plan !== 'annual' && plan !== 'monthly') return { ok: false, reason: 'unknown_plan' };
   const cfg = PLANS[plan];
   if (!cfg) return { ok: false, reason: 'unknown_plan' };
   if (!env.paysimpleApiUser || !env.paysimpleApiKey) return { ok: false, reason: 'billing_unconfigured' };
@@ -248,16 +316,11 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
   const lastName = nameParts.slice(1).join(' ') || '-';
 
   try {
-    const customer = await findOrCreateCustomer({
-      fullName: enrollment.full_name || 'Student',
-      email: enrollment.email,
-      company: enrollment.company || 'Individual',
-      phone: enrollment.phone || undefined,
-    });
+    const customerId = await resolveCheckoutCustomerId(enrollment);
 
     const link = await createPaymentLink({
       externalId,
-      cohortName: appliedCents > 0 ? `${cfg.label} plan (−$${round2(appliedCents / 100)} credit)` : `${cfg.label} plan`,
+      cohortName: appliedCents > 0 ? `${cfg.label} (−$${round2(appliedCents / 100)} credit)` : `${cfg.label} plan`,
       // Real plan amount less any account credit, on prod (live mode). On dev
       // (PAYMENT_MODE=test) the service reduces this to $0.01 so checkout can be
       // tested without a real charge.
@@ -274,10 +337,23 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
       amount_cents: cfg.amount_cents,          // full recurring price (unchanged by the credit)
       applied_credit_cents: appliedCents,      // discount taken off this first charge
       payment_ref: externalId,
-      paysimple_customer_id: String(customer.Id),
+      paysimple_customer_id: customerId,
       created_at: new Date(nowMs),
       updated_at: new Date(nowMs),
     });
+
+    // Mirror the customer id onto the enrollment. The missed-webhook reconciler keys
+    // its candidate scan off enrollments; writing it only to the subscription row left
+    // 62 of 86 pending checkouts invisible to that safety net (found live 2026-08-12).
+    // Best-effort by design: the payment link is already valid and the subscription row
+    // already carries the id, so this bookkeeping must never fail a live checkout.
+    if (!enrollment.paysimple_customer_id) {
+      try {
+        await enrollment.update({ paysimple_customer_id: customerId });
+      } catch (err: any) {
+        console.error('[Subscription] enrollment customer-id mirror failed (non-fatal):', err?.message);
+      }
+    }
 
     return { ok: true, payment_link: link.payment_link, plan, amount: chargeAmount, full_amount: cfg.price, applied_credit: round2(appliedCents / 100) };
   } catch (err: any) {
@@ -328,16 +404,10 @@ export async function activateByRef(
   // Convert Explorer → paying member. Flipping enrollment_type off 'explorer'
   // drops the Week-0 timeline gate and the Projects demo lock automatically.
   if (enrollment) {
-    await enrollment.update({
-      enrollment_type: 'standard',
-      tier: 'member',
-      payment_status: 'paid',
-      status: 'active',
-      portal_enabled: true,
-      cohort_id: cohort ? cohort.id : enrollment.cohort_id,
-      amount_paid: typeof opts.amount === 'number' && opts.amount > 0 ? opts.amount : cfg.price,
-      payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
-      enrolled_at: enrollment.enrolled_at || now, // actual payment date, not the anchor
+    await grantMembership(enrollment, {
+      cohortId: cohort ? cohort.id : enrollment.cohort_id,
+      amountPaid: typeof opts.amount === 'number' && opts.amount > 0 ? opts.amount : cfg.price,
+      now, // enrolled_at falls back to this only if the enrollment has none yet
     });
   }
 
@@ -354,6 +424,126 @@ export async function activateByRef(
     }
   }
   return sub;
+}
+
+/**
+ * The single definition of "this enrollment has a paid seat" — shared by paid
+ * activation (activateByRef) and comped grants (grantFreeAccess). Flipping
+ * enrollment_type off 'explorer' is what drops the Week-0 timeline gate and the
+ * Projects demo lock; the rest marks it paid/active/portal-enabled. Kept in one
+ * place so the two callers can never drift apart.
+ */
+async function grantMembership(
+  enrollment: Enrollment,
+  opts: { cohortId: string | null; amountPaid: number; now: Date },
+): Promise<void> {
+  await enrollment.update({
+    enrollment_type: 'standard',
+    tier: 'member',
+    payment_status: 'paid',
+    status: 'active',
+    portal_enabled: true,
+    cohort_id: opts.cohortId ?? enrollment.cohort_id,
+    amount_paid: opts.amountPaid,
+    payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
+    enrolled_at: enrollment.enrolled_at || opts.now,
+  });
+
+  // The legacy CB- payment path (markEnrollmentPaid, enrollmentService.ts) has
+  // always retired a paying student's lingering free Explorer duplicate on
+  // confirmation -- this self-serve path (activateByRef, and grantFreeAccess
+  // below, both funnel through here) never did, which is a real reason 8+
+  // students found live 2026-07-31 ended up with an active Explorer duplicate
+  // shadowing their real, newly-paid account. Best-effort + idempotent, same
+  // as the legacy call: never blocks or fails the activation itself.
+  retireRedundantExplorerAccounts(enrollment.email, enrollment.id).catch((err: any) =>
+    console.error('[Subscription] Explorer reconcile failed (non-fatal):', err?.message),
+  );
+}
+
+const COMP_PREFIX = 'COMP-';
+
+/** Every enrollment id sharing this one's email (case-insensitive), including
+ *  itself — a person can span more than one enrollment row (an Explorer-shaped
+ *  duplicate alongside their real paid/comped row), and Free Access must be
+ *  read/written consistently regardless of which sibling row an admin happens
+ *  to have open. Takes the email directly (callers that already have the
+ *  enrollment loaded pass its email straight through — no redundant re-fetch).
+ *  Falls back to just the requested id if there's no email or no siblings. */
+async function resolveSiblingEnrollmentIds(enrollmentId: string, email: string | null | undefined): Promise<string[]> {
+  const normalizedEmail = email ? email.toLowerCase().trim() : '';
+  if (!normalizedEmail) return [enrollmentId];
+  const siblings = await Enrollment.findAll({ where: { email: { [Op.iLike]: normalizedEmail } }, attributes: ['id'] });
+  return siblings.length ? siblings.map((s) => s.id) : [enrollmentId];
+}
+
+/**
+ * Admin grant — "Free Access": comp a seat (100% discount) for anyone, with NO
+ * employee/staff role. The person gets the NORMAL student experience (normal
+ * curriculum gating), just never billed — distinct from staff, who bypass
+ * gating. Creates (idempotently) an active 'comp' subscription so the paywall
+ * clears + the seat is labelled, then flips the enrollment to a paid member.
+ * Idempotent across this person's OTHER enrollment rows too: if a sibling
+ * enrollment already holds an active comp subscription, reuses it instead of
+ * stacking a second comp row for the same real person under a different id.
+ */
+export async function grantFreeAccess(enrollmentId: string, nowMs: number = Date.now()): Promise<Subscription> {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) {
+    throw Object.assign(new Error('Enrollment not found'), { error_class: 'NotFoundError' });
+  }
+  const now = new Date(nowMs);
+
+  const siblingIds = await resolveSiblingEnrollmentIds(enrollmentId, enrollment.email);
+  let sub = await Subscription.findOne({ where: { enrollment_id: siblingIds, plan: 'comp', status: 'active' } });
+  if (!sub) {
+    sub = await Subscription.create({
+      enrollment_id: enrollmentId,
+      plan: 'comp',
+      status: 'active',
+      amount_cents: 0,
+      applied_credit_cents: 0,
+      payment_ref: `${COMP_PREFIX}${enrollmentId}-${nowMs}`,
+      started_at: now,
+      current_period_end: new Date(nowMs + COMP_PERIOD_DAYS * DAY_MS),
+    });
+  }
+
+  await grantMembership(enrollment, { cohortId: enrollment.cohort_id, amountPaid: 0, now });
+  return sub;
+}
+
+/**
+ * Admin revoke — remove the Free-Access label by canceling whichever of this
+ * person's enrollment rows actually holds the active comp subscription — not
+ * necessarily the exact id the admin has open (confirmed live: Brianna
+ * Woodard's comp subscription lived on a sibling row, so revoking against her
+ * Explorer row alone silently did nothing). Cancels every active comp row
+ * found across her siblings, not just the first, so a stray second comp row
+ * can never survive a revoke. Deliberately does NOT downgrade the
+ * enrollment's current access; forcibly locking someone out is a separate,
+ * explicit admin action, so revoking a comp can never fight a real payment or
+ * strand a student mid-course.
+ */
+export async function revokeFreeAccess(enrollmentId: string, nowMs: number = Date.now()): Promise<boolean> {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  const siblingIds = await resolveSiblingEnrollmentIds(enrollmentId, enrollment?.email);
+  const subs = await Subscription.findAll({ where: { enrollment_id: siblingIds, plan: 'comp', status: 'active' } });
+  if (!subs.length) return false;
+  const now = new Date(nowMs);
+  await Promise.all(subs.map((sub) => sub.update({ status: 'canceled', canceled_at: now, cancel_reason: 'comp_revoked', updated_at: now })));
+  return true;
+}
+
+/** Which of these enrollments currently hold an active comped seat — for admin
+ *  rosters that flag "Free Access". One query; returns a Set for O(1) lookup. */
+export async function activeCompEnrollmentIds(enrollmentIds: string[]): Promise<Set<string>> {
+  if (!enrollmentIds.length) return new Set();
+  const rows = await Subscription.findAll({
+    where: { enrollment_id: enrollmentIds, plan: 'comp', status: 'active' },
+    attributes: ['enrollment_id'],
+  });
+  return new Set(rows.map((r) => r.enrollment_id));
 }
 
 export type CancelResult =

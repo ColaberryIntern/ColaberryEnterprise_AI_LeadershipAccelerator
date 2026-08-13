@@ -1,7 +1,33 @@
+import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { Ticket, TicketActivity } from '../models';
 import type { TicketStatus, TicketPriority, TicketType, TicketActorType } from '../models/Ticket';
 import type { AgentExecutionResult } from './agents/types';
+import { emitEvent } from './workLedger/workLedgerService';
+import type { WorkLedgerEventInput } from '../schemas/workLedgerEventSchema';
+
+// ProofDesk Work Ledger (Milestone 1 - Foundation, shadow mode): wraps this file's
+// three side-effecting functions with an emitEvent() call each. This helper NEVER
+// throws — a ledger-write failure must never change createTicket / updateTicketStatus
+// / addAgentOutput's existing return value or error behavior for their callers. See
+// workLedgerService.ts's header comment for the full Failure-First Design rationale.
+async function emitLedgerEventSafe(input: WorkLedgerEventInput): Promise<void> {
+  try {
+    await emitEvent(input);
+  } catch (err: any) {
+    console.error(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'ticketService',
+        event: 'work_ledger_emit_failed',
+        outcome: 'failure',
+        error_class: err?.error_class || err?.name || 'Error',
+        context: { action_class: input.actionClass, idempotency_key: input.idempotencyKey, message: err?.message },
+      }),
+    );
+  }
+}
 
 // ── State Machine ────────────────────────────────────────────────────────
 
@@ -85,6 +111,22 @@ export async function createTicket(data: CreateTicketData) {
     metadata: { title: ticket.title, priority: ticket.priority, type: ticket.type },
   });
 
+  await emitLedgerEventSafe({
+    ticketId: ticket.id,
+    traceId: crypto.randomUUID(),
+    actorType: data.created_by_type,
+    actorId: data.created_by_id,
+    intent: 'ticket.create',
+    domain: 'tickets',
+    actionClass: 'create',
+    targetType: 'ticket',
+    targetId: ticket.id,
+    idempotencyKey: `ticket-created:${ticket.id}`,
+    result: 'success',
+    sourceRecordType: 'ticket',
+    sourceRecordId: ticket.id,
+  });
+
   return ticket;
 }
 
@@ -110,7 +152,7 @@ export async function updateTicketStatus(
 
   await ticket.update(updates);
 
-  await TicketActivity.create({
+  const activity = await TicketActivity.create({
     ticket_id: ticketId,
     actor_type: actorType,
     actor_id: actorId,
@@ -119,10 +161,39 @@ export async function updateTicketStatus(
     to_value: newStatus,
   });
 
+  await emitLedgerEventSafe({
+    ticketId,
+    traceId: crypto.randomUUID(),
+    actorType,
+    actorId,
+    intent: 'ticket.status_change',
+    domain: 'tickets',
+    actionClass: 'status_change',
+    targetType: 'ticket',
+    targetId: ticketId,
+    idempotencyKey: `ticket-status-change:${activity.id}`,
+    result: 'success',
+    beforeStateRef: fromStatus,
+    afterStateRef: newStatus,
+    sourceRecordType: 'ticket_activity',
+    sourceRecordId: activity.id,
+  });
+
   // Learning loop: when a strategic ticket reaches 'done', trigger outcome tracking
   if (newStatus === 'done' && (ticket as any).type === 'strategic' && (ticket as any).source === 'cory') {
     import('./reporting/coryDecisionEngine')
       .then((engine) => engine.trackExecutionOutcome(ticketId))
+      .catch(() => { /* non-critical */ });
+  }
+
+  // ProofDesk Outcomes & Learning (Milestone 5, spec 20.4): every ticket reaching
+  // 'done' — not just cory strategic tickets — gets a 7-day recurrence-check
+  // follow-up scheduled. Non-blocking, same failure-isolation contract as the cory
+  // hook above: a failure here must never affect this function's own success/failure
+  // or return value.
+  if (newStatus === 'done') {
+    import('./outcomes/outcomeMeasurementService')
+      .then((svc) => svc.scheduleOutcomeMeasurement(ticketId))
       .catch(() => { /* non-critical */ });
   }
 
@@ -212,6 +283,22 @@ export async function addAgentOutput(
   });
 
   await ticket.update({ updated_at: new Date() } as any);
+
+  await emitLedgerEventSafe({
+    ticketId,
+    traceId: crypto.randomUUID(),
+    actorType: 'agent',
+    actorId: agentName,
+    intent: 'ticket.agent_output',
+    domain: 'tickets',
+    actionClass: 'agent_output',
+    targetType: 'ticket',
+    targetId: ticketId,
+    idempotencyKey: `ticket-agent-output:${activity.id}`,
+    result: output.errors && output.errors.length > 0 ? 'failure' : 'success',
+    sourceRecordType: 'ticket_activity',
+    sourceRecordId: activity.id,
+  });
 
   return activity;
 }

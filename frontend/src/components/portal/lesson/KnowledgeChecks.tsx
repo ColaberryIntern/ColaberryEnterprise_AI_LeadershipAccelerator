@@ -306,7 +306,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
                 <span className="small" style={{ color: isCorrect ? '#047857' : '#991b1b' }}>{q.explanation}</span>
               </div>
 
-              {/* Ask AI Mentor button — always visible after answering */}
+              {/* Ask Cory button — always visible after answering */}
               <div className="ps-4 mt-2">
                 <button
                   className="btn btn-sm d-flex align-items-center gap-1"
@@ -321,7 +321,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
                   onClick={handleAskMentor}
                 >
                   <i className="bi bi-robot"></i>
-                  Ask AI Mentor
+                  Ask Cory
                 </button>
               </div>
 

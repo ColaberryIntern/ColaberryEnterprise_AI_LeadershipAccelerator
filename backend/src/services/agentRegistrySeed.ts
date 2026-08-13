@@ -1,6 +1,8 @@
 import AiAgent from '../models/AiAgent';
 import type { AiAgentType, AiAgentTriggerType, AiAgentCategory } from '../models/AiAgent';
 import { Op } from 'sequelize';
+import { seedReeseIdentity } from './reese/reeseIdentitySeed';
+import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
 
 interface AgentSeedEntry {
   agent_name: string;
@@ -12,6 +14,15 @@ interface AgentSeedEntry {
   category: AiAgentCategory;
   description: string;
   config?: Record<string, any>;
+  // Only honored on first creation (see the findOrCreate loop below) — lets a
+  // seed entry ship disabled by default without resetting it on every restart.
+  enabled?: boolean;
+  // Reese Phase 1 — agent-transparency fields (additive columns, see
+  // ensureAiAgentIdentitySchema.ts). Optional so every other registry entry is
+  // unaffected.
+  system_prompt?: string;
+  tools_granted?: string[];
+  persona_version?: string;
 }
 
 const AGENT_REGISTRY: AgentSeedEntry[] = [
@@ -125,6 +136,65 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'outbound',
     description:
       'Checks if email digest is enabled. Compiles and sends daily/weekly digest emails at the configured hour and day to admin recipients.',
+  },
+  {
+    agent_name: 'AiNewsRefresh',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/intel/aiNewsIngestionService.ts',
+    trigger_type: 'cron',
+    schedule: '15 3 * * *',
+    category: 'accelerator',
+    description:
+      'AI News Flash intelligence pipeline. Daily 03:15 CT: fetches free AI-lab RSS feeds, dedup-upserts the library, materializes up to AI_NEWS_MAX_PER_RUN news cards (cost-gated by AI_NEWS_INGEST_ENABLED), then prunes generated cards older than 30 days. A boot catch-up recovers a run missed by a redeploy. Registering it here gives the cron run-history + failure tracking via instrumentCronJob.',
+  },
+  // Intelligence pipelines — the 9 generators beyond AI News Flash. Daily 03:45 CT
+  // via the shared Intel cron loop; each cost-gated by its own <SLUG>_INGEST_ENABLED
+  // flag (default OFF → ships dark) and tracked per-source via instrumentCronJob.
+  {
+    agent_name: 'Intel_ai_research_digest', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_research_digest.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Research Digest pipeline (arXiv API + Papers with Code RSS). Daily 03:45 CT; cost-gated by AI_RESEARCH_DIGEST_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_architecture_breakdown', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_architecture_breakdown.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Architecture Breakdown pipeline (Netflix/AWS/Uber engineering blog RSS). Daily 03:45 CT; cost-gated by AI_ARCHITECTURE_BREAKDOWN_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_build_breakdown', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/build_breakdown.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Build Breakdown pipeline (GitHub Blog + dev.to AI RSS). Daily 03:45 CT; cost-gated by BUILD_BREAKDOWN_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_tool_of_the_day', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_tool_of_the_day.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Tool of the Day pipeline (curated tool seed + LLM profile). Daily 03:45 CT; cost-gated by AI_TOOL_OF_THE_DAY_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_quote_of_the_day', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_quote_of_the_day.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Quote of the Day pipeline (curated quote seed + LLM). Daily 03:45 CT; cost-gated by AI_QUOTE_OF_THE_DAY_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_claude_code_technique', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/claude_code_technique.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Claude Code Technique pipeline (curated technique seed + LLM). Daily 03:45 CT; cost-gated by CLAUDE_CODE_TECHNIQUE_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_mcp_server_spotlight', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/mcp_server_spotlight.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'MCP Server Spotlight pipeline (MCP registry README + curated fallback). Daily 03:45 CT; cost-gated by MCP_SERVER_SPOTLIGHT_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_video_stream', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/aiVideoStreamSource.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Video Stream pipeline (YouTube Data API; needs YOUTUBE_API_KEY, degrades to no-op if absent). Daily 03:45 CT; cost-gated by AI_VIDEO_STREAM_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_market_intelligence', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/marketIntelligenceSource.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Market Intelligence pipeline (Opportunity Pulse REST; needs OPPORTUNITY_PULSE_URL, degrades to no-op if absent). Daily 03:45 CT; cost-gated by MARKET_INTELLIGENCE_INGEST_ENABLED (default off).',
   },
   {
     agent_name: 'SessionReminders',
@@ -1998,6 +2068,188 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description:
       'Daily batch sync of GitHub activity for all active enrolled students. Fetches commits_last_7d, open_prs, total_stars, and contribution_graph_json for every enrollment with a connected repository. Per-student failures are isolated — one failure does not abort others. Webhook-triggered syncs handle real-time push events; this job is the fallback.',
   },
+
+  // --- AI Workforce directors (orgRegistry.ts) — one tool + one action each,
+  // gated by workforceAgentRuntime.ts's hard kill-switch/safe-mode/enabled
+  // check (see docs/trust-audit/2026-07-30-ai-workforce-activation.md). Ship
+  // enabled: true — each is individually toggleable via the admin dashboard
+  // or ai_agents.enabled without a redeploy, and the global kill switch stops
+  // all of them at once. ---
+  {
+    agent_name: 'WorkforceStudentSuccessDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '0 6 * * *',
+    category: 'workforce_director',
+    description: 'Marcus Bell. Reads the daily at-risk-student signal and flags the top one as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCurriculumDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '10 6 * * *',
+    category: 'workforce_director',
+    description: 'Dr. Elena Vasquez. Reads the daily curriculum-quality signal and flags the top gap as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCareerDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '20 6 * * *',
+    category: 'workforce_director',
+    description: 'Jordan Ellis. Reads the daily employment-readiness signal and flags the gap as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCertificationDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '30 6 * * *',
+    category: 'workforce_director',
+    description: 'Nadia Farouk. Reads the daily certification pass-probability signal and flags the risk as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceFinanceDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '40 6 * * *',
+    category: 'workforce_director',
+    description: 'Grace Okoro. Reads the daily unpaid-tuition signal and flags collections as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceOperationsDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'workforce_director',
+    description: 'Ravi Kapoor. Reads the attendance signal and flags a WorkforceTask when it drops below threshold. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCommunityDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '50 6 * * *',
+    category: 'workforce_director',
+    description: 'Diego Morales. Reads the portfolio-sharing signal and flags a WorkforceTask when artifacts lag active students. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceTechnologyDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '7,22,37,52 * * * *',
+    category: 'workforce_director',
+    description: 'Alex Kim. Reads the ai_agents registry for the worst unhealthy agent and flags it as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceResearchDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '0 7 * * 0',
+    category: 'workforce_director',
+    description: 'Dr. Kenji Watanabe. Weekly digest of the top 3 ranked school signals, sent as one WorkforceMessage to Curriculum. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceMarketingDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'workforce_director',
+    description: 'Sofia Lindqvist. Manual-trigger only. Drafts ONE content idea (one gpt-4o-mini call) grounded in the top ranked signal and queues it in proposed_agent_actions for human review — never posts or sends.',
+    enabled: true,
+  },
+  // --- Reese Phase 1: real staff AI mentor identity ---
+  {
+    agent_name: 'Reese',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/',
+    // Reactive only in Phase 1 — replies exist purely as a response to an
+    // inbound student DM, never on a schedule. See reeseReplyService.ts (T009).
+    trigger_type: 'event_driven',
+    schedule: '',
+    category: 'student_success',
+    description:
+      'Reese — the student\'s dedicated AI Systems Architect mentor, reachable via ' +
+      'a real, persistent direct-message thread (same DM system as the rest of the ' +
+      'portal). Phase 1 is 100% reactive: Reese only ever replies to an inbound ' +
+      'student message, never initiates contact. Every exchange is backed by a ' +
+      'real ProofDesk ticket. See docs/CORY_PERSONA_SPEC.md for the locked voice ' +
+      'rules this persona is built from.',
+    config: { pilot_cohort_ids: [] },
+    enabled: true,
+    system_prompt: REESE_PERSONA_BLOCK,
+    // Honest, non-aspirational — reflects exactly what Phase 1 code lets Reese do.
+    tools_granted: ['respond_to_dm', 'read_learner_context'],
+    persona_version: '2026-08-06',
+  },
+  // --- Reese Phase 2: Autonomous Outreach (the two new scheduled crons) ---
+  // Registered here (not left to run "untracked", the gap Phase 1's own
+  // ReesePresenceHeartbeat cron has today) specifically so
+  // schedulerService.ts's instrumentCronJob() enabled/paused gate actually
+  // applies to them — this is the run's real rollback/kill-switch mechanism:
+  // an admin can pause either job from Admin > Agents (enabled:false or
+  // status:'paused') with no redeploy. See execution-contract.md.
+  {
+    agent_name: 'ReeseAutonomousOutreachSweep',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reeseAutonomousOutreachService.ts',
+    trigger_type: 'cron',
+    schedule: '0 15 * * *',
+    category: 'student_success',
+    description:
+      'Reese Phase 2 — daily scan of the approved pilot cohort for two real ' +
+      'risk signals (inactivity/low-completion, behavior anomaly). On a real, ' +
+      'non-duplicate, non-cadence-capped hit, sends one real autonomous DM and ' +
+      'opens a ProofDesk ticket with the real reason/goal. Hard caps: 7-day ' +
+      'per-student cadence, 12/day combined ceiling shared with the follow-up ' +
+      'job below, R3 governance tagging (shadow-mode, log-only).',
+    enabled: true,
+  },
+  {
+    agent_name: 'ReeseOutreachFollowUps',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reeseOutreachFollowUpService.ts',
+    trigger_type: 'cron',
+    schedule: '0 16 * * *',
+    category: 'student_success',
+    description:
+      'Reese Phase 2 — daily sweep of open autonomous-outreach threads. Closes ' +
+      'with real evidence when the signal clears or the student replies; sends ' +
+      'one more unique follow-up if under the 3-attempt cap; escalates to human ' +
+      'review (never a 4th message, never a silent auto-close) once the cap is ' +
+      'reached.',
+    enabled: true,
+  },
 ];
 
 /**
@@ -2023,6 +2275,12 @@ export async function seedAgentRegistry(): Promise<void> {
         description: entry.description,
         // Only set config if it wasn't customized (still empty)
         ...(Object.keys(agent.config || {}).length === 0 && entry.config ? { config: entry.config } : {}),
+        // Registry-defined identity metadata — refreshed like the other
+        // definitional fields above, not treated as user-customized runtime
+        // state (unlike config/status/run stats).
+        ...(entry.system_prompt !== undefined ? { system_prompt: entry.system_prompt } : {}),
+        ...(entry.tools_granted !== undefined ? { tools_granted: entry.tools_granted } : {}),
+        ...(entry.persona_version !== undefined ? { persona_version: entry.persona_version } : {}),
       });
     } else {
       console.log(`[AI Ops] Registered agent: ${entry.agent_name}`);
@@ -2038,6 +2296,16 @@ export async function seedAgentRegistry(): Promise<void> {
 
   // Assign agent_group to existing agents for super-agent aggregation
   await assignAgentGroups();
+
+  // Reese Phase 1 — create/link the real staff identity (AdminUser, Enrollment,
+  // CommunityMember) now that the 'Reese' AiAgent row above definitely exists.
+  // Failure here must never break the rest of boot (same fail-open posture as
+  // every ensure*Schema() call site) — log and continue.
+  try {
+    await seedReeseIdentity();
+  } catch (err: any) {
+    console.warn('[AI Ops] Reese identity seed failed:', err?.message);
+  }
 }
 
 // ─── Agent Group Assignment ────────────────────────────────────────────────

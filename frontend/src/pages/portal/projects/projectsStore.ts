@@ -90,9 +90,17 @@ export type NewBuildAnswers = {
   name?: string;
   idea: string;
   size: BuildSize;
+  /**
+   * Legacy scoping fields. The wizard no longer asks these as three fixed
+   * questions — they are derived best-effort from `answers` so the local
+   * fallback below and the server's requirements document (which must
+   * reference all three) keep working.
+   */
   users?: string;
   dataSources?: string;
   done?: string;
+  /** The interview: questions generated from this student's idea, and their replies. */
+  answers?: Array<{ id: string; question: string; answer: string }>;
   weeks: number;
 };
 
@@ -143,6 +151,23 @@ export function subscribe(fn: Listener): () => void {
 export function loadProjects(): StudentProject[] { return read(); }
 export function getProject(id: string): StudentProject | undefined {
   return read().find((p) => p.id === id);
+}
+
+/**
+ * Replace the whole project list and re-render subscribers. Used by projectSync
+ * after reconciling with the backend (completions overlaid / a build hydrated on
+ * a fresh device). This is the store's only backend-authoritative write entry.
+ */
+export function hydrateProjects(list: StudentProject[]): void { write(list); notify(); }
+
+// Fire-and-forget the task's status through to the backend (best-effort, flag-
+// gated inside projectSync). Dynamic import keeps the store free of any static
+// dependency on the network layer, so its pure helpers stay trivially testable.
+// The demo/sample build is never persisted.
+function emitTaskStatus(project: StudentProject, task: ProjectTask): void {
+  if (project.sample) return;
+  const key = task.storyId || task.id;
+  void import('./projectSync').then((m) => m.pushTaskStatusByStory(key, task.state)).catch(() => { /* best-effort */ });
 }
 
 // ── React hook: re-render on any store change ────────────────────────────────
@@ -200,6 +225,7 @@ export function markTaskDone(projectId: string, taskId: string): void {
   const list = read();
   const p = list.find((x) => x.id === projectId);
   if (!p) return;
+  let changed: ProjectTask | undefined;
   for (const l of p.lists) {
     const t = l.tasks.find((x) => x.id === taskId);
     if (t && t.state !== 'done') {
@@ -215,21 +241,25 @@ export function markTaskDone(projectId: string, taskId: string): void {
       }
       p.activity.unshift({ id: 'a' + Date.now(), kind: 'done', who: 'You', time: 'just now',
         title: `Completed: ${t.title}`, body: 'Marked done in your build workspace.' });
+      changed = t;
       break;
     }
   }
   write(list); notify();
+  if (changed) emitTaskStatus(p, changed);
 }
 
 export function skipTask(projectId: string, taskId: string): void {
   const list = read();
   const p = list.find((x) => x.id === projectId);
   if (!p) return;
+  let changed: ProjectTask | undefined;
   for (const l of p.lists) {
     const t = l.tasks.find((x) => x.id === taskId);
-    if (t && t.state === 'todo') { t.state = 'skipped'; break; }
+    if (t && t.state === 'todo') { t.state = 'skipped'; changed = t; break; }
   }
   write(list); notify();
+  if (changed) emitTaskStatus(p, changed);
 }
 
 // ── background creation ──────────────────────────────────────────────────────

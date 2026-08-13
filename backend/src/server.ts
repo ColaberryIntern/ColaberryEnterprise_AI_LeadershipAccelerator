@@ -16,12 +16,17 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
+import capePortalRoutes from './routes/capePortalRoutes';
+import capeAdminRoutes from './routes/admin/capeAdminRoutes';
+import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
+import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
 import buildArtifactRoutes from './routes/buildArtifactRoutes';
+import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
@@ -33,6 +38,32 @@ import { seedCurriculumCourseLinks } from './seeds/seedCurriculumCourseLinks';
 import { seedAllCampaigns } from './seeds/seedAllCampaigns';
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
+import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
+import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
+import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
+import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
+import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
+// Student Build Pipeline. These two were dropped from server.ts when the
+// sponsor magic-link fix (c21cd66e) resolved a conflict in this file by
+// taking one side wholesale. Without them build_intake/build_plans are never
+// created and github_connections is never re-keyed, so the pipeline fails on
+// first use with 'relation does not exist'. Both are idempotent and assert
+// their own post-conditions.
+import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
+import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
+import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
+import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
+import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
+import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
+import { ensureCapeSchema } from './db/ensureCapeSchema';
+import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
+import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
+import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValueRankerSchema';
+import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
+import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
+import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -71,8 +102,15 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+app.use(capePortalRoutes);
+app.use(capeAdminRoutes);
+app.use(capeGovernanceRoutes);
+// Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
+// COMMUNITY_ROOMS_ENABLED is off).
+app.use(communityRoomsRoutes);
 app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
+app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
@@ -397,6 +435,15 @@ async function ensureStudentTaskMergeSchema() {
   // path) and story/engine-based tasks live in one table. Idempotent. The
   // partial unique on (project_id, story_id) keeps engine upserts idempotent
   // without affecting requirement-based rows (story_id NULL).
+  // Base tables first (idempotent CREATE) so a fresh/partial DB always has
+  // student_task_lists + student_tasks BEFORE the ALTERs run — otherwise the
+  // merge schema silently no-ops on a DB that never created them.
+  try {
+    const { seedStudentTaskTables } = await import('./seeds/seedStudentTasks');
+    await seedStudentTaskTables();
+  } catch (err: any) {
+    console.warn('[DB] student-task base tables ensure failed:', err?.message);
+  }
   const statements = [
     `ALTER TABLE student_tasks ALTER COLUMN requirement_key DROP NOT NULL`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS story_id VARCHAR(60)`,
@@ -412,6 +459,22 @@ async function ensureStudentTaskMergeSchema() {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS blocked_by JSONB`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_story ON student_tasks (story_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_story ON student_tasks (project_id, story_id) WHERE story_id IS NOT NULL`,
+    // SBP-REQ-v1 FR-012: a requirement is fulfilled by MANY stories, so
+    // UNIQUE (project_id, requirement_key) was never a valid constraint. It
+    // aborted importProject on the first task that re-cited a requirement —
+    // in production every student build persisted exactly 3 tasks and then
+    // 500'd (see docs/BUILD_PIPELINE_AUDIT.md, finding F-1). Task identity is
+    // (project_id, story_id), enforced by the partial unique index above.
+    // Recreate ONLY if you can also prove one requirement never spans two
+    // stories, which the product explicitly does not guarantee.
+    // Sequelize's `unique: true` creates a CONSTRAINT, not a bare index, so
+    // `DROP INDEX` fails with "cannot drop index ... because constraint ...
+    // requires it" and — because this loop catches and logs each statement —
+    // fails SILENTLY. Drop the constraint first (that removes its backing index
+    // too), then the bare-index form for any DB where it exists without a
+    // constraint. Both are IF EXISTS, so running this twice is a no-op.
+    `ALTER TABLE student_tasks DROP CONSTRAINT IF EXISTS student_tasks_unique_req_key`,
+    `DROP INDEX IF EXISTS student_tasks_unique_req_key`,
   ];
   for (const sql of statements) {
     try {
@@ -419,6 +482,45 @@ async function ensureStudentTaskMergeSchema() {
     } catch (err: any) {
       console.warn('[DB] student-task merge schema stmt skipped:', err?.message);
     }
+  }
+
+  // Post-condition check. Every statement above is best-effort and its failure is
+  // only warned about, so a statement that MUST take effect cannot be verified by
+  // "it didn't throw" — that is exactly how the first attempt at this drop failed
+  // silently (DROP INDEX against a constraint-backed index). Assert the outcome.
+  try {
+    const [rows]: any = await sequelize.query(
+      `SELECT
+         (SELECT count(*) FROM pg_constraint
+           WHERE conrelid = 'student_tasks'::regclass
+             AND conname = 'student_tasks_unique_req_key') AS con,
+         (SELECT count(*) FROM pg_indexes
+           WHERE tablename = 'student_tasks'
+             AND indexname = 'student_tasks_unique_req_key') AS idx`
+    );
+    const con = Number(rows?.[0]?.con ?? 0);
+    const idx = Number(rows?.[0]?.idx ?? 0);
+    if (con > 0 || idx > 0) {
+      // Loud and structured: while this survives, every student build silently
+      // truncates at the first task that re-cites a requirement (audit F-1).
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'backend',
+        event: 'student_tasks_unique_req_key_still_present',
+        outcome: 'failure',
+        error_class: 'SchemaInvariantViolation',
+        context: {
+          constraint: con, index: idx,
+          impact: 'student build imports will abort on the first duplicate requirement_key',
+          remedy: "ALTER TABLE student_tasks DROP CONSTRAINT IF EXISTS student_tasks_unique_req_key",
+        },
+      }));
+    } else {
+      console.log('[DB] student_tasks_unique_req_key confirmed absent (FR-012)');
+    }
+  } catch (err: any) {
+    console.warn('[DB] student-task schema post-check failed:', err?.message);
   }
 }
 
@@ -519,6 +621,76 @@ async function ensurePointsSchema() {
   }
 }
 
+async function ensureCommunityMemberRoleSchema() {
+  // People directory role (student|mentor|staff), admin-assigned, default student.
+  // Idempotent DDL (sequelize.sync is disabled on this graph) so a deploy adds the
+  // column without a manual migration step. Mirrors 20260721_add_community_member_role.sql.
+  const statements = [
+    `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'student'`,
+    `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_role`,
+    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_role CHECK (role IN ('student', 'mentor', 'staff'))`,
+    // Management-portal role for staff (Owner/Admin/Curriculum/Revenue/Admissions/
+    // Support/Community Organizer). NULL = not a mgmt user. Gates admin sections
+    // via mgmtRoles.ts.
+    `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS mgmt_role VARCHAR(20)`,
+    `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_mgmt_role`,
+    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_mgmt_role CHECK (mgmt_role IS NULL OR mgmt_role IN ('owner','admin','curriculum','revenue','admissions','support','community_organizer'))`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] community member role schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureCommunityCommentModerationSchema() {
+  // Comment moderation (Community Organizer role, Ali 2026-08-05): mirrors the
+  // existing community_posts status/removed_at/removed_by soft-delete pattern
+  // (20260713_add_community_moderation.sql) so a removed comment stays in the
+  // DB for audit but drops out of the thread. Idempotent DDL (sequelize.sync
+  // is disabled on this graph) so a deploy adds the columns without a manual
+  // migration step.
+  const statements = [
+    `ALTER TABLE community_comments ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'visible'`,
+    `ALTER TABLE community_comments ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ`,
+    `ALTER TABLE community_comments ADD COLUMN IF NOT EXISTS removed_by UUID`,
+    `ALTER TABLE community_comments DROP CONSTRAINT IF EXISTS ck_community_comments_status`,
+    `ALTER TABLE community_comments ADD CONSTRAINT ck_community_comments_status CHECK (status IN ('visible', 'removed'))`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] community comment moderation schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureCommunityWinsSchema() {
+  // Peer Wins (community_discussion type) — tether a community post to the
+  // curriculum card + program/week it was posted from, plus a structured win_meta.
+  // All nullable/additive; idempotent DDL (sequelize.sync is disabled on this graph)
+  // so a deploy adds the columns without a manual migration step. The partial index
+  // makes the per-(cohort, program, week) wins aggregation cheap.
+  const statements = [
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS program_id UUID`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS week INTEGER`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS source_card_id UUID`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS ritual_meta JSONB`,
+    `CREATE INDEX IF NOT EXISTS idx_community_posts_wins ON community_posts (cohort_id, program_id, week) WHERE source_card_id IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_community_posts_source_card ON community_posts (source_card_id, member_id) WHERE source_card_id IS NOT NULL`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] community wins schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureOrgSchema() {
   // Free-trial Organization / Manager layer. A manager registers free → gets a
   // management org + their own free enrollment; teammates join as free members.
@@ -549,6 +721,10 @@ async function ensureOrgSchema() {
     `CREATE UNIQUE INDEX IF NOT EXISTS org_members_org_email_unique ON org_members (org_id, email)`,
     `CREATE INDEX IF NOT EXISTS idx_org_members_org_id ON org_members (org_id)`,
     `CREATE INDEX IF NOT EXISTS idx_org_members_enrollment_id ON org_members (enrollment_id)`,
+    // Opt-in auto-roster: when true, anyone assigned the community 'staff' role is
+    // automatically added to this org's roster (and removed on demotion). See
+    // communityService.setMemberRole → syncStaffToAutoOrgs.
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS auto_staff_sync BOOLEAN NOT NULL DEFAULT false`,
   ];
   for (const sql of statements) {
     try {
@@ -708,6 +884,12 @@ async function ensureEnrollmentColumns() {
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS portal_enabled BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS active_project_id UUID`,
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'`,
+    // Nullable future-dated access gate: an enrollment can be active/paid but have
+    // its full-curriculum access deliberately deferred to a later date (e.g. a
+    // postponed cohort move) while retaining free-tier portal access in the
+    // interim. NULL (the default) means no gate — behavior for every existing
+    // enrollment is unchanged. See contentEntitlement.ts.
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS access_starts_at DATE`,
   ];
   for (const sql of statements) {
     try {
@@ -831,8 +1013,8 @@ async function ensureExperienceBuilderSchema() {
     // Seed an initial approved baseline (the core week activities) ONLY on first run —
     // once anything is approved/unapproved by hand, this guard is false and never fights the author.
     `UPDATE curriculum_type_definitions SET approved = TRUE, approved_at = NOW(), approved_by = 'system:baseline'
-       WHERE slug IN ('announcement','overview','warmup','video','knowledge_check','deep_dive','prompt_lab',
-                      'implementation_task','github_sync','artifact_submission','reflection','community_discussion',
+       WHERE slug IN ('announcement','warmup','video','knowledge_check','deep_dive','prompt_lab',
+                      'implementation_task','artifact_submission','reflection','community_discussion',
                       'mock_interview','survey','evaluation','live_class')
        AND NOT EXISTS (SELECT 1 FROM curriculum_type_definitions WHERE approved = TRUE)`,
     `CREATE TABLE IF NOT EXISTS component_analytics (
@@ -961,6 +1143,42 @@ async function ensurePodcastSchema() {
   }
 }
 
+// "Recommend a friend" onboarding step — one row per friend recommended. Model is
+// the schema contract; targeted sync creates the table if missing (boot has no
+// global sync).
+async function ensureFriendReferralSchema() {
+  try {
+    const { FriendReferral } = await import('./models');
+    await FriendReferral.sync();
+    // .sync() only CREATEs a missing table — it does not backfill indexes onto a
+    // table that already exists (this one shipped to dev before the unique
+    // constraint below was added). Add it explicitly, idempotently, so
+    // submitReferrals()'s ignoreDuplicates bulkCreate has a real constraint to
+    // conflict against on every environment, not just fresh ones.
+    await sequelize.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS friend_referrals_enrollment_email_uidx
+         ON friend_referrals (enrollment_id, friend_email)`,
+    );
+    console.log('[DB] FriendReferral schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] FriendReferral schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
+// Sponsor portal magic-link audit trail (STORY-001). Append-only; the model is
+// the schema contract and targeted sync creates the table if missing, since
+// boot runs no global sync. Non-fatal on failure: an unavailable audit table
+// must not stop the API from booting, and every audit write is best-effort.
+async function ensureSponsorPortalAuditSchema() {
+  try {
+    const { SponsorPortalAuditLog } = await import('./models');
+    await SponsorPortalAuditLog.sync();
+    console.log('[DB] Sponsor portal audit schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] Sponsor portal audit schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
 // Per-card student comments (Runtime workspace, newest-first). Model is the schema
 // contract; targeted sync creates the table if missing (boot has no global sync).
 async function ensureCardCommentsSchema() {
@@ -995,6 +1213,38 @@ async function ensureSurveyResponsesSchema() {
       await sequelize.query(sql);
     } catch (err: any) {
       console.warn('[DB] survey responses schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+// Reflection entries — per-student strategic signals captured by the weekly
+// "Week in Review" Reflection card (readiness, application, direction, + a JSONB
+// catch-all). One row per (card, enrollment), upserted on re-submit. Sibling of
+// ensureSurveyResponsesSchema.
+async function ensureReflectionEntriesSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS reflection_entries (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       card_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       program_id UUID,
+       week INTEGER,
+       readiness INTEGER,
+       application VARCHAR(64),
+       direction VARCHAR(64),
+       note TEXT,
+       answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS reflection_entries_unique ON reflection_entries (card_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reflection_entries_program_week ON reflection_entries (program_id, week)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] reflection entries schema stmt skipped:', err?.message);
     }
   }
 }
@@ -1075,12 +1325,42 @@ async function ensureBlogSchema() {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_bpv_enrollment ON blog_post_views (enrollment_id)`,
     `CREATE INDEX IF NOT EXISTS idx_bpv_enrollment_card ON blog_post_views (enrollment_id, last_timeline_card_id)`,
+    // read_state drives the blog 2-minute read gate (continuous dwell → collect points)
+    `ALTER TABLE blog_post_views ADD COLUMN IF NOT EXISTS read_state JSONB NOT NULL DEFAULT '{}'::jsonb`,
   ];
   for (const sql of statements) {
     try { await sequelize.query(sql); }
     catch (err: any) { console.warn('[DB] Blog schema statement failed:', err.message?.split('\n')[0]); }
   }
   console.log('[DB] Blog schema ensured');
+}
+
+// AI News Flash intelligence pipeline — the library table behind the news feed.
+// Idempotent DDL, DB-side defaults; the ingestion service upserts by guid.
+async function ensureAiNewsSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS ai_news_items (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       guid VARCHAR(200) NOT NULL UNIQUE,
+       source VARCHAR(80) NOT NULL,
+       title TEXT NOT NULL,
+       url TEXT,
+       excerpt TEXT,
+       published_at TIMESTAMPTZ,
+       importance INTEGER NOT NULL DEFAULT 0,
+       summary_json JSONB,
+       card_id UUID,
+       first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ai_news_importance ON ai_news_items (importance DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_ai_news_card ON ai_news_items (card_id)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] AI News schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] AI News schema ensured');
 }
 
 // Today Timeline v2 (Phase 1): per-student append-only feed sequence backing the
@@ -1110,6 +1390,30 @@ async function ensureTodayFeedSchema() {
     catch (err: any) { console.warn('[DB] Today feed schema statement failed:', err.message?.split('\n')[0]); }
   }
   console.log('[DB] Today feed schema ensured');
+}
+
+// Feed Control plane — additive per-card + per-type routing/cadence columns.
+// `priority` + `release_date` already exist on timeline_cards (activated here);
+// these add the surface override + cadence/frequency/pin knobs. All nullable →
+// a card/type with no override falls back to its type default then the policy.
+async function ensureFeedControlSchema() {
+  const statements = [
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_surface VARCHAR(20)`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_cadence INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_frequency_cap INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_cooldown_days INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS pinned_until TIMESTAMPTZ`,
+    `CREATE INDEX IF NOT EXISTS idx_tc_priority ON timeline_cards (priority DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_tc_pinned ON timeline_cards (pinned_until)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_cadence INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_frequency_cap INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_cooldown_days INTEGER`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Feed control schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Feed control schema ensured');
 }
 
 // Enhance the existing (stub) `testimonial` curriculum type into the working
@@ -1378,6 +1682,7 @@ async function ensureCurriculumComposerSchema() {
        learning_objectives JSONB NOT NULL DEFAULT '[]'::jsonb,
        competencies JSONB NOT NULL DEFAULT '[]'::jsonb,
        architect_domains JSONB NOT NULL DEFAULT '[]'::jsonb,
+       session_competencies JSONB NOT NULL DEFAULT '[]'::jsonb,
        bloom JSONB NOT NULL DEFAULT '[]'::jsonb,
        evidence_produced JSONB NOT NULL DEFAULT '[]'::jsonb,
        github_deliverables JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -1406,6 +1711,8 @@ async function ensureCurriculumComposerSchema() {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_curriculum_blueprints_status ON curriculum_blueprints (status)`,
     `CREATE INDEX IF NOT EXISTS idx_curriculum_blueprints_week ON curriculum_blueprints (week)`,
+    // Additive column for pre-existing tables (session/Academy competencies — see competencyDictionary).
+    `ALTER TABLE curriculum_blueprints ADD COLUMN IF NOT EXISTS session_competencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
   ];
   for (const sql of statements) {
     try { await sequelize.query(sql); }
@@ -1699,6 +2006,294 @@ async function ensureMissedOpportunitiesSchema() {
   console.log('[DB] Missed Opportunities schema ensured');
 }
 
+// Colaberry Commons — Community Rooms layer. Explicit idempotent DDL (sync is
+// off on this graph). Additive & reversible: new room_* / community_rooms tables
+// only, no ALTERs to existing tables. NO cross-table FK constraints (plain UUID
+// columns, like student_tasks) so creation ordering never matters. The whole
+// feature stays dark behind env.communityRoomsEnabled regardless of these tables.
+// Messaging extras (additive, idempotent): a per-member DM read cursor for
+// unread state, and a widened community_notifications type CHECK so friend /
+// message notifications can be inserted (the column is VARCHAR; only the CHECK
+// restricts values). Both safe to run every boot.
+async function ensureMessagingSchema() {
+  const statements = [
+    `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`,
+    `ALTER TABLE community_notifications DROP CONSTRAINT IF EXISTS ck_community_notifications_type`,
+    `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message'))`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure messaging schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Messaging schema ensured');
+}
+
+// Friendships — the friend graph behind the portal Contacts rail. Idempotent,
+// additive; status is VARCHAR + CHECK (not a Postgres ENUM) so new states are a
+// one-line CHECK change, never a type migration. No feature flag.
+async function ensureFriendshipSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS friendships (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       requester_id UUID NOT NULL,
+       addressee_id UUID NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       CONSTRAINT ck_friendships_status CHECK (status IN ('pending','accepted','declined'))
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS friendships_pair_unique ON friendships (requester_id, addressee_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships (addressee_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships (requester_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure Friendship schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Friendship schema ensured');
+}
+
+async function ensureCommunityRoomsSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS community_rooms (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       slug VARCHAR(140) NOT NULL,
+       name VARCHAR(200) NOT NULL,
+       category VARCHAR(40) NOT NULL DEFAULT 'social',
+       room_type VARCHAR(30) NOT NULL DEFAULT 'persistent',
+       privacy VARCHAR(20) NOT NULL DEFAULT 'public',
+       status VARCHAR(20) NOT NULL DEFAULT 'active',
+       description TEXT,
+       topic VARCHAR(255),
+       capacity INTEGER,
+       owner_enrollment_id UUID,
+       linked_cohort_id UUID,
+       linked_project_id UUID,
+       linked_module_id UUID,
+       linked_live_session_id UUID,
+       is_system BOOLEAN NOT NULL DEFAULT false,
+       created_by VARCHAR(60) NOT NULL DEFAULT 'system',
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_rooms_slug_unique ON community_rooms (slug)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_rooms_linked_session_unique ON community_rooms (linked_live_session_id) WHERE linked_live_session_id IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_community_rooms_cohort ON community_rooms (linked_cohort_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_community_rooms_category ON community_rooms (category)`,
+    `CREATE INDEX IF NOT EXISTS idx_community_rooms_privacy_status ON community_rooms (privacy, status)`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS is_video BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS always_open BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS meeting_link VARCHAR(600)`,
+
+    `CREATE TABLE IF NOT EXISTS room_memberships (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       role VARCHAR(20) NOT NULL DEFAULT 'member',
+       access_state VARCHAR(20) NOT NULL DEFAULT 'active',
+       notification_pref VARCHAR(20) NOT NULL DEFAULT 'mentions',
+       invited_by UUID,
+       joined_at TIMESTAMPTZ,
+       left_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_memberships_unique ON room_memberships (room_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_memberships_enrollment ON room_memberships (enrollment_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_bookings (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       variant VARCHAR(30) NOT NULL DEFAULT 'study',
+       title VARCHAR(255) NOT NULL,
+       description TEXT,
+       outcome TEXT,
+       agenda TEXT,
+       host_enrollment_id UUID,
+       co_hosts JSONB NOT NULL DEFAULT '[]'::jsonb,
+       start_at TIMESTAMPTZ,
+       end_at TIMESTAMPTZ,
+       timezone VARCHAR(60),
+       recurrence VARCHAR(40),
+       privacy VARCHAR(20) NOT NULL DEFAULT 'public',
+       audience_rules JSONB NOT NULL DEFAULT '{}'::jsonb,
+       capacity INTEGER,
+       approval_required BOOLEAN NOT NULL DEFAULT false,
+       meeting_provider VARCHAR(30) NOT NULL DEFAULT 'zoom',
+       meeting_link VARCHAR(600),
+       google_event_id VARCHAR(255),
+       external_ids JSONB NOT NULL DEFAULT '{}'::jsonb,
+       related_module_id UUID,
+       related_live_session_id UUID,
+       related_project_id UUID,
+       skill_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+       rsvp_deadline TIMESTAMPTZ,
+       reminder_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+       recording_policy VARCHAR(30) NOT NULL DEFAULT 'ask',
+       artifact_prompt TEXT,
+       reflection_prompt TEXT,
+       moderation_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+       state VARCHAR(20) NOT NULL DEFAULT 'draft',
+       timeline_published BOOLEAN NOT NULL DEFAULT false,
+       timeline_card_id UUID,
+       created_by_enrollment_id UUID,
+       idempotency_key VARCHAR(160),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_bookings_idem_unique ON room_bookings (idempotency_key) WHERE idempotency_key IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_room_bookings_room ON room_bookings (room_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_bookings_state_start ON room_bookings (state, start_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_bookings_related_session ON room_bookings (related_live_session_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_booking_attendees (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       booking_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       rsvp_state VARCHAR(20) NOT NULL DEFAULT 'none',
+       approval_state VARCHAR(20) NOT NULL DEFAULT 'auto',
+       attended BOOLEAN NOT NULL DEFAULT false,
+       attendance_source VARCHAR(20),
+       joined_at TIMESTAMPTZ,
+       waitlist_position INTEGER,
+       feedback_rating INTEGER,
+       feedback_text TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_booking_attendees_unique ON room_booking_attendees (booking_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_booking_attendees_enrollment ON room_booking_attendees (enrollment_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_messages (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       booking_id UUID,
+       enrollment_id UUID,
+       sender_name VARCHAR(120) NOT NULL,
+       content TEXT NOT NULL,
+       thread_root_id UUID,
+       kind VARCHAR(20) NOT NULL DEFAULT 'message',
+       question_status VARCHAR(20),
+       moderation_state VARCHAR(20) NOT NULL DEFAULT 'visible',
+       edited_at TIMESTAMPTZ,
+       deleted_at TIMESTAMPTZ,
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_room_messages_room_created ON room_messages (room_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_messages_thread ON room_messages (thread_root_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_resources (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       booking_id UUID,
+       resource_type VARCHAR(20) NOT NULL,
+       title VARCHAR(255),
+       url VARCHAR(1000),
+       body TEXT,
+       created_by_enrollment_id UUID,
+       is_pinned BOOLEAN NOT NULL DEFAULT false,
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_room_resources_room ON room_resources (room_id, resource_type)`,
+    // Docs & Files (room_resources 'file' uploads): real files carry their MIME
+    // type, byte size, and the disk-resolved storage key (UUID+ext) separately
+    // from `url`, which stays reserved for link/recording resource types.
+    `ALTER TABLE room_resources ADD COLUMN IF NOT EXISTS mime_type VARCHAR(120)`,
+    `ALTER TABLE room_resources ADD COLUMN IF NOT EXISTS size_bytes INTEGER`,
+    `ALTER TABLE room_resources ADD COLUMN IF NOT EXISTS storage_key VARCHAR(255)`,
+
+    `CREATE TABLE IF NOT EXISTS room_outbox_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       event_type VARCHAR(50) NOT NULL,
+       aggregate_type VARCHAR(30) NOT NULL,
+       aggregate_id UUID NOT NULL,
+       payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+       idempotency_key VARCHAR(180) NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       attempts INTEGER NOT NULL DEFAULT 0,
+       max_attempts INTEGER NOT NULL DEFAULT 6,
+       next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       last_error TEXT,
+       correlation_id UUID,
+       processed_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_outbox_events_idem_unique ON room_outbox_events (idempotency_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_outbox_ready ON room_outbox_events (status, next_attempt_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_outbox_aggregate ON room_outbox_events (aggregate_type, aggregate_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_reports (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       reporter_enrollment_id UUID NOT NULL,
+       target_type VARCHAR(20) NOT NULL,
+       target_id UUID NOT NULL,
+       reason VARCHAR(60) NOT NULL,
+       detail TEXT,
+       status VARCHAR(20) NOT NULL DEFAULT 'open',
+       resolution TEXT,
+       resolved_by VARCHAR(60),
+       resolved_at TIMESTAMPTZ,
+       idempotency_key VARCHAR(180),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_reports_idem_unique ON room_reports (idempotency_key) WHERE idempotency_key IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_room_reports_status ON room_reports (status)`,
+
+    `CREATE TABLE IF NOT EXISTS room_presence (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       in_video BOOLEAN NOT NULL DEFAULT false,
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_presence_unique ON room_presence (room_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_presence_room_seen ON room_presence (room_id, last_seen_at)`,
+
+    `CREATE TABLE IF NOT EXISTS community_contributions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       category VARCHAR(30) NOT NULL,
+       action VARCHAR(40) NOT NULL,
+       points INTEGER NOT NULL DEFAULT 0,
+       room_id UUID,
+       booking_id UUID,
+       message_id UUID,
+       idempotency_key VARCHAR(180) NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_contributions_idem_unique ON community_contributions (idempotency_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_community_contributions_enrollment_cat ON community_contributions (enrollment_id, category)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure Community Rooms schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Community Rooms schema ensured');
+}
+
 async function start(): Promise<void> {
   // Ensure uploads directory exists
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -1737,6 +2332,49 @@ async function start(): Promise<void> {
   await ensureEnrollmentColumns();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
+  // Live Sessions build-out: 5 live-session tables (idempotent DDL, sync is disabled).
+  await ensureLiveSessionSchema();
+  // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
+  await ensureInboxCaseSchema();
+  // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
+  // nullable ticket columns (idempotent DDL, shadow mode).
+  await ensureWorkLedgerSchema();
+  // Explorer Growth OS — EPIC 1 (Foundation): 5 tables for the learner decision
+  // layer (idempotent DDL, additive only). Nothing reads or writes them until the
+  // EXPLORER_GROWTH_OS_ENABLED flag is on, which it is not by default.
+  await ensureExplorerGrowthSchema();
+  // D1 fix: page_events.lead_id. contextGraphService has always queried this
+  // column and it has never existed, so buildCompositeContext() throws and every
+  // campaign email silently falls back to the legacy prompt. Additive + nullable.
+  await ensurePageEventLeadId();
+  // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
+  // tables (idempotent DDL, additive only, no binary storage).
+  await ensureEvidenceSchema();
+  // ProofDesk Work Graph — Milestone 3 (Multi-Agent Work Graph): 3 work-graph tables
+  // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
+  // additive only).
+  await ensureWorkGraphSchema();
+  // ProofDesk Governance — Milestone 4 (Governance Enforcement, SHADOW MODE ONLY):
+  // approval_requests table + FK from M1's pre-existing
+  // work_ledger_events.authorization_decision_id (idempotent DDL, additive only).
+  // Nothing that reads this table gates a real action yet — see
+  // agentActionAuthorizationBridge.ts's header.
+  await ensureApprovalRequestsSchema();
+  // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
+  // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
+  // processed by schedulerService.ts's daily cron.
+  await ensureOutcomeMeasurementsSchema();
+  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
+  // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
+  // additive only, parallel to the existing XP/promotion tables).
+  await ensureCapeSchema();
+
+  await ensureCommunityMemberRoleSchema();
+  // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
+  await ensureCommunityWinsSchema();
+  // Comment moderation (Community Organizer role) — status/removed_at/removed_by
+  // on community_comments, mirroring the existing post-moderation columns.
+  await ensureCommunityCommentModerationSchema();
   // Free-trial Organization / Manager layer — org + roster tables (idempotent).
   await ensureOrgSchema();
   // Student self-serve subscriptions (idempotent).
@@ -1751,27 +2389,72 @@ async function start(): Promise<void> {
   await ensureOnboardingProfileSchema();
   // Student Settings: avatar photo + uploaded resume file columns (idempotent).
   await ensurePortalSettingsSchema();
+  // CAPE Phase 2 — resume/LinkedIn placement + adaptive diagnostic: 2 new
+  // onboarding_profiles columns + 2 new tables (idempotent DDL, additive
+  // only). Must run AFTER ensurePortalSettingsSchema() so onboarding_profiles
+  // already exists.
+  await ensureCapePlacementSchema();
   // Unified StudentTask: nullable requirement_key + story-driven columns (idempotent).
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
   await ensureTimelineEngineSchema();
+  // CAPE Phase 3 — curriculum-to-skill mapping: curriculum_skill_maps +
+  // architecture_skill_prerequisites tables + 5 stamp columns on timeline_cards
+  // (idempotent DDL, additive only). Must run AFTER ensureTimelineEngineSchema() so
+  // timeline_cards already exists before the ALTER TABLE statements run.
+  await ensureCapeCurriculumMapSchema();
   // Network Video Library (Testimonials random personalized mode) — catalog + per-enrollment view ledger.
   await ensureNetworkVideoSchema();
   // Podcast Library (Podcast random personalized mode) — catalog + per-enrollment listen ledger.
   await ensurePodcastSchema();
+  // "Recommend a friend" onboarding step — friend_referrals table.
+  await ensureFriendReferralSchema();
+  // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
+  await ensureSponsorPortalAuditSchema();
+  await ensureSbpSchema();
+  await ensureWorkspaceRepoSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
   await ensureSurveyResponsesSchema();
   // Knowledge Check (quiz) + Evaluation attempts — scores, responses, pre/post correlation.
   await ensureAssessmentSchema();
+  // Weekly "Week in Review" Reflection — per-student captured signals (idempotent).
+  await ensureReflectionEntriesSchema();
   // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
   await ensureTodayFeedSchema();
+  await ensureCapeLearningValueRankerSchema(); // CAPE Phase 4 (T007) — additive columns; must run AFTER ensureTodayFeedSchema
+  await ensureCapeTodayPlanSchema(); // CAPE Phase 5 (T003) — new today_plan_feedback table, references enrollments(id)
+  await ensureCapeGovernanceSchema(); // CAPE Phase 6 — cape_governance_policy + cape_lifecycle_mode_policy (additive, byte-identical seed defaults)
+  await ensureCapeAiPulseExposureSchema(); // ai_pulse rotation bugfix (2026-08-06) — cape_ai_pulse_exposure table, references enrollments(id)
+  await ensureFeedControlSchema();
+  await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
     .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
     .catch((err: any) => console.warn('[DB] Blog boot refresh skipped:', err?.message?.split('\n')[0]));
+  // AI News Flash pipeline: populate a fresh env, then catch up a missed daily
+  // run so a redeploy through the 03:15 cron window doesn't drop a day's card
+  // (non-blocking). Materialization is cost-gated by AI_NEWS_INGEST_ENABLED.
+  import('./services/intel/aiNewsIngestionService')
+    .then(({ refreshAiNewsOnBoot }) => refreshAiNewsOnBoot())
+    .catch((err: any) => console.warn('[DB] AI News boot ingest skipped:', err?.message?.split('\n')[0]));
+  // Intelligence pipelines (the 9 generators): ensure the shared library table,
+  // register all source adapters, then run each source's boot catch-up so a
+  // redeploy through the cron window doesn't drop a day (non-blocking). Each is
+  // cost-gated by its own <SLUG>_INGEST_ENABLED flag (default OFF) — dark until set.
+  import('./services/intel/sources')
+    .then(async () => {
+      const { ensureIntelItemsSchema } = await import('./models/IntelItem');
+      await ensureIntelItemsSchema();
+      const { listIntelSources, runIntelPipelineOnBoot } = await import('./services/intel/intelPipeline');
+      for (const src of listIntelSources()) {
+        runIntelPipelineOnBoot(src.slug).catch((err: any) =>
+          console.warn(`[DB] Intel ${src.slug} boot ingest skipped:`, err?.message?.split('\n')[0]));
+      }
+    })
+    .catch((err: any) => console.warn('[DB] Intel pipelines boot skipped:', err?.message?.split('\n')[0]));
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();
@@ -1779,6 +2462,41 @@ async function start(): Promise<void> {
   await ensureOpsCenterSchema();
   await ensureWorkforceSchema();
   await ensureIntelligenceSchema();
+  // Colaberry Commons — Community Rooms tables (idempotent, additive). Created
+  // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
+  // env.communityRoomsEnabled at the route/worker/linkage layers.
+  await ensureCommunityRoomsSchema();
+  // Friendships (portal Contacts rail friend graph) — idempotent, additive, no flag.
+  await ensureFriendshipSchema();
+  // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
+  await ensureMessagingSchema();
+  // Reese Phase 1 — staff-identity columns on admin_users (display_name,
+  // is_ai_operated, agent_id). Additive, idempotent, no flag.
+  await ensureAdminUserIdentitySchema();
+  // Reese Phase 1 — agent-transparency columns on ai_agents (system_prompt,
+  // tools_granted, persona_version). Additive, idempotent, no flag.
+  await ensureAiAgentIdentitySchema();
+  // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
+  // Gated on the feature flag so it only populates envs where Rooms is enabled.
+  if (env.communityRoomsEnabled) {
+    try {
+      const { seedDefaultCommunityRooms } = await import('./seeds/seedDefaultCommunityRooms');
+      const r = await seedDefaultCommunityRooms();
+      console.log(`[CommunityRooms] default rooms: ${r.created} created, ${r.existing} existing`);
+    } catch (err: any) {
+      console.warn('[CommunityRooms] default room seed failed:', err?.message);
+    }
+  }
+  // Intelligence-pipeline sample cards — one evergreen card per intel type so the
+  // Today feed carries this content before the ingestion pipelines run. Idempotent
+  // (upserts by type); fail-soft so a fresh DB without the types can't break boot.
+  try {
+    const { seedIntelSampleCards } = await import('./seeds/seedIntelSampleCards');
+    const r = await seedIntelSampleCards();
+    console.log(`[IntelSamples] ${r.created.length} created, ${r.updated.length} updated`);
+  } catch (err: any) {
+    console.warn('[IntelSamples] sample-card seed failed:', err?.message);
+  }
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any
   // missing column as NULLABLE; never drops/alters. Fixes the recurring
@@ -1833,6 +2551,45 @@ async function start(): Promise<void> {
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
+      // CAPE Phase 0-1: 10 Architecture Skill definitions + default evidence-band weights.
+      const { seedCapeConfig } = await import('./services/cape/capeSeeders');
+      const cape = await seedCapeConfig();
+      console.log(`[CAPE] seeded: ${cape.skillDefinitions} skill definitions, ${cape.weights} weight config`);
+      // CAPE Phase 3: type-default curriculum_skill_maps rows — one per registered
+      // Curriculum Type (50/50, including explicit zero-credit rows for the
+      // system/community/delivery-event policy groups). Idempotent — only inserts
+      // when no current row exists yet for a given type_slug.
+      const { seedTypeSkillMaps } = await import('./services/cape/capeTypeSkillMapSeeds');
+      const typeMaps = await seedTypeSkillMaps();
+      console.log(`[CAPE] type-default skill maps seeded: ${typeMaps.created} created, ${typeMaps.skipped} already current`);
+      // CAPE Phase 3: week-level curriculum_skill_maps targets — Weeks 0-12, the
+      // second resolution tier (supersedes a type default for any card with a week
+      // number). Idempotent.
+      const { seedWeekSkillMaps } = await import('./services/cape/capeWeekSkillMapSeeds');
+      const weekMaps = await seedWeekSkillMaps();
+      console.log(`[CAPE] week-target skill maps seeded: ${weekMaps.created} created, ${weekMaps.skipped} already current, ${weekMaps.blueprintGapsLogged} blueprint gaps logged`);
+      // CAPE Phase 3: Architecture Skill prerequisite graph — a small starter seed
+      // (execution-contract.md Assumption 6), consumed by Phase 4's ranker later.
+      const { seedSkillPrerequisites } = await import('./services/cape/capeSkillPrerequisiteSeeds');
+      const prereqs = await seedSkillPrerequisites();
+      console.log(`[CAPE] skill prerequisites seeded: ${prereqs.created} created, ${prereqs.skipped} already existed`);
+      // Feed Control: re-apply stored type routing to the registry AFTER the seed
+      // (typeSeeder re-asserts surface columns from code, so routing must win last).
+      const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');
+      await applyFeedRoutingToRegistry();
+      // Invariant: at most one published build station per week — archive any
+      // artifact_submission duplicate of an implementation_task so a re-scaffold that
+      // re-published it self-heals (idempotent). See buildStationReconciler.
+      const { reconcileBuildStationLayout } = await import('./services/timeline/buildStationReconciler');
+      const bs = await reconcileBuildStationLayout();
+      if (bs.archived) console.log(`[TimelineEngine] build-station dedup: archived ${bs.archived} duplicate artifact_submission card(s)`);
+      // Invariant: every published reflect-chain eval/survey/reflection card carries
+      // its computed unlock_rules — self-heals drift from any card-creation path that
+      // bypasses createCard()'s auto-gate (seed scripts, legacy migrations) or cards
+      // added out of order. See reflectGatingReconciler.
+      const { reconcileReflectGating } = await import('./services/timeline/reflectGatingReconciler');
+      const rg = await reconcileReflectGating();
+      if (rg.fixed) console.log(`[TimelineEngine] reflect-gating reconcile: fixed ${rg.fixed}/${rg.checked} card(s)`);
     } catch (err: any) {
       console.warn('[TimelineEngine] seed failed:', err?.message);
     }
@@ -2004,6 +2761,41 @@ async function start(): Promise<void> {
       .then(({ pollArchitectBuilds }) => pollArchitectBuilds())
       .catch((err) => console.warn('[ArchitectPoller] scheduled run failed:', err?.message));
   });
+
+  // Cory health canary — exercises real read-only Cory tool executors every 4h so
+  // tool.call + retrieval observability (Trust Center P1-6) stays live even during
+  // weeks with no organic Cory investigation traffic. Read-only, no LLM involved,
+  // no write tools exposed. See services/observability/coryHealthCanaryService.ts.
+  cron.schedule('0 */4 * * *', () => {
+    import('./services/observability/coryHealthCanaryService')
+      .then(({ runCoryHealthCanary }) => runCoryHealthCanary())
+      .then((result) => {
+        if (result.errors.length > 0) {
+          console.warn('[CoryHealthCanary] completed with errors:', result.errors);
+        }
+      })
+      .catch((err) => console.warn('[CoryHealthCanary] scheduled run failed:', err?.message));
+  });
+
+  // Colaberry Commons — drain the community-rooms outbox every minute (Meet-link
+  // provisioning, timeline publish, reminders). Flag-gated so it registers no cron
+  // at all when the feature is off; the drain itself is idempotent + retryable
+  // with dead-lettering (see roomOutboxService).
+  if (env.communityRoomsEnabled) {
+    cron.schedule('* * * * *', () => {
+      import('./services/communityRooms/roomOutboxService')
+        .then(({ drainOutbox }) => drainOutbox(25))
+        .catch((err) => console.warn('[CommunityRoomsOutbox] drain failed:', err?.message));
+    });
+
+    // Sweep RSVP reminders into the outbox every 5 minutes. Idempotent — the
+    // outbox de-dups each (booking, window) reminder; the drain above delivers.
+    cron.schedule('*/5 * * * *', () => {
+      import('./services/communityRooms/roomReminderService')
+        .then(({ sweepReminders }) => sweepReminders())
+        .catch((err) => console.warn('[CommunityRoomsReminders] sweep failed:', err?.message));
+    });
+  }
 
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {

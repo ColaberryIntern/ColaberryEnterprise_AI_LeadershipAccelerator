@@ -10,9 +10,11 @@
  * instead of the 3-tier chooser). ProjectSwitcher calls clearRequirementsDraft
  * on both switch and new-project; RequirementsBuilder owns read/write.
  */
+import { getParticipantToken } from './participantToken';
+
 export function requirementsDraftKey(): string {
   try {
-    const t = localStorage.getItem('participant_token') || '';
+    const t = getParticipantToken() || '';
     const payload = JSON.parse(atob(t.split('.')[1] || ''));
     if (payload && payload.sub) return `requirements_builder_state:${payload.sub}`;
   } catch { /* fall through */ }

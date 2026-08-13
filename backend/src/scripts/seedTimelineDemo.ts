@@ -21,7 +21,6 @@ interface CardSpec { type: string; title: string; subtitle?: string; week: numbe
 const CARDS: CardSpec[] = [
   { type: 'announcement', title: 'Welcome to the AI Systems Architect Accelerator', subtitle: 'Read this first — how your timeline works', week: 1 },
   { type: 'warmup', title: 'Warm-up: what is an AI system, really?', week: 1 },
-  { type: 'overview', title: 'Overview: the Architect mindset', subtitle: 'Deterministic execution, agent-first design', week: 1 },
   { type: 'video', title: 'Video: anatomy of an AI operating system', week: 1 },
   { type: 'live_class', title: 'Live Class — Architecture Day', subtitle: 'Tuesday 1:30pm CT', week: 1 },
   { type: 'deep_dive', title: 'Deep Dive: context engineering', week: 1 },
@@ -30,7 +29,6 @@ const CARDS: CardSpec[] = [
   { type: 'prompt_challenge', title: 'Prompt Challenge: constrain the model', week: 2 },
   { type: 'implementation_task', title: 'Implementation Task: ship a working endpoint', subtitle: 'GitHub-tracked, AI + instructor reviewed', week: 2 },
   { type: 'artifact_submission', title: 'Artifact: architecture decision record', week: 2 },
-  { type: 'github_sync', title: 'GitHub Sync: connect your repo', week: 2 },
   { type: 'reflection', title: 'Reflection: what surprised you this week?', week: 2 },
   { type: 'demo', title: 'Demo Tuesday: present your build', week: 3 },
   { type: 'community_discussion', title: 'Community: share a win', week: 3 },

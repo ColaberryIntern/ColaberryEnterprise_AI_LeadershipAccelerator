@@ -10,19 +10,19 @@ import { PlanCard } from '../types';
 const BP = { title: 'Prompt Engineering', week: 4, difficulty: 'core', competencies: ['prompt_engineering', 'context_engineering', 'testing', 'github'], architect_domains: ['prompt_engineering', 'architecture'] };
 
 describe('scaffoldPlan', () => {
-  it('assembles a 15-card week from real registry types with all deps satisfied', () => {
+  it('assembles a 13-card week from real registry types with all deps satisfied', () => {
     const plan = scaffoldPlan(BP, 'week');
-    expect(plan.cards.length).toBe(15);
+    expect(plan.cards.length).toBe(13);
     expect(plan.cards.every((c) => typeof c.type === 'string')).toBe(true);
     expect(checkDependencies(plan.cards).ok).toBe(true);   // canonical sequence is dependency-clean
     expect(plan.cards[0].type).toBe('announcement');
   });
   it('shrinks for smaller scopes', () => {
-    expect(scaffoldPlan(BP, 'lesson').cards.length).toBe(3);
+    expect(scaffoldPlan(BP, 'lesson').cards.length).toBe(2);
     expect(scaffoldPlan(BP, 'certification_module').cards.some((c) => c.type === 'certification_exercise')).toBe(true);
   });
   it('includes ONLY approved activities when an approved set is given', () => {
-    const approved = new Set(['overview', 'video', 'reflection']);
+    const approved = new Set(['announcement', 'video', 'reflection']);
     const plan = scaffoldPlan(BP, 'week', approved);
     expect(plan.cards.length).toBe(3);
     expect(plan.cards.every((c) => approved.has(c.type))).toBe(true);
@@ -31,16 +31,16 @@ describe('scaffoldPlan', () => {
 
 describe('dependencyEngine', () => {
   const card = (type: string): PlanCard => ({ type, title: type, bucket: 'learn', week: 1, difficulty: 'core', estimated_time: 15, points: { learning: 0, builder: 0, community: 0 }, competencies: [] });
-  it('flags a Prompt Lab with no Overview/Video before it', () => {
+  it('flags a Prompt Lab with no Video before it', () => {
     const r = checkDependencies([card('prompt_lab')]);
     expect(r.ok).toBe(false);
-    expect(r.issues[0].missing.sort()).toEqual(['overview', 'video']);
+    expect(r.issues[0].missing.sort()).toEqual(['video']);
   });
   it('is satisfied when prerequisites appear earlier', () => {
-    expect(checkDependencies([card('overview'), card('video'), card('prompt_lab')]).ok).toBe(true);
+    expect(checkDependencies([card('video'), card('prompt_lab')]).ok).toBe(true);
   });
   it('order matters — a prereq AFTER the dependent does not satisfy it', () => {
-    expect(checkDependencies([card('prompt_lab'), card('overview'), card('video')]).ok).toBe(false);
+    expect(checkDependencies([card('prompt_lab'), card('video')]).ok).toBe(false);
   });
 });
 
@@ -90,7 +90,7 @@ describe('architectJourney + DNA', () => {
 describe('optimizationEngine', () => {
   it('recommends adding GitHub evidence when there is none', () => {
     const noGh: PlanCard[] = [
-      { type: 'overview', title: 'o', bucket: 'learn', week: 1, difficulty: 'intro', estimated_time: 15, points: { learning: 10, builder: 0, community: 0 }, competencies: [] },
+      { type: 'deep_dive', title: 'o', bucket: 'learn', week: 1, difficulty: 'intro', estimated_time: 15, points: { learning: 10, builder: 0, community: 0 }, competencies: [] },
       { type: 'video', title: 'v', bucket: 'learn', week: 1, difficulty: 'intro', estimated_time: 15, points: { learning: 15, builder: 0, community: 0 }, competencies: [] },
     ];
     const recs = recommend(noGh, BP, validateCurriculum(noGh, BP));

@@ -57,6 +57,20 @@ services:
       ENABLE_VOICE_CALLS: ${ENABLE_VOICE_CALLS:-false}
       # Service-to-service token training.colaberry.com uses for /api/v1/* calls.
       ENTERPRISE_CRM_TOKEN: ${ENTERPRISE_CRM_TOKEN:-}
+      # AI News Flash intelligence pipeline — the daily generator behind the
+      # intelligence-pipeline curriculum feed. These two knobs resolve from the
+      # host .env (also via env_file) but are declared explicitly so the cadence
+      # is visible and version-controlled. MAX_PER_RUN bounds cards per daily run
+      # AND per boot catch-up (~1 gpt-4o-mini call each, pennies/day) — 3 = a
+      # livelier feed, ~90-card rolling window with the 30-day prune.
+      # CATCHUP_STALE_HOURS is the boot backfill window (< the 24h cron so a
+      # missed day recovers on restart).
+      # NOTE: the cost gate AI_NEWS_INGEST_ENABLED is deliberately NOT re-declared
+      # here — it stays carried by env_file only. An explicit `${...:-false}`
+      # fallback would OVERRIDE the host .env `true` and silently disable
+      # ingestion if compose ever ran from a dir whose .env lacked the key.
+      AI_NEWS_MAX_PER_RUN: ${AI_NEWS_MAX_PER_RUN:-3}
+      AI_NEWS_CATCHUP_STALE_HOURS: ${AI_NEWS_CATCHUP_STALE_HOURS:-20}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

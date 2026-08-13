@@ -12,8 +12,8 @@ describe('dependencyService.createsCycle', () => {
     expect(createsCycle('c', ['a'], adj)).toBe(true);
   });
   it('allows a valid DAG edge', () => {
-    const adj = new Map<string, string[]>([['lab', ['overview']], ['overview', []], ['video', []]]);
-    expect(createsCycle('lab', ['overview', 'video'], adj)).toBe(false);
+    const adj = new Map<string, string[]>([['lab', ['deep_dive']], ['deep_dive', []], ['video', []]]);
+    expect(createsCycle('lab', ['deep_dive', 'video'], adj)).toBe(false);
   });
 });
 

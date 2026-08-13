@@ -5,6 +5,7 @@
 import { google, gmail_v1 } from 'googleapis';
 import InboxEmail, { InboxProvider } from '../../models/InboxEmail';
 import SystemSetting from '../../models/SystemSetting';
+import { shouldSkip, recordFailure, recordSuccess } from './inboxSyncBackoff';
 let fetchNewMessages: any;
 let isMsGraphConfigured: () => boolean = () => false;
 try {
@@ -219,9 +220,13 @@ async function syncGmailAccount(
 }
 
 async function fetchRecentMessageIds(gmail: gmail_v1.Gmail): Promise<string[]> {
+  // `-in:sent` is load-bearing (2026-07-14 mail-loop incident, BC #10095332194):
+  // without it, this sync also ingests Cora's own outgoing replies as "new"
+  // inbound emails on the very next cycle, which — combined with a since-fixed
+  // header-matching bug in hardRuleEngine — let her reply to herself forever.
   const listRes = await gmail.users.messages.list({
     userId: 'me',
-    q: 'newer_than:1d',
+    q: 'newer_than:1d -in:sent',
     maxResults: 100,
   });
 
@@ -327,16 +332,24 @@ export async function syncAllMailboxes(): Promise<{ synced: number; errors: stri
   // --- Gmail (Colaberry) ---
   const colaberryGmail = getColaberryGmailClient();
   if (colaberryGmail) {
-    try {
-      const emails = await syncGmailAccount('gmail_colaberry', colaberryGmail);
-      const newCount = await upsertEmails(emails);
-      totalNew += newCount;
-      console.log(`${LOG_PREFIX} [gmail_colaberry] Synced ${emails.length} messages, ${newCount} new`);
-    } catch (error: any) {
-      const msg = `gmail_colaberry: ${error.message}`;
-      console.error(`${LOG_PREFIX} ${msg}`);
-      errors.push(msg);
-      try { await (await import('./smsAlertService')).alertSyncFailure('gmail_colaberry', 'sync', error.message); } catch { /* alert is non-critical */ }
+    if (shouldSkip('gmail_colaberry')) {
+      console.log(JSON.stringify({
+        event: 'sync_skipped_backoff', service: 'InboxCOS', provider: 'gmail_colaberry', outcome: 'skipped',
+      }));
+    } else {
+      try {
+        const emails = await syncGmailAccount('gmail_colaberry', colaberryGmail);
+        const newCount = await upsertEmails(emails);
+        totalNew += newCount;
+        recordSuccess('gmail_colaberry');
+        console.log(`${LOG_PREFIX} [gmail_colaberry] Synced ${emails.length} messages, ${newCount} new`);
+      } catch (error: any) {
+        const msg = `gmail_colaberry: ${error.message}`;
+        console.error(`${LOG_PREFIX} ${msg}`);
+        errors.push(msg);
+        recordFailure('gmail_colaberry', error.message);
+        try { await (await import('./smsAlertService')).alertSyncFailure('gmail_colaberry', 'sync', error.message); } catch { /* alert is non-critical */ }
+      }
     }
   } else {
     console.log(`${LOG_PREFIX} [gmail_colaberry] Skipped — not configured`);
@@ -345,16 +358,24 @@ export async function syncAllMailboxes(): Promise<{ synced: number; errors: stri
   // --- Gmail (Personal) ---
   const personalGmail = getPersonalGmailClient();
   if (personalGmail) {
-    try {
-      const emails = await syncGmailAccount('gmail_personal', personalGmail);
-      const newCount = await upsertEmails(emails);
-      totalNew += newCount;
-      console.log(`${LOG_PREFIX} [gmail_personal] Synced ${emails.length} messages, ${newCount} new`);
-    } catch (error: any) {
-      const msg = `gmail_personal: ${error.message}`;
-      console.error(`${LOG_PREFIX} ${msg}`);
-      errors.push(msg);
-      try { await (await import('./smsAlertService')).alertSyncFailure('gmail_personal', 'sync', error.message); } catch { /* alert is non-critical */ }
+    if (shouldSkip('gmail_personal')) {
+      console.log(JSON.stringify({
+        event: 'sync_skipped_backoff', service: 'InboxCOS', provider: 'gmail_personal', outcome: 'skipped',
+      }));
+    } else {
+      try {
+        const emails = await syncGmailAccount('gmail_personal', personalGmail);
+        const newCount = await upsertEmails(emails);
+        totalNew += newCount;
+        recordSuccess('gmail_personal');
+        console.log(`${LOG_PREFIX} [gmail_personal] Synced ${emails.length} messages, ${newCount} new`);
+      } catch (error: any) {
+        const msg = `gmail_personal: ${error.message}`;
+        console.error(`${LOG_PREFIX} ${msg}`);
+        errors.push(msg);
+        recordFailure('gmail_personal', error.message);
+        try { await (await import('./smsAlertService')).alertSyncFailure('gmail_personal', 'sync', error.message); } catch { /* alert is non-critical */ }
+      }
     }
   } else {
     console.log(`${LOG_PREFIX} [gmail_personal] Skipped — not configured`);
@@ -390,9 +411,11 @@ export async function syncAllMailboxes(): Promise<{ synced: number; errors: stri
       console.log(`${LOG_PREFIX} [hotmail] Synced ${emails.length} messages via MS Graph SDK, ${newCount} new`);
     }
   } catch (error: any) {
+    const errorClass = (error as any).error_class || 'Error';
     const msg = `hotmail_graph: ${error.message}`;
-    console.error(`${LOG_PREFIX} ${msg}`);
+    console.error(`${LOG_PREFIX} ${msg} [${errorClass}]`);
     errors.push(msg);
+    try { await (await import('./smsAlertService')).alertSyncFailure('hotmail', 'sync', error.message); } catch { /* alert is non-critical */ }
   }
   if (!require('./graphMailService').isConfigured() && !isMsGraphConfigured()) {
     try {

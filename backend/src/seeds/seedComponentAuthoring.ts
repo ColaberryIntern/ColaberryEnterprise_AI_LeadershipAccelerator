@@ -14,6 +14,7 @@
  * a reseed and promotes cleanly to prod.
  */
 import CurriculumTypeDefinition, { CurriculumTypeDefinitionAttributes } from '../models/CurriculumTypeDefinition';
+import { INTEL_FORMATS } from './intelCardFormats';
 
 type AuthoredFields = Partial<CurriculumTypeDefinitionAttributes>;
 
@@ -22,20 +23,25 @@ type AuthoredFields = Partial<CurriculumTypeDefinitionAttributes>;
 // direction + a small Colaberry wordmark chip), shipped as static assets in
 // frontend/public/thumbnails/curriculum-types/ and served by the frontend build
 // at /thumbnails/curriculum-types/<slug>.jpg. Replaces the deterministic
-// gradient templateThumbnail() SVGs (and the earlier hand-drawn Overview vista
-// — frontend/public/thumbnails/overview-vista.svg stays on disk but the AI
-// banner supersedes it as Overview's picture).
+// gradient templateThumbnail() SVGs.
 // Regeneration pipeline: scripts/curriculum-type-thumbnails/ (see its README).
 const THUMBNAIL_SLUGS = [
-  'announcement', 'overview', 'live_class', 'event', 'video', 'testimonial',
+  'announcement', 'live_class', 'event', 'video', 'testimonial',
   'podcast', 'blog', 'warmup', 'knowledge_check', 'survey', 'prompt_lab',
   'deep_dive', 'prompt_challenge', 'implementation_task', 'artifact_submission',
   'ai_video_feedback', 'mock_interview', 'anthropic_skills_jar',
   'certification_exercise', 'evaluation', 'question', 'discussion',
-  'project_task', 'build_story', 'github_sync', 'reflection',
+  'project_task', 'build_story', 'reflection',
   'community_discussion', 'presentation', 'study_session', 'demo',
   'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',
+  'setup_lab',   // Claude Code "get unblocked" enablement lab
+  'architect_mindset',   // The Architect Time Machine — cinematic decision simulation
+  'community_live_session',
+  // Intelligence Pipeline types
+  'ai_news_flash', 'ai_research_digest', 'ai_tool_of_the_day', 'ai_video_stream',
+  'ai_quote_of_the_day', 'ai_architecture_breakdown', 'build_breakdown',
+  'mcp_server_spotlight', 'claude_code_technique', 'market_intelligence',
   // legacy pre-registry types (seedCurriculumTypeDefinitions.ts) still shown
   // in the Experience Studio grid
   'executive_reality_check', 'prompt_template', 'ai_strategy',
@@ -47,46 +53,9 @@ const AI_THUMBNAILS: Record<string, AuthoredFields> = Object.fromEntries(
   THUMBNAIL_SLUGS.map((slug) => [slug, { thumbnail_url: thumbnailUrlFor(slug) }]),
 );
 
-// ── overview ─────────────────────────────────────────────────────────────────
-// Overview's picture is its AI banner (short static URL, so BOTH the Library
-// <img> and the prompt-driven thumbnail renderer reference the exact same
-// picture — an LLM can copy a short URL verbatim; it cannot reliably reproduce
-// a data-URI).
-const OVERVIEW_THUMBNAIL_URL = thumbnailUrlFor('overview');
-
-// Zero author input: the runtime prepends the week's Blueprint ("WEEK CONTEXT",
-// see getBlueprintContext) and — for SECTION_ROSTER_TYPES — the week's actual
-// activity roster ("THIS WEEK'S ACTIVITIES", see sectionCurriculumContext), and
-// enforces the fixed output schema. This prompt steers title + body_html.
-const OVERVIEW_GENERATION_PROMPT = [
-  'You write the Week Overview for the AI Systems Architect Accelerator: the framing card a participant reads before the week begins. The WEEK CONTEXT block above gives this week\'s topic, focus, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground everything in it and invent nothing it does not support.',
-  '',
-  'title: the word "Overview", then a space, an em dash, a space, then the week\'s topic exactly as named in the WEEK CONTEXT. Example: "Overview — Claude Code Foundations + Workspace".',
-  '',
-  'body_html: clean, self-contained, VALID and fully balanced HTML (no scripts, no inline styles). Emit exactly these four parts in order:',
-  '  1. <p> a one or two sentence welcome naming the week\'s big idea </p>',
-  '  2. <p><strong>What you\'ll cover</strong></p> then a <ul> of 3 to 6 short <li> items describing what the student will actually DO this week — when a THIS WEEK\'S ACTIVITIES list is provided above, draw the items from it (name the videos, labs, courses, and builds); otherwise use the learning objectives',
-  '  3. <p><strong>Why it matters</strong></p> then <p> one or two sentences tying the week to the AI Systems Architect path </p>',
-  '  4. <p><strong>By the end of this week you\'ll be able to…</strong></p> then a <ul> of 2 to 3 <li> capability statements from the student outcomes or success criteria',
-  'Every opening tag must have a matching closing tag. Do not leave any stray or unbalanced tags.',
-  '',
-  'summary: one sentence describing what the week covers.',
-  'completion: "Marked complete when the participant opens and reads the overview."',
-  'Return questions as [], reflection as "", discussion_prompt as "", github_task as null, evaluation_criteria as [].',
-  '',
-  'Voice: executive — clear, calm, authoritative. About 150 to 230 words. No hype, no emojis. The only em dash appears in the title, not the body.',
-].join('\n');
-
-// The prompt-driven thumbnail surface: every Overview thumbnail is the SAME
-// fixed vista picture with only the title changing on top of it.
-const OVERVIEW_THUMBNAIL_RENDERER = [
-  'Render this "Overview" as a compact 320x180 thumbnail card.',
-  'Structure: a relatively-positioned rounded-corner card that contains, full-bleed,',
-  `EXACTLY this image tag (copy the src verbatim, do not alter it): <img src="${OVERVIEW_THUMBNAIL_URL}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">`,
-  'and the card title overlaid bottom-left in white (the image has a built-in dark scrim there). Nothing else — no summary, no badges, no extra decoration.',
-  'Output clean, self-contained, accessible HTML (no scripts). Use the content:',
-  '{{content}}',
-].join('\n');
+// NOTE: the 'overview' curriculum type was retired 2026-07-21 (announcement is
+// the section-opener now) — its thumbnail/generation/renderer authoring was
+// removed here along with its typeRegistry entry and authoring block below.
 
 // ── survey (weekly feedback) ─────────────────────────────────────────────────
 // Zero author input: the runtime prepends the week's Blueprint ("WEEK CONTEXT")
@@ -244,8 +213,533 @@ const ANNOUNCEMENT_GENERATION_PROMPT = [
   'completion: "Marked complete when the participant opens and reads the weekly announcement."',
 ].join('\n');
 
+const SETUP_LAB_GENERATION_PROMPT = `You author a "Setup Lab" for the AI Systems Architect Accelerator — a short, hands-on "get unblocked" lab that helps a NON-TECHNICAL business executive get ONE technical thing working, with Claude Code doing the heavy lifting. Ground the tone, the example, and the "why now" in the WEEK CONTEXT above, and refer to the week by its section TITLE, never by number. Invent no technical claim the WEEK CONTEXT and the topic below do not support; accuracy beats completeness.
+
+The ONE thing the student must get working in this lab is: {{setup_topic}}.
+{{setup_context}}
+
+Purpose: remove fear and build the core habit of the whole program — let Claude Code do the technical part. Write for a smart executive who has never done this and is a little intimidated. Voice: warm, confident, energizing but never hype; plain English; short sentences; define any unavoidable term in-line. Make them feel this is easy and they have got it.
+
+title: the words "Setup Lab", a space, an em dash, a space, then {{setup_topic}} in sentence case.
+
+summary: one vivid sentence naming the single outcome they will walk away with.
+
+body_html: clean, semantic, fully-balanced HTML — NO <style>, NO colors, NO inline styles, NO scripts, NO images (the workspace supplies the theme). Use ONLY these tags: h3, p, strong, em, ol, ul, li, pre, code. Emit EXACTLY these five sections in order, each opened by an <h3> with this exact wording:
+  <h3>Why this matters</h3> — 2 punchy sentences: what {{setup_topic}} is and why it unlocks this week's work.
+  <h3>Your one outcome</h3> — a single <p><strong>...</strong></p> stating one crisp, checkable win in plain language.
+  <h3>Let your AI do it</h3> — one sentence of framing, then a SINGLE <pre> containing a genuine, first-person, paste-ready prompt the student pastes straight into Claude Code — natural language addressed to Claude Code, telling it to DO {{setup_topic}} for them and to explain and confirm each step for a non-technical person. It must be copy-paste runnable as written, not a checklist. If {{setup_topic}} is installing or first-running Claude Code itself, make this the first prompt they paste once it opens, to confirm it works and orient them. Keep the prompt 3–7 sentences.
+  <h3>Prefer to do it yourself?</h3> — a short <ol> of 3–6 concrete manual steps.
+  <h3>Check it worked</h3> — 1–2 sentences: exactly what counts as done (the real outcome the portal verifies) and what they will see when it passes.
+Every opening tag has a matching closing tag. About 250–420 words.
+
+github_task: if {{setup_topic}} involves GitHub, a repository, commits, pushes, or CI, return a one-line description of the concrete git/CI action the portal should verify; otherwise null.
+
+Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", evaluation_criteria = []. completion: "Marked complete when the participant proves the outcome — verified automatically where a real check exists (e.g. GitHub), otherwise by submitting evidence."`;
+
+const PROMPT_LAB_GENERATION_PROMPT = `You author a "Prompt Lab" for the AI Systems Architect Accelerator — a catalog of hands-on PRACTICE PROMPTS a NON-TECHNICAL business executive pastes into Claude Code to practice this week by building small real things. Use ALL of the context above: the WEEK CONTEXT (the week's topic + objectives), THIS WEEK'S ACTIVITIES (the roster — especially the Deep Dive and the Anthropic course named there), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
+
+Ground the catalog in that context:
+- Include at least one or two prompts that have the student BUILD one of the documents/artifacts named in WHAT STUDENTS BUILD THIS WEEK or covered by this week's Deep Dive.
+- Include at least one prompt that reinforces the concepts from the Anthropic course / the week's learning objectives.
+- The remaining prompts can be lighter warm-up practice on the week's topic.
+
+Produce a CATALOG of 4 to 6 practice prompts grouped into 2 or 3 CATEGORIES that rise in ambition (for example "Warm up", "Build something real", "Push further").
+
+title: the words "Prompt Lab", a space, an em dash, a space, then the week's topic exactly as named in the WEEK CONTEXT.
+summary: one vivid sentence on what they will practice building this week.
+
+body_html: clean, semantic, fully-balanced HTML — NO <style>, NO colors, NO inline styles, NO scripts, NO images (the workspace supplies the theme). Use ONLY these tags: h3, h4, p, strong, em, ol, ul, li, pre, code. Structure it EXACTLY like this, in order:
+For each category:
+  <h3>Category name</h3>
+  then for each practice prompt in that category, in order:
+    <h4>A short action title for the prompt</h4>
+    <p>One or two plain sentences: what this prompt has Claude Code build for them, and why it is good practice for this week (name the document or concept it connects to). This explanation is always visible.</p>
+    <pre>The full, first-person, paste-ready prompt addressed to Claude Code — natural language, copy-paste runnable exactly as written, that has Claude Code build the thing AND explain each step for a non-technical person. 3 to 7 sentences.</pre>
+Every <h4> is followed by exactly one <p> then exactly one <pre>. Every opening tag has a matching closing tag. 4 to 6 prompts total across the categories.
+
+Voice: warm, confident, encouraging, plain English; make a non-technical executive feel these are doable. Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", github_task = null, evaluation_criteria = []. completion: "Marked complete when the participant copies a prompt, builds it in Claude Code, and submits what they made."`;
+
+const BUILD_ARTIFACTS_GENERATION_PROMPT = `You author a "Build Artifact(s) Lab" for the AI Systems Architect Accelerator — a build station where a NON-TECHNICAL business executive picks ONE artifact and runs a paste-ready prompt in Claude Code to build it ON THEIR OWN PROJECT: a significant, portfolio-grade deliverable (~5+ minutes of work, Deep-Dive quality, something they would be proud of). Use ALL the context above — the WEEK CONTEXT (topic + objectives), THIS WEEK'S ACTIVITIES (the Deep Dive + the Anthropic course), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
+
+Produce EXACTLY 5 artifacts the student could build this section — grounded in the week's deliverables, Deep Dive, and topic. Each is a substantial, real deliverable (a document, module, package, framework, or diagram), never a toy.
+
+title: the word "Build", a space, an em dash, a space, then the week's topic exactly as named in the WEEK CONTEXT.
+summary: one vivid sentence on the real things they can build this section.
+
+body_html: clean, semantic, fully-balanced HTML — NO <style>, NO colors, NO inline styles, NO scripts, NO images (the workspace supplies the theme). Use ONLY these tags: h4, p, strong, em, ol, ul, li, pre, code. Emit EXACTLY 5 artifacts, each in this order:
+  <h4>Short artifact name</h4>
+  <p>One or two plain sentences: what this artifact is and why it is valuable. Always visible.</p>
+  <pre>A long, well-designed, first-person paste-ready prompt addressed to Claude Code that builds this artifact ON the student's project. Use the LITERAL token {PROJECT} wherever the project name goes (it is substituted at runtime). Have Claude Code produce a real, polished, portfolio-grade deliverable and explain each step for a non-technical person. The prompt MUST state up front what file it will produce (pick the fitting type and name it: a Markdown .md document, or a PDF / Word / PowerPoint / Excel file), and MUST end by telling Claude Code to SAVE the finished artifact as that single file into the user's Downloads folder with a clear kebab-case filename, then TELL THE USER the exact filename and full path in plain words (for example: "I've saved it to your Downloads folder as governance-framework.md") so they know precisely which file to upload afterward. This is a substantial build (~5+ minutes). 8 to 14 sentences.</pre>
+Every <h4> is followed by exactly one <p> then exactly one <pre>. Every opening tag has a matching closing tag. EXACTLY 5 artifacts.
+
+Voice: warm, confident, encouraging, plain English. Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", github_task = null, evaluation_criteria = []. completion: "Marked complete on the participant's FIRST submitted build; they can re-run on other artifacts or projects for practice without earning additional points."`;
+
+// ── Intelligence Pipeline types (news / research / tools / video / quote /
+//    architecture / build / MCP / technique / market) ─────────────────────────
+// These 10 types are reusable content GENERATORS: each turns one external item
+// into a standalone Timeline Card carrying a fixed executive quality standard.
+// They are DUAL-MODE. When materialized by an ingestion pipeline (e.g. the AI
+// News Flash cron) the runtime passes the real item through the {{item_*}} vars,
+// so the card summarizes THAT item. When merely scheduled on a week by the
+// Composer (or previewed in Experience Studio) no item is passed, so the prompt
+// falls back to a representative example grounded in the week's WEEK CONTEXT.
+// Only generation_prompt drives the runtime; it emits the fixed 9-key schema.
+interface IntelPromptConfig {
+  slug: string;          // which INTEL_FORMATS design this card emits
+  role: string;          // one line: what this card type is
+  unit: string;          // what one item is, singular (e.g. "an AI news item")
+  titleRule: string;     // how to format the title
+  reflectionSeed: string;
+  discussionSeed: string;
+  github?: string;       // when set, github_task instruction; otherwise null
+  // legacy fields — no longer used (the design now comes from INTEL_FORMATS[slug])
+  leadHeading?: string;
+  leadBody?: string;
+  sources?: string;
+}
+
+// Each type emits its OWN distinct, richly-styled format (intelCardFormats.ts).
+// Because the `intel` band renders through lessonDoc (which preserves <style>),
+// the prompt tells the model to copy that type's <style> VERBATIM, then fill the
+// type's structure — so a live LLM card matches the hand-authored sample design.
+const intelGenerationPrompt = (c: IntelPromptConfig): string => {
+  const f = INTEL_FORMATS[c.slug];
+  return [
+    `You write ${c.role} for the AI Systems Architect Accelerator — a continuously-updated intelligence card that keeps enterprise AI architects current. Executive voice: clear, calm, authoritative (Bloomberg meets Salesforce). No hype, no marketing language.`,
+    '',
+    'DATA SOURCE — read this first. An ITEM may be provided through variables:',
+    '  ITEM title: {{item_title}} | source: {{item_source}} | url: {{item_url}} | date: {{item_date}} | excerpt: {{item_excerpt}}',
+    `If the ITEM title is non-empty, base the ENTIRE card on that specific real item (${c.unit}). If it is empty, produce ONE representative, clearly-illustrative example (${c.unit}) grounded in the WEEK CONTEXT above. Never fabricate a URL, a citation, a metric, or a quote you were not given; when a fact is missing, describe it in general terms and lower the confidence.`,
+    '',
+    `title: ${c.titleRule}`,
+    'summary: one sentence (under ~30 words) stating the single most important takeaway.',
+    '',
+    'body_html: this card type has a SPECIFIC, DISTINCT visual format — do NOT emit a generic list of headings. FIRST, copy this <style> block VERBATIM, character for character (do not rename a class or change a value):',
+    `<style>${f.style}</style>`,
+    'THEN emit the markup using ONLY those classes, in exactly this structure:',
+    f.structure,
+    'Rules: valid, fully-balanced HTML (every opening tag has a matching close); no <script>, no <img>, and no inline style attributes beyond the ones the structure already shows. Fill every slot from the ITEM (or the illustrative example) — tight, concrete, specific copy. The Source line must end with a confidence of High, Medium, or Low (Low for an illustrative example or when facts were missing).',
+    '',
+    `reflection: ${c.reflectionSeed}`,
+    `discussion_prompt: ${c.discussionSeed}`,
+    'questions: [].',
+    c.github ? `github_task: ${c.github}` : 'github_task: null.',
+    'evaluation_criteria: [].',
+    'completion: "Marked complete when the participant reads the card."',
+  ].join('\n');
+};
+
+const AI_NEWS_FLASH_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_news_flash',
+  role: 'an AI News Flash — a concise executive briefing on one piece of AI news',
+  unit: 'an AI news item',
+  titleRule: 'the news headline itself, rewritten as a crisp Title-Case headline under ~12 words (keep acronyms like AI, API, MCP, LLM as-is). No "AI News Flash" prefix.',
+  leadHeading: 'What happened',
+  leadBody: 'two or three sentences stating plainly what was announced or reported, who did it, and when.',
+  sources: 'Anthropic, OpenAI, Google DeepMind, Microsoft AI, Meta AI, Hugging Face, NVIDIA, the GitHub blog',
+  reflectionSeed: 'one sentence asking how this news could change something the participant is building or planning.',
+  discussionSeed: 'one open prompt inviting the cohort to weigh in on what this means for enterprise AI.',
+});
+
+const AI_RESEARCH_DIGEST_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_research_digest',
+  role: 'an AI Research Digest — a plain-English explainer of one AI research paper',
+  unit: 'an AI research paper',
+  titleRule: 'the paper\'s idea in plain Title-Case English under ~12 words (not the raw academic title). No prefix.',
+  leadHeading: 'The paper, in plain English',
+  leadBody: 'explain what the paper does and its core innovation so a non-researcher understands it, then note (as sub-points in the same section if useful) its business value, its architecture impact, and one concrete implementation idea.',
+  sources: 'arXiv, Papers with Code, Nature, MIT, Stanford, CMU, Anthropic Research, OpenAI Research',
+  reflectionSeed: 'one sentence asking where a technique from this paper might apply in the participant\'s own work.',
+  discussionSeed: 'one open prompt asking whether this research is ready for enterprise use yet, and why.',
+});
+
+const AI_TOOL_OF_THE_DAY_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_tool_of_the_day',
+  role: 'an AI Tool of the Day — an enterprise-readiness profile of one AI tool',
+  unit: 'an AI tool',
+  titleRule: 'the tool\'s name, then " — ", then a three-to-six-word description of what it does.',
+  leadHeading: 'The tool',
+  leadBody: 'cover, as a short paragraph plus a compact <ul>: purpose, website/vendor, pricing model, enterprise readiness (security, SSO, data handling), rough popularity, primary business use cases, its technical stack, notable pros and cons, and a couple of alternatives.',
+  sources: 'the tool\'s own docs and vendor site, plus independent reviews',
+  reflectionSeed: 'one sentence asking whether this tool fits a system the participant is designing, and where it would slot in.',
+  discussionSeed: 'one open prompt inviting a build/buy debate for this tool in an enterprise context.',
+});
+
+const AI_VIDEO_STREAM_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_video_stream',
+  role: 'an AI Video Stream card — a briefing on one high-quality AI video, talk, keynote, or podcast',
+  unit: 'an AI video or talk',
+  titleRule: 'the video/talk title in Title Case under ~14 words. No prefix. The video itself plays in the card player; this text is the accompanying briefing.',
+  leadHeading: 'What the video covers',
+  leadBody: 'summarize the talk in two or three sentences (speaker, venue, core thesis), then a short <ul> of 3 to 5 key moments or takeaways and the skills it teaches.',
+  sources: 'YouTube, conference talks, keynotes and podcasts from Anthropic, Google, Microsoft, OpenAI, NVIDIA',
+  reflectionSeed: 'one sentence asking which idea from the talk the participant would try first.',
+  discussionSeed: 'one open prompt asking the cohort to share the single most useful moment.',
+});
+
+const AI_QUOTE_OF_THE_DAY_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_quote_of_the_day',
+  role: 'an AI Quote of the Day — a short, thought-provoking quote from an AI leader with context',
+  unit: 'a quote from an AI leader',
+  titleRule: 'a 3-to-6-word Title-Case phrase capturing the quote\'s theme. No prefix, no quotation marks in the title.',
+  leadHeading: 'The quote',
+  leadBody: 'a <blockquote> with the quote verbatim (only if provided; otherwise a clearly-illustrative paraphrase), then a <p> naming the person, their organization, the date/occasion, the original source, and one or two sentences of context and historical significance.',
+  sources: 'interviews, keynotes, essays and posts by named AI leaders',
+  reflectionSeed: 'one reflective question asking the participant whether they agree with the quote and why.',
+  discussionSeed: 'one open prompt inviting the cohort to react to the quote from their own experience.',
+});
+
+const AI_ARCHITECTURE_BREAKDOWN_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_architecture_breakdown',
+  role: 'an AI Architecture Breakdown — an explanation of how one real AI system is built',
+  unit: 'a real AI product or system',
+  titleRule: 'the system\'s name, then " — ", then "Architecture Breakdown".',
+  leadHeading: 'The system',
+  leadBody: 'explain, as a short paragraph plus a compact <ul>, how the system is put together across as many of these as apply: overall architecture, agents, data flow, models used, MCP / tool integration, vector database, memory, observability, and governance. Be concrete about the pattern, not the marketing.',
+  sources: 'engineering blogs, talks, and public docs for systems like Cursor, Claude, ChatGPT, Perplexity, Netflix, Tesla, Spotify, Amazon',
+  reflectionSeed: 'one sentence asking which part of this architecture the participant would reuse in their own system.',
+  discussionSeed: 'one open prompt asking what the cohort would design differently and why.',
+});
+
+const BUILD_BREAKDOWN_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'build_breakdown',
+  role: 'a Build Breakdown — a dissection of one impressive AI build shared by a developer',
+  unit: 'an impressive AI build',
+  titleRule: 'the build\'s name or one-line description in Title Case under ~12 words. No prefix.',
+  leadHeading: 'What was built',
+  leadBody: 'describe what the build does and why it is impressive, then a compact <ul> covering its architecture, the key lessons learned, the prompt techniques used, and its business applications. Reference the repository if a url was provided.',
+  sources: 'GitHub, X/Twitter, Reddit, and developer blogs',
+  reflectionSeed: 'one sentence asking what the participant would build using the same approach.',
+  discussionSeed: 'one open prompt asking the cohort which technique from this build they want to try.',
+  github: 'a short, optional "try it" task — e.g. clone or recreate one small piece of this build in a repo and open a PR. One or two sentences.',
+});
+
+const MCP_SERVER_SPOTLIGHT_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'mcp_server_spotlight',
+  role: 'an MCP Server Spotlight — a profile of one Model Context Protocol server',
+  unit: 'an MCP server',
+  titleRule: 'the MCP server\'s name, then " — ", then "MCP Server".',
+  leadHeading: 'The server',
+  leadBody: 'explain what this MCP server does and why it is useful, then a compact <ul> covering its purpose, installation, architecture, example calls, business value, and integration points.',
+  sources: 'the server\'s repository and docs, and the MCP registry',
+  reflectionSeed: 'one sentence asking which of the participant\'s projects this server could plug into.',
+  discussionSeed: 'one open prompt asking the cohort where an MCP server like this adds the most leverage.',
+  github: 'a short task — install this MCP server locally, wire it into a Claude Code project, and commit the config. One or two sentences.',
+});
+
+const CLAUDE_CODE_TECHNIQUE_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'claude_code_technique',
+  role: 'a Claude Code Technique — an advanced Claude Code workflow explained with a practical example',
+  unit: 'a Claude Code technique',
+  titleRule: 'the technique named as a Title-Case phrase under ~10 words. No prefix.',
+  leadHeading: 'The technique',
+  leadBody: 'explain the technique and when to use it (hooks, agents, subagents, memory, planning, testing, GitHub workflows, prompt engineering, or architecture), then a short numbered <ol> of steps and a concrete worked example.',
+  sources: 'Claude Code docs, engineering posts, and community workflows',
+  reflectionSeed: 'one sentence asking where this technique would save the participant the most time.',
+  discussionSeed: 'one open prompt asking the cohort to share their own variation of this technique.',
+  github: 'a short task — apply this technique in a real repo (e.g. add the hook / subagent / test) and commit it. One or two sentences.',
+});
+
+const MARKET_INTELLIGENCE_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'market_intelligence',
+  role: 'a Market Intelligence card — an enterprise-AI market or industry signal (the kind Opportunity Pulse surfaces)',
+  unit: 'a market / industry AI signal',
+  titleRule: 'the signal as a crisp Title-Case headline under ~12 words. No prefix.',
+  leadHeading: 'The signal',
+  leadBody: 'state the market signal plainly, then a compact <ul> covering as many as apply: emerging industry, AI buying trend, funding, enterprise demand, government opportunity, hiring trend, and AI maturity by industry.',
+  sources: 'Opportunity Pulse, funding and hiring data, industry reports',
+  reflectionSeed: 'one sentence asking how this market signal could shape the participant\'s positioning or roadmap.',
+  discussionSeed: 'one open prompt asking the cohort which industry is the biggest AI opportunity right now.',
+});
+
+// Every intelligence card takes the same external item through these vars.
+const INTEL_ITEM_VARS = ['item_title', 'item_source', 'item_url', 'item_excerpt', 'item_date'];
+
+// Shared authored shape for the 10 intelligence types — only icon/label/Parts/
+// prompt differ. completion on view, not scored; content is program-wide.
+const intelAuthoring = (o: {
+  slug: string;
+  student_label: string;
+  icon: string;
+  badge_class: string;
+  estimated_time: number;
+  capabilities: string[];
+  generation_prompt: string;
+  extraVars?: string[];
+}): AuthoredFields => ({
+  student_label: o.student_label,
+  category: 'Intelligence',
+  icon: o.icon,
+  badge_class: o.badge_class,
+  estimated_time: o.estimated_time,
+  capabilities: o.capabilities,
+  inputs: [],
+  variable_keys: [...INTEL_ITEM_VARS, ...(o.extraVars || [])],
+  outputs: [
+    { key: 'title', type: 'string', description: 'Headline for the item' },
+    { key: 'summary', type: 'string', description: 'One-sentence takeaway' },
+    { key: 'body_html', type: 'html', description: 'Executive card: what · why · architect relevance · business/technical/enterprise implications · next action · related · source' },
+    { key: 'reflection', type: 'string', description: 'One reflection prompt' },
+    { key: 'discussion_prompt', type: 'string', description: 'One cohort discussion seed' },
+  ],
+  completion_rules: { on: 'view' },
+  evaluation_type: 'none',
+  generation_prompt: o.generation_prompt,
+  thumbnail_url: thumbnailUrlFor(o.slug),
+  approved: true,
+  status: 'published',
+});
+
+// The Architect Time Machine. Week 0 ships a hand-authored scenario in code
+// (data/architectMindsetScenario.ts — the null-blueprint free-preview tier); this
+// prompt is for the Weeks 1-12 generator, which produces the same structured
+// scenario JSON against the injected WEEK CONTEXT and caches it on the card.
+const ARCHITECT_MINDSET_GENERATION_PROMPT = `You author one weekly scenario for "The Architect Time Machine", a cinematic decision simulation in the AI Systems Architect Accelerator. Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by number. Assume architecture has no single correct answer; reward evidence, assumptions, tradeoffs, failure anticipation, governance, and clear communication, never jargon.
+
+Return STRICT json matching this shape (an AmScenario): {
+  "version": string, "week": number, "baseline": false,
+  "title": string (the week's LOCKED title from WEEK CONTEXT), "series": "Architect Mindset", "experience": "The Architect Time Machine",
+  "principle": string (the week's LOCKED principle), "tagline": "Gain the lessons experience usually teaches too late.",
+  "request": { "from": string, "text": string (a deceptively simple business/system request) },
+  "initial_system": string[] (the 2-4 boxes the request appears to be),
+  "first_decision": { "prompt": string, "options": [{ "id": string, "label": string }, ..., { "id": "custom", "label": "I would do something else", "custom": true }] },
+  "zoom_out": { "people": string[], "information": string[], "decisions": string[], "operations": string[] },
+  "signature_reveals": string[] (2-3 memorable one-line statistics/statements),
+  "interview_part_1": [{ "id": string, "text": string, "mode": "single", "dimension": one of system_scope|assumption_discovery|stakeholder_awareness|tradeoff_quality|failure_anticipation|evidence_observability|governance_ownership|decision_communication, "options": [3-4 plausible professional instincts, then { "id":"custom", "label":"I see it differently, let me write my own answer.", "custom": true }] }],
+  "interview_part_2": [ same shape, asks what changed after the consequences ],
+  "consequence": { "horizon": [{ "point": string, "risk": 0-100, "note": string }], "reveal": string, "lesson": string (ties the principle to the consequences) },
+  "rearchitecture": { "prompt": string },
+  "receipt": { "counts": [{ "label": string, "value": string }], "represented_hours": number, "minutes": number, "qualification": "Illustrative and scenario-based. This represents patterns studied, not employment experience earned, and is not a guarantee of competence or job readiness." },
+  "adr": { "fields": ["context","decision","assumption","consequence","tradeoff","owner"] },
+  "project_transfer": { "prompt": string, "questions": string[] },
+  "commitment_prompt": string
+}
+Multiple-choice options must be plausible professional instincts, never one-obviously-correct plus absurd distractors, and never a memorization test. Do not invent a technical claim the WEEK CONTEXT does not support.`;
+
+// ── community_discussion → weekly Community Ritual ────────────────────────────
+// The card renders a LIVE bespoke panel (PeerWinsPanel, render_band 'peer_wins')
+// that runs a DIFFERENT ritual each week (Roll Call, Skill Drop, Cohort Wins,
+// Unblock Me, Hot Take, Architect Manifesto…; the exact prompt + composer + wall
+// come from communityRituals.ts, resolved by the card's week). The generation
+// prompt only frames the card (a neutral title + one sentence) — the ritual UI is
+// code, not generated content, so the prompt must NOT name a specific ritual.
+const PEER_WINS_GENERATION_PROMPT = [
+  "You author the end-of-week Community card for the AI Systems Architect Accelerator — a share-with-your-cohort moment a NON-TECHNICAL business executive reaches AFTER finishing this week's section.",
+  'The card renders a LIVE weekly ritual (a guided composer + the cohort wall) whose exact prompt is set in code per week — you do NOT write it. Your only job is a short, inviting title + one framing sentence.',
+  'Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by number. Invent no technical claim the context does not support.',
+  'Produce ONLY these two, and set every other output key empty:',
+  '- title: a short, warm invitation tied to this week\'s topic (for example "Share what you built — {the week\'s section topic}"). Do NOT name a specific ritual.',
+  '- summary: ONE warm sentence (max ~24 words) inviting the student to post and cheer their classmates. Plain language, no jargon, no hype.',
+  'Set the rest empty: body_html "", questions [], reflection "", discussion_prompt "", github_task null, evaluation_criteria [], completion "".',
+].join('\n');
+
+// ── reflection → the weekly "Week in Review" (the week-CLOSER) ───────────────
+// A roster-summary type (SECTION_ROSTER_TYPES): the runtime prepends the week
+// Blueprint ("WEEK CONTEXT") AND the week's real activity roster ("THIS WEEK'S
+// ACTIVITIES"), so this reflection reflects the WHOLE week back — every activity
+// placed, grouped by phase — not a generic "what did you learn?". Generic render
+// band → it ships its own light, self-contained CSS inside body_html (lessonDoc
+// preserves <style>). The light "Ledger" design: evidence first, two strategic
+// signals last (readiness + application). NOTE: per-student results (scores,
+// commits) are NOT injected yet — fills are class-wide/illustrative until the
+// cross-card student-history binding + bespoke renderer land (see the build spec).
+const REFLECTION_GENERATION_PROMPT = [
+  "You write the weekly Reflection for the AI Systems Architect Accelerator: the week-CLOSER that reflects the WHOLE week back to the student — what they did, what moved, what to carry forward. The WEEK CONTEXT above gives the week topic, objectives, competencies, and level. THIS WEEK'S ACTIVITIES above lists the ACTUAL curriculum items placed in this week, in journey order with each item's phase in brackets and its minutes. Ground everything in both; invent nothing; cover the whole week.",
+  '',
+  'VOICE: calm, warm, authoritative — an executive coach speaking in second person ("you"), past tense ("this week you…"). No hype, minimal emoji.',
+  'TITLE: exactly the words "Your Week in Review", a space, an em dash, a space, then the week topic EXACTLY as written in the WEEK CONTEXT — copy it verbatim. Example: "Your Week in Review — Claude Code Foundations + Workspace".',
+  'SUMMARY: one warm sentence (max ~22 words) naming what this week changed in them, grounded in the topic and outcomes.',
+  '',
+  'BODY_HTML: output the following in order and NOTHING else. FIRST copy this <style> block VERBATIM, character for character:',
+  '<style>',
+  '  body{max-width:880px;margin:0 auto;background:#f6f7f9;color:#16223c;padding:20px;line-height:1.5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
+  '  h1,p{margin:0}',
+  '  .e{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:#2e5aac}',
+  '  h1{font-size:23px;letter-spacing:-.01em;margin:8px 0 6px;line-height:1.16}',
+  '  .sub{color:#586a86;font-size:15px;max-width:64ch}',
+  '  .st{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}',
+  '  .st span{background:#fff;border:1px solid #e9ecf2;border-radius:999px;padding:6px 13px;font-size:12.5px;color:#586a86}',
+  '  .st b{color:#16223c}',
+  '  .l{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:22px 0 8px}',
+  '  .p{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8b94a8;margin:13px 0 6px}',
+  '  .b{background:#fff;border:1px solid #e9ecf2;border-radius:12px;padding:2px 14px}',
+  '  .i{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #eef0f4}',
+  '  .i:first-child{border-top:0}',
+  '  .i .g{width:20px;text-align:center;flex:none}',
+  '  .i .t{flex:1;font-size:13px;font-weight:600}',
+  '  .i .m{font-size:11.5px;color:#8b94a8;font-weight:600;white-space:nowrap}',
+  '  .q{background:#fff;border:1px solid #e9ecf2;border-radius:12px;padding:14px;margin-bottom:9px}',
+  '  .q .k{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#2e5aac}',
+  '  .q .t2{font-size:14px;font-weight:650;margin:5px 0 3px}',
+  '  .q .w{font-size:11px;color:#8b94a8}',
+  '  .sv{color:#8b94a8;font-size:12px;margin-top:14px}',
+  '</style>',
+  '',
+  'THEN the content, using ONLY these classes — no other classes, no inline styles, no <script>, no <img>:',
+  '  <p class="e">Week {N from WEEK CONTEXT} · {week topic}</p><h1>a warm past-tense headline naming what they accomplished this week</h1><p class="sub">one grounding sentence tying the week\'s work to becoming an AI Systems Architect</p>',
+  '  three tiles from THIS WEEK\'S ACTIVITIES header: <div class="st"><span><b>{N} activities</b></span><span><b>{total time, e.g. ~7.7 hrs}</b> invested</span><span><b>{level from WEEK CONTEXT}</b> level</span></div>',
+  '  <p class="l">What you did this week</p>',
+  '  Then for EACH phase that has activities, in journey order Prep, Learn, Practice, Build, Reflect, Share: <p class="p">{Phase name} · {count}</p><div class="b"> one row per activity in that phase: <div class="i"><span class="g">{activity emoji}</span><span class="t">{the activity\'s real title — the words AFTER the colon on its THIS WEEK\'S ACTIVITIES line, verbatim}</span><span class="m">{that activity\'s minutes}m</span></div> </div>',
+  '  <p class="l">Before you go</p>',
+  '  <div class="q"><p class="k">Readiness</p><p class="t2">a specific question asking how confident they now feel applying THIS week\'s core skill on real work</p><p class="w">Shapes your review schedule and where your mentor focuses next.</p></div>',
+  '  <div class="q"><p class="k">Application</p><p class="t2">a question asking where they will put this week\'s skill to work first</p><p class="w">Tailors the examples we show you — and shows your sponsor the ROI.</p></div>',
+  '  <p class="sv">Saved to your learning story — close this and keep going whenever you\'re ready.</p>',
+  '',
+  'COVER EVERY activity from THIS WEEK\'S ACTIVITIES, grouped by phase, rendering ALL phase groups IN FULL and in order through the FINAL Share phase. A COMMON MISTAKE is stopping after the Build phase — you MUST NOT: continue and render the Reflect phase (the week\'s evaluation and survey) and the Share phase (the community activity), which are the most important activities to reflect on. Do not skip, merge, or invent any; only omit pure system cards and the reflection activity itself (this IS that moment). For each row use the activity\'s real TITLE — the text AFTER the colon on its THIS WEEK\'S ACTIVITIES line, verbatim — NOT the short type label before the colon; use its exact minutes; never re-estimate. Activity emoji by type: 📣 announcement, 📖 self study/reading, ✅ knowledge check/quiz/evaluation, 🎬 video, 👥 live class, 🔎 deep dive, 🎓 skills course, 🧪 prompt lab, 🖥️ setup, 🏗️ implementation/build, 🔁 github sync, 📦 artifact, 🧭 architect mindset, 📝 survey, 🤝 community/discussion.',
+  'Keep it compact so the whole response stays well within length limits: one line per activity, terse copy. Every opening tag has a matching closing tag; the CSS must be valid. (The skills-growth meters and concept map are intentionally omitted from this generated body — they belong to the reflection panel, rendered from the student\'s own history, not to class-wide generated content.)',
+  '',
+  'questions: an array of EXACTLY the two full question SENTENCES you wrote in the .t2 fields of the two .q blocks above (the readiness question sentence, then the application question sentence) — the sentences themselves, never the labels "Readiness"/"Application".',
+  'reflection: one short coaching stem inviting the student to write the single biggest thing that clicked this week.',
+  'discussion_prompt: one warm invitation to share their biggest insight from this week\'s topic with the cohort.',
+  'github_task: null.',
+  'evaluation_criteria: [].',
+  'completion: "Marked complete when the participant reviews their week and answers the two reflections."',
+].join('\n');
+
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
+  reflection: {
+    label: 'Reflection',
+    student_label: 'Reflection',
+    description: "The weekly week-closer: reflects the WHOLE week back to the student — every activity they did (grouped by phase), the skills the week moved, and the concepts they explored — then captures two strategic signals (readiness + application). A roster-summary type (SECTION_ROSTER_TYPES): the runtime injects the week Blueprint AND the real activity roster, so it covers every card placed in the week. Ships its own light, self-contained CSS in body_html.",
+    category: 'Reflect',
+    icon: 'bi-journal-check',
+    badge_class: 'bg-info',
+    estimated_time: 10,
+    difficulty: 'intro',
+    capabilities: ['reflection', 'portfolio', 'sharing', 'comments'],
+    inputs: [],
+    variable_keys: [], // zero author input — the runtime injects blueprint + week roster
+    outputs: [
+      { key: 'title', type: 'string', description: 'Your Week in Review — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Light "Ledger" week review: what you did (every activity by phase), skills moved, concepts, two reflections' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing of what the week changed' },
+      { key: 'questions', type: 'json', description: 'The two strategic reflections (readiness, application)' },
+      { key: 'reflection', type: 'string', description: 'A coaching stem for the biggest takeaway' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: REFLECTION_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('reflection'),
+    approved: true,
+    status: 'published',
+  },
+  architect_mindset: {
+    label: 'Architect Mindset',
+    student_label: 'Architect Time Machine',
+    description: 'A weekly interactive architectural simulation that exposes students to difficult system lessons traditionally learned through years of project experience. The student enters the Architect Time Machine, makes a decision, sees its consequences unfold across time, and is interviewed about what they saw and missed.',
+    category: 'Architect Development',
+    icon: 'bi-hourglass-split',
+    badge_class: 'bg-dark',
+    estimated_time: 28,
+    capabilities: ['evidence', 'artifacts', 'reflection', 'evaluation', 'scoring', 'retry', 'comments', 'portfolio', 'mentor_review'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'interview_responses', type: 'json', description: 'Architect Interview answers (initial + revised, per question)' },
+      { key: 'architect_decision_record', type: 'json', description: 'A structured, student-owned Architect Decision Record (ADR)' },
+      { key: 'mindset_score', type: 'json', description: 'Transparent dimension breakdown + stage (Week 0 = baseline, unscored)' },
+      { key: 'mindset_ledger', type: 'json', description: 'Cumulative Mindset Ledger update (derived)' },
+      { key: 'project_transfer', type: 'json', description: 'The lesson applied to the student personalized project' },
+      { key: 'experience_receipt', type: 'json', description: 'Patterns represented + illustrative estimate + mandatory qualification' },
+    ],
+    completion_rules: { on: 'evaluate' },
+    evaluation_type: 'ai',
+    generation_prompt: ARCHITECT_MINDSET_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('architect_mindset'),
+    approved: true,
+    status: 'ready',
+  },
+  setup_lab: {
+    label: 'Setup Lab',
+    student_label: 'Setup Lab',
+    description: 'A hands-on "get unblocked" lab: get one technical thing working with Claude Code doing the heavy lifting. Five beats — why, the one outcome, let your AI do it (a paste-ready prompt), a manual fallback, and a real check.',
+    category: 'Setup',
+    icon: 'bi-rocket-takeoff',
+    badge_class: 'bg-success',
+    estimated_time: 30,
+    capabilities: ['evidence', 'github', 'hint_system', 'mentor_review', 'comments'],
+    inputs: [
+      { key: 'setup_topic', type: 'string', required: true },
+      { key: 'setup_context', type: 'string', required: false },
+    ],
+    variable_keys: ['setup_topic', 'setup_context'],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Setup Lab — {setup_topic}' },
+      { key: 'body_html', type: 'html', description: 'Five beats: why, the one outcome, let your AI do it, manual fallback, check it worked' },
+      { key: 'summary', type: 'string', description: 'One sentence naming the outcome' },
+      { key: 'github_task', type: 'string', description: 'Commit/push/CI action to verify when the topic involves GitHub, else null' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: SETUP_LAB_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('setup_lab'),
+    approved: true,
+    status: 'ready',
+  },
+  prompt_lab: {
+    student_label: 'Prompt Lab',
+    category: 'Practice',
+    icon: 'bi-lightning-charge',
+    badge_class: 'bg-danger',
+    estimated_time: 45,
+    capabilities: ['ai_chat', 'hint_system', 'mentor_review', 'comments', 'evidence'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Prompt Lab — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Practice-prompt catalog: categories (h3), each prompt = h4 title, p explanation, pre prompt' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: PROMPT_LAB_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('prompt_lab'),
+    approved: true,
+    status: 'ready',
+  },
+  implementation_task: {
+    student_label: 'Build Artifact(s) Lab',
+    category: 'Build',
+    icon: 'bi-hammer',
+    badge_class: 'bg-danger',
+    estimated_time: 90,
+    capabilities: ['ai_chat', 'github', 'evidence', 'artifacts', 'portfolio', 'mentor_review', 'comments'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Build — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Build station: 5 artifacts, each h4 name + p what + pre build_prompt (uses {PROJECT})' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: BUILD_ARTIFACTS_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('implementation_task'),
+    approved: true,
+    status: 'ready',
+  },
+  artifact_submission: {
+    student_label: 'Build Artifact(s) Lab',
+    category: 'Build',
+    icon: 'bi-hammer',
+    badge_class: 'bg-danger',
+    estimated_time: 60,
+    capabilities: ['ai_chat', 'github', 'evidence', 'artifacts', 'portfolio', 'mentor_review', 'comments'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Build — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Build station: 5 artifacts, each h4 name + p what + pre build_prompt (uses {PROJECT})' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: BUILD_ARTIFACTS_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('artifact_submission'),
+    approved: true,
+    status: 'ready',
+  },
   warmup: {
     label: 'Self Study',
     student_label: 'Self Study',
@@ -317,28 +811,6 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     approved: true,
     status: 'published',
   },
-  overview: {
-    student_label: 'Overview',
-    category: 'Learn',
-    icon: 'bi-binoculars',
-    badge_class: 'bg-info',
-    estimated_time: 8,
-    capabilities: ['bookmarks', 'comments', 'likes'],
-    inputs: [],
-    variable_keys: [], // zero author input — the runtime injects blueprint + week roster
-    outputs: [
-      { key: 'title', type: 'string', description: 'Overview — {week topic}' },
-      { key: 'body_html', type: 'html', description: '4-part week overview' },
-      { key: 'summary', type: 'string', description: 'One-sentence week summary' },
-    ],
-    completion_rules: { on: 'view' },
-    evaluation_type: 'none',
-    generation_prompt: OVERVIEW_GENERATION_PROMPT,
-    thumbnail_url: OVERVIEW_THUMBNAIL_URL,
-    renderers: { thumbnail: OVERVIEW_THUMBNAIL_RENDERER },
-    approved: true,
-    status: 'ready',
-  },
   knowledge_check: {
     student_label: 'Knowledge Check',
     category: 'Assess',
@@ -383,6 +855,117 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     thumbnail_url: thumbnailUrlFor('evaluation'),
     approved: true,
     status: 'ready',
+  },
+
+  // ── Intelligence Pipeline types ────────────────────────────────────────────
+  ai_news_flash: intelAuthoring({
+    slug: 'ai_news_flash', student_label: 'AI News Flash', icon: 'bi-newspaper', badge_class: 'bg-info',
+    estimated_time: 6, capabilities: ['ai_chat', 'comments', 'likes', 'bookmarks', 'sharing'],
+    generation_prompt: AI_NEWS_FLASH_GENERATION_PROMPT,
+  }),
+  ai_research_digest: intelAuthoring({
+    slug: 'ai_research_digest', student_label: 'AI Research Digest', icon: 'bi-journal-richtext', badge_class: 'bg-primary',
+    estimated_time: 12, capabilities: ['ai_chat', 'reflection', 'comments', 'bookmarks'],
+    generation_prompt: AI_RESEARCH_DIGEST_GENERATION_PROMPT,
+  }),
+  ai_tool_of_the_day: intelAuthoring({
+    slug: 'ai_tool_of_the_day', student_label: 'AI Tool of the Day', icon: 'bi-tools', badge_class: 'bg-success',
+    estimated_time: 8, capabilities: ['ai_chat', 'comments', 'likes', 'bookmarks', 'sharing'],
+    generation_prompt: AI_TOOL_OF_THE_DAY_GENERATION_PROMPT,
+  }),
+  ai_video_stream: intelAuthoring({
+    slug: 'ai_video_stream', student_label: 'AI Video Stream', icon: 'bi-play-btn', badge_class: 'bg-danger',
+    estimated_time: 15, capabilities: ['video', 'transcript', 'comments', 'bookmarks'],
+    generation_prompt: AI_VIDEO_STREAM_GENERATION_PROMPT, extraVars: ['item_video_url'],
+  }),
+  ai_quote_of_the_day: intelAuthoring({
+    slug: 'ai_quote_of_the_day', student_label: 'AI Quote of the Day', icon: 'bi-chat-quote', badge_class: 'bg-secondary',
+    estimated_time: 3, capabilities: ['reflection', 'comments', 'likes', 'bookmarks'],
+    generation_prompt: AI_QUOTE_OF_THE_DAY_GENERATION_PROMPT,
+  }),
+  ai_architecture_breakdown: intelAuthoring({
+    slug: 'ai_architecture_breakdown', student_label: 'Architecture Breakdown', icon: 'bi-diagram-3', badge_class: 'bg-primary',
+    estimated_time: 15, capabilities: ['ai_chat', 'reflection', 'comments', 'bookmarks'],
+    generation_prompt: AI_ARCHITECTURE_BREAKDOWN_GENERATION_PROMPT,
+  }),
+  build_breakdown: intelAuthoring({
+    slug: 'build_breakdown', student_label: 'Build Breakdown', icon: 'bi-hammer', badge_class: 'bg-success',
+    estimated_time: 12, capabilities: ['ai_chat', 'github', 'comments', 'bookmarks'],
+    generation_prompt: BUILD_BREAKDOWN_GENERATION_PROMPT,
+  }),
+  mcp_server_spotlight: intelAuthoring({
+    slug: 'mcp_server_spotlight', student_label: 'MCP Server Spotlight', icon: 'bi-hdd-network', badge_class: 'bg-info',
+    estimated_time: 10, capabilities: ['ai_chat', 'github', 'comments', 'bookmarks'],
+    generation_prompt: MCP_SERVER_SPOTLIGHT_GENERATION_PROMPT,
+  }),
+  claude_code_technique: intelAuthoring({
+    slug: 'claude_code_technique', student_label: 'Claude Code Technique', icon: 'bi-terminal', badge_class: 'bg-dark',
+    estimated_time: 12, capabilities: ['ai_chat', 'github', 'reflection', 'comments'],
+    generation_prompt: CLAUDE_CODE_TECHNIQUE_GENERATION_PROMPT,
+  }),
+  market_intelligence: intelAuthoring({
+    slug: 'market_intelligence', student_label: 'Market Intelligence', icon: 'bi-graph-up-arrow', badge_class: 'bg-warning',
+    estimated_time: 8, capabilities: ['ai_chat', 'comments', 'bookmarks', 'sharing'],
+    generation_prompt: MARKET_INTELLIGENCE_GENERATION_PROMPT,
+  }),
+
+  community_live_session: {
+    student_label: 'Live Session',
+    category: 'Community',
+    icon: 'bi-camera-video',
+    badge_class: 'bg-danger',
+    estimated_time: 60,
+    // Colaberry Commons — a live community room session (study/demo/office-hours/
+    // etc). The card is delivered by the 'event' renderer; its body is populated
+    // from the booking (purpose, outcome, host, time, Join). Comments/likes let
+    // the cohort react before and after.
+    capabilities: ['comments', 'likes', 'bookmarks'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Session title' },
+      { key: 'body_html', type: 'html', description: 'Session purpose, outcome, host, time, and Join CTA' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing of the session' },
+    ],
+    completion_rules: { on: 'view' },
+    evaluation_type: 'none',
+    generation_prompt:
+      'Write a concise, inviting card for an upcoming community live session using the provided booking fields ' +
+      '(title, variant, purpose/outcome, host, start time, timezone). Output a friendly title, a short body_html ' +
+      '(2-4 short paragraphs: what it is, who it is for, the outcome, and a clear "Join" call to action), and a ' +
+      'one-sentence summary. Do not invent details that are not in the booking.',
+    thumbnail_url: thumbnailUrlFor('community_live_session'),
+    approved: true,
+    status: 'published',
+  },
+
+  community_discussion: {
+    student_label: 'Community Ritual',
+    category: 'Community',
+    icon: 'bi-people-fill',
+    badge_class: 'bg-success',
+    estimated_time: 15,
+    // Renders the LIVE ritual panel (render_band 'peer_wins'): a different guided
+    // ritual per week (composer + cohort wall + kudos), resolved from the card's
+    // week in communityRituals.ts. Parts signal what the student gets; the panel is
+    // code-driven so they don't gate behavior.
+    capabilities: ['reflection', 'comments', 'likes', 'sharing'],
+    inputs: [],
+    variable_keys: [], // zero author input — the runtime injects the week blueprint
+    outputs: [
+      { key: 'title', type: 'string', description: 'A short, warm invitation tied to the week topic' },
+      { key: 'summary', type: 'string', description: 'One warm sentence inviting a ritual post' },
+    ],
+    // Posting a win is OPTIONAL — engaging with the card completes it (never gated
+    // on posting). Display-only field; runtime completion is the explicit Mark complete.
+    completion_rules: { on: 'view' },
+    evaluation_type: 'none',
+    generation_prompt: PEER_WINS_GENERATION_PROMPT,
+    // EXPLICIT — an authored entry overrides the ...AI_THUMBNAILS spread, so the
+    // thumbnail must be re-stated here or the type ships with no banner.
+    thumbnail_url: thumbnailUrlFor('community_discussion'),
+    approved: true,
+    status: 'published',
   },
 };
 

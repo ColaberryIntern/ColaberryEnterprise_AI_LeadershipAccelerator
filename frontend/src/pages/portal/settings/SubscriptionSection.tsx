@@ -31,6 +31,10 @@ const firstCharge = (priceDollars: number, creditCents: number): { appliedCents:
 
 const CANCEL_REASONS = ['Too expensive', 'Not enough time', 'Not what I expected', 'Found another option', 'Just exploring'];
 
+// Named window target for the PaySimple checkout tab -- see onChoose() for why
+// this needs a name rather than a held JS reference.
+const CHECKOUT_WINDOW_NAME = 'colaberryCheckout';
+
 const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onToast }) => {
   const [view, setView] = useState<SubscriptionView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,11 +54,29 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
   const onChoose = async (plan: PlanId) => {
     if (busy || waiting) return;
     setBusy(true);
+    // Open the tab SYNCHRONOUSLY, in direct response to the click, before any
+    // await. Once window.open() happens after an async gap (even a fast one),
+    // most browsers no longer treat it as tied to the user gesture and the
+    // popup blocker silently swallows it -- found live 2026-07-30 ("I'm having
+    // issues Enrolling... it stays on this page, no other tab opens"), and the
+    // UI still showed the "waiting on payment" spinner even though no tab had
+    // actually opened. A named target lets the later, post-await call navigate
+    // this SAME tab without needing to hold a JS reference to it, so 'noopener'
+    // still protects against the payment page reaching back into window.opener.
+    const opened = window.open('', CHECKOUT_WINDOW_NAME);
+    if (opened) {
+      try { opened.document.write('<title>Redirecting to checkout…</title><body style="font-family:sans-serif;padding:40px;color:#555">Redirecting to secure checkout…</body>'); } catch { /* best-effort only */ }
+    } else {
+      flash('Your browser blocked the payment window. Please allow pop-ups for this site and try again.');
+      setBusy(false);
+      return;
+    }
     try {
       const { payment_link } = await startSubscriptionCheckout(plan);
-      window.open(payment_link, '_blank', 'noopener'); // pay in a NEW tab; this tab waits
+      window.open(payment_link, CHECKOUT_WINDOW_NAME, 'noopener'); // navigates the tab opened above
       setWaiting(true);
     } catch (err: any) {
+      opened.close();
       const code = err?.response?.data?.error;
       flash(code === 'billing_unconfigured'
         ? 'Payments aren’t enabled in this environment yet.'

@@ -13,6 +13,9 @@ build/
 
 # IDE
 .vscode/
+
+# /loop-architect skill run state (per-run scratch state, not source)
+.loop-architect/
 .idea/
 
 # Personal Claude Code overrides — project-scoped, never shared with the team
@@ -64,3 +67,7 @@ credentials/
 # these into the repo tree at runtime; ignoring the whole dir keeps the prod working tree
 # clean so `git pull` / deploys never hit a dirty-tree conflict. (0 tracked files here.)
 tmp/ops-engine/
+
+# loop-architect run state — dashboards, plans, verification logs for in-progress
+# autonomous build loops. Local working state, not shipped product code.
+.loop-architect/

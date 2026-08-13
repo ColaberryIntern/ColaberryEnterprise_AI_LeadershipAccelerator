@@ -13,7 +13,7 @@ interface CardCtx { id: string; type: string; title: string; description?: strin
 const KIND_BY_TYPE: Record<string, string> = {
   prompt_lab: 'prompt_library', prompt_challenge: 'prompt_library',
   implementation_task: 'architecture_doc', project_task: 'architecture_doc', internship_activity: 'architecture_doc',
-  artifact_submission: 'case_study', github_sync: 'implementation_notes',
+  artifact_submission: 'case_study',
   presentation: 'presentation', demo: 'presentation', build_story: 'case_study',
   reflection: 'reflection', ai_video_feedback: 'reflection', mock_interview: 'case_study',
 };

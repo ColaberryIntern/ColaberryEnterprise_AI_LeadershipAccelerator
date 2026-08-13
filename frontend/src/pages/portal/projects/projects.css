@@ -69,12 +69,12 @@
 .pjw-size .sz-t{font-size:15px;font-weight:700;color:var(--text-strong);display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .pjw-size .sz-time{font-size:12px;font-weight:700;color:var(--leaf-text);background:rgba(91,166,60,.14);border-radius:var(--r-pill);padding:2px 10px}
 .pjw-size .sz-d{font-size:13px;color:var(--text-muted);margin-top:4px}
-/* generated requirement rows */
-.pjw-req{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-bottom:1px solid var(--border-subtle);font-size:15px}
-.pjw-req:last-child{border-bottom:none}
-.pjw-req .rbadge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:rgba(54,120,149,.14);color:var(--berry);flex:none;margin-top:2px;letter-spacing:.03em}
-.pjw-gentask{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border-default);border-radius:var(--r-12);margin-bottom:9px;background:var(--surface-page);font-size:14px}
-.pjw-gentask .chip{flex:none}
+/* Step 3 review rows — the student's OWN words played back to them.
+   (The old .pjw-req / .pjw-gentask rows rendered a fabricated plan that no
+   generator had produced; they were deleted along with the markup.) */
+.pjw-review{padding:11px 14px;border:1px solid var(--border-default);border-radius:var(--r-12);margin-bottom:9px;background:var(--surface-page);font-size:14px;white-space:pre-wrap}
+.pjw-next{margin:0 0 4px;padding-left:20px;font-size:14px;color:var(--text-muted)}
+.pjw-next li{margin-bottom:7px}
 .pjw-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 .pjw-actions .grow{flex:1}
 .pjw-tf{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:rgba(54,120,149,.08);border:1px solid rgba(54,120,149,.28);border-radius:var(--r-16);padding:16px;margin-bottom:14px}
@@ -209,6 +209,15 @@
 .pj-prog .meter{flex:1;height:9px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;border:1px solid var(--border-subtle)}
 .pj-prog .meter>i{display:block;height:100%;border-radius:var(--r-pill)}
 .pj-prog .pct{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text-strong)}
+
+/* Inside a single build (ProjectInterior), the header-condense mechanism is
+   deliberately OFF — you've already committed to one build, so the "what's
+   next across everything" header summary doesn't apply. Instead, THIS build's
+   next-action hero stays pinned near the top of the viewport as the task list
+   scrolls, same offset/sticky pattern as .te-side, so the one thing to do next
+   never scrolls out of reach. */
+.pj-nexthero-pinned{position:sticky;top:20px;z-index:5}
+@media(max-width:1300px){.pj-nexthero-pinned{position:static;top:auto}}
 
 /* next action */
 .pj-next{position:relative;background:var(--surface-page);border:1px solid var(--border-default);border-left:5px solid var(--cherry);border-radius:var(--r-16);padding:20px 22px;box-shadow:var(--shadow-md);margin-bottom:18px}

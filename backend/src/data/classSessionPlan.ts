@@ -1,0 +1,1696 @@
+/**
+ * classSessionPlan.ts — the canonical per-class content spine for the AI Systems
+ * Architect Accelerator live sessions ("AI Architect Today · Learn It Monday /
+ * Build It Thursday").
+ *
+ * This file is the single source of truth that BOTH of these consume:
+ *   1. The session-content writer (scripts/updateClassSessionContent.ts) — sets
+ *      each live_session's title, description, and kit_json.
+ *   2. The Class Kit deck builder (services/classKit/*) — turns each class into
+ *      an interactive, Open-House-style teaching deck with a live pace tracker.
+ *
+ * Design: the run-of-show TIMING structure is templated per day kind (Architecture
+ * Day / Build Day / Orientation) in services/classKit/runOfShow.ts — identical
+ * every week, straight from AI_BUILD_SHOW_STRATEGY.md §3/§4. The CONTENT below
+ * fills that structure per week, grounded in data/weekBlueprints.ts (purpose,
+ * objectives, evidence, github deliverables, risk_areas) and the 12-week show
+ * slate (AI_BUILD_SHOW_STRATEGY.md §6). Templated timing + blueprint-driven
+ * content = consistent show format, authentic per-week substance.
+ *
+ * Dependency-free (inline types, pure data) so it type-checks and unit-tests in
+ * isolation, exactly like data/weekBlueprints.ts.
+ *
+ * Naming contract (matches the curriculum blueprint titles the admin dropdown
+ * shows, per Ali 2026-07-21): a week's two sessions are titled
+ *   "Week N · Architecture Day — <Blueprint Title>"  (Monday)
+ *   "Week N · Build Day — <Blueprint Title>"          (Thursday)
+ * so getSessionCurriculum's /Week\s+(\d+)/ parse still resolves the blueprint.
+ */
+
+export type DayKind = 'orientation' | 'architecture' | 'build';
+export type InteractionKind = 'prediction' | 'poll' | 'trivia';
+
+export interface Interaction {
+  kind: InteractionKind;
+  q: string;
+  options: string[];
+  /** Index of the correct option for `trivia`; omitted for opinion polls/predictions. */
+  answer?: number;
+  /** One line the instructor reads on reveal. */
+  reveal?: string;
+  /** Render as a full-screen "Live Decision Theater" moment (voting badge, live
+   * count, locked vote, animated reveal) instead of the compact inline treatment.
+   * Use sparingly — a handful of times per class, for decisions worth stopping for. */
+  theater?: boolean;
+}
+
+export interface BuildCheckpoint {
+  n: number; // 0..3
+  label: string;
+  detail: string;
+}
+
+/** A visual "change of pace" story/teaching-moment slide — icon + narrative,
+ * for metaphors, real-world examples, and the human stakes behind the tool.
+ * Code-rendered (large emoji + color), not a photo — no image pipeline exists. */
+export interface StoryBeat {
+  icon: string;             // large emoji anchor
+  eyebrow: string;
+  title: string;
+  body: string;             // 2-4 sentences, the story itself
+  punch?: string;           // optional closing one-liner, styled distinctly
+  tone?: 'cherry' | 'berry' | 'amber' | 'leaf' | 'violet';
+}
+
+/** Optional "Build Bay" metadata for a coding prompt. All fields are optional —
+ * a prompt with none of them still renders (generic paste target + a fallback
+ * rescue line), so this degrades gracefully on the hundreds of existing prompts
+ * authored before this model existed. Populate real values for flagship weeks. */
+export interface BuildBayMeta {
+  /** What this code block IS, which decides the Build Bay's lead chip:
+   *  'paste' (default) → "📋 PASTE INTO <target>" — the student runs it.
+   *  'review' → "📖 REVIEW TOGETHER" — the instructor reads it with the room
+   *  and nobody pastes anything. Needed because a class that directs Claude
+   *  Code to WRITE the code still wants the resulting code on screen to read,
+   *  and labelling that "paste this" teaches the opposite of the lesson. */
+  kind?: 'paste' | 'review';
+  /** Where the prompt gets pasted. Defaults to "Claude Code" at render time.
+   *  Set it explicitly for anything that is NOT a Claude Code prompt — shell
+   *  commands belong in a terminal, and mislabelling them is a real teaching
+   *  error in a program whose whole thesis is "you direct Claude Code". */
+  pasteWhere?: string;
+  /** e.g. "Plan Mode" | "Manual" | "Auto" — omitted (no chip) if not set. */
+  ccMode?: string;
+  /** "YOU SHOULD SEE" — omitted if not set. */
+  expectedResult?: string;
+  /** "STOP WHEN" — omitted if not set. */
+  stopCondition?: string;
+  /** "IF YOU GET STUCK" — falls back to a generic line at render time if not set. */
+  rescue?: string;
+}
+
+export interface ClassPrompt extends BuildBayMeta {
+  label: string;
+  /** The copy-ready Claude Code prompt the instructor pastes on screen. */
+  prompt: string;
+}
+
+export interface WeekClassContent {
+  week: number;
+  /** Blueprint title — the "section name" that must match the curriculum. */
+  title: string;
+  intensive: string;
+  /** YouTube title direction (result-first), from the show slate. */
+  publicTitle: string;
+
+  monday: {
+    /** The business tension — why this matters beyond the tool. */
+    tension: string;
+    /** Cold-open payoff: what will exist by Thursday. */
+    payoffPreview: string;
+    /** 3–5 architecture story beats (diagram, components, risks, decisions). */
+    architectureBeats: string[];
+    /** Deconstruct a real example — what works and what fails. */
+    realExample: string;
+    /** Guided micro-build: the first component students start on Monday. */
+    microBuild: string;
+    /** Architecture challenge — students choose between design options. */
+    designChoice: Interaction;
+    /** Knowledge-check trivia. */
+    trivia: Interaction;
+    /** Open loop into Thursday. */
+    thursdayTrailer: string;
+    /** Optional Story Mode cold-open — a single-statement full-screen visual hook
+     * shown before the business-problem beat. Omit for weeks without one authored. */
+    hook?: { headline: string; caption: string };
+    /** Optional "change of pace" story beats, inserted right after the named
+     * segment's content (segment id -> beats to insert there). Omit for weeks
+     * without any authored. */
+    storyBeats?: Record<string, StoryBeat[]>;
+    /** Optional extra survey questions beyond the fixed designChoice/trivia
+     * slots, each tagged with the run-of-show segment to render in (same
+     * shape as kitConfig.ts's InteractionPlacement, inlined here to avoid a
+     * circular import — classSessionPlan.ts stays dependency-free). Spliced
+     * in by kitSpecDaySlides.ts's defaultInteractionsFor(); empty/omitted for
+     * every week that doesn't need more than the 3 default questions. */
+    extraInteractions?: Array<Interaction & { segment: string; eyebrow?: string; title?: string; presenterTip?: string }>;
+  };
+
+  thursday: {
+    /** Result preview — what students are producing today. */
+    resultPreview: string;
+    /** Readiness check — the setup that must be true to build along. */
+    readinessCheck: string;
+    /** Build map — checkpoints + safety rules, narrated. */
+    buildMap: string[];
+    /** Checkpoint branches (CP0 clean → CP3 artifact). */
+    checkpoints: BuildCheckpoint[];
+    /** Copy-ready Claude Code prompts driven live. */
+    prompts: ClassPrompt[];
+    /** The authentic failure to inject (drawn from blueprint risk_areas). */
+    failureInjection: string;
+    /** How an architect diagnoses and recovers from it. */
+    recovery: string;
+    /** Knowledge-check trivia. */
+    trivia: Interaction;
+    /** Optional Story Mode before/after comparison, shown before the assignment
+     * brief as the transformation payoff. Omit for weeks without one authored. */
+    beforeAfter?: { label?: string; before: string[]; after: string[] };
+    /** Optional "change of pace" story beats for Build Day, inserted right
+     * after the named segment's content (segment id -> beats to insert
+     * there). Same shape and splice mechanism as monday.storyBeats — omit
+     * for weeks without any authored. */
+    storyBeats?: Record<string, StoryBeat[]>;
+    /** Optional extra survey questions beyond the fixed readiness-trivia slot,
+     * each tagged with the run-of-show segment to render in. Mirrors
+     * monday.extraInteractions exactly — see that field's doc comment. */
+    extraInteractions?: Array<Interaction & { segment: string; eyebrow?: string; title?: string; presenterTip?: string }>;
+  };
+
+  /** Prove-it-by-Friday: the graded deliverable. */
+  assignment: {
+    title: string;
+    deliverables: string[];
+    proof: string;
+  };
+
+  /** The week-specific artifact each student names in their 30-sec Builder Broadcast. */
+  builderBroadcastFocus: string;
+}
+
+/* ========================================================================== */
+/*  ORIENTATION — the cohort opener (Thursday, week 0 slot).                   */
+/*  1 hr Ali (big picture) + 30 min Taiwo (platform) + 30 min Swati (setup).   */
+/* ========================================================================== */
+
+export interface OrientationSegmentSpec {
+  presenter: string;
+  minutes: number;
+  title: string;
+  beats: string[];
+}
+
+export const ORIENTATION_PLAN: {
+  title: string;
+  publicTitle: string;
+  intensive: string;
+  welcome: string;
+  segments: OrientationSegmentSpec[];
+  designChoice: Interaction;
+  trivia: Interaction;
+  assignment: { title: string; deliverables: string[]; proof: string };
+  storyBeats?: Record<string, StoryBeat[]>;
+} = {
+  title: 'Orientation — Welcome to the Accelerator',
+  publicTitle: 'From AI User to AI Builder — Orientation',
+  intensive: 'Kickoff',
+  welcome:
+    'Welcome to the AI Systems Architect Accelerator. Tonight is the big picture, the platform, and getting your build environment live — you leave able to open Claude Code and start.',
+  segments: [
+    {
+      presenter: 'Ali Muwwakkil',
+      minutes: 60,
+      title: 'The big picture — from AI user to AI builder',
+      beats: [
+        'The moment we are in: what the people building AI say is coming, and the gap between AI users and AI builders',
+        'Quotes and data: displacement AND creation, the wage premium, the leverage curve (learn it → build it → architect it)',
+        'What Colaberry has done: 14 years, careers launched, the Anthropic / Claude Code partnership',
+        'How this program works: Learn It Monday, Build It Thursday, Prove It By Friday — one continuous 12-week build, your own idea',
+        'What to expect: the platform, live classes, attendance and points, the credential (CCA-F), the portfolio, the free internship lane',
+        'The deal: bring your idea, leave with a working, governed AI system you can defend',
+      ],
+    },
+    {
+      presenter: 'Taiwo',
+      minutes: 30,
+      title: 'Your platform — the daily command center',
+      beats: [
+        'Today: your one feed for the whole program — lessons, project, schedule, community',
+        'The Path: your real position on the 12-week road; streaks and points you claim daily',
+        'Classroom + Schedule: live sessions with one-click Join, recordings after, countdowns to the next class',
+        'Your Project: your idea decomposed into releases, steps, and scheduled tasks with copy-ready prompts',
+        'Portfolio + Readiness: everything you build becomes graded, public proof',
+      ],
+    },
+    {
+      presenter: 'Swati',
+      minutes: 30,
+      title: 'Get your build environment live — Claude Code + VS Code',
+      beats: [
+        'Install VS Code and open the integrated terminal',
+        'Install Claude Code and sign in; verify it runs with a first prompt',
+        'Clone your Architect Workspace starter repo',
+        'Run a first Plan-Mode prompt so you see the agentic loop before Week 1',
+        'Troubleshooting stations: anyone not fully set up leaves tonight set up',
+      ],
+    },
+  ],
+  designChoice: {
+    kind: 'poll',
+    q: 'Where are you starting from tonight?',
+    options: ['I mostly use AI as a chat tool', 'I automate a few things', 'I write some code', 'I build systems already'],
+    reveal: 'Wherever you start, in 12 weeks you leave on the builder side of that line.',
+  },
+  trivia: {
+    kind: 'trivia',
+    q: 'What do you leave this program with?',
+    options: ['A certificate of attendance', 'A working, governed AI system + CCA-F credential + public portfolio', 'A set of recordings', 'A reading list'],
+    answer: 1,
+    reveal: 'A defended capstone, the Claude Certified Architect — Foundations credential, and a public portfolio.',
+  },
+  assignment: {
+    title: 'You are set up and oriented',
+    deliverables: [
+      'Claude Code installed and running (verified with one prompt)',
+      'VS Code installed with your Architect Workspace repo cloned',
+      'Portal tour completed: found Today, the Path, and your next class',
+    ],
+    proof: 'A screenshot of Claude Code responding to your first prompt in VS Code.',
+  },
+  storyBeats: {
+    welcome: [
+      {
+        icon: '🚪', tone: 'amber', eyebrow: 'Right now — the room you are in',
+        title: 'Two kinds of people walk into a room like this one',
+        body: 'One kind is here to collect information — another framework, another tool, another thing to half-remember by Friday. The other kind is here to leave different than they walked in: with a real system running, a habit of building instead of asking, and proof they can point to. Tonight does not decide which kind of person you are. Week 12 does. Tonight just decides whether you show up for it.',
+        punch: 'Nobody in this room is behind yet. That only becomes true if you decide it is.',
+      },
+    ],
+    'big-picture': [
+      {
+        icon: '🗡️', tone: 'cherry', eyebrow: 'The story behind this room',
+        title: 'Every builder starts as an apprentice',
+        body: 'In the old story, the hero trains for years before ever facing the dragon. In this one, you face it in week 12 — a real system, live, solving a real problem — and every week between now and then is you learning to hold the sword without cutting yourself. Nobody in this room slays anything alone; the rescue branch exists because the first swing is supposed to miss sometimes.',
+        punch: 'You are not here to watch someone else fight it. You are here to fight it yourself, with a net.',
+      },
+    ],
+    platform: [
+      {
+        icon: '🧗', tone: 'berry', eyebrow: 'Change of pace — the 1% architect',
+        title: 'Nobody notices day 3. Everyone notices week 12.',
+        body: 'A climber training for a summit does not feel stronger after one workout. She feels the SAME — sore, unsure, checking her form against people ahead of her. But she is 1% better, and 1% compounded for 84 days is not a small number anymore. Your points, your streak, your daily card on Today are not a game layer bolted onto learning. They are the only proof that day 3 mattered, on a day when it will not feel like it did.',
+        punch: 'Trust the compounding. The summit is not visible from base camp — that is normal, not a warning sign.',
+      },
+    ],
+    setup: [
+      {
+        icon: '🌱', tone: 'leaf', eyebrow: 'Before we set up — the locker room talk',
+        title: 'Everyone in this room feels behind their first week. That is the baseline, not a red flag.',
+        body: 'The people who eventually build the most impressive things almost always describe their first working session the same way: confusing, slower than expected, one small win they almost missed because they were looking for a bigger one. That feeling is not a sign you are in the wrong room. It is what "the unit of work just changed" feels like from the inside, before it feels like anything else.',
+        punch: 'Tonight the goal is not mastery. It is one prompt, one plan, one thing that actually ran.',
+      },
+    ],
+  },
+};
+
+/* ========================================================================== */
+/*  WEEKS 1–12                                                                 */
+/* ========================================================================== */
+
+export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
+  /* ------------------------------------------------------------------ Week 1 */
+  {
+    week: 1,
+    title: 'Claude Code Foundations + Workspace',
+    intensive: 'Intensive 1 · Build Your AI Foundation',
+    publicTitle: 'Build Your First Claude Code Workspace the Right Way',
+    monday: {
+      tension:
+        'Most people use Claude like a smarter search box. That is not how companies automate work. Claude Code runs an agentic loop — a context window, tools, and permissions — that reads your repo, plans, edits files, runs commands, and commits.',
+      payoffPreview: 'By Thursday you have a working Architect Workspace and a CLAUDE.md that makes Claude carry your project standards for the rest of the program.',
+      architectureBeats: [
+        'The agentic loop: context window + tools + permissions — what Claude Code can see, do, and is allowed to do',
+        'The workflow that scales: explore → plan → code → commit (never skip explore and plan)',
+        'Permission modes: Manual (approve each action), Plan (propose then wait), and Auto (run freely) — and when each is safe',
+        'Claude Code manages context automatically now — compaction happens in the background, so you focus on direction, not memory management',
+        'CLAUDE.md as persistent project memory — Claude reads it every session',
+      ],
+      realExample: 'Watch one real explore → plan → code → commit loop end to end, then a session where skipping Plan Mode lets Claude edit the wrong area — and what that costs.',
+      microBuild: 'Install Claude Code, open the Architect Workspace repo, and run your first Plan-Mode prompt so you see the plan before any file changes.',
+      designChoice: {
+        kind: 'poll',
+        q: 'Your CLAUDE.md is getting long. What earns its place in it?',
+        options: ['Everything Claude might ever need', 'Only rules that change how Claude behaves, testably', 'A copy of the README', 'Nothing — keep it empty'],
+        reveal: 'A rule belongs in CLAUDE.md only if a change to it changes behavior. Aspirational prose is context bloat.',
+        theater: true,
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'What does Plan Mode do?',
+        options: ['Auto-accepts every edit', 'Proposes a plan and waits before touching files', 'Clears the context window', 'Commits automatically'],
+        answer: 1,
+        reveal: 'Plan Mode is your seatbelt: Claude proposes the approach and waits for you before editing.',
+      },
+      thursdayTrailer: 'Thursday we make Claude follow your standards — we build the Workspace and a CLAUDE.md that actually steers it.',
+      hook: {
+        headline: 'You gave AI an answer to type. Now it can act.',
+        caption: 'The unit of work just changed — from "what should I do" to "do it, and show me it worked."',
+      },
+      storyBeats: {
+        checkin: [
+          {
+            icon: '🧭', tone: 'violet', eyebrow: 'Right now — the room you are in',
+            title: 'You just made a prediction. Hold onto it — you will be wrong or right in about ten minutes, on purpose.',
+            body: 'Architecture Day is not a lecture with slides in the middle. It is a working session with theory bolted to both sides. Every prediction you make tonight, including the one you just tapped, gets tested against a real example before the class ends. That is not a gimmick — it is the fastest way anyone learns architecture: commit to a guess, then watch reality correct it.',
+            punch: 'Being wrong in the next two hours is the whole point. Being wrong in production next month is the thing we are training you to avoid.',
+          },
+        ],
+        'business-problem': [
+          {
+            icon: '🎫', tone: 'berry', eyebrow: 'Change of pace — a real support ticket',
+            title: 'The chatbot gave the right answer. The customer waited four more days anyway.',
+            body: 'A support agent pastes a customer\'s error into a chatbot, gets a correct three-step fix, and then does what every chatbot user does next: copies it, opens four different internal tools by hand, retypes half of it because the formatting broke, and finally closes the ticket — three hours after the "answer" arrived. The chatbot was never the bottleneck. The eight manual handoffs after it were.',
+            punch: 'An agent does not just answer the ticket. It opens the tools, makes the change, and closes the loop.',
+          },
+        ],
+        architecture: [
+          {
+            icon: '✈️', tone: 'violet', eyebrow: 'Change of pace — the pilot\'s three hands',
+            title: 'Manual, Plan, and Auto are not settings. They are how much you trust the runway.',
+            body: 'A pilot hand-flies through a crowded pattern near the ground, engages autopilot to propose the cruise route and waits for a nod before committing to it, and only lets the plane fly itself hands-off over open, familiar sky. Nobody argues about which mode is "best" — the terrain decides. A vague CLAUDE.md rule in Auto mode is flying blind through the pattern.',
+            punch: 'The skill is not picking a favorite mode. It is reading the terrain correctly, every single time.',
+          },
+        ],
+        deconstruct: [
+          {
+            icon: '🐉', tone: 'cherry', eyebrow: 'Change of pace — the dragon in this example',
+            title: 'This is the dragon almost every builder in this room will eventually meet',
+            body: 'An agent with too much context, a vague instruction, and no plan will not fail loudly — it will fail confidently, editing the wrong files with total conviction and telling you it succeeded. That is not a Claude problem. It is what happens any time a powerful tool is given a fuzzy goal and full permission at the same time. You just watched it happen in the failing example above.',
+            punch: 'You do not slay this dragon by trusting it less. You slay it by being specific enough that it cannot wander.',
+          },
+        ],
+      },
+    },
+    thursday: {
+      resultPreview: 'A governed project foundation — folder structure, docs, and progress tracking — traced back to your own CLAUDE.md and your project requirements, approved by you before Claude created a single folder, and validated as ready for the first component you build in Week 3.',
+      readinessCheck: 'Your CLAUDE.md and a project brief/requirements doc (Project Builder output, a README, or wherever you defined what you\'re building) both present in the repo; Claude Code running.',
+      buildMap: [
+        'CP0: CLAUDE.md confirmed specific and testable',
+        'CP1: governance verified — rules read, project brief located',
+        'CP2: architecture proposed, challenged, and approved',
+        'CP3: foundation built — structure + docs only, no product code',
+        'CP4: foundation validated — ready for Week 3',
+      ],
+      checkpoints: [
+        { n: 0, label: 'CLAUDE.md ready', detail: 'Every rule in your CLAUDE.md is specific and testable, not aspirational.' },
+        { n: 1, label: 'Governance verified', detail: 'Claude has read CLAUDE.md in full and located your project brief — it does not invent the product.' },
+        { n: 2, label: 'Architecture approved', detail: 'A personalized folder tree + rule-to-architecture traceability table, challenged by you, then approved with APPROVE FOUNDATION.' },
+        { n: 3, label: 'Foundation built', detail: 'Only the approved structure, per-folder READMEs, and an architecture doc created — zero product code, zero dependencies.' },
+        { n: 4, label: 'Foundation validated', detail: 'Claude audits itself against CLAUDE.md and reports FOUNDATION VERIFIED — READY FOR WEEK 3.' },
+      ],
+      prompts: [
+        {
+          label: 'CLAUDE.md ready-check', prompt: 'Show me the CLAUDE.md at the root of this repository. Confirm every rule in it is specific and testable, not aspirational. If any rule is vague, propose a sharper version — but do not edit the file yet, just show me the diff.',
+          pasteWhere: 'Claude Code, in your Architect Workspace repo', ccMode: 'Plan Mode',
+          expectedResult: 'Confirmation every rule is specific and testable, or a proposed sharper rewrite of any vague rule. No files touched.',
+          stopCondition: 'Claude shows the confirmation or proposed diff and stops.',
+          rescue: 'No CLAUDE.md yet, or Claude Code not already running? Open a terminal once: `cd architect-workspace && claude`, then paste this.',
+        },
+        {
+          label: 'Governance gate', prompt: 'Read the entire root CLAUDE.md and follow any session-start or verification protocol it requires. Inspect this repository without modifying anything. Then locate my project\'s definition — a requirements doc, Project Builder output, README, or brief describing what I\'m building (if you can\'t find one, stop and ask me where it is — do not invent the product). Summarize: what the project is, who it serves, the primary problem it solves, the tech stack, the CLAUDE.md rules that affect structure, and any protected, legacy, generated, or read-only locations. Do not create or modify any files.',
+          pasteWhere: 'Claude Code', ccMode: 'Plan Mode',
+          expectedResult: 'A summary of your project and its governing rules, including any protected/legacy areas. Zero files touched.',
+          stopCondition: 'Claude finishes the summary. If it stops and asks for your project brief instead, go find it — don\'t skip this.',
+          rescue: 'No requirements doc exists yet? Point Claude at whatever you have — even a paragraph counts. It must not invent your product.',
+        },
+        {
+          label: 'Architecture proposal', prompt: 'Propose a personalized folder-tree architecture for this project. For every top-level folder, give: its purpose, what belongs there, what must never go there, the CLAUDE.md rule or requirement that supports it, whether it\'s needed NOW/LATER/EXISTING/GENERATED/LEGACY/DO-NOT-TOUCH, and how it will be verified. Only include a folder if my requirements, my stack, an existing convention, or a CLAUDE.md rule supports it — do not copy a generic template. Include a rule-to-architecture traceability table, your assumptions, decisions that need my approval, and the recommended home for my first Week 3 component. Do not create anything yet. End with: ARCHITECTURE APPROVAL REQUIRED.',
+          pasteWhere: 'Claude Code', ccMode: 'Plan Mode',
+          expectedResult: 'A folder tree, a rule-to-architecture traceability table, and the line ARCHITECTURE APPROVAL REQUIRED. No files created.',
+          stopCondition: 'Claude prints ARCHITECTURE APPROVAL REQUIRED and waits. Discuss it as a class — which folder holds the first Week 3 component? what\'s protected? what\'s needed now vs. later? — then type: APPROVE FOUNDATION',
+          rescue: 'Proposal missing a rule or looks wrong? Point out the gap and ask it to re-propose before you approve anything.',
+        },
+        {
+          label: 'Approved foundation build', prompt: 'APPROVE FOUNDATION. Create only the approved structure — preserve all existing work, and do not touch protected, generated, legacy, or read-only locations. Do not build product features and do not install any dependencies. Add a short README to each new major folder explaining why it exists, what belongs there, what doesn\'t, and how it will eventually be tested. Then write the full architecture documentation (purpose, principles, folder tree, component responsibilities, rule-to-structure traceability, testing strategy, security boundaries, protected locations, deferred folders, first Week 3 build target, assumptions and risks) in the documentation location CLAUDE.md requires, and update progress tracking exactly as CLAUDE.md requires.',
+          pasteWhere: 'Claude Code', ccMode: 'Auto',
+          expectedResult: 'The approved folders exist, each with a short README, plus an architecture doc and updated progress tracking — no product code, no installed packages.',
+          stopCondition: 'Claude reports the structure created and shows the new files it wrote.',
+          rescue: 'Did it touch a protected/legacy folder or install something? Stop it, point to the exact CLAUDE.md rule it broke, and have it undo that part.',
+        },
+        {
+          label: 'Validate + report', prompt: 'Audit the foundation you just created. Verify: CLAUDE.md is unchanged, every new folder has a documented responsibility with no conflicts, no implementation code or dependencies were added, no secrets exist, no protected or generated location was touched, and progress tracking was updated. Show the final folder tree, files created, files deliberately not created, which rules drove each decision, and the recommended first Week 3 implementation task. Write a short foundation report. End with exactly one line: FOUNDATION VERIFIED — READY FOR WEEK 3, or FOUNDATION BLOCKED — ACTION REQUIRED with the blocker.',
+          pasteWhere: 'Claude Code', ccMode: 'Auto',
+          expectedResult: 'A validation report ending in exactly FOUNDATION VERIFIED — READY FOR WEEK 3 (or a named blocker).',
+          stopCondition: 'Claude prints the final status line.',
+          rescue: 'Got FOUNDATION BLOCKED? That\'s a correct, valuable outcome — read the blocker with Claude and fix it together; don\'t force past it.',
+        },
+      ],
+      failureInjection: 'Ask Claude to scaffold before it has fully read CLAUDE.md\'s protected/legacy areas — watch it propose creating files inside a DO-NOT-TOUCH or legacy folder.',
+      recovery: 'An architect never approves a plan without checking it against governance first: point Claude back to the specific CLAUDE.md rule it missed and have it re-propose. This is exactly what CP4 validation exists to catch before real damage is done.',
+      trivia: {
+        kind: 'trivia',
+        q: 'What has to happen between Claude\'s Architecture Proposal and it actually creating files?',
+        options: ['Nothing — it creates immediately', 'You review it and type APPROVE FOUNDATION', 'Claude asks you to rewrite CLAUDE.md', 'It skips straight to Week 3'],
+        answer: 1,
+        reveal: 'The approval gate is the whole point of CP2 — a proposal is a plan, not permission to act.',
+      },
+      beforeAfter: {
+        label: 'The foundation changed',
+        before: ['Copy a generic starter folder structure', 'Hope it fits your project', 'Start coding immediately', 'Find out later a folder was wrong'],
+        after: ['Claude reads CLAUDE.md + your project brief', 'Proposes a personalized, traced architecture', 'You approve before anything is created', 'The foundation is validated against governance, ready for Week 3'],
+      },
+    },
+    assignment: {
+      title: 'From CLAUDE.md to a Build-Ready Project Foundation',
+      deliverables: [
+        'Personalized repository tree from Claude\'s approved architecture proposal',
+        'Architecture/foundation report + rule-to-architecture traceability table',
+        'Screenshot of the VS Code project tree',
+        'Screenshot of Claude\'s architecture proposal before approval',
+        'GitHub commit showing the foundation',
+        'One-paragraph Week 3 build target',
+      ],
+      proof: 'A short screen recording or GIF walking the approved folder tree, plus the FOUNDATION VERIFIED report.',
+    },
+    builderBroadcastFocus: 'the governed project foundation traced back to their own CLAUDE.md — and exactly where their first Week 3 component will live',
+  },
+
+  /* ------------------------------------------------------------------ Week 2 */
+  {
+    week: 2,
+    title: 'Agent Skills (build 3 skills)',
+    intensive: 'Intensive 1 · Build Your AI Foundation',
+    publicTitle: 'Teach Claude Once and Reuse It Forever',
+    monday: {
+      tension:
+        'It is 8:05 AM. The executive revenue dashboard says revenue is down 18%. The ETL job says SUCCESS — it ran clean, on schedule, no errors. But the analyst who normally validates the numbers by hand before anyone sees them is out today, and nobody ran that check. The source data actually contains a duplicate order ID, a missing region, a negative revenue amount, and a load timestamp older than 48 hours — a green pipeline only proves the job ran, it never proved the data was trustworthy. The analyst should not be the control. The repeatable procedure should be the control.',
+      payoffPreview: 'By Thursday you adapt this exact pattern into three project-specific Skills of your own — hardened, tested, versioned, and committed.',
+      architectureBeats: [
+        'data-quality-gate — validates orders/ETL output against a quality contract before anything publishes; PASS/WARN/FAIL + a PUBLISH/BLOCK recommendation',
+        'etl-failure-triage — when the gate blocks, reads logs + run metadata, ranks likely causes with evidence, recommends the next diagnostic step',
+        'executive-dashboard-brief — turns the technical findings into status, business impact, decision, owner, and next-update leadership can act on',
+        'One incident, one connected workflow: Detect → Diagnose → Communicate',
+        'Detection protects the business. Diagnosis restores the system. Communication closes the loop.',
+      ],
+      realExample: 'Compare two descriptions for the exact same data-quality-gate body. "Helps with data" never fires — it names no trigger, no output, and collides with every other data-related ask. "Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication" fires reliably, every time, because it names the trigger and the output in the words a data analyst actually uses.',
+      microBuild: 'The gate just blocked the bad data — that stops the bleeding, but the incident is not resolved. Now build the two Skills that finish it: etl-failure-triage investigates why the pipeline produced invalid data, and executive-dashboard-brief turns that investigation into something leadership can act on.',
+      designChoice: {
+        kind: 'poll',
+        q: 'The ETL run is green, but the dashboard looks wrong. What should happen first?',
+        options: ['Rebuild the dashboard', 'Rerun the entire ETL pipeline', 'Validate the output against its data-quality contract', 'Ask leadership which number looks suspicious'],
+        answer: 2,
+        reveal: 'A green pipeline proves that the job ran. It does not prove that the resulting data is trustworthy.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'Which part primarily helps Claude recognize when a Skill is relevant?',
+        options: ['Folder color', 'Description', 'Body length', 'Creation date'],
+        answer: 1,
+        reveal: 'Claude scans name + description to decide WHEN to load a Skill — the description is the routing logic, not documentation.',
+      },
+      extraInteractions: [
+        {
+          segment: 'deconstruct', kind: 'poll',
+          q: 'The Skill works when you type /data-quality-gate, but not when you ask, "Is this dataset safe to publish?" What should you inspect first?',
+          options: ['Dataset size', 'Skill description', 'Body length', 'CSV filename'],
+          answer: 1,
+          reveal: 'Direct invocation proves the body can run. Natural invocation tests whether the description helps Claude recognize when the Skill is relevant.',
+          eyebrow: '🔬 Deconstruct', title: 'Direct invocation works. Natural does not. Why?',
+          presenterTip: 'This is the trigger-failure diagnosis moment — land it before moving into Harden.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'The gate blocked the dataset. What capability should come next?',
+          options: ['Rebuild the dashboard', 'Add a permanent rule to CLAUDE.md', 'Run a reusable ETL failure-triage procedure', 'Send the entire log to the CFO'],
+          answer: 2,
+          reveal: 'The gate tells us the data is unsafe. Triage determines what evidence explains the failure and what should be tested next.',
+          eyebrow: '🩺 The incident continues', title: 'Data is blocked. What comes next?',
+          presenterTip: 'Take responses, reveal, then move straight into building etl-failure-triage.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'What belongs in the executive incident update?',
+          options: ['The entire pipeline log', 'Every SQL statement tested', 'Status, impact, evidence, decision, owner, and next update', 'A generic statement that IT is investigating'],
+          answer: 2,
+          reveal: 'Leadership needs a decision product, not a technical data dump.',
+          eyebrow: '📣 Leadership is waiting', title: 'What goes in the brief?',
+          presenterTip: 'Take responses, reveal, then move straight into building executive-dashboard-brief.',
+        },
+        {
+          segment: 'trivia', kind: 'trivia',
+          q: 'What does allowed-tools currently do?',
+          options: ['Permanently restricts the Skill to those tools', 'Pre-approves named tools for the invocation turn', 'Prevents automatic Skill invocation', 'Loads every reference file'],
+          answer: 1,
+          reveal: 'Pre-approval and restriction are different controls. allowed-tools pre-approves tools for the turn; disallowed-tools and broader permission deny rules are what actually restrict.',
+          eyebrow: '🧠 Knowledge check', title: 'Tool permissions, precisely',
+          presenterTip: 'This corrects a common misconception — read the reveal exactly as written, do not paraphrase.',
+        },
+      ],
+      thursdayTrailer: 'Thursday you adapt this exact pattern into three project-specific Skills of your own — one hardened, all tested, all versioned and committed.',
+      hook: {
+        headline: 'The ETL job says SUCCESS. The revenue number is wrong.',
+        caption: 'A green pipeline proves the job ran. It never proved the data was trustworthy.',
+      },
+      storyBeats: {
+        checkin: [
+          {
+            icon: '🕗', tone: 'violet', eyebrow: '8:05 AM · The analyst is unavailable',
+            title: 'The analyst who normally catches this is out today.',
+            body: 'The company does not lack a procedure. The analyst runs the same checks every morning: freshness, row count, duplicate keys, required fields, unreasonable amounts. But the procedure exists only in her head, so the control disappears the day she is unavailable.',
+            punch: 'The analyst should not be the control. The repeatable procedure should be the control.',
+          },
+        ],
+        'business-problem': [
+          {
+            icon: '✅', tone: 'berry', eyebrow: 'The procedure became visible',
+            title: 'Everyone in the room just performed the same checks.',
+            body: 'A few minutes ago, the procedure existed only in an analyst\'s memory and saved prompts. Now every student used the same checks, the same thresholds, and the same PASS or FAIL language.',
+            punch: 'Tribal knowledge just became an executable team asset.',
+          },
+        ],
+        deconstruct: [
+          {
+            icon: '🚧', tone: 'cherry', eyebrow: 'The incident continues',
+            title: 'The gate protected the dashboard. Now the business wants the cause.',
+            body: 'Blocking unsafe data is the correct decision, but it does not resolve the incident. Operations still needs to understand why the pipeline produced invalid data, what evidence supports the diagnosis, and what should be tested next.',
+            punch: 'Detection protects the business. Diagnosis restores the system.',
+          },
+        ],
+        'micro-build': [
+          {
+            icon: '📣', tone: 'amber', eyebrow: 'The audience changes',
+            title: 'The technical team has an answer. Leadership is still waiting.',
+            body: 'The data-quality report explains what is wrong. The triage report explains why it may have happened. Neither is written for the CFO, who needs impact, confidence, action, ownership, and the next update.',
+            punch: 'A technically correct answer can still be the wrong communication product.',
+          },
+        ],
+      },
+    },
+    thursday: {
+      resultPreview: 'A real system architecture diagram, a tech stack you actually understand, and a working visual demo of what your idea could look like — three Skills, committed to your workspace, built from nothing but your project idea.',
+      readinessCheck: 'Your Architect Workspace from Week 1, a .claude/skills/ folder, and one paragraph describing your project idea — it does not need to be final.',
+      buildMap: ['CP0: skills folder ready', 'CP1: system-architect draws your first diagram', 'CP2: all three Skills authored', 'CP3: mvp-scoper is multi-file, scoped, and shows off your idea'],
+      checkpoints: [
+        { n: 0, label: 'Clean start', detail: '.claude/skills/ exists in your workspace.' },
+        { n: 1, label: 'system-architect fires', detail: 'A real architecture diagram, generated from your idea.' },
+        { n: 2, label: 'Three skills', detail: 'system-architect, tech-stack-recommender, and mvp-scoper all authored.' },
+        { n: 3, label: 'Scoped + shows off', detail: 'mvp-scoper is multi-file, tool-scoped, and produces a visual demo, committed.' },
+      ],
+      prompts: [
+        { label: 'Draw the architecture', prompt: 'Create an Agent Skill named "system-architect" that turns a one-paragraph project idea into a full system architecture with a real mermaid diagram. Give it a precise description of when to use it.' },
+        { label: 'Recommend the stack', prompt: 'Create an Agent Skill named "tech-stack-recommender" that takes a system architecture and recommends a tech stack, explained simply with icons and a fit rating for each choice.' },
+        { label: 'Scope the demo builder', prompt: 'Turn "mvp-scoper" into a multi-file Skill that outputs a Week-1 task list, a visual HTML mockup of the idea, and a short marketing one-pager — restrict its tool access to only what it needs.' },
+      ],
+      failureInjection: 'The quiet failure nobody notices in the room: an idea that took an hour to architect, stack, and demo — sitting only on disk, one crashed laptop or one overwritten file away from gone.',
+      recovery: 'git init, git add, git commit — the three commands that turn tonight\'s blueprint into something that survives a closed laptop, a reformatted machine, or tomorrow\'s forgetfulness.',
+      trivia: {
+        kind: 'trivia',
+        q: 'Best tool-access setting for a Skill that only writes a Markdown report?',
+        options: ['Full access to everything', 'The narrowest scope it needs', 'No tools at all, always', 'Whatever is default'],
+        answer: 1,
+        reveal: 'Scope tools to the minimum the Skill needs — least privilege is an architecture habit, not a nicety.',
+      },
+      storyBeats: {
+        'result-preview': [
+          {
+            icon: '🏛️', tone: 'violet', eyebrow: 'Before you build — the story behind tonight',
+            title: 'Every real system you have ever used started exactly where you are right now',
+            body: 'Somewhere there is a napkin, a Slack message, or a one-paragraph email that was the entire spec for a system now worth millions. The founders did not wait until the idea was perfect. They wrote down who it was for, what it did, and the one thing it had to get right — then handed that paragraph to whoever could turn it into a diagram. Tonight, that whoever is Claude, and the paragraph is yours.',
+            punch: 'A blueprint is not what you build after the idea is finished. It is what makes an unfinished idea real enough to argue with.',
+          },
+        ],
+        'build-map': [
+          {
+            icon: '📐', tone: 'berry', eyebrow: 'Why architecture comes before code',
+            title: 'Nobody pours a foundation before seeing the blueprint — the same rule applies here',
+            body: 'A contractor who starts pouring concrete before the blueprint exists is not moving fast, they are gambling with the client\'s money. The four checkpoints tonight exist for the same reason a real blueprint exists: so the expensive mistakes get caught on paper, in minutes, instead of in code, in weeks. system-architect is not a formality before the "real" work — it IS the real work, just faster than an architect could ever do it by hand.',
+            punch: 'Slow is not the opposite of fast here. Guessing is.',
+          },
+        ],
+      },
+      extraInteractions: [
+        {
+          segment: 'build-map', kind: 'poll',
+          q: 'How ready do you feel to turn your idea into a real architecture tonight?',
+          options: ['😬 Honestly nervous', '🙂 Cautiously ready', '😎 Let\'s go', '🔥 Already sketching it in my head'],
+          eyebrow: '🌡️ Room check', title: 'Before we start building',
+          presenterTip: 'Quick temperature check, no reveal needed — just read a few answers out loud to loosen the room up before CP0.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'Rate how cool your deliverable is right now, honestly.',
+          options: ['🙂 Solid', '😃 Really good', '🤩 Genuinely impressive', '🚀 I would show this to an investor tomorrow'],
+          eyebrow: '📣 Show it off', title: 'Rate your blueprint',
+          presenterTip: 'Fires right after CP3 lands, while mockups are still open on screen. Read a few of the "🚀" answers out loud by name — this is the peak-energy moment of the night.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'How much did tonight get your creative juices flowing for your actual capstone?',
+          options: ['💧 A little', '🌊 A lot', '🌪️ I already have three new ideas', '🎢 I want to redo my whole idea now'],
+          eyebrow: '💡 Spark check', title: 'Did this change how you\'re thinking about your project?',
+          presenterTip: 'Pairs with the poll above — back-to-back reaction round right before the break. If several people pick the last two options, say so out loud; that is the class working.',
+        },
+        {
+          segment: 'failure', kind: 'poll',
+          q: 'Be honest — how comfortable are you with git commands like add and commit right now?',
+          options: ['😅 Still Googling every command', '🙂 I can follow along', '💪 I could teach this to someone else', '🧙 I dream in git log'],
+          eyebrow: '🧠 Self-check', title: 'Where you stand on git, right now',
+          presenterTip: 'Ask this AFTER the git lesson, not before — it is a confidence check on what was just taught, not a cold-open poll. Reveal is unnecessary; just note the spread.',
+        },
+      ],
+    },
+    assignment: {
+      title: 'Your idea, architected and demoed',
+      deliverables: ['.claude/skills/ with all 3 Skills committed', 'A real architecture diagram + tech stack for your idea', 'A visual mockup + one-pager showing off what it could look like'],
+      proof: 'A short demo running all three Skills on your own idea, ending on the visual mockup.',
+    },
+    builderBroadcastFocus: 'the visual mockup mvp-scoper generated for your idea',
+  },
+
+  /* ------------------------------------------------------------------ Week 3 */
+  {
+    week: 3,
+    title: 'Claude API + Workflow Assistant',
+    intensive: 'Intensive 1 · Build Your AI Foundation',
+    publicTitle: 'Build Your First AI Workflow Assistant',
+    monday: {
+      tension:
+        'Tonight your build plan gets generated — you start it at the top of class and open it after the break, once it has had time to turn your paragraph into real requirements and real tasks. Scroll it and you will find task after task where the assistant has to classify something, draft something, or decide something — at 2am, on a schedule, with nobody at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. Those tasks need the other door: the Claude API, called from your own code. Same models, different driver, and — this is the part nobody has told you yet — a completely separate bill.',
+      payoffPreview: 'By Thursday you ship a Business Workflow Assistant — a small program that automates one real workflow from your own build plan, end to end. This is your Intensive 1 deliverable.',
+      architectureBeats: [
+        'Two doors into the same models: Claude Code (a human drives) vs the Claude API (a program drives)',
+        'Two separate bills: a Claude subscription pays for your seat; Console credits pay for your code, per token',
+        'The token meter: input + output tokens × the rate of the model you named — output costs ~5× input',
+        'Python is the wrapper that shows up when you do not: trigger → call → structured result → your systems',
+        'One endpoint: system + messages + tools in, one message and a token bill out',
+      ],
+      realExample: 'An assistant that never missed in the demo, then met production: prose where the code expected JSON, a tool loop with no cap draining credits overnight, and no eval to tell you it got worse. None of the three raise an error — that is what makes them expensive.',
+      microBuild: 'First, open the build plan that has been generating all night and find one task that needs Claude to decide something — that is the task you are about to learn how to build. Then: an API key into your environment, your first authenticated call from a real Python file, a structured shape you can trust, one tool — and the token meter on what you just spent.',
+      designChoice: {
+        kind: 'poll',
+        theater: true,
+        q: 'Your Anthropic subscription is paid up. What does that actually cover?',
+        options: [
+          'Everything — Claude Code and anything I build',
+          'Claude Code and the Claude apps only',
+          'Only the API calls my programs make',
+          'Nothing, it is all pay-as-you-go',
+        ],
+        answer: 1,
+        reveal: 'Your subscription pays for the seat you personally sit in. Anything your CODE calls is a separate meter — API credits from the Console, billed per token. Same login, two wallets.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'What exactly are you billed for on one Claude API call?',
+        options: [
+          'A flat fee per request',
+          'Minutes of compute time',
+          'Input tokens + output tokens, at the rate of the model you named',
+          'One charge per tool the model calls',
+        ],
+        answer: 2,
+        reveal: 'Two meters on every call: everything you sent in, and everything Claude wrote back — and output runs about five times the input rate on every current model.',
+      },
+      thursdayTrailer: 'Thursday we ship the Workflow Assistant on a workflow from your own build plan — API, one tool, structured output, and a real eval. Bring the task you picked tonight.',
+      hook: {
+        headline: 'Tonight your project stops being an idea and becomes a build.',
+        caption: 'And the moment it does, half your tasks need something you have never done: Claude, running without you.',
+      },
+      storyBeats: {
+        checkin: [
+          {
+            icon: '🧾', tone: 'amber', eyebrow: 'Right now — the paragraph on your screen',
+            title: 'Somewhere there is a napkin that became a company',
+            body: 'Almost every system you use every day started as a paragraph somebody was slightly embarrassed by. The founders did not wait for the idea to be finished; they wrote down who it was for, what it did, and the one thing it had to get right, and handed it to whoever could turn it into a plan. What you are typing into that box right now is that paragraph. It does not have to be right. It has to be real enough to argue with.',
+            punch: 'The paragraph is not the small part of this. It is the only part nobody can do for you.',
+          },
+        ],
+        'business-problem': [
+          {
+            icon: '🏛️', tone: 'violet', eyebrow: 'Change of pace — what you actually are now',
+            title: 'The architect on a job site does not lay the bricks. She also does not leave.',
+            body: 'A building architect is not on site because she is faster with a trowel than the crew. She is there because when a wall goes up two feet off the plan, she is the only one who will notice tonight instead of in six weeks. Your task list already has the prompts written. Claude will lay the bricks faster than you ever could. What it cannot do is care whether what is going up is the building you meant.',
+            punch: 'You were never going to win by typing faster. You win by being the one who notices.',
+          },
+        ],
+        architecture: [
+          {
+            icon: '💡', tone: 'cherry', eyebrow: 'Change of pace — the first invoice',
+            title: 'Everything you have built so far has been free at the point of use',
+            body: 'For two weeks Claude Code has felt like a light switch: you flip it, work happens, and the cost is a flat monthly number you already agreed to. The moment your code makes the call instead of your keyboard, that changes — every run has a price, and the price is set by a decision you make in one line. This is not a warning. It is the first time in this program you get to make a real engineering trade-off, and the trade-off is intelligence against money.',
+            punch: 'Every serious system you will ever build is somebody choosing what to spend on which decision.',
+          },
+        ],
+        deconstruct: [
+          {
+            icon: '🌙', tone: 'berry', eyebrow: 'The 3am story',
+            title: 'The loop that ran all night and nobody was awake to see it',
+            body: 'The demo was flawless at 4pm. At 11pm a customer sent a ticket with a malformed order number, the model got confused, and it asked for the same lookup again. And again. There was no cap, because nothing had ever needed one in the demo. By morning the code had not crashed, had not thrown a single error, and had not sent a single reply — it had just quietly spent all night asking the same question.',
+            punch: 'A system that fails loudly is a nuisance. A system that fails silently is a bill.',
+          },
+        ],
+        'micro-build': [
+          {
+            icon: '🐍', tone: 'leaf', eyebrow: 'Before the code — the locker room talk',
+            title: 'Nobody in this room is becoming a Python developer tonight, and nobody needs to',
+            body: 'Some of you have never written a line of Python and are quietly deciding right now that this is the week you fall behind. Here is the actual bar: you need to be able to read about forty lines and tell whether they do what you meant. That is it. Claude writes the lines. You are the one who has to look at them and say yes or no — which is the same job you have been doing since Week 1, in a file instead of a terminal.',
+            punch: 'You are not learning to write it. You are learning to judge it. You have been doing that for two weeks already.',
+          },
+        ],
+      },
+      extraInteractions: [
+        {
+          segment: 'checkin', kind: 'poll',
+          q: 'Where are you right now?',
+          options: ['Still writing my idea', 'Submitted — it is generating', 'I cannot find the button', 'Something errored'],
+          eyebrow: '🚦 Room check', title: 'Before we go on — is everyone launched?',
+          presenterTip: 'Operational, not teaching. You only need "submitted" — the plan itself takes a long time to generate and nobody will have one yet, so do not ask about task lists here. Read the last two counts out loud and send a mentor to those students NOW. Do not advance until they are near zero.',
+        },
+        {
+          segment: 'business-problem', kind: 'poll',
+          q: 'You paste a task prompt, and Claude proposes something that is not what you meant. What does an architect do?',
+          options: [
+            'Accept it and clean it up later',
+            'Delete the task and skip it',
+            'Name exactly what is wrong and have it re-propose',
+            'Give up on the prompt and write the code by hand',
+          ],
+          answer: 2,
+          reveal: 'Redirecting is not the prompt failing. Redirecting IS the job — and naming the specific thing that is wrong is what separates an architect from someone rerolling the dice.',
+          eyebrow: '🏛️ Architect check', title: 'It came back wrong. Now what?',
+          presenterTip: 'Take answers before revealing. If the room splits toward "accept and fix later," that is worth two extra minutes — it is the habit that quietly wrecks a capstone. This question needs no finished build, which is why it comes first.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'Open your build plan now — how many tasks did it generate?',
+          options: ['Under 10', '10 to 20', '21 to 40', 'More than 40', 'Mine is still building'],
+          eyebrow: '📊 Look at yours', title: 'How big did your plan turn out?',
+          presenterTip: 'Deliberately AFTER the break, not in the first half. Generating requirements and decomposing them takes a real while — asking in the business-problem segment lands before most plans exist and the honest answer is just "still building", which teaches nothing. By this point in the night everyone has one. No right answer; call out the biggest number by name to make the plan feel real.',
+        },
+        {
+          segment: 'architecture', kind: 'poll',
+          theater: true,
+          q: 'Same triage job, 1,000 tickets a day. Which model do you put on it?',
+          options: [
+            'Haiku 4.5 — about $90 a month',
+            'Sonnet 5 — about $270 a month',
+            'Opus 5 — about $450 a month',
+            'It depends on whether it passes my eval',
+          ],
+          answer: 3,
+          reveal: 'All three are defensible answers, and exactly one is the architect answer: you pick the cheapest model that still passes your eval. That is why Week 3 ends with building an eval — without one, this is guessing with a price tag.',
+          eyebrow: '💰 The real decision', title: 'You are paying for this. Choose.',
+          presenterTip: 'Full-screen theater moment — lock the votes, show the spread, then reveal. Do not rush it. This is the slide people quote back to you in Week 10.',
+        },
+        {
+          segment: 'architecture', kind: 'trivia',
+          q: 'Where does your API key belong?',
+          options: [
+            'In the Python file, near the top so it is easy to find',
+            'In an environment variable, never committed',
+            'In the README so your team can find it',
+            'In the task prompt so Claude Code can use it',
+          ],
+          answer: 1,
+          reveal: 'Environment variable, every time. A key committed to git is a key you must treat as already stolen — you rotate it, you do not hide it.',
+          eyebrow: '🔑 Knowledge check', title: 'One question before we touch code',
+          presenterTip: 'Fast. Reveal, one line of why, move straight into the key setup. Do not let it become a security lecture — it comes back in Week 9.',
+        },
+        {
+          segment: 'deconstruct', kind: 'poll',
+          q: 'Of these three failures, which one costs you actual money the fastest?',
+          options: [
+            'Prose returned where the code expected JSON',
+            'A tool loop with no cap, running overnight',
+            'No eval, so regressions go unnoticed',
+            'A typo in the system prompt',
+          ],
+          answer: 1,
+          reveal: 'The uncapped loop. The other two cost you trust and time; that one spends real credits all night with nobody awake to notice. It is the first bug in this program with a dollar figure attached.',
+          eyebrow: '💸 Cost check', title: 'Three silent failures. Which one bills you?',
+          presenterTip: 'Ties the failure segment straight back to the money slide. After the reveal, say the number out loud — an uncapped overnight loop on the top-tier model is not a rounding error.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'Did your first API call come back?',
+          options: ['✅ Got a reply', '⏳ Still setting up', '🔑 Stuck on the key', '😵 Completely lost'],
+          eyebrow: '🚦 Build check', title: 'Everyone gets a reply before we move on',
+          presenterTip: 'Operational. Call the numbers out loud ("18 of 22 — four more"). Nobody moves past this until the last two options are near zero.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'Honestly — where are you with Python right now?',
+          options: [
+            '😬 I have never written a line',
+            '🙂 I can read it and follow along',
+            '💪 I could write this myself',
+            '🧙 I write Python for a living',
+          ],
+          eyebrow: '🌡️ Self-check', title: 'Where you actually stand, no judgment',
+          presenterTip: 'Ask this AFTER they have run real code, not before — it is a confidence read on what just happened. If most of the room picks the first two options, say so out loud and repeat the bar: read forty lines, judge them. That is the whole requirement.',
+        },
+      ],
+    },
+    thursday: {
+      resultPreview: 'A Workflow Assistant that automates one real workflow from YOUR own build plan — tool use, a capped loop, a structured record your systems could ingest, and an eval score you can defend. Then broken on purpose three ways and hardened.',
+      readinessCheck: 'Four things green: your key live in the terminal you are about to use (it does not survive a new tab), Monday\'s project folder, Claude Code open in it, and one workflow chosen from your own build plan.',
+      buildMap: [
+        'CP0: your workflow named + the package scaffolded',
+        'CP1: client, system prompt, and one real tool',
+        'CP2: the capped tool loop → a validated structured record',
+        'CP3: a 10-case eval with a score — then break it and harden it',
+      ],
+      checkpoints: [
+        { n: 0, label: 'Scoped', detail: 'Your workflow written in one line, and a package structure you approved.' },
+        { n: 1, label: 'Wired', detail: 'Client connects, system prompt is yours, and one real tool is implemented.' },
+        { n: 2, label: 'Running', detail: 'The capped loop returns a validated record on a REAL item from your work.' },
+        { n: 3, label: 'Measured', detail: 'A 10-case eval prints a score — and survives being broken and hardened.' },
+      ],
+      prompts: [
+        { label: 'Scaffold it', pasteWhere: 'Claude Code', ccMode: 'Plan Mode', prompt: 'In Plan Mode, propose a small Python package for a Workflow Assistant automating this workflow: [YOURS]. One file per responsibility — client, system prompt, tools, the assistant, the eval. Say what belongs in each and what must never go in it. Do not create anything yet.' },
+        { label: 'Wire the tool + capped loop', pasteWhere: 'Claude Code', prompt: 'Add one real tool for my workflow (its description must say WHEN to use it), plus the request-execute-return loop. Enforce a MAX_TURNS cap of 5, an explicit timeout on every call, and a named error when the cap is hit. Return all tool_result blocks in a single user message with matching tool_use_ids, and accumulate token usage across every call.' },
+        { label: 'Structure it + grade it', pasteWhere: 'Claude Code', prompt: 'End every run with one call that returns a validated record using output_config with a json_schema format (not the deprecated output_format). Then build a 10-case eval set for my workflow — I will confirm the expected answers — and a grader that prints a score, the failures, and the total token cost, with the model selectable from the command line.' },
+      ],
+      failureInjection: 'On a COPY, cause all three failures we predicted on Monday: hardcode the key into the source, remove the MAX_TURNS cap, and reword the system prompt so it is vaguer. Then re-run the eval next to the original score. The lesson is that only the third is detectable — and only because they built an eval.',
+      recovery: 'One boring fix per break: key back to the environment plus a startup check that fails loudly, the cap restored with a timeout and a specific named error, and the prompt reverted because the number said so. Then rotate the key that touched a file — a key that has been in a file is compromised whether or not it was pushed.',
+      trivia: {
+        kind: 'trivia',
+        q: 'You hardcoded a key into a file, then deleted the line. Are you fine?',
+        options: [
+          'Yes — it was never committed',
+          'Yes, as long as the file is gitignored',
+          'No — treat it as compromised and rotate it',
+          'Only if the repo is private',
+        ],
+        answer: 2,
+        reveal: 'A key that has touched a file is in your shell history, your editor buffer, and one careless commit from public. Rotate first, investigate second — always that order.',
+      },
+      beforeAfter: {
+        label: 'Monday → Thursday',
+        before: [
+          'Four disconnected exercises',
+          'A demo ticket somebody else wrote',
+          'It works when you watch it',
+          '"Seems better" after a prompt change',
+          'A loop that could run all night',
+        ],
+        after: [
+          'One assistant you can reuse',
+          'A real workflow from your own plan',
+          'It runs unattended, with a cap and a timeout',
+          'A score out of 10 you can defend',
+          'Broken on purpose, then hardened',
+        ],
+      },
+      storyBeats: {
+        'result-preview': [
+          {
+            icon: '🌉', tone: 'violet', eyebrow: 'Before you build — where you actually are',
+            title: 'On Monday you learned four moves. Tonight they stop being moves.',
+            body: 'There is a particular moment in learning anything practical when the separate drills collapse into one motion — when a driver stops thinking about the clutch and simply drives. Monday you practised four things one at a time: authenticate, steer, structure, and hand it a tool. None of them was useful alone. Tonight they become a single program that does one real job, and after tonight you will not think about them separately again.',
+            punch: 'You are not learning four things anymore. You are building one thing that happens to use them.',
+          },
+        ],
+        'build-map': [
+          {
+            icon: '🧯', tone: 'amber', eyebrow: 'Why we break it on purpose',
+            title: 'Every fire drill you have ever done was for a fire that never came',
+            body: 'Nobody schedules a fire drill because they expect a fire that Tuesday. They do it because the first time you find the exit should not be the first time you need it. Tonight we set fire to your assistant deliberately, while it is small, while nothing depends on it, and while an instructor is standing there. The failures we cause are the exact three that take down real systems, and you will have already met all of them.',
+            punch: 'The first time your code fails should never be the first time you have seen it fail.',
+          },
+        ],
+        failure: [
+          {
+            icon: '🔑', tone: 'cherry', eyebrow: 'A true story that happens constantly',
+            title: 'The key was in the file for four minutes. That was enough.',
+            body: 'A developer pastes a key into a config file to test something quickly, means to remove it, and gets pulled into a meeting. It goes out in a commit that afternoon. Automated scanners crawl public repositories continuously looking for exactly this, and keys have been found and used within minutes of being pushed. Nobody in that story was careless in a way you would notice at the time — they were just briefly, ordinarily busy.',
+            punch: 'This is why the rule is rotate first, investigate second. Judgement is slower than a scanner.',
+          },
+        ],
+      },
+      extraInteractions: [
+        {
+          segment: 'readiness', kind: 'poll',
+          q: 'Four-point check — where are you?',
+          options: ['✅ All four green', '🔑 Key not set in this terminal', '📁 Cannot find Monday\'s folder', '📋 No workflow chosen yet'],
+          eyebrow: '🚦 Roll call', title: 'Before anyone writes a line',
+          presenterTip: 'Operational. Read the counts out loud and send mentors to the non-green students immediately. Do not begin the guided build with people stuck on setup — that is how a Build Day dies.',
+        },
+        {
+          segment: 'build-map', kind: 'poll',
+          q: 'Which workflow from your own build plan are you automating tonight?',
+          options: ['Something that reads and classifies', 'Something that drafts or writes', 'Something that looks up and reports', 'Still deciding'],
+          eyebrow: '📋 Commit to one', title: 'Name it before you build it',
+          presenterTip: 'Have three people say theirs out loud in one sentence. Anyone on "still deciding" gets helped now — the whole night is built on this choice, and a vague answer here produces a vague assistant.',
+        },
+        {
+          segment: 'guided-build', kind: 'trivia',
+          q: 'Your tool never fires, even though the question obviously needs it. What do you check FIRST?',
+          options: [
+            'The input_schema types',
+            'The tool description — does it say WHEN to use it?',
+            'max_tokens',
+            'Whether the model supports tools',
+          ],
+          answer: 1,
+          reveal: 'The description is the routing logic, not documentation. Same lesson as Skill descriptions in Week 2 — if it does not name the trigger, Claude cannot tell it is relevant.',
+          eyebrow: '🛠️ Diagnose it', title: 'The tool is not firing',
+          presenterTip: 'Fires right after they write the tool. Take answers, reveal, then have them re-read their own description against it — several will fix theirs on the spot.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'Your assistant just ran on a real item. How did it do?',
+          options: ['🎯 Nailed it', '🙂 Close — needs prompt work', '🤨 Wrong decision', '💥 Still debugging'],
+          eyebrow: '🎬 The moment', title: 'It just ran on your real work',
+          presenterTip: 'Peak-energy moment of the night. Call on a "nailed it" to describe what theirs did, then a "wrong decision" — the second one is more instructive, and normalising it keeps the room honest.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'You swapped to Haiku and re-ran the eval. What happened to the score?',
+          options: ['Held — same score, way cheaper', 'Dropped a little', 'Dropped a lot', 'Did not get to try it'],
+          eyebrow: '💰 The architect move', title: 'Cheaper model, same eval — what happened?',
+          presenterTip: 'Only run this if the room got to the model swap. If several say "held", stop and name what just happened: they made a real cost decision with evidence instead of a guess. That is the whole week in one poll.',
+        },
+        {
+          segment: 'failure', kind: 'poll',
+          q: 'Of the three faults you just introduced, how many raised an error?',
+          options: ['All three', 'Two', 'One', 'None of them'],
+          answer: 3,
+          reveal: 'None. The leaked key and the uncapped loop looked perfectly healthy — only the prompt regression was detectable, and only because you built an eval to detect it.',
+          eyebrow: '😐 Notice this', title: 'How many of them crashed?',
+          presenterTip: 'Ask before you reveal. The realisation that nothing crashed is the single highest-retention beat of the week — let the silence do the work.',
+        },
+        {
+          segment: 'demos', kind: 'poll',
+          q: 'Would you actually use tonight\'s assistant on your real work next week?',
+          options: ['Yes, as-is', 'Yes, with a bit more hardening', 'Not yet — but I can see it', 'No, mine is a learning exercise'],
+          eyebrow: '🔮 Honest check', title: 'Is this real enough to use?',
+          presenterTip: 'No wrong answer. Read the spread out loud — it tells you who to point at the internship lane, and it tells them how far they actually got tonight.',
+        },
+      ],
+    },
+    assignment: {
+      title: 'Business Workflow Assistant + eval',
+      deliverables: ['Repo with API client, tool definitions, eval script, and the Workflow Assistant'],
+      proof: 'A demo video of the assistant automating a real workflow.',
+    },
+    builderBroadcastFocus: 'a Workflow Assistant that automates one real task end to end',
+  },
+
+  /* ------------------------------------------------------------------ Week 4 */
+  {
+    week: 4,
+    title: 'Prompt Engineering + Prompt Library',
+    intensive: 'Intensive 2 · Create Your AI Team',
+    publicTitle: 'The Prompt Library Every AI Team Needs',
+    monday: {
+      tension:
+        'When every teammate writes prompts their own way, enterprise prompting becomes chaos — nothing is reproducible, tested, or shared. The fix is a systematic prompt-engineering ladder and a governed, versioned Prompt Library.',
+      payoffPreview: 'By Thursday you have an Enterprise Prompt Library: at least 8 versioned, tested, documented prompts your whole team can rely on.',
+      architectureBeats: [
+        'The technique ladder: clear & direct → specific → XML/structure → examples → decomposition',
+        'Prompt templates with variables for reuse across tasks',
+        'Library structure: naming, versioning, metadata, and the workflow each prompt serves',
+        'Quality gates: a prompt is "library-ready" only when it passes an eval',
+        'Prompts as reusable assets — the foundation for the multi-agent team in Weeks 5–7',
+      ],
+      realExample: 'Take one weak prompt and walk it up the ladder, scoring each step against an eval — watch the number climb.',
+      microBuild: 'Turn one ad-hoc prompt into a versioned template with variables and a tested example.',
+      designChoice: {
+        kind: 'poll',
+        q: 'When is a prompt "library-ready"?',
+        options: ['When it works once', 'When it passes an eval and has metadata + a version', 'When it looks long', 'When someone likes it'],
+        reveal: 'Library-ready = tested against an eval, versioned, documented. "Worked once" is not a standard.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'What makes a prompt reproducible across a team?',
+        options: ['Everyone rewrites it', 'A versioned template with variables and a tested example', 'Longer prompts', 'Luck'],
+        answer: 1,
+        reveal: 'A versioned template with a tested example is what makes a prompt an asset instead of a one-off.',
+      },
+      thursdayTrailer: 'Thursday we build the library — 8+ versioned prompts with tests and a "library-ready" standard.',
+    },
+    thursday: {
+      resultPreview: 'An Enterprise Prompt Library with 8+ versioned, documented prompts, each with a tested example and metadata.',
+      readinessCheck: 'Your repo open with a prompts/ folder and your Week 3 eval pattern handy.',
+      buildMap: ['CP0: prompts/ scaffold', 'CP1: first versioned template', 'CP2: 8 prompts with metadata', 'CP3: standard doc + eval gate'],
+      checkpoints: [
+        { n: 0, label: 'Scaffold', detail: 'prompts/ folder with a template format chosen.' },
+        { n: 1, label: 'First template', detail: 'One versioned prompt template with variables + a tested example.' },
+        { n: 2, label: 'Eight prompts', detail: '8+ prompts, each with metadata and a workflow mapping.' },
+        { n: 3, label: 'Governed', detail: 'A written "library-ready" standard and an eval gate.' },
+      ],
+      prompts: [
+        { label: 'Templatize', prompt: 'Turn this prompt into a reusable template: extract variables, add an XML structure, and include one worked example.' },
+        { label: 'Add metadata', prompt: 'For each prompt in prompts/, add front-matter: name, version, purpose, the workflow it serves, and its last eval score.' },
+        { label: 'Library standard', prompt: 'Write a CONTRIBUTING doc defining exactly what makes a prompt "library-ready" (tested example, version, metadata, passing eval).' },
+      ],
+      failureInjection: 'Add a prompt with no version and no test that "works on my machine," then change the model and watch it drift.',
+      recovery: 'Gate it: no prompt enters the library without a version, metadata, and a passing eval example. Re-add it the right way.',
+      trivia: {
+        kind: 'trivia',
+        q: 'Why version prompts?',
+        options: ['To look organized', 'So changes are traceable and the library does not silently rot', 'For fun', 'It is required by law'],
+        answer: 1,
+        reveal: 'Versioning makes prompt changes traceable — the difference between a library and a junk drawer.',
+      },
+    },
+    assignment: {
+      title: 'Enterprise Prompt Library',
+      deliverables: ['prompts/ library with 8+ versioned templates', 'A CONTRIBUTING/standard doc'],
+      proof: 'A before/after of one prompt with its eval scores.',
+    },
+    builderBroadcastFocus: 'a versioned, tested Prompt Library your whole team can reuse',
+  },
+
+  /* ------------------------------------------------------------------ Week 5 */
+  {
+    week: 5,
+    title: 'MCP Foundations + First MCP Server',
+    intensive: 'Intensive 2 · Create Your AI Team',
+    publicTitle: 'Build Your First MCP Server With Claude',
+    monday: {
+      tension:
+        'AI is only as useful as what it can reach. MCP (Model Context Protocol) moves tool definition and execution off your app onto specialized servers — the standard way to connect AI to real tools and data.',
+      payoffPreview: 'By Thursday you have your first MCP server exposing a real capability, verified in the inspector and called by a client.',
+      architectureBeats: [
+        'MCP architecture: how it shifts tool definition/execution to specialized servers',
+        'The three primitives — tools, resources, prompts — and when to use each',
+        'Building a server with the SDK; resources with proper MIME types',
+        'Testing and debugging with the MCP inspector',
+        'Connecting a client to your server',
+      ],
+      realExample: 'Look at a server that confuses tools with resources — and why the client cannot use it correctly.',
+      microBuild: 'Scaffold an MCP server and define one tool; open the inspector and call it.',
+      designChoice: {
+        kind: 'poll',
+        q: 'Read-only reference data your AI needs. Tool, resource, or prompt?',
+        options: ['A tool', 'A resource', 'A prompt', 'Hardcode it'],
+        reveal: 'Read-only context is a resource; an action Claude performs is a tool; a reusable message template is a prompt.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'What do you use to test an MCP server?',
+        options: ['Print statements only', 'The MCP inspector', 'A browser', 'Nothing, ship it'],
+        answer: 1,
+        reveal: 'The inspector lets you exercise tools/resources/prompts before wiring a client.',
+      },
+      thursdayTrailer: 'Thursday we build the server — tools, resources, prompts — and prove it in the inspector.',
+    },
+    thursday: {
+      resultPreview: 'A working MCP server with at least one tool and one resource, verified in the inspector and called by a client.',
+      readinessCheck: 'Python and the MCP SDK installed; JSON/HTTP basics; your repo open.',
+      buildMap: ['CP0: server scaffold', 'CP1: one tool', 'CP2: a resource + a prompt', 'CP3: client calls it'],
+      checkpoints: [
+        { n: 0, label: 'Scaffold', detail: 'An MCP server project that starts.' },
+        { n: 1, label: 'A tool', detail: 'One tool defined with the SDK and validated input.' },
+        { n: 2, label: 'Resource + prompt', detail: 'A resource with a MIME type and one prompt primitive.' },
+        { n: 3, label: 'Client call', detail: 'A client successfully calls the server.' },
+      ],
+      prompts: [
+        { label: 'Scaffold server', prompt: 'Create an MCP server using the SDK with one tool "search_docs(query)" that validates its input and returns structured results.' },
+        { label: 'Add a resource', prompt: 'Add a resource that exposes a docs file with the correct MIME type, and a prompt primitive that templates a support reply.' },
+        { label: 'Connect client', prompt: 'Write a minimal MCP client that connects to this server, lists its tools/resources, and calls search_docs.' },
+      ],
+      failureInjection: 'Define a tool with no input validation and pass it garbage — watch it throw deep in the server.',
+      recovery: 'Add schema validation at the tool boundary so bad input is rejected with a clear message before it reaches logic.',
+      trivia: {
+        kind: 'trivia',
+        q: 'The three MCP primitives are…',
+        options: ['Tools, resources, prompts', 'GET, POST, PUT', 'Model, view, controller', 'Read, write, execute'],
+        answer: 0,
+        reveal: 'Tools (actions), resources (context), prompts (templates).',
+      },
+    },
+    assignment: {
+      title: 'First MCP server',
+      deliverables: ['mcp-server repo with tools/resources/prompts + run instructions'],
+      proof: 'An inspector demo of the server.',
+    },
+    builderBroadcastFocus: 'an MCP server that connects Claude to a real tool',
+  },
+
+  /* ------------------------------------------------------------------ Week 6 */
+  {
+    week: 6,
+    title: 'Advanced MCP + System Integration',
+    intensive: 'Intensive 2 · Create Your AI Team',
+    publicTitle: 'Turn a Basic MCP Server Into a Real Integration',
+    monday: {
+      tension:
+        'Prototype integrations break in production. Taking an MCP server from toy to production means sampling, progress/log notifications, file-access roots, the right transport, and stateless-vs-stateful scaling.',
+      payoffPreview: 'By Thursday your server is production-shaped and integrated with a real business system — your Intensive 2 deliverable alongside the Prompt Library.',
+      architectureBeats: [
+        'Sampling: a server requesting model calls through the client',
+        'Progress and log notifications for long-running operations',
+        'Roots: controlling file access with permission patterns',
+        'Transports: STDIO vs StreamableHTTP, and stateless vs stateful scaling',
+        'Integrating with a real system or data source safely',
+      ],
+      realExample: 'A server that assumes it is stateful and breaks the moment it scales to two instances — and the transport choice that caused it.',
+      microBuild: 'Add progress notifications to a long-running tool so the client shows real feedback.',
+      designChoice: {
+        kind: 'poll',
+        q: 'A public, multi-user integration. Which transport?',
+        options: ['STDIO', 'StreamableHTTP (stateless where possible)', 'Whatever the tutorial used', 'None'],
+        reveal: 'STDIO is great for local/single-user; a scaled, multi-user integration wants StreamableHTTP, stateless where possible.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'What do "roots" control in MCP?',
+        options: ['Server startup order', 'File-access boundaries', 'The model version', 'Log levels'],
+        answer: 1,
+        reveal: 'Roots bound which files a server may touch — a security control, not a nicety.',
+      },
+      thursdayTrailer: 'Thursday we harden the server — sampling, notifications, roots, transport — and wire it to a real system.',
+    },
+    thursday: {
+      resultPreview: 'A production-shaped MCP server (sampling + notifications + roots) integrated with a real business system, with a justified transport choice.',
+      readinessCheck: 'Your Week 5 server, plus access to a real system or dataset to integrate.',
+      buildMap: ['CP0: server running', 'CP1: sampling + notifications', 'CP2: roots + transport chosen', 'CP3: real integration'],
+      checkpoints: [
+        { n: 0, label: 'Baseline', detail: 'Week 5 server running.' },
+        { n: 1, label: 'Upgraded', detail: 'Sampling and progress/log notifications added.' },
+        { n: 2, label: 'Bounded + transported', detail: 'Roots set and a documented transport choice.' },
+        { n: 3, label: 'Integrated', detail: 'Server integrated against a real system/data source.' },
+      ],
+      prompts: [
+        { label: 'Add sampling', prompt: 'Add sampling so the server can request a model call through the client to summarize a long document, and stream progress notifications.' },
+        { label: 'Bound roots', prompt: 'Configure roots so the server can only read from the ./data directory, and explain the security rationale in a comment.' },
+        { label: 'Integrate', prompt: 'Add an adapter that connects a tool to a real system (database or API), with a timeout and error handling.' },
+      ],
+      failureInjection: 'Leave file roots wide open and let a tool read outside its directory.',
+      recovery: 'Constrain roots to the intended directory and add a check; the escape attempt is now denied and logged.',
+      trivia: {
+        kind: 'trivia',
+        q: 'Stateful server, scaled to 3 instances, shared in-memory session. What breaks?',
+        options: ['Nothing', 'Requests hit different instances and lose state', 'Only the logs', 'The favicon'],
+        answer: 1,
+        reveal: 'Stateful assumptions break under horizontal scaling — go stateless or externalize state.',
+      },
+    },
+    assignment: {
+      title: 'Integrated, production-shaped MCP server',
+      deliverables: ['Upgraded server repo with transport config + integration adapter'],
+      proof: 'A demo of the integrated server handling a real task.',
+    },
+    builderBroadcastFocus: 'an MCP server that securely integrates with a real system',
+  },
+
+  /* ------------------------------------------------------------------ Week 7 */
+  {
+    week: 7,
+    title: 'Subagents + Multi-Agent Team',
+    intensive: 'Intensive 3 · Connect AI To The Real World',
+    publicTitle: 'I Turned Claude Code Into an AI Team',
+    monday: {
+      tension:
+        'One assistant hits a ceiling. Subagents give Claude Code isolated context windows and specialized roles — turning a single assistant into a coordinated team that splits exploration from editing and runs independent work in parallel.',
+      payoffPreview: 'By Thursday you have a coordinated team of three specialized subagents, each with structured output and scoped tools.',
+      architectureBeats: [
+        'How subagents work: separate context windows, input flow in, summaries back',
+        'Designing reliable subagents: structured output, obstacle reporting, limited tools',
+        'When to delegate — and the anti-patterns (over-delegation, unscoped tools)',
+        'Coordinating a team: split exploration from editing',
+        'Running independent subagents in parallel',
+      ],
+      realExample: 'A team that over-delegates trivial work and one with unscoped tools returning untrusted results — why both fail.',
+      microBuild: 'Create one specialized subagent with the /agents command and delegate a scoped task to it.',
+      designChoice: {
+        kind: 'poll',
+        q: 'When should you NOT use a subagent?',
+        options: ['For trivial one-line work', 'For a large read-only exploration', 'For parallel independent tasks', 'For isolating context'],
+        reveal: 'Subagents cost coordination overhead — skip them for trivial work; use them to isolate context and parallelize.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'Why require structured output from a subagent?',
+        options: ['It looks nice', 'So the coordinator can trust and act on the result', 'To use more tokens', 'No reason'],
+        answer: 1,
+        reveal: 'Structured output is the contract that lets the coordinator trust a subagent’s result.',
+      },
+      thursdayTrailer: 'Thursday we build the team — three subagents, scoped and coordinated on one real task.',
+    },
+    thursday: {
+      resultPreview: 'A multi-agent team of 3+ specialized subagents, each with structured output and scoped tools, plus a worked coordination example.',
+      readinessCheck: 'Your Architect Workspace with a .claude/agents/ folder.',
+      buildMap: ['CP0: agents folder', 'CP1: first subagent', 'CP2: three specialized subagents', 'CP3: coordinated run'],
+      checkpoints: [
+        { n: 0, label: 'Scaffold', detail: '.claude/agents/ ready.' },
+        { n: 1, label: 'First subagent', detail: 'One specialized subagent with structured output.' },
+        { n: 2, label: 'Team of three', detail: 'Three subagents with scoped tools.' },
+        { n: 3, label: 'Coordinated', detail: 'A run splitting exploration from editing across the team.' },
+      ],
+      prompts: [
+        { label: 'Create subagent', prompt: 'Create a subagent "explorer" that maps a subsystem read-only and returns a structured summary. Restrict it to read and search tools.' },
+        { label: 'Build the team', prompt: 'Add a "reviewer" and an "editor" subagent, each with a structured output format and only the tools it needs.' },
+        { label: 'Coordinate', prompt: 'Run the team on a real change: explorer maps it, reviewer flags risks, editor implements. Show the handoffs.' },
+      ],
+      failureInjection: 'Give a subagent full tool access and let it wander outside its job, returning unstructured mush.',
+      recovery: 'Scope its tools to only what the role needs and require a structured output schema; the result becomes trustworthy.',
+      trivia: {
+        kind: 'trivia',
+        q: 'Two independent tasks. Best pattern?',
+        options: ['One agent, sequential', 'Run two subagents in parallel', 'Skip both', 'Do it by hand'],
+        answer: 1,
+        reveal: 'Independent work runs in parallel — that is the point of a team.',
+      },
+    },
+    assignment: {
+      title: 'Coordinated multi-agent team',
+      deliverables: ['.claude/agents/ with 3+ subagents + a coordination example'],
+      proof: 'A demo of the team handling a multi-step task.',
+    },
+    builderBroadcastFocus: 'a team of subagents that split the work and report back',
+  },
+
+  /* ------------------------------------------------------------------ Week 8 */
+  {
+    week: 8,
+    title: 'Claude Code Workflows + Automation',
+    intensive: 'Intensive 3 · Connect AI To The Real World',
+    publicTitle: 'Make Claude Code Run a Complete Workflow Automatically',
+    monday: {
+      tension:
+        'AI work only compounds when it is repeatable. Custom commands, hooks, the SDK, headless runs, and GitHub Actions turn Claude Code into an automation platform that runs routine engineering itself — safely and unsupervised.',
+      payoffPreview: 'By Thursday you have a real dev workflow that runs itself: custom commands + a hook + a headless run + automated code review on PRs.',
+      architectureBeats: [
+        'Custom commands and reusable automations',
+        'Hooks for formatting, command control, and guardrails',
+        'The Claude Code SDK and headless/routines for unattended runs',
+        'Permission modes for supervised vs unsupervised work',
+        'GitHub Actions + automated code review, with a verification step you can trust',
+      ],
+      realExample: 'A headless automation with unsafe permissions and no verification — how it quietly ships a bad change.',
+      microBuild: 'Write one custom command and one hook, and run them on a real task.',
+      designChoice: {
+        kind: 'poll',
+        q: 'Running Claude Code headless in CI. What must be true?',
+        options: ['Full permissions, no checks', 'Scoped permissions + a verification step', 'It never fails', 'Nothing special'],
+        reveal: 'Unattended = least-privilege permissions plus a verification gate. Automation without verification is a liability.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'What is a hook good for?',
+        options: ['Formatting + guardrails around commands', 'Nothing', 'Only logging', 'Replacing tests'],
+        answer: 0,
+        reveal: 'Hooks enforce formatting and control which commands run — your automation guardrails.',
+      },
+      thursdayTrailer: 'Thursday we automate a real workflow — commands, hooks, headless, and CI code review.',
+    },
+    thursday: {
+      resultPreview: 'An automated dev workflow: 2+ custom commands, a hook, a headless run completing a task unattended, and GitHub Actions code review on PRs.',
+      readinessCheck: 'Your repo on GitHub with Actions enabled, and the Claude Code SDK available.',
+      buildMap: ['CP0: repo + Actions', 'CP1: commands + hook', 'CP2: headless run', 'CP3: CI code review'],
+      checkpoints: [
+        { n: 0, label: 'Ready', detail: 'Repo on GitHub with Actions enabled.' },
+        { n: 1, label: 'Automated locally', detail: '2 custom commands + 1 hook wired into a real workflow.' },
+        { n: 2, label: 'Headless', detail: 'A routine/headless run completing a task unattended.' },
+        { n: 3, label: 'CI review', detail: 'GitHub Actions running automated code review on PRs.' },
+      ],
+      prompts: [
+        { label: 'Custom command', prompt: 'Create a custom command "/ship" that runs the tests, formats the code, and drafts a PR description.' },
+        { label: 'Add a hook', prompt: 'Add a hook that blocks a commit if the tests fail, and formats staged files before commit.' },
+        { label: 'CI code review', prompt: 'Add a GitHub Actions workflow that runs Claude Code review on every PR and comments findings. Redact any secrets.' },
+      ],
+      failureInjection: 'Run the headless automation with broad permissions and no verification — let it push an unverified change.',
+      recovery: 'Add a verification step (tests must pass) and scope permissions; the automation now refuses to ship a red build.',
+      trivia: {
+        kind: 'trivia',
+        q: 'Automation with no verification step is…',
+        options: ['Efficient', 'A production defect waiting to happen', 'Best practice', 'Fine in prod'],
+        answer: 1,
+        reveal: 'No verification = unattended risk. Verify before you automate.',
+      },
+    },
+    assignment: {
+      title: 'Self-running dev workflow',
+      deliverables: ['.claude/ commands + hooks', 'A GitHub Actions workflow for automated review'],
+      proof: 'A demo of the automated workflow + a CI review comment.',
+    },
+    builderBroadcastFocus: 'a workflow that runs itself — commands, hooks, and CI review',
+  },
+
+  /* ------------------------------------------------------------------ Week 9 */
+  {
+    week: 9,
+    title: 'Reliability Engineering + Quality Layer',
+    intensive: 'Intensive 3 · Connect AI To The Real World',
+    publicTitle: 'I Broke Our AI System on Purpose',
+    monday: {
+      tension:
+        'A successful demo still fails in production. Reliability is designing the failure path before the happy path: timeouts, retries with backoff, circuit breakers, fallbacks, dead-letter handling, and idempotency so operations are safe to re-run.',
+      payoffPreview: 'By Thursday your system wears a reliability + quality layer, and you prove idempotency by running the same operation twice to one end state.',
+      architectureBeats: [
+        'Failure-first design: enumerate failure modes for each external boundary',
+        'Timeouts, capped retries with backoff, circuit breakers',
+        'Fallbacks and dead-letter handling for exhausted retries',
+        'Idempotency: same input → same end state, no duplicate side effects',
+        'Quality gates: an eval threshold that blocks bad AI output',
+      ],
+      realExample: 'A retry loop with no cap and a non-idempotent write — how one blip becomes duplicate charges.',
+      microBuild: 'Add a timeout and capped retry to one external call.',
+      designChoice: {
+        kind: 'poll',
+        q: 'A webhook can fire twice. How do you stay correct?',
+        options: ['Hope it does not', 'Idempotency key + unique constraint', 'Retry forever', 'Ignore duplicates'],
+        reveal: 'Idempotency keys make replay safe. If a retry can duplicate a side effect, the operation is broken.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'A circuit breaker exists to…',
+        options: ['Speed things up', 'Stop hammering a failing dependency and fail clearly', 'Add features', 'Log more'],
+        answer: 1,
+        reveal: 'When an upstream keeps failing, the breaker opens — you stop calling and surface a clear error.',
+      },
+      thursdayTrailer: 'Thursday we break the system on purpose — and make it recover.',
+    },
+    thursday: {
+      resultPreview: 'A reliability layer (timeouts + retries + breaker + fallback), idempotency proven, and a quality gate blocking a bad output on camera.',
+      readinessCheck: 'Your Intensive 1–3 system in the repo, ready to wrap.',
+      buildMap: ['CP0: baseline system', 'CP1: timeouts + retries + breaker', 'CP2: idempotency proven', 'CP3: quality gate blocks bad output'],
+      checkpoints: [
+        { n: 0, label: 'Baseline', detail: 'The system runs on the happy path.' },
+        { n: 1, label: 'Resilient', detail: 'Timeouts + capped retries + circuit breaker + fallback added.' },
+        { n: 2, label: 'Idempotent', detail: 'Same operation run twice yields one end state.' },
+        { n: 3, label: 'Gated', detail: 'An eval threshold blocks a deliberately bad output.' },
+      ],
+      prompts: [
+        { label: 'Add resilience', prompt: 'Wrap this external call with a timeout, capped exponential-backoff retry, and a circuit breaker. Log the error class on failure.' },
+        { label: 'Make it idempotent', prompt: 'Add an idempotency key to this side-effecting operation and a unique constraint so a replay does not duplicate the effect.' },
+        { label: 'Quality gate', prompt: 'Add an eval gate that scores the AI output and blocks it below threshold, returning a clear rejection.' },
+      ],
+      failureInjection: 'Force the external dependency to 500, then fire the same operation twice — show the duplicate side effect before the fix.',
+      recovery: 'Add the breaker + idempotency key; re-run the exact failure and watch it degrade gracefully with one clean end state.',
+      trivia: {
+        kind: 'trivia',
+        q: 'try { … } catch (e) {} (empty catch) is…',
+        options: ['Clean', 'A silent-failure production defect', 'Required', 'Faster'],
+        answer: 1,
+        reveal: 'Swallowing errors silently hides root cause. Classify, log, and handle.',
+      },
+    },
+    assignment: {
+      title: 'Reliability + quality layer',
+      deliverables: ['Reliability module (timeouts/retries/breaker/DLQ) + eval gate + tests'],
+      proof: 'A demo of a forced failure being handled and retried to one clean state.',
+    },
+    builderBroadcastFocus: 'a system that survives failure and refuses to duplicate work',
+  },
+
+  /* ----------------------------------------------------------------- Week 10 */
+  {
+    week: 10,
+    title: 'Governance + Governance Engine',
+    intensive: 'Intensive 4 · Design AI That Scales',
+    publicTitle: 'This AI Tried to Act — Governance Stopped It',
+    monday: {
+      tension:
+        'Autonomous AI needs authority limits. Governance is the trust layer that makes an agentic system safe in production: attribute-based access control, human-in-the-loop escalation, and an immutable audit trail that gate actions before side effects fire.',
+      payoffPreview: 'By Thursday you have a Governance Engine that blocks a disallowed action, escalates a high-risk one to a human, and reconstructs any decision from a single correlation ID.',
+      architectureBeats: [
+        'Five-factor ABAC: user, resource, action, context, risk',
+        'Human-in-the-loop: which action categories must escalate, and the path',
+        'Immutable audit trail keyed on a correlation ID',
+        'Fail-closed defaults: an ungoverned action is a denied action',
+        'INPACT (Permitted & Transparent) and the GOALS Governance pillar',
+      ],
+      realExample: 'Governance bolted on after the fact vs governance-first — why "after" leaks actions.',
+      microBuild: 'Write one ABAC rule that denies an action and returns a clear reason.',
+      designChoice: {
+        kind: 'poll',
+        q: 'An agent requests a high-risk action (a refund > $500). Default behavior?',
+        options: ['Allow it', 'Escalate to a human, then resume on approval', 'Deny silently', 'Log and allow'],
+        reveal: 'High-risk actions escalate to a human and resume only after approval — fail-closed by default.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'What lets you reconstruct any decision later?',
+        options: ['Guessing', 'An audit trail keyed on a correlation ID', 'Bigger logs', 'The model'],
+        answer: 1,
+        reveal: 'One correlation ID threads a decision through every log line and side effect.',
+      },
+      thursdayTrailer: 'Thursday we build the Governance Engine — block, escalate, approve, audit.',
+    },
+    thursday: {
+      resultPreview: 'A Governance Engine over your system: an ABAC policy that blocks a disallowed action, a HITL gate that escalates and resumes, and audit reconstruction from one correlation ID.',
+      readinessCheck: 'Your Intensive 1–3 system, with the reliability layer from Week 9.',
+      buildMap: ['CP0: baseline system', 'CP1: ABAC blocks an action', 'CP2: HITL escalation + resume', 'CP3: audit reconstruction'],
+      checkpoints: [
+        { n: 0, label: 'Baseline', detail: 'The system runs without governance.' },
+        { n: 1, label: 'Policy blocks', detail: 'An ABAC evaluator denies a disallowed action with a reason.' },
+        { n: 2, label: 'Human gate', detail: 'A high-risk action escalates and resumes on approval.' },
+        { n: 3, label: 'Auditable', detail: 'A decision reconstructed end to end from one correlation ID.' },
+      ],
+      prompts: [
+        { label: 'ABAC policy', prompt: 'Add a 5-factor ABAC policy file (user, resource, action, context, risk) and an evaluator middleware that denies fail-closed with a reason.' },
+        { label: 'HITL gate', prompt: 'Add a human-in-the-loop queue: high-risk actions pause, notify an approver, and resume on approval.' },
+        { label: 'Audit trail', prompt: 'Generate a correlation ID at entry and thread it through every log line and side effect so any decision can be reconstructed. Never log secrets.' },
+      ],
+      failureInjection: 'Route a high-risk action straight through with governance disabled — show it firing unchecked.',
+      recovery: 'Turn on fail-closed evaluation: the same action is now blocked, escalated, and fully audited.',
+      trivia: {
+        kind: 'trivia',
+        q: 'Fail-closed means…',
+        options: ['Allow when unsure', 'Deny when a governing decision is missing', 'Crash', 'Retry'],
+        answer: 1,
+        reveal: 'No explicit permission → denied. Ungoverned equals disallowed.',
+      },
+    },
+    assignment: {
+      title: 'Governance Engine',
+      deliverables: ['governance module: ABAC policy file + evaluator middleware + HITL queue + audit log'],
+      proof: 'A demo: one blocked action, one escalated action, one audit reconstruction.',
+    },
+    builderBroadcastFocus: 'a Governance Engine that blocks, escalates, and audits every action',
+  },
+
+  /* ----------------------------------------------------------------- Week 11 */
+  {
+    week: 11,
+    title: 'Systems Architecture + Architecture Package',
+    intensive: 'Intensive 4 · Design AI That Scales',
+    publicTitle: 'How to Architect a Production AI System',
+    monday: {
+      tension:
+        'Architects earn authority by explaining complex systems clearly. An architecture package is diagrams + decisions + evidence — not slides: the 7-layer map, trust boundaries, ADRs, and a Trust Band scorecard.',
+      payoffPreview: 'By Thursday you have a Solution Architecture Package: your system mapped onto the 7-layer reference, 5+ ADRs, and an INPACT/Trust Band scorecard — the exhibit for the Expo.',
+      architectureBeats: [
+        'The 7-layer reference: Storage → Data Fabric → Semantic → Intelligence → Governance → Observability → Orchestration',
+        'Trust boundaries, data flow, and failure/recovery per layer',
+        'ADRs that justify — not just describe — the highest-stakes choices',
+        'INPACT composite + Trust Band scorecard for the finished system',
+        'Reliability (Wk9) and governance (Wk10) are layers here, not add-ons',
+      ],
+      realExample: 'A "pretty slides" architecture with no trust boundaries vs an evidence-backed package — which one survives a review.',
+      microBuild: 'Map your system onto the 7-layer table and mark where each component lives.',
+      designChoice: {
+        kind: 'poll',
+        q: 'What makes an ADR worth writing?',
+        options: ['It describes what you did', 'It justifies the choice and the alternatives rejected', 'It is long', 'It has a diagram'],
+        reveal: 'An ADR captures the decision, the alternatives, and why — so future-you can defend it.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'An architecture package is…',
+        options: ['Slides', 'Diagrams + decisions + evidence', 'A README', 'A demo video'],
+        answer: 1,
+        reveal: 'Evidence, not slides. Diagrams, ADRs, and scorecards you can defend.',
+      },
+      thursdayTrailer: 'Thursday we assemble the package — 7-layer map, ADRs, and the Trust Band scorecard.',
+    },
+    thursday: {
+      resultPreview: 'A Solution Architecture Package: system + data-flow diagrams, a 7-layer mapping table, 5+ ADRs, and an INPACT/Trust Band scorecard with the top 3 gaps.',
+      readinessCheck: 'Your full system from Intensives 1–4 in the repo.',
+      buildMap: ['CP0: system inventory', 'CP1: 7-layer map + diagrams', 'CP2: 5+ ADRs', 'CP3: scorecard + gaps'],
+      checkpoints: [
+        { n: 0, label: 'Inventory', detail: 'Every component of your system listed.' },
+        { n: 1, label: 'Mapped', detail: 'A 7-layer table + system and data-flow diagrams.' },
+        { n: 2, label: 'Justified', detail: '5+ ADRs for the highest-stakes decisions.' },
+        { n: 3, label: 'Scored', detail: 'An INPACT composite + Trust Band scorecard with top 3 gaps.' },
+      ],
+      prompts: [
+        { label: '7-layer map', prompt: 'Generate a table mapping each component of my system onto the 7 layers (Storage → Data Fabric → Semantic → Intelligence → Governance → Observability → Orchestration), noting trust boundaries.' },
+        { label: 'Write ADRs', prompt: 'Draft 5 ADRs for my highest-stakes decisions: context, decision, alternatives considered, and consequences.' },
+        { label: 'Scorecard', prompt: 'Produce an INPACT composite and a Trust Band scorecard for the system, and list the top 3 gaps between current and target.' },
+      ],
+      failureInjection: 'Present an architecture with no marked trust boundaries — ask where untrusted input enters and watch the gap appear.',
+      recovery: 'Add explicit trust boundaries and data-flow arrows; the entry points and controls become obvious.',
+      trivia: {
+        kind: 'trivia',
+        q: 'Where do reliability and governance live in the 7-layer model?',
+        options: ['Bolted on at the end', 'As their own layers in the architecture', 'Nowhere', 'In the README'],
+        answer: 1,
+        reveal: 'They are architecture layers (Observability/Governance), not afterthoughts.',
+      },
+    },
+    assignment: {
+      title: 'Solution Architecture Package',
+      deliverables: ['/architecture: system + data-flow diagrams, 7-layer table, ADRs, scorecard'],
+      proof: 'The packaged architecture doc (PDF/site) for the Expo.',
+    },
+    builderBroadcastFocus: 'an architecture package that explains and defends your whole system',
+  },
+
+  /* ----------------------------------------------------------------- Week 12 */
+  {
+    week: 12,
+    title: 'Capstone + Architect Expo',
+    intensive: 'Intensive 4 · Design AI That Scales',
+    publicTitle: '12 Weeks. One Working AI System. Here’s What We Built.',
+    monday: {
+      tension:
+        'From idea to governed system: the capstone integrates the whole arc — foundation, team, integration, reliability, governance, architecture — into one system running end to end, governed and observable, ready to defend.',
+      payoffPreview: 'Thursday is the Architect Expo: you present the build, defend the decisions, cite the evidence, and sit the CCA-F exam.',
+      architectureBeats: [
+        'Integrate all six threads into one capstone system',
+        'Freeze and run it end to end with governance + observability on',
+        'The executive story: problem → architecture → demo → evidence → roadmap',
+        'CCA-F exam blueprint: the five domains and how to close the last gaps',
+        'Defending a system to a panel with authority',
+      ],
+      realExample: 'A demo without a defense vs a demo that cites evidence for every claim — which one earns the credential.',
+      microBuild: 'Draft your Expo throughline: the one sentence that states the problem and the outcome.',
+      designChoice: {
+        kind: 'poll',
+        q: 'Your Expo talk should lead with…',
+        options: ['The tech stack', 'The problem and the outcome', 'A tools tour', 'An apology for what is unfinished'],
+        reveal: 'Lead with problem → outcome. Executives buy the outcome; the architecture backs it up.',
+      },
+      trivia: {
+        kind: 'trivia',
+        q: 'What are you graded on at the Expo?',
+        options: ['A working demo only', 'Demo + defense: decisions justified and evidenced', 'Slide count', 'Attendance'],
+        answer: 1,
+        reveal: 'The defense is the point: can you justify the architecture and cite the evidence?',
+      },
+      thursdayTrailer: 'Thursday is the Expo — you present, you defend, you certify.',
+    },
+    thursday: {
+      resultPreview: 'A frozen capstone running end to end (governance + observability on), a recorded Expo presentation, and a CCA-F exam attempt.',
+      readinessCheck: 'Your integrated capstone system and your architecture package ready.',
+      buildMap: ['CP0: integrated capstone', 'CP1: frozen end-to-end run', 'CP2: recorded Expo talk', 'CP3: CCA-F attempt'],
+      checkpoints: [
+        { n: 0, label: 'Integrated', detail: 'All threads integrated into one capstone.' },
+        { n: 1, label: 'Frozen run', detail: 'End-to-end run with governance + observability on.' },
+        { n: 2, label: 'Presented', detail: 'A recorded Expo talk: problem → architecture → demo → evidence → roadmap.' },
+        { n: 3, label: 'Certified', detail: 'A CCA-F exam attempt and a submitted architecture package.' },
+      ],
+      prompts: [
+        { label: 'Integrate', prompt: 'Wire my Intensive 1–4 components into one runnable capstone and produce a single command that runs it end to end.' },
+        { label: 'Dry-run the defense', prompt: 'Play a skeptical panelist: ask me to justify my three highest-stakes architecture decisions and probe for the weakest one.' },
+        { label: 'Expo cut', prompt: 'From my capstone, draft an Expo script: problem, architecture, live demo beats, evidence, and one honest limitation.' },
+      ],
+      failureInjection: 'Run the capstone and let one integration seam fail live — the classic "it worked in pieces" moment.',
+      recovery: 'Diagnose the seam with the correlation ID and the reliability layer; recover on camera — the defense is stronger for it.',
+      trivia: {
+        kind: 'trivia',
+        q: 'The credential is CCA-F. It stands for…',
+        options: ['Claude Code Advanced', 'Claude Certified Architect — Foundations', 'Certified Cloud Admin', 'None'],
+        answer: 1,
+        reveal: 'Claude Certified Architect — Foundations: the external gate you sit this week.',
+      },
+    },
+    assignment: {
+      title: 'Capstone + Expo + CCA-F',
+      deliverables: ['Capstone repo (integrated system) + the final architecture package', 'Recorded Expo presentation', 'CCA-F exam attempt'],
+      proof: 'Your recorded Expo defense and your CCA-F attempt.',
+    },
+    builderBroadcastFocus: 'the working, governed AI system you built and defended in 12 weeks',
+  },
+];
+
+/** Lookup by week number (1..12). */
+export function weekClassContent(week: number): WeekClassContent | undefined {
+  return WEEK_CLASS_CONTENT.find((w) => w.week === week);
+}
+
+/**
+ * Mermaid architecture diagrams — one per week, shown on the Architecture Day
+ * "architecture story" slide. Concise flowcharts of that week's system so the
+ * instructor can teach the shape at a glance (and the student sees the picture).
+ * Rendered client-side by mermaid; the raw source stays visible if the CDN is
+ * unreachable.
+ */
+export const ARCHITECTURE_DIAGRAMS: Record<number, string> = {
+  1: `flowchart LR
+  U["You: a task"] --> CC["Claude Code"]
+  subgraph LOOP["The agentic loop"]
+    CTX["Context window"]
+    T["Tools: read / edit / run"]
+    P["Permissions"]
+  end
+  CC --> LOOP
+  LOOP --> W["explore → plan → code → commit"]
+  W --> R[("Your repo")]
+  MD["CLAUDE.md — persistent standards"] -.-> CC`,
+  2: `flowchart TD
+  D["Orders + ETL output"] --> G["data-quality-gate"]
+  G -->|"FAIL"| T["etl-failure-triage"]
+  G -->|"PASS"| PUB["Publish to dashboard"]
+  T --> B["executive-dashboard-brief"]
+  B --> L["Leadership: PUBLISH or BLOCK decision"]`,
+  3: `flowchart LR
+  Y["👤 You"] --> CC["💻 Claude Code<br/>subscription seat"]
+  CC --> APP["🐍 Your Python program"]
+  APP --> API["🔌 Claude API<br/>paid per token"]
+  API --> APP
+  APP --> OUT["📦 Structured result<br/>your systems can use"]
+  KEY["🔑 API key<br/>from the Console"] -.-> API`,
+  4: `flowchart TD
+  A["Ad-hoc prompt"] --> L["Technique ladder<br/>clear → specific → structured → examples"]
+  L --> TPL["Versioned template + variables"]
+  TPL --> G{"Passes eval?"}
+  G -->|yes| LIB["Prompt Library<br/>versioned · tested · documented"]
+  G -->|no| L
+  LIB --> TEAM["The whole team reuses"]`,
+  5: `flowchart LR
+  Client["MCP client (Claude)"] <--> Server["Your MCP server"]
+  Server --> Tools["Tools = actions"]
+  Server --> Res["Resources = context"]
+  Server --> Prompts["Prompts = templates"]
+  Insp["MCP inspector"] -.tests.-> Server`,
+  6: `flowchart LR
+  Client["Client"] <--> Server["Production-shaped MCP server"]
+  Server --> Samp["Sampling"]
+  Server --> Notif["Progress + log notifications"]
+  Server --> Roots["Roots = file-access limits"]
+  Server --> Trans["Transport: STDIO ↔ StreamableHTTP"]
+  Server --> Sys[("Real business system")]`,
+  7: `flowchart TD
+  Lead["Coordinator"] --> Ex["Explorer (read-only)"]
+  Lead --> Rev["Reviewer"]
+  Lead --> Ed["Editor"]
+  Ex --> Sum["Structured summaries"]
+  Rev --> Sum
+  Ed --> Sum
+  Sum --> Lead`,
+  8: `flowchart LR
+  Dev["Dev workflow"] --> Cmd["Custom commands"]
+  Dev --> Hook["Hooks = guardrails"]
+  Dev --> HL["Headless / SDK"]
+  HL --> V{"Verification passes?"}
+  V -->|yes| Ship["Auto-ship"]
+  V -->|no| Stop["Blocked"]
+  GH["GitHub Actions"] --> Rev["Automated code review"]`,
+  9: `flowchart LR
+  Call["External call"] --> TO["Timeout"]
+  TO --> Retry["Capped retry + backoff"]
+  Retry --> CB{"Circuit breaker"}
+  CB -->|open| FB["Fallback / dead-letter"]
+  CB -->|closed| OK["Success"]
+  Idem["Idempotency key"] -.safe replay.-> Call
+  Gate["Quality gate = eval"] --> Out["Trusted output"]`,
+  10: `flowchart TD
+  Act["Agent wants to act"] --> ABAC{"ABAC policy<br/>user·resource·action·context·risk"}
+  ABAC -->|allow| Do["Execute"]
+  ABAC -->|high risk| HITL["Human approval"]
+  ABAC -->|deny| Block["Fail-closed"]
+  HITL -->|approved| Do
+  Do --> Audit[("Audit trail = correlation id")]`,
+  11: `flowchart TD
+  L7["7 · Orchestration"] --> L6["6 · Observability"]
+  L6 --> L5["5 · Governance"]
+  L5 --> L4["4 · Intelligence"]
+  L4 --> L3["3 · Semantic"]
+  L3 --> L2["2 · Data Fabric"]
+  L2 --> L1[("1 · Storage")]`,
+  12: `flowchart LR
+  I1["Foundation"] --> Cap["Capstone system"]
+  I2["AI team"] --> Cap
+  I3["Integration + reliability"] --> Cap
+  I4["Governance + architecture"] --> Cap
+  Cap --> Expo["Architect Expo — demo + defense"]
+  Cap --> Cert["CCA-F exam"]`,
+};

@@ -10,7 +10,11 @@ import { sequelize } from '../config/database';
  * that upgrade is additive (no data migration). One row per checkout attempt;
  * the student's CURRENT subscription is the newest non-failed row.
  */
-export type SubscriptionPlan = 'annual' | 'monthly';
+// 'annual' | 'monthly' are the two self-serve paid plans; 'comp' is an
+// admin-granted comped seat (Free Access — full program access at $0, never
+// billed). 'comp' is never offered in the student checkout (getSubscription
+// lists only annual+monthly; startCheckout rejects it).
+export type SubscriptionPlan = 'annual' | 'monthly' | 'comp';
 export type SubscriptionStatus = 'pending' | 'active' | 'canceled' | 'failed';
 
 export interface SubscriptionAttributes {

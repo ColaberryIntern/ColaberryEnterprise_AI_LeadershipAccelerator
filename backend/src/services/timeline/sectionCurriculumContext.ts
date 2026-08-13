@@ -4,23 +4,26 @@
  * Where blueprintContext tells a generator what the week is ABOUT (topics,
  * objectives), this tells it what the student will actually DO — the published
  * TimelineCards placed in that (program, week). Injected ONLY for types that
- * summarize the week (SECTION_ROSTER_TYPES — today just `overview`) so a lab or
- * video generation never starts narrating its sibling cards.
+ * summarize the week (SECTION_ROSTER_TYPES — the week-opener `announcement`) so
+ * a lab or video generation never starts narrating its sibling cards.
  *
  * Failure mode: any lookup problem returns null and the generation proceeds on
  * blueprint context alone (same graceful-degrade contract as blueprintContext).
  */
 import TimelineCard from '../../models/TimelineCard';
+import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { resolve } from './typeRegistry';
 
-/** Types whose generation receives the week's activity roster. Extend as other
- *  week-summary types (wrap-ups, weekly reflections) need it. `announcement` is
- *  the friendly week-opener that scans the section and reports what's ahead. */
-export const SECTION_ROSTER_TYPES = new Set(['overview', 'announcement']);
+/** Types whose generation receives the week's activity roster. `announcement` is
+ *  the friendly week-opener that scans the section and reports what's ahead;
+ *  `prompt_lab` builds practice against the week's real deliverables; `reflection`
+ *  is the week-closer that reflects the WHOLE week back to the student, so it must
+ *  see every activity that was placed (grouped by phase) to capture all of it. */
+export const SECTION_ROSTER_TYPES = new Set(['announcement', 'prompt_lab', 'reflection']);
 
 /** Meta/system cards excluded from the roster — they are not "things you'll do". */
 const EXCLUDED_TYPES = new Set([
-  'overview', 'announcement', 'event',
+  'announcement', 'event',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',
 ]);
 
@@ -62,7 +65,8 @@ function fmtDuration(mins: number): string {
  *  Leads with the TOTAL count + total time, tags each item with its phase AND minutes,
  *  and lists per-phase time subtotals — so a week-summary card (announcement/overview)
  *  can show a real, curriculum-derived time budget (total at the top, per phase, per
- *  activity) and cover the WHOLE week grouped by phase instead of cherry-picking. */
+ *  activity) and cover the WHOLE week grouped by phase instead of cherry-picking.
+ *  (Consumed by the week-opener `announcement` type.) */
 export function buildSectionCurriculumText(week: number, items: SectionCurriculumItem[]): string {
   const total = items.reduce((s, it) => s + (it.est_minutes || 0), 0);
   const byPhase = new Map<string, number>();
@@ -121,5 +125,31 @@ export async function getSectionCurriculumContext(
   if (!items.length) return null;
 
   items.sort((a, b) => (BUCKET_ORDER[a.bucket] ?? 9) - (BUCKET_ORDER[b.bucket] ?? 9));
-  return { week, items, prompt_text: buildSectionCurriculumText(week, items) };
+
+  // ENRICHMENT — the concrete DELIVERABLES the week produces (the actual documents
+  // built) + the Deep Dive's focus, so a practice generator (Prompt Lab) can write
+  // prompts that build those real artifacts instead of generic exercises.
+  let enrichment = '';
+  try {
+    const list = (v: any): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : []);
+    const bp = await CurriculumBlueprint.findOne({ where: { program_id: programId, week }, order: [['created_at', 'DESC']] });
+    const gh = list((bp as any)?.github_deliverables);
+    const pf = list((bp as any)?.portfolio_deliverables);
+    const ev = list((bp as any)?.evidence_produced);
+    const lines: string[] = [];
+    if (gh.length || pf.length || ev.length) {
+      lines.push("WHAT STUDENTS BUILD THIS WEEK (the concrete documents/artifacts — the best raw material for practice prompts):");
+      if (gh.length) lines.push('- Code / GitHub deliverables: ' + gh.join('; '));
+      if (pf.length) lines.push('- Portfolio deliverables: ' + pf.join('; '));
+      if (ev.length) lines.push('- Evidence produced: ' + ev.join('; '));
+    }
+    const dd = cards.find((c) => c.type === 'deep_dive');
+    if (dd) {
+      const ddSummary = (dd as any).metadata?.content?.summary;
+      lines.push(`This week's Deep Dive ("${dd.title}") ${ddSummary ? 'covers: ' + ddSummary : 'is a focused field guide on the week topic'} — practice prompts may have the student build the documents the Deep Dive teaches.`);
+    }
+    if (lines.length) enrichment = '\n\n' + lines.join('\n');
+  } catch { /* graceful degrade — proceed on the roster alone */ }
+
+  return { week, items, prompt_text: buildSectionCurriculumText(week, items) + enrichment };
 }

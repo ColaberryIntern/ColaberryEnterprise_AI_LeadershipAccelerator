@@ -20,6 +20,13 @@ export const initials = (n: string): string => (n || '?').split(/\s+/).slice(0, 
 /** Ladder tone from a 0..8 rank: teal (low) → green (mid) → amber (near Architect). */
 export const lvlTone = (rank: number): string => (rank >= 7 ? '#E8920C' : rank >= 3 ? '#5BA63C' : '#367895');
 
+/** Points-economy tone from a total-points balance: muted (not yet earning) →
+ *  teal → green → amber (highest tier). Mirrors lvlTone's palette so the pts
+ *  pill reads as part of the same visual language as the level pill. */
+export const ptsTone = (points: number): string => (
+  points >= 2400 ? '#E8920C' : points >= 800 ? '#5BA63C' : points >= 150 ? '#367895' : 'var(--text-subtle)'
+);
+
 /** Turn a level_slug ("sr_dev") into a display label ("Sr Dev"). */
 export const prettyLevel = (slug: string): string => (slug || 'builder').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 

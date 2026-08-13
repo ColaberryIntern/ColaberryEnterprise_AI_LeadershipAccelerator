@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { env } from '../config/env';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /* ------------------------------------------------------------------ */
 /*  PaySimple API Service                                              */
@@ -121,11 +122,11 @@ export async function findOrCreateCustomer(params: {
 }): Promise<PaySimpleCustomer> {
   const existing = await findCustomerByEmail(params.email);
   if (existing) {
-    console.log(`[PaySimple] Found existing customer ${existing.Id} for ${params.email}`);
+    console.log(`[PaySimple] Found existing customer ${existing.Id} for ${redactForLogs(params.email)}`);
     return existing;
   }
   const customer = await createCustomer(params);
-  console.log(`[PaySimple] Created customer ${customer.Id} for ${params.email}`);
+  console.log(`[PaySimple] Created customer ${customer.Id} for ${redactForLogs(params.email)}`);
   return customer;
 }
 
@@ -136,6 +137,19 @@ export async function findOrCreateCustomer(params: {
 export interface HostedPaymentLink {
   id: string;
   payment_link: string;
+}
+
+// PaySimple rejects item.name over 50 chars (validation error, not a 5xx —
+// found live 2026-07-31 when a student's credit-applied checkout ("Monthly
+// plan (-$50 credit)") pushed the combined name to 54 chars and PaySimple
+// returned a 400 for every one of the 25 students with an unapplied credit).
+const MAX_ITEM_NAME_LENGTH = 50;
+
+function clampItemName(name: string): string {
+  if (name.length <= MAX_ITEM_NAME_LENGTH) return name;
+  const truncated = name.slice(0, MAX_ITEM_NAME_LENGTH);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return lastSpace > 30 ? truncated.slice(0, lastSpace) : truncated;
 }
 
 export async function createPaymentLink(params: {
@@ -161,7 +175,7 @@ export async function createPaymentLink(params: {
     item: {
       price: amount,
       allow_price_entry: false,
-      name: `AI Leadership Accelerator - ${params.cohortName}`,
+      name: clampItemName(`AI Leadership Accelerator - ${params.cohortName}`),
       description: isTestMode()
         ? `TEST MODE - Colaberry Enterprise AI Leadership Accelerator enrollment (original: $${params.amount})`
         : 'Colaberry Enterprise AI Leadership Accelerator enrollment',
@@ -361,16 +375,35 @@ export function verifyWebhookSignature(
     return false;
   }
 
-  // PaySimple HMAC verification
+  // PaySimple HMAC verification.
+  //
+  // Compare the raw 32 DIGEST BYTES, not the text of the digest. PaySimple sends
+  // UPPERCASE hex ("5F0738DD...") while Node's digest('hex') returns lowercase
+  // ("5f0738dd..."), so the previous string-buffer comparison could never match:
+  // '5F' is 0x35,0x46 and '5f' is 0x35,0x66. That silently rejected 100% of real
+  // webhooks with a signature failure -- found live 2026-08-12 by capturing an
+  // actual PaySimple delivery, whose digest was byte-identical to ours apart from
+  // letter case. It is the third distinct cause of "every PaySimple webhook is
+  // rejected" (after the JSON.stringify raw-body bug on 2026-07-30 and the
+  // Content-Type matcher on 2026-07-31), so decoding to bytes here also makes the
+  // check immune to the encoding PaySimple happens to use: hex in either case, or
+  // base64, all reduce to the same 32 bytes.
   const expected = crypto
     .createHmac('sha256', env.paysimpleWebhookSecret)
     .update(payload)
-    .digest('hex');
+    .digest();
 
-  const sigBuf = Buffer.from(signature);
-  const expBuf = Buffer.from(expected);
+  const sigBuf = decodeDigest(signature.trim());
+  if (!sigBuf || sigBuf.length !== expected.length) return false;
 
-  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expected);
+}
 
-  return crypto.timingSafeEqual(sigBuf, expBuf);
+/** A signature header decoded to its raw digest bytes: 64 hex chars (either case)
+ *  or standard base64. Null when it is neither, so a malformed header is rejected
+ *  rather than compared against a truncated buffer. */
+function decodeDigest(signature: string): Buffer | null {
+  if (/^[0-9a-fA-F]{64}$/.test(signature)) return Buffer.from(signature, 'hex');
+  if (/^[A-Za-z0-9+/]{43}=$/.test(signature)) return Buffer.from(signature, 'base64');
+  return null;
 }

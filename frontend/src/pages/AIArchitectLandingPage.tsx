@@ -8,6 +8,7 @@ import { Card } from '../colaberry/components/core/Card';
 import IndustryDemoGrid from '../components/IndustryDemoGrid';
 import { captureUTMFromURL } from '../services/utmService';
 import { initTracker, trackEvent } from '../utils/tracker';
+import { selectNextCohort } from '../utils/cohortSelection';
 
 const IntelligenceDemoSection = React.lazy(() => import('../components/intelligence-demo/IntelligenceDemoSection'));
 
@@ -169,16 +170,12 @@ function AIArchitectLandingPage() {
     fetch((process.env.REACT_APP_API_URL || '') + '/api/cohorts')
       .then(r => r.json())
       .then(data => {
-        const cohorts = data.cohorts || [];
-        const today = new Date().toISOString().split('T')[0];
-        const upcoming = cohorts
-          .filter((c: any) => c.start_date >= today && c.seats_taken < c.max_seats)
-          .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
-        if (upcoming.length > 0) {
+        const next = selectNextCohort(data.cohorts);
+        if (next) {
           setNextCohort({
-            name: upcoming[0].name,
-            start_date: upcoming[0].start_date,
-            seats_remaining: upcoming[0].max_seats - upcoming[0].seats_taken,
+            name: next.name,
+            start_date: next.start_date,
+            seats_remaining: next.max_seats - next.seats_taken,
           });
         }
       })

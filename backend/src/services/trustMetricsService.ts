@@ -15,8 +15,11 @@ import AiAgentActivityLog from '../models/AiAgentActivityLog';
 import ChatConversation from '../models/ChatConversation';
 import AgentWriteAudit from '../models/AgentWriteAudit';
 import AiEvent from '../models/AiEvent';
+import AiAgent from '../models/AiAgent';
 import { isKillSwitchActive } from './launchSafety';
 import { isSafeModeActive } from './systemControlService';
+import { getAgentPermission } from './agentPermissionService';
+import { findEmployee, WORKFORCE_AGENT_NAME } from './workforce/orgRegistry';
 import {
   collectLiveSignals,
   evaluateAll,
@@ -25,6 +28,8 @@ import {
   type DimensionDetail,
   type OpenAction,
 } from './trustRubric';
+import { getInpactGoalsEstimate } from './trustInpactGoalsService';
+import { classifyAgent } from './agentRegistryAuditClassification';
 
 type MetricState = 'live' | 'baseline' | 'placeholder';
 
@@ -36,6 +41,11 @@ export interface DimensionScore {
   evidence?: string; // why this score — closed gaps (with PR) + what remains. Powers the drill-down.
 }
 
+// TBI_COMPLIANCE_PROGRAM.md §2.4 — the Tier-1 production gate. Single source of truth; the
+// frontend banner reads productionGateMet rather than hardcoding these numbers itself.
+export const INPACT_PRODUCTION_GATE_PCT = 86;
+export const GOALS_PRODUCTION_GATE = 21;
+
 export interface TrustOverview {
   compositeTrustScore: number; // 0-100
   band: 'red' | 'amber' | 'green';
@@ -44,6 +54,9 @@ export interface TrustOverview {
   dimensions: DimensionScore[];
   inpactEstimatePct: number;
   goalsEstimate: number; // /25
+  inpactGoalsSource: string; // provenance of the estimate above — always surface this, never imply "live"
+  inpactGoalsScoredSystems: number; // how many Tier-1 systems the estimate is averaged over
+  productionGateMet: boolean; // INPACT >= INPACT_PRODUCTION_GATE_PCT && GOALS >= GOALS_PRODUCTION_GATE
   baselineSource: string;
 }
 
@@ -128,16 +141,36 @@ export async function getTrustOverview(): Promise<TrustOverview> {
     state: d.state,
     evidence: d.summary,
   }));
+
+  // INPACT/GOALS: averaged from the AI System Registry (docs/ai-governance/ai-systems-registry.csv)
+  // rather than hardcoded. Still a desk estimate per-system — TBI_COMPLIANCE_PROGRAM.md §4.1's
+  // evidence-cited scoring SOP has not run for any system yet — but now traceable and auditable
+  // instead of two unexplained literals.
+  let inpactEstimatePct = 0;
+  let goalsEstimate = 0;
+  let inpactGoalsSource = 'registry unavailable';
+  let inpactGoalsScoredSystems = 0;
+  try {
+    const est = getInpactGoalsEstimate();
+    inpactEstimatePct = est.inpactEstimatePct;
+    goalsEstimate = est.goalsEstimate;
+    inpactGoalsSource = est.registrySource;
+    inpactGoalsScoredSystems = est.scoredSystemCount;
+  } catch (err) {
+    structuredError('trust_inpact_goals_read', err);
+  }
+
   return {
     compositeTrustScore: composite,
     band: bandFor(composite),
     maturityLevel: composite >= 50 ? 'Level 3 of 5 — Developing' : 'Level 2 of 5 — Emerging / Pilot',
     recommendation: composite >= 80 ? 'GO' : 'GO WITH CONDITIONS',
     dimensions,
-    // INPACT/GOALS remain conservative desk estimates (the full cross-functional INPACT assessment
-    // is a separate exercise). P/T and G/O lifted by the kill-switch gating + cost/trace/events now live.
-    inpactEstimatePct: 53,
-    goalsEstimate: 15,
+    inpactEstimatePct,
+    goalsEstimate,
+    inpactGoalsSource,
+    inpactGoalsScoredSystems,
+    productionGateMet: inpactEstimatePct >= INPACT_PRODUCTION_GATE_PCT && goalsEstimate >= GOALS_PRODUCTION_GATE,
     baselineSource: RUBRIC_SOURCE,
   };
 }
@@ -174,6 +207,37 @@ export async function getCostBreakdown(): Promise<{ windowDays: number; totalUsd
     )) as CostByWorkflow[];
   } catch (err) {
     structuredError('cost_breakdown_query', err);
+  }
+  const totalUsd = Math.round(rows.reduce((sum, r) => sum + Number(r.costUsd || 0), 0) * 100) / 100;
+  return { windowDays: 30, totalUsd, rows };
+}
+
+export interface CostByUser { userId: string; calls: number; costUsd: number; totalTokens: number; }
+
+/**
+ * Per-user cost drill-down (T004 / P3-4) — same shape/window as getCostBreakdown, grouped by
+ * user_id instead of workflow_id. Most llm.call events today carry no user_id (visitor/lead
+ * traffic isn't threaded through as an internal user), so '(unattributed)' dominates until more
+ * call sites pass user_id through getInstrumentedOpenAI's context — that's a real, honest gap
+ * this task surfaces rather than papers over; see the per-workflow-cost criterion's live evidence.
+ */
+export async function getCostByUser(): Promise<{ windowDays: number; totalUsd: number; rows: CostByUser[] }> {
+  let rows: CostByUser[] = [];
+  try {
+    rows = (await sequelize.query(
+      `SELECT COALESCE(user_id, '(unattributed)') AS "userId",
+              COUNT(*)::int AS calls,
+              ROUND(COALESCE(SUM(cost_usd), 0)::numeric, 4)::float AS "costUsd",
+              COALESCE(SUM(total_tokens), 0)::int AS "totalTokens"
+       FROM ai_events
+       WHERE created_at >= NOW() - INTERVAL '30 days' AND event_type = 'llm.call'
+       GROUP BY 1
+       ORDER BY 3 DESC NULLS LAST
+       LIMIT 50`,
+      { type: QueryTypes.SELECT }
+    )) as CostByUser[];
+  } catch (err) {
+    structuredError('cost_by_user_query', err);
   }
   const totalUsd = Math.round(rows.reduce((sum, r) => sum + Number(r.costUsd || 0), 0) * 100) / 100;
   return { windowDays: 30, totalUsd, rows };
@@ -306,5 +370,562 @@ export async function getObservabilityStatus(): Promise<ObservabilityStatus> {
     dimensions: OBSERVABILITY_DIMENSIONS,
     auditedGenerations24h: { value: audited, state: 'live' },
     note: '~58/60 LLM call sites now emit ai_events — TS services (PR #50) + cron scripts (PR #54). P1-2 substantially closed; remaining work is tool-call + retrieval observability (P1-6).',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// AI Workforce drill-down (orgRegistry.ts directors) — per-agent status,
+// trigger, and 7-day cost. Extends the Trust Command Center rather than a
+// separate dashboard; reads the same ai_agents / ai_agent_activity_logs /
+// ai_events tables the rest of this file already reads.
+// ---------------------------------------------------------------------------
+
+/** Shared cost-aggregation over ai_events, grouped by agent_id — used by both getAgentRoster
+ *  (all workforce agents) and getAgentDetail (one agent). `days` is a fixed internal literal,
+ *  never user input, interpolated the same way dailyCounts() already does above. */
+async function agentCostRows(days: number, agentId?: string): Promise<{ agentId: string; costUsd: number; runs: number }[]> {
+  const where = agentId
+    ? `agent_id = :agentId AND created_at >= NOW() - INTERVAL '${days} days'`
+    : `agent_id IS NOT NULL AND created_at >= NOW() - INTERVAL '${days} days'`;
+  return (await sequelize.query(
+    `SELECT agent_id AS "agentId", COALESCE(SUM(cost_usd), 0)::float AS "costUsd", COUNT(*)::int AS "runs"
+     FROM ai_events WHERE ${where} GROUP BY 1`,
+    { type: QueryTypes.SELECT, replacements: agentId ? { agentId } : {} }
+  )) as { agentId: string; costUsd: number; runs: number }[];
+}
+
+interface LastActivityRow { agentId: string; action: string; result: string; createdAt: Date | string; }
+
+/** One most-recent activity row per agent in a single query (DISTINCT ON), instead of
+ *  one AiAgentActivityLog.findOne() per director — avoids an N+1 on a 30s poll. */
+async function lastActivityByAgentId(agentIds: string[]): Promise<Map<string, LastActivityRow>> {
+  if (agentIds.length === 0) return new Map();
+  // Sequelize's named-replacement array substitution renders `(v1, v2, ...)` for a list
+  // replacement — that's correct for `IN (:agentIds)` but syntactically invalid after
+  // `ANY(`, which expects a single array/subquery expression, not a comma list (this
+  // shipped as `ANY(:agentIds)` and threw "syntax error at or near \",\"" on every poll
+  // in production — getAgentRoster()'s catch silently degraded it to an empty roster).
+  const rows = (await sequelize.query(
+    `SELECT DISTINCT ON (agent_id) agent_id AS "agentId", action, result, created_at AS "createdAt"
+     FROM ai_agent_activity_logs
+     WHERE agent_id IN (:agentIds)
+     ORDER BY agent_id, created_at DESC`,
+    { type: QueryTypes.SELECT, replacements: { agentIds } }
+  )) as LastActivityRow[];
+  return new Map(rows.map((r) => [r.agentId, r]));
+}
+
+export interface AgentRosterRow {
+  slug: string;
+  agentName: string;
+  name: string;
+  role: string;
+  avatar: string;
+  enabled: boolean;
+  status: string;
+  triggerType: string | null;
+  schedule: string | null;
+  lastAction: { action: string; result: string; at: string | null } | null;
+  cost7d: number;
+  runs7d: number;
+}
+
+/** One row per AI Workforce director: live status, trigger, last action, 7-day cost. */
+export async function getAgentRoster(): Promise<{ rows: AgentRosterRow[] }> {
+  let rows: AgentRosterRow[] = [];
+  try {
+    const slugs = Object.keys(WORKFORCE_AGENT_NAME);
+    const agentNames = Object.values(WORKFORCE_AGENT_NAME);
+    const agents = await AiAgent.findAll({ where: { agent_name: { [Op.in]: agentNames } } });
+    const agentByName = new Map(agents.map((a) => [a.agent_name, a]));
+
+    const [costRows, lastByAgentId] = await Promise.all([
+      agentCostRows(7),
+      lastActivityByAgentId(agents.map((a) => a.id)),
+    ]);
+    const costByAgentId = new Map(costRows.map((r) => [r.agentId, r]));
+
+    rows = slugs.map((slug) => {
+      const employee = findEmployee(slug)!;
+      const agentName = WORKFORCE_AGENT_NAME[slug];
+      const agent = agentByName.get(agentName);
+      if (!agent) {
+        return {
+          slug, agentName, name: employee.name, role: employee.role, avatar: employee.avatar,
+          enabled: false, status: 'not_registered', triggerType: null, schedule: null,
+          lastAction: null, cost7d: 0, runs7d: 0,
+        };
+      }
+      const last = lastByAgentId.get(agent.id);
+      const c = costByAgentId.get(agent.id);
+      return {
+        slug, agentName, name: employee.name, role: employee.role, avatar: employee.avatar,
+        enabled: agent.enabled, status: agent.status,
+        triggerType: agent.trigger_type || null, schedule: agent.schedule || null,
+        lastAction: last ? { action: last.action, result: last.result, at: last.createdAt ? new Date(last.createdAt).toISOString() : null } : null,
+        cost7d: Math.round((c?.costUsd || 0) * 10000) / 10000,
+        runs7d: c?.runs || 0,
+      };
+    });
+  } catch (err) {
+    structuredError('agent_roster_query', err);
+  }
+  return { rows };
+}
+
+export type RegistryHealthBucket = 'live' | 'internal_pipeline_step' | 'confirmed_dead' | 'staged_pending_activation' | 'unclassified';
+
+// The 4 agents T002 (aiOpsScheduler.ts) wired through trackAgentRun() — genuinely live
+// and scheduled, but run_count stays 0 until their first post-deploy cron tick fires
+// (up to 6h for CoryEvolutionCycle). Counting them as 'live' immediately, rather than
+// 'unclassified' during that window, is what the audit's own findings established.
+const REGISTRY_LIVE_BY_NAME = new Set(['AutonomousEngine', 'AICOOStrategicCycle', 'MetaAgentLoop', 'CoryEvolutionCycle']);
+
+export interface RegistryHealthAgent { name: string; category: string | null; note?: string; }
+export interface RegistryHealthGroup { count: number; agents: RegistryHealthAgent[]; }
+export type RegistryHealth = Record<RegistryHealthBucket, RegistryHealthGroup>;
+
+/**
+ * Buckets the full ai_agents registry (all 211+ rows, not just the 10 Workforce
+ * directors getAgentRoster covers) by real status, per the 2026-07-31 registry audit.
+ * Prefers the DB's own config.registry_audit annotation (written by
+ * scripts/auditAgentRegistryStatus.ts) when present; falls back to the static
+ * classification module for any row not yet annotated, so this stays accurate even
+ * before that one-time script has run in a given environment.
+ */
+export async function getRegistryHealth(): Promise<RegistryHealth> {
+  const health: RegistryHealth = {
+    live: { count: 0, agents: [] },
+    internal_pipeline_step: { count: 0, agents: [] },
+    confirmed_dead: { count: 0, agents: [] },
+    staged_pending_activation: { count: 0, agents: [] },
+    unclassified: { count: 0, agents: [] },
+  };
+
+  try {
+    const workforceAgentNames = new Set(Object.values(WORKFORCE_AGENT_NAME));
+    const agents = await AiAgent.findAll();
+
+    for (const agent of agents) {
+      const dbAudit = (agent.config as any)?.registry_audit;
+      const bucket: RegistryHealthBucket = dbAudit?.status
+        ?? classifyAgent(agent.agent_name)?.status
+        ?? (workforceAgentNames.has(agent.agent_name) && agent.run_count === 0 ? 'staged_pending_activation' : null)
+        ?? (agent.run_count > 0 || REGISTRY_LIVE_BY_NAME.has(agent.agent_name) ? 'live' : 'unclassified');
+
+      health[bucket].count++;
+      health[bucket].agents.push({
+        name: agent.agent_name,
+        category: agent.category ?? null,
+        note: dbAudit?.note ?? classifyAgent(agent.agent_name)?.note,
+      });
+    }
+  } catch (err) {
+    structuredError('registry_health_query', err);
+  }
+
+  return health;
+}
+
+export interface AgentGoalsDimension { key: string; label: string; score: number; source: 'live' | 'fixed'; evidence: string; }
+export interface AgentDetail {
+  slug: string;
+  agentName: string;
+  name: string;
+  role: string;
+  mission: string;
+  enabled: boolean;
+  status: string;
+  tier: string;
+  triggerType: string | null;
+  schedule: string | null;
+  killSwitchActive: boolean | null;
+  safeModeActive: boolean | null;
+  goals: AgentGoalsDimension[];
+  goalsOverall: number;
+  recentActivity: Array<{ action: string; result: string; reason: string | null; at: string | null; traceId: string | null }>;
+  cost7d: number;
+}
+
+/** Drill-down for one director: tier, live kill-switch/safe-mode state, a GOALS-scored
+ *  signal grounded in that agent's own recent activity, and the raw activity log (L3). */
+export async function getAgentDetail(slug: string): Promise<AgentDetail | null> {
+  const agentName = WORKFORCE_AGENT_NAME[slug];
+  const employee = findEmployee(slug);
+  if (!agentName || !employee) return null;
+
+  const agent = await AiAgent.findOne({ where: { agent_name: agentName } });
+  if (!agent) return null;
+
+  const permission = getAgentPermission(agentName);
+
+  // Independent reads — run in parallel rather than as 4 sequential round-trips.
+  const [recent, killSwitch, safeMode, costRows] = await Promise.all([
+    AiAgentActivityLog.findAll({ where: { agent_id: agent.id }, order: [['created_at', 'DESC']], limit: 20 }),
+    isKillSwitchActive().catch(() => null),
+    isSafeModeActive().catch(() => null),
+    agentCostRows(7, agent.id).catch((err) => {
+      structuredError('agent_detail_cost_query', err);
+      return [] as { agentId: string; costUsd: number; runs: number }[];
+    }),
+  ]);
+  const cost7d = Math.round((costRows[0]?.costUsd || 0) * 10000) / 10000;
+
+  const withTrace = recent.filter((r) => r.trace_id).length;
+  const failed = recent.filter((r) => r.result === 'failed').length;
+  const observabilityScore = recent.length ? Math.max(1, Math.round((withTrace / recent.length) * 5)) : 3;
+  const solidScore = recent.length ? Math.max(1, 5 - Math.round((failed / recent.length) * 4)) : 5;
+  const availabilityScore = !agent.enabled ? 1 : agent.trigger_type === 'on_demand' ? 5 : recent.length > 0 ? 5 : 2;
+
+  // governance/lexicon are 'fixed' — structurally guaranteed by the code (tier + the hard
+  // runtime gate; the domain mapping), not measured from this agent's own recent behavior.
+  // Tagging them distinctly from the 'live' scores keeps the file's own live/baseline/
+  // placeholder honesty invariant intact at the per-agent level too.
+  const goals: AgentGoalsDimension[] = [
+    { key: 'governance', label: 'Governance', score: 5, source: 'fixed', evidence: `Tier ${permission.tier}, scoped to ${permission.allowedTables.join(', ') || '(proposal queue only)'}. Kill switch / safe mode / enabled are hard-checked before every write (workforceAgentRuntime.ts), independent of the repo-wide abac_enforcement shadow default — code-verified by workforceAgentRuntime.test.ts.` },
+    { key: 'observability', label: 'Observability', score: observabilityScore, source: 'live', evidence: `${withTrace}/${recent.length} of the last ${recent.length} logged actions carry a trace_id.` },
+    { key: 'availability', label: 'Availability', score: availabilityScore, source: 'live', evidence: agent.enabled ? `Enabled · trigger ${agent.trigger_type || 'unknown'}${agent.schedule ? ` (${agent.schedule})` : ''}.` : 'Disabled — will not run until enabled.' },
+    { key: 'lexicon', label: 'Lexicon', score: 4, source: 'fixed', evidence: `Domain fixed at build time to "${employee.ops_domain || employee.department}", matching orgRegistry.ts — structurally guaranteed, not dynamically re-validated each run.` },
+    { key: 'solid', label: 'Solid', score: solidScore, source: 'live', evidence: `${failed}/${recent.length} of the last ${recent.length} logged actions failed.` },
+  ];
+  const goalsOverall = Math.round((goals.reduce((s, g) => s + g.score, 0) / goals.length) * 10) / 10;
+
+  return {
+    slug, agentName, name: employee.name, role: employee.role, mission: employee.mission,
+    enabled: agent.enabled, status: agent.status, tier: permission.tier,
+    triggerType: agent.trigger_type || null, schedule: agent.schedule || null,
+    killSwitchActive: killSwitch, safeModeActive: safeMode,
+    goals, goalsOverall,
+    recentActivity: recent.map((r) => ({
+      action: r.action, result: r.result, reason: r.reason || null,
+      at: r.created_at?.toISOString() || null, traceId: r.trace_id || null,
+    })),
+    cost7d,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase B — Trust 90+ drill-down (T008-T013). Every StatCard/tile on /admin/trust should
+// lead to real underlying data instead of being a dead end. T008/T009/T010/T011 are NEW
+// read-only endpoints; T012 generalizes agent lookup via a sibling function (getAgentDetail
+// above is untouched — see its regression test); T013 judged the existing getRetentionReport
+// route already sufficient as a summary shape (class-level counts, no row detail) — no new
+// code, see PROGRESS.md.
+//
+// PII-SCOPING RULE (T009/T010/T011): every row below is METADATA ONLY — timestamp, ids,
+// outcome, model, duration. Never raw prompt/response/message text (chat_messages.content,
+// content_generation_logs.error_message, agent_write_audits.before_state/after_state, etc.
+// — the same columns retentionReportService.ts's RETENTION_POLICY already flags as
+// PII-bearing). Each drill-down below has a dedicated unit test asserting this.
+// ---------------------------------------------------------------------------
+
+// ---- T008: composite-score breakdown ----
+
+export interface CompositeBreakdownRow {
+  key: string;
+  label: string;
+  score: number; // 0-100
+  weightPct: number; // this dimension's share of the composite (equal-weighted average)
+  contribution: number; // this dimension's point contribution to the composite score
+  state: MetricState;
+  evidence?: string;
+}
+
+export interface CompositeBreakdown {
+  compositeTrustScore: number;
+  band: 'red' | 'amber' | 'green';
+  rows: CompositeBreakdownRow[];
+  source: string;
+}
+
+/** Drill-down for the composite-score tile: the live per-dimension contribution behind it.
+ *  Reshapes the same evaluateAll() output getTrustOverview() already assembles — no new query. */
+export async function getCompositeBreakdown(): Promise<CompositeBreakdown> {
+  const signals = await collectLiveSignals();
+  const details = evaluateAll(signals);
+  const n = details.length || 1;
+  const compositeTrustScore = Math.round(details.reduce((sum, d) => sum + d.score, 0) / n);
+  const weightPct = Math.round((100 / n) * 100) / 100;
+  const rows: CompositeBreakdownRow[] = details.map((d) => ({
+    key: d.key,
+    label: d.label,
+    score: d.score,
+    weightPct,
+    contribution: Math.round((d.score / n) * 100) / 100,
+    state: d.state,
+    evidence: d.summary,
+  }));
+  return { compositeTrustScore, band: bandFor(compositeTrustScore), rows, source: RUBRIC_SOURCE };
+}
+
+// ---- T009 / T011: 24h activity detail + day-of-trend detail ----
+
+export type ActivityKind = 'conversations' | 'generations' | 'agent-runs' | 'errors';
+
+export interface ActivityDetailRow {
+  timestamp: string | null;
+  eventType: string;
+  outcome: string;
+  traceId: string | null;
+  agentId: string | null;
+  userId: string | null;
+  model: string | null;
+  durationMs: number | null;
+}
+
+export interface ActivityDetail {
+  kind: ActivityKind;
+  windowHours: number;
+  rows: ActivityDetailRow[];
+}
+
+const ACTIVITY_DETAIL_LIMIT = 50;
+
+function conversationRow(c: ChatConversation): ActivityDetailRow {
+  return {
+    timestamp: c.started_at ? new Date(c.started_at).toISOString() : null,
+    eventType: `chat.${c.trigger_type || 'conversation'}`,
+    outcome: c.status,
+    traceId: null,
+    agentId: null,
+    userId: c.visitor_id || null,
+    model: null,
+    durationMs: null,
+  };
+}
+
+function generationRow(g: ContentGenerationLog): ActivityDetailRow {
+  return {
+    timestamp: g.created_at ? new Date(g.created_at).toISOString() : null,
+    eventType: `content_generation.${g.generation_type}`,
+    outcome: g.success ? 'success' : 'failure',
+    traceId: null,
+    agentId: null,
+    userId: null,
+    model: g.model_used || null,
+    durationMs: g.duration_ms ?? null,
+  };
+}
+
+function agentRunRow(r: AiAgentActivityLog): ActivityDetailRow {
+  return {
+    timestamp: r.created_at ? new Date(r.created_at).toISOString() : null,
+    eventType: `agent.${r.action}`,
+    outcome: r.result || 'pending',
+    traceId: r.trace_id || null,
+    agentId: r.agent_id || null,
+    userId: null,
+    model: null,
+    durationMs: r.duration_ms ?? null,
+  };
+}
+
+/** Drill-down for one 24h StatCard (Conversations/Generations/Agent runs/Errors) — up to 50
+ *  real underlying rows, most recent first. `kind` is Zod-validated at the controller before
+ *  reaching here (T009). */
+export async function getActivityDetail(kind: ActivityKind): Promise<ActivityDetail> {
+  const since = hoursAgo(24);
+  let rows: ActivityDetailRow[] = [];
+  try {
+    switch (kind) {
+      case 'conversations': {
+        const convos = await ChatConversation.findAll({
+          where: { started_at: { [Op.gte]: since } },
+          order: [['started_at', 'DESC']],
+          limit: ACTIVITY_DETAIL_LIMIT,
+        });
+        rows = convos.map(conversationRow);
+        break;
+      }
+      case 'generations': {
+        const gens = await ContentGenerationLog.findAll({
+          where: { created_at: { [Op.gte]: since } },
+          order: [['created_at', 'DESC']],
+          limit: ACTIVITY_DETAIL_LIMIT,
+        });
+        rows = gens.map(generationRow);
+        break;
+      }
+      case 'agent-runs': {
+        const runs = await AiAgentActivityLog.findAll({
+          where: { created_at: { [Op.gte]: since } },
+          order: [['created_at', 'DESC']],
+          limit: ACTIVITY_DETAIL_LIMIT,
+        });
+        rows = runs.map(agentRunRow);
+        break;
+      }
+      case 'errors': {
+        // Mirrors getActivityMetrics()'s errors24h COUNT exactly (ContentGenerationLog rows
+        // with success=false in the last 24h) — this is the list version of that same query.
+        const errs = await ContentGenerationLog.findAll({
+          where: { created_at: { [Op.gte]: since }, success: false },
+          order: [['created_at', 'DESC']],
+          limit: ACTIVITY_DETAIL_LIMIT,
+        });
+        rows = errs.map(generationRow);
+        break;
+      }
+    }
+  } catch (err) {
+    structuredError('activity_detail_query', err);
+  }
+  return { kind, windowHours: 24, rows };
+}
+
+export interface DayActivityDetail {
+  date: string; // YYYY-MM-DD
+  counts: { conversations: number; generations: number; agentRuns: number };
+  conversations: ActivityDetailRow[];
+  generations: ActivityDetailRow[];
+  agentRuns: ActivityDetailRow[];
+}
+
+/** Drill-down for one day of the 7-day trend chart (getActivityMetrics().trend / buildTrend()
+ *  above) — same 3 categories, scoped to a single calendar day, with real underlying rows
+ *  (reusing T009's row shapers) plus accurate full-day counts (not capped by the row limit).
+ *  `date` is Zod-validated (YYYY-MM-DD) at the controller (T011); still defensively
+ *  re-checked here so a bad string degrades to an empty-but-typed result, never a throw. */
+export async function getActivityDetailForDay(date: string): Promise<DayActivityDetail> {
+  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  const dayEnd = new Date(`${date}T23:59:59.999Z`);
+  const empty: DayActivityDetail = {
+    date, counts: { conversations: 0, generations: 0, agentRuns: 0 },
+    conversations: [], generations: [], agentRuns: [],
+  };
+  if (Number.isNaN(dayStart.getTime())) return empty;
+
+  try {
+    const range = { [Op.gte]: dayStart, [Op.lte]: dayEnd };
+    const [conversationsCount, generationsCount, agentRunsCount, convos, gens, runs] = await Promise.all([
+      ChatConversation.count({ where: { started_at: range } }),
+      ContentGenerationLog.count({ where: { created_at: range } }),
+      AiAgentActivityLog.count({ where: { created_at: range } }),
+      ChatConversation.findAll({ where: { started_at: range }, order: [['started_at', 'DESC']], limit: ACTIVITY_DETAIL_LIMIT }),
+      ContentGenerationLog.findAll({ where: { created_at: range }, order: [['created_at', 'DESC']], limit: ACTIVITY_DETAIL_LIMIT }),
+      AiAgentActivityLog.findAll({ where: { created_at: range }, order: [['created_at', 'DESC']], limit: ACTIVITY_DETAIL_LIMIT }),
+    ]);
+    return {
+      date,
+      counts: { conversations: conversationsCount, generations: generationsCount, agentRuns: agentRunsCount },
+      conversations: convos.map(conversationRow),
+      generations: gens.map(generationRow),
+      agentRuns: runs.map(agentRunRow),
+    };
+  } catch (err) {
+    structuredError('activity_detail_day_query', err);
+    return empty;
+  }
+}
+
+// ---- T010: blocked-agent-writes detail ----
+
+export interface BlockedWriteRow {
+  timestamp: string | null;
+  agentId: string;
+  agentName: string;
+  operation: string;
+  targetTable: string;
+  permissionTier: string;
+  denialReason: string | null;
+  traceId: string | null;
+}
+
+export interface BlockedWritesDetail {
+  windowHours: number;
+  rows: BlockedWriteRow[];
+}
+
+/** Drill-down for Governance's "Blocked agent writes 24h" tile — real denied AgentWriteAudit
+ *  rows. Denial reason is a governance decision string (safe); before_state/after_state are
+ *  deliberately excluded — they may carry arbitrary row content. */
+export async function getBlockedWrites(): Promise<BlockedWritesDetail> {
+  const since = hoursAgo(24);
+  let rows: BlockedWriteRow[] = [];
+  try {
+    const audits = await AgentWriteAudit.findAll({
+      where: { created_at: { [Op.gte]: since }, was_allowed: false },
+      order: [['created_at', 'DESC']],
+      limit: 50,
+    });
+    rows = audits.map((a) => ({
+      timestamp: a.created_at ? new Date(a.created_at).toISOString() : null,
+      agentId: a.agent_id,
+      agentName: a.agent_name,
+      operation: a.operation,
+      targetTable: a.target_table,
+      permissionTier: a.permission_tier,
+      denialReason: a.blocked_reason || null,
+      traceId: a.trace_id || null,
+    }));
+  } catch (err) {
+    structuredError('blocked_writes_detail_query', err);
+  }
+  return { windowHours: 24, rows };
+}
+
+// ---- T012: generalized agent-registry detail ----
+
+export interface AgentRegistryAuditInfo { status: string; note: string; parentAgent?: string }
+export interface AgentRegistryDetail {
+  agentName: string;
+  agentType: string;
+  category: string | null;
+  status: string;
+  enabled: boolean;
+  triggerType: string | null;
+  schedule: string | null;
+  runCount: number;
+  lastRunAt: string | null;
+  cost7d: number;
+  runs7d: number;
+  registryAudit: AgentRegistryAuditInfo | null;
+}
+
+/**
+ * Drill-down for any row in the full ai_agents registry (not just the 10 Workforce directors
+ * getAgentDetail() above covers) — real run stats + the 2026-07-31 registry-audit
+ * classification (DB annotation first, static classifyAgent() fallback), same precedence
+ * getRegistryHealth() already uses.
+ *
+ * Deliberately a SIBLING function, not an extension of getAgentDetail(): that function's
+ * shape (goals scoring, employee mission/role from orgRegistry, kill-switch/safe-mode state)
+ * is specific to the 10 Workforce directors and has existing consumers depending on it — see
+ * trustMetricsService.agentRoster.test.ts and the T012 regression test. Reuses the same
+ * building blocks (agentCostRows, classifyAgent) without touching either.
+ */
+export async function getAgentRegistryDetail(agentName: string): Promise<AgentRegistryDetail | null> {
+  let agent: AiAgent | null = null;
+  try {
+    agent = await AiAgent.findOne({ where: { agent_name: agentName } });
+  } catch (err) {
+    structuredError('agent_registry_detail_query', err);
+    return null;
+  }
+  if (!agent) return null;
+
+  const costRows = await agentCostRows(7, agent.id).catch((err) => {
+    structuredError('agent_registry_detail_cost_query', err);
+    return [] as { agentId: string; costUsd: number; runs: number }[];
+  });
+  const cost7d = Math.round((costRows[0]?.costUsd || 0) * 10000) / 10000;
+  const runs7d = costRows[0]?.runs || 0;
+
+  const dbAudit = (agent.config as any)?.registry_audit;
+  const audit = dbAudit ?? classifyAgent(agent.agent_name);
+
+  return {
+    agentName: agent.agent_name,
+    agentType: agent.agent_type,
+    category: agent.category ?? null,
+    status: agent.status,
+    enabled: agent.enabled,
+    triggerType: agent.trigger_type || null,
+    schedule: agent.schedule || null,
+    runCount: agent.run_count,
+    lastRunAt: agent.last_run_at ? new Date(agent.last_run_at).toISOString() : null,
+    cost7d,
+    runs7d,
+    registryAudit: audit ? { status: audit.status, note: audit.note, parentAgent: (audit as any).parentAgent } : null,
   };
 }

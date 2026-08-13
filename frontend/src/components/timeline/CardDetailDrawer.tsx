@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { TimelineFeedCard } from './TimelineCard';
 import CardDetailBody from './CardDetailBody';
 
@@ -22,6 +22,7 @@ interface Props {
 
 const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview }) => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!card) return;
@@ -39,18 +40,26 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview 
 
   if (!card) return null;
 
+  // The scrim + panel styles (and the design tokens they use) are scoped under
+  // `.tl-de`. The drawer is often mounted OUTSIDE the feed's `.tl-de` wrapper
+  // (e.g. TodayShell renders it as a sibling of the feed), so without this scope
+  // the fixed scrim gets NO styling — it renders invisible while `body` scroll is
+  // locked, i.e. the page freezes. `display:contents` provides the scope without
+  // adding a layout box.
   return (
-    <div className="tld-scrim" onClick={onClose}>
-      <aside className="tld-panel" role="dialog" aria-modal="true" aria-label={card.title} onClick={(e) => e.stopPropagation()}>
-        <CardDetailBody
-          card={card}
-          preview={preview}
-          autoplayVideo
-          onClose={onClose}
-          onComplete={preview || !onComplete ? undefined : () => onComplete(card)}
-          onEnterWorkspace={preview ? undefined : () => navigate(`/portal/runtime/${card.id}`)}
-        />
-      </aside>
+    <div className="tl-de" style={{ display: 'contents' }}>
+      <div className="tld-scrim" onClick={onClose}>
+        <aside className="tld-panel" role="dialog" aria-modal="true" aria-label={card.title} onClick={(e) => e.stopPropagation()}>
+          <CardDetailBody
+            card={card}
+            preview={preview}
+            autoplayVideo
+            onClose={onClose}
+            onComplete={preview || !onComplete ? undefined : () => onComplete(card)}
+            onEnterWorkspace={preview ? undefined : () => navigate(`/portal/runtime/${card.id}`, { state: { from: location.pathname } })}
+          />
+        </aside>
+      </div>
     </div>
   );
 };

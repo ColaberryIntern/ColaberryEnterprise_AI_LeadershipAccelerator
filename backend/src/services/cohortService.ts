@@ -1,23 +1,241 @@
-import { Cohort, Enrollment, AccountCredit } from '../models';
-import { UpdateCohortInput } from '../schemas/cohortSchema';
+import { Cohort, Enrollment, AccountCredit, LiveSession, ProgramBlueprint } from '../models';
+import { UpdateCohortInput, CreateCohortInput, ScheduleDayInput } from '../schemas/cohortSchema';
 import { AppError } from '../utils/AppError';
-import { Op } from 'sequelize';
+import { Op, fn, col } from 'sequelize';
+
+const SESSION_DEFAULT_DURATION_MIN = 90; // matches the existing "Add Session" form's own 10:00->11:30 default
+const DEFAULT_PROGRAM_WEEKS = 12; // matches sessionGenerationService.ts's own constant of the same name
+
+function addMinutes(time24: string, minutes: number): string {
+  const [h, m] = time24.split(':').map(Number);
+  const total = ((h * 60 + m + minutes) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function formatTimeLabel(time24: string): string {
+  const [h, m] = time24.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${hour}:00 ${period}` : `${hour}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+export interface DerivedSchedule {
+  schedule: {
+    recurring_days: string[];
+    core_days: string[];
+    day_times: Record<string, { start_time: string; end_time: string }>;
+    start_time: string;
+    end_time: string;
+    total_sessions: number;
+  };
+  core_day: string;
+  core_time: string;
+  optional_lab_day: string | null;
+}
+
+/**
+ * Turns the new multi-day/per-day-time picker's input into (a) the
+ * settings_json.schedule shape sessionGenerationService.ts actually consumes for
+ * real session generation, and (b) the legacy core_day/core_time/optional_lab_day
+ * fields every other consumer (enrollment emails, the AI voice script, the public
+ * "next cohort" widget, AdminCohortDetailPage) still reads directly — derived from
+ * the FIRST and SECOND day in picker order, same convention SessionControlTab.tsx's
+ * own handleCohortSave already uses. A 3rd+ day has no legacy-field slot; that's an
+ * existing limitation of those two fields, not something this introduces.
+ */
+export function deriveScheduleFromDays(days: ScheduleDayInput[], existingTotalSessions?: number): DerivedSchedule {
+  if (!days.length) {
+    throw new AppError('schedule_days must include at least one day', 400);
+  }
+  const day_times: Record<string, { start_time: string; end_time: string }> = {};
+  for (const d of days) {
+    day_times[d.day] = { start_time: d.time, end_time: addMinutes(d.time, SESSION_DEFAULT_DURATION_MIN) };
+  }
+  const recurring_days = days.map((d) => d.day);
+  const [first, second] = days;
+  const firstTime = day_times[first.day];
+  return {
+    schedule: {
+      recurring_days,
+      core_days: recurring_days,
+      day_times,
+      start_time: firstTime.start_time,
+      end_time: firstTime.end_time,
+      total_sessions: existingTotalSessions ?? recurring_days.length * DEFAULT_PROGRAM_WEEKS,
+    },
+    core_day: first.day,
+    core_time: `${formatTimeLabel(firstTime.start_time)} - ${formatTimeLabel(firstTime.end_time)}`,
+    optional_lab_day: second ? second.day : null,
+  };
+}
+
+/** Shallow-merges settings_json at the `schedule` level: explicit keys the caller
+ *  sends override, keys the caller doesn't send (e.g. skipped_dates, day_times set
+ *  by a different admin surface) survive instead of being silently dropped by a
+ *  blind column overwrite. */
+export function mergeSettingsJson(
+  existing: Record<string, any> | null | undefined,
+  incoming: Record<string, any> | null | undefined
+): Record<string, any> {
+  const existingSchedule = existing?.schedule || {};
+  const incomingSchedule = incoming?.schedule || {};
+  return {
+    ...(existing || {}),
+    ...(incoming || {}),
+    schedule: { ...existingSchedule, ...incomingSchedule },
+  };
+}
+
+/** Builds the actual DB write patch for create/update: resolves schedule_days (if
+ *  present) into the legacy flat fields + settings_json.schedule, then merges with
+ *  whatever settings_json already exists on the row (update only — create has no
+ *  prior row to merge against). */
+function buildScheduleAwarePatch(
+  data: Record<string, any>,
+  existingSettingsJson?: Record<string, any> | null
+): Record<string, any> {
+  const { schedule_days, settings_json, ...rest } = data;
+  const patch: Record<string, any> = { ...rest };
+
+  let finalSettingsJson: Record<string, any> | undefined = settings_json;
+  if (schedule_days?.length) {
+    const existingSchedule = (existingSettingsJson || {}).schedule || {};
+    const derived = deriveScheduleFromDays(schedule_days, existingSchedule.total_sessions);
+    finalSettingsJson = {
+      ...(settings_json || {}),
+      schedule: { ...(settings_json?.schedule || {}), ...derived.schedule },
+    };
+    patch.core_day = derived.core_day;
+    patch.core_time = derived.core_time;
+    patch.optional_lab_day = derived.optional_lab_day;
+  }
+
+  if (finalSettingsJson) {
+    patch.settings_json = existingSettingsJson !== undefined
+      ? mergeSettingsJson(existingSettingsJson, finalSettingsJson)
+      : finalSettingsJson;
+  }
+
+  return patch;
+}
 
 export async function listOpenCohorts() {
   return Cohort.findAll({
     where: {
       status: 'open',
-      // Only show cohorts with seats available
+      // Private business/owner workspaces (cohort_type='business') are never shown
+      // in the public/student cohort list.
+      cohort_type: { [Op.ne]: 'business' },
     },
-    attributes: ['id', 'name', 'start_date', 'core_day', 'core_time', 'optional_lab_day', 'max_seats', 'seats_taken'],
+    // `cohort_type` is part of the public contract: callers use it to keep the
+    // remaining internal lanes (explorer prospect cohort, corporate sponsor
+    // cohorts, demo rows) out of public cohort pickers. The `business` exclusion
+    // above only covers private owner workspaces.
+    attributes: ['id', 'name', 'start_date', 'core_day', 'core_time', 'optional_lab_day', 'max_seats', 'seats_taken', 'cohort_type'],
     order: [['start_date', 'ASC']],
   });
 }
 
+/**
+ * Real, live headcount per cohort — COUNT(*) of active enrollments, regardless of
+ * `enrollment_type`. `Cohort.seats_taken` is deliberately NOT this number: it's a
+ * paid-capacity counter that enrollmentService intentionally skips for Explorer
+ * signups (they have no seat limit), so any UI that reused `seats_taken` to mean
+ * "how many people are enrolled" always read 0 for the Explorer cohort no matter
+ * how many prospects actually signed up. This is the correct source for that.
+ */
+async function getEnrolledCountsByCohort(): Promise<Map<string, number>> {
+  const rows = (await Enrollment.findAll({
+    attributes: ['cohort_id', [fn('COUNT', col('id')), 'count']],
+    where: { status: 'active', cohort_id: { [Op.ne]: null } } as any,
+    group: ['cohort_id'],
+    raw: true,
+  })) as unknown as Array<{ cohort_id: string; count: string }>;
+
+  const byCohort = new Map<string, number>();
+  for (const row of rows) {
+    byCohort.set(row.cohort_id, Number(row.count));
+  }
+  return byCohort;
+}
+
 export async function listAllCohorts() {
-  return Cohort.findAll({
-    order: [['start_date', 'DESC']],
-  });
+  const [cohorts, enrolledCounts] = await Promise.all([
+    Cohort.findAll({
+      order: [['start_date', 'DESC']],
+      // Surfaces the parent Course name alongside each Cohort so the admin UI can
+      // show the Course -> Cohort hierarchy explicitly instead of leaving
+      // program_id as an opaque id (see AdminAcceleratorPage's course/cohort
+      // breadcrumb). A cohort with no program_id (e.g. the Explorer cohort) simply
+      // has a null `program` — the UI renders "No parent course set" for that case.
+      include: [{ model: ProgramBlueprint, as: 'program', attributes: ['id', 'name'] }],
+    }),
+    getEnrolledCountsByCohort(),
+  ]);
+  return cohorts.map((c) => ({
+    ...c.toJSON(),
+    enrolled_count: enrolledCounts.get(c.id) || 0,
+  }));
+}
+
+export async function createCohort(data: CreateCohortInput) {
+  return Cohort.create({
+    seats_taken: 0,
+    status: 'open',
+    ...buildScheduleAwarePatch(data as unknown as Record<string, any>),
+  } as any);
+}
+
+export interface CohortDependents {
+  enrollmentCount: number;
+  /** Non-withdrawn enrollments with a real recorded payment — the signal that
+   *  blocks a default (non-forced) delete, since cascading would destroy a real
+   *  student's record, not a test/internal fixture. */
+  unsafeEnrollmentCount: number;
+  liveSessionCount: number;
+}
+
+export async function getCohortDependents(cohortId: string): Promise<CohortDependents> {
+  const [enrollments, liveSessionCount] = await Promise.all([
+    Enrollment.findAll({
+      where: { cohort_id: cohortId },
+      attributes: ['id', 'status', 'amount_paid'],
+    }),
+    LiveSession.count({ where: { cohort_id: cohortId } }),
+  ]);
+  const unsafeEnrollmentCount = enrollments.filter(
+    (e) => e.status !== 'withdrawn' && Number(e.amount_paid) > 0
+  ).length;
+  return { enrollmentCount: enrollments.length, unsafeEnrollmentCount, liveSessionCount };
+}
+
+export type DeleteCohortResult =
+  | { deleted: true; cohortId: string; dependents: CohortDependents }
+  | { deleted: false; blocked: true; dependents: CohortDependents };
+
+/**
+ * Deletes a cohort. The DB FK (`enrollments_cohort_id_fkey` etc.) is
+ * ON DELETE CASCADE, so this also removes every dependent enrollment/session row —
+ * irreversible. Refuses by default (returns `blocked: true` rather than throwing,
+ * so the controller can surface the dependent counts to the caller) whenever the
+ * cohort has a non-withdrawn enrollment with a real recorded payment, or any live
+ * session, unless the caller explicitly passes `force: true`.
+ */
+export async function deleteCohort(
+  id: string,
+  opts: { force?: boolean } = {}
+): Promise<DeleteCohortResult> {
+  const cohort = await Cohort.findByPk(id);
+  if (!cohort) throw new AppError('Cohort not found', 404);
+
+  const dependents = await getCohortDependents(id);
+  const blocked = dependents.unsafeEnrollmentCount > 0 || dependents.liveSessionCount > 0;
+  if (blocked && !opts.force) {
+    return { deleted: false, blocked: true, dependents };
+  }
+
+  await cohort.destroy();
+  return { deleted: true, cohortId: id, dependents };
 }
 
 /**
@@ -103,7 +321,10 @@ export async function getOrCreateExplorerCohort(): Promise<Cohort> {
 
 export async function getCohortDetail(id: string) {
   const cohort = await Cohort.findByPk(id, {
-    include: [{ model: Enrollment, as: 'enrollments' }],
+    include: [
+      { model: Enrollment, as: 'enrollments' },
+      { model: ProgramBlueprint, as: 'program', attributes: ['id', 'name'] },
+    ],
   });
   if (!cohort) throw new AppError('Cohort not found', 404);
   return cohort;
@@ -112,7 +333,8 @@ export async function getCohortDetail(id: string) {
 export async function updateCohort(id: string, data: UpdateCohortInput) {
   const cohort = await Cohort.findByPk(id);
   if (!cohort) throw new AppError('Cohort not found', 404);
-  await cohort.update(data);
+  const patch = buildScheduleAwarePatch(data as unknown as Record<string, any>, (cohort as any).settings_json);
+  await cohort.update(patch);
   return cohort;
 }
 
@@ -147,8 +369,13 @@ export async function getDashboardStats() {
   //     membership payment). Count deposits still 'available'; an 'applied' one is
   //     already folded into the membership charge, so this can't double-count.
   // Replaces the old count * $4,500 estimate.
+  // status: 'active' excludes withdrawn duplicate rows (see
+  // duplicateAccountSweepService) — a merged-away loser row keeps its
+  // amount_paid/payment_status='paid' for history, so without this filter the
+  // same real dollar gets counted twice (confirmed live: Martin Mungai and
+  // Ikenna Nzeribe's $1,788 each, 2026-07-31).
   const membershipRevenue =
-    (await Enrollment.sum('amount_paid', { where: { payment_status: 'paid' } as any })) || 0;
+    (await Enrollment.sum('amount_paid', { where: { payment_status: 'paid', status: 'active' } as any })) || 0;
   const depositCents =
     (await AccountCredit.sum('amount_cents', { where: { status: 'available' } as any })) || 0;
   const collectedRevenue = membershipRevenue + depositCents / 100;

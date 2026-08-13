@@ -8,6 +8,22 @@ import { PINNED_LINKS, NAV_GROUPS, ALL_LINKS, NavLink as NavLinkT } from './admi
 const COLLAPSE_KEY = 'admin.nav.collapsed.v1';
 
 function NavItem({ link, active, onNavigate }: { link: NavLinkT; active: boolean; onNavigate: () => void }) {
+  const inner = (
+    <>
+      <i className={`ri-${link.icon} admin-nav-ricon`} aria-hidden="true" />
+      <span>{link.label}</span>
+    </>
+  );
+  // External destinations / bridge-landing pages open in a new tab so the
+  // current admin session stays put (mirrors the portal sidebar's Management
+  // Portal link).
+  if (link.newTab) {
+    return (
+      <a href={link.path} className="admin-nav-link" target="_blank" rel="noopener noreferrer" onClick={onNavigate}>
+        {inner}
+      </a>
+    );
+  }
   return (
     <Link
       to={link.path}
@@ -15,14 +31,13 @@ function NavItem({ link, active, onNavigate }: { link: NavLinkT; active: boolean
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
     >
-      <i className={`ri-${link.icon} admin-nav-ricon`} aria-hidden="true" />
-      <span>{link.label}</span>
+      {inner}
     </Link>
   );
 }
 
 function AdminLayout() {
-  const { logout } = useAuth();
+  const { logout, canSection, hasPortalAccount } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -65,9 +80,27 @@ function AdminLayout() {
   const handleLogout = () => { logout(); navigate('/admin/login'); };
   const closeMobile = () => setSidebarOpen(false);
 
+  // RBAC: only show pinned links / groups / search hits the logged-in admin's
+  // role may access (canSection is permissive until /me resolves, so legacy
+  // admins never flash an empty nav). The backend enforces the same per-section.
+  const pinned = PINNED_LINKS.filter(
+    (l) => canSection(l.section as string) && (!l.requiresMgmtBridge || hasPortalAccount),
+  );
+  // Filter per LINK (a link may carry its own section, e.g. Leads/Pipeline sit
+  // in the Revenue group but belong to the narrower 'leads' section), then drop
+  // any group left with nothing in it. Group-level filtering alone would hide
+  // Leads from a sales rep who holds 'leads' but not 'revenue'.
+  const groups = NAV_GROUPS
+    .map((g) => ({ ...g, links: g.links.filter((l) => canSection(l.section ?? g.section)) }))
+    .filter((g) => g.links.length > 0);
+
   const q = query.trim().toLowerCase();
   const searchResults = q
-    ? ALL_LINKS.filter((l) => l.label.toLowerCase().includes(q))
+    ? ALL_LINKS.filter(
+        (l) => l.label.toLowerCase().includes(q)
+          && canSection(l.section as string)
+          && (!l.requiresMgmtBridge || hasPortalAccount),
+      )
     : null;
 
   // Intelligence OS page gets full-screen treatment (no sidebar, no padding)
@@ -115,12 +148,12 @@ function AdminLayout() {
             ) : (
               <>
                 <div className="admin-nav-group admin-nav-group--pinned">
-                  {PINNED_LINKS.map((link) => (
+                  {pinned.map((link) => (
                     <NavItem key={link.path} link={link} active={isActive(link.path)} onNavigate={closeMobile} />
                   ))}
                 </div>
 
-                {NAV_GROUPS.map((group) => {
+                {groups.map((group) => {
                   const label = group.label as string;
                   const isCollapsed = !!collapsed[label];
                   const groupActive = group.links.some((l) => isActive(l.path));
@@ -146,6 +179,9 @@ function AdminLayout() {
           </nav>
 
           <div className="admin-sidebar-footer">
+            <Link to="/admin/change-password" className="admin-sidebar-logout" onClick={closeMobile}>
+              <i className="ri-key-2-line" aria-hidden="true" /> Change password
+            </Link>
             <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
               <i className="ri-logout-box-r-line" aria-hidden="true" /> Logout
             </button>

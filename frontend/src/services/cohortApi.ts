@@ -1,4 +1,5 @@
 import api from '../utils/api';
+import { selectNextCohort } from '../utils/cohortSelection';
 
 // Public open-cohort shape from GET /api/cohorts (enrollmentRoutes →
 // handleListOpenCohorts → cohortService.listOpenCohorts), the same source the
@@ -12,22 +13,20 @@ export interface OpenCohort {
   core_time?: string | null; // e.g. '6:30 PM - 8:30 PM CST'
   max_seats: number;
   seats_taken: number;
+  status?: 'open' | 'closed' | 'completed';
+  cohort_type?: string;
 }
 
-// The next open cohort (earliest start date that is today or later), so public
-// surfaces can show the same start date AND live-session schedule the admin
-// manages instead of hardcoded values. Returns null on any failure (network,
-// bad shape, none upcoming) so callers fall back to their own defaults — never
-// throws, never blocks render.
+// The next joinable public cohort, so public surfaces can show the same start
+// date AND live-session schedule the admin manages instead of hardcoded values.
+// Selection (including late-join and internal-lane rules) lives in
+// utils/cohortSelection so every public surface agrees. Returns null on any
+// failure (network, bad shape, none joinable) so callers fall back to their own
+// defaults — never throws, never blocks render.
 export async function fetchNextCohort(signal?: AbortSignal): Promise<OpenCohort | null> {
   try {
     const res = await api.get('/api/cohorts', { signal, timeout: 12000 });
-    const cohorts: OpenCohort[] = Array.isArray(res?.data?.cohorts) ? res.data.cohorts : [];
-    const todayISO = new Date().toISOString().slice(0, 10);
-    const upcoming = cohorts
-      .filter((c) => typeof c?.start_date === 'string' && c.start_date >= todayISO)
-      .sort((a, b) => a.start_date.localeCompare(b.start_date));
-    return upcoming[0] ?? null;
+    return selectNextCohort(res?.data?.cohorts) as OpenCohort | null;
   } catch {
     return null;
   }
