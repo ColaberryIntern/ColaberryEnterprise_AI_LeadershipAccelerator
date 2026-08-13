@@ -2495,15 +2495,31 @@ async function start(): Promise<void> {
       console.warn('[CommunityRooms] default room seed failed:', err?.message);
     }
   }
-  // Intelligence-pipeline sample cards — one evergreen card per intel type so the
-  // Today feed carries this content before the ingestion pipelines run. Idempotent
-  // (upserts by type); fail-soft so a fresh DB without the types can't break boot.
-  try {
-    const { seedIntelSampleCards } = await import('./seeds/seedIntelSampleCards');
-    const r = await seedIntelSampleCards();
-    console.log(`[IntelSamples] ${r.created.length} created, ${r.updated.length} updated`);
-  } catch (err: any) {
-    console.warn('[IntelSamples] sample-card seed failed:', err?.message);
+  // Intelligence-pipeline sample cards — one evergreen card per intel type, to
+  // carry the Today feed before the ingestion pipelines have produced anything.
+  //
+  // OFF by default. That cold-start justification has expired: the pipelines
+  // have since generated hundreds of real published cards across all ten types,
+  // so on a populated database this seed only adds demo content on top of real
+  // content. Running it unconditionally caused two production problems:
+  //   1. It re-asserted all ten cards on EVERY boot and forced them back to
+  //      published, so a correction made in the DB or by an admin silently
+  //      reverted on the next deploy (a dead video link came back this way on
+  //      2026-08-13).
+  //   2. Its permanent card meant a type's card count was never 0, which
+  //      suppressed the INTEL_SOURCE_EXHAUSTED / POOL_EMPTY diagnostics until
+  //      feedTypeStatsService.ts added an explicit exclusion on 2026-08-10.
+  //
+  // Set SEED_INTEL_SAMPLE_CARDS=true to run it — intended for a fresh dev or
+  // preview database, which is what it was written for. Still fail-soft.
+  if (process.env.SEED_INTEL_SAMPLE_CARDS === 'true') {
+    try {
+      const { seedIntelSampleCards } = await import('./seeds/seedIntelSampleCards');
+      const r = await seedIntelSampleCards();
+      console.log(`[IntelSamples] ${r.created.length} created, ${r.updated.length} updated`);
+    } catch (err: any) {
+      console.warn('[IntelSamples] sample-card seed failed:', err?.message);
+    }
   }
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any
