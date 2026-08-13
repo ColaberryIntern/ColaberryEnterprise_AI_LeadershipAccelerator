@@ -39,6 +39,13 @@ export interface IntakeQuestion {
    * generated before suggestions existed still parses.
    */
   suggestions?: string[];
+  /**
+   * How the student answers. 'multi' (tick everything that applies) is what the
+   * tools question uses — one tick-through gets the whole list, where three
+   * questions about integrations got two vague answers and a skip. Optional so
+   * a response cached before choices existed still parses as free text.
+   */
+  kind?: 'text' | 'single' | 'multi';
 }
 
 export interface IntakeQuestionsResult {
@@ -91,7 +98,8 @@ function isQuestionShaped(v: unknown): v is IntakeQuestion {
     // Suggestions are optional on the wire (an older cached response has none)
     // but must be strings when present — the UI renders them as buttons.
     && (q.suggestions === undefined
-      || (Array.isArray(q.suggestions) && q.suggestions.every((x: unknown) => typeof x === 'string')));
+      || (Array.isArray(q.suggestions) && q.suggestions.every((x: unknown) => typeof x === 'string')))
+    && (q.kind === undefined || ['text', 'single', 'multi'].includes(q.kind));
 }
 
 /**

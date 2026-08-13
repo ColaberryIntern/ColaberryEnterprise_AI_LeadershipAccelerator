@@ -91,9 +91,14 @@ their work, not about system design. Never use the angle's own name in the quest
 
 1. THE GUARDRAIL — ask: what would you want to look at yourself before this goes out / gets saved /
    gets sent? What would be bad if it got it wrong and nobody checked?
-2. SYSTEMS OF RECORD — ask: where does this information live today? Which app, inbox or spreadsheet
-   do you open to find it? Do you need it to put anything BACK there, or only read it? "I don't know
-   how we'd connect to it" is a perfectly good answer.
+2. THE TOOLS — ask this as ONE "multi" question covering every tool the system must work with,
+   not as several questions about individual integrations. Something like: "Which of these does
+   this need to work with? Tick everything it must read from or write to." Give 4-6 of the tools
+   MOST LIKELY for their line of work, named exactly (Google Sheets, Excel, Gmail, Outlook,
+   QuickBooks, Salesforce, HubSpot, Slack, Notion, Airtable, Calendly, Stripe, a shared drive,
+   whatever fits THEIR domain) and let them add their own. One question they can tick through
+   gets the whole list; three questions about integrations gets two vague answers and a skip.
+   "I don't know how we'd connect to it" stays a perfectly good answer.
 3. WHEN IT IS NOT SURE — ask: when YOU are not sure about one of these, what do you do — ask
    someone, look it up, put it aside? That is what it should do too. Offer them the options: flag
    it, ask you, make its best guess and show its reasoning, or stop.
@@ -129,7 +134,11 @@ RULES
 - Each question must stand alone. Do not number them or reference each other.
 - "why" explains to the student, in one plain sentence, what this changes about their build. It is shown under the question.
 - "placeholder" is a SHORT hint of the KIND of answer wanted — never a real answer they might just accept. It must not be about a different domain than theirs.
-- "suggestions" are 2-4 real, pickable answers in their domain. They are shown as chips the student can tap to fill the box and then edit.
+- "suggestions" are the options. On a "multi" or "single" question they are the actual choices, so
+  give the 4-6 most likely ones by name. On a "text" question they are examples shown as chips.
+- Every question, whatever its kind, also lets the student write their own answer. Never write a
+  question whose real answer could not be something you did not think of.
+- Use "multi" for the tools question, always. Use it anywhere else the honest answer is a list.
 - The student sees ONE question at a time and can see their earlier answers. Later questions may build on earlier ones — if an earlier answer named a system, a tool or a person, use that name.
 - Never invent facts about their project. If something is unknown, ask about it.
 - Return ONLY JSON matching the schema. No prose, no markdown fence.`;
@@ -146,21 +155,33 @@ export const INTAKE_QUESTIONS_JSON_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'question', 'why', 'placeholder', 'suggestions'],
+        required: ['id', 'question', 'why', 'placeholder', 'suggestions', 'kind'],
         properties: {
           id: { type: 'string', description: 'short snake_case key, e.g. primary_users' },
+          kind: {
+            type: 'string',
+            enum: ['text', 'single', 'multi'],
+            description:
+              'How the student answers. "multi" = tick every one that applies, for questions whose '
+              + 'honest answer is a LIST (which tools, which systems). "single" = pick one, for a '
+              + 'question with genuinely exclusive answers. "text" = write a sentence. Prefer multi '
+              + 'or single whenever the likely answers can be named up front — it is far easier for '
+              + 'someone new, and every kind still lets them write their own.',
+          },
           question: { type: 'string' },
           why: { type: 'string', description: 'one plain sentence: what this changes about the build' },
           placeholder: { type: 'string', description: 'a hint at the kind of answer, never a usable answer' },
           suggestions: {
             type: 'array',
             minItems: 2,
-            maxItems: 4,
+            maxItems: 6,
             items: { type: 'string' },
             description:
-              'Concrete example answers in the domain the student described, which they could pick or edit. '
-              + 'This is what makes the question answerable for someone new to AI, and where you show '
-              + 'them a capability they did not know to ask for. Never generic; never one obviously right.',
+              'The options. For "multi"/"single" these ARE the choices, so give the 4-6 MOST LIKELY '
+              + 'answers for this project by name — real tools, real systems, real behaviours — ordered '
+              + 'most likely first. For "text" they are example answers shown as chips. Either way: '
+              + 'concrete, in the domain the student described, never generic filler, and never one '
+              + 'obviously correct. The student can always write their own instead.',
           },
         },
       },
@@ -203,27 +224,43 @@ export function buildIntakeQuestionsPrompt(input: IntakeQuestionsInputs): string
  * so they are a documented degradation, used only when generation fails, and
  * the caller marks them as such so we can see it in the logs.
  */
-export function fallbackQuestions(size: BuildSize): Array<{ id: string; question: string; why: string; placeholder: string; suggestions: string[] }> {
+export function fallbackQuestions(size: BuildSize): Array<{
+  id: string; question: string; why: string; placeholder: string;
+  suggestions: string[]; kind: 'text' | 'single' | 'multi';
+}> {
   // The safety net, used when the model call fails. Written to the same rule as
   // the generated set: a person new to AI can answer every one of these from
   // memory, and the suggestions show them what they are allowed to ask for.
   const base = [
     {
       id: 'primary_users',
+      kind: 'single' as const,
       question: 'Who is going to use this, and what are they trying to get done?',
       why: 'Who is in front of it decides what has to be obvious and what can stay behind the scenes.',
       placeholder: 'their role, and what they are in the middle of when they need this',
       suggestions: ['Me, a few times a day', 'My team, as part of their normal work', 'A customer or client, directly'],
     },
     {
+      // ONE question for every tool, ticked rather than described. Asked as
+      // separate integration questions it got two vague answers and a skip;
+      // asked as a list a student can tick through, it gets the whole list.
       id: 'data_sources',
-      question: 'Where does the information live today — which app, inbox or spreadsheet do you open?',
-      why: 'Everything it has to read or write is a real piece of work, and it decides what gets built first.',
-      placeholder: 'name the tools, even if you do not know how they connect',
-      suggestions: ['A spreadsheet', 'Email or a shared inbox', 'A system we log into', 'Honestly, it is in my head'],
+      kind: 'multi' as const,
+      question: 'Which of these does this need to work with? Tick everything it has to read from or write to.',
+      why: 'Each one it touches is real work to connect, and together they decide what gets built first.',
+      placeholder: 'anything else it has to work with',
+      suggestions: [
+        'A spreadsheet (Excel or Google Sheets)',
+        'Email — Gmail or Outlook',
+        'A shared drive or folder',
+        'A calendar',
+        'A system we log into (CRM, accounting, scheduling)',
+        'Nothing yet — it lives in my head or on paper',
+      ],
     },
     {
       id: 'must_get_right',
+      kind: 'single' as const,
       question: 'What would you want to look at yourself before it went out?',
       why: 'This becomes the check that has to pass before the system is allowed to act.',
       placeholder: 'the thing that would be bad if it got it wrong and nobody noticed',
@@ -231,6 +268,7 @@ export function fallbackQuestions(size: BuildSize): Array<{ id: string; question
     },
     {
       id: 'when_unsure',
+      kind: 'single' as const,
       question: 'When YOU are not sure about one of these, what do you do?',
       why: 'It should do the same thing. Every system is wrong sometimes; what happens next decides whether people keep using it.',
       placeholder: 'ask someone, look it up, set it aside…',
@@ -241,6 +279,7 @@ export function fallbackQuestions(size: BuildSize): Array<{ id: string; question
   const more = [
     {
       id: 'measure',
+      kind: 'text' as const,
       question: 'How long does this take you today, or how often does it go wrong?',
       why: 'A real number now is what makes it possible to prove this worked later.',
       placeholder: 'any honest number — hours a week, or how many slip through',
@@ -248,6 +287,7 @@ export function fallbackQuestions(size: BuildSize): Array<{ id: string; question
     },
     {
       id: 'trust_it',
+      kind: 'multi' as const,
       question: 'What would you need to see before you would let this run without watching it?',
       why: 'This is where most of the interesting features come from — and you can have more than you think.',
       placeholder: 'what would make you comfortable',
@@ -263,6 +303,7 @@ export function fallbackQuestions(size: BuildSize): Array<{ id: string; question
   return [...base, ...more,
     {
       id: 'standout',
+      kind: 'single' as const,
       question: 'What would make someone watching say "I did not know it could do that"?',
       why: 'This is the moment your demo is built around, so it is worth choosing on purpose.',
       placeholder: 'the part that would impress the person whose problem this is',
@@ -274,6 +315,7 @@ export function fallbackQuestions(size: BuildSize): Array<{ id: string; question
     },
     {
       id: 'failure_mode',
+      kind: 'single' as const,
       question: 'If it got something wrong at 2am, what should happen?',
       why: 'The failure path has to be designed rather than discovered in production.',
       placeholder: 'who finds out, and how it gets back on track',
