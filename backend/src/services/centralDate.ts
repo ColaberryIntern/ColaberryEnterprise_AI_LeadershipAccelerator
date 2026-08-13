@@ -123,6 +123,50 @@ export function formatCentralClock(sessionDate: string, rawTime: string): string
 }
 
 /**
+ * How near a class is, in words, relative to `nowMs` — "Today", "Tomorrow", or a
+ * named day for anything further out.
+ *
+ * This is the DAY half of the same defect formatCentralClock fixed above. The
+ * reminder email hardcoded the word "Tomorrow" for every non-1-hour reminder,
+ * because the sender assumed the "24-hour reminder" fires 24 hours out. It does
+ * not: schedulerService sweeps a ROLLING window (`now < session <= now+24h`) and
+ * the send is armed by an in-process Set, so any backend restart on the day of a
+ * class re-arms it and the next sweep announces a class starting in nine hours
+ * as "Tomorrow". That is exactly what went out for Session 7 on 2026-08-13 —
+ * sent 9:30 AM Central for a 6:30 PM Central class.
+ *
+ * Takes `session_date` (already a Central calendar date — that is how live class
+ * dates are stored) and compares CALENDAR DAYS, not elapsed hours. A class 9
+ * hours out is "Today"; a class 20 hours out that crosses midnight is
+ * "Tomorrow". Both keys are parsed at UTC midnight purely to subtract them, so
+ * the arithmetic cannot drift across a DST boundary the way `+86400000` would.
+ *
+ * Pure. Returns "Upcoming" for an unparseable date rather than an empty string
+ * or a guess: an empty label would render "[Accelerator] : Session 7", and a
+ * guess would repeat the original defect of confidently naming the wrong day.
+ */
+export function sessionDayLabel(sessionDate: string, nowMs: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test((sessionDate || '').trim())) return 'Upcoming';
+  const sessionMs = Date.parse(`${sessionDate.trim()}T00:00:00Z`);
+  const todayMs = Date.parse(`${centralDateKey(nowMs)}T00:00:00Z`);
+  if (Number.isNaN(sessionMs) || Number.isNaN(todayMs)) return 'Upcoming';
+
+  const dayDiff = Math.round((sessionMs - todayMs) / 86400000);
+  if (dayDiff === 0) return 'Today';
+  if (dayDiff === 1) return 'Tomorrow';
+
+  // Past dates land here too (dayDiff < 0). A reminder should never fire for a
+  // past class, but naming the actual day is the safe failure: it is still true,
+  // where "Today"/"Tomorrow" would not be.
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC', // keys are already Central calendar dates; UTC avoids re-shifting them
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(sessionMs));
+}
+
+/**
  * A raw instant (any ISO string, epoch, or Date — as stored in Postgres `TIMESTAMPTZ`
  * columns across ProofDesk/Workforce OS) rendered for a human, e.g. "Aug 12, 3:00 PM
  * CDT". DST-aware and labeled for the same reason formatCentralClock is: this
