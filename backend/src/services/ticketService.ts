@@ -5,6 +5,7 @@ import type { TicketStatus, TicketPriority, TicketType, TicketActorType } from '
 import type { AgentExecutionResult } from './agents/types';
 import { emitLedgerEventSafe } from './workLedger/emitLedgerEventSafe';
 import { tryReuseStudentSupportTicket } from './ticketStudentSupportReuse';
+import { resolveActorDisplayName } from './actorIdentity/resolveActorDisplayName';
 
 // ── State Machine ────────────────────────────────────────────────────────
 
@@ -305,7 +306,33 @@ export async function getTicketById(ticketId: string) {
     order: [['created_at', 'ASC']],
   });
 
-  return { ticket, activities, subTasks };
+  // Display-layer enrichment only — actor_id/actor_type stay exactly as persisted.
+  // Ali's live feedback ("You fixed the name in part of the ticket, but not all the
+  // ticket") named two specific surfaces still showing a raw actor UUID after the
+  // prior run fixed titles/descriptions: the Technical tab's "Assigned" field and its
+  // activity-feed lines. Both read from this response, so both are resolved here,
+  // once, server-side — matching summaryGeneratorService.ts's own pattern of
+  // generating human-facing text on the backend rather than pushing N resolution
+  // calls onto the frontend.
+  const assignedToDisplayName =
+    ticket.assigned_to_type && ticket.assigned_to_id
+      ? await resolveActorDisplayName(ticket.assigned_to_type, ticket.assigned_to_id)
+      : null;
+
+  // Resolved concurrently (Promise.all), not one-at-a-time, so a ticket with a long
+  // activity history doesn't pay an N-query waterfall for what can run in parallel.
+  const activitiesWithNames = await Promise.all(
+    activities.map(async (activity) => ({
+      ...activity.toJSON(),
+      actor_display_name: await resolveActorDisplayName(activity.actor_type, activity.actor_id),
+    })),
+  );
+
+  return {
+    ticket: { ...ticket.toJSON(), assigned_to_display_name: assignedToDisplayName },
+    activities: activitiesWithNames,
+    subTasks,
+  };
 }
 
 export async function getTicketsForBoard(filters?: TicketFilters) {

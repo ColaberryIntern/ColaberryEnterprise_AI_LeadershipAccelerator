@@ -1,7 +1,8 @@
 import { Ticket, TicketActivity } from '../../models';
 import { emitEvent } from '../../services/workLedger/workLedgerService';
 import { scheduleOutcomeMeasurement } from '../../services/outcomes/outcomeMeasurementService';
-import { createTicket, updateTicketStatus, addAgentOutput } from '../../services/ticketService';
+import { resolveActorDisplayName } from '../../services/actorIdentity/resolveActorDisplayName';
+import { createTicket, updateTicketStatus, addAgentOutput, getTicketById } from '../../services/ticketService';
 
 /** Dynamic import() hooks (cory + outcome-measurement) run in a `.then()` chain that
  * is deliberately NOT awaited by updateTicketStatus (non-blocking by design) — flush
@@ -14,8 +15,8 @@ async function flushMicrotasks(): Promise<void> {
 
 jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 jest.mock('../../models', () => ({
-  Ticket: { findOne: jest.fn(), create: jest.fn(), findByPk: jest.fn() },
-  TicketActivity: { create: jest.fn() },
+  Ticket: { findOne: jest.fn(), create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn() },
+  TicketActivity: { create: jest.fn(), findAll: jest.fn() },
 }));
 jest.mock('../../services/workLedger/workLedgerService', () => ({
   emitEvent: jest.fn(),
@@ -23,19 +24,36 @@ jest.mock('../../services/workLedger/workLedgerService', () => ({
 jest.mock('../../services/outcomes/outcomeMeasurementService', () => ({
   scheduleOutcomeMeasurement: jest.fn(),
 }));
+// getTicketById's own name-resolution behavior is covered exhaustively by
+// resolveActorDisplayName's own unit tests — mocked here so this file tests the
+// WIRING (does getTicketById call it with the right actor_type/actor_id per row and
+// attach the result under the right key) rather than re-testing DB lookups.
+jest.mock('../../services/actorIdentity/resolveActorDisplayName', () => ({
+  resolveActorDisplayName: jest.fn(),
+}));
 
 const ticketFindOne = Ticket.findOne as unknown as jest.Mock;
 const ticketCreate = Ticket.create as unknown as jest.Mock;
 const ticketFindByPk = Ticket.findByPk as unknown as jest.Mock;
+const ticketFindAll = Ticket.findAll as unknown as jest.Mock;
 const activityCreate = TicketActivity.create as unknown as jest.Mock;
+const activityFindAll = TicketActivity.findAll as unknown as jest.Mock;
 const mockEmit = emitEvent as unknown as jest.Mock;
 const mockScheduleOutcome = scheduleOutcomeMeasurement as unknown as jest.Mock;
+const mockResolveActorDisplayName = resolveActorDisplayName as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockEmit.mockResolvedValue({ event_id: 'evt-mock' });
   mockScheduleOutcome.mockResolvedValue({ id: 'om-mock' });
+  mockResolveActorDisplayName.mockImplementation(async (_type: string, id: string) => id);
 });
+
+/** Minimal Sequelize-instance-shaped mock: real getTicketById() calls .toJSON() on
+ * both the ticket and each activity row, so every fixture needs one. */
+function mockRow<T extends Record<string, any>>(fields: T): T & { toJSON: () => T } {
+  return { ...fields, toJSON: () => fields };
+}
 
 describe('createTicket', () => {
   it('happy path: creates the ticket, writes an activity, and emits one ledger event', async () => {
@@ -346,5 +364,103 @@ describe('ledger-write failure isolation (regression: must never break the wrapp
     };
 
     await expect(addAgentOutput('t6', 'X', output as any)).resolves.toBe(activity);
+  });
+});
+
+// Round 2 of the raw-actor-UUID fix: Ali found the ticket detail Technical tab's
+// "Assigned" field and activity feed still showing a raw UUID after the prior run
+// fixed titles/descriptions. getTicketById() is the API response both surfaces read
+// from — these pin the server-side enrichment that resolves names once, here,
+// rather than pushing per-row resolution onto the frontend. getTicketById() had zero
+// prior test coverage before this task.
+describe('getTicketById', () => {
+  const REESE_ADMIN_ID = '82c2dfd2-369e-4545-8d2f-22d1ae3451ff';
+
+  it('happy path: an ai_staff-assigned ticket gets a resolved assigned_to_display_name, and each activity gets its own actor_display_name', async () => {
+    ticketFindByPk.mockResolvedValue(
+      mockRow({ id: 'tk-1', assigned_to_type: 'ai_staff', assigned_to_id: REESE_ADMIN_ID }),
+    );
+    activityFindAll.mockResolvedValue([
+      mockRow({ id: 'act-1', actor_type: 'ai_staff', actor_id: REESE_ADMIN_ID, action: 'created' }),
+      mockRow({ id: 'act-2', actor_type: 'agent', actor_id: 'CurriculumArchitectAgent', action: 'assigned' }),
+    ]);
+    ticketFindAll.mockResolvedValue([]);
+    mockResolveActorDisplayName.mockImplementation(async (type: string, id: string) =>
+      type === 'ai_staff' && id === REESE_ADMIN_ID ? 'Reese' : id,
+    );
+
+    const result = await getTicketById('tk-1');
+
+    expect(result?.ticket.assigned_to_display_name).toBe('Reese');
+    expect(mockResolveActorDisplayName).toHaveBeenCalledWith('ai_staff', REESE_ADMIN_ID);
+    expect(result?.activities[0].actor_display_name).toBe('Reese');
+    expect(result?.activities[1].actor_display_name).toBe('CurriculumArchitectAgent');
+    // Raw ids stay in the response unchanged — the Technical tab is explicitly
+    // allowed to also show them for technical fidelity; only the API contract grew
+    // a field, nothing was removed.
+    expect(result?.ticket.assigned_to_id).toBe(REESE_ADMIN_ID);
+    expect(result?.activities[0].actor_id).toBe(REESE_ADMIN_ID);
+  });
+
+  it('boundary: an unassigned ticket (assigned_to_id null) gets assigned_to_display_name null, with zero resolver calls for it', async () => {
+    ticketFindByPk.mockResolvedValue(
+      mockRow({ id: 'tk-2', assigned_to_type: null, assigned_to_id: null }),
+    );
+    activityFindAll.mockResolvedValue([]);
+    ticketFindAll.mockResolvedValue([]);
+
+    const result = await getTicketById('tk-2');
+
+    expect(result?.ticket.assigned_to_display_name).toBeNull();
+    expect(mockResolveActorDisplayName).not.toHaveBeenCalled();
+  });
+
+  it('boundary: an activity whose actor cannot be resolved still returns successfully with the resolver\'s own honest fallback label, never dropping the activity or throwing', async () => {
+    ticketFindByPk.mockResolvedValue(mockRow({ id: 'tk-3', assigned_to_type: null, assigned_to_id: null }));
+    activityFindAll.mockResolvedValue([
+      mockRow({ id: 'act-3', actor_type: 'ai_staff', actor_id: 'no-such-admin-uuid', action: 'created' }),
+    ]);
+    ticketFindAll.mockResolvedValue([]);
+    mockResolveActorDisplayName.mockResolvedValue('Ai Staff'); // resolver's real fail-closed shape
+
+    const result = await getTicketById('tk-3');
+
+    expect(result?.activities).toHaveLength(1);
+    expect(result?.activities[0].actor_display_name).toBe('Ai Staff');
+  });
+
+  it('regression: mixed actor types across a real activity history (agent/human/cory/ai_staff) each resolve independently, matching non-Reese ticket types too', async () => {
+    ticketFindByPk.mockResolvedValue(
+      mockRow({ id: 'tk-4', assigned_to_type: 'human', assigned_to_id: 'admin-uuid-1' }),
+    );
+    activityFindAll.mockResolvedValue([
+      mockRow({ id: 'act-4a', actor_type: 'agent', actor_id: 'PlatformFixAgent', action: 'assigned' }),
+      mockRow({ id: 'act-4b', actor_type: 'cory', actor_id: 'bpos_orchestrator', action: 'status_changed' }),
+      mockRow({ id: 'act-4c', actor_type: 'human', actor_id: 'admin-uuid-1', action: 'commented' }),
+    ]);
+    ticketFindAll.mockResolvedValue([]);
+    mockResolveActorDisplayName.mockImplementation(async (type: string, id: string) => {
+      if (type === 'human') return 'Ali Muwwakkil';
+      return id; // agent/cory ids here are already readable, per the resolver's own real behavior
+    });
+
+    const result = await getTicketById('tk-4');
+
+    expect(result?.ticket.assigned_to_display_name).toBe('Ali Muwwakkil');
+    expect(result?.activities.map((a: any) => a.actor_display_name)).toEqual([
+      'PlatformFixAgent',
+      'bpos_orchestrator',
+      'Ali Muwwakkil',
+    ]);
+  });
+
+  it('returns null for a nonexistent ticket without calling the resolver', async () => {
+    ticketFindByPk.mockResolvedValue(null);
+
+    const result = await getTicketById('missing');
+
+    expect(result).toBeNull();
+    expect(activityFindAll).not.toHaveBeenCalled();
+    expect(mockResolveActorDisplayName).not.toHaveBeenCalled();
   });
 });

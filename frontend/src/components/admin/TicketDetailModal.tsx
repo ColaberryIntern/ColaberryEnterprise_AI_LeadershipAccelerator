@@ -14,6 +14,11 @@ interface Activity {
   id: string;
   actor_type: string;
   actor_id: string;
+  // Resolved server-side by getTicketById() (ProofDesk actor-name resolution, round
+  // 2 — see backend/src/services/actorIdentity/resolveActorDisplayName.ts). Optional
+  // because older/unrelated callers of this same shape may not send it — every
+  // render site falls back to actor_id when absent, never shows literal `undefined`.
+  actor_display_name?: string;
   action: string;
   from_value: string | null;
   to_value: string | null;
@@ -35,6 +40,9 @@ interface Ticket {
   created_by_id: string;
   assigned_to_type: string | null;
   assigned_to_id: string | null;
+  // Resolved server-side by getTicketById() — see the Activity interface's
+  // actor_display_name comment above for the same optionality/fallback rationale.
+  assigned_to_display_name?: string | null;
   parent_ticket_id: string | null;
   entity_type: string | null;
   entity_id: string | null;
@@ -257,7 +265,18 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
         {/* Meta info */}
         <div className="d-flex gap-3 flex-wrap mb-3 small text-muted">
           <span>Source: <strong>{ticket.source}</strong></span>
-          {ticket.assigned_to_id && <span>Assigned: <strong>{ticket.assigned_to_id}</strong></span>}
+          {ticket.assigned_to_id && (
+            <span>
+              Assigned: <strong>{ticket.assigned_to_display_name || ticket.assigned_to_id}</strong>
+              {/* Raw id kept visible for technical fidelity (this IS the Technical
+                  tab) — but only as a secondary, muted parenthetical, never as the
+                  only identifier a human sees. Omitted when it would just repeat
+                  the name (no resolved name yet, or name === id). */}
+              {ticket.assigned_to_display_name && ticket.assigned_to_display_name !== ticket.assigned_to_id && (
+                <span className="text-muted ms-1" style={{ fontSize: '0.7rem' }}>({ticket.assigned_to_id})</span>
+              )}
+            </span>
+          )}
           {ticket.confidence != null && <span>Confidence: <strong>{ticket.confidence}%</strong></span>}
           {ticket.estimated_effort && <span>Effort: <strong>{ticket.estimated_effort}</strong></span>}
           <span>Created: <strong>{fmtCentralDateTime(ticket.created_at)}</strong></span>
@@ -292,7 +311,13 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
                 <span className={`badge bg-${a.actor_type === 'agent' ? 'info' : a.actor_type === 'cory' ? 'primary' : 'secondary'} me-1`} style={{ fontSize: '0.6rem' }}>
                   {a.actor_type}
                 </span>
-                <span className="text-muted me-1" style={{ fontSize: '0.7rem' }}>{a.actor_id}</span>
+                {/* Resolved name is the visible text; the raw id moves to a hover
+                    tooltip rather than disappearing — same "technical fidelity, but
+                    never a bare UUID as the only identifier" rule as the Assigned
+                    line above. */}
+                <span className="text-muted me-1" style={{ fontSize: '0.7rem' }} title={a.actor_id}>
+                  {a.actor_display_name || a.actor_id}
+                </span>
                 {renderActivityLine(a)}
               </div>
             </div>
