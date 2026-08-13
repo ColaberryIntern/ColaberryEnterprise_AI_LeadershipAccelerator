@@ -115,7 +115,7 @@ const AssessmentPanel: React.FC<Props> = ({ cardId, onCompleted, preview, kind: 
           <div className="as-prog"><div className="as-progbar"><span style={{ width: `${((idx + 1) / total) * 100}%` }} /></div><div className="as-progn">Question {idx + 1} of {total}</div></div>
           {q.competency && <div className="as-qtag">{prettyDomain(q.competency)}</div>}
           <div className="as-qtext">{q.question}</div>
-          <div className="as-opts">
+          <div className="as-opts" role="radiogroup" aria-label={q.question}>
             {q.options.map((opt, oi) => {
               const chosen = answers[idx] === oi;
               const showFeedback = !isEval && locked[idx];
@@ -123,6 +123,7 @@ const AssessmentPanel: React.FC<Props> = ({ cardId, onCompleted, preview, kind: 
               const isWrong = showFeedback && chosen && q.correct_index !== oi;
               return (
                 <button key={oi} className={`as-opt${chosen ? ' chosen' : ''}${isCorrect ? ' correct' : ''}${isWrong ? ' wrong' : ''}`}
+                  role="radio" aria-checked={chosen}
                   disabled={showFeedback} onClick={() => pick(oi)}>
                   <span className="as-optk">{String.fromCharCode(65 + oi)}</span>
                   <span className="as-optt">{opt}</span>
@@ -304,8 +305,39 @@ function scorePreview(kind: AssessmentKind, answers: Record<number, number>): As
   return { kind, score, correct_count: correct, total_count: total, passed, pass_threshold: kind === 'evaluation' ? 0.70 : null, attempt_number: 1, items, competency_scores, section, completion: null };
 }
 
-const asCss = `
-.as{padding:2px 2px 8px}
+/*
+ * Deliberately self-contained: `.as` declares every token it uses rather than
+ * inheriting them, because this panel renders in two different scopes. In the
+ * Runtime Workspace it sits under `.rt` (runtimeKit) which defines them all; in
+ * the Classroom drawer it sits under `.tl-de` (timeline.css) which defines only
+ * --berry/--cherry/--leaf/--amber. Under `.tl-de` the missing --line made
+ * `border:1.5px solid var(--line)` invalid at computed-value time, so
+ * border-style fell back to `none` and --berry-soft resolved to transparent —
+ * which meant a picked answer was pixel-identical to an unpicked one and
+ * students could not see (or revise) their own selection. Same rule the other
+ * card renderers already follow (see CardSurveyExperience `.svx`,
+ * ReflectionReview `.rfx`, ArchitectTimeMachine `.am`).
+ *
+ * Values mirror runtimeKit's `.rt` exactly, so the workspace rendering is
+ * unchanged; only the drawer gains the styling it was silently losing.
+ */
+export const asCss = `
+.as{--ink:#16191C;--paper:#FFFFFF;--mist:#F7F8FA;--sunken:#EFF2F5;--line:#E6EAEE;--line-soft:#EEF1F4;
+  --berry:#367895;--berry-deep:#2E6A86;--berry-soft:#E6F0F3;--cherry:#FB2832;--cherry-deep:#C20E1E;--cherry-soft:#FDE7E8;
+  --leaf:#5BA63C;--leaf-deep:#3C7A26;--leaf-soft:#E9F5E4;--amber:#E8920C;--amber-soft:#FBEFD9;--muted:#6A7680;--muted2:#95A0A8;
+  --mono:'Roboto Mono',ui-monospace,Consolas,monospace;--sans:'Roboto',system-ui,'Segoe UI',sans-serif;
+  padding:2px 2px 8px}
+/* Follows the one global theme the portal header toggle stamps on <html>. Both
+   selectors are needed: the workspace root carries data-theme itself, while the
+   Classroom drawer inherits it from <html> under .te-main. Admin Experience
+   Studio previews reuse .tl-de outside .te-main and stay light, matching
+   timeline.css. */
+.rt[data-theme="dark"] .as,
+:root[data-theme="dark"] .te-main .as{
+  --ink:#F4F4F4;--paper:#1E1E1E;--mist:#151515;--sunken:#272727;--line:#3A3A3A;--line-soft:#2C2C2C;
+  --berry-soft:#22343B;--cherry-soft:#3A1B1E;--leaf-soft:#22331C;--amber-soft:#3A2E12;
+  --muted:#9C9C9C;--muted2:#7E8891;
+}
 .as-load{padding:30px 0;color:var(--muted);text-align:center}
 .as-journey{display:flex;align-items:center;gap:8px;margin:2px 0 16px;flex-wrap:wrap}
 .as-jstep{display:flex;align-items:center;gap:9px;opacity:.6}
@@ -333,7 +365,8 @@ const asCss = `
 .as-opt{display:flex;align-items:center;gap:12px;text-align:left;padding:13px 15px;border:1.5px solid var(--line);background:var(--paper);border-radius:11px;cursor:pointer;font-size:14.5px;color:var(--ink);transition:all .12s}
 .as-opt:hover:not(:disabled){border-color:var(--berry)}
 .as-opt:disabled{cursor:default}
-.as-opt.chosen{border-color:var(--berry);background:var(--berry-soft)}
+.as-opt.chosen{border-color:var(--berry);background:var(--berry-soft);box-shadow:inset 0 0 0 1px var(--berry)}
+.as-opt.chosen .as-optk{background:var(--berry);color:#fff}
 .as-opt.correct{border-color:var(--leaf);background:var(--leaf-soft)}
 .as-opt.wrong{border-color:var(--cherry);background:var(--cherry-soft)}
 .as-optk{width:26px;height:26px;border-radius:7px;background:var(--sunken);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:800;font-size:12.5px;color:var(--muted);flex:none}

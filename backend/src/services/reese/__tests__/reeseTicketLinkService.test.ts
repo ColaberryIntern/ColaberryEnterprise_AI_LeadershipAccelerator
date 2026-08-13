@@ -6,26 +6,31 @@
 jest.mock('../../ticketService', () => ({ createTicket: jest.fn(), addTicketComment: jest.fn() }));
 jest.mock('../../workLedger/workLedgerService', () => ({ emitEvent: jest.fn() }));
 jest.mock('../reeseIdentitySeed', () => ({ getReeseAdminUserId: jest.fn() }));
+jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
 
 import { createTicket, addTicketComment } from '../../ticketService';
 import { emitEvent } from '../../workLedger/workLedgerService';
 import { getReeseAdminUserId } from '../reeseIdentitySeed';
+import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from '../reeseTicketLinkService';
 
 const mockCreateTicket = createTicket as unknown as jest.Mock;
 const mockAddComment = addTicketComment as unknown as jest.Mock;
 const mockEmitEvent = emitEvent as unknown as jest.Mock;
 const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
+const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const ROOM_ID = 'dm-room-1';
-const STUDENT_ID = 'student-enrollment-1';
+const STUDENT_ID = 'd6a4b017-6716-4673-96b5-ab3074b70191'; // real-shaped UUID — the exact defect Ali flagged live
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetReeseAdminUserId.mockResolvedValue(REESE_ADMIN_ID);
   mockAddComment.mockResolvedValue({ id: 'activity-1' });
   mockEmitEvent.mockResolvedValue({ event_id: 'evt-1' });
+  mockResolveStudentDisplayName.mockResolvedValue('Jordan Rivera');
 });
 
 describe('ensureReeseTicketForRoom', () => {
@@ -80,6 +85,33 @@ describe('ensureReeseTicketForRoom', () => {
     expect(description).not.toContain(longMessage);
     const embeddedRun = description.match(/x+/)?.[0] ?? '';
     expect(embeddedRun.length).toBeLessThanOrEqual(300);
+  });
+
+  it('happy path: title/description contain the resolved student name, never the raw enrollment UUID (Ali\'s live feedback: "reporting the id of the user is not helpful")', async () => {
+    mockCreateTicket.mockResolvedValue({ id: 'ticket-1' });
+
+    await ensureReeseTicketForRoom(ROOM_ID, STUDENT_ID, 'I am stuck on my project.');
+
+    expect(mockResolveStudentDisplayName).toHaveBeenCalledWith(STUDENT_ID);
+    const call = mockCreateTicket.mock.calls[0][0];
+    expect(call.title).toContain('Jordan Rivera');
+    expect(call.description).toContain('Jordan Rivera');
+    expect(call.title).not.toMatch(UUID_PATTERN);
+    expect(call.description).not.toMatch(UUID_PATTERN);
+    // entity_id is the roomId (unaffected by the name resolution).
+    expect(call.entity_id).toBe(ROOM_ID);
+  });
+
+  it('failure path: an unresolvable enrollment falls back to a generic, non-UUID phrase rather than throwing or printing the raw id', async () => {
+    mockCreateTicket.mockResolvedValue({ id: 'ticket-1' });
+    mockResolveStudentDisplayName.mockResolvedValue('a student'); // resolveStudentDisplayName's own fallback
+
+    await ensureReeseTicketForRoom(ROOM_ID, STUDENT_ID, 'hello');
+
+    const call = mockCreateTicket.mock.calls[0][0];
+    expect(call.title).toContain('a student');
+    expect(call.title).not.toMatch(UUID_PATTERN);
+    expect(call.description).not.toMatch(UUID_PATTERN);
   });
 });
 

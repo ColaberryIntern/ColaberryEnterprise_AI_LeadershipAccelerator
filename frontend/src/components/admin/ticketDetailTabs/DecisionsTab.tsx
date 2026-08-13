@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { fmtCentralDateTime } from '../../../utils/centralTime';
 
 // ProofDesk Milestone 2 — Decisions tab (spec §10, §15.3). Lists decision_records for
 // this ticket and lets an admin post a new one (approve/reject/override/note) via
@@ -83,10 +84,6 @@ export default function DecisionsTab({ ticketId, token }: Props) {
     }
   }
 
-  function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  }
-
   return (
     <div>
       <div className="mb-3">
@@ -129,7 +126,7 @@ export default function DecisionsTab({ ticketId, token }: Props) {
         <div>
           {decisions.map((d) => (
             <div key={d.id} className="d-flex gap-2 mb-2 small">
-              <div className="text-muted" style={{ minWidth: 100, fontSize: '0.7rem' }}>{formatDate(d.created_at)}</div>
+              <div className="text-muted" style={{ minWidth: 110, fontSize: '0.7rem' }}>{fmtCentralDateTime(d.created_at)}</div>
               <div>
                 <span className={`badge bg-${DECISION_BADGES[d.decision_type]} me-1`} style={{ fontSize: '0.6rem' }}>
                   {d.decision_type}

@@ -21,11 +21,18 @@ export interface IntakeQuestionsInputs {
   name?: string;
 }
 
-/** How many questions each tier earns. Deeper builds justify a longer interview. */
+/**
+ * How many questions each tier earns. Deeper builds justify a longer interview.
+ *
+ * The maxima are the cut points on the ten priority-ordered angles below:
+ * a workflow gets the five a raw idea never contains, a project adds the
+ * judgement and the operator, and an autonomous build works the whole list.
+ * Raised from 5/7/9 so the top tier can actually reach angle 10.
+ */
 export const QUESTION_TARGETS: Record<BuildSize, { min: number; max: number }> = {
   workflow: { min: 4, max: 5 },
   project: { min: 6, max: 7 },
-  autonomous: { min: 8, max: 9 },
+  autonomous: { min: 8, max: 10 },
 };
 
 export const INTAKE_SYSTEM_PROMPT = `You are a systems architect running the intake interview for a student's capstone project.
@@ -38,14 +45,42 @@ WHAT MAKES A GOOD QUESTION HERE
 - It is answerable by a working professional who is NOT a software engineer. No jargon, no framework names, no "what's your stack".
 - It surfaces something the student probably has not thought about yet, without being a gotcha.
 
-COVER THESE ANGLES, phrased for their specific idea (skip any the student already answered clearly in their description — never ask something they just told you):
-- Who is actually using this, and what is true about them that constrains the design
-- Where the real data lives today, and who owns it
-- The single most important thing it must get right, and what must never happen
-- What "done" looks like concretely enough to test
-- Scale and rhythm: how often, how many, how fast
-- The boundary: what is deliberately NOT in scope
-- For an agentic build: what it is allowed to do on its own versus what needs a human
+THE ANGLES, IN PRIORITY ORDER. Work down this list and ask the first {{MAX}} that the student's
+description does not already answer clearly. Never ask something they just told you — but do ask
+when they were vague, because "it connects to our system" is not an answer to angle 2.
+
+The order is not arbitrary. It is what a raw idea almost never contains, times how much the build
+changes when it is missing. Measured across three projects (2026-08-12): without these answers a
+plan named the student's real systems 0 times out of 14, and carried their stated guardrail 0 times
+out of 6. Generating a 17,000-word requirements document first recovered NEITHER. The only way the
+plan learns these facts is to ask.
+
+1. THE GUARDRAIL — what must never happen without a human deciding first. The thing that would be
+   genuinely bad. Not a preference; a hard line.
+2. SYSTEMS OF RECORD — which systems that already exist it must read from or write to, by name, and
+   which direction. If they do not know how the integration works, that itself is the answer.
+3. WHEN IT IS NOT SURE — what the system should do when it is not confident. Every AI system is
+   wrong sometimes and what happens then decides whether anyone keeps using it. Push for a
+   threshold, an escalation path, or how the doubt is shown.
+4. THE MEASURE — the number that would prove this worked, and what that number is today. Something
+   checkable in a month, not "better" or "faster".
+5. EARNING AUTONOMY — what someone would need to SEE before letting this run without watching it.
+   A preview before it acts, an undo after, a plain-language reason, a digest they can check.
+6. THE JUDGEMENT — the specific decision being handed to the machine, and exactly which inputs it
+   gets to see when it makes that decision.
+7. THE OPERATOR — who is actually in front of this, how technical they are, and what they should
+   never need to understand to use it.
+8. TRIGGER AND RHYTHM — what starts a run: a person, an event, or a clock. How often, and how many
+   at a time, now and at their busiest.
+9. THE STANDOUT AND THE CUT — the one moment that would make someone watching say this is genuinely
+   impressive, and what they are giving up to make room for it. Ask both halves together.
+10. THE JOB — in one sentence, the outcome this exists to produce, for whom. Usually already in
+    their description, which is why it is last.
+
+Angles 3 and 5 are where the interesting features come from — confidence handling, escalation,
+preview, undo, explanations. A student who is never asked will build a system that assumes it is
+always right and gives its user no way to check it. Prefer them over angles 7, 8 and 10 whenever the
+description already hints at those.
 
 RULES
 - Ask between {{MIN}} and {{MAX}} questions. Fewer, sharper questions beat a long form.

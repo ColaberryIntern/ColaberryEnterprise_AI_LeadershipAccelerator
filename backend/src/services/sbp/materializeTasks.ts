@@ -22,6 +22,10 @@ import StudentTaskList from '../../models/StudentTaskList';
 import StudentTask from '../../models/StudentTask';
 import { BuildPlan, PlanStory } from './planContract';
 import { buildStoryPrompt } from './buildStoryPrompt';
+import { Schedule } from './buildSchedule';
+import {
+  COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_ACCEPTANCE, commandCenterPrompt,
+} from './commandCenterStory';
 
 export interface MaterializeResult {
   lists: number;
@@ -57,11 +61,23 @@ export async function materializePlanAsTasks(
   projectId: string,
   enrollmentId: string,
   plan: BuildPlan,
-  ctx: { repoUrl?: string | null; manifestPaths?: string[] } = {},
+  ctx: {
+    repoUrl?: string | null;
+    manifestPaths?: string[];
+    /**
+     * Real calendar dates for this cohort. Omitted, tasks materialize without
+     * due dates exactly as before — a build must never fail because a cohort
+     * has no start date on it.
+     */
+    schedule?: Schedule | null;
+  } = {},
 ): Promise<MaterializeResult> {
   const ordered = [...plan.releases].sort((a, b) => a.key.localeCompare(b.key));
   const gates = gateByRelease(plan);
   const result: MaterializeResult = { lists: 0, tasks: 0, preservedComplete: 0 };
+  const dueByStory = new Map<string, Date>(
+    (ctx.schedule?.tasks ?? []).map((t) => [t.storyId, t.dueOn]),
+  );
 
   await sequelize.transaction(async (t: Transaction) => {
     let listPos = 0;
@@ -87,13 +103,53 @@ export async function materializePlanAsTasks(
 
       const inRel = plan.stories.filter((s) => s.release === rel.key);
       let taskPos = 0;
+
+      // STORY-000 — the Command Center, first task of the first release, before
+      // any of the student's own stories. Injected here rather than generated
+      // so it is identical in shape across the cohort (it is taught and demoed
+      // as one thing) and cannot be renamed or merged away by the decomposer.
+      // It stays out of the plan and the traceability gate on purpose: it
+      // fulfils no requirement of the student's system because it is not part
+      // of that system — it is the window onto it.
+      if (rel.key === ordered[0].key) {
+        const ccAttrs = {
+          project_id: projectId, task_list_id: list.id, story_id: COMMAND_CENTER_STORY_ID,
+          title: COMMAND_CENTER_TITLE, description: COMMAND_CENTER_TITLE,
+          narrative: 'As a builder, I want one page that shows what I am building and how far along it is, so that I can see my own project and demo from it.',
+          status: 'not_started', position: taskPos, release_key: rel.key,
+          acceptance: [...COMMAND_CENTER_ACCEPTANCE], fulfills: [],
+          build: commandCenterPrompt(plan, ctx.schedule ?? null),
+          blocked_by: null,
+          // Day one. It is the thing they run at the start of the first class.
+          due_on: ctx.schedule?.buildStart ?? null,
+        };
+        taskPos += 1;
+        const [ccRow, ccCreated] = await StudentTask.findOrCreate({
+          where: { project_id: projectId, story_id: COMMAND_CENTER_STORY_ID },
+          defaults: { ...ccAttrs, due_baseline_on: ccAttrs.due_on } as any,
+          transaction: t,
+        });
+        if (!ccCreated) {
+          const keepComplete = ccRow.status === 'complete';
+          if (keepComplete) result.preservedComplete += 1;
+          await ccRow.update(
+            { ...ccAttrs, status: keepComplete ? 'complete' : ccRow.status } as any,
+            { transaction: t },
+          );
+        }
+        result.tasks += 1;
+      }
       for (const story of inRel) {
-        const attrs = taskAttrs(projectId, list.id, story, plan, gates.get(story.id) ?? [], taskPos, ctx);
+        const attrs = taskAttrs(projectId, list.id, story, plan, gates.get(story.id) ?? [], taskPos, ctx,
+          dueByStory.get(story.id) ?? null);
         taskPos += 1;
 
         const [row, created] = await StudentTask.findOrCreate({
           where: { project_id: projectId, story_id: story.id },
-          defaults: attrs as any,
+          // The baseline is written ONCE, at first publish, and never appears
+          // in the update below. A plan that silently rewrites its own original
+          // deadlines hides exactly the lesson a slipping project should teach.
+          defaults: { ...attrs, due_baseline_on: attrs.due_on } as any,
           transaction: t,
         });
         if (!created) {
@@ -108,9 +164,60 @@ export async function materializePlanAsTasks(
         result.tasks += 1;
       }
     }
+
+    // Demo prep is real, dated work. A plan that ends at the last build story
+    // pretends that preparing to present costs nothing, and students discover
+    // otherwise in the last week.
+    const prep = ctx.schedule?.prep ?? [];
+    if (prep.length) {
+      const [prepList] = await StudentTaskList.findOrCreate({
+        where: { project_id: projectId, cluster: 'prep' },
+        defaults: {
+          project_id: projectId, enrollment_id: enrollmentId, cluster: 'prep',
+          title: 'Demo prep · the dedicated week', status: 'not_started', position: listPos,
+        } as any,
+        transaction: t,
+      });
+      await prepList.update({ position: listPos }, { transaction: t });
+      result.lists += 1;
+
+      for (let i = 0; i < prep.length; i++) {
+        const p = prep[i];
+        const attrs = {
+          project_id: projectId, task_list_id: prepList.id, story_id: p.key,
+          title: p.title, description: p.title, narrative: p.title,
+          status: 'not_started', position: i, release_key: 'prep',
+          acceptance: [], fulfills: [], build: prepPrompt(plan, p.title),
+          blocked_by: null, due_on: p.dueOn,
+        };
+        const [row, created] = await StudentTask.findOrCreate({
+          where: { project_id: projectId, story_id: p.key },
+          defaults: { ...attrs, due_baseline_on: p.dueOn } as any,
+          transaction: t,
+        });
+        if (!created) {
+          const keepComplete = row.status === 'complete';
+          if (keepComplete) result.preservedComplete += 1;
+          await row.update({ ...attrs, status: keepComplete ? 'complete' : row.status } as any, { transaction: t });
+        }
+        result.tasks += 1;
+      }
+    }
   });
 
   return result;
+}
+
+/** Prep tasks are human work, not a Claude Code prompt — say so plainly. */
+function prepPrompt(plan: BuildPlan, title: string): string {
+  return [
+    `${title}`,
+    '',
+    `This one is you, not Claude Code. You are preparing to present ${plan.project_name}.`,
+    '',
+    'Keep the story short: the problem, the one moment that lands, and the guardrail that',
+    'makes it trustworthy. Show the thing working before you explain how it works.',
+  ].join('\n');
 }
 
 function taskAttrs(
@@ -121,6 +228,7 @@ function taskAttrs(
   blockedBy: string[],
   position: number,
   ctx: { repoUrl?: string | null; manifestPaths?: string[] },
+  dueOn: Date | null,
 ) {
   // The prompt is assembled here so it is stored WITH the task — the drawer's
   // "Copy prompt" reads `build` directly and must not need a round trip. If
@@ -150,5 +258,6 @@ function taskAttrs(
     fulfills: story.fulfills ?? [],
     build: prompt,
     blocked_by: blockedBy.length ? blockedBy : null,
+    due_on: dueOn,
   };
 }

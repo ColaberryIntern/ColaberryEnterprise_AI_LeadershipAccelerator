@@ -243,6 +243,71 @@ describe('subscriptionService', () => {
       expect(v.subscription?.access_until).not.toBeNull();
       expect(v.subscription?.next_payment).toBeNull();
     });
+
+    /*
+     * A paying student must never be rendered as unsubscribed or canceled because of
+     * leftover checkout rows. Both shapes below were live on 2026-08-12 across 7
+     * students: clicking checkout again after paying leaves a newer 'pending' row, and
+     * retiring those duplicates as 'canceled' (what reconcileAppPayments does) then made
+     * the newest row a canceled one. findAll is ordered created_at DESC, so index 0 is
+     * newest.
+     */
+    const ACTIVE = {
+      plan: 'monthly', status: 'active', amount_cents: 19900,
+      started_at: new Date(NOW), current_period_end: new Date(NOW + 20 * 864e5), cancel_reason: null,
+    };
+
+    it('an ACTIVE plan wins over a NEWER abandoned pending checkout', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'monthly', status: 'pending', amount_cents: 19900, cancel_reason: null },
+        ACTIVE,
+      ]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.status).toBe('active');
+      expect(v.needs_subscription).toBe(false);
+    });
+
+    it('an ACTIVE plan wins over a NEWER canceled duplicate', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'monthly', status: 'canceled', amount_cents: 19900, cancel_reason: 'duplicate checkout submission (reconcile)' },
+        ACTIVE,
+      ]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.status).toBe('active');
+      expect(v.subscription?.canceled).toBe(false);
+    });
+
+    it('finds the ACTIVE plan even behind many newer checkout rows (no 5-row cap)', async () => {
+      // One real student had 14 rows; a cap of 5 hid the active one entirely.
+      const noise = Array.from({ length: 12 }, () => ({ plan: 'monthly', status: 'pending', amount_cents: 19900, cancel_reason: null }));
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([...noise, ACTIVE]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.status).toBe('active');
+      // The query must not cap rows, or the active row falls outside the window.
+      expect((Subscription.findAll as jest.Mock).mock.calls[0][0]).not.toHaveProperty('limit');
+    });
+
+    it('with NO active plan, a genuine cancellation is still reported as canceled', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'annual', status: 'canceled', amount_cents: 178800, started_at: new Date(NOW), current_period_end: new Date(NOW + 30 * 864e5), cancel_reason: 'Too busy' },
+      ]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.canceled).toBe(true);
+    });
+
+    it('ignores failed rows entirely, even when they are newest', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'monthly', status: 'failed', amount_cents: 19900, cancel_reason: null },
+        ACTIVE,
+      ]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.status).toBe('active');
+    });
   });
 
   describe('startCheckout', () => {
@@ -292,6 +357,84 @@ describe('subscriptionService', () => {
       const created = (Subscription.create as jest.Mock).mock.calls[0][0];
       expect(created.amount_cents).toBe(19900);        // full recurring price kept
       expect(created.applied_credit_cents).toBe(5000); // credit recorded for consumption on settle
+    });
+
+    /*
+     * PaySimple ignores its own `GET /v4/customer?email=` filter, so findOrCreateCustomer
+     * can only ever create. Left unchecked that mints a duplicate customer per attempt —
+     * Arinze Ohagwu's four tries on 2026-08-10 made four. Reuse what we already stored,
+     * and mirror it onto the enrollment so the missed-webhook reconciler can see it.
+     */
+    it('reuses the customer id already on the enrollment instead of minting another', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X', paysimple_customer_id: '777', update });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+
+      const r = await startCheckout('e1', 'monthly', NOW);
+
+      expect(r).toMatchObject({ ok: true });
+      expect(findOrCreateCustomer).not.toHaveBeenCalled();            // no duplicate minted
+      expect((Subscription.create as jest.Mock).mock.calls[0][0].paysimple_customer_id).toBe('777');
+      expect(update).not.toHaveBeenCalled();                          // already mirrored
+    });
+
+    it('reuses the customer id from a prior checkout when the enrollment has none', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X', update });
+      (Subscription.findOne as jest.Mock).mockResolvedValue({ paysimple_customer_id: '888' });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+
+      const r = await startCheckout('e1', 'monthly', NOW);
+
+      expect(r).toMatchObject({ ok: true });
+      expect(findOrCreateCustomer).not.toHaveBeenCalled();
+      expect((Subscription.create as jest.Mock).mock.calls[0][0].paysimple_customer_id).toBe('888');
+      // Mirrored onto the enrollment so the reconciler's candidate scan can find it.
+      expect(update).toHaveBeenCalledWith({ paysimple_customer_id: '888' });
+    });
+
+    it('mirrors a NEWLY created customer id onto the enrollment', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X', update });
+      (Subscription.findOne as jest.Mock).mockResolvedValue(null);
+      (findOrCreateCustomer as jest.Mock).mockResolvedValue({ Id: 42 });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+
+      await startCheckout('e1', 'monthly', NOW);
+
+      expect(update).toHaveBeenCalledWith({ paysimple_customer_id: '42' });
+    });
+
+    // The student's payment link is already valid at this point; bookkeeping must never
+    // take the checkout down with it.
+    it('still succeeds when mirroring the customer id onto the enrollment fails', async () => {
+      const update = jest.fn().mockRejectedValue(new Error('db down'));
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X', update });
+      (Subscription.findOne as jest.Mock).mockResolvedValue(null);
+      (findOrCreateCustomer as jest.Mock).mockResolvedValue({ Id: 42 });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+
+      const r = await startCheckout('e1', 'monthly', NOW);
+
+      expect(r).toMatchObject({ ok: true, payment_link: 'https://pay.example/abc' });
+    });
+
+    it('falls back to creating a customer when the prior-checkout lookup throws', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X', update });
+      (Subscription.findOne as jest.Mock).mockRejectedValue(new Error('db down'));
+      (findOrCreateCustomer as jest.Mock).mockResolvedValue({ Id: 42 });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+
+      const r = await startCheckout('e1', 'monthly', NOW);
+
+      expect(r).toMatchObject({ ok: true });
+      expect((Subscription.create as jest.Mock).mock.calls[0][0].paysimple_customer_id).toBe('42');
     });
   });
 

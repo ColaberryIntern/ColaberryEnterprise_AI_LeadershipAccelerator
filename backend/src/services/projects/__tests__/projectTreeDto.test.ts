@@ -75,3 +75,51 @@ describe('toProjectSummaryDto', () => {
     expect(toProjectSummaryDto({ id: 'p1', name: 'A' }, null).is_active).toBe(false);
   });
 });
+
+describe('the schedule reaches the portal', () => {
+  /**
+   * MEASURED, 2026-08-13, production. The pipeline computed real due dates and
+   * wrote them to student_tasks — 19 of 19 rows dated — and the portal showed
+   * none of them, because ProjectTaskDto simply had no field for them. The
+   * whole scheduling feature was invisible on the only surface a student looks
+   * at. Nothing failed; the dates just stopped at the DTO boundary.
+   */
+  it('carries the due date and its untouched baseline', () => {
+    const dto = toTaskDto({
+      id: 't1', title: 'Build your Command Center', position: 0,
+      due_on: '2026-08-13', due_baseline_on: '2026-08-13',
+    });
+
+    expect(dto.due_on).toBe('2026-08-13');
+    expect(dto.due_baseline_on).toBe('2026-08-13');
+  });
+
+  it('keeps the baseline when the current date has moved — that gap is the lesson', () => {
+    const dto = toTaskDto({ id: 't1', title: 'Slipped', position: 0,
+      due_on: '2026-09-10', due_baseline_on: '2026-08-20' });
+
+    expect(dto.due_on).toBe('2026-09-10');
+    expect(dto.due_baseline_on).toBe('2026-08-20');
+  });
+
+  it('emits a date, never a timestamp, whichever way the driver returns it', () => {
+    // A due date carrying a time lands on the wrong day in another timezone.
+    const dto = toTaskDto({ id: 't1', title: 'x', position: 0,
+      due_on: new Date('2026-08-13T00:00:00Z'), due_baseline_on: '2026-08-13T00:00:00.000Z' });
+
+    expect(dto.due_on).toBe('2026-08-13');
+    expect(dto.due_baseline_on).toBe('2026-08-13');
+  });
+
+  it('is null, not undefined or an empty string, when a cohort has no start date', () => {
+    const dto = toTaskDto({ id: 't1', title: 'x', position: 0 });
+
+    expect(dto.due_on).toBeNull();
+    expect(dto.due_baseline_on).toBeNull();
+  });
+
+  it('refuses to pass through something that is not a date', () => {
+    const dto = toTaskDto({ id: 't1', title: 'x', position: 0, due_on: 'soon' } as any);
+    expect(dto.due_on).toBeNull();
+  });
+});

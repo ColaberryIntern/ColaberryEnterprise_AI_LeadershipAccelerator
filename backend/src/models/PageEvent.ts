@@ -5,6 +5,13 @@ interface PageEventAttributes {
   id?: string;
   session_id: string;
   visitor_id: string;
+  /**
+   * Set by visitorTrackingService.resolveIdentity() once a visitor is known to
+   * be a given lead, and backfilled historically from visitor_sessions.
+   * Nullable: most page events belong to visitors who were never identified.
+   * contextGraphService.ts:135-139 depends on this column existing.
+   */
+  lead_id?: number | null;
   event_type: string;
   page_url: string;
   page_path: string;
@@ -19,6 +26,7 @@ class PageEvent extends Model<PageEventAttributes> implements PageEventAttribute
   declare id: string;
   declare session_id: string;
   declare visitor_id: string;
+  declare lead_id: number | null;
   declare event_type: string;
   declare page_url: string;
   declare page_path: string;
@@ -45,6 +53,13 @@ PageEvent.init(
       type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'visitors', key: 'id' },
+    },
+    // No `references` here on purpose: the DDL adds the column without a foreign
+    // key so Postgres never has to validate-scan this high-write table. Declaring
+    // one in the model but not in the DDL would be a lie about the schema.
+    lead_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     event_type: {
       type: DataTypes.STRING(30),

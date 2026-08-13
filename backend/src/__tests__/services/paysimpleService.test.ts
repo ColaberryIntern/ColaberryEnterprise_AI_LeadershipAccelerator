@@ -103,7 +103,11 @@ describe('PaySimple Service', () => {
 
   describe('findCustomerByEmail', () => {
     it('returns customer when found', async () => {
-      const customer = { Id: 456, FirstName: 'John', LastName: 'Smith' };
+      // Email is required in the fixture: findCustomerByEmail only accepts a row whose
+      // Email actually matches, because PaySimple does not honor its own ?email= filter
+      // and otherwise returns page 1 of the whole merchant account. Without it this test
+      // asserted the guard's rejection path while claiming to test the match path.
+      const customer = { Id: 456, FirstName: 'John', LastName: 'Smith', Email: 'john@smith.com' };
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: [customer] }),

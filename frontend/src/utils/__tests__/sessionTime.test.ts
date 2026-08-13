@@ -1,4 +1,4 @@
-import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTime, formatSessionTimeRange } from '../sessionTime';
+import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTime, formatSessionTimeRange, formatCentralSessionTime, formatCentralSessionRange } from '../sessionTime';
 
 describe('parseSessionTimeToHHMM', () => {
   it('converts 12-hour PM to 24-hour', () => {
@@ -99,5 +99,51 @@ describe('formatSessionTimeRange', () => {
   it('falls back to the raw strings when either side is unparseable', () => {
     expect(formatSessionTimeRange('garbage', '20:30:00')).toBe('garbage - 20:30:00');
     expect(formatSessionTimeRange(null, undefined)).toBe('');
+  });
+});
+
+/**
+ * The portal Schedule list and Dashboard "Next Session" card both used to print
+ * the raw stored string with a hardcoded " ET" suffix — "18:30:00 ET" for a
+ * 6:30 PM Central class (reported by staff 2026-08-11). These pin the fix.
+ */
+describe('formatCentralSessionTime', () => {
+  it('formats the stored wall-clock and labels it Central', () => {
+    expect(formatCentralSessionTime('18:30:00', '2026-08-10')).toBe('6:30 PM CDT');
+  });
+
+  it('follows DST rather than hardcoding a suffix', () => {
+    expect(formatCentralSessionTime('18:30:00', '2026-01-15')).toBe('6:30 PM CST');
+  });
+
+  it('never emits an Eastern label', () => {
+    expect(formatCentralSessionTime('18:30:00', '2026-08-10')).not.toMatch(/E[SD]T/);
+  });
+
+  it('drops the suffix rather than guessing when the date is missing', () => {
+    expect(formatCentralSessionTime('18:30:00', null)).toMatch(/^6:30 PM( C[SD]T)?$/);
+  });
+
+  it('falls back to the raw value when unparseable', () => {
+    expect(formatCentralSessionTime('garbage', '2026-08-10')).toBe('garbage');
+    expect(formatCentralSessionTime(null, '2026-08-10')).toBe('');
+  });
+});
+
+describe('formatCentralSessionRange', () => {
+  it('formats a start/end pair with one Central suffix', () => {
+    expect(formatCentralSessionRange('18:30:00', '20:30:00', '2026-08-10')).toBe('6:30 - 8:30 PM CDT');
+  });
+
+  it('keeps both AM/PM suffixes across noon and still labels Central', () => {
+    expect(formatCentralSessionRange('11:30:00', '13:30:00', '2026-08-10')).toBe('11:30 AM - 1:30 PM CDT');
+  });
+
+  it('never emits an Eastern label', () => {
+    expect(formatCentralSessionRange('18:30:00', '20:30:00', '2026-01-15')).toBe('6:30 - 8:30 PM CST');
+  });
+
+  it('degrades to the raw strings rather than disappearing', () => {
+    expect(formatCentralSessionRange('garbage', '20:30:00', '2026-08-10')).toMatch(/^garbage - 20:30:00/);
   });
 });

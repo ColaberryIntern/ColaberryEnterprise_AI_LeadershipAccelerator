@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../../utils/api';
 import { workforceCss, readTheme, writeTheme } from './themeKit';
+import StatusBadge from '../../../components/admin/shell/StatusBadge';
+import { getTicketTypeTone, getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
+import { fmtCentralDateTime } from '../../../utils/centralTime';
 
 /**
  * WorkforceOSPage — the AI Workforce Operating System. An executive opens one
@@ -14,6 +18,14 @@ import { workforceCss, readTheme, writeTheme } from './themeKit';
 interface Employee { slug: string; name: string; role: string; department: string; avatar: string; supervisor: string | null; mission: string; ops_domain: string | null; workload: number; status: string }
 interface Meeting { meeting_date: string; agenda: any; contributions: Array<{ slug: string; name: string; role: string; line: string }>; action_items: Array<{ owner: string; title: string; severity: string; rec_key: string }>; participants: string[] }
 
+// Reese Phase 4 (Workforce integration) — real, DB-backed AiAgent rows built via
+// the agentBlueprint pattern (backend/src/services/workforce/liveAgentsService.ts).
+// Distinct shape from Employee above on purpose: a Live Agent is a real, ticketed,
+// ProofDesk-governed operating agent, not a conceptual department-strategy persona
+// like the static AI_ORG directors — see the "Live Agents" section below.
+interface LiveAgent { id: string; agent_name: string; agent_type: string; category: string | null; description: string | null; enabled: boolean; live_status: string; ticket_count: number }
+interface LiveAgentActivityEvent { agent_id: string; agent_name: string; ticket_id: string; ticket_number: number | null; title: string; type: string; status: string; priority: string; occurred_at: string | null }
+
 const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 const av = (color: string, name: string, cls = '') => <span className={`wf-av ${cls}`} style={{ background: color }}>{initials(name)}</span>;
 
@@ -25,20 +37,25 @@ const WorkforceOSPage: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
   const [office, setOffice] = useState<any>(null);
+  const [liveAgents, setLiveAgents] = useState<LiveAgent[]>([]);
+  const [liveAgentActivity, setLiveAgentActivity] = useState<LiveAgentActivityEvent[]>([]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     setBusy('load'); setError('');
     try {
-      const [r, b, m, msg, an] = await Promise.all([
+      const [r, b, m, msg, an, la, lt] = await Promise.all([
         api.get('/api/admin/workforce/roster'),
         api.get('/api/admin/workforce/briefing'),
         api.post('/api/admin/workforce/meeting/daily'),
         api.get('/api/admin/workforce/messages'),
         api.get('/api/admin/workforce/analytics'),
+        api.get('/api/admin/workforce/live-agents'),
+        api.get('/api/admin/workforce/live-agents/activity'),
       ]);
       setEmps(r.data.employees); setBrief(b.data); setMeeting(m.data.meeting); setMessages(msg.data.messages); setAnalytics(an.data);
+      setLiveAgents(la.data.agents || []); setLiveAgentActivity(lt.data.activity || []);
     } catch (e: any) { setError(e?.response?.data?.error || 'Could not load the AI Workforce.'); } finally { setBusy(''); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -129,6 +146,61 @@ const WorkforceOSPage: React.FC = () => {
             </div>
           ))}
         </div>
+
+        {/* Live Agents — real, DB-backed AiAgent rows built via the agentBlueprint
+            pattern (Reese today; any future agent built the same way appears here
+            automatically). Distinct from the static Directors above: these are
+            real, ticketed, ProofDesk-governed operating agents, not conceptual
+            department-strategy personas, so clicking one opens the real Agent
+            Detail page rather than the Directors' office drawer. */}
+        <div className="wf-lab section">Live Agents · {liveAgents.length} operating</div>
+        {liveAgents.length === 0 ? (
+          <div className="wf-muted" style={{ padding: '8px 0 4px' }}>No live agents yet.</div>
+        ) : (
+          <div className="wf-dirs">
+            {liveAgents.map((a) => (
+              <Link to={`/admin/agents/${a.id}`} className="wf-emp" key={a.id} style={{ display: 'flex', textDecoration: 'none', color: 'inherit' }}>
+                {av('#7A5AF0', a.agent_name)}
+                <div style={{ minWidth: 0 }}>
+                  <div className="nm">{a.agent_name}</div>
+                  <div className="rl">{a.category || a.agent_type}</div>
+                </div>
+                <div className={`wl ${a.live_status === 'online' ? 'busy' : ''}`}><b>{a.ticket_count}</b><br />tickets</div>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Activity Timeline — real, chronological ProofDesk ticket events across
+            every Live Agent above. Driven ONLY by real ticket data (see
+            liveAgentsService.ts) — never fabricated for the static Directors, so
+            this is correctly empty/Reese-only today, the first agent on this path. */}
+        <section className="wf-card" style={{ marginTop: 16 }}>
+          <div className="wf-lab">Activity Timeline</div>
+          {liveAgentActivity.length === 0 ? (
+            <div className="wf-muted">No activity yet.</div>
+          ) : (
+            liveAgentActivity.map((ev) => (
+              // Clickable through to the ticket — reuses the exact same route
+              // pattern AgentDetailPage.tsx's Ticket activity table already uses
+              // (`/admin/tickets?open=<id>`), matching the Live Agents Link 20
+              // lines above rather than inventing a second navigation pattern.
+              <Link
+                to={`/admin/tickets?open=${ev.ticket_id}`}
+                className="wf-msg"
+                key={ev.ticket_id}
+                style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
+              >
+                <div className="rt">{ev.agent_name} · TK-{ev.ticket_number ?? '—'} · {ev.occurred_at ? fmtCentralDateTime(ev.occurred_at) : ''}</div>
+                <div className="sb" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {ev.title}
+                  <StatusBadge label={getTicketTypeLabel(ev.type)} tone={getTicketTypeTone(ev.type)} />
+                </div>
+                <div className="wf-muted">{ev.status}</div>
+              </Link>
+            ))
+          )}
+        </section>
 
         {/* Communication + analytics */}
         <div className="wf-grid" style={{ marginTop: 16 }}>

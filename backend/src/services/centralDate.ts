@@ -90,3 +90,109 @@ export function convertTo24h(timeStr: string): string {
 export function classInstant(sessionDate: string, rawTime: string): Date {
   return centralWallClockToInstant(new Date(`${sessionDate}T${convertTo24h(rawTime)}:00Z`));
 }
+
+/**
+ * A class's stored time rendered for a human, e.g. ("2026-08-10", "18:30:00")
+ * → "6:30 PM CDT".
+ *
+ * The zone suffix is DERIVED from the session's own date, never hardcoded, for
+ * two reasons. First, the reminder email used to append a literal " ET" to the
+ * raw stored string, producing "18:30:00 ET" for a class that actually starts
+ * 6:30 PM Central — reported by staff 2026-08-11. Second, a hardcoded "CST" is
+ * wrong for most of the teaching year: Central is CDT from March to November,
+ * so the label has to follow DST the way the scheduling math already does.
+ *
+ * Pure. Returns the unformatted input if the time cannot be parsed, so a
+ * malformed row degrades to visible-but-ugly rather than to a wrong time.
+ * Note this deliberately does NOT lean on convertTo24h's '10:00' fallback:
+ * that default is safe for scheduling math (which needs *some* instant) but
+ * not for a label, where it would confidently announce a class at 10:00 AM
+ * that is not at 10:00 AM.
+ */
+export function formatCentralClock(sessionDate: string, rawTime: string): string {
+  if (!sessionDate || !rawTime) return rawTime || '';
+  if (!/^\d{1,2}:\d{2}(?::\d{2})?\s*(AM|PM)?$/i.test(rawTime.trim())) return rawTime;
+  const instant = classInstant(sessionDate, rawTime);
+  if (Number.isNaN(instant.getTime())) return rawTime;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: CENTRAL_TZ,
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(instant);
+}
+
+/**
+ * How near a class is, in words, relative to `nowMs` — "Today", "Tomorrow", or a
+ * named day for anything further out.
+ *
+ * This is the DAY half of the same defect formatCentralClock fixed above. The
+ * reminder email hardcoded the word "Tomorrow" for every non-1-hour reminder,
+ * because the sender assumed the "24-hour reminder" fires 24 hours out. It does
+ * not: schedulerService sweeps a ROLLING window (`now < session <= now+24h`) and
+ * the send is armed by an in-process Set, so any backend restart on the day of a
+ * class re-arms it and the next sweep announces a class starting in nine hours
+ * as "Tomorrow". That is exactly what went out for Session 7 on 2026-08-13 —
+ * sent 9:30 AM Central for a 6:30 PM Central class.
+ *
+ * Takes `session_date` (already a Central calendar date — that is how live class
+ * dates are stored) and compares CALENDAR DAYS, not elapsed hours. A class 9
+ * hours out is "Today"; a class 20 hours out that crosses midnight is
+ * "Tomorrow". Both keys are parsed at UTC midnight purely to subtract them, so
+ * the arithmetic cannot drift across a DST boundary the way `+86400000` would.
+ *
+ * Pure. Returns "Upcoming" for an unparseable date rather than an empty string
+ * or a guess: an empty label would render "[Accelerator] : Session 7", and a
+ * guess would repeat the original defect of confidently naming the wrong day.
+ */
+export function sessionDayLabel(sessionDate: string, nowMs: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test((sessionDate || '').trim())) return 'Upcoming';
+  const sessionMs = Date.parse(`${sessionDate.trim()}T00:00:00Z`);
+  const todayMs = Date.parse(`${centralDateKey(nowMs)}T00:00:00Z`);
+  if (Number.isNaN(sessionMs) || Number.isNaN(todayMs)) return 'Upcoming';
+
+  const dayDiff = Math.round((sessionMs - todayMs) / 86400000);
+  if (dayDiff === 0) return 'Today';
+  if (dayDiff === 1) return 'Tomorrow';
+
+  // Past dates land here too (dayDiff < 0). A reminder should never fire for a
+  // past class, but naming the actual day is the safe failure: it is still true,
+  // where "Today"/"Tomorrow" would not be.
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC', // keys are already Central calendar dates; UTC avoids re-shifting them
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(sessionMs));
+}
+
+/**
+ * A raw instant (any ISO string, epoch, or Date — as stored in Postgres `TIMESTAMPTZ`
+ * columns across ProofDesk/Workforce OS) rendered for a human, e.g. "Aug 12, 3:00 PM
+ * CDT". DST-aware and labeled for the same reason formatCentralClock is: this
+ * codebase's admin/ticket surfaces used to render bare `.toISOString()` or the
+ * browser's own local timezone with no indication a conversion happened at all — see
+ * PROGRESS.md session CC-20260812-r9x3 ("ticket UX" fixes) for the concrete instance
+ * (a generated ticket summary embedding raw UTC as unlabeled prose). Unlike
+ * formatCentralClock (which takes a Central *wall-clock* pair because live-class times
+ * are stored that way), this takes a real instant directly — the shape most call sites
+ * in this codebase actually have (a `Date`/timestamptz column, not a wall-clock pair).
+ *
+ * Pure. Returns a safe, honest fallback string for null/invalid input rather than
+ * throwing or emitting "Invalid Date" — this function backs both UI display and
+ * AI-generated prose text, where a raw exception or "Invalid Date" leaking into a
+ * ticket summary would be worse than a plain-language fallback.
+ */
+export function formatCentralDateTime(d: Date | string | null | undefined): string {
+  if (!d) return 'an unknown time';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return 'an unknown time';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: CENTRAL_TZ,
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(date);
+}

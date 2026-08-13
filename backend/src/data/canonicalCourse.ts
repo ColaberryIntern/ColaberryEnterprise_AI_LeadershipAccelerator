@@ -158,9 +158,13 @@ const cohort: CohortDef = {
     'First run of the AI Systems Architect Accelerator. 12 weeks, two live sessions per week (Mon Architecture Day, Thu Build Day).',
   start_date: '2026-07-13', // Monday
   core_day: 'Monday',
-  core_time: '1:00–3:00 PM ET',
+  // Central, not Eastern: live class times are stored and scheduled as Central
+  // wall-clock throughout (backend/src/services/centralDate.ts). Seeding a
+  // cohort as Eastern made every zone-aware surface label the same class an
+  // hour off.
+  core_time: '1:00–3:00 PM CT',
   optional_lab_day: 'Thursday',
-  timezone: 'America/New_York',
+  timezone: 'America/Chicago',
   max_seats: 20,
 };
 

@@ -72,12 +72,12 @@ const ProjectWorkspaceDrawer: React.FC<Props> = ({ project, task, open, onClose 
     let cancelled = false;
     setRepoError(null);
     setRepoLoading(true);
-    getWorkspaceRepo()
+    getWorkspaceRepo(project.id)
       .then((r) => { if (!cancelled) setRepo(r); })
       .catch(() => { if (!cancelled) setRepo(null); }) // no backend/auth → stay unprovisioned
       .finally(() => { if (!cancelled) setRepoLoading(false); });
     return () => { cancelled = true; };
-  }, [open]);
+  }, [open, project.id]);
 
   const onNotesChange = useCallback((v: string) => {
     setNotes(v);
@@ -93,27 +93,27 @@ const ProjectWorkspaceDrawer: React.FC<Props> = ({ project, task, open, onClose 
     setRepoError(null);
     setRepoBusy(true);
     try {
-      const r = await provisionWorkspaceRepo(ghLogin.trim());
+      const r = await provisionWorkspaceRepo(project.id, ghLogin.trim());
       setRepo(r);
     } catch (err: any) {
       setRepoError(err?.response?.data?.error || 'Could not create your repo. Check the username and try again.');
     } finally {
       setRepoBusy(false);
     }
-  }, [ghLogin]);
+  }, [ghLogin, project.id]);
 
   const doSync = useCallback(async () => {
     setRepoError(null);
     setRepoBusy(true);
     try {
-      const r = await syncWorkspaceRepo();
+      const r = await syncWorkspaceRepo(project.id);
       setRepo(r);
     } catch (err: any) {
       setRepoError(err?.response?.data?.error || 'Sync failed. Make sure you have pushed your work.');
     } finally {
       setRepoBusy(false);
     }
-  }, []);
+  }, [project.id]);
 
   // The workspace must NEVER open for a blocked task (dependency gate). The
   // interior already refuses to resolve one, but guard here too (defense in depth).

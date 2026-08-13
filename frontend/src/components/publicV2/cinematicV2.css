@@ -1,0 +1,544 @@
+/* ============================================================================
+   cinematicV2.css -- the visual layer, ported from the approved prototype's
+   styles-cinematic.css.
+
+   WHY THIS FILE EXISTS
+   The React implementation shipped the governance and content layers faithfully
+   and dropped the visual layer entirely: zero icons, zero product imagery, no
+   motion, no depth. This restores it.
+
+   TOKEN SUBSTITUTIONS, because four prototype tokens do not exist in the real
+   design system and inventing them would fail silently at runtime:
+     --surface-info-subtle -> colour-mixed from --chart-1
+     --surface-ok-subtle   -> colour-mixed from --green-600
+     --surface-warn-subtle -> --amber-50
+     --amber-700           -> --status-warning
+   Verified present before use: --chart-1, --green-600/700, --amber-50,
+   --status-warning, --shadow-lg/xl, --font-display, --radius-lg.
+
+   MOTION IS OPT-IN, NOT OPT-OUT. Every animated element is fully visible with no
+   JS and no animation. During prototype review a reveal system that started at
+   opacity:0 stranded whole pages blank below the fold when the observer never
+   fired. Nothing here may hide content it is not certain to reveal.
+   ========================================================================== */
+
+/* --------------------------------------------------------- display face -- */
+
+/*
+ * Space Grotesk, self-hosted from the prototype (OFL-1.1, licence shipped
+ * alongside the woff2 in ./fonts/). Self-hosted rather than loaded from a font
+ * CDN, so this face adds no third-party request to a page that is asking the
+ * visitor for consent before it measures anything.
+ *
+ * CORRECTION, and it matters: self-hosting this face does NOT make the page
+ * third-party-free. `public/index.html` still loads Quicksand, Roboto and Roboto
+ * Mono from fonts.googleapis.com on every page in the app, V2 included, and it
+ * fires BEFORE the consent banner is answered -- which hands the visitor's IP
+ * and user-agent to Google regardless of what they then choose. That link is in
+ * a file shared with the live site, so removing it is a cutover decision rather
+ * than something to change from inside this task. Logged in PROGRESS.md.
+ *
+ * font-display: swap so headings render immediately in the fallback and reflow
+ * once, rather than leaving the hero blank while a 22KB file loads.
+ */
+@font-face {
+  font-family: 'Space Grotesk V2';
+  /* Relative, not /public: css-loader resolves url() at build time, so an
+     absolute public path fails the production build even though it would work
+     at runtime. Importing from src lets webpack fingerprint and emit it. */
+  src: url('./fonts/SpaceGrotesk-var.woff2') format('woff2-variations'),
+       url('./fonts/SpaceGrotesk-var.woff2') format('woff2');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+ * Scoped to the V2 shell ONLY. Overriding --font-display globally would change
+ * the typeface on the portal, admin and every live public page, which is not
+ * this task's business.
+ */
+.cbv2-shell {
+  /* Undefined in the design system, yet read by .cbv2-pagehero__lede and others,
+     which were each falling back to their own hardcoded hex. Defined once here. */
+  /* Measured: #a9b4c4 gave 4.26:1 on the berry step rows, under AA. Lifted for
+     every dark-ground use, not just this one. */
+  --text-on-inverse-muted: #ccd8e4;
+  --font-display: 'Space Grotesk V2', 'Roboto', system-ui, -apple-system, sans-serif;
+}
+
+/* ------------------------------------------------------------ icon tiles -- */
+
+.cbv2-ic { flex: 0 0 auto; }
+
+.cbv2-icon-tile {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  isolation: isolate;
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+}
+/* Inner highlight: gives the tile a lit edge instead of a flat fill. */
+.cbv2-icon-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+.cbv2-icon-tile--blue {
+  color: var(--chart-1);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--chart-1) 14%, transparent), transparent);
+}
+.cbv2-icon-tile--green {
+  color: var(--green-700);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--green-600) 16%, transparent), transparent);
+}
+.cbv2-icon-tile--amber {
+  color: var(--status-warning);
+  background: linear-gradient(145deg, var(--amber-50), transparent);
+}
+
+/* -------------------------------------------------- ambient hero field ---- */
+
+.cbv2-pagehero,
+.cbv2-hero { isolation: isolate; position: relative; }
+
+.cbv2-mesh {
+  position: absolute;
+  inset: -12% -6%;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(48px);
+  opacity: 0.9;
+}
+.cbv2-mesh i {
+  position: absolute;
+  border-radius: 50%;
+  display: block;
+  mix-blend-mode: screen;
+}
+.cbv2-mesh i:nth-child(1) {
+  width: 46%; height: 58%; left: 56%; top: -16%;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-cherry, #fb2832) 55%, transparent), transparent 70%);
+  animation: cbv2-drift1 20s ease-in-out infinite alternate;
+}
+.cbv2-mesh i:nth-child(2) {
+  width: 42%; height: 54%; left: -10%; top: 16%;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--chart-1) 50%, transparent), transparent 70%);
+  animation: cbv2-drift2 26s ease-in-out infinite alternate;
+}
+.cbv2-mesh i:nth-child(3) {
+  width: 34%; height: 44%; left: 26%; top: 58%;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--green-600) 42%, transparent), transparent 70%);
+  animation: cbv2-drift3 32s ease-in-out infinite alternate;
+}
+@keyframes cbv2-drift1 { to { transform: translate3d(-9%, 7%, 0) scale(1.12); } }
+@keyframes cbv2-drift2 { to { transform: translate3d(8%, -6%, 0) scale(1.15); } }
+@keyframes cbv2-drift3 { to { transform: translate3d(-6%, -9%, 0) scale(1.08); } }
+
+/* Faint engineering grid, so the hero reads as a system rather than a gradient. */
+.cbv2-gridlines {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 100%);
+}
+
+/* Content must sit above the ambient layers. */
+.cbv2-pagehero > .cbv2-wrap,
+.cbv2-hero > .cbv2-wrap { position: relative; z-index: 1; }
+
+/* ------------------------------------------------- product screenshots ---- */
+
+.cbv2-shot { display: block; width: 100%; height: auto; }
+
+.cbv2-shot-frame {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  background: var(--surface-card);
+}
+
+/* Perspective stack: the main capture tilts slightly toward the reader on hover. */
+.cbv2-shot-stack { position: relative; perspective: 1700px; }
+.cbv2-shot-stack__main {
+  position: relative;
+  z-index: 2;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  transform: rotateY(-7deg) rotateX(3deg) scale(0.985);
+  transform-origin: 50% 50%;
+  transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cbv2-shot-stack:hover .cbv2-shot-stack__main {
+  transform: rotateY(-3deg) rotateX(1.4deg) scale(1.012);
+}
+.cbv2-shot-stack__float {
+  position: absolute;
+  z-index: 3;
+  width: 60%;
+  right: -7%;
+  bottom: -10%;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  animation: cbv2-floaty 7s ease-in-out infinite alternate;
+}
+@keyframes cbv2-floaty { to { transform: translateY(-14px); } }
+
+.cbv2-shot-stack__badge {
+  position: absolute;
+  z-index: 4;
+  left: -5%;
+  top: 8%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface-card);
+  box-shadow: var(--shadow-lg);
+}
+.cbv2-shot-stack__badge .cbv2-pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green-600);
+  animation: cbv2-pulsering 2.4s ease-out infinite;
+}
+@keyframes cbv2-pulsering {
+  70% { box-shadow: 0 0 0 12px rgba(91, 166, 60, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(91, 166, 60, 0); }
+}
+.cbv2-shot-stack__badge b { font-size: 13px; color: var(--text-strong); display: block; line-height: 1.2; }
+.cbv2-shot-stack__badge span { font-size: 11px; color: var(--text-subtle); display: block; }
+
+@media (max-width: 1080px) {
+  .cbv2-shot-stack__main { transform: none; }
+  .cbv2-shot-stack__float,
+  .cbv2-shot-stack__badge { display: none; }
+}
+
+.cbv2-shot-caption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: var(--space-3);
+  font-size: var(--fs-caption);
+  color: var(--text-subtle);
+}
+
+/* ------------------------------------------------------- scroll reveals --- */
+
+/* Default state is VISIBLE. The animation only ever runs when JS has added
+   .cbv2-reveal-on to <html>, so a failed observer degrades to plain content
+   rather than a blank page. */
+.cbv2-rv { opacity: 1; transform: none; }
+
+html.cbv2-reveal-on .cbv2-rv {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 620ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+html.cbv2-reveal-on .cbv2-rv.is-in { opacity: 1; transform: none; }
+
+.cbv2-rv-1 { transition-delay: 0.07s; }
+.cbv2-rv-2 { transition-delay: 0.14s; }
+.cbv2-rv-3 { transition-delay: 0.21s; }
+.cbv2-rv-4 { transition-delay: 0.28s; }
+.cbv2-rv-5 { transition-delay: 0.35s; }
+.cbv2-rv-6 { transition-delay: 0.42s; }
+
+/* ---------------------------------------------------------- section glow -- */
+
+.cbv2-section--spot { position: relative; isolation: isolate; overflow: hidden; }
+.cbv2-section--spot::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 72%;
+  height: 150%;
+  left: 50%;
+  top: -25%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--chart-1) 8%, transparent), transparent 65%);
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------- big stat -- */
+
+.cbv2-bigstat {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2.75rem, 6vw, 4.5rem);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+}
+.cbv2-section--inverse .cbv2-bigstat,
+.cbv2-pagehero .cbv2-bigstat { color: var(--text-on-inverse, #fff); }
+
+/* ---------------------------------------------------------------- glass -- */
+
+.cbv2-glass {
+  background: color-mix(in srgb, var(--surface-card) 74%, transparent);
+  backdrop-filter: blur(14px);
+  border: var(--border-1) solid color-mix(in srgb, var(--text-strong) 8%, transparent);
+  border-radius: var(--radius-lg);
+}
+.cbv2-section--inverse .cbv2-glass,
+.cbv2-pagehero .cbv2-glass {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* ------------------------------------------------------ reduced motion ----- */
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-mesh i,
+  .cbv2-shot-stack__float,
+  .cbv2-shot-stack__badge .cbv2-pulse { animation: none !important; }
+  .cbv2-shot-stack__main { transform: none !important; transition: none !important; }
+  html.cbv2-reveal-on .cbv2-rv {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* ------------------------------------------- ambient page heroes (CSS only) --
+
+   Every inner page hero gets the same depth treatment as the homepage, done
+   with pseudo-elements so no page component needs to carry decorative markup.
+   Both layers are behind content (.cbv2-wrap is already z-index 1) and neither
+   is announced to assistive technology, because a ::before cannot be.
+   ---------------------------------------------------------------------------- */
+
+.cbv2-pagehero { position: relative; overflow: hidden; }
+
+.cbv2-pagehero::before {
+  content: '';
+  position: absolute;
+  inset: -30% -10% auto -10%;
+  height: 190%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 52% at 82% 6%, color-mix(in srgb, var(--color-cherry, #fb2832) 34%, transparent), transparent 70%),
+    radial-gradient(40% 48% at 4% 40%, color-mix(in srgb, var(--chart-1) 30%, transparent), transparent 72%);
+  filter: blur(44px);
+  opacity: 0.85;
+}
+
+.cbv2-pagehero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.45;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 78% 70% at 40% 40%, #000 35%, transparent 100%);
+}
+
+/* Two-column page hero, for the inner pages that carry an image beside the copy. */
+.cbv2-pagehero__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: var(--space-9, 48px);
+  align-items: center;
+}
+@media (max-width: 980px) {
+  .cbv2-pagehero__split { grid-template-columns: minmax(0, 1fr); }
+  .cbv2-pagehero__split .cbv2-shot-frame { display: none; }
+}
+
+/* ------------------------------------------------------- split sections ---- */
+
+/* Copy beside an image. Used where a section would otherwise be a heading and a
+   button alone, which is what made the mid-page rhythm feel thin. */
+.cbv2-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--space-9, 48px);
+  align-items: center;
+}
+@media (max-width: 980px) {
+  .cbv2-split { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
+}
+
+/* Captions sit inside the framed shot, so they need the frame's padding. */
+.cbv2-shot-frame .cbv2-shot-caption {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-1) solid var(--border-subtle);
+}
+
+/* ============================================================================
+   D4 -- COLOUR AND LIGHT
+   Scored 5/10: cherry, white and greys alternating, no second voice. The brand
+   has three colours and the site was using one. Berry Blue is introduced as a
+   genuine second ground, the neutrals are warmed so white sections stop reading
+   as default, and the ambient light is given real range instead of a faint wash.
+   ========================================================================== */
+
+/* Warmed neutrals. A pure grey ground reads as unstyled; a few degrees toward
+   the accent reads as chosen. Scoped to the V2 shell only. */
+.cbv2-shell {
+  --cbv2-warm-sunken: color-mix(in srgb, var(--color-cherry, #fb2832) 2.5%, var(--surface-sunken));
+  --cbv2-warm-page: color-mix(in srgb, var(--color-cherry, #fb2832) 1.2%, var(--surface-card));
+}
+.cbv2-section--sunken { background: var(--cbv2-warm-sunken); }
+
+/* ---------------------------------------------------- berry section ground -- */
+
+/*
+ * The second voice. Used once, on the section carrying the central idea, so it
+ * lands as emphasis rather than decoration. Text colours are set explicitly
+ * because a light-on-dark section that inherits body colour is how the 1.03:1
+ * heading shipped during prototype review.
+ */
+.cbv2-section--berry {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Solid ground under the gradient: a fallback if gradients fail, and it gives
+     contrast tooling something real to measure instead of seeing through to the
+     page background. */
+  background-color: var(--blue-900);
+  background-image:
+    radial-gradient(120% 90% at 85% 0%, color-mix(in srgb, var(--blue-700) 55%, transparent), transparent 60%),
+    linear-gradient(165deg, var(--blue-900), var(--blue-800) 70%);
+  background-repeat: no-repeat;
+  color: var(--text-on-inverse, #fff);
+}
+/*
+ * Text colours are flipped at the TOKEN level, not per element.
+ *
+ * The first attempt set `.cbv2-section--berry h2 { color: ... }` and lost to the
+ * more specific `.cbv2-section__head h2` -- measured, not guessed: the heading
+ * computed rgb(26,26,26) on a rgb(26,57,71) ground, 1.43:1. Chasing selectors
+ * one at a time is how that recurs. Redefining the tokens means every descendant
+ * that already reads --text-strong / --text-muted flips automatically, including
+ * ones added later.
+ */
+.cbv2-section--berry {
+  --text-strong: var(--text-on-inverse, #ffffff);
+  /* Measured: #cddcea gave 4.26:1 on the step rows, just under AA. */
+  --text-body: #dfeaf4;
+  --text-muted: #dfeaf4;
+  --text-subtle: #a8bed2;
+  --border-default: rgba(255, 255, 255, 0.18);
+  --border-subtle: rgba(255, 255, 255, 0.12);
+}
+.cbv2-section--berry .cbv2-eyebrow { color: var(--blue-200, #bcd6e6); }
+
+/* Cards on the berry ground become glass rather than white blocks, so the
+   section reads as one surface with depth instead of a tray of tiles. */
+.cbv2-section--berry .cbv2-lane,
+.cbv2-section--berry .cbv2-card {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+}
+.cbv2-section--berry .cbv2-lane__d { color: var(--text-on-inverse-muted, #c3d2e4); }
+.cbv2-section--berry .cbv2-lane__n {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-on-inverse, #fff);
+}
+/* The convergence statement is the point of the section: give it the accent. */
+.cbv2-section--berry .cbv2-converge {
+  background: color-mix(in srgb, var(--color-cherry, #fb2832) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-cherry, #fb2832) 45%, transparent);
+}
+.cbv2-section--berry .cbv2-converge strong { color: var(--text-on-inverse, #fff); }
+
+/* A faint grid, as on the hero, so the two dark grounds belong to one system. */
+.cbv2-section--berry::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 80% at 70% 20%, #000 30%, transparent 100%);
+}
+
+/* ------------------------------------------------------ D1 -- hero light --- */
+
+/* Scored 7/10: composed but not arresting, because the ambient field was too
+   faint to read. Widen it, lift the opacity, and add a third source so the
+   light has direction rather than sitting as an even haze. */
+.cbv2-mesh { filter: blur(56px); opacity: 1; }
+.cbv2-mesh i:nth-child(1) { width: 58%; height: 72%; left: 50%; top: -22%; }
+.cbv2-mesh i:nth-child(2) { width: 52%; height: 64%; left: -14%; top: 10%; }
+.cbv2-mesh i:nth-child(3) { width: 44%; height: 56%; left: 22%; top: 54%; }
+
+/* A directional wash across the hero, warm at the top right where the product
+   capture sits, so the screenshot looks lit rather than pasted on. */
+.cbv2-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(90% 70% at 78% 18%,
+    color-mix(in srgb, var(--color-cherry, #fb2832) 16%, transparent), transparent 62%);
+}
+
+/* Page heroes get the same treatment at lower strength. */
+.cbv2-pagehero::before { opacity: 1; filter: blur(52px); }
+
+/* ------------------------------------------------ D3 -- display type below -- */
+
+/* Scored 7/10: the display face earned its keep in the hero and nowhere else.
+   Section headings get real scale, so the page has a typographic spine. */
+.cbv2-section__head h2,
+.cbv2-section > .cbv2-wrap > h2 {
+  font-size: clamp(1.75rem, 3.2vw, 2.6rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/*
+ * The step rows inside each lane carry their own opaque light background from
+ * homeV2.css. The token flip above turned their text white, which put white on
+ * light grey at 1.13:1 -- measured, and worse than what it replaced. The rows
+ * become translucent here so the dark ground shows through and the flipped text
+ * lands on it.
+ */
+.cbv2-section--berry .cbv2-lane__steps li {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+/*
+ * Pre-existing, found by the same sweep: the hero badge's second line used
+ * --text-subtle on a white card at 3.36:1, below AA for small text. It sits on
+ * an opaque light badge, so it needs the muted token rather than the subtle one.
+ */
+.cbv2-shot-stack__badge span span,
+.cbv2-shot-stack__badge > span > span:last-child { color: var(--text-muted); }

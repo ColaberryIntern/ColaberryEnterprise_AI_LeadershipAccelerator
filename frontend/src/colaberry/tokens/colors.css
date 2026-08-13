@@ -149,6 +149,15 @@
   --status-warning:    var(--amber-500);
   --status-warning-bg: var(--amber-50);
 
+  /* Status — data-viz-extension tones, for cases beyond the 4 core semantic states
+     above (e.g. agent-generated ticket types). Sourced from the existing
+     theme-aware --chart-5/--chart-6 tokens (never a new hex value), same
+     color-mix() light-tint technique --surface-brand-subtle already uses. */
+  --status-violet:    var(--chart-5);
+  --status-violet-bg: color-mix(in srgb, var(--chart-5) 14%, var(--neutral-0));
+  --status-teal:       var(--chart-6);
+  --status-teal-bg:    color-mix(in srgb, var(--chart-6) 14%, var(--neutral-0));
+
   /* Focus ring */
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--blue-500) 45%, transparent);
 }

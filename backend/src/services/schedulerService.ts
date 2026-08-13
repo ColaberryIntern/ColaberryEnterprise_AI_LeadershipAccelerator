@@ -1990,12 +1990,64 @@ export function startScheduler(): void {
     cron.schedule('*/20 * * * *', () => {
       instrumentCronJob('AppPaymentReconcile', async () => {
         const { reconcileAppPayments } = await import('./appPaymentReconcileService');
-        await reconcileAppPayments({});
+        const summary = await reconcileAppPayments({});
+
+        // Healing via the checkout-window path means the WEBHOOK missed those payments.
+        // The reconcile succeeding is exactly why that stays invisible, so say it out
+        // loud rather than letting a broken primary path hide behind its safety net.
+        if (summary.linkedByCheckoutWindow > 0) {
+          const { emitAlert } = await import('./alertService');
+          await emitAlert({
+            type: 'warning',
+            severity: 6,
+            sourceType: 'system',
+            impactArea: 'revenue',
+            urgency: 'high',
+            title: 'PaySimple payments are being healed by reconcile, not the webhook',
+            description:
+              `The reconcile job linked ${summary.linkedByCheckoutWindow} payment(s) ` +
+              `($${(summary.linkedTotalCents / 100).toFixed(2)}) that the PaySimple webhook should have ` +
+              `activated on its own. Students were briefly left on the wrong access level. ` +
+              `Check webhook delivery and signature verification.`,
+            metadata: {
+              linked: summary.linked,
+              linkedByCheckoutWindow: summary.linkedByCheckoutWindow,
+              linkedTotalCents: summary.linkedTotalCents,
+            },
+          }).catch(() => {}); // alerting must never fail the reconcile
+        }
       }).catch((err) => {
         console.error('[Scheduler] App payment reconcile error:', err);
       });
     });
     console.log('[Scheduler] AppPaymentReconcile scheduled (*/20 * * * *)');
+
+    // Watch the webhook itself every 15 minutes. The reconcile above only notices a
+    // problem once a payment is already late; this catches a total rejection run
+    // (the 2026-08-12 shape) within minutes of it starting.
+    cron.schedule('*/15 * * * *', () => {
+      instrumentCronJob('PaySimpleWebhookHealth', async () => {
+        const { webhookHealthSnapshot, evaluateWebhookHealth } = await import('./paysimpleWebhookHealth');
+        const snapshot = webhookHealthSnapshot();
+        const verdict = evaluateWebhookHealth(snapshot);
+        if (!verdict.alert) return;
+
+        const { emitAlert } = await import('./alertService');
+        await emitAlert({
+          type: verdict.type,
+          severity: verdict.severity,
+          sourceType: 'system',
+          impactArea: 'revenue',
+          urgency: verdict.type === 'critical' ? 'immediate' : 'high',
+          title: verdict.title,
+          description: verdict.description,
+          metadata: { ...snapshot },
+        });
+      }).catch((err) => {
+        console.error('[Scheduler] PaySimple webhook health check error:', err);
+      });
+    });
+    console.log('[Scheduler] PaySimpleWebhookHealth scheduled (*/15 * * * *)');
   }
 
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
@@ -2322,8 +2374,10 @@ export function startScheduler(): void {
 
   // -- Accelerator Session Lifecycle --
 
-  // Session reminders: check every 30 minutes (with dedup to prevent spam)
-  const sentReminders = new Set<string>(); // Track "sessionId-type" to prevent re-sending
+  // Session reminders: check every 30 minutes. Arming is persisted on the session
+  // row (reminder_24h_sent_at / reminder_1h_sent_at), NOT in process memory: this
+  // used to be an in-process Set, so every deploy re-armed both sends and the next
+  // sweep re-mailed the whole cohort — see ensureSessionReminderSchema.ts.
   cron.schedule('*/30 * * * *', () => {
     instrumentCronJob('SessionReminders', async () => {
       // 24-hour reminders
@@ -2334,8 +2388,7 @@ export function startScheduler(): void {
         await ensureSessionMeetLink(session).catch((err: any) =>
           console.error(`[Scheduler] Meet link ensure failed for session ${session.id}:`, err.message)
         );
-        const dedupKey = `${session.id}-24h`;
-        if (sentReminders.has(dedupKey)) continue; // Already sent this reminder
+        if (session.reminder_24h_sent_at) continue; // Already sent, and it survives restarts
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
@@ -2353,7 +2406,7 @@ export function startScheduler(): void {
           }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
-          sentReminders.add(dedupKey);
+          await session.update({ reminder_24h_sent_at: new Date() });
           console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
         }
       }
@@ -2361,8 +2414,7 @@ export function startScheduler(): void {
       // 1-hour reminders
       const upcoming1h = await getUpcomingSessions(1);
       for (const session of upcoming1h) {
-        const dedupKey1h = `${session.id}-1h`;
-        if (sentReminders.has(dedupKey1h)) continue; // Already sent this reminder
+        if (session.reminder_1h_sent_at) continue; // Already sent, and it survives restarts
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
@@ -2380,7 +2432,7 @@ export function startScheduler(): void {
           }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
-          sentReminders.add(dedupKey1h);
+          await session.update({ reminder_1h_sent_at: new Date() });
           console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
         }
       }

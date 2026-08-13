@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { resolveExplorerGrowthFlags } from './explorerGrowthFlags';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -124,6 +125,12 @@ export const env = {
   enableVisitorTracking: process.env.ENABLE_VISITOR_TRACKING === 'true',
   visitorSessionTimeoutMinutes: parseInt(process.env.VISITOR_SESSION_TIMEOUT || '30', 10),
   enableChat: process.env.ENABLE_CHAT === 'true',
+  // Explorer Growth OS (docs/EXPLORER_GROWTH_OS_PLAN.md §34). Resolved by the
+  // pure helper rather than inlined here so the nine flags have ONE parse site
+  // and cannot drift between this object and the accessor module. Every flag is
+  // default OFF; sub-flags are subordinate to the master and must be read via
+  // isExplorerFeatureEnabled(), never directly.
+  explorerGrowth: resolveExplorerGrowthFlags(process.env),
   // Today Timeline v2 — the never-ending engagement feed (Phase 1). Default OFF;
   // set TODAY_FEED_V2_ENABLED=true to expose GET /api/portal/runtime/today.
   todayFeedV2Enabled: process.env.TODAY_FEED_V2_ENABLED === 'true',
@@ -157,6 +164,31 @@ export const env = {
   // documented in .env.example, matching the FEED_CONTROL_ENABLED/
   // CAPE_LEARNING_VALUE_RANKER_ENABLED inline-only convention.
   feedControlTypeSuppressionEnabled: process.env.FEED_CONTROL_TYPE_SUPPRESSION_ENABLED === 'true',
+  // Feed Control ambient-provider suppression + backfill — extends the same
+  // Freq cap/Cooldown fields Ali already edits on the Feed Control board (gear
+  // icon) to blog/podcast/testimonial, which today are never read by
+  // ambientPool.ts/extendFeed()'s ambient path (see ambientTypeExposureService.ts).
+  // Paired with a cross-type slot backfill so suppressing an over-represented
+  // provider gives its slot to a sibling evergreen type's genuine surplus
+  // instead of just shrinking the page. Distinct from
+  // feedControlTypeSuppressionEnabled (anchored types) — independently
+  // rollback-able. Default OFF everywhere including production — flag-off keeps
+  // extendFeed() byte-identical to before. Not documented in .env.example,
+  // matching the inline-only convention for this flag family.
+  feedControlAmbientSuppressionEnabled: process.env.FEED_CONTROL_AMBIENT_SUPPRESSION_ENABLED === 'true',
+  // Today daily auto-refresh — once per Central-time calendar day, a student's
+  // Today feed opportunistically tops up with a small batch of already-generated
+  // content BEFORE serving, instead of only extending when the student scrolls
+  // past everything already materialized (see todayDailyRefreshService.ts). Zero
+  // new generation cost: only surfaces content the intel-pipeline crons already
+  // produced on their own independent, capped daily budget. Default OFF
+  // everywhere including production — flag-off keeps getTodayPage() byte-identical
+  // to before. Not documented in .env.example, matching the FEED_CONTROL_ENABLED/
+  // CAPE_LEARNING_VALUE_RANKER_ENABLED inline-only convention.
+  todayDailyRefreshEnabled: process.env.TODAY_DAILY_REFRESH_ENABLED === 'true',
+  // Bounded top-up size for the above — kept small and tunable so the feature
+  // stays "economical" (Ali's own requirement) without a redeploy to retune it.
+  todayDailyRefreshTopupSize: Number(process.env.TODAY_DAILY_REFRESH_TOPUP_SIZE || 4),
   // CAPE Phase 4 — the learning-value ranker (design doc §9, §16 Phase 4). Reorders
   // the ANCHORED candidate queue in todayFeedComposer.ts by an explainable
   // skill-gap/prerequisite/goal-fit score instead of raw gatherAnchored() order.

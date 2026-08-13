@@ -4,6 +4,7 @@ import { getTestOverrides, getSetting } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { formatCentralClock, sessionDayLabel } from './centralDate';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -1241,12 +1242,17 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
     return;
   }
 
-  const urgency = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
+  // Computed ONCE and threaded into the body, so the subject line and the banner
+  // inside the email can never disagree about which day the class is — two
+  // independent Date.now() reads could straddle midnight and do exactly that.
+  const urgency = data.isOneHour
+    ? 'Starting in 1 Hour'
+    : sessionDayLabel(data.sessionDate, Date.now());
   const r = await resolveEmailRecipient(
     data.to,
     `[Accelerator] ${urgency}: Session ${data.sessionNumber} - ${data.sessionTitle}`
   );
-  const html = buildSessionReminderHtml(data);
+  const html = buildSessionReminderHtml(data, urgency);
   const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
@@ -1260,8 +1266,7 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
   console.log(`[Email] Session reminder sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
-function buildSessionReminderHtml(data: SessionReminderData): string {
-  const urgencyLabel = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
+function buildSessionReminderHtml(data: SessionReminderData, urgencyLabel: string): string {
   const materialsHtml = data.materialsJson?.length
     ? `<h2>Session Materials</h2><ul>${data.materialsJson.map((m: any) => `<li><a href="${m.url}">${m.title || m.url}</a></li>`).join('')}</ul>`
     : '';
@@ -1293,7 +1298,7 @@ function buildSessionReminderHtml(data: SessionReminderData): string {
   <div class="highlight">
     <strong>Session:</strong> #${data.sessionNumber} - ${data.sessionTitle}<br>
     <strong>Date:</strong> ${data.sessionDate}<br>
-    <strong>Time:</strong> ${data.startTime} ET
+    <strong>Time:</strong> ${formatCentralClock(data.sessionDate, data.startTime)}
   </div>
 
   ${data.meetingLink ? `<p><a href="${data.meetingLink}" class="cta">Join Session</a></p>` : '<p><em>Meeting link will be shared before the session starts.</em></p>'}

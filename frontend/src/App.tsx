@@ -5,6 +5,17 @@ import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
 import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
+import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
+import HomeV2 from './pages/publicV2/HomeV2';
+import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
+import PlatformV2 from './pages/publicV2/PlatformV2';
+import ProofV2 from './pages/publicV2/ProofV2';
+import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
+import TryV2 from './pages/publicV2/TryV2';
+import PrivacyV2 from './pages/publicV2/PrivacyV2';
+import SignupV2 from './pages/publicV2/SignupV2';
+import PricingV2 from './pages/publicV2/PricingV2';
+import StoriesV2 from './pages/publicV2/StoriesV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -39,6 +50,22 @@ function App() {
         {adminRoutes}
         {portalRoutes}
         {referralRoutes}
+        {/* Website V2 preview. Mounted at /v2 so the rebuild is reviewable
+            without replacing the live public site. The cutover that makes this
+            the real "/" happens once V2 is complete and approved. */}
+        <Route path="/v2" element={<PublicLayoutV2 />}>
+          <Route index element={<HomeV2 />} />
+          <Route path="services" element={<ServicesV2 />} />
+          <Route path="services/:slug" element={<ServiceDetailV2 />} />
+          <Route path="platform" element={<PlatformV2 />} />
+          <Route path="proof" element={<ProofV2 />} />
+          <Route path="lab" element={<OpportunityLabV2 />} />
+          <Route path="try" element={<TryV2 />} />
+          <Route path="privacy" element={<PrivacyV2 />} />
+          <Route path="start" element={<SignupV2 />} />
+          <Route path="pricing" element={<PricingV2 />} />
+          <Route path="stories" element={<StoriesV2 />} />
+        </Route>
         <Route element={<PublicLayout />}>
           {publicRoutes}
         </Route>

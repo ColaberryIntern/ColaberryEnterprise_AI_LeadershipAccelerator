@@ -4,6 +4,8 @@ import {
   SubscriptionView, PlanId,
 } from '../../../services/subscriptionApi';
 import { formatClassDate } from '../../../services/portalEnrollmentApi';
+import { trackEvent } from '../../../utils/tracker';
+import { markOncePerSession } from '../../../utils/oncePerSession';
 
 /**
  * SubscriptionSection — the Settings billing block.
@@ -54,6 +56,15 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
   const onChoose = async (plan: PlanId) => {
     if (busy || waiting) return;
     setBusy(true);
+    // Explorer Growth OS §6.3 friction. Checkout is a PaySimple HOSTED redirect,
+    // so the app never observes the payment failing — only that an attempt was
+    // made. Pairing this with enrollments.payment_status is what makes
+    // "tried to pay and did not complete" derivable at all; inventing a
+    // client-side payment_failed here would be inventing an event this flow
+    // cannot produce.
+    if (markOncePerSession(`payment_attempt:${plan}`)) {
+      trackEvent('payment_attempt', { plan });
+    }
     // Open the tab SYNCHRONOUSLY, in direct response to the click, before any
     // await. Once window.open() happens after an async gap (even a fast one),
     // most browsers no longer treat it as tied to the user gesture and the

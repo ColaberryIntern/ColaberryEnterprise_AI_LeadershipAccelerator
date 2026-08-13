@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import api from '../utils/api';
 import { getUTMPayloadFields } from '../services/utmService';
+import { trackEvent } from '../utils/tracker';
+import { markOncePerSession } from '../utils/oncePerSession';
 import StrategyCallModal from '../components/StrategyCallModal';
 import { Card } from '../colaberry/components/core/Card';
 import { Button } from '../colaberry/components/core/Button';
@@ -76,10 +78,21 @@ function EnrollPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Explorer Growth OS §6.2 tier-3 intent. Fires on the first real field
+  // interaction, NOT on mount — on mount it would emit for every page view and
+  // become a tier-1 view signal wearing a tier-3 label, corrupting the
+  // HIGH_INTENT gate that decides who gets contacted.
+  const signalFormStart = (): void => {
+    if (markOncePerSession('form_start:enroll')) {
+      trackEvent('form_start', { form: 'enroll' });
+    }
+  };
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+    signalFormStart();
     setFormData({ ...formData, [name]: value });
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });

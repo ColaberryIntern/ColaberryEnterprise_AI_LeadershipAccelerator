@@ -8,6 +8,7 @@ import {
   roster, office, briefing, runDailyMeeting, listMeetings,
   listTasks, createTask, updateTask, listMessages, review, analytics,
 } from '../services/workforce/workforceService';
+import { listLiveAgents, listLiveAgentActivity } from '../services/workforce/liveAgentsService';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -48,4 +49,16 @@ export async function handleReview(req: Request, res: Response, next: NextFuncti
 }
 export async function handleAnalytics(_req: Request, res: Response, next: NextFunction) {
   try { res.json(await analytics()); } catch (e) { fail(res, e, next); }
+}
+
+// Reese Phase 4 (Workforce integration) — real, DB-backed AiAgent rows built via
+// the agentBlueprint pattern, distinct from the static AI_ORG director roster above.
+export async function handleListLiveAgents(_req: Request, res: Response, next: NextFunction) {
+  try { res.json({ agents: await listLiveAgents() }); } catch (e) { fail(res, e, next); }
+}
+export async function handleListLiveAgentActivity(req: Request, res: Response, next: NextFunction) {
+  try {
+    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
+    res.json({ activity: await listLiveAgentActivity(Number.isFinite(limit) ? limit : undefined) });
+  } catch (e) { fail(res, e, next); }
 }

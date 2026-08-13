@@ -49,6 +49,13 @@ const VALID_EVENT_TYPES = [
   'demo_to_input_focus',
   'demo_watch_click',
   'demo_industry_click',
+  // Explorer Growth OS §6.3 friction (EPIC 2). Checkout is a PaySimple hosted
+  // redirect, so the app only ever observes the ATTEMPT; "attempted and did not
+  // complete" is derived by pairing this with enrollments.payment_status rather
+  // than by a client-side failure event the hosted flow cannot produce.
+  // The ingest rejects unknown types, so without this entry the signal would be
+  // emitted by the client and silently dropped here.
+  'payment_attempt',
 ] as const;
 
 function extractReferrerDomain(referrerUrl?: string): string | undefined {

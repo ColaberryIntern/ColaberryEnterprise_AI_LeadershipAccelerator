@@ -50,11 +50,48 @@ jobs:
             echo "Merge conflict detected — will open a PR for manual review."
           fi
 
-      - name: Open PR for manual review (conflict path)
+      # Idempotency guard. Without this, every push to main opens ANOTHER
+      # identical conflict PR: the branch is always cut from origin/main, so
+      # each one is the same unresolvable merge wearing a new number. That is
+      # how 56 open PRs accumulated between 2026-08-07 and 2026-08-11 while the
+      # underlying main/staging divergence went unresolved. Opening a duplicate
+      # tells no one anything the first PR did not already say, and it buries
+      # real PRs in the list.
+      - name: Look for an already-open sync PR
         if: steps.check.outputs.behind != '0' && steps.merge.outputs.result == 'conflict'
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NUM=$(gh pr list --base staging --state open \
+                  --search "chore: sync main to staging in:title" \
+                  --json number --jq '.[0].number // empty')
+          echo "number=$NUM" >> "$GITHUB_OUTPUT"
+          if [ -n "$NUM" ]; then
+            echo "An open sync PR already exists: #$NUM. Will comment instead of opening another."
+          else
+            echo "No open sync PR. Will open one."
+          fi
+
+      # A conflict that is already reported does not need a new PR; it needs the
+      # existing one to stay current. Comment on it so the thread shows the
+      # divergence is still growing, and keep the PR count at one.
+      - name: Note the new conflict on the existing PR
+        if: steps.existing.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.sha }}
+          BEHIND: ${{ steps.check.outputs.behind }}
+        run: |
+          gh pr comment "${{ steps.existing.outputs.number }}" --body \
+            "Still conflicting as of commit \`$SHA\`. Staging is now **$BEHIND commits behind main**. This PR remains the single tracking item for the divergence; no duplicate has been opened."
+
+      - name: Open PR for manual review (conflict path)
+        if: steps.existing.outputs.number == '' && steps.merge.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          BEHIND: ${{ steps.check.outputs.behind }}
         run: |
           BRANCH="sync/main-to-staging-$(date +%Y%m%d-%H%M)"
           git checkout -b "$BRANCH" origin/main
@@ -63,4 +100,4 @@ jobs:
             --base staging \
             --head "$BRANCH" \
             --title "chore: sync main to staging (conflict - manual review needed)" \
-            --body "Automated sync of main to staging detected merge conflicts and could not auto-merge. Action required: Kes resolves conflicts and merges this PR before cutting any new feature branches. Triggered by commit $SHA."
+            --body "Automated sync of main to staging detected merge conflicts and could not auto-merge. Staging is $BEHIND commits behind main. Action required: resolve the divergence and merge before cutting any new feature branches. Triggered by commit $SHA. This workflow will not open a second PR while this one is open; it comments here on each further conflicting push instead."

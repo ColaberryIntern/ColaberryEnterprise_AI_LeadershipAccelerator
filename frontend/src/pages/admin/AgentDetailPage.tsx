@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getAgentDetail, AgentDetail } from '../../services/agentDetailApi';
-import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
+import { PageHeader, StatCard, SectionCard, StatusBadge } from '../../components/admin/shell';
+import { fmtCentralDateTime } from '../../utils/centralTime';
+import { timeAgo } from '../../components/admin/shell/trust';
+import { getTicketTypeLabel, getTicketTypeTone, getTicketStatusLabel, getTicketStatusTone } from '../../utils/ticketTypeMeta';
 
 // Agent Detail — Ali's requested transparency page: who this agent is, its real
 // system prompt, its real tools/capabilities, its live status, and its linked
@@ -149,12 +152,13 @@ export default function AgentDetailPage() {
                 <th>Priority</th>
                 <th>Type</th>
                 <th>Updated</th>
+                <th>Last activity</th>
               </tr>
             </thead>
             <tbody>
               {tickets.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-muted text-center py-3">No ticket activity yet.</td>
+                  <td colSpan={6} className="text-muted text-center py-3">No ticket activity yet.</td>
                 </tr>
               ) : (
                 tickets.map((t) => (
@@ -164,10 +168,11 @@ export default function AgentDetailPage() {
                         {t.ticket_number ? `#${t.ticket_number}` : ''} {t.title}
                       </Link>
                     </td>
-                    <td><span className="badge bg-light text-dark border">{t.status}</span></td>
+                    <td><StatusBadge label={getTicketStatusLabel(t.status)} tone={getTicketStatusTone(t.status)} /></td>
                     <td>{t.priority}</td>
-                    <td><code>{t.type}</code></td>
-                    <td>{t.updated_at ? new Date(t.updated_at).toLocaleString() : '—'}</td>
+                    <td><StatusBadge label={getTicketTypeLabel(t.type)} tone={getTicketTypeTone(t.type)} /></td>
+                    <td>{t.updated_at ? fmtCentralDateTime(t.updated_at) : '—'}</td>
+                    <td>{timeAgo(t.updated_at)}</td>
                   </tr>
                 ))
               )}

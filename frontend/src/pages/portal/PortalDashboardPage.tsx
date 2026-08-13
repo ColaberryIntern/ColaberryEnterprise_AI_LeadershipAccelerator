@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import { formatCentralSessionTime } from '../../utils/sessionTime';
 
 interface DashboardData {
   enrollment: any;
@@ -212,7 +213,7 @@ function PortalDashboardPage() {
                     #{next_session.session_number}: {next_session.title}
                   </h6>
                   <p className="text-muted small mb-3">
-                    {next_session.session_date} at {next_session.start_time} ET
+                    {next_session.session_date} at {formatCentralSessionTime(next_session.start_time, next_session.session_date)}
                   </p>
 
                   {/* Countdown Timer */}

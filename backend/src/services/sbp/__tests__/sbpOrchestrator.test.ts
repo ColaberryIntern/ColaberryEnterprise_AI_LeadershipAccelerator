@@ -28,6 +28,14 @@ jest.mock('../planStore', () => ({
 }));
 jest.mock('../repoWriter', () => ({ writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a) }));
 jest.mock('../materializeTasks', () => ({ materializePlanAsTasks: (...a: any[]) => mockMaterialize(...a) }));
+// publishBuild ends by setting the enrollment's active project, which pulls in
+// the real database config through a dynamic import. Left unmocked that loads
+// Sequelize inside the test run — slow (~500ms) and intermittently failing
+// under parallel suites (observed twice on 2026-08-13, passing in isolation
+// every time). The pointer write itself has its own test; here it is noise.
+jest.mock('../../../config/database', () => ({
+  sequelize: { query: jest.fn().mockResolvedValue([[{ id: 'enr-1' }], []]) },
+}));
 
 import { startBuild, publishBuild, getBuildState, buildBriefText } from '../sbpOrchestrator';
 import { BuildPlan } from '../planContract';
@@ -250,7 +258,17 @@ describe('publishBuild', () => {
 
   it('materializes even with NO repo — the plan must still be visible', async () => {
     await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo: null });
-    expect(mockMaterialize).toHaveBeenCalledWith(PROJECT, ENROLLMENT, goodPlan, {});
+    expect(mockMaterialize).toHaveBeenCalledWith(PROJECT, ENROLLMENT, goodPlan,
+      expect.objectContaining({ schedule: null }));
+  });
+
+  it('publishes without dates rather than failing when the cohort has no start date', async () => {
+    // A missing cohort start must cost the student their due dates, never their
+    // build. `schedule: null` is a normal outcome, not an error path.
+    await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo: null });
+    const ctx = mockMaterialize.mock.calls[0][3];
+    expect(ctx.schedule).toBeNull();
+    expect(mockPublishPlan).toHaveBeenCalled();
   });
 
   it('does not materialize a plan blocked on coverage', async () => {

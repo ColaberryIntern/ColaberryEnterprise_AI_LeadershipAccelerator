@@ -136,6 +136,36 @@ export function buildStoryPrompt(
       : ['_No requirement is linked to this story._']),
   ].join('\n'));
 
+  // ── 4b. THE PROJECT'S GUARANTEES — in EVERY prompt, not just the story that
+  // builds them. A student wiring up a calendar reader had no idea the whole
+  // project rested on "nothing is ordered without a person approving it", so
+  // nothing stopped them building a path around it. Any story can violate a
+  // guardrail; every story therefore has to know what they are.
+  const safety = plan.requirements.filter((r) => r.kind === 'SAFE');
+  const ownSafe = new Set(reqs.map((r) => r.id));
+  if (safety.length) {
+    sections.push([
+      '## Guardrails that apply to the WHOLE project',
+      'These hold regardless of which story you are on. If this task would break one,',
+      'stop and say so rather than working around it.',
+      '',
+      ...safety.map((r) => `- ${r.statement}${ownSafe.has(r.id) ? '  ← this story is where it gets built' : ''}`),
+    ].join('\n'));
+  }
+
+  // ── 4c. Why this project exists. A measurable target keeps "done" honest —
+  // without it a student optimises for the acceptance criteria alone and can
+  // ship something that passes every test and moves nothing.
+  const measures = plan.requirements.filter((r) => r.kind === 'NFR' && /\d/.test(r.statement));
+  if (measures.length) {
+    sections.push([
+      '## What this project is trying to move',
+      ...measures.map((r) => `- ${r.statement}`),
+      '',
+      'You are not being asked to hit these today. Know them so your choices point at them.',
+    ].join('\n'));
+  }
+
   // ── 5. How we build here ──────────────────────────────────────────────────
   sections.push([
     '## How we build here',
@@ -145,6 +175,26 @@ export function buildStoryPrompt(
     'call gets an explicit timeout and capped retries. Every side effect is idempotent —',
     'running it twice must not double-charge, double-email, or double-create.',
   ].join('\n'));
+
+  // ── 5b. Where this sits. Without it every story reads like the only story,
+  // and a student rebuilds what the previous one already delivered.
+  const all = [...plan.stories].sort((a, b) => a.id.localeCompare(b.id));
+  const here = all.findIndex((s) => s.id === story.id);
+  const before = all.slice(Math.max(0, here - 2), here);
+  const after = all.slice(here + 1, here + 3);
+  if (before.length || after.length) {
+    sections.push([
+      '## Where this sits in the build',
+      ...(before.length
+        ? ['Already specified before this one — reuse it, do not rebuild it:',
+           ...before.map((s) => `- ${s.id} · ${s.title}`)]
+        : ['This is the first story. Nothing exists yet — you are laying the foundation.']),
+      ...(after.length
+        ? ['', 'Coming next — leave room for it, but do NOT build it now:',
+           ...after.map((s) => `- ${s.id} · ${s.title}`)]
+        : ['', 'This is the last story in the plan.']),
+    ].join('\n'));
+  }
 
   // ── 6. Failure paths ──────────────────────────────────────────────────────
   if ((story.failure_paths ?? []).length) {
@@ -160,6 +210,22 @@ export function buildStoryPrompt(
     ...(hasRepo ? ['', `Then tick the matching boxes in ./docs/stories/${story.id}.md — the platform reads them to mark this story complete.`] : []),
   ].join('\n'));
 
+  // ── 7b. Stop & escalate. Taken from the house task-prompt format, which has
+  // always had it and these prompts never did: the only stop condition a
+  // student's session had was "acceptance passes". Everything else — a missing
+  // credential, an API that does not work the way the plan assumed — was an
+  // invitation to improvise, and improvising around a requirement is how a
+  // plan and a build quietly diverge.
+  sections.push([
+    '## Stop and ask me if',
+    '- A guardrail above would have to bend to finish this.',
+    '- The requirement turns out to be wrong, or impossible as written. Say so — do not',
+    '  silently build something adjacent that passes the tests.',
+    `- You need a credential, an account, or access to ${integrationNames(plan) || 'an external system'} that you do not have.`,
+    '- The acceptance criteria cannot be tested as written.',
+    '- You are about to change a file outside this story to make it pass.',
+  ].join('\n'));
+
   // ── 8. Definition of done ─────────────────────────────────────────────────
   sections.push([
     '## Definition of done',
@@ -167,6 +233,8 @@ export function buildStoryPrompt(
     '- No secrets in code, commits, or logs.',
     `- The commit message names the story: \`${story.id}: <what you did>\`. The platform reads that to track your progress.`,
     '- A junior developer can read the change and understand why it is correct.',
+    '- When you are finished, tell me your confidence as a percentage that this story is',
+    '  complete and correct, and what would raise it.',
   ].join('\n'));
 
   // ── 9. Working mode ───────────────────────────────────────────────────────
@@ -181,4 +249,20 @@ export function buildStoryPrompt(
 
   sections.push('Begin.');
   return sections.join('\n\n');
+}
+
+/**
+ * The real systems this project names, for the escalate-if line. CONSTRAINT
+ * requirements are exactly "the things that already exist and we must work
+ * with", so they are the ones a student can actually be blocked on.
+ */
+function integrationNames(plan: BuildPlan): string {
+  const names = plan.requirements
+    .filter((r) => r.kind === 'CONSTRAINT')
+    .map((r) => {
+      const m = r.statement.match(/\b(?:use|read|connect to|write to|access)\s+(?:the\s+)?([A-Z][\w. ]{2,28})/);
+      return m ? m[1].trim().replace(/\s+(to|for|from|and)$/i, '') : null;
+    })
+    .filter((x): x is string => Boolean(x));
+  return [...new Set(names)].slice(0, 4).join(', ');
 }

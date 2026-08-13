@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import MermaidDiagram from '../../visuals/MermaidDiagram';
+import { fmtCentralDateTime } from '../../../utils/centralTime';
 
 // ProofDesk Milestone 3 — Work Graph tab goes live (spec §15.3). M2 shipped this as
 // a static, no-fetch placeholder ("coming in a future milestone"); this wires it to
@@ -78,10 +79,6 @@ export function buildMermaidChart(workUnits: WorkUnit[], dependencies: WorkUnitD
   return lines.join('\n');
 }
 
-function formatExpiry(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
 interface ContentProps {
   ticketId: string;
   workUnits: WorkUnit[];
@@ -132,7 +129,7 @@ export function WorkGraphContent({ ticketId, workUnits, dependencies }: ContentP
               {u.assigned_agent_name && <span>Agent: {u.assigned_agent_name}</span>}
               {u.activeLease ? (
                 <span className="badge bg-info text-dark">
-                  Active lease: {u.activeLease.lease_owner} (expires {formatExpiry(u.activeLease.expires_at)})
+                  Active lease: {u.activeLease.lease_owner} (expires {fmtCentralDateTime(u.activeLease.expires_at)})
                 </span>
               ) : (
                 u.status === 'in_progress' && <span>No active lease</span>

@@ -28,6 +28,10 @@ export interface StudentTaskAttributes {
   fulfills?: any;
   release_key?: string | null;
   blocked_by?: string[] | null;   // story_ids this task waits on (walking-skeleton release gate)
+  /** Derived at publish from the cohort window and the plan's release weeks. */
+  due_on?: Date | string | null;
+  /** The FIRST due date this task ever had. Written once, never updated. */
+  due_baseline_on?: Date | string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -53,6 +57,8 @@ class StudentTask extends Model<StudentTaskAttributes> implements StudentTaskAtt
   declare fulfills: any;
   declare release_key: string | null;
   declare blocked_by: string[] | null;
+  declare due_on: Date | string | null;
+  declare due_baseline_on: Date | string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -85,6 +91,11 @@ StudentTask.init(
     fulfills: { type: DataTypes.JSONB, allowNull: true },
     release_key: { type: DataTypes.STRING(60), allowNull: true },
     blocked_by: { type: DataTypes.JSONB, allowNull: true },
+    // Without these two declared here, Sequelize silently DROPS them on write:
+    // the columns exist, the values are computed, and every task still lands
+    // with a null date. Found end-to-end on a real account, not in a test.
+    due_on: { type: DataTypes.DATEONLY, allowNull: true },
+    due_baseline_on: { type: DataTypes.DATEONLY, allowNull: true },
   },
   {
     sequelize,

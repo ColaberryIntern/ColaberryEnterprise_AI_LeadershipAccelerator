@@ -39,23 +39,37 @@ workspaceApi.interceptors.request.use((config) => {
   return config;
 });
 
-/** GET the current workspace repo state for the signed-in student. */
-export async function getWorkspaceRepo(): Promise<WorkspaceRepoView> {
-  const { data } = await workspaceApi.get<WorkspaceRepoView>('/api/portal/workspace/repo');
+// A repo belongs to a PROJECT, not to an enrollment (FR-037) — a student with
+// two projects has two repos. All three routes therefore require project_id,
+// and every caller here must pass it. It was missing when the backend was
+// re-keyed: the routes answered 400, the drawer's fail-soft turned that into
+// silence, and the whole "Your workspace repo" section rendered as nothing.
+
+/** GET the current workspace repo state for one project. */
+export async function getWorkspaceRepo(projectId: string): Promise<WorkspaceRepoView> {
+  const { data } = await workspaceApi.get<WorkspaceRepoView>(
+    '/api/portal/workspace/repo',
+    { params: { project_id: projectId } },
+  );
   return data;
 }
 
 /** Provision (idempotent) a private workspace repo and add the student as a push collaborator. */
-export async function provisionWorkspaceRepo(githubLogin: string): Promise<WorkspaceRepoView> {
+export async function provisionWorkspaceRepo(
+  projectId: string, githubLogin: string,
+): Promise<WorkspaceRepoView> {
   const { data } = await workspaceApi.post<WorkspaceRepoView>(
     '/api/portal/workspace/repo/provision',
-    { github_login: githubLogin },
+    { project_id: projectId, github_login: githubLogin },
   );
   return data;
 }
 
 /** Sync (pull) the student's repo — the portal never commits for them. */
-export async function syncWorkspaceRepo(): Promise<WorkspaceRepoView> {
-  const { data } = await workspaceApi.post<WorkspaceRepoView>('/api/portal/workspace/repo/sync');
+export async function syncWorkspaceRepo(projectId: string): Promise<WorkspaceRepoView> {
+  const { data } = await workspaceApi.post<WorkspaceRepoView>(
+    '/api/portal/workspace/repo/sync',
+    { project_id: projectId },
+  );
   return data;
 }

@@ -1,0 +1,115 @@
+/* ============================================================================
+   proofV2.css -- Proof Room.
+   Design-system tokens only; cbv2-* namespace only.
+
+   KNOWN COUPLING, recorded rather than relied on silently: this page uses
+   .cbv2-grid--2 and .cbv2-note, which are currently defined in servicesV2.css,
+   and .cbv2-grid--3 / .cbv2-lede / .cbv2-card, defined in homeV2.css. That
+   resolves today only because App.tsx imports every V2 page statically, so all
+   V2 stylesheets land in one bundle. If any V2 route is ever lazy-loaded, those
+   shared primitives must move into publicV2.css first or this page's layout
+   silently degrades. Not fixed here because relocating them touches files owned
+   by tasks 1.4 and 1.5.
+   ========================================================================== */
+
+/* ------------------------------------------------- evidence-class cards ---- */
+
+.cbv2-evcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.cbv2-evcard__meaning {
+  margin: 0;
+  color: var(--text-strong);
+  font-weight: 600;
+  line-height: 1.5;
+}
+.cbv2-evcard__rule {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.6;
+}
+
+/* --------------------------------------------------------- live counts ---- */
+
+.cbv2-proof-counts { margin-top: var(--space-8); }
+
+/* -------------------------------------------------------- withdrawn list -- */
+
+.cbv2-withdrawn {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  counter-reset: withdrawn;
+}
+@media (max-width: 860px) { .cbv2-withdrawn { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-withdrawn__item {
+  counter-increment: withdrawn;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-5);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+/* The numeral marks a count of withdrawn items, which is information the reader
+   is meant to total up -- it is not sequencing decoration. */
+.cbv2-withdrawn__item::before {
+  content: counter(withdrawn);
+  grid-row: 1 / span 2;
+  font-family: var(--font-mono);
+  font-size: var(--fs-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+  padding-top: 2px;
+}
+.cbv2-withdrawn__cat {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  color: var(--text-strong);
+  line-height: 1.35;
+}
+.cbv2-withdrawn__why {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+@media (max-width: 560px) {
+  .cbv2-withdrawn__item { grid-template-columns: minmax(0, 1fr); }
+  .cbv2-withdrawn__item::before { grid-row: auto; }
+}
+
+/* Evidence-class and gate cards lead with an icon tile. */
+.cbv2-evcard .cbv2-icon-tile { margin-bottom: var(--space-1); }
+
+/* ============================================================================
+   D7 -- the four evidence classes were a flat 2x2 of identical cards. They are
+   not equal in weight: "verified" is the standard the other three are measured
+   against, so it takes the full width and leads.
+   ========================================================================== */
+@media (min-width: 860px) {
+  .cbv2-evcards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-5);
+  }
+  .cbv2-evcards .cbv2-evcard:first-child {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-6);
+    background: linear-gradient(120deg,
+      color-mix(in srgb, var(--green-600) 8%, var(--surface-card)),
+      var(--surface-card) 55%);
+  }
+  .cbv2-evcards .cbv2-evcard:first-child .cbv2-evcard__meaning { font-size: var(--fs-body-lg); }
+}

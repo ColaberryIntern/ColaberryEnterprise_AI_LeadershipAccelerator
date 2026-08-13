@@ -17,6 +17,7 @@ import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
+import explorerSignalRoutes from './routes/explorerSignalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
@@ -41,6 +42,8 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
+import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
+import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // Student Build Pipeline. These two were dropped from server.ts when the
 // sponsor magic-link fix (c21cd66e) resolved a conflict in this file by
 // taking one side wholesale. Without them build_intake/build_plans are never
@@ -52,6 +55,7 @@ import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
@@ -101,6 +105,9 @@ app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
 app.use(capePortalRoutes);
+// Explorer Growth OS learner signal ingest (EPIC 2). Dark until
+// EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
+app.use(explorerSignalRoutes);
 app.use(capeAdminRoutes);
 app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
@@ -114,10 +121,20 @@ app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
 app.use(v1Routes);
-app.use(adminRoutes);
+
+// PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted
+// with no path prefix and chains many admin sub-routers that call `router.use(requireAdmin)`
+// with no path scope. Because of that, any request that doesn't match an earlier route
+// falls into adminRoutes and is 401'd ("Authentication required") by the first requireAdmin
+// guard before it can ever reach these public routes. Mounting them ahead of adminRoutes lets
+// their specific paths (/api/calendar/*, /api/strategy-prep/*, /api/t/*, /api/chat/*) match
+// first. This was the cause of the strategy-call booking 401 bug (see
+// reference_calendar_booking_401_bug). DO NOT move these below adminRoutes.
 app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
+
+app.use(adminRoutes);
 
 // OpenClaw tracked short URL redirect (public, no auth)
 app.get('/i/:tag', async (req, res) => {
@@ -2327,9 +2344,20 @@ async function start(): Promise<void> {
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
   // nullable ticket columns (idempotent DDL, shadow mode).
   await ensureWorkLedgerSchema();
+  // Explorer Growth OS — EPIC 1 (Foundation): 5 tables for the learner decision
+  // layer (idempotent DDL, additive only). Nothing reads or writes them until the
+  // EXPLORER_GROWTH_OS_ENABLED flag is on, which it is not by default.
+  await ensureExplorerGrowthSchema();
+  // D1 fix: page_events.lead_id. contextGraphService has always queried this
+  // column and it has never existed, so buildCompositeContext() throws and every
+  // campaign email silently falls back to the legacy prompt. Additive + nullable.
+  await ensurePageEventLeadId();
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
+  // Session-reminder arming columns on live_sessions. Must be ensured before the
+  // reminder cron starts, or the sweep falls back to re-sending on every deploy.
+  await ensureSessionReminderSchema();
   // ProofDesk Work Graph — Milestone 3 (Multi-Agent Work Graph): 3 work-graph tables
   // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
   // additive only).

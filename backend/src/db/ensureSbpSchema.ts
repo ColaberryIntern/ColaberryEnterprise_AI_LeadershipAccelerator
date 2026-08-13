@@ -49,6 +49,16 @@ export async function ensureSbpSchema(): Promise<void> {
     // The adaptive interview's Q&A. Added after the fixed users/data_sources/
     // done_definition columns, which only ever fit the three hardcoded questions
     // the wizard used to ask; those stay for older clients and existing rows.
+    // Task due dates. There was no date field of any kind on student_tasks, so
+    // a student could see their whole build and never learn when anything was
+    // due. Dates are derived at publish from the cohort window and the plan's
+    // own release weeks (see buildSchedule). `due_baseline_on` never changes
+    // after the first publish: a plan that quietly rewrites its own deadlines
+    // teaches the opposite of what a slipping project should teach.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS due_on DATE`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS due_baseline_on DATE`,
+    `CREATE INDEX IF NOT EXISTS idx_student_tasks_due ON student_tasks (due_on) WHERE due_on IS NOT NULL`,
+
     `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS answers JSONB`,
     `CREATE UNIQUE INDEX IF NOT EXISTS build_intake_unique_project ON build_intake (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_enrollment ON build_intake (enrollment_id)`,
@@ -90,6 +100,12 @@ export async function ensureSbpSchema(): Promise<void> {
 
 /** What ensureSbpSchema must have produced. Checked, not assumed. */
 const REQUIRED_TABLES = ['build_intake', 'build_plans'] as const;
+/** Columns added after their table's first release. Checked, not assumed. */
+const REQUIRED_COLUMNS = [
+  'build_intake.answers',
+  'student_tasks.due_on',
+  'student_tasks.due_baseline_on',
+] as const;
 const REQUIRED_INDEXES = [
   'build_intake_unique_project',
   'build_plans_unique_project_version',
@@ -115,6 +131,19 @@ export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[
     const foundIndexes: string[] = rows?.[0]?.indexes ?? [];
     for (const t of REQUIRED_TABLES) if (!foundTables.includes(t)) missing.push(`table:${t}`);
     for (const i of REQUIRED_INDEXES) if (!foundIndexes.includes(i)) missing.push(`index:${i}`);
+
+    // Columns added after a table's first release need checking separately:
+    // CREATE TABLE IF NOT EXISTS is a no-op on an existing table, so on any
+    // database that already had these tables the ALTERs above are the only
+    // thing that creates them — and a silently-skipped ALTER leaves the code
+    // writing to a column that is not there.
+    const [colRows]: any = await sequelize.query(
+      `SELECT table_name, column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = ANY($tables)`,
+      { bind: { tables: ['build_intake', 'student_tasks'] } },
+    );
+    const found = new Set((colRows ?? []).map((r: any) => `${r.table_name}.${r.column_name}`));
+    for (const c of REQUIRED_COLUMNS) if (!found.has(c)) missing.push(`column:${c}`);
   } catch (err: any) {
     console.warn('[DB] sbp schema post-check could not run:', err?.message);
     return { ok: false, missing: ['post-check-failed'] };

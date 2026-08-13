@@ -22,8 +22,13 @@ const mockTaskCreate = jest.fn();
 const mockGetOwnedProjectTree = jest.fn();
 const mockCreateProjectForEnrollment = jest.fn();
 
+const mockQuery = jest.fn();
+
 jest.mock('../../../config/database', () => ({
-  sequelize: { transaction: (...args: any[]) => mockTransaction(...args) },
+  sequelize: {
+    transaction: (...args: any[]) => mockTransaction(...args),
+    query: (...args: any[]) => mockQuery(...args),
+  },
 }));
 jest.mock('../../../models/Project', () => ({ __esModule: true, default: { findByPk: jest.fn() } }));
 jest.mock('../../../models/StudentTaskList', () => ({
@@ -80,6 +85,7 @@ const SKELETON_PAYLOAD = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockQuery.mockResolvedValue([[], []]); // no published build unless a test says so
   mockCreateProjectForEnrollment.mockResolvedValue({ id: PROJECT_ID });
   mockGetOwnedProjectTree.mockResolvedValue({ id: PROJECT_ID, lists: [] });
   // Run the callback with a stub transaction, mimicking sequelize.transaction.
@@ -192,5 +198,62 @@ describe('importProject — FR-013: one transaction, no partial project', () => 
     } as any);
 
     expect(update.mock.calls[0][0].status).toBe('complete');
+  });
+});
+
+describe('importProject refuses to overwrite a published build', () => {
+  /**
+   * MEASURED, 2026-08-13, production, on ali@colaberry.com's own account.
+   * A plan was published at 08:30:09 and became the active project. At
+   * 08:35:25 the portal mirrored the browser's localStorage — a DIFFERENT,
+   * older project — and because `createProjectForEnrollment` returns the
+   * ACTIVE project, all 18 published tasks were rewritten with the old
+   * project's content. Both plans number their stories STORY-001 upward and
+   * story_id is the identity key, so every single row matched and was
+   * overwritten. The published lists were left empty beside six new ones.
+   *
+   * Every student in the cohort would have hit this the moment they opened
+   * the portal after publishing.
+   */
+  const publishedBuild = () => mockQuery.mockResolvedValue([[{ '?column?': 1 }], []]);
+
+  it('writes nothing when the target project has a published plan', async () => {
+    publishedBuild();
+
+    await importProject(ENROLLMENT, SKELETON_PAYLOAD as any);
+
+    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(mockListFindOrCreate).not.toHaveBeenCalled();
+    expect(mockTaskFindOrCreate).not.toHaveBeenCalled();
+    expect(mockTaskCreate).not.toHaveBeenCalled();
+  });
+
+  it('still returns the project tree, so the portal renders the published plan', async () => {
+    publishedBuild();
+    mockGetOwnedProjectTree.mockResolvedValue({ id: PROJECT_ID, lists: [{ cluster: 'r0' }] });
+
+    const tree = await importProject(ENROLLMENT, SKELETON_PAYLOAD as any);
+
+    expect(tree).toEqual({ id: PROJECT_ID, lists: [{ cluster: 'r0' }] });
+    expect(mockGetOwnedProjectTree).toHaveBeenCalledWith(ENROLLMENT, PROJECT_ID);
+  });
+
+  it('asks about the project it is about to write, not the enrollment', async () => {
+    publishedBuild();
+
+    await importProject(ENROLLMENT, SKELETON_PAYLOAD as any);
+
+    const [sql, opts] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/build_plans/);
+    expect(sql).toMatch(/status = 'published'/);
+    expect(opts.bind).toEqual({ pid: PROJECT_ID });
+  });
+
+  it('imports normally when the project has no published plan', async () => {
+    // The legacy client-only projects this path was written for must still work.
+    await importProject(ENROLLMENT, SKELETON_PAYLOAD as any);
+
+    expect(mockTransaction).toHaveBeenCalled();
+    expect(mockTaskFindOrCreate).toHaveBeenCalledTimes(6);
   });
 });

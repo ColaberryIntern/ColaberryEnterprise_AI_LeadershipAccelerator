@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import { openSessionRecording } from '../../services/roomsApi';
+import { formatCentralSessionRange } from '../../utils/sessionTime';
 
 interface SessionItem {
   id: string;
@@ -88,7 +89,7 @@ function PortalSessionsPage() {
                         ) : session.title}
                       </h6>
                       <p className="text-muted small mb-0">
-                        {session.session_date} &middot; {session.start_time} - {session.end_time} ET
+                        {session.session_date} &middot; {formatCentralSessionRange(session.start_time, session.end_time, session.session_date)}
                       </p>
                     </div>
                     <div className="d-flex gap-2">
