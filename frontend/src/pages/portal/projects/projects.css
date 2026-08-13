@@ -58,6 +58,26 @@
 .pjw-pane .lead{margin:0 0 16px;color:var(--text-muted);font-size:15px}
 .pjw-label{font-size:13px;font-weight:700;color:var(--text-strong);display:block;margin:16px 0 8px}
 /* size picker */
+/* The interview: ONE question on screen, with the count visible so it reads as
+   finite. Seven boxes at once got form answers — short and hedged; one at a
+   time gets a sentence about their actual work. */
+.pjw-q{margin-top:4px}
+.pjw-qprog{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.pjw-qbar{flex:1;height:5px;border-radius:999px;background:var(--border-default);overflow:hidden}
+.pjw-qbar i{display:block;height:100%;background:var(--leaf,#5BA63C);transition:width .28s ease}
+@media(prefers-reduced-motion:reduce){.pjw-qbar i{transition:none}}
+
+/* Tappable example answers. Half of why someone new to AI can answer at all,
+   and where they discover what they are allowed to ask for. Tapping FILLS the
+   box rather than submitting, so the answer stays theirs to edit. */
+.pjw-sugs{margin-top:12px}
+.pjw-sugrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:7px}
+.pjw-sug{text-align:left;padding:8px 13px;border:1.5px solid var(--border-default);border-radius:999px;
+  background:var(--surface-page);color:var(--text-body);font-size:13.5px;line-height:1.35;cursor:pointer;
+  transition:border-color .15s ease,background .15s ease}
+.pjw-sug:hover{border-color:var(--leaf,#5BA63C);background:rgba(91,166,60,.07)}
+.pjw-sug:focus-visible{outline:2px solid var(--leaf,#5BA63C);outline-offset:2px}
+
 .pjw-sizes{display:flex;flex-direction:column;gap:10px;margin-top:6px}
 .pjw-size{display:flex;align-items:flex-start;gap:13px;text-align:left;width:100%;padding:14px 16px;border:1.5px solid var(--border-default);
   background:var(--surface-page);border-radius:var(--r-12);cursor:pointer;font-family:inherit;transition:.15s}

@@ -31,6 +31,14 @@ export interface IntakeQuestion {
   question: string;
   why: string;
   placeholder: string;
+  /**
+   * 2-4 concrete answers in the student's own domain, shown as chips they can
+   * tap to fill the box and then edit. This is what makes the interview
+   * answerable for someone new to AI, and it is where they discover a
+   * capability they did not know to ask for. Optional on the type so a plan
+   * generated before suggestions existed still parses.
+   */
+  suggestions?: string[];
 }
 
 export interface IntakeQuestionsResult {
@@ -79,7 +87,11 @@ function isQuestionShaped(v: unknown): v is IntakeQuestion {
     && typeof q.id === 'string' && q.id.length > 0
     && typeof q.question === 'string' && q.question.trim().length > 8
     && typeof q.why === 'string'
-    && typeof q.placeholder === 'string';
+    && typeof q.placeholder === 'string'
+    // Suggestions are optional on the wire (an older cached response has none)
+    // but must be strings when present — the UI renders them as buttons.
+    && (q.suggestions === undefined
+      || (Array.isArray(q.suggestions) && q.suggestions.every((x: unknown) => typeof x === 'string')));
 }
 
 /**

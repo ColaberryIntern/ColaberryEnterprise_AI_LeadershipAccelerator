@@ -16,6 +16,8 @@ import { coach, MentorMode } from '../runtime/mentorService';
 import StudentTask from '../../models/StudentTask';
 import Project from '../../models/Project';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface ProjectTaskCtx {
   id: string;
   title: string;
@@ -39,8 +41,16 @@ export async function loadOwnedTask(
 
   // `taskId` may be the row id or the story id — the portal links by story id
   // (STORY-000), which is what a student sees and what survives a republish.
-  const task: any = await StudentTask.findOne({ where: { project_id: projectId, story_id: taskId } })
-    ?? await StudentTask.findOne({ where: { project_id: projectId, id: taskId } });
+  //
+  // The `id` fallback is guarded on the value LOOKING like a uuid. Without that
+  // guard an unknown story id ("STORY-999") reached the uuid column, Postgres
+  // rejected it with `invalid input syntax for type uuid`, and the route
+  // answered 500 where it should have answered 404 — measured against
+  // production immediately after deploying this endpoint.
+  let task: any = await StudentTask.findOne({ where: { project_id: projectId, story_id: taskId } });
+  if (!task && UUID_RE.test(taskId)) {
+    task = await StudentTask.findOne({ where: { project_id: projectId, id: taskId } });
+  }
   if (!task) return null;
 
   return {

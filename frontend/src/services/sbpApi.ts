@@ -73,6 +73,11 @@ export interface IntakeQuestion {
   /** Why we're asking — shown under the field so the question isn't a black box. */
   why: string;
   placeholder: string;
+  /**
+   * 2-4 pickable example answers in the student's own domain. Optional because
+   * an older cached response has none — the UI must not assume they exist.
+   */
+  suggestions?: string[];
 }
 
 export interface IntakeQuestionsResult {
