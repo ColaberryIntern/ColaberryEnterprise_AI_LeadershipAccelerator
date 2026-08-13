@@ -48,18 +48,26 @@ export interface VideoCardRow {
   video_url: string;
 }
 
+/**
+ * `video_title` rather than `title` on purpose: this is the title YouTube
+ * reports for the video, which is a different thing from the card's own title
+ * and must not collide with it when the two are merged into an AuditResult.
+ * (They did collide — `string` vs `string | null` — and it failed the build.)
+ */
 export type ProbeOutcome =
-  | { state: 'OK'; channel: string | null; title: string | null }
+  | { state: 'OK'; channel: string | null; video_title: string | null }
   | { state: 'DEAD'; httpStatus: 404 }
   | { state: 'UNKNOWN'; error: string };
 
-export type AuditResult = Partial<VideoCardRow> & {
+export interface AuditResult extends Partial<VideoCardRow> {
   state: 'OK' | 'DEAD' | 'UNKNOWN' | 'SKIPPED';
   video_id?: string;
   note?: string;
   channel?: string | null;
+  video_title?: string | null;
   error?: string;
-};
+  httpStatus?: number;
+}
 
 /**
  * Accepts watch?v=, youtu.be/, /embed/ and /shorts/ forms. Returns null for a
@@ -98,7 +106,7 @@ export async function probe(videoId: string): Promise<ProbeOutcome> {
 
       if (res.status === 200) {
         const body = await res.json();
-        return { state: 'OK', channel: body.author_name ?? null, title: body.title ?? null };
+        return { state: 'OK', channel: body.author_name ?? null, video_title: body.title ?? null };
       }
       if (res.status === 404) {
         return { state: 'DEAD', httpStatus: 404 };

@@ -39,7 +39,7 @@ describe('probe', () => {
     await expect(probe('6wkFb2_cUik')).resolves.toEqual({
       state: 'OK',
       channel: 'Anthropic',
-      title: 'Tool use with the Claude 3 model family',
+      video_title: 'Tool use with the Claude 3 model family',
     });
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
@@ -78,7 +78,7 @@ describe('probe', () => {
     await expect(probe('h8gMhXYAv1k')).resolves.toEqual({
       state: 'OK',
       channel: 'IBM Technology',
-      title: 'What is Tool Calling?',
+      video_title: 'What is Tool Calling?',
     });
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
