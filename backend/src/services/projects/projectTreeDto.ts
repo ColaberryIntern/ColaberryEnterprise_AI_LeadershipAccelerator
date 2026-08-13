@@ -33,6 +33,16 @@ export interface ProjectTaskDto {
   // a due date with a time on it lands on the wrong day in another timezone.
   due_on: string | null;
   due_baseline_on: string | null;
+  /**
+   * When the platform confirmed this story is actually done, as opposed to
+   * `status` which is only what the student claims. Null means unverified, and
+   * unverified is what the points gate will read — so the portal needs this on
+   * the same payload it already renders the task from, not behind a second call
+   * nobody makes. Full ISO timestamp (not a date): unlike a due date, the
+   * instant of verification is a real point in time and the client decides how
+   * to display it.
+   */
+  verified_at: string | null;
 }
 
 export interface ProjectListDto {
@@ -98,6 +108,24 @@ function asDateOnly(v: unknown): string | null {
   return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
 }
 
+/**
+ * TIMESTAMPTZ columns come back from Sequelize as a Date, but a raw query, a
+ * JSON round-trip, or a cached row can hand over a string instead. Everything
+ * leaves here as one shape — an ISO-8601 string or null — because a DTO field
+ * that is sometimes a Date and sometimes a string is a field every consumer has
+ * to defend against, and `JSON.stringify` quietly papering over the difference
+ * is why nobody notices until something compares two of them.
+ *
+ * Anything unparseable becomes null rather than being passed through: this
+ * field will gate points, and a garbage value must read as "not verified", not
+ * as "verified at ???".
+ */
+function asIsoTimestamp(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null;
+  const d = v instanceof Date ? v : new Date(v as string | number);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 export function toTaskDto(t: Plain): ProjectTaskDto {
   return {
     id: String(t.id),
@@ -119,6 +147,7 @@ export function toTaskDto(t: Plain): ProjectTaskDto {
     blocked_by: asArray(t.blocked_by),
     due_on: asDateOnly(t.due_on),
     due_baseline_on: asDateOnly(t.due_baseline_on),
+    verified_at: asIsoTimestamp(t.verified_at),
   };
 }
 
