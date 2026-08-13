@@ -36,6 +36,13 @@ export type ProjectTask = {
   blockedBy?: string[];   // storyIds of prerequisite tasks that must be DONE first
   state: TaskState;
   due: TaskDue;
+  /**
+   * Points this task is worth, when the backend has said. Optional and never
+   * defaulted: the hero shows the badge only when a real number exists, because
+   * an invented one would be the dashboard lying on the first screen a student
+   * sees. Wired to points_config once story verification lands.
+   */
+  points?: number;
 };
 
 export type ProjectList = {
