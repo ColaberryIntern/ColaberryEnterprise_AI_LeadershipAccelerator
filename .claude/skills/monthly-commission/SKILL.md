@@ -5,6 +5,36 @@ description: Process the monthly Mentor/Instructor/SMI commission — starts fro
 
 # Monthly Commission (Mentor/Instructor/SMI)
 
+## Runbook (copy-paste)
+
+Set these two and the rest follows. Everything lands in one folder per month.
+
+```bash
+YM=2026-05; MON=May; YR=2026                     # the commission month
+DIR="/c/Users/ali_m/Downloads/$MON $YR Commission"
+REPO="/c/Users/ali_m/OneDrive/Business/Colaberry Novedea/AI Projects/Colaberry Enterprise AI Leadership Accelerator"
+ARCHIVE="/c/Users/ali_m/OneDrive/Business/Colaberry Novedea/Stats/Commissions/SMI Comm"
+mkdir -p "$DIR"
+
+# 1. Jackie's LATEST workbook -> $DIR/<YYYY>_<MM>_ColaberryTrainingCommissions_Original.xlsx
+#    (find the newest message first - she re-sends corrections under changed subjects)
+# 2. staff total + table image
+python "$REPO/scripts/commission/build_staff_png.py" \
+       "$DIR/${YR}_05_ColaberryTrainingCommissions_Original.xlsx" \
+       "$DIR/$MON $YR Staff Commission.png" "$MON"
+# 3-4. pipeline -> json   5. build the month tabs   (see the numbered table below)
+# 6. THE GATE - nothing sends unless this exits 0
+python "$REPO/scripts/commission/preflight.py" --month $YM --dir "$DIR"
+# 7. dry run, read the body, then send from inside accelerator-backend
+node "$REPO/scripts/commission/send_commission_email.js" --dir "$DIR"
+# 8. close the loop, then archive
+python "$REPO/scripts/commission/preflight.py" --month $YM --dir "$DIR" --record
+cp "$DIR/${YR}_05_SMI Commisions.xlsx" "$DIR/IPBC Group $MON $YR.xlsx" "$ARCHIVE/"
+```
+
+Keep the month folder path short. Windows still enforces a 260-character path limit and
+`openpyxl` fails on longer ones; `~/Downloads/<Mon> <Year> Commission` is well inside it.
+
 The recurring monthly payroll hand-off. It **always** starts with an email from
 `jackie@colaberry.com` (historically `mika@colaberry.com`) and **always** ends with one
 email from Ali to `accounting@colaberry.com`.
@@ -146,8 +176,28 @@ month, `Name = ALI`.
 | Named sales rep (not SMI, not Job Referral) | `TotalPaidMinus25Per × 0.05` |
 | Job Referral Sales Rep, or NULL | `(TotalPaid × 0.75) × 0.15` |
 
-Every month processed so far has sat in the bottom tier, which is the only reason a flat
-11.25% appeared to work. **A month clearing $20,000 changes the rate.** Let the SQL decide.
+Every month sent so far has sat in the bottom tier, which is the only reason a flat 11.25%
+appeared to work. **A month clearing $20,000 changes the rate.** Let the SQL decide; `preflight.py`
+cross-checks the figure against the tier and shouts when the tier moves.
+
+Measured 2026 (from CCPP on 2026-08-13) — note July:
+
+| Month | CompanyPaid | Tier | Effective | AliComm |
+|---|---|---|---|---|
+| Jan | $18,810.80 | 0.15 | 11.25% | $2,116.22 |
+| Feb | $16,952.80 | 0.15 | 11.25% | $1,907.19 |
+| Mar | $19,052.83 | 0.15 | 11.25% | $2,143.44 |
+| Apr | $18,466.26 | 0.15 | 11.25% | $2,077.45 |
+| May | $15,104.44 | 0.15 | 11.25% | $1,699.25 |
+| Jun | $17,478.02 | 0.15 | 11.25% | $1,966.28 |
+| **Jul** | **$28,053.24** | **0.17** | **12.75%** | **$3,576.79** |
+
+**July 2026 crosses the boundary.** At the old flat 11.25% it would come out $3,155.99 —
+**$420.80 short**. March cleared the boundary by only $947, so this is genuinely volatile
+month to month, not a one-off. Never carry a rate forward from last month.
+
+These are point-in-time figures: late payments and reversals keep landing in past months, so
+re-run rather than quoting this table. It is here to show the boundary is live, not as a source.
 
 ### The source query
 
@@ -217,9 +267,40 @@ AND    Month(p.[Order Date]) = @mm AND Year(p.[Order Date]) = @yyyy
 `No Data for the month` — the established convention (see the Feb/Mar/May 2024 tabs). April
 2026 was such a month: no IPBC enrolments, so no `IPBC - Enrollment` row in the SMI tab either.
 
-## Step 5 — Send
+## Step 5 — Preflight, then send
 
-Compose from `ali@colaberry.com`. Body, plain and short — this is exactly what Feb and Mar said:
+**Nothing goes to accounting until `preflight.py` exits 0.** It derives both figures from the
+files rather than trusting anything typed, and it is the only thing that writes the
+`send_manifest.json` the sender requires.
+
+```bash
+python scripts/commission/preflight.py --month 2026-05 --dir "~/Downloads/May 2026 Commission"
+```
+
+Six gates, any FAIL blocks the send:
+
+| # | Gate | Catches |
+|---|---|---|
+| 1 | Idempotency vs `ledger.json` | Double-sending a month to accounting |
+| 2 | All four attachments present, non-zero, under 20 MB | A missing or truncated file |
+| 3 | Staff total re-derived from column T, header shape asserted | A moved column silently changing the total |
+| 4 | Ali figure read from K:N, cross-checked against the tier | Pasting the wrong rows, or the wrong rate |
+| 5 | Every prior month still computes to what was emailed | A restated basis |
+| 6 | Carried-over month tabs survived the rebuild | openpyxl round-trip corruption |
+
+Then dry-run, send, and close the loop:
+
+```bash
+node scripts/commission/send_commission_email.js --dir "<dir>"            # dry run, prints the body
+node scripts/commission/send_commission_email.js --dir "<dir>" --send     # in accelerator-backend
+python scripts/commission/preflight.py --month 2026-05 --dir "<dir>" --record
+```
+
+The sender carries **no figures of its own** — it reads the manifest, re-hashes all four
+attachments against it, and aborts if any file changed since preflight. Verified by break test:
+a one-byte change to an attachment aborts with exit 1; a missing manifest exits 2.
+
+The body, exactly as Feb / Mar / Apr said it:
 
 ```
 Staff Commission: $11,950.00
@@ -235,18 +316,8 @@ Colaberry Inc.
 ali@colaberry.com  enterprise.colaberry.ai
 ```
 
-Amounts carry thousands separators and 2 decimals (`$11,325` was written `$11,325`, Ali's
-figure as `$1,907.19`). No em-dashes in body copy — the `—` in the signature title is part of
-the fixed block and stays.
-
-**Preflight — all four must pass before sending:**
-
-1. Staff total equals `SUM(Staff Commissions!T)` in the attached workbook.
-2. Ali total equals the SMI tab's month `TotalPaid × 0.1125`, rounded to 2dp.
-3. All 4 attachments present, named exactly as in the contract table.
-4. The attached `..._Original.xlsx` is md5-identical to Jackie's latest attachment.
-
-Then send, Bcc `ali@colaberry.com`.
+Amounts carry thousands separators and 2 decimals. No em-dashes in body copy — the `—` in the
+signature title is part of the fixed block and stays; the sender asserts this.
 
 ## Step 6 — After sending
 
@@ -286,17 +357,36 @@ spaces and must be bracketed: `[Customer #]`, `[Order Date]`, `[Amount Paid]`.
 
 ## Bundled scripts
 
-Run them in this order. All the `.js` ones execute inside `accelerator-backend`.
+Run in this order. The `.js` ones execute inside `accelerator-backend` (except a dry run, which
+works anywhere).
 
 | # | Script | Purpose |
 |---|---|---|
-| 1 | `scripts/commission/gmail_dl.js` | Downloads Jackie's attachment by message id using the prod backend's Gmail credentials (the Gmail MCP connector cannot read attachments). |
-| 2 | `scripts/commission/build_staff_png.py` | Reads `Staff Commissions`, prints the staff total, renders the table PNG. Self-validates against February. |
-| 3 | `scripts/commission/run_smi_pipeline.js` | Runs Ali's `SMI Commission.sql` through `#SMI_CommIII` (minus the hand-toggled month filter) and writes `smi_detail.json`, `smi_summary.json`, `ipbc_<mon>.json`. Needs `smi_pipeline.sql` — the decoded SQL truncated at the end of the `INTO #SMI_CommIII` statement — copied to `/app`. |
-| 4 | `scripts/commission/build_month_tabs.py` | Copies last month's SMI + IPBC workbooks, prepends the new `<Mon> <Year>` tab to each, writes them under the new month's name. |
-| 5 | `scripts/commission/verify_month.py` | Independent read-back: month totals, the K:N summary, the prior-month regression against what was actually emailed, and that carried-over tabs survived unchanged. **Run this before sending.** |
-| 6 | `scripts/commission/send_commission_email.js` | Sends via Mandrill SMTP with all four attachments and the PNG inline as `cid:staffcomm`. Edit `STAFF`, `ALI`, `SUBJECT`, `DIR` at the top. |
+| 1 | `gmail_dl.js` | Downloads Jackie's attachment by message id using the prod backend's Gmail credentials (the Gmail MCP connector cannot read attachments). |
+| 2 | `build_staff_png.py` | Reads `Staff Commissions`, prints the staff total, renders the table PNG. Self-validates against February. |
+| 3 | `extract_pipeline.py` | Decodes `SMI Commission.sql` (UTF-16LE) and cuts it at the end of the `INTO #SMI_CommIII` statement. Refuses to emit anything that still carries the hand-toggled `OrderMonth NOT IN` filter or is missing a temp table. |
+| 4 | `run_smi_pipeline.js` | Runs that pipeline against CCPP; writes `smi_detail.json`, `smi_summary.json`, `ipbc_<mon>.json`. |
+| 5 | `build_month_tabs.py` | Copies last month's SMI + IPBC workbooks, prepends the new `<Mon> <Year>` tab to each, saves under the new month's name. |
+| 6 | **`preflight.py`** | **The gate.** Six checks, writes `send_manifest.json` on pass. Nothing sends without it. |
+| 7 | `send_commission_email.js` | Reads the manifest, re-hashes every attachment, sends via Mandrill with the PNG inline as `cid:staffcomm`. Dry run by default. |
+| 8 | `preflight.py --record` | Appends the month to `ledger.json` after a confirmed send. |
+| — | `verify_month.py` | Standalone read-back, kept for ad-hoc inspection. `preflight.py` supersedes it in the flow. |
+| — | `ledger.json` | Every month ever sent. Idempotency record, regression baseline, and tier history in one file. |
 
-Step 6 uses raw nodemailer rather than `sendWithBcAttach`, which hard-requires a Basecamp
+Step 7 uses raw nodemailer rather than `sendWithBcAttach`, which hard-requires a Basecamp
 `ticketId`. This email has no originating ticket — Feb and Mar went straight from Outlook with
 no BC attachment — and the helper's own guard directs that case to raw nodemailer.
+
+## If a mentor disputes after the send
+
+It happens (Dozie did it for April, before the send). The basis is Jackie's workbook, so:
+
+1. Jackie issues a corrected workbook — she owns the staff numbers, not us.
+2. Re-run from Step 1 with the new file into the **same** month folder.
+3. `preflight.py` will refuse: the month is in the ledger. That is working as designed. Pass
+   `--force` once you have confirmed a correction is genuinely intended.
+4. Subject the correction clearly, e.g. `Apr 2026 Commission (Mentor/Instructor/SMI) - corrected`,
+   and say in one line what moved and for whom. Do not resend a bare duplicate.
+5. `--record` again afterwards; add a `note` on the ledger entry saying what changed.
+
+Ali's own figure never changes in this scenario — it comes from CCPP, not from Jackie's sheet.
