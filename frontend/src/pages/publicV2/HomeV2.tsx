@@ -62,10 +62,10 @@ function HomeV2(): React.ReactElement {
               connected platform.
             </p>
             <div className="cbv2-hero__ctas">
-              <Link className="cbv2-btn cbv2-btn--primary" to="/v2/platform">
+              <Link className="cbv2-btn cbv2-btn--primary" to="/platform">
                 Explore the Live Platform
               </Link>
-              <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/lab">
+              <Link className="cbv2-btn cbv2-btn--ghost" to="/lab">
                 Map an AI Opportunity
               </Link>
             </div>
@@ -278,7 +278,7 @@ function HomeV2(): React.ReactElement {
           </div>
           <div className="cbv2-ribbon">
             {SERVICES.map((s) => (
-              <Link className="cbv2-ribbon__item" to={`/v2/services/${s.slug}`} key={s.slug}>
+              <Link className="cbv2-ribbon__item" to={`/services/${s.slug}`} key={s.slug}>
                 <span className="cbv2-ribbon__n">{s.number}</span>
                 <span className="cbv2-ribbon__title">{s.name}</span>
                 <span className="cbv2-ribbon__body">{s.fit}</span>
@@ -286,7 +286,7 @@ function HomeV2(): React.ReactElement {
             ))}
           </div>
           <p style={{ marginTop: 'var(--space-8)' }}>
-            <Link className="cbv2-btn cbv2-btn--secondary" to="/v2/services">
+            <Link className="cbv2-btn cbv2-btn--secondary" to="/services">
               Compare all five services
             </Link>
           </p>
@@ -311,7 +311,7 @@ function HomeV2(): React.ReactElement {
                 Invite your team and the sample gives way to their own progress.
               </p>
               <p style={{ marginTop: 'var(--space-6)' }}>
-                <Link className="cbv2-btn cbv2-btn--primary" to="/v2/start">
+                <Link className="cbv2-btn cbv2-btn--primary" to="/start">
                   Open the Free Company Workspace
                 </Link>
               </p>
@@ -385,7 +385,7 @@ function HomeV2(): React.ReactElement {
             Start free, or bring one workflow to an architect.
           </p>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/start">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/start">
               Open the Free Company Workspace
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">

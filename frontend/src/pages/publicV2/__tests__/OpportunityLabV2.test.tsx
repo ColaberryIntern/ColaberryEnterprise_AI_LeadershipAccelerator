@@ -24,7 +24,7 @@ import {
 
 const html = (): string =>
   renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/v2/lab']}>
+    <MemoryRouter initialEntries={['/lab']}>
       <OpportunityLabV2 />
     </MemoryRouter>,
   );
@@ -49,7 +49,7 @@ const answers = {
 };
 
 describe('buildLeadPayload — what it omits', () => {
-  const payload = buildLeadPayload(contact, answers, 'Some context.', {}, '/v2/lab');
+  const payload = buildLeadPayload(contact, answers, 'Some context.', {}, '/lab');
 
   it('never sends a visitor fingerprint', () => {
     expect(payload).not.toHaveProperty('visitor_fingerprint');
@@ -76,7 +76,7 @@ describe('buildLeadPayload — what it omits', () => {
 });
 
 describe('buildLeadPayload — what it carries', () => {
-  const payload = buildLeadPayload(contact, answers, 'Some context.', {}, '/v2/lab');
+  const payload = buildLeadPayload(contact, answers, 'Some context.', {}, '/lab');
 
   it('trims the free-text identity fields', () => {
     expect(payload.name).toBe('Dana Reyes');
@@ -87,7 +87,7 @@ describe('buildLeadPayload — what it carries', () => {
 
   it('passes consent through as given, never defaulted to true', () => {
     expect(payload.consent_contact).toBe(true);
-    const declined = buildLeadPayload({ ...contact, consent: false }, answers, '', {}, '/v2/lab');
+    const declined = buildLeadPayload({ ...contact, consent: false }, answers, '', {}, '/lab');
     expect(declined.consent_contact).toBe(false);
   });
 
@@ -98,7 +98,7 @@ describe('buildLeadPayload — what it carries', () => {
 
   it('merges UTM parameters without letting them overwrite answers', () => {
     const withUtm = buildLeadPayload(
-      contact, answers, '', { utm_source: 'linkedin', utm_campaign: 'q3' }, '/v2/lab',
+      contact, answers, '', { utm_source: 'linkedin', utm_campaign: 'q3' }, '/lab',
     );
     expect(withUtm.utm_source).toBe('linkedin');
     expect(withUtm.form_type).toBe(LAB_FORM_TYPE);

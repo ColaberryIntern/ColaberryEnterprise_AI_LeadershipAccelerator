@@ -64,7 +64,7 @@ export function ServicesV2(): React.ReactElement {
                 </span>
                 <p className="cbv2-eyebrow">Service {s.number}</p>
                 <h2 className="cbv2-svc__name">
-                  <Link to={`/v2/services/${s.slug}`}>{s.name}</Link>
+                  <Link to={`/services/${s.slug}`}>{s.name}</Link>
                 </h2>
                 <p className="cbv2-lede">{s.happens}</p>
                 <div className="cbv2-field" style={{ marginTop: 'var(--space-5)' }}>
@@ -76,7 +76,7 @@ export function ServicesV2(): React.ReactElement {
                   <p>{s.trigger}</p>
                 </div>
                 <p style={{ marginTop: 'var(--space-6)' }}>
-                  <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to={`/v2/services/${s.slug}`}>
+                  <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to={`/services/${s.slug}`}>
                     See what this includes
                   </Link>
                 </p>
@@ -137,7 +137,7 @@ export function ServiceDetailV2(): React.ReactElement {
             That engagement does not exist. See all five services instead.
           </p>
           <p style={{ marginTop: 'var(--space-6)' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/services">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/services">
               All services
             </Link>
           </p>
@@ -153,7 +153,7 @@ export function ServiceDetailV2(): React.ReactElement {
       <section className="cbv2-pagehero" aria-labelledby="cbv2-svcd-title">
         <div className="cbv2-wrap">
           <p className="cbv2-breadcrumb">
-            <Link to="/v2/services">Services</Link> / {service.name}
+            <Link to="/services">Services</Link> / {service.name}
           </p>
           <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Service {service.number}</p>
           <h1 id="cbv2-svcd-title">{service.name}</h1>

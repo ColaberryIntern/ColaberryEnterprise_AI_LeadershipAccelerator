@@ -138,7 +138,7 @@ function PrivacyV2(): React.ReactElement {
           </p>
           <p className="cbv2-prose">
             Questions about any of it, or a request to remove your data, go to{' '}
-            <Link to="/v2/lab">the contact form</Link>.
+            <Link to="/lab">the contact form</Link>.
           </p>
         </div>
       </section>

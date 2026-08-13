@@ -40,34 +40,34 @@ const GROUPS: readonly FooterGroup[] = [
   {
     heading: 'Services',
     links: [
-      { label: 'Opportunity Sprint', to: '/v2/services/ai-opportunity-sprint' },
-      { label: 'Production Pilot', to: '/v2/services/claude-production-pilot' },
-      { label: 'Build & Modernization', to: '/v2/services/enterprise-build-modernization' },
-      { label: 'Workforce Accelerator', to: '/v2/services/workforce-architect-accelerator' },
-      { label: 'Embedded AI Ops', to: '/v2/services/embedded-ai-operations' },
+      { label: 'Opportunity Sprint', to: '/services/ai-opportunity-sprint' },
+      { label: 'Production Pilot', to: '/services/claude-production-pilot' },
+      { label: 'Build & Modernization', to: '/services/enterprise-build-modernization' },
+      { label: 'Workforce Accelerator', to: '/services/workforce-architect-accelerator' },
+      { label: 'Embedded AI Ops', to: '/services/embedded-ai-operations' },
     ],
   },
   {
     heading: 'Platform',
     links: [
-      { label: 'Platform', to: '/v2/platform' },
-      { label: 'Free workspace', to: '/v2/start' },
-      { label: 'Pricing', to: '/v2/pricing' },
+      { label: 'Platform', to: '/platform' },
+      { label: 'Free workspace', to: '/free-workspace' },
+      { label: 'Pricing', to: '/pricing' },
     ],
   },
   {
     heading: 'Proof',
     links: [
-      { label: 'Proof Room', to: '/v2/proof' },
-      { label: 'Map an opportunity', to: '/v2/lab' },
-      { label: 'Builder stories', to: '/v2/stories' },
+      { label: 'Proof Room', to: '/proof' },
+      { label: 'Map an opportunity', to: '/lab' },
+      { label: 'Builder stories', to: '/stories' },
     ],
   },
   {
     heading: 'Company',
     links: [
       { label: 'Contact', to: '/contact' },
-      { label: 'What we collect', to: '/v2/privacy' },
+      { label: 'What we collect', to: '/privacy' },
     ],
   },
 ];

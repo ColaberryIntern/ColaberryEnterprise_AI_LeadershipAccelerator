@@ -13,7 +13,7 @@ import { SHOWROOM_SURFACES, DATA_EARNED } from '../../../config/v2Platform';
 
 const html = (): string =>
   renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/v2/platform']}>
+    <MemoryRouter initialEntries={['/platform']}>
       <PlatformV2 />
     </MemoryRouter>,
   );

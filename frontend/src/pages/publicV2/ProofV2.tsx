@@ -181,10 +181,10 @@ function ProofV2(): React.ReactElement {
             reporting.
           </p>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/platform">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/platform">
               See the platform
             </Link>
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/services">
+            <Link className="cbv2-btn cbv2-btn--ghost" to="/services">
               Compare services
             </Link>
           </div>

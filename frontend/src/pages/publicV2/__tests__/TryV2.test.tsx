@@ -17,7 +17,7 @@ import { publicClaim } from '../../../config/claimsRegistry';
 
 const html = (): string =>
   renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/v2/try']}>
+    <MemoryRouter initialEntries={['/try']}>
       <TryV2 />
     </MemoryRouter>,
   );
@@ -98,16 +98,16 @@ describe('the reposition itself — V2 CTAs lead to account creation', () => {
     renderToStaticMarkup(<MemoryRouter initialEntries={[path]}>{el}</MemoryRouter>);
 
   it('HomeV2 sends free-workspace CTAs to account creation', () => {
-    const h = render(<HomeV2 />, '/v2');
-    expect(h).toContain('href="/v2/start"');
+    const h = render(<HomeV2 />, '/');
+    expect(h).toContain('href="/start"');
     // A bare /try link would drop the visitor out of the V2 shell into a preview
     // with no signup path at all.
     expect(h).not.toMatch(/href="\/try"/);
   });
 
   it('PlatformV2 does the same', () => {
-    const h = render(<PlatformV2 />, '/v2/platform');
-    expect(h).toContain('href="/v2/start"');
+    const h = render(<PlatformV2 />, '/platform');
+    expect(h).toContain('href="/start"');
     expect(h).not.toMatch(/href="\/try"/);
   });
 });

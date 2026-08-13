@@ -333,7 +333,7 @@ function SignupV2(): React.ReactElement {
               shipped work.
             </p>
             <p style={{ marginTop: 'var(--space-6)' }}>
-              <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/platform">
+              <Link className="cbv2-btn cbv2-btn--ghost" to="/platform">
                 See the platform first
               </Link>
             </p>

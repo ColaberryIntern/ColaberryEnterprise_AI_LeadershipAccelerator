@@ -33,6 +33,12 @@ export interface PricingTier {
   readonly icon: IconName;
   /** The tier we recommend starting on. Exactly one. */
   readonly featured?: boolean;
+  /**
+   * Each tier carries its own accent, as the previous site did. One accent
+   * across three cards made them read as a list; three accents make them read
+   * as three choices, which is what the page is asking the reader to make.
+   */
+  readonly accent: 'green' | 'cherry' | 'blue';
 }
 
 export const PRICING_TIERS: readonly PricingTier[] = [
@@ -52,8 +58,9 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       'Free test invites, so your employees can try it before anyone pays',
     ],
     ctaLabel: 'Create a free account',
-    ctaRoute: '/v2/start',
+    ctaRoute: '/start',
     icon: 'spark',
+    accent: 'green',
     featured: true,
   },
   {
@@ -72,8 +79,9 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       'Weekly live events and office hours',
     ],
     ctaLabel: 'Start free first',
-    ctaRoute: '/v2/start',
+    ctaRoute: '/start',
     icon: 'ladder',
+    accent: 'cherry',
   },
   {
     key: 'team',
@@ -94,6 +102,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     ctaLabel: 'Talk to an architect',
     ctaRoute: '/contact',
     icon: 'people',
+    accent: 'blue',
   },
 ];
 

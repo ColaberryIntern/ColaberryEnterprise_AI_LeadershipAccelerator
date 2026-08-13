@@ -36,11 +36,11 @@ export interface NavItem {
  * inventing a destination for a nav label is how the dead links happened.
  */
 export const V2_NAV: readonly NavItem[] = [
-  { label: 'Services', to: '/v2/services' },
-  { label: 'Platform', to: '/v2/platform' },
-  { label: 'Pricing', to: '/v2/pricing' },
-  { label: 'Proof', to: '/v2/proof' },
-  { label: 'Start Free', to: '/v2/start' },
+  { label: 'Services', to: '/services' },
+  { label: 'Platform', to: '/platform' },
+  { label: 'Pricing', to: '/pricing' },
+  { label: 'Proof', to: '/proof' },
+  { label: 'Start Free', to: '/start' },
 ];
 
 export interface PublicHeaderV2Props {
@@ -80,7 +80,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
   return (
     <header className="cbv2-header">
       <div className="cbv2-wrap cbv2-nav">
-        <Link className="cbv2-brand" to="/v2" aria-label="Colaberry Enterprise AI, home">
+        <Link className="cbv2-brand" to="/" aria-label="Colaberry Enterprise AI, home">
           <img src="/colaberry-logo-transparent.png" alt="" width={291} height={82} />
           <span className="cbv2-brand__text">Enterprise AI</span>
         </Link>
@@ -107,7 +107,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
               <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
                 Talk to an Architect
               </Link>
-              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/v2/platform">
+              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/platform">
                 Explore the Platform
               </Link>
             </li>
@@ -129,7 +129,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
           <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
             Talk to an Architect
           </Link>
-          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/v2/platform">
+          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/platform">
             Explore the Platform
           </Link>
         </div>

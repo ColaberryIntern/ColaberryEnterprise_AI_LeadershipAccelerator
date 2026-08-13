@@ -1,5 +1,5 @@
 /**
- * v2Try.ts -- content for the free-workspace front door at /v2/try.
+ * v2Try.ts -- content for the free-workspace front door at /try-free.
  *
  * WHY THIS PAGE EXISTS RATHER THAN A REWRITE OF /try
  * The live free workspace (`ManagementPreviewPage`, routed at /try) is real,
@@ -91,7 +91,7 @@ export const PAID_BOUNDARIES: readonly PaidBoundary[] = [
     detail:
       'Architects working alongside your team on a specific workflow. Scoped to what you ' +
       'actually need, which is why there is no list price.',
-    href: '/v2/services',
+    href: '/services',
     linkLabel: 'Compare engagements',
   },
 ];

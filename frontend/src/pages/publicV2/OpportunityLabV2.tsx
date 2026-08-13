@@ -159,10 +159,10 @@ function OpportunityLabV2(): React.ReactElement {
               <pre className="cbv2-recap__body">{composeSummary(answers, freeText)}</pre>
             </div>
             <div className="cbv2-hero__ctas" style={{ marginTop: 'var(--space-6)' }}>
-              <Link className="cbv2-btn cbv2-btn--primary" to="/v2/platform">
+              <Link className="cbv2-btn cbv2-btn--primary" to="/platform">
                 See the platform
               </Link>
-              <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/proof">
+              <Link className="cbv2-btn cbv2-btn--ghost" to="/proof">
                 Read the proof standard
               </Link>
             </div>
