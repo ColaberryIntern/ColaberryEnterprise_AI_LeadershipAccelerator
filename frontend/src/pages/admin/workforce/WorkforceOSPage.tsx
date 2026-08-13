@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../../utils/api';
 import { workforceCss, readTheme, writeTheme } from './themeKit';
 import StatusBadge from '../../../components/admin/shell/StatusBadge';
 import { getTicketTypeTone, getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
 import { fmtCentralDateTime } from '../../../utils/centralTime';
-import { agentAvatarColor } from '../../../utils/agentAvatarColor';
+import { assignDistinctAvatarColors } from '../../../utils/agentAvatarColor';
 
 /**
  * WorkforceOSPage — the AI Workforce Operating System. An executive opens one
@@ -60,6 +60,12 @@ const WorkforceOSPage: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Could not load the AI Workforce.'); } finally { setBusy(''); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // Collision-avoiding, not a bare per-id hash: assigned across the WHOLE current
+  // roster so every simultaneously-displayed card is guaranteed a different color
+  // (up to the 8-color palette) — a bare agentAvatarColor(id) call per card can and
+  // did collide live (cory-engine and InboxCaseEngine both landed on '#C2185B').
+  // Declared before the early `error` return below, per the Rules of Hooks.
+  const liveAgentColors = useMemo(() => assignDistinctAvatarColors(liveAgents.map((a) => a.id)), [liveAgents]);
 
   const toggleTheme = () => { const t = theme === 'dark' ? 'light' : 'dark'; setTheme(t); writeTheme(t); };
   const openOffice = async (slug: string) => { try { setOffice((await api.get(`/api/admin/workforce/employee/${slug}`)).data); } catch { setError('Could not open office.'); } };
@@ -161,7 +167,7 @@ const WorkforceOSPage: React.FC = () => {
           <div className="wf-dirs">
             {liveAgents.map((a) => (
               <Link to={`/admin/agents/${a.id}`} className="wf-emp" key={a.id} style={{ display: 'flex', textDecoration: 'none', color: 'inherit' }}>
-                {av(agentAvatarColor(a.id), a.display_name)}
+                {av(liveAgentColors[a.id], a.display_name)}
                 <div style={{ minWidth: 0 }}>
                   <div className="nm">{a.display_name}</div>
                   <div className="rl">{a.category || a.agent_type}</div>

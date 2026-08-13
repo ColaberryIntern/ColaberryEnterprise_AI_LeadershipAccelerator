@@ -28,19 +28,66 @@ const AGENT_AVATAR_PALETTE: readonly string[] = [
   '#6B6B6B', // chart-8 — neutral
 ];
 
-/**
- * Deterministic (same seed -> same color, every call, no Math.random / no Date) hash
- * of a stable seed string — pass the agent's real `id` (UUID), not its `agent_name`,
- * so the color survives a hypothetical future rename — into one of the 8 real,
- * accessible palette colors above. Never returns a value outside that palette.
- */
-export function agentAvatarColor(seed: string): string {
+function hashToIndex(seed: string): number {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     // 31 is the standard small-prime multiplier (java/kotlin String.hashCode()
     // convention) — good bit-mixing for short id strings, cheap, no dependency.
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   }
-  const index = Math.abs(hash) % AGENT_AVATAR_PALETTE.length;
-  return AGENT_AVATAR_PALETTE[index];
+  return Math.abs(hash) % AGENT_AVATAR_PALETTE.length;
+}
+
+/**
+ * Deterministic (same seed -> same color, every call, no Math.random / no Date) hash
+ * of a stable seed string — pass the agent's real `id` (UUID), not its `agent_name`,
+ * so the color survives a hypothetical future rename — into one of the 8 real,
+ * accessible palette colors above. Never returns a value outside that palette.
+ *
+ * Standalone, this function alone does NOT guarantee two different real ids never
+ * land on the same palette slot (an 8-bucket hash can and — confirmed live, two of
+ * the 6 real Stage-1 agents originally collided on '#C2185B' — does collide). For
+ * rendering a roster where every SIMULTANEOUSLY-DISPLAYED card must look different
+ * (Ali's actual ask), use assignDistinctAvatarColors() below instead. This function
+ * stays exported and used on its own by anything that only ever renders ONE agent at
+ * a time (e.g. a detail page) and has no roster to de-collide against.
+ */
+export function agentAvatarColor(seed: string): string {
+  return AGENT_AVATAR_PALETTE[hashToIndex(seed)];
+}
+
+/**
+ * Assigns each id in the given roster a color from the same 8-color palette,
+ * guaranteed collision-free as long as the roster size does not exceed 8 (today: 6
+ * real Live Agents) — beyond that, a fixed 8-color palette cannot give every agent a
+ * unique hue by pigeonhole, so slots are reused gracefully once exhausted rather than
+ * inventing a 9th color or crashing.
+ *
+ * Deterministic for a FIXED roster regardless of input order: ids are sorted
+ * internally before assignment, so the same set of currently-live agents always
+ * produces the same id->color mapping on every call/page load — this is still "the
+ * same agent always gets the same color," just evaluated against the real roster it's
+ * actually sharing a page with, not in isolation. Each id's PREFERRED color is still
+ * its own agentAvatarColor(id) hash — collisions only walk forward to the next free
+ * palette slot, they never reassign an id an unrelated color for no reason.
+ */
+export function assignDistinctAvatarColors(ids: string[]): Record<string, string> {
+  const sortedIds = [...ids].sort();
+  const takenSlots = new Set<number>();
+  const colorById: Record<string, string> = {};
+
+  for (const id of sortedIds) {
+    let slot = hashToIndex(id);
+    if (takenSlots.size < AGENT_AVATAR_PALETTE.length) {
+      let attempts = 0;
+      while (takenSlots.has(slot) && attempts < AGENT_AVATAR_PALETTE.length) {
+        slot = (slot + 1) % AGENT_AVATAR_PALETTE.length;
+        attempts++;
+      }
+    }
+    takenSlots.add(slot);
+    colorById[id] = AGENT_AVATAR_PALETTE[slot];
+  }
+
+  return colorById;
 }
