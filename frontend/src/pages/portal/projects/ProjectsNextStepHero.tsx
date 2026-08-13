@@ -86,34 +86,41 @@ const ProjectsNextStepHero: React.FC<Props> = ({ primary, primaryNext, demo, var
     const pct = inRelease.length ? Math.round((done / inRelease.length) * 100) : 0;
     const pts = primaryNext.task.points ?? 0;
 
+    // Wrapped in `.tl-de`. Every rule for this card is scoped under it in
+    // timeline.css (`.tl-de .tl-nextweek{...}`), so on a page that does not carry
+    // that class the markup renders completely unstyled. Wrapping is the fix;
+    // copying the rules into projects.css would be two implementations of one
+    // card, which is what reusing the Classroom's markup was meant to avoid.
     return (
-      <div className="tl-card tl-nextweek" style={{ borderTopColor: primary.accent }}>
-        <div className="tl-nextweek-week">
-          <h3 style={{ textAlign: 'center' }}>{releaseLabel(release?.name)}</h3>
-          <div className="tl-small" style={{ textAlign: 'center' }}>
-            {inRelease.length} task{inRelease.length === 1 ? '' : 's'} this release
+      <div className="tl-de">
+        <div className="tl-card tl-nextweek" style={{ borderTopColor: primary.accent }}>
+          <div className="tl-nextweek-week">
+            <h3 style={{ textAlign: 'center' }}>{releaseLabel(release?.name)}</h3>
+            <div className="tl-small" style={{ textAlign: 'center' }}>
+              {inRelease.length} task{inRelease.length === 1 ? '' : 's'} this release
+            </div>
+            <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
+            <div className="tl-small" style={{ textAlign: 'center' }}>
+              <b>{done}</b> of <b>{inRelease.length}</b> complete
+            </div>
           </div>
-          <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
-          <div className="tl-small" style={{ textAlign: 'center' }}>
-            <b>{done}</b> of <b>{inRelease.length}</b> complete
+          <div className="tl-nextweek-step">
+            <div className="eyebrow">
+              Your next step · {primary.name}
+              {/* Only shown when the task actually carries points. An invented
+                  number here would be the dashboard lying, on the first screen. */}
+              {pts > 0 && <span className="tl-ptbadge">+{pts} pts</span>}
+            </div>
+            <h2>{primaryNext.task.title}</h2>
+            {primaryNext.task.what && <p>{primaryNext.task.what}</p>}
+            <div className="pjw-actions" style={{ marginTop: 0 }}>
+              <button type="button" className="tl-btn primary" onClick={onOpenBuild}>Open</button>
+              {primaryNext.task.prompt && (
+                <button type="button" className="te-btn ghost" onClick={onCopyPrompt} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>Copy prompt</button>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="tl-nextweek-step">
-          <div className="eyebrow">
-            Your next step · {primary.name}
-            {/* Only shown when the task actually carries points. An invented
-                number here would be the dashboard lying, on the first screen. */}
-            {pts > 0 && <span className="tl-ptbadge">+{pts} pts</span>}
           </div>
-          <h2>{primaryNext.task.title}</h2>
-          {primaryNext.task.what && <p>{primaryNext.task.what}</p>}
-          <div className="pjw-actions" style={{ marginTop: 0 }}>
-            <button type="button" className="tl-btn primary" onClick={onOpenBuild}>Open</button>
-            {primaryNext.task.prompt && (
-              <button type="button" className="te-btn ghost" onClick={onCopyPrompt} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>Copy prompt</button>
-            )}
-          </div>
-        </div>
       </div>
     );
   }

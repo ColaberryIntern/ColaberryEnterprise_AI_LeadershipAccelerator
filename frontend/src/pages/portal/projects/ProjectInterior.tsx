@@ -6,6 +6,7 @@ import {
 import NextSessionStrip from './NextSessionStrip';
 import { CorySpark } from '../../../components/portal/CoryMark';
 import { useIsExplorer } from '../useIsExplorer';
+import ProjectsNextStepHero from './ProjectsNextStepHero';
 
 // The portal-native project workspace, in the Today-page shape: a full-width
 // build header, then a two-column grid — left is the FB timeline (hero "your
@@ -197,43 +198,32 @@ const ProjectInterior: React.FC<{
           same way the overview's hero does; without that the two screens
           scrolled differently for no reason a student could see. */}
       <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
-        {nx ? (
-          <div className="te-hero">
-            <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next action on this build</div>
-            <h2>{nx.task.title}</h2>
-            <p>{nx.task.what || 'Pick this up next — it keeps the walking skeleton moving.'}</p>
-            <div style={{ marginTop: 4 }}>
-              <TaskActions project={project} task={nx.task} onOpen={onOpenTask} />
-            </div>
-          </div>
-        ) : (
-          <div className="te-hero"><div className="eyebrow">This build</div><h2>Every open task is done</h2><p>Nice work — nothing else queued on this build right now.</p></div>
-        )}
+        <ProjectsNextStepHero
+          variant="full"
+          primary={project}
+          primaryNext={nx}
+          demo={demo}
+          onOpenBuild={() => nx && onOpenTask(nx.task.id)}
+          onCopyPrompt={() => { if (navigator.clipboard && nx?.task.prompt) navigator.clipboard.writeText(nx.task.prompt); }}
+          onStartBuild={onBack}
+        />
       </div>
 
-      {/* full-width build header */}
-      <div className="card pj-head">
-        <div className="pj-cover" style={{ background: project.cover }}>
-          {/* themed watermark — the project's own icon, big + low-opacity, behind
-              the title. Auto-derived from `project.icon` (scissors for the salon). */}
-          <span className="pj-wm" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none"><path d={project.icon} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" /></svg>
-          </span>
+      {/* A build header of a few lines, not a page. The name, descriptor, stage
+          and preview URL moved to the top of the Project outline card in the
+          right column — that is where you look for "which build is this", and
+          the full-bleed cover was pushing the actual work below the fold. */}
+      <div className="pj-headbar">
+        <span className="pj-av sm" style={{ background: project.accent }}>
+          <svg viewBox="0 0 24 24" fill="none"><path d={project.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>
+        </span>
+        <div className="pj-hb-t">
+          <div className="pj-hb-name">{project.name}</div>
+          <div className="pj-hb-sub">{project.stage}{project.sample ? ' · training example' : ''}</div>
         </div>
-        <div className="pj-hbody">
-          <div className="pj-avwrap">
-            <span className="pj-av" style={{ background: project.accent }}><svg viewBox="0 0 24 24" fill="none"><path d={project.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></span>
-            <div style={{ minWidth: 0 }}>
-              <div className="pj-name">{project.name}</div>
-              <div className="pj-desc">{project.descriptor}</div>
-            </div>
-          </div>
-          <div className="pj-metarow">
-            <span className="pj-pill"><span className="chip" style={{ margin: 0, padding: '2px 10px', background: 'rgba(54,120,149,.12)', color: '#2E6A86' }}><span className="sw" style={{ background: '#367895' }} />{project.stage}</span></span>
-            {project.sample && <span className="pj-pill" style={{ borderColor: '#E8920C', color: '#B5710A' }}>Training example · from Basecamp</span>}
-            <span className="pj-pill prev"><svg viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>{project.slug}.preview.colaberry.ai</span>
-          </div>
-          <div className="pj-prog"><div className="meter"><i style={{ width: `${prog.pct}%`, background: '#5BA63C' }} /></div><span className="pct">{prog.pct}%</span></div>
+        <div className="pj-hb-prog">
+          <span className="meter"><i style={{ width: `${prog.pct}%`, background: '#5BA63C' }} /></span>
+          <span className="pct">{prog.pct}%</span>
         </div>
       </div>
 
@@ -254,6 +244,21 @@ const ProjectInterior: React.FC<{
         <aside className="te-side">
           <div className="te-card te-scard">
             <h3><svg viewBox="0 0 24 24" fill="none"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Project outline</h3>
+
+            {/* Who this build is — moved off the page header, where it was a
+                full-bleed banner, to the top of the card you already look at to
+                navigate the build. */}
+            <div className="pj-ol-ident">
+              <div className="nm">{project.name}</div>
+              <div className="ds">{project.descriptor}</div>
+              <div className="mt">
+                <span className="chip sm">{project.stage}</span>
+                {project.sample && <span className="chip sm warn">Training example</span>}
+              </div>
+              <a className="prev" href={`https://${project.slug}.preview.colaberry.ai`} target="_blank" rel="noreferrer">
+                {project.slug}.preview.colaberry.ai
+              </a>
+            </div>
             <div className="pj-outline">
               <button className={`pj-olrow${sel === 'all' ? ' active' : ''}`} onClick={() => setSel('all')}>
                 <span className="nm">All tasks</span><span className="ct">{open + done}</span>
