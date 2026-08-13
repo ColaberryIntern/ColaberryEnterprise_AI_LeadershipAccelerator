@@ -30,6 +30,9 @@ export interface LiveSessionAttributes {
   required_variable_keys?: string[];
   email_trigger_config?: any;
   reminder_trigger_config?: any;
+  // Restart-durable arming for the reminder cron — see ensureSessionReminderSchema.ts.
+  reminder_24h_sent_at?: Date | null;
+  reminder_1h_sent_at?: Date | null;
   created_at?: Date;
 }
 
@@ -62,6 +65,9 @@ class LiveSession extends Model<LiveSessionAttributes> implements LiveSessionAtt
   declare required_variable_keys: string[];
   declare email_trigger_config: any;
   declare reminder_trigger_config: any;
+  // Restart-durable arming for the reminder cron — see ensureSessionReminderSchema.ts.
+  declare reminder_24h_sent_at: Date | null;
+  declare reminder_1h_sent_at: Date | null;
   declare created_at: Date;
 }
 
@@ -186,6 +192,14 @@ LiveSession.init(
     },
     reminder_trigger_config: {
       type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    reminder_24h_sent_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    reminder_1h_sent_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     created_at: {
