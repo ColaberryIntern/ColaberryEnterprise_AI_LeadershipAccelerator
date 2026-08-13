@@ -9980,6 +9980,15 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: pure jest `todayAnchoredBlend.test.ts`; backend tsc + jest = CI gate. Flag-off preserves current Class-only behavior.
   - Notes: Branch `workstream/today-aggregate-sources` off main. Frontend renders Project/Community via the existing TodayFeedItem→TimelineCard path (surface colour shows the section). Click-through deep-links + relevance-weighted blend are follow-ups.
 
+### Calendar / public-API 401 bug — public routes were mounted AFTER the admin guard (2026-07-19)
+- [x] **Move `calendarRoutes`, `strategyPrepRoutes`, `trackingRoutes` ABOVE `adminRoutes` in `server.ts` so public booking/chat/analytics endpoints stop 401'ing**
+  - Date: 2026-07-19
+  - Session: CC-20260719-r7k4
+  - What changed:
+    - `backend/src/server.ts`: the three public route groups (`/api/calendar/*`, `/api/strategy-prep/*`, `/api/t/*`, `/api/chat/*`) were mounted at lines 82-84, AFTER `app.use(adminRoutes)` (line 81). `adminRoutes` is mounted with no path prefix and chains ~16 admin sub-routers that call `router.use(requireAdmin)` with no path scope; so any request not matched by an earlier router falls into adminRoutes and is 401'd ("Authentication required", from `authMiddleware.requireAdmin`) before it can reach the public routes. Moved the three `app.use()` calls ABOVE `adminRoutes` and added a load-bearing comment.
+  - Why: live prod `GET /api/calendar/availability` returned `401 {"error":"Authentication required"}`, so website strategy-call bookings never created an event or a `strategy_calls` row (zero rows since ~2026-04-28). Same swallow silently broke the public Cora chat widget (`/api/chat/*`) and visitor analytics (`/api/t/*`). Root cause was mount order set in commit 9406e6b3 (2026-06-23), NOT this branch. See `reference_calendar_booking_401_bug`.
+  - Verification: root cause reproduced against LIVE prod (curl → 401 on `/api/calendar/availability` and `/api/chat/proactive-check`); fix is a type-neutral reordering of existing `app.use(importedRouter)` calls (authoritative tsc runs in the Docker prod build). Post-deploy: re-curl the same endpoints expecting non-401.
+  - Notes: Branch `workstream/calendar-401-fix` off origin/main. Kept the `|| 'primary'` calendar-ID fallback OUT of `calendarService.ts` deliberately — prod `GOOGLE_CALENDAR_ID` is set correctly, and falling back to the service account's own primary calendar on a missing ID would silently drop bookings; failing loud is safer. Prod working tree currently carries an uncommitted staged revert of the today-aggregation feature (another operator) — deploy path must be surgical (single-file server.ts checkout + backend rebuild), not `git pull`/`reset`, to avoid clobbering it.
 ### Project Backend fix — self-heal student_task base tables on boot (+ prod repair) — 2026-07-19
 - [x] Boot ensure now CREATEs student_task_lists + student_tasks before ALTERing; repaired prod's stale/incompatible student_tasks
   - Date: 2026-07-19

@@ -116,10 +116,20 @@ app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
 app.use(v1Routes);
-app.use(adminRoutes);
+
+// PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted
+// with no path prefix and chains many admin sub-routers that call `router.use(requireAdmin)`
+// with no path scope. Because of that, any request that doesn't match an earlier route
+// falls into adminRoutes and is 401'd ("Authentication required") by the first requireAdmin
+// guard before it can ever reach these public routes. Mounting them ahead of adminRoutes lets
+// their specific paths (/api/calendar/*, /api/strategy-prep/*, /api/t/*, /api/chat/*) match
+// first. This was the cause of the strategy-call booking 401 bug (see
+// reference_calendar_booking_401_bug). DO NOT move these below adminRoutes.
 app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
+
+app.use(adminRoutes);
 
 // OpenClaw tracked short URL redirect (public, no auth)
 app.get('/i/:tag', async (req, res) => {
