@@ -143,6 +143,12 @@ export const env = {
   // no way to turn it off without breaking the existing projects API. Defaults
   // OFF — deploying changes nothing until this is set.
   sbpPipelineEnabled: process.env.SBP_PIPELINE_ENABLED === 'true',
+  // Who gets the scoped AI agent roster on their build. Adds a model call to
+  // generation, so it rolls out by enrollment rather than to a whole cohort at
+  // once: 'off' (default), 'all', or a comma-separated list of enrollment ids.
+  // Deliberately NOT a boolean — the first audience for this is one account
+  // being tested while a class is running on the same deployment.
+  sbpAgentScoping: (process.env.SBP_AGENT_SCOPING ?? 'off').trim(),
   // Today aggregation — blend Project + Community cards into the Today feed
   // (Phase 2). Default OFF; the feed stays Class-only until enabled.
   todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',
