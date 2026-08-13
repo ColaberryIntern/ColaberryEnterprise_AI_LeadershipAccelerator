@@ -180,7 +180,18 @@ export type AiAgentType =
   | 'workforce_director'
   // Reese Phase 1 — real staff-facing AI mentor identity (student DM, ProofDesk-
   // linked). See backend/src/services/reeseIdentitySeed.ts.
-  | 'ai_staff_mentor';
+  | 'ai_staff_mentor'
+  // Agent Registration Stage 1 — identity-only registrations for real,
+  // high-volume ticket-creator processes (cory-engine, CoryBrain,
+  // InboxCaseEngine, workforce_intelligence_engine, bpos_orchestrator) that
+  // have no conversational/staff-facing role. These rows exist so
+  // resolveActorDisplayName() can resolve a ticket's created_by_id string to
+  // a real display name; they carry no behavior of their own and are
+  // distinct from any scheduler-tracked run-identity row for the same
+  // underlying cron (e.g. 'cory-engine' here vs. the separate
+  // 'AutonomousEngine' registry row used for run-count tracking). See
+  // backend/src/services/agentBlueprint/ticketCreatorIdentitySeed.ts.
+  | 'ticket_creator_identity';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
