@@ -129,6 +129,13 @@ export async function recordLearnerSignal(
       return { outcome: 'duplicate_suppressed', written: false, reason: 'seen within dedupe window' };
     }
 
+    // NOTE for anyone adding a raw-SQL writer to this table later (found during
+    // T006's dev-database check): student_navigation_events.id is NOT NULL with
+    // NO database default. This create() is safe because the Sequelize model
+    // declares defaultValue: DataTypes.UUIDV4 and generates the id client-side —
+    // but a plain `INSERT INTO student_navigation_events (enrollment_id, ...)`
+    // fails with a not-null violation. Supply gen_random_uuid() explicitly, or
+    // go through the model.
     await StudentNavigationEvent.create({
       enrollment_id: input.enrollmentId,
       event_type: input.eventType,
