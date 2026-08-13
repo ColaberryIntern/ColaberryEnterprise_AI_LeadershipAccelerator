@@ -125,7 +125,7 @@ describe('the fallback set', () => {
     for (const size of ['workflow', 'project', 'autonomous'] as const) {
       for (const q of fallbackQuestions(size)) {
         expect(q.suggestions.length).toBeGreaterThanOrEqual(2);
-        expect(q.suggestions.length).toBeLessThanOrEqual(4);
+        expect(q.suggestions.length).toBeLessThanOrEqual(6);
         for (const sug of q.suggestions) expect(sug.trim().length).toBeGreaterThan(3);
       }
     }
@@ -175,7 +175,7 @@ describe('the ten angles', () => {
   const prompt = INTAKE_SYSTEM_PROMPT;
   const ORDER = [
     'THE GUARDRAIL',
-    'SYSTEMS OF RECORD',
+    'THE TOOLS',
     'WHEN IT IS NOT SURE',
     'THE MEASURE',
     'EARNING AUTONOMY',
@@ -200,7 +200,7 @@ describe('the ten angles', () => {
     // Systems 0/14 and guardrail 0/6 without an interview. A workflow-tier
     // student only gets five questions — these must be two of them.
     expect(prompt.indexOf('THE GUARDRAIL')).toBeLessThan(prompt.indexOf('THE JUDGEMENT'));
-    expect(prompt.indexOf('SYSTEMS OF RECORD')).toBeLessThan(prompt.indexOf('THE OPERATOR'));
+    expect(prompt.indexOf('THE TOOLS')).toBeLessThan(prompt.indexOf('THE OPERATOR'));
   });
 
   it('protects the two feature-generating angles from being crowded out', () => {

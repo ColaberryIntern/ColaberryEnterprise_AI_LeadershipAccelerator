@@ -62,6 +62,13 @@ export interface ProjectTreeDto {
   health_score: number | null;
   lists: ProjectListDto[];
   task_counts: TaskCounts;
+  /**
+   * Where this project's Command Center is running, once STORY-000 is built and
+   * deployed. Held in `project_variables` rather than its own column: it is one
+   * nullable string, and a migration on a core table hours before a class is a
+   * bad trade for a field a JSONB blob already holds.
+   */
+  command_center_url: string | null;
 }
 
 export interface ProjectSummaryDto {
@@ -160,7 +167,20 @@ export function toProjectTreeDto(p: Plain, lists: Array<Plain & { tasks?: Plain[
     health_score: p.health_score ?? null,
     lists: listDtos,
     task_counts: countTasks(listDtos),
+    command_center_url: commandCenterUrl(p),
   };
+}
+
+/**
+ * Only ever an https URL. A student pastes whatever their host gave them, and
+ * this is rendered as a link that opens in a new tab — so `javascript:` and
+ * friends are refused here rather than trusted to the browser.
+ */
+export function commandCenterUrl(p: Plain): string | null {
+  const raw = (p?.project_variables as any)?.command_center_url;
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const url = raw.trim();
+  return /^https:\/\/[^\s]+$/i.test(url) ? url : null;
 }
 
 export function toProjectSummaryDto(p: Plain, activeProjectId: string | null): ProjectSummaryDto {

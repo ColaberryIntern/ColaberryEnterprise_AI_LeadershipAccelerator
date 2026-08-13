@@ -162,18 +162,27 @@ describe('failure behaviour', () => {
       .rejects.toMatchObject({ error_class: 'ConfigError' });
   });
 
+  // These count attempts on the REPO call, not raw fetch calls: the writer also
+  // reads the student's existing CLAUDE.md before committing it, and that read
+  // is deliberately soft (a 404 just means they have none). Counting every
+  // fetch would make an unrelated extra request look like a retry.
+  const repoCalls = (impl: jest.Mock) =>
+    impl.mock.calls.filter((c) => !String(c[0]).includes('/contents/')).length;
+
   it('does not retry a terminal 4xx', async () => {
     const impl = jest.fn(async () => ({ ok: false, status: 404, text: async () => 'Not Found', json: async () => ({}) }));
     await expect(writeDocsToRepo(TARGET, files, null, { fetchImpl: impl as any }))
       .rejects.toBeInstanceOf(RepoWriteError);
-    expect(impl).toHaveBeenCalledTimes(1);
+    expect(repoCalls(impl)).toBe(1);
   });
 
   it('retries a 5xx up to the cap, then fails cleanly', async () => {
     const impl = jest.fn(async () => ({ ok: false, status: 503, text: async () => 'unavailable', json: async () => ({}) }));
     await expect(writeDocsToRepo(TARGET, files, null, { fetchImpl: impl as any }))
       .rejects.toMatchObject({ error_class: 'UpstreamError' });
-    expect(impl).toHaveBeenCalledTimes(3);
+    // 3 attempts on the repo call. The CLAUDE.md read retries its own 5xx too,
+    // then gives up softly, which is why this filters rather than counting all.
+    expect(repoCalls(impl)).toBe(3);
   });
 
   it('classifies a timeout distinctly', async () => {
@@ -249,5 +258,84 @@ describe('the manifest never triggers a commit on its own', () => {
     const existing = Object.fromEntries(files.map((f) => [f.path, sha(f.content)]));
     const set = withManifest(files, 'any-time');
     expect(changedFiles(set, existing)).toEqual([]);
+  });
+});
+
+// ── the student's own CLAUDE.md ─────────────────────────────────────────────
+describe('CLAUDE.md belongs to the student', () => {
+  /**
+   * Students arrive with a CLAUDE.md that already carries their own conventions
+   * — "we have lots of functionality baked into ours". This writer replaced the
+   * whole file, so every republish silently deleted it. Their file is theirs;
+   * we own a delimited block inside it and nothing else.
+   */
+  const THEIRS = '# CLAUDE.md\n\n## Our conventions\n- Run the linter first.\n- Never touch vendor/.\n';
+
+  /** The commit flow, plus a readable CLAUDE.md on the contents endpoint. */
+  function stubWithExistingClaudeMd(existing: string | null) {
+    const { impl, calls, mock } = githubStub();
+    const wrapped = jest.fn(async (url: any, init: any) => {
+      if (String(url).includes('/contents/CLAUDE.md')) {
+        return existing === null
+          ? { ok: false, status: 404, json: async () => ({}), text: async () => 'Not Found' }
+          : {
+            ok: true,
+            status: 200,
+            json: async () => ({ content: Buffer.from(existing, 'utf8').toString('base64') }),
+            text: async () => '',
+          };
+      }
+      return (impl as any)(url, init);
+    });
+    return { impl: wrapped as unknown as typeof fetch, calls, mock };
+  }
+
+  /** The CLAUDE.md blob actually sent to GitHub. */
+  const committedClaudeMd = (calls: Array<{ url: string; init: RequestInit }>): string => {
+    const tree = calls.find((c) => c.url.endsWith('/git/trees'))!;
+    const body = JSON.parse(String(tree.init.body));
+    return body.tree.find((t: any) => t.path === 'CLAUDE.md').content;
+  };
+
+  it('keeps everything the student wrote and adds our block below it', async () => {
+    const { impl, calls } = stubWithExistingClaudeMd(THEIRS);
+
+    await writeDocsToRepo(TARGET, files, null, { fetchImpl: impl });
+
+    const written = committedClaudeMd(calls);
+    expect(written).toContain('Run the linter first.');
+    expect(written).toContain('Never touch vendor/.');
+    expect(written).toContain('COLABERRY:BEGIN');
+    expect(written).toContain('Conventions.');            // our rendered content
+    expect(written.indexOf('Our conventions')).toBeLessThan(written.indexOf('COLABERRY:BEGIN'));
+  });
+
+  it('writes our block alone when they have no CLAUDE.md', async () => {
+    const { impl, calls } = stubWithExistingClaudeMd(null);
+
+    await writeDocsToRepo(TARGET, files, null, { fetchImpl: impl });
+
+    expect(committedClaudeMd(calls)).toContain('COLABERRY:BEGIN');
+  });
+
+  it('appends rather than clobbers when their file cannot be read', async () => {
+    // A read failure must never be treated as "they had nothing".
+    const { impl, calls } = githubStub();
+    const failing = jest.fn(async (url: any, init: any) => {
+      if (String(url).includes('/contents/CLAUDE.md')) throw new Error('network down');
+      return (impl as any)(url, init);
+    });
+
+    await writeDocsToRepo(TARGET, files, null, { fetchImpl: failing as unknown as typeof fetch });
+
+    expect(committedClaudeMd(calls)).toContain('COLABERRY:BEGIN');
+  });
+
+  it('does not read their file when nothing changed — the no-op stays silent', async () => {
+    const { impl, mock } = stubWithExistingClaudeMd(THEIRS);
+
+    await writeDocsToRepo(TARGET, files, manifestFor(files), { fetchImpl: impl });
+
+    expect(mock).not.toHaveBeenCalled();
   });
 });

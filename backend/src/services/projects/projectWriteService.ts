@@ -184,3 +184,26 @@ export async function importProject(enrollmentId: string, payload: ImportProject
   // that a later rollback would erase.
   return getOwnedProjectTree(enrollmentId, project.id);
 }
+
+/**
+ * Record where this project's Command Center is running. Scoped to the
+ * requesting enrollment; null when the project is not theirs, which the route
+ * turns into a 404.
+ *
+ * Written into `project_variables` rather than a new column — see
+ * ProjectTreeDto.command_center_url for why.
+ */
+export async function setCommandCenterUrl(
+  enrollmentId: string, projectId: string, url: string,
+): Promise<ProjectTreeDto | null> {
+  const project: any = await Project.findByPk(projectId);
+  if (!project || String(project.enrollment_id) !== String(enrollmentId)) return null;
+
+  const vars = { ...(project.project_variables || {}), command_center_url: url };
+  project.project_variables = vars;
+  project.changed('project_variables', true);
+  await project.save();
+
+  log('project_command_center_set', { enrollmentId, projectId });
+  return getOwnedProjectTree(enrollmentId, projectId);
+}
