@@ -5,6 +5,8 @@ import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { formatCentralClock, sessionDayLabel } from './centralDate';
+import { isDev } from '../config/featureFlags';
+import { decideDevEmailRouting } from './devEmailGuard';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -49,7 +51,67 @@ async function guardedSendMail(options: nodemailer.SendMailOptions): Promise<nod
       envelope: { from: '', to: [] },
     } as unknown as nodemailer.SentMessageInfo;
   }
-  return transporter!.sendMail(options);
+  // Environment backstop. Every send in this file funnels through here, so this
+  // is the one place that can guarantee a dev process cannot reach a real
+  // address regardless of database state — see devEmailGuard.ts for why a
+  // settings row alone was not enough.
+  const routed = await applyDevEmailGuard(options);
+  if (!routed) {
+    const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
+    return {
+      messageId: '',
+      accepted: [],
+      rejected: to ? [to] : [],
+      pending: [],
+      response: 'blocked_by_dev_email_guard',
+      envelope: { from: '', to: [] },
+    } as unknown as nodemailer.SentMessageInfo;
+  }
+
+  return transporter!.sendMail(routed);
+}
+
+/**
+ * Apply the dev-environment guard, resolving the sink at call time.
+ *
+ * Returns the options to send, or null when the send must be blocked.
+ *
+ * Sink precedence is env-var first, DB setting second, deliberately: the guard
+ * exists because a database value can vanish on a refresh, so the durable
+ * source is checked ahead of the fragile one. If both are absent the send is
+ * blocked rather than delivered.
+ */
+async function applyDevEmailGuard(
+  options: nodemailer.SendMailOptions
+): Promise<nodemailer.SendMailOptions | null> {
+  if (!isDev) return options;
+
+  let sink = (process.env.DEV_EMAIL_SINK || '').trim();
+  if (!sink) {
+    try {
+      const test = await getTestOverrides();
+      if (test.email) sink = test.email;
+    } catch {
+      // Settings unreadable — fall through with no sink, which fails closed.
+    }
+  }
+
+  const decision = decideDevEmailRouting(options as any, sink || null, true);
+  if (decision.action === 'block') {
+    console.warn(
+      `[Email] BLOCKED by dev guard — APP_ENV=dev with no DEV_EMAIL_SINK and no test_email setting. ` +
+        `Refusing to send to ${redactForLogs(decision.originalRecipients)} (subject: ${options.subject ?? ''})`
+    );
+    return null;
+  }
+  if (decision.action === 'redirect') {
+    console.warn(
+      `[Email] DEV REDIRECT — ${redactForLogs(decision.originalRecipients)} -> ${redactForLogs(sink)} ` +
+        `(subject: ${options.subject ?? ''})`
+    );
+    return decision.options as nodemailer.SendMailOptions;
+  }
+  return options;
 }
 
 async function resolveEmailRecipient(
@@ -1273,8 +1335,17 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
     throw err;
   }
 
-  await recordSessionReminderLog(data, r, urgency, info, null);
-  console.log(`[Email] Session reminder sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+  // guardedSendMail resolves with an empty messageId instead of throwing when a
+  // guard stops the send (kill switch, or the dev-environment guard). Recording
+  // that as 'sent' would put a delivery in communication_logs that never
+  // happened — which defeats the point of the audit row. Same
+  // Boolean(info.messageId) test the training-welcome sender already uses.
+  const delivered = Boolean(info?.messageId);
+  await recordSessionReminderLog(data, r, urgency, info, null, delivered);
+  console.log(
+    `[Email] Session reminder ${delivered ? 'sent' : `BLOCKED (${info?.response || 'guard'})`} to: ` +
+      `${redactForLogs(r.to)} | msgId: ${info?.messageId || ''}`
+  );
 }
 
 /**
@@ -1298,7 +1369,8 @@ async function recordSessionReminderLog(
   r: { to: string; subject: string },
   urgency: string,
   info: any | null,
-  err: any | null
+  err: any | null,
+  delivered: boolean = true
 ): Promise<void> {
   try {
     // Required lazily, NOT imported at the top of the file — do not "tidy" this
@@ -1317,7 +1389,11 @@ async function recordSessionReminderLog(
       // setting is on; recording which mode was in play is the difference
       // between "55 students were mailed" and "55 copies went to one inbox".
       delivery_mode: r.to === data.to ? 'live' : 'test_redirect',
-      status: err ? 'failed' : 'sent',
+      // 'blocked' is a third outcome, distinct from both: the message was never
+      // handed to the transport (kill switch or dev guard). Collapsing it into
+      // 'sent' would record a delivery that did not occur; collapsing it into
+      // 'failed' would imply something went wrong when the block was deliberate.
+      status: err ? 'failed' : delivered ? 'sent' : 'blocked',
       to_address: r.to,
       from_address: env.emailFrom,
       subject: r.subject,
