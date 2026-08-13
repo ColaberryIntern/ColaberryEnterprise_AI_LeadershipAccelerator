@@ -148,6 +148,40 @@ duplicates of anything.
 
 ---
 
+## Governance checklist for a new platform agent (added 2026-08-10, Reese Phase 3)
+
+Reese (Phase 1: identity/DM/ticket-linkage/transparency; Phase 2: signal-driven
+autonomous outreach) is the proven pattern for a real staff-account AI agent wired into
+ProofDesk. `.claude/skills/build-platform-agent/` turns that pattern into a repeatable
+skill for the next agent, sharing 3 generic modules
+(`backend/src/services/agentBlueprint/{agentIdentitySeed,agentSystemPrompt,
+agentTicketLinkService}.ts`) that Reese's own Phase 1 code now calls (Reese is their
+first caller, refactored with zero behavior change — see
+`.loop-architect/runs/20260810-reese-phase3-agent-blueprint/handoff.md`). Before a new
+agent built this way goes live, confirm:
+
+1. **Any communication capability (DM, email, outbound message) requires Ali's
+   explicit sign-off before that agent's `AiAgent.enabled` flag is ever set `true` in
+   production** — matching Reese Phase 2's own rollout gate (a pilot-cohort-scoped
+   launch, explicitly verified live before wider enablement). This is a CLAUDE.md
+   Autonomy Model judgment call (new communication capability sits outside routine
+   implementation-level autonomy), not an automatic proceed.
+2. **New agents seed with `AiAgent.enabled: false` by default.** Reactive-only agents
+   (identity + DM reply + ticket-linkage, no autonomous outreach) still need an
+   explicit enable step before their first real conversation.
+3. **Identity-seed + ticket-linkage + the transparency page must be verified live**
+   (a real DM or equivalent real exchange, a real linked ticket, a real Agent Detail
+   page render) before any proactive/autonomous capability is added on top — mirrors
+   Reese's own Phase 1 → Phase 2 sequencing, never built simultaneously.
+4. **A pilot-cohort or equivalent eligible-population gate is mandatory before any
+   autonomous outreach ships, fail-closed by design** (no default-to-eligible path on
+   missing/ambiguous data) — see `reeseEligibilityService.ts` for the worked pattern.
+   Cadence cap, daily send cap, and a follow-up/escalation cap (see
+   `reeseAutonomousOutreachService.ts` / `reeseOutreachFollowUpService.ts`) are each
+   re-derived per agent for its own domain, never imported as shared code.
+
+---
+
 ## Where to look next
 
 - Full audit evidence (every query, every citation, every independent re-verification):

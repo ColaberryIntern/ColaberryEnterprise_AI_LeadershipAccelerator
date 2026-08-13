@@ -33,8 +33,10 @@ describe('getKitConfigDefaults', () => {
     expect(d.week).toBe(1);
     expect(d.teach.length).toBeGreaterThan(0);
     expect(d.teach.some((s) => /Claude audits its own work/.test(s.title))).toBe(true);
-    expect(d.interactions.every((q) => q.segment === 'readiness')).toBe(true);
-    expect(d.interactions.some((q) => q.q.includes('Architecture Proposal'))).toBe(true);
+    // The fixed Build Day trivia slot still lands on `readiness`. It is no
+    // longer the ONLY question — Week 1 gained authored extras when it was
+    // migrated to a content pack — so assert placement, not exclusivity.
+    expect(d.interactions.some((q) => q.segment === 'readiness' && q.q.includes('Architecture Proposal'))).toBe(true);
     // Evidence is aggregated across rendered teach slides; may be empty for a
     // week with no authored EvidenceClaims, so just assert the shape is an array.
     expect(Array.isArray(d.evidence)).toBe(true);
@@ -56,7 +58,11 @@ describe('getKitConfigDefaults', () => {
   it('resolves Architecture Day defaults: the Monday poll/trivia, story beats, and opening content', () => {
     const d = getKitConfigDefaults(week1Monday);
     expect(d.dayKind).toBe('architecture');
-    expect(d.interactions.filter((q) => q.segment === 'checkin' || q.segment === 'challenge').every((q) => q.q.includes('CLAUDE.md'))).toBe(true);
+    // The design-choice poll is asked at check-in and revealed at the
+    // challenge — same question in both slots. Week 1 now also carries
+    // authored extras on those segments, so assert the pair is present rather
+    // than that nothing else shares the segment.
+    expect(d.interactions.filter((q) => (q.segment === 'checkin' || q.segment === 'challenge') && q.q.includes('CLAUDE.md')).length).toBe(2);
     expect(d.interactions.some((q) => q.segment === 'trivia' && q.q.includes('Plan Mode'))).toBe(true);
     expect(d.storyBeats.length).toBeGreaterThan(0);
     expect(d.storyBeats.every((b) => typeof b.segment === 'string')).toBe(true);
@@ -121,8 +127,10 @@ describe('getKitConfigDefaults', () => {
 
   it('resolves Week 2\'s extraInteractions spliced into the architecture-day default list (week2-architecture-day-redesign)', () => {
     const d = getKitConfigDefaults(week2Monday);
-    // 3 fixed slots (checkin, challenge, trivia) + 4 extras = 7 total.
-    expect(d.interactions.length).toBe(7);
+    // 3 fixed slots (checkin, challenge, trivia) + the week's authored extras.
+    // The extras grew from 4 to 8 when Week 2 was migrated to a content pack,
+    // so assert the fixed slots plus a floor rather than an exact total.
+    expect(d.interactions.length).toBeGreaterThanOrEqual(7);
     const deconstructPoll = d.interactions.find((it) => it.segment === 'deconstruct');
     expect(deconstructPoll?.options).toContain('Skill description');
     const microBuildPolls = d.interactions.filter((it) => it.segment === 'micro-build');
@@ -133,8 +141,16 @@ describe('getKitConfigDefaults', () => {
   });
 
   it('does not leak Week 2\'s extraInteractions into any other week (week2-architecture-day-redesign)', () => {
+    // Every week now authors its own extras, so a raw count no longer proves
+    // isolation. Assert the real property instead: Week 2's distinctive
+    // questions must not appear anywhere in Week 1's resolved set.
     const d1 = getKitConfigDefaults(week1Monday);
-    expect(d1.interactions.length).toBe(3);
+    const week1Text = JSON.stringify(d1.interactions);
+    expect(week1Text).not.toContain('Skill description');
+    expect(week1Text).not.toContain('allowed-tools');
+    expect(week1Text).not.toContain('data-quality-gate');
+    // and Week 1's own fixed slots are still all present
+    expect(d1.interactions.filter((q) => ['checkin', 'challenge', 'trivia'].includes(q.segment)).length).toBeGreaterThanOrEqual(3);
   });
 
   it('scales segment lane widths to a session\'s actual (non-120-min) duration, proportionally', () => {

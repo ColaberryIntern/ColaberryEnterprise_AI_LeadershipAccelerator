@@ -90,9 +90,17 @@ export type NewBuildAnswers = {
   name?: string;
   idea: string;
   size: BuildSize;
+  /**
+   * Legacy scoping fields. The wizard no longer asks these as three fixed
+   * questions — they are derived best-effort from `answers` so the local
+   * fallback below and the server's requirements document (which must
+   * reference all three) keep working.
+   */
   users?: string;
   dataSources?: string;
   done?: string;
+  /** The interview: questions generated from this student's idea, and their replies. */
+  answers?: Array<{ id: string; question: string; answer: string }>;
   weeks: number;
 };
 

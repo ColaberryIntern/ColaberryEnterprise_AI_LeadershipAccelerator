@@ -17,6 +17,7 @@ import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
+import explorerSignalRoutes from './routes/explorerSignalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
@@ -41,6 +42,18 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
+import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
+import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
+// Student Build Pipeline. These two were dropped from server.ts when the
+// sponsor magic-link fix (c21cd66e) resolved a conflict in this file by
+// taking one side wholesale. Without them build_intake/build_plans are never
+// created and github_connections is never re-keyed, so the pipeline fails on
+// first use with 'relation does not exist'. Both are idempotent and assert
+// their own post-conditions.
+import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
+import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
+import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
@@ -51,6 +64,7 @@ import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchem
 import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValueRankerSchema';
 import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
 import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
+import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -90,6 +104,9 @@ app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
 app.use(capePortalRoutes);
+// Explorer Growth OS learner signal ingest (EPIC 2). Dark until
+// EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
+app.use(explorerSignalRoutes);
 app.use(capeAdminRoutes);
 app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
@@ -103,10 +120,20 @@ app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
 app.use(v1Routes);
-app.use(adminRoutes);
+
+// PUBLIC API routes — MUST stay mounted BEFORE adminRoutes. adminRoutes is mounted
+// with no path prefix and chains many admin sub-routers that call `router.use(requireAdmin)`
+// with no path scope. Because of that, any request that doesn't match an earlier route
+// falls into adminRoutes and is 401'd ("Authentication required") by the first requireAdmin
+// guard before it can ever reach these public routes. Mounting them ahead of adminRoutes lets
+// their specific paths (/api/calendar/*, /api/strategy-prep/*, /api/t/*, /api/chat/*) match
+// first. This was the cause of the strategy-call booking 401 bug (see
+// reference_calendar_booking_401_bug). DO NOT move these below adminRoutes.
 app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
+
+app.use(adminRoutes);
 
 // OpenClaw tracked short URL redirect (public, no auth)
 app.get('/i/:tag', async (req, res) => {
@@ -436,6 +463,22 @@ async function ensureStudentTaskMergeSchema() {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS blocked_by JSONB`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_story ON student_tasks (story_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_story ON student_tasks (project_id, story_id) WHERE story_id IS NOT NULL`,
+    // SBP-REQ-v1 FR-012: a requirement is fulfilled by MANY stories, so
+    // UNIQUE (project_id, requirement_key) was never a valid constraint. It
+    // aborted importProject on the first task that re-cited a requirement —
+    // in production every student build persisted exactly 3 tasks and then
+    // 500'd (see docs/BUILD_PIPELINE_AUDIT.md, finding F-1). Task identity is
+    // (project_id, story_id), enforced by the partial unique index above.
+    // Recreate ONLY if you can also prove one requirement never spans two
+    // stories, which the product explicitly does not guarantee.
+    // Sequelize's `unique: true` creates a CONSTRAINT, not a bare index, so
+    // `DROP INDEX` fails with "cannot drop index ... because constraint ...
+    // requires it" and — because this loop catches and logs each statement —
+    // fails SILENTLY. Drop the constraint first (that removes its backing index
+    // too), then the bare-index form for any DB where it exists without a
+    // constraint. Both are IF EXISTS, so running this twice is a no-op.
+    `ALTER TABLE student_tasks DROP CONSTRAINT IF EXISTS student_tasks_unique_req_key`,
+    `DROP INDEX IF EXISTS student_tasks_unique_req_key`,
   ];
   for (const sql of statements) {
     try {
@@ -443,6 +486,45 @@ async function ensureStudentTaskMergeSchema() {
     } catch (err: any) {
       console.warn('[DB] student-task merge schema stmt skipped:', err?.message);
     }
+  }
+
+  // Post-condition check. Every statement above is best-effort and its failure is
+  // only warned about, so a statement that MUST take effect cannot be verified by
+  // "it didn't throw" — that is exactly how the first attempt at this drop failed
+  // silently (DROP INDEX against a constraint-backed index). Assert the outcome.
+  try {
+    const [rows]: any = await sequelize.query(
+      `SELECT
+         (SELECT count(*) FROM pg_constraint
+           WHERE conrelid = 'student_tasks'::regclass
+             AND conname = 'student_tasks_unique_req_key') AS con,
+         (SELECT count(*) FROM pg_indexes
+           WHERE tablename = 'student_tasks'
+             AND indexname = 'student_tasks_unique_req_key') AS idx`
+    );
+    const con = Number(rows?.[0]?.con ?? 0);
+    const idx = Number(rows?.[0]?.idx ?? 0);
+    if (con > 0 || idx > 0) {
+      // Loud and structured: while this survives, every student build silently
+      // truncates at the first task that re-cites a requirement (audit F-1).
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'backend',
+        event: 'student_tasks_unique_req_key_still_present',
+        outcome: 'failure',
+        error_class: 'SchemaInvariantViolation',
+        context: {
+          constraint: con, index: idx,
+          impact: 'student build imports will abort on the first duplicate requirement_key',
+          remedy: "ALTER TABLE student_tasks DROP CONSTRAINT IF EXISTS student_tasks_unique_req_key",
+        },
+      }));
+    } else {
+      console.log('[DB] student_tasks_unique_req_key confirmed absent (FR-012)');
+    }
+  } catch (err: any) {
+    console.warn('[DB] student-task schema post-check failed:', err?.message);
   }
 }
 
@@ -1084,6 +1166,20 @@ async function ensureFriendReferralSchema() {
     console.log('[DB] FriendReferral schema ensured');
   } catch (err: any) {
     console.warn('[DB] FriendReferral schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
+// Sponsor portal magic-link audit trail (STORY-001). Append-only; the model is
+// the schema contract and targeted sync creates the table if missing, since
+// boot runs no global sync. Non-fatal on failure: an unavailable audit table
+// must not stop the API from booting, and every audit write is best-effort.
+async function ensureSponsorPortalAuditSchema() {
+  try {
+    const { SponsorPortalAuditLog } = await import('./models');
+    await SponsorPortalAuditLog.sync();
+    console.log('[DB] Sponsor portal audit schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] Sponsor portal audit schema ensure failed:', err.message?.split('\n')[0]);
   }
 }
 
@@ -2247,6 +2343,14 @@ async function start(): Promise<void> {
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
   // nullable ticket columns (idempotent DDL, shadow mode).
   await ensureWorkLedgerSchema();
+  // Explorer Growth OS — EPIC 1 (Foundation): 5 tables for the learner decision
+  // layer (idempotent DDL, additive only). Nothing reads or writes them until the
+  // EXPLORER_GROWTH_OS_ENABLED flag is on, which it is not by default.
+  await ensureExplorerGrowthSchema();
+  // D1 fix: page_events.lead_id. contextGraphService has always queried this
+  // column and it has never existed, so buildCompositeContext() throws and every
+  // campaign email silently falls back to the legacy prompt. Additive + nullable.
+  await ensurePageEventLeadId();
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
@@ -2309,6 +2413,10 @@ async function start(): Promise<void> {
   await ensurePodcastSchema();
   // "Recommend a friend" onboarding step — friend_referrals table.
   await ensureFriendReferralSchema();
+  // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
+  await ensureSponsorPortalAuditSchema();
+  await ensureSbpSchema();
+  await ensureWorkspaceRepoSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
@@ -2324,6 +2432,7 @@ async function start(): Promise<void> {
   await ensureCapeLearningValueRankerSchema(); // CAPE Phase 4 (T007) — additive columns; must run AFTER ensureTodayFeedSchema
   await ensureCapeTodayPlanSchema(); // CAPE Phase 5 (T003) — new today_plan_feedback table, references enrollments(id)
   await ensureCapeGovernanceSchema(); // CAPE Phase 6 — cape_governance_policy + cape_lifecycle_mode_policy (additive, byte-identical seed defaults)
+  await ensureCapeAiPulseExposureSchema(); // ai_pulse rotation bugfix (2026-08-06) — cape_ai_pulse_exposure table, references enrollments(id)
   await ensureFeedControlSchema();
   await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
@@ -2365,6 +2474,12 @@ async function start(): Promise<void> {
   await ensureFriendshipSchema();
   // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
   await ensureMessagingSchema();
+  // Reese Phase 1 — staff-identity columns on admin_users (display_name,
+  // is_ai_operated, agent_id). Additive, idempotent, no flag.
+  await ensureAdminUserIdentitySchema();
+  // Reese Phase 1 — agent-transparency columns on ai_agents (system_prompt,
+  // tools_granted, persona_version). Additive, idempotent, no flag.
+  await ensureAiAgentIdentitySchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

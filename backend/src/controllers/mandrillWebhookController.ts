@@ -139,6 +139,49 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
         url: event.url, // For click events
       });
 
+      // D2 FIX — suppress a hard-bounced address globally.
+      //
+      // Before this, a hard bounce wrote an InteractionOutcome and nothing else.
+      // checkLeadSendable (communicationSafetyService.ts:106) blocks on
+      // Lead.status IN ('unsubscribed','dnd','bounced'), but NOTHING in the
+      // codebase ever wrote 'bounced' — so that branch was unreachable and a
+      // hard-bounced address stayed globally sendable. campaignLifecycleService
+      // exits the lead from the campaign it bounced on, which meant re-enrolling
+      // them anywhere else resumed mail to a dead address. That is a real
+      // deliverability and reputation problem, not a tidiness one.
+      //
+      // hard_bounce and reject only. A reject means the address is on the
+      // provider's suppression list, which is at least as permanent as a hard
+      // bounce. soft_bounce is deliberately excluded — it is transient (full
+      // mailbox, temporary server issue) and suppressing on it would silently
+      // discard recoverable recipients.
+      if (event.event === 'hard_bounce' || event.event === 'reject') {
+        try {
+          const scheduledEmail = await ScheduledEmail.findByPk(scheduledEmailId, {
+            attributes: ['id', 'lead_id'],
+          });
+          if (scheduledEmail) {
+            const lead = await Lead.findByPk(scheduledEmail.lead_id, {
+              attributes: ['id', 'status'],
+            });
+            // Never downgrade a stronger, user-expressed suppression. An
+            // unsubscribe or DND is a decision the person made; 'bounced' is a
+            // mechanical fact, and overwriting the former with the latter would
+            // lose the reason we must never contact them again.
+            if (lead && lead.status !== 'unsubscribed' && lead.status !== 'dnd') {
+              await Lead.update({ status: 'bounced' }, { where: { id: lead.id } });
+              console.log(
+                `[MandrillWebhook] Lead ${lead.id} marked bounced via ${event.event}`,
+              );
+            }
+          }
+        } catch (bounceErr: any) {
+          // Never fail the webhook over this — Mandrill retries on non-200 and a
+          // retry storm is worse than a delayed suppression.
+          console.warn('[MandrillWebhook] Bounce suppression failed:', bounceErr.message);
+        }
+      }
+
       // Process opt-out for unsub/spam events
       if (outcome === 'unsubscribed') {
         try {

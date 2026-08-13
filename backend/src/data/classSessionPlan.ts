@@ -67,7 +67,17 @@ export interface StoryBeat {
  * rescue line), so this degrades gracefully on the hundreds of existing prompts
  * authored before this model existed. Populate real values for flagship weeks. */
 export interface BuildBayMeta {
-  /** Where the prompt gets pasted. Defaults to "Claude Code" at render time. */
+  /** What this code block IS, which decides the Build Bay's lead chip:
+   *  'paste' (default) → "📋 PASTE INTO <target>" — the student runs it.
+   *  'review' → "📖 REVIEW TOGETHER" — the instructor reads it with the room
+   *  and nobody pastes anything. Needed because a class that directs Claude
+   *  Code to WRITE the code still wants the resulting code on screen to read,
+   *  and labelling that "paste this" teaches the opposite of the lesson. */
+  kind?: 'paste' | 'review';
+  /** Where the prompt gets pasted. Defaults to "Claude Code" at render time.
+   *  Set it explicitly for anything that is NOT a Claude Code prompt — shell
+   *  commands belong in a terminal, and mislabelling them is a real teaching
+   *  error in a program whose whole thesis is "you direct Claude Code". */
   pasteWhere?: string;
   /** e.g. "Plan Mode" | "Manual" | "Auto" — omitted (no chip) if not set. */
   ccMode?: string;
@@ -655,56 +665,319 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     publicTitle: 'Build Your First AI Workflow Assistant',
     monday: {
       tension:
-        'A chat window cannot run your business process at 2am. Moving from the CLI to the Claude API turns a conversation into a program: authenticated, multi-turn, structured output, and tool use so Claude can actually act.',
-      payoffPreview: 'By Thursday you ship a Business Workflow Assistant — a small program that automates one real workflow end to end. This is your Intensive 1 deliverable.',
+        'Tonight your build plan gets generated — you start it at the top of class and open it after the break, once it has had time to turn your paragraph into real requirements and real tasks. Scroll it and you will find task after task where the assistant has to classify something, draft something, or decide something — at 2am, on a schedule, with nobody at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. Those tasks need the other door: the Claude API, called from your own code. Same models, different driver, and — this is the part nobody has told you yet — a completely separate bill.',
+      payoffPreview: 'By Thursday you ship a Business Workflow Assistant — a small program that automates one real workflow from your own build plan, end to end. This is your Intensive 1 deliverable.',
       architectureBeats: [
-        'From CLI to code: API auth, messages, system prompts, streaming',
-        'Structured (JSON) output so downstream code can trust the shape',
-        'Tool use: define a tool schema, handle tool-result blocks, run multi-tool turns',
-        'Evaluation: a test dataset + a grader, so quality is measured not eyeballed',
-        'The Workflow Assistant pattern: input → reason → call tools → structured result',
+        'Two doors into the same models: Claude Code (a human drives) vs the Claude API (a program drives)',
+        'Two separate bills: a Claude subscription pays for your seat; Console credits pay for your code, per token',
+        'The token meter: input + output tokens × the rate of the model you named — output costs ~5× input',
+        'Python is the wrapper that shows up when you do not: trigger → call → structured result → your systems',
+        'One endpoint: system + messages + tools in, one message and a token bill out',
       ],
-      realExample: 'Deconstruct an assistant that works in the demo but has no eval and unbounded tool calls — where it silently breaks in production.',
-      microBuild: 'Make your first authenticated API call from code, then add one tool and get structured output back.',
+      realExample: 'An assistant that never missed in the demo, then met production: prose where the code expected JSON, a tool loop with no cap draining credits overnight, and no eval to tell you it got worse. None of the three raise an error — that is what makes them expensive.',
+      microBuild: 'First, open the build plan that has been generating all night and find one task that needs Claude to decide something — that is the task you are about to learn how to build. Then: an API key into your environment, your first authenticated call from a real Python file, a structured shape you can trust, one tool — and the token meter on what you just spent.',
       designChoice: {
         kind: 'poll',
-        q: 'Your assistant sometimes returns malformed output. Best fix?',
-        options: ['Add more prompt pleading', 'Require structured JSON output and validate it', 'Retry forever', 'Ship it'],
-        reveal: 'Ask for structured output and validate at the boundary. Hope is not a parsing strategy.',
+        theater: true,
+        q: 'Your Anthropic subscription is paid up. What does that actually cover?',
+        options: [
+          'Everything — Claude Code and anything I build',
+          'Claude Code and the Claude apps only',
+          'Only the API calls my programs make',
+          'Nothing, it is all pay-as-you-go',
+        ],
+        answer: 1,
+        reveal: 'Your subscription pays for the seat you personally sit in. Anything your CODE calls is a separate meter — API credits from the Console, billed per token. Same login, two wallets.',
       },
       trivia: {
         kind: 'trivia',
-        q: 'How do you know a prompt actually improved?',
-        options: ['It feels better', 'An eval: a dataset + a grader with a score', 'More tokens', 'A colleague nods'],
-        answer: 1,
-        reveal: 'An eval turns "feels better" into a number you can defend.',
+        q: 'What exactly are you billed for on one Claude API call?',
+        options: [
+          'A flat fee per request',
+          'Minutes of compute time',
+          'Input tokens + output tokens, at the rate of the model you named',
+          'One charge per tool the model calls',
+        ],
+        answer: 2,
+        reveal: 'Two meters on every call: everything you sent in, and everything Claude wrote back — and output runs about five times the input rate on every current model.',
       },
-      thursdayTrailer: 'Thursday we ship the Workflow Assistant — API, tools, structured output, and a real eval.',
+      thursdayTrailer: 'Thursday we ship the Workflow Assistant on a workflow from your own build plan — API, one tool, structured output, and a real eval. Bring the task you picked tonight.',
+      hook: {
+        headline: 'Tonight your project stops being an idea and becomes a build.',
+        caption: 'And the moment it does, half your tasks need something you have never done: Claude, running without you.',
+      },
+      storyBeats: {
+        checkin: [
+          {
+            icon: '🧾', tone: 'amber', eyebrow: 'Right now — the paragraph on your screen',
+            title: 'Somewhere there is a napkin that became a company',
+            body: 'Almost every system you use every day started as a paragraph somebody was slightly embarrassed by. The founders did not wait for the idea to be finished; they wrote down who it was for, what it did, and the one thing it had to get right, and handed it to whoever could turn it into a plan. What you are typing into that box right now is that paragraph. It does not have to be right. It has to be real enough to argue with.',
+            punch: 'The paragraph is not the small part of this. It is the only part nobody can do for you.',
+          },
+        ],
+        'business-problem': [
+          {
+            icon: '🏛️', tone: 'violet', eyebrow: 'Change of pace — what you actually are now',
+            title: 'The architect on a job site does not lay the bricks. She also does not leave.',
+            body: 'A building architect is not on site because she is faster with a trowel than the crew. She is there because when a wall goes up two feet off the plan, she is the only one who will notice tonight instead of in six weeks. Your task list already has the prompts written. Claude will lay the bricks faster than you ever could. What it cannot do is care whether what is going up is the building you meant.',
+            punch: 'You were never going to win by typing faster. You win by being the one who notices.',
+          },
+        ],
+        architecture: [
+          {
+            icon: '💡', tone: 'cherry', eyebrow: 'Change of pace — the first invoice',
+            title: 'Everything you have built so far has been free at the point of use',
+            body: 'For two weeks Claude Code has felt like a light switch: you flip it, work happens, and the cost is a flat monthly number you already agreed to. The moment your code makes the call instead of your keyboard, that changes — every run has a price, and the price is set by a decision you make in one line. This is not a warning. It is the first time in this program you get to make a real engineering trade-off, and the trade-off is intelligence against money.',
+            punch: 'Every serious system you will ever build is somebody choosing what to spend on which decision.',
+          },
+        ],
+        deconstruct: [
+          {
+            icon: '🌙', tone: 'berry', eyebrow: 'The 3am story',
+            title: 'The loop that ran all night and nobody was awake to see it',
+            body: 'The demo was flawless at 4pm. At 11pm a customer sent a ticket with a malformed order number, the model got confused, and it asked for the same lookup again. And again. There was no cap, because nothing had ever needed one in the demo. By morning the code had not crashed, had not thrown a single error, and had not sent a single reply — it had just quietly spent all night asking the same question.',
+            punch: 'A system that fails loudly is a nuisance. A system that fails silently is a bill.',
+          },
+        ],
+        'micro-build': [
+          {
+            icon: '🐍', tone: 'leaf', eyebrow: 'Before the code — the locker room talk',
+            title: 'Nobody in this room is becoming a Python developer tonight, and nobody needs to',
+            body: 'Some of you have never written a line of Python and are quietly deciding right now that this is the week you fall behind. Here is the actual bar: you need to be able to read about forty lines and tell whether they do what you meant. That is it. Claude writes the lines. You are the one who has to look at them and say yes or no — which is the same job you have been doing since Week 1, in a file instead of a terminal.',
+            punch: 'You are not learning to write it. You are learning to judge it. You have been doing that for two weeks already.',
+          },
+        ],
+      },
+      extraInteractions: [
+        {
+          segment: 'checkin', kind: 'poll',
+          q: 'Where are you right now?',
+          options: ['Still writing my idea', 'Submitted — it is generating', 'I cannot find the button', 'Something errored'],
+          eyebrow: '🚦 Room check', title: 'Before we go on — is everyone launched?',
+          presenterTip: 'Operational, not teaching. You only need "submitted" — the plan itself takes a long time to generate and nobody will have one yet, so do not ask about task lists here. Read the last two counts out loud and send a mentor to those students NOW. Do not advance until they are near zero.',
+        },
+        {
+          segment: 'business-problem', kind: 'poll',
+          q: 'You paste a task prompt, and Claude proposes something that is not what you meant. What does an architect do?',
+          options: [
+            'Accept it and clean it up later',
+            'Delete the task and skip it',
+            'Name exactly what is wrong and have it re-propose',
+            'Give up on the prompt and write the code by hand',
+          ],
+          answer: 2,
+          reveal: 'Redirecting is not the prompt failing. Redirecting IS the job — and naming the specific thing that is wrong is what separates an architect from someone rerolling the dice.',
+          eyebrow: '🏛️ Architect check', title: 'It came back wrong. Now what?',
+          presenterTip: 'Take answers before revealing. If the room splits toward "accept and fix later," that is worth two extra minutes — it is the habit that quietly wrecks a capstone. This question needs no finished build, which is why it comes first.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'Open your build plan now — how many tasks did it generate?',
+          options: ['Under 10', '10 to 20', '21 to 40', 'More than 40', 'Mine is still building'],
+          eyebrow: '📊 Look at yours', title: 'How big did your plan turn out?',
+          presenterTip: 'Deliberately AFTER the break, not in the first half. Generating requirements and decomposing them takes a real while — asking in the business-problem segment lands before most plans exist and the honest answer is just "still building", which teaches nothing. By this point in the night everyone has one. No right answer; call out the biggest number by name to make the plan feel real.',
+        },
+        {
+          segment: 'architecture', kind: 'poll',
+          theater: true,
+          q: 'Same triage job, 1,000 tickets a day. Which model do you put on it?',
+          options: [
+            'Haiku 4.5 — about $90 a month',
+            'Sonnet 5 — about $270 a month',
+            'Opus 5 — about $450 a month',
+            'It depends on whether it passes my eval',
+          ],
+          answer: 3,
+          reveal: 'All three are defensible answers, and exactly one is the architect answer: you pick the cheapest model that still passes your eval. That is why Week 3 ends with building an eval — without one, this is guessing with a price tag.',
+          eyebrow: '💰 The real decision', title: 'You are paying for this. Choose.',
+          presenterTip: 'Full-screen theater moment — lock the votes, show the spread, then reveal. Do not rush it. This is the slide people quote back to you in Week 10.',
+        },
+        {
+          segment: 'architecture', kind: 'trivia',
+          q: 'Where does your API key belong?',
+          options: [
+            'In the Python file, near the top so it is easy to find',
+            'In an environment variable, never committed',
+            'In the README so your team can find it',
+            'In the task prompt so Claude Code can use it',
+          ],
+          answer: 1,
+          reveal: 'Environment variable, every time. A key committed to git is a key you must treat as already stolen — you rotate it, you do not hide it.',
+          eyebrow: '🔑 Knowledge check', title: 'One question before we touch code',
+          presenterTip: 'Fast. Reveal, one line of why, move straight into the key setup. Do not let it become a security lecture — it comes back in Week 9.',
+        },
+        {
+          segment: 'deconstruct', kind: 'poll',
+          q: 'Of these three failures, which one costs you actual money the fastest?',
+          options: [
+            'Prose returned where the code expected JSON',
+            'A tool loop with no cap, running overnight',
+            'No eval, so regressions go unnoticed',
+            'A typo in the system prompt',
+          ],
+          answer: 1,
+          reveal: 'The uncapped loop. The other two cost you trust and time; that one spends real credits all night with nobody awake to notice. It is the first bug in this program with a dollar figure attached.',
+          eyebrow: '💸 Cost check', title: 'Three silent failures. Which one bills you?',
+          presenterTip: 'Ties the failure segment straight back to the money slide. After the reveal, say the number out loud — an uncapped overnight loop on the top-tier model is not a rounding error.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'Did your first API call come back?',
+          options: ['✅ Got a reply', '⏳ Still setting up', '🔑 Stuck on the key', '😵 Completely lost'],
+          eyebrow: '🚦 Build check', title: 'Everyone gets a reply before we move on',
+          presenterTip: 'Operational. Call the numbers out loud ("18 of 22 — four more"). Nobody moves past this until the last two options are near zero.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'Honestly — where are you with Python right now?',
+          options: [
+            '😬 I have never written a line',
+            '🙂 I can read it and follow along',
+            '💪 I could write this myself',
+            '🧙 I write Python for a living',
+          ],
+          eyebrow: '🌡️ Self-check', title: 'Where you actually stand, no judgment',
+          presenterTip: 'Ask this AFTER they have run real code, not before — it is a confidence read on what just happened. If most of the room picks the first two options, say so out loud and repeat the bar: read forty lines, judge them. That is the whole requirement.',
+        },
+      ],
     },
     thursday: {
-      resultPreview: 'A running Business Workflow Assistant that automates one real workflow, plus a basic eval harness.',
-      readinessCheck: 'An API key in your environment (never in source), Python or Node ready, your repo open.',
-      buildMap: ['CP0: authenticated call', 'CP1: tool use working', 'CP2: structured output + one workflow', 'CP3: eval harness green'],
+      resultPreview: 'A Workflow Assistant that automates one real workflow from YOUR own build plan — tool use, a capped loop, a structured record your systems could ingest, and an eval score you can defend. Then broken on purpose three ways and hardened.',
+      readinessCheck: 'Four things green: your key live in the terminal you are about to use (it does not survive a new tab), Monday\'s project folder, Claude Code open in it, and one workflow chosen from your own build plan.',
+      buildMap: [
+        'CP0: your workflow named + the package scaffolded',
+        'CP1: client, system prompt, and one real tool',
+        'CP2: the capped tool loop → a validated structured record',
+        'CP3: a 10-case eval with a score — then break it and harden it',
+      ],
       checkpoints: [
-        { n: 0, label: 'Authenticated', detail: 'A single API call returns from code.' },
-        { n: 1, label: 'Tool use', detail: 'Claude calls one defined tool and you handle the result.' },
-        { n: 2, label: 'Workflow', detail: 'The assistant automates one real workflow with structured output.' },
-        { n: 3, label: 'Evaluated', detail: 'A dataset + grader scores the assistant.' },
+        { n: 0, label: 'Scoped', detail: 'Your workflow written in one line, and a package structure you approved.' },
+        { n: 1, label: 'Wired', detail: 'Client connects, system prompt is yours, and one real tool is implemented.' },
+        { n: 2, label: 'Running', detail: 'The capped loop returns a validated record on a REAL item from your work.' },
+        { n: 3, label: 'Measured', detail: 'A 10-case eval prints a score — and survives being broken and hardened.' },
       ],
       prompts: [
-        { label: 'API client', prompt: 'Write a minimal Claude API client that sends a system prompt and a user message and prints the response. Read the key from an environment variable, never hardcode it.' },
-        { label: 'Add a tool', prompt: 'Add a tool named "lookup_order" with a JSON schema, handle the tool-result turn, and return the final structured answer as JSON.' },
-        { label: 'Eval harness', prompt: 'Write an eval script: a small dataset of inputs + expected fields, run the assistant on each, and grade whether the required fields are present and valid.' },
+        { label: 'Scaffold it', pasteWhere: 'Claude Code', ccMode: 'Plan Mode', prompt: 'In Plan Mode, propose a small Python package for a Workflow Assistant automating this workflow: [YOURS]. One file per responsibility — client, system prompt, tools, the assistant, the eval. Say what belongs in each and what must never go in it. Do not create anything yet.' },
+        { label: 'Wire the tool + capped loop', pasteWhere: 'Claude Code', prompt: 'Add one real tool for my workflow (its description must say WHEN to use it), plus the request-execute-return loop. Enforce a MAX_TURNS cap of 5, an explicit timeout on every call, and a named error when the cap is hit. Return all tool_result blocks in a single user message with matching tool_use_ids, and accumulate token usage across every call.' },
+        { label: 'Structure it + grade it', pasteWhere: 'Claude Code', prompt: 'End every run with one call that returns a validated record using output_config with a json_schema format (not the deprecated output_format). Then build a 10-case eval set for my workflow — I will confirm the expected answers — and a grader that prints a score, the failures, and the total token cost, with the model selectable from the command line.' },
       ],
-      failureInjection: 'Hardcode the API key in source (then "accidentally" show it), and let a tool call run unbounded with no error handling.',
-      recovery: 'Move the key to an env var, redact it in logs, and wrap the tool call with a timeout, capped retries, and a clear error class. Re-run safely.',
+      failureInjection: 'On a COPY, cause all three failures we predicted on Monday: hardcode the key into the source, remove the MAX_TURNS cap, and reword the system prompt so it is vaguer. Then re-run the eval next to the original score. The lesson is that only the third is detectable — and only because they built an eval.',
+      recovery: 'One boring fix per break: key back to the environment plus a startup check that fails loudly, the cap restored with a timeout and a specific named error, and the prompt reverted because the number said so. Then rotate the key that touched a file — a key that has been in a file is compromised whether or not it was pushed.',
       trivia: {
         kind: 'trivia',
-        q: 'Where does an API key belong?',
-        options: ['In the source file', 'In an environment variable, never committed', 'In the README', 'In the commit message'],
-        answer: 1,
-        reveal: 'Secrets live in env vars — never in source, logs, or history.',
+        q: 'You hardcoded a key into a file, then deleted the line. Are you fine?',
+        options: [
+          'Yes — it was never committed',
+          'Yes, as long as the file is gitignored',
+          'No — treat it as compromised and rotate it',
+          'Only if the repo is private',
+        ],
+        answer: 2,
+        reveal: 'A key that has touched a file is in your shell history, your editor buffer, and one careless commit from public. Rotate first, investigate second — always that order.',
       },
+      beforeAfter: {
+        label: 'Monday → Thursday',
+        before: [
+          'Four disconnected exercises',
+          'A demo ticket somebody else wrote',
+          'It works when you watch it',
+          '"Seems better" after a prompt change',
+          'A loop that could run all night',
+        ],
+        after: [
+          'One assistant you can reuse',
+          'A real workflow from your own plan',
+          'It runs unattended, with a cap and a timeout',
+          'A score out of 10 you can defend',
+          'Broken on purpose, then hardened',
+        ],
+      },
+      storyBeats: {
+        'result-preview': [
+          {
+            icon: '🌉', tone: 'violet', eyebrow: 'Before you build — where you actually are',
+            title: 'On Monday you learned four moves. Tonight they stop being moves.',
+            body: 'There is a particular moment in learning anything practical when the separate drills collapse into one motion — when a driver stops thinking about the clutch and simply drives. Monday you practised four things one at a time: authenticate, steer, structure, and hand it a tool. None of them was useful alone. Tonight they become a single program that does one real job, and after tonight you will not think about them separately again.',
+            punch: 'You are not learning four things anymore. You are building one thing that happens to use them.',
+          },
+        ],
+        'build-map': [
+          {
+            icon: '🧯', tone: 'amber', eyebrow: 'Why we break it on purpose',
+            title: 'Every fire drill you have ever done was for a fire that never came',
+            body: 'Nobody schedules a fire drill because they expect a fire that Tuesday. They do it because the first time you find the exit should not be the first time you need it. Tonight we set fire to your assistant deliberately, while it is small, while nothing depends on it, and while an instructor is standing there. The failures we cause are the exact three that take down real systems, and you will have already met all of them.',
+            punch: 'The first time your code fails should never be the first time you have seen it fail.',
+          },
+        ],
+        failure: [
+          {
+            icon: '🔑', tone: 'cherry', eyebrow: 'A true story that happens constantly',
+            title: 'The key was in the file for four minutes. That was enough.',
+            body: 'A developer pastes a key into a config file to test something quickly, means to remove it, and gets pulled into a meeting. It goes out in a commit that afternoon. Automated scanners crawl public repositories continuously looking for exactly this, and keys have been found and used within minutes of being pushed. Nobody in that story was careless in a way you would notice at the time — they were just briefly, ordinarily busy.',
+            punch: 'This is why the rule is rotate first, investigate second. Judgement is slower than a scanner.',
+          },
+        ],
+      },
+      extraInteractions: [
+        {
+          segment: 'readiness', kind: 'poll',
+          q: 'Four-point check — where are you?',
+          options: ['✅ All four green', '🔑 Key not set in this terminal', '📁 Cannot find Monday\'s folder', '📋 No workflow chosen yet'],
+          eyebrow: '🚦 Roll call', title: 'Before anyone writes a line',
+          presenterTip: 'Operational. Read the counts out loud and send mentors to the non-green students immediately. Do not begin the guided build with people stuck on setup — that is how a Build Day dies.',
+        },
+        {
+          segment: 'build-map', kind: 'poll',
+          q: 'Which workflow from your own build plan are you automating tonight?',
+          options: ['Something that reads and classifies', 'Something that drafts or writes', 'Something that looks up and reports', 'Still deciding'],
+          eyebrow: '📋 Commit to one', title: 'Name it before you build it',
+          presenterTip: 'Have three people say theirs out loud in one sentence. Anyone on "still deciding" gets helped now — the whole night is built on this choice, and a vague answer here produces a vague assistant.',
+        },
+        {
+          segment: 'guided-build', kind: 'trivia',
+          q: 'Your tool never fires, even though the question obviously needs it. What do you check FIRST?',
+          options: [
+            'The input_schema types',
+            'The tool description — does it say WHEN to use it?',
+            'max_tokens',
+            'Whether the model supports tools',
+          ],
+          answer: 1,
+          reveal: 'The description is the routing logic, not documentation. Same lesson as Skill descriptions in Week 2 — if it does not name the trigger, Claude cannot tell it is relevant.',
+          eyebrow: '🛠️ Diagnose it', title: 'The tool is not firing',
+          presenterTip: 'Fires right after they write the tool. Take answers, reveal, then have them re-read their own description against it — several will fix theirs on the spot.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'Your assistant just ran on a real item. How did it do?',
+          options: ['🎯 Nailed it', '🙂 Close — needs prompt work', '🤨 Wrong decision', '💥 Still debugging'],
+          eyebrow: '🎬 The moment', title: 'It just ran on your real work',
+          presenterTip: 'Peak-energy moment of the night. Call on a "nailed it" to describe what theirs did, then a "wrong decision" — the second one is more instructive, and normalising it keeps the room honest.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'You swapped to Haiku and re-ran the eval. What happened to the score?',
+          options: ['Held — same score, way cheaper', 'Dropped a little', 'Dropped a lot', 'Did not get to try it'],
+          eyebrow: '💰 The architect move', title: 'Cheaper model, same eval — what happened?',
+          presenterTip: 'Only run this if the room got to the model swap. If several say "held", stop and name what just happened: they made a real cost decision with evidence instead of a guess. That is the whole week in one poll.',
+        },
+        {
+          segment: 'failure', kind: 'poll',
+          q: 'Of the three faults you just introduced, how many raised an error?',
+          options: ['All three', 'Two', 'One', 'None of them'],
+          answer: 3,
+          reveal: 'None. The leaked key and the uncapped loop looked perfectly healthy — only the prompt regression was detectable, and only because you built an eval to detect it.',
+          eyebrow: '😐 Notice this', title: 'How many of them crashed?',
+          presenterTip: 'Ask before you reveal. The realisation that nothing crashed is the single highest-retention beat of the week — let the silence do the work.',
+        },
+        {
+          segment: 'demos', kind: 'poll',
+          q: 'Would you actually use tonight\'s assistant on your real work next week?',
+          options: ['Yes, as-is', 'Yes, with a bit more hardening', 'Not yet — but I can see it', 'No, mine is a learning exercise'],
+          eyebrow: '🔮 Honest check', title: 'Is this real enough to use?',
+          presenterTip: 'No wrong answer. Read the spread out loud — it tells you who to point at the internship lane, and it tells them how far they actually got tonight.',
+        },
+      ],
     },
     assignment: {
       title: 'Business Workflow Assistant + eval',
@@ -1349,13 +1622,12 @@ export const ARCHITECTURE_DIAGRAMS: Record<number, string> = {
   T --> B["executive-dashboard-brief"]
   B --> L["Leadership: PUBLISH or BLOCK decision"]`,
   3: `flowchart LR
-  In["Business input"] --> API["Claude API"]
-  API --> SYS["System prompt + streaming"]
-  API --> TOOL["Tool use"]
-  TOOL --> EXT["Real systems / data"]
-  API --> OUT["Structured JSON output"]
-  OUT --> APP["Workflow Assistant"]
-  EVAL["Eval: dataset + grader"] -.measures.-> API`,
+  Y["👤 You"] --> CC["💻 Claude Code<br/>subscription seat"]
+  CC --> APP["🐍 Your Python program"]
+  APP --> API["🔌 Claude API<br/>paid per token"]
+  API --> APP
+  APP --> OUT["📦 Structured result<br/>your systems can use"]
+  KEY["🔑 API key<br/>from the Console"] -.-> API`,
   4: `flowchart TD
   A["Ad-hoc prompt"] --> L["Technique ladder<br/>clear → specific → structured → examples"]
   L --> TPL["Versioned template + variables"]

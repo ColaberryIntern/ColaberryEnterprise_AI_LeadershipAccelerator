@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
 import ProjectPreview from './ProjectPreview';
 import ProjectInterior from './ProjectInterior';
 import NextSessionStrip from './NextSessionStrip';
+import { resolveBackendProjectId, startBuild as startServerBuild, pollBuild } from '../../../services/sbpApi';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
 import FeedCard, { FeedItem } from '../feed/FeedCard';
 import {
@@ -12,6 +13,7 @@ import {
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
 import { syncProjectsWithBackend } from './projectSync';
+import { deriveLegacyScope } from './deriveLegacyScope';
 import './projects.css';
 import '../today/TodayShell.css';
 
@@ -53,6 +55,71 @@ function BuildCard({ p, onOpen }: { p: StudentProject; onOpen: () => void }) {
   );
 }
 
+type PipelineState =
+  | { state: 'idle' }
+  | { state: 'generating'; projectId: string; status?: string }
+  | { state: 'ready'; projectId: string }
+  | { state: 'gate_failed'; projectId: string; reason: string }
+  | { state: 'local'; reason: string };
+
+/**
+ * Tells the student which path produced their plan, and why.
+ *
+ * Deliberately visible. The original defect survived for months precisely
+ * because a degraded result looked identical to a good one — a student saw a
+ * build and had no way to know it was a generic template rather than a plan
+ * derived from what they wrote.
+ */
+const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => {
+  if (pipeline.state === 'idle') return null;
+
+  if (pipeline.state === 'generating') {
+    return (
+      <div className="card pjw-pane" role="status" aria-live="polite">
+        <strong>Designing your system…</strong>
+        <p className="lead" style={{ marginBottom: 0 }}>
+          We are writing your requirements and breaking them into releases and stories.
+          This takes a few minutes — you can keep working and come back.
+        </p>
+      </div>
+    );
+  }
+
+  if (pipeline.state === 'ready') {
+    return (
+      <div className="card pjw-pane" role="status" aria-live="polite">
+        <strong>Your plan is ready.</strong>
+        <p className="lead" style={{ marginBottom: 0 }}>
+          Built from your own answers, with every requirement traced to a story.
+        </p>
+      </div>
+    );
+  }
+
+  if (pipeline.state === 'gate_failed') {
+    return (
+      <div className="card pjw-pane" role="status" aria-live="polite">
+        <strong>Your plan has a gap.</strong>
+        <p className="lead" style={{ marginBottom: 0 }}>
+          {pipeline.reason} We would rather tell you than hand you a plan that
+          quietly misses something. Regenerate to try again.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card pjw-pane" role="status" aria-live="polite">
+      <strong>We built you a starter plan.</strong>
+      <p className="lead" style={{ marginBottom: 0 }}>
+        The full requirements service was unavailable, so this is a general
+        template rather than a plan written from your answers. Everything still
+        works — regenerate later for the tailored version. ({pipeline.reason})
+      </p>
+    </div>
+  );
+};
+
 const ProjectsPage: React.FC = () => {
   const projects = useProjectsList();
   // Backend-source flip: pull the student's persisted build (completions from
@@ -61,16 +128,82 @@ const ProjectsPage: React.FC = () => {
   useEffect(() => { void syncProjectsWithBackend(); }, []);
   const demo = useIsExplorer();   // Explorer = demo mode: no real builds get created
   const [view, setView] = useState<View>({ kind: 'overview' });
+  // Which path produced the student's plan, and why. Surfaced rather than
+  // hidden: a student is entitled to know whether they got the real thing.
+  const [pipeline, setPipeline] = useState<PipelineState>({ state: 'idle' });
 
   const active = (view.kind === 'preview' || view.kind === 'interior') ? projects.find((p) => p.id === view.id) : null;
   const openInterior = (id: string) => { setView({ kind: 'interior', id }); window.scrollTo(0, 0); };
 
-  const handleCreate = (a: NewBuildAnswers) => {
+  /**
+   * Start a build.
+   *
+   * Tries the real server pipeline first — a genuine requirements document,
+   * a gated plan, releases and stories derived from the student's own answers.
+   * Falls back to the local generator on ANY failure, including the pipeline
+   * being switched off (404).
+   *
+   * The fallback is deliberate rather than defensive: the local path still
+   * produces something a student can work with, so a pipeline problem degrades
+   * the quality of their plan instead of leaving them with nothing. The banner
+   * tells them which one they got — silently serving the worse result is how
+   * the original defect stayed invisible for months.
+   */
+  const handleCreate = useCallback(async (raw: NewBuildAnswers) => {
     if (demo) return;   // demo — the wizard's create button is disabled; guard the store too
-    const id = createProjectFromAnswers(a);
-    setView({ kind: 'preview', id });
+
+    // The interview is generated now, so the three legacy scoping fields are
+    // derived from it rather than asked directly. Both the local fallback and
+    // the server read them, so derive once and use the same object for both.
+    const a: NewBuildAnswers = { ...raw, ...deriveLegacyScope(raw.answers) };
+
+    // Optimistic local build first, so the student sees their project
+    // immediately either way and the page has something to show.
+    const localId = createProjectFromAnswers(a);
+    setView({ kind: 'preview', id: localId });
     window.scrollTo(0, 0);
-  };
+
+    const resolved = await resolveBackendProjectId();
+    if (!resolved.ok) { setPipeline({ state: 'local', reason: resolved.error.message }); return; }
+
+    const started = await startServerBuild({
+      project_id: resolved.projectId,
+      idea: a.idea,
+      name: a.name || undefined,
+      size: a.size,
+      users: a.users || undefined,
+      data_sources: a.dataSources || undefined,
+      done_definition: a.done || undefined,
+      answers: a.answers && a.answers.length ? a.answers : undefined,
+      target_weeks: a.weeks,
+    });
+    if (!started.ok) { setPipeline({ state: 'local', reason: started.error.message }); return; }
+
+    setPipeline({ state: 'generating', projectId: resolved.projectId });
+    const result = await pollBuild(resolved.projectId, {
+      onUpdate: (st) => setPipeline({ state: 'generating', projectId: resolved.projectId, status: st.status }),
+    });
+
+    if (!result.ok) { setPipeline({ state: 'local', reason: result.error.message }); return; }
+    if (result.state.status === 'gate_failed') {
+      // Say what is actually wrong. The backend only reports gate_failed for
+      // BLOCKING violations now — uncovered must-haves, broken references, an
+      // r0 nobody can start — and those are not all "not covered by a story",
+      // which is what this used to claim regardless of the real cause.
+      const blocking = result.state.gate?.violations ?? [];
+      setPipeline({
+        state: 'gate_failed',
+        projectId: resolved.projectId,
+        reason: blocking.length
+          ? blocking.slice(0, 3).map((v) => v.message).join(' ')
+          : 'The plan could not be verified against your requirements.',
+      });
+      return;
+    }
+    setPipeline({ state: 'ready', projectId: resolved.projectId });
+    // The persisted plan is pulled in by the normal sync on next load.
+    void syncProjectsWithBackend();
+  }, [demo]);
 
   // primary build + hero next-step
   const primary = projects[0] || null;
@@ -120,6 +253,7 @@ const ProjectsPage: React.FC = () => {
       <PortalShell><div className="pj-root">
         <div className="page-h"><div className="crumbs0">Where work happens</div><h1>Start a new build</h1><div className="sub">Turn a raw idea into a scheduled build with lists and tasks — created in the background, right here in your portal.</div></div>
         <button className="pj-back" onClick={() => setView({ kind: 'overview' })}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Back to projects</button>
+        <PipelineBanner pipeline={pipeline} />
         <ProjectWizard onCreate={handleCreate} />
       </div></PortalShell>
     );

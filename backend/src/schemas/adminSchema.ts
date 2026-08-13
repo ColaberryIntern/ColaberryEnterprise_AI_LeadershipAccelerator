@@ -6,3 +6,12 @@ export const adminLoginSchema = z.object({
 });
 
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
+
+// Length is re-checked in changeAdminPassword (MIN_PASSWORD_LENGTH) so the rule
+// holds for any caller, not just ones arriving through this route.
+export const adminChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(12, 'New password must be at least 12 characters'),
+});
+
+export type AdminChangePasswordInput = z.infer<typeof adminChangePasswordSchema>;

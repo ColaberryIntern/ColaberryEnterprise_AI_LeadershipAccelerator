@@ -177,7 +177,10 @@ export type AiAgentType =
   // Department super agents
   | 'super_agent'
   // AI Workforce directors (orgRegistry.ts) — one tool + one action each
-  | 'workforce_director';
+  | 'workforce_director'
+  // Reese Phase 1 — real staff-facing AI mentor identity (student DM, ProofDesk-
+  // linked). See backend/src/services/reeseIdentitySeed.ts.
+  | 'ai_staff_mentor';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
@@ -212,6 +215,12 @@ interface AiAgentAttributes {
   agent_group?: string;
   created_at?: Date;
   updated_at?: Date;
+  // Reese Phase 1 — agent-transparency fields (additive, see
+  // backend/src/db/ensureAiAgentIdentitySchema.ts). All optional/nullable so
+  // existing AiAgent rows are unaffected.
+  system_prompt?: string | null;
+  tools_granted?: string[] | null;
+  persona_version?: string | null;
 }
 
 class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
@@ -240,6 +249,9 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare agent_group: string;
   declare created_at: Date;
   declare updated_at: Date;
+  declare system_prompt: string | null;
+  declare tools_granted: string[] | null;
+  declare persona_version: string | null;
 }
 
 AiAgent.init(
@@ -352,6 +364,19 @@ AiAgent.init(
     },
     updated_at: {
       type: DataTypes.DATE,
+      allowNull: true,
+    },
+    system_prompt: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    tools_granted: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+    },
+    persona_version: {
+      type: DataTypes.STRING(50),
       allowNull: true,
     },
   },

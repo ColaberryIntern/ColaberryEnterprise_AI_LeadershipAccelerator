@@ -4,6 +4,7 @@ import { getTestOverrides, getSetting } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { formatCentralClock } from './centralDate';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -1293,7 +1294,7 @@ function buildSessionReminderHtml(data: SessionReminderData): string {
   <div class="highlight">
     <strong>Session:</strong> #${data.sessionNumber} - ${data.sessionTitle}<br>
     <strong>Date:</strong> ${data.sessionDate}<br>
-    <strong>Time:</strong> ${data.startTime} ET
+    <strong>Time:</strong> ${formatCentralClock(data.sessionDate, data.startTime)}
   </div>
 
   ${data.meetingLink ? `<p><a href="${data.meetingLink}" class="cta">Join Session</a></p>` : '<p><em>Meeting link will be shared before the session starts.</em></p>'}
@@ -2151,6 +2152,7 @@ export interface CommunityDigestEmailData {
   fullName: string;
   digestDate: string;
   unreadNotificationCount: number;
+  unreadDmCount: number;
   newPostCount: number;
   upcomingEvents: CommunityDigestEmailEvent[];
 }
@@ -2176,6 +2178,14 @@ export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): 
         .join('')}</ul>`
     : '<p style="color:#64748b">No upcoming sessions or Open Houses scheduled.</p>';
 
+  // DM line only appears when there's something to report (offline-DM-
+  // notification fix) — matches this template's existing posture of not
+  // printing a zero-value line (see the empty-state branch for eventsHtml
+  // above); a "0 new messages" line would just be noise every single day.
+  const dmLineHtml = data.unreadDmCount > 0
+    ? `<p style="margin:8px 0 0"><strong>${data.unreadDmCount}</strong> new message${data.unreadDmCount === 1 ? '' : 's'}</p>`
+    : '';
+
   const html = `
 <!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
   <h2 style="color:#1e293b">Your Community Digest</h2>
@@ -2183,6 +2193,7 @@ export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): 
   <div style="background:#f8fafc;border-radius:8px;padding:20px;margin:20px 0">
     <p style="margin:0 0 8px"><strong>${data.unreadNotificationCount}</strong> unread mention${data.unreadNotificationCount === 1 ? '' : 's'}/repl${data.unreadNotificationCount === 1 ? 'y' : 'ies'}</p>
     <p style="margin:0"><strong>${data.newPostCount}</strong> new post${data.newPostCount === 1 ? '' : 's'} in your cohort since yesterday</p>
+    ${dmLineHtml}
   </div>
   <h3 style="color:#1e293b">Upcoming</h3>
   ${eventsHtml}

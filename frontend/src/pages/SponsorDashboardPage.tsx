@@ -52,6 +52,7 @@ function CtaButton({ to, children, ...rest }: CtaButtonProps) {
 type TierName = 'Gold' | 'Silver' | 'Bronze' | 'Unranked';
 
 interface Participant {
+  id: string; // stable react key; enrollment_id for live data
   rank: number;
   name: string;
   email: string;
@@ -77,15 +78,9 @@ interface SponsorDashboard {
 // ----------------------------- Sample fallback ----------------------------
 // Realistic data shown only if the endpoint is unreachable. Mirrors the
 // contract exactly so the live view drops in with no shape changes.
-const SAMPLE: SponsorDashboard = {
-  company: 'Meridian Freight',
-  season: 'Season 3',
-  seatsPurchased: 25,
-  seatsRedeemed: 19,
-  seatsAvailable: 6,
-  seatsReassignable: 3,
-  tierMax: 600,
-  participants: [
+// Ids are injected below rather than written on every row — they exist only to
+// give React a stable key, and live data keys off enrollment_id instead.
+const SAMPLE_PARTICIPANTS: Omit<Participant, 'id'>[] = [
     { rank: 1, name: 'Priya Nandakumar', email: 'priya.n@meridianfreight.com', tier: 'Gold', points: 540, projects: 9, certified: true, demoDayCandidate: true },
     { rank: 2, name: 'Grace Mwangi', email: 'grace.m@meridianfreight.com', tier: 'Gold', points: 505, projects: 8, certified: true, demoDayCandidate: true },
     { rank: 3, name: 'Daniel Okonkwo', email: 'daniel.o@meridianfreight.com', tier: 'Silver', points: 472, projects: 7, certified: true, demoDayCandidate: true },
@@ -96,8 +91,110 @@ const SAMPLE: SponsorDashboard = {
     { rank: 8, name: 'Lena Fischer', email: 'lena.f@meridianfreight.com', tier: 'Bronze', points: 188, projects: 3, certified: false, demoDayCandidate: false },
     { rank: 9, name: 'Omar Haddad', email: 'omar.h@meridianfreight.com', tier: 'Bronze', points: 121, projects: 2, certified: false, demoDayCandidate: false },
     { rank: 10, name: 'Beatriz Santos', email: 'beatriz.s@meridianfreight.com', tier: 'Unranked', points: 40, projects: 1, certified: false, demoDayCandidate: false },
-  ],
+];
+
+// Shown only when the endpoint is unreachable or its payload does not match
+// the contract below.
+const SAMPLE: SponsorDashboard = {
+  company: 'Meridian Freight',
+  season: 'Season 3',
+  seatsPurchased: 25,
+  seatsRedeemed: 19,
+  seatsAvailable: 6,
+  seatsReassignable: 3,
+  tierMax: 600,
+  participants: SAMPLE_PARTICIPANTS.map((p, i) => ({ ...p, id: `sample-${i + 1}` })),
 };
+
+/* ------------------- API response -> view model ---------------------------
+ * GET /api/sponsor/dashboard speaks snake_case and nests its seat counts; this
+ * page renders flat camelCase fields. The two were never reconciled, and the
+ * only boundary check was `Array.isArray(payload.participants)` — which an
+ * empty array passes — so the page accepted a live payload and then rendered
+ * `undefined` into the heading and all four stat cards. Map it explicitly, and
+ * fall back to sample data when the shape does not match.
+ * -------------------------------------------------------------------------*/
+
+interface ApiParticipant {
+  rank: number;
+  enrollment_id: string;
+  full_name: string;
+  points: number;
+  projects_shipped: number;
+  cert_earned: boolean;
+  tier: string;
+}
+
+interface ApiSponsorDashboard {
+  sponsor_id: string;
+  company_name: string;
+  seats: { purchased: number; redeemed: number; available: number; reassignable: number };
+  participants: ApiParticipant[];
+  demo_day_candidates: ApiParticipant[];
+}
+
+// The API has no notion of a season or a points ceiling; both are presentation
+// concerns owned here.
+const DEFAULT_SEASON = 'Current season';
+const DEFAULT_TIER_MAX = 600;
+
+// Backend tiers are lowercase bronze/silver/gold. This page's tone helpers key
+// off capitalised names and know an 'Unranked' state the API never sends, so an
+// unmapped value must land somewhere sane rather than fall through as-is.
+function toTierName(tier: string): TierName {
+  switch ((tier || '').toLowerCase()) {
+    case 'gold':
+      return 'Gold';
+    case 'silver':
+      return 'Silver';
+    case 'bronze':
+      return 'Bronze';
+    default:
+      return 'Unranked';
+  }
+}
+
+function isApiSponsorDashboard(payload: unknown): payload is ApiSponsorDashboard {
+  const p = payload as Partial<ApiSponsorDashboard> | null;
+  return (
+    !!p &&
+    typeof p.company_name === 'string' &&
+    !!p.seats &&
+    typeof p.seats.purchased === 'number' &&
+    Array.isArray(p.participants)
+  );
+}
+
+function mapApiSponsorDashboard(payload: unknown): SponsorDashboard | null {
+  if (!isApiSponsorDashboard(payload)) return null;
+
+  // Demo-Day membership is the server's judgement (cert earned or work shipped);
+  // read it off the list it already sends rather than re-deriving the rule here.
+  const demoDayIds = new Set((payload.demo_day_candidates || []).map((c) => c.enrollment_id));
+
+  return {
+    company: payload.company_name,
+    season: DEFAULT_SEASON,
+    seatsPurchased: payload.seats.purchased,
+    seatsRedeemed: payload.seats.redeemed,
+    seatsAvailable: payload.seats.available,
+    seatsReassignable: payload.seats.reassignable,
+    tierMax: DEFAULT_TIER_MAX,
+    participants: payload.participants.map((p) => ({
+      id: p.enrollment_id,
+      rank: p.rank,
+      name: p.full_name,
+      // The endpoint deliberately does not expose participant emails to the
+      // sponsor surface; nothing on this page renders one.
+      email: '',
+      tier: toTierName(p.tier),
+      points: p.points,
+      projects: p.projects_shipped,
+      certified: p.cert_earned,
+      demoDayCandidate: demoDayIds.has(p.enrollment_id),
+    })),
+  };
+}
 
 const tierTone = (t: TierName): 'red' | 'neutral' | 'warning' =>
   t === 'Gold' ? 'red' : t === 'Silver' ? 'neutral' : 'warning';
@@ -265,16 +362,17 @@ function SponsorDashboardPage() {
     let active = true;
     setLoading(true);
     api
-      .get<SponsorDashboard>('/api/sponsor/dashboard', {
+      .get<unknown>('/api/sponsor/dashboard', {
         params: { sponsor_id: session.sponsor_id },
         headers: { 'x-sponsor-token': session.access_token },
       })
       .then((res) => {
         if (!active) return;
-        const payload = res.data;
-        // Validate the contract at the boundary; fall back if it's malformed.
-        if (payload && Array.isArray(payload.participants)) {
-          setData(payload);
+        // Validate and translate the contract at the boundary; fall back if the
+        // payload does not match what the endpoint is documented to return.
+        const mapped = mapApiSponsorDashboard(res.data);
+        if (mapped) {
+          setData(mapped);
           setUsingSample(false);
         } else {
           setData(SAMPLE);
@@ -547,7 +645,7 @@ function SponsorDashboardPage() {
         ) : candidates.length > 0 ? (
           <div className="cbsd-dd-grid">
             {candidates.map((p) => (
-              <Card key={p.email} className="cbsd-dd-card" elevation="sm" hoverable accent="red">
+              <Card key={p.id} className="cbsd-dd-card" elevation="sm" hoverable accent="red">
                 <Avatar name={p.name} src={p.avatar} size="md" ring />
                 <span className="meta cb-min0">
                   <span className="nm">{p.name}</span>

@@ -6,6 +6,7 @@ import RoomMessage from '../../models/RoomMessage';
 import { RoomAccessContext } from './roomEntitlementService';
 import { postMessage, listMessages } from './roomMessageService';
 import { isStaffOrMgmt } from '../access/staffAccess';
+import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 
 // 1:1 direct messages, modelled as a 2-person private CommunityRoom
 // (room_type 'dm') so they reuse the persisted RoomMessage layer — messages
@@ -32,6 +33,24 @@ async function assertSameCohort(me: string, otherId: string, myCohortId: string 
   if (!other) throw new DmError('That person is no longer available');
   if (myCohortId && other.cohort_id === myCohortId) return;
   if (await isStaffOrMgmt(me)) return;
+  // Reese Phase 1 — narrow, identity-keyed bypass (NOT a broadened isStaffOrMgmt
+  // semantic): a student can always reach Reese regardless of cohort, since
+  // Reese's own enrollment has no cohort_id. Scoped to Reese's specific,
+  // known enrollment id only — every other student's cross-cohort DM behavior
+  // is byte-for-byte unchanged (see the regression test in dmService.test.ts).
+  // Fail-closed: a lookup error here must still deny cross-cohort access, not
+  // throw an unhandled 500 that could look like "server broke, try again until
+  // it works" — the same DmError as an ordinary rejection.
+  let reeseEnrollmentId: string | null = null;
+  try {
+    reeseEnrollmentId = await getReeseEnrollmentId();
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'dm', event: 'reese_enrollment_lookup_failed',
+      error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
+  if (reeseEnrollmentId && (me === reeseEnrollmentId || otherId === reeseEnrollmentId)) return;
   throw new DmError(myCohortId ? 'You can only message people in your cohort' : 'You are not in a cohort yet');
 }
 
@@ -88,10 +107,69 @@ async function assertDmRoom(roomId: string): Promise<void> {
   if (!room || room.room_type !== 'dm') throw new DmError('Not a direct message');
 }
 
+// Best-effort in-app notification for the DM's OTHER participant (never the
+// sender — createNotification() already no-ops on actor.id === recipient.id,
+// and this lookup only ever targets "the other party" anyway). Skips Reese
+// (an AI agent doesn't need an email digest about being messaged); the
+// reverse direction (Reese -> student, Reese Phase 2 outreach) is NOT
+// skipped, since notifying the inactive student is the entire point of this
+// fix. Fail-closed on the Reese-id lookup itself: a lookup error logs and
+// falls through to notifying anyway, matching this file's existing posture
+// in assertSameCohort() (never let an internal lookup failure silently
+// suppress real behavior). Never throws — a notification failure must never
+// cost the sender their message, same posture as the Reese reply-trigger
+// hook directly below this function's call site.
+async function notifyDmRecipient(roomId: string, senderId: string, messageId: string): Promise<void> {
+  try {
+    const others = await RoomMembership.findAll({
+      where: { room_id: roomId, enrollment_id: { [Op.ne]: senderId } },
+    });
+    const recipientId = others[0]?.enrollment_id;
+    if (!recipientId) return;
+
+    let reeseEnrollmentId: string | null = null;
+    try {
+      reeseEnrollmentId = await getReeseEnrollmentId();
+    } catch (e: any) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'dm', event: 'reese_enrollment_lookup_failed_notify',
+        room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
+      }));
+    }
+    if (reeseEnrollmentId && recipientId === reeseEnrollmentId) return;
+
+    const { createNotification } = await import('../communityNotificationService');
+    await createNotification(recipientId, senderId, 'new_message', 'dm', messageId);
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'dm', event: 'dm_notification_failed',
+      room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
+}
+
 /** Send a message in a DM room (room-service auth enforces membership). */
 export async function sendDmMessage(ctx: RoomAccessContext, roomId: string, content: string): Promise<RoomMessage> {
   await assertDmRoom(roomId);
-  return postMessage(ctx, roomId, { content });
+  const message = await postMessage(ctx, roomId, { content });
+  await notifyDmRecipient(roomId, ctx.enrollmentId, message.id);
+  // Reese Phase 1 — reactive-only reply trigger. maybeTriggerReeseReply() is a
+  // strict no-op for any room Reese isn't a member of, and for any message
+  // Reese herself just sent (loop guard) — see reeseReplyService.ts. It never
+  // throws by design, but this call site ALSO try/catches (belt-and-suspenders,
+  // same posture as postSystemMessage's idempotency guard above) so the
+  // sender's own message is never lost even if that internal contract is ever
+  // violated by a future edit.
+  try {
+    const { maybeTriggerReeseReply } = await import('../reese/reeseReplyService');
+    await maybeTriggerReeseReply(roomId, ctx.enrollmentId);
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'dm', event: 'reese_reply_trigger_failed',
+      room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
+  return message;
 }
 
 /** List a DM's messages (room-service auth enforces membership). */

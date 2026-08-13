@@ -22,6 +22,7 @@ import { attachArtifactToProject, createProjectForEnrollment, getProjectByEnroll
 import { refreshProjectOutputs } from './portfolioEnhancementService';
 import { createTasksFromRequirements } from './studentTaskService';
 import { materializeRequirementsFromDocument } from './requirementsMaterializeService';
+import StudentTask from '../models/StudentTask';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from './openaiInstrumented';
 
@@ -320,12 +321,11 @@ async function executeJob(jobId: string, enrollmentId: string): Promise<void> {
     // Parse the generated spec into keyed RequirementsMap rows (the missing
     // link), THEN seed native task lists from those clusters. Non-blocking and
     // non-fatal — a parse/seed failure never fails the completed generation job.
+    // Outcome is recorded durably on the job row (see finalizeGeneratedRequirements).
     if (project) {
-      materializeRequirementsFromDocument(project.id, document)
-        .then(() => createTasksFromRequirements(project.id))
-        .catch(err =>
-          console.error('[RequirementsGen] Requirement materialize / task seeding failed:', err.message)
-        );
+      finalizeGeneratedRequirements(job, project.id, document).catch(err =>
+        console.error('[RequirementsGen] finalizeGeneratedRequirements itself threw:', err?.message),
+      );
     }
   } catch (err: any) {
     console.error(`[RequirementsGen] Job ${jobId} failed:`, err.message);
@@ -335,6 +335,140 @@ async function executeJob(jobId: string, enrollmentId: string): Promise<void> {
       completed_at: new Date(),
     });
   }
+}
+
+/** Marker prefix on `error_message` for a post-completion (not generation) problem. */
+export const POST_GENERATION_MARKER = '[post-generation]';
+
+/**
+ * Runs the two steps that turn a finished requirements document into the rows a
+ * student actually sees (RequirementsMap → StudentTaskList/StudentTask), and
+ * records the outcome durably on the job row.
+ *
+ * Why this exists (BC #10108536393): these two steps run AFTER the job is already
+ * marked `completed`, and used to be fire-and-forget with a bare `console.error`.
+ * That gave three failure modes which were all invisible and all produced the
+ * same student-visible symptom — an empty task list and Cory reporting
+ * "Nothing to execute":
+ *
+ *   1. materialize throws                  -> logged to a rotating console only
+ *   2. materialize succeeds with 0 rows    -> no error raised at all
+ *   3. task seeding no-ops (0 reqs / no project) -> silent early return
+ *
+ * In every case the job row still read `status: 'completed'`, `error_message: ''`,
+ * so neither the job table nor the API surfaced any hint that the student got
+ * nothing. Per this repo's Failure-First Design + Observability rules, a failure
+ * in a side-effecting step must leave a durable, classified trace.
+ *
+ * Deliberately does NOT flip `status` to `'failed'`: generation genuinely
+ * succeeded and `output_document` is valid — the review screen must keep working,
+ * and the polling route only surfaces `error_message` when status is `'failed'`,
+ * so writing here changes no existing user-facing behavior. It only makes an
+ * otherwise-invisible failure queryable.
+ *
+ * Idempotent: writes a single field, so a re-run overwrites rather than appends.
+ */
+export async function finalizeGeneratedRequirements(
+  job: RequirementsGenerationJob,
+  projectId: string,
+  document: string,
+): Promise<void> {
+  const log = (event: string, outcome: string, extra: Record<string, unknown> = {}) =>
+    console[outcome === 'success' ? 'log' : 'error'](
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: outcome === 'success' ? 'info' : 'error',
+        service: 'requirements-generation',
+        event,
+        outcome,
+        job_id: job.id,
+        project_id: projectId,
+        ...extra,
+      }),
+    );
+
+  const record = async (message: string): Promise<void> => {
+    try {
+      await job.update({ error_message: `${POST_GENERATION_MARKER} ${message}` });
+    } catch (writeErr: any) {
+      // Telemetry must never break the caller — the structured log above already
+      // recorded the real problem regardless of whether this write lands.
+      log('post_generation_record_failed', 'failure', {
+        error_class: writeErr?.constructor?.name ?? 'Error',
+        context: { message: writeErr?.message },
+      });
+    }
+  };
+
+  let requirementCount: number;
+  try {
+    requirementCount = await materializeRequirementsFromDocument(projectId, document);
+  } catch (err: any) {
+    log('requirements_materialize', 'failure', {
+      error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    });
+    await record(`requirement materialization failed: ${err?.message ?? 'unknown error'}`);
+    return;
+  }
+
+  // Mode 2: no throw, but nothing was produced — the student's task list can
+  // never populate from this. Silent before this change.
+  if (requirementCount === 0) {
+    log('requirements_materialize', 'failure', {
+      error_class: 'EmptyRequirementsParse',
+      context: { document_length: document.length },
+    });
+    await record(
+      `requirement materialization produced 0 requirements from a ${document.length}-char document; ` +
+        'the student task list cannot populate. Check the document\'s heading/bullet structure against requirementsParserService.',
+    );
+    return;
+  }
+
+  try {
+    await createTasksFromRequirements(projectId);
+  } catch (err: any) {
+    log('student_task_seeding', 'failure', {
+      error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, requirement_count: requirementCount },
+    });
+    await record(
+      `requirements materialized (${requirementCount}) but student task seeding failed: ${err?.message ?? 'unknown error'}`,
+    );
+    return;
+  }
+
+  // Mode 3: createTasksFromRequirements returns void and early-returns silently
+  // when it finds no active requirements or no project, so "it didn't throw" is
+  // not proof the student got tasks. Verify the post-condition it exists to
+  // produce. A count failure here is not itself a reason to flag the job.
+  let taskCount: number | null = null;
+  try {
+    taskCount = await StudentTask.count({ where: { project_id: projectId } });
+  } catch (countErr: any) {
+    log('student_task_verify', 'failure', {
+      error_class: countErr?.constructor?.name ?? 'Error',
+      context: { message: countErr?.message },
+    });
+  }
+
+  if (taskCount === 0) {
+    log('student_task_seeding', 'failure', {
+      error_class: 'NoTasksSeeded',
+      context: { requirement_count: requirementCount },
+    });
+    await record(
+      `requirements materialized (${requirementCount}) but student task seeding produced 0 tasks; ` +
+        'the Command Center will report "Nothing to execute". Check that the requirement rows are is_active.',
+    );
+    return;
+  }
+
+  log('requirements_finalize', 'success', {
+    requirement_count: requirementCount,
+    task_count: taskCount,
+  });
 }
 
 /**

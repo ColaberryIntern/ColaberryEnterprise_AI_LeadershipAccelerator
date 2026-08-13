@@ -44,7 +44,12 @@ export const META: Record<string, SampleMeta> = {
     summary: 'Splitting exploration from editing, using subagents, and keeping context lean.',
     reflection: 'Which exploration task would you delegate to a read-only subagent first?',
     discussion: 'What is the right boundary between exploration and mutation in your agents?',
-    video: { url: 'https://www.youtube.com/watch?v=aihgAvpirDU', title: 'How Claude Code Works in Large Codebases', presenter: 'Anthropic' },
+    // Was aihgAvpirDU, which was removed from YouTube (oEmbed 404) and left 145
+    // students with a dead player. Fixed in the DB on 2026-08-12 and silently
+    // reverted hours later by this seed, which re-asserts all 10 sample cards on
+    // every boot — so the seed is the only durable place to fix it. Replacement
+    // verified via oEmbed author_name: channel "Claude", 170s.
+    video: { url: 'https://www.youtube.com/watch?v=6bs5b4FltCU', title: 'How Claude Code Works', presenter: 'Claude' },
   },
   ai_quote_of_the_day: {
     title: 'Trust Before Intelligence', render_band: 'intel', bucket: 'reflect',

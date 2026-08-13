@@ -43,9 +43,26 @@ export interface TypeRouting {
   feed_cooldown_days?: number | null;
 }
 
-async function getRoutingMap(): Promise<Record<string, TypeRouting>> {
-  const raw = await getSetting(ROUTING_KEY);
-  return raw && typeof raw === 'object' ? raw : {};
+async function getRoutingMapInternal(): Promise<Record<string, TypeRouting>> {
+  try {
+    const raw = await getSetting(ROUTING_KEY);
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    // Fail-soft, matching getFeedPolicy()'s convention: a transient settings-read
+    // failure must degrade every caller to "no routing overrides" (identical to a
+    // freshly-seeded system), never take down the whole Today feed request. This
+    // is now on the hot path for every request (ambient + anchored suppression
+    // both read this per call), so a bare rejection here is a single point of
+    // failure for the entire page, not just the suppression feature.
+    return {};
+  }
+}
+
+/** Read-only accessor for the durable per-type routing map (the `feed_type_routing`
+ *  SystemSetting). Exported so sibling read-only services (e.g. feedTypeStatsService)
+ *  can read the same source of truth `getBoard()` uses instead of re-deriving it. */
+export async function getRoutingMap(): Promise<Record<string, TypeRouting>> {
+  return getRoutingMapInternal();
 }
 
 /** Apply one type's stored routing onto the in-memory registry (makes it live). */

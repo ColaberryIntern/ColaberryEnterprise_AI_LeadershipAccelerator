@@ -10,6 +10,11 @@ interface AuthContextType {
   // The backend is authoritative (it also enforces per-section); these gate the UI.
   sections: string[];
   mgmtRole: string | null;
+  // admin_users.role for this login ('super_admin' | 'admin' | 'sales'), from
+  // /me's JWT claims. `sections` covers nav gating; this exists so the shell can
+  // recognise a narrowly-scoped rep and deny-by-default on routes that have no
+  // nav entry (see ProtectedRoute) without changing behaviour for anyone else.
+  adminRole: string | null;
   // Whether this login has a connected staff/portal account to bridge into
   // ("AI Training" nav link) — true for a bridge-minted session OR a direct
   // login whose email is linked to a staff CommunityMember. Deliberately
@@ -26,6 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
   sections: [],
   mgmtRole: null,
+  adminRole: null,
   hasPortalAccount: false,
   meLoaded: false,
   canSection: () => true,
@@ -37,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
   const [sections, setSections] = useState<string[]>([]);
   const [mgmtRole, setMgmtRole] = useState<string | null>(null);
+  const [adminRole, setAdminRole] = useState<string | null>(null);
   const [hasPortalAccount, setHasPortalAccount] = useState(false);
   const [meLoaded, setMeLoaded] = useState(false);
 
@@ -45,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // role's sections. Raw fetch (not the axios instance) to avoid an import cycle.
   useEffect(() => {
     let live = true;
-    if (!token) { setSections([]); setMgmtRole(null); setHasPortalAccount(false); setMeLoaded(false); return; }
+    if (!token) { setSections([]); setMgmtRole(null); setAdminRole(null); setHasPortalAccount(false); setMeLoaded(false); return; }
     setMeLoaded(false);
     fetch('/api/admin/me', { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => (r.ok ? r.json() : null))
@@ -53,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!live) return;
         setSections(Array.isArray(d?.sections) ? d.sections : []);
         setMgmtRole(d?.mgmt_role ?? null);
+        setAdminRole(d?.user?.role ?? null);
         setHasPortalAccount(!!d?.has_portal_account);
         setMeLoaded(true);
       })
@@ -86,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         sections,
         mgmtRole,
+        adminRole,
         hasPortalAccount,
         meLoaded,
         canSection,

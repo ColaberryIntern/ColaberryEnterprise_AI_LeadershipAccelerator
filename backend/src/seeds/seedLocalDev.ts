@@ -45,7 +45,7 @@ async function run(): Promise<void> {
       name: COHORT_NAME,
       start_date: '2026-06-01',
       core_day: 'Thursday',
-      core_time: '1:00–3:00 PM EST',
+      core_time: '1:00–3:00 PM CT',
       optional_lab_day: 'Tuesday',
       max_seats: 20,
       seats_taken: 10,

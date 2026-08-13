@@ -1,4 +1,4 @@
-import { selectLinkableMembershipPayments } from '../appPaymentReconcileService';
+import { selectLinkableMembershipPayments, matchesAppCheckout } from '../appPaymentReconcileService';
 
 /**
  * The scope guard is the safety-critical part: a payment is linkable ONLY if its
@@ -53,5 +53,100 @@ describe('appPaymentReconcileService.selectLinkableMembershipPayments', () => {
       ourCids
     );
     expect(out.get('43540563')).toHaveLength(2);
+  });
+});
+
+/**
+ * Path B exists because PaySimple's hosted page mints its OWN customer for the payer,
+ * so the charge never carries the customer id we pre-created. The guard that replaces
+ * the customer-id check must still be ORIGIN-based: an app-opened pending checkout,
+ * for that amount, just before the charge. Email alone must never qualify a payment —
+ * that is what keeps bootcamp tuition and direct charges out of Accelerator revenue.
+ */
+describe('appPaymentReconcileService.matchesAppCheckout', () => {
+  const T0 = Date.parse('2026-08-11T02:23:53Z'); // Arinze's real checkout
+  const EMAIL = 'arinzeohagwu@yahoo.com';
+  const checkouts = [{ startedMs: T0, amountCents: 19900 }];
+
+  it('matches the real case: hosted page charged a DIFFERENT customer 4 min after our checkout', () => {
+    expect(
+      matchesAppCheckout(
+        { amountCents: 19900, paidMs: Date.parse('2026-08-11T02:28:15Z'), payerEmail: EMAIL },
+        EMAIL,
+        checkouts
+      )
+    ).toBe(true);
+  });
+
+  it('REJECTS a same-amount charge from a different payer (no origin link to this person)', () => {
+    expect(
+      matchesAppCheckout(
+        { amountCents: 19900, paidMs: Date.parse('2026-08-11T02:28:15Z'), payerEmail: 'someone-else@example.com' },
+        EMAIL,
+        checkouts
+      )
+    ).toBe(false);
+  });
+
+  it('REJECTS a charge for an amount we never asked for (bootcamp $250 tuition on the shared gateway)', () => {
+    expect(
+      matchesAppCheckout(
+        { amountCents: 25000, paidMs: Date.parse('2026-08-11T02:28:15Z'), payerEmail: EMAIL },
+        EMAIL,
+        checkouts
+      )
+    ).toBe(false);
+  });
+
+  it('REJECTS a charge outside the window — a later direct/manual charge is not this checkout', () => {
+    expect(
+      matchesAppCheckout(
+        { amountCents: 19900, paidMs: Date.parse('2026-08-12T09:00:00Z'), payerEmail: EMAIL },
+        EMAIL,
+        checkouts
+      )
+    ).toBe(false);
+  });
+
+  it('REJECTS everything when the person has no app-originated checkout at all', () => {
+    expect(
+      matchesAppCheckout(
+        { amountCents: 19900, paidMs: Date.parse('2026-08-11T02:28:15Z'), payerEmail: EMAIL },
+        EMAIL,
+        []
+      )
+    ).toBe(false);
+  });
+
+  it('allows small clock skew (charge stamped just before our row was written)', () => {
+    expect(
+      matchesAppCheckout(
+        { amountCents: 19900, paidMs: T0 - 60_000, payerEmail: EMAIL },
+        EMAIL,
+        checkouts
+      )
+    ).toBe(true);
+  });
+
+  it('is case- and whitespace-insensitive on the payer email', () => {
+    expect(
+      matchesAppCheckout(
+        { amountCents: 19900, paidMs: T0 + 60_000, payerEmail: '  ArinzeOhagwu@Yahoo.com ' },
+        EMAIL,
+        checkouts
+      )
+    ).toBe(true);
+  });
+
+  it('REJECTS a payment with an unparseable date rather than guessing', () => {
+    expect(
+      matchesAppCheckout({ amountCents: 19900, paidMs: NaN, payerEmail: EMAIL }, EMAIL, checkouts)
+    ).toBe(false);
+  });
+
+  it('REJECTS when the payer email is missing (customer lookup failed)', () => {
+    expect(
+      matchesAppCheckout({ amountCents: 19900, paidMs: T0 + 60_000, payerEmail: '' }, EMAIL, checkouts)
+    ).toBe(false);
   });
 });

@@ -33,15 +33,24 @@
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
-import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineService';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
 import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
+import { isDailyRefreshDue } from './todayDailyRefreshService';
+import { getAmbientDistinctSeenCounts } from './ambientTypeExposureService';
+import { getRoutingMap } from './feedControlService';
 import { env } from '../../config/env';
 import { getFeedPolicy } from './feedConfigService';
-import { rankLearningValue } from '../cape/capeLearningValueRanker';
+import { type TodayFeedItem, type TodayPage, type ImpressionRow } from './todayFeedTypes';
+import { type CapeExplanation, extractCapeExplanation, applyCapeRankingIfEnabled, selectAnchoredOrder } from './todayFeedCapeRanking';
+
+// Re-exported so no existing `from './todayFeedComposer'` import site needed to
+// change when these were split out (2026-08-12, daily-refresh build — see
+// todayFeedTypes.ts / todayFeedCapeRanking.ts for why).
+export type { TodayFeedItem, TodayPage } from './todayFeedTypes';
+export { type CapeExplanation, extractCapeExplanation, applyCapeRankingIfEnabled, selectAnchoredOrder } from './todayFeedCapeRanking';
 
 /** Legacy default: inject one ambient item after every CADENCE anchored items.
  *  When FEED_CONTROL_ENABLED, cadence + the active ambient providers come from
@@ -49,46 +58,6 @@ import { rankLearningValue } from '../cape/capeLearningValueRanker';
 const CADENCE = 2;
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 30;
-
-export interface TodayFeedItem {
-  position: number;
-  kind: TodayItemKind;
-  ref: string;                 // `card:<id>` | `<provider>:<mediaId>`
-  surface: string;             // home_surface of the type (drives the section colour)
-  type: string;                // curriculum type slug
-  render_band: string;
-  card_id: string | null;      // anchored deep-link target (open/complete)
-  title: string | null;
-  subtitle: string | null;
-  description: string | null;
-  image: string | null;
-  video: FeedVideo | null;
-  blog: FeedBlog | null;
-  content: FeedContent | null;
-  week: number | null;
-  estimated_time: number | null;
-  status: string | null;       // anchored progress status
-  points?: { learning?: number; builder?: number; community?: number } | null;  // engagement points the card awards (anchored curriculum cards)
-  interacted: boolean;
-  author?: { name: string; avatar_url: string | null; level: number } | null;  // community posts: the member byline
-}
-
-export interface TodayPage {
-  items: TodayFeedItem[];
-  nextCursor: number;
-  exhausted: boolean;          // true only when even ambient produced nothing (empty pools)
-}
-
-interface ImpressionRow {
-  position: number;
-  kind: TodayItemKind;
-  ref: string;
-  provider: string | null;
-  card_id: string | null;
-  item: any;                   // stored TodayFeedItem payload
-  interacted_at: Date | null;
-  served_at: Date;
-}
 
 function ambientItemFrom(a: AmbientItem, position: number): TodayFeedItem {
   const def = resolveType(a.provider);
@@ -126,17 +95,6 @@ async function loadImpressions(enrollmentId: string): Promise<ImpressionRow[]> {
   );
 }
 
-/** CAPE Phase 4 Stage 5 explanation (design doc §9 Stage 5, §13) — present only
- * when `env.capeLearningValueRankerEnabled` is on and ranking succeeded for
- * this item; absent (all 4 columns stay NULL/[]) otherwise, including every
- * flag-off write. */
-export interface CapeExplanation {
-  rank_score: number;
-  reasons: string[];
-  policy_version: number;
-  learner_state_version: string;
-}
-
 export async function persistImpression(enrollmentId: string, it: TodayFeedItem, provider: string | null, explanation?: CapeExplanation): Promise<void> {
   await sequelize.query(
     `INSERT INTO today_feed_impressions
@@ -157,69 +115,6 @@ export async function persistImpression(enrollmentId: string, it: TodayFeedItem,
   );
 }
 
-/** Extracts a CAPE explanation from a ranked candidate, if present. Ranked
- * items carry `rank_score`/`reasons`/`policy_version`/`learner_state_version`
- * at runtime (stamped by `capeLearningValueRanker.rankLearningValue`) even
- * though `TodayFeedItem`'s own type doesn't declare them — this is the one
- * place that bridges the two, via an explicit runtime check
- * (`typeof rank_score === 'number'`), never an unchecked cast. Returns
- * `undefined` for every flag-off item, so `persistImpression` writes NULL/[]
- * for all 4 new columns exactly as it did before this task. */
-export function extractCapeExplanation(cand: TodayFeedItem): CapeExplanation | undefined {
-  const c = cand as TodayFeedItem & Partial<CapeExplanation>;
-  if (typeof c.rank_score !== 'number') return undefined;
-  return {
-    rank_score: c.rank_score,
-    reasons: Array.isArray(c.reasons) ? c.reasons : [],
-    policy_version: c.policy_version ?? 0,
-    learner_state_version: c.learner_state_version ?? '',
-  };
-}
-
-/**
- * CAPE Phase 4 flag-ON ranking step (design doc §9, §16 Phase 4). Applied
- * AFTER `selectAnchoredOrder` (which stays a pure passthrough — see its own
- * doc comment) so the flag-off contract that function's tests prove is
- * completely unaffected by this function's existence. A ranking failure
- * (thrown `CapeLearnerStateError`, a DB blip, anything) is caught and logged
- * here — the feed falls back to the unranked precedence/week-bound order
- * rather than breaking, matching this file's own "fail-soft throughout"
- * contract.
- */
-export async function applyCapeRankingIfEnabled(enrollmentId: string, anchoredQueue: TodayFeedItem[]): Promise<TodayFeedItem[]> {
-  if (!env.capeLearningValueRankerEnabled || !anchoredQueue.length) return anchoredQueue;
-  try {
-    const ranked = await rankLearningValue(enrollmentId, anchoredQueue, new Date());
-    return ranked.items;
-  } catch (err: any) {
-    console.warn(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'warn',
-      service: 'backend',
-      event: 'cape_learning_value_ranking_failed',
-      error_class: err?.name || 'Error',
-      outcome: 'failure',
-      context: { enrollment_id: enrollmentId, candidate_count: anchoredQueue.length, message: err?.message },
-    }));
-    return anchoredQueue;
-  }
-}
-
-/**
- * CAPE Phase 4 wiring seam (design doc §9, §16 Phase 4). The single call site
- * both `extendFeed` and `composeReadOnlyPage` route the precedence/week-bound
- * queue through before consumption. Flag OFF (the default, everywhere
- * including production) returns the SAME array, SAME order `gatherAnchored`
- * produced — a pure passthrough, proven by identity (`toBe`, not just
- * `toEqual`) in `todayFeedComposer.capeFlagOff.test.ts`, so this is
- * byte-identical to pre-Phase-4 behavior. Flag ON routes through
- * `applyCapeRankingIfEnabled` (a separate function layered on top — see its
- * own doc comment) which delegates to the CAPE learning-value ranker.
- */
-export function selectAnchoredOrder(anchoredQueue: TodayFeedItem[], capeEnabled: boolean): TodayFeedItem[] {
-  return anchoredQueue;
-}
-
 /** Real ambient providers (raw blog_posts/podcasts/network_videos pickers) — the
  *  subset of "variety" keys that need an on-demand DB fetch via ambientPool,
  *  as opposed to evergreen curriculum types (already resolved cards). */
@@ -236,6 +131,21 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   const anchoredPlaced = existing.filter((r) => isPrecedenceImpression({ kind: r.kind, week: (r.item as TodayFeedItem | null)?.week ?? null })).length;
   const ambientPlaced = existing.length - anchoredPlaced;
   const placedRefs = new Set(existing.map((r) => r.ref));
+
+  // Feed Control ambient suppression (env.feedControlAmbientSuppressionEnabled,
+  // default OFF everywhere including production): extends the same Freq
+  // cap/Cooldown fields Ali already edits on the Feed Control board for
+  // testimonial/podcast/blog — today those fields are stored but never read by
+  // this path. Resolved ONCE per call so a per-provider Cooldown override can
+  // replace the single global AMBIENT_REPEAT_COOLDOWN_DAYS below, and so a
+  // per-provider Freq cap can be checked in the fetch loop further down. Flag
+  // off: both stay null and every provider falls back to the exact
+  // global-constant behavior — byte-identical to before this task.
+  const ambientSuppressionOn = env.feedControlAmbientSuppressionEnabled;
+  const [ambientRouting, ambientSeenCounts] = ambientSuppressionOn
+    ? await Promise.all([getRoutingMap(), getAmbientDistinctSeenCounts(enrollmentId)])
+    : [null, null];
+
   // Only recently-placed ambient items stay excluded — an all-time exclusion
   // permanently exhausts small pools (blog: 89 posts, podcast: 24 episodes) for
   // any long-lived account, defeating ambientPool's own least-recently-seen
@@ -244,9 +154,12 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   // own separate reuse mechanism (generatedContentRetention.ts).
   const placedMedia: Record<AmbientProviderSlug, string[]> = { blog: [], podcast: [], testimonial: [] };
   for (const r of existing) {
-    if (r.kind === 'ambient' && r.provider && r.ref.includes(':') && isWithinAmbientCooldown(r.served_at, AMBIENT_REPEAT_COOLDOWN_DAYS)) {
-      const mediaId = r.ref.slice(r.ref.indexOf(':') + 1);
-      if (r.provider in placedMedia) placedMedia[r.provider as AmbientProviderSlug].push(mediaId);
+    if (r.kind === 'ambient' && r.provider && r.ref.includes(':')) {
+      const cooldown = ambientRouting?.[r.provider]?.feed_cooldown_days ?? AMBIENT_REPEAT_COOLDOWN_DAYS;
+      if (isWithinAmbientCooldown(r.served_at, cooldown)) {
+        const mediaId = r.ref.slice(r.ref.indexOf(':') + 1);
+        if (r.provider in placedMedia) placedMedia[r.provider as AmbientProviderSlug].push(mediaId);
+      }
     }
   }
 
@@ -285,11 +198,27 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   for (const s of plan.slots) if (s.kind === 'ambient' && s.provider) perKeyNeed[s.provider] = (perKeyNeed[s.provider] ?? 0) + 1;
   const ambientQueues: Record<string, AmbientItem[]> = {};
   const evergreenQueues: Record<string, TodayFeedItem[]> = {};
+  // Genuine, currently-discarded evergreen supply beyond what this call's own
+  // slots already claimed — the only legitimate backfill source (see below).
+  // ambientQueues is deliberately NOT mirrored here: it's already exactly
+  // sized to perKeyNeed with no surplus, and over-fetching it for backfill
+  // purposes would be a new DB call this task's contract forbids.
+  const evergreenSurplus: Record<string, TodayFeedItem[]> = {};
   for (const key of varietyKeys) {
     const n = perKeyNeed[key] ?? 0;
     if (n <= 0) continue;
     if (REAL_AMBIENT_PROVIDERS.has(key)) {
       const provider = key as AmbientProviderSlug;
+      // Feed Control ambient suppression: a routing Freq cap caps LIFETIME
+      // distinct items shown (see ambientTypeExposureService.ts docstring).
+      // Once a student has met/exceeded it, this provider is skipped for the
+      // whole call — ambientQueues[key] stays unset, making the slot(s) that
+      // would have used it "dry" and eligible for the evergreen backfill pass
+      // in the slot-fulfillment loop below.
+      const cap = ambientSuppressionOn ? ambientRouting?.[provider]?.feed_frequency_cap : undefined;
+      if (typeof cap === 'number' && cap > 0 && (ambientSeenCounts?.[provider] ?? 0) >= cap) {
+        continue;
+      }
       const fresh = await pickAmbientBatch(enrollmentId, provider, n, placedMedia[provider] ?? []);
       // Small ambient pools (podcast: 24 episodes) can be fully consumed by an
       // active student within the cooldown window itself — a provider going
@@ -303,7 +232,9 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
         ambientQueues[key] = fresh;
       }
     } else {
-      evergreenQueues[key] = (evergreenByType.get(key) ?? []).slice(0, n);
+      const candidates = evergreenByType.get(key) ?? [];
+      evergreenQueues[key] = candidates.slice(0, n);
+      if (ambientSuppressionOn) evergreenSurplus[key] = candidates.slice(n);
     }
   }
 
@@ -326,6 +257,22 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     } else if (slot.provider) {
       const cand = evergreenQueues[slot.provider]?.shift();
       if (cand) item = { ...cand, position: pos }; // real card — provider stays null, same as weekBound curriculum
+    }
+    if (!item && ambientSuppressionOn && slot.kind !== 'anchored') {
+      // Backfill: a dry slot (suppressed ambient provider or an exhausted
+      // evergreen type) gets one shot at a sibling evergreen type's genuine
+      // surplus — real candidates that existed for this call but lost the
+      // per-key slice above. Ambient is never a backfill source (see comment
+      // on evergreenSurplus). First key in varietyKeys order with surplus wins;
+      // single attempt, no retry loop, no new fetch.
+      for (const key of varietyKeys) {
+        const surplus = evergreenSurplus[key];
+        if (surplus && surplus.length > 0) {
+          const cand = surplus.shift()!;
+          item = { ...cand, position: pos };
+          break;
+        }
+      }
     }
     if (!item) continue; // source ran dry (e.g. empty pool) — skip the slot
     await persistImpression(enrollmentId, item, provider, explanation);
@@ -453,6 +400,19 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   }
 
   let existing = await loadImpressions(enrollmentId);
+
+  // Daily auto-refresh (env.todayDailyRefreshEnabled, default OFF): once per
+  // Central-time calendar day, opportunistically top up the feed with a small
+  // bounded batch BEFORE serving, so a student who doesn't scroll deep still
+  // sees something genuinely new — otherwise a long-tenured account's plain
+  // reload only ever reshuffles the same already-materialised pool (see this
+  // file's own "Deterministic pagination" docstring above). Reuses extendFeed()
+  // exactly as-is; this only changes WHEN it fires, not what it does.
+  if (env.todayDailyRefreshEnabled && (await isDailyRefreshDue(enrollmentId))) {
+    await extendFeed(enrollmentId, existing, env.todayDailyRefreshTopupSize);
+    existing = await loadImpressions(enrollmentId);
+  }
+
   let served = await buildServed(enrollmentId, existing, opts.seed);
   let exhausted = false;
 

@@ -39,6 +39,7 @@ import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
 import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom } from './sessionRecordingService';
+import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 
 /**
@@ -1771,6 +1772,21 @@ async function checkPhaseGraduation(): Promise<void> {
 }
 
 export function startScheduler(): void {
+  // Reese Phase 1 — presence heartbeat. Touches ONLY Reese's own CommunityMember
+  // row's last_active_at, on the same ~60s cadence a real student's browser uses
+  // (pingPresence()), so the People panel's existing derivePresence() logic
+  // (90s online threshold) reads Reese as online without any new real-time
+  // infrastructure. Untracked in AiAgent run stats (not the same identity as
+  // Reese's own registry row — a heartbeat touch is not a "Reese ran" event).
+  cron.schedule('*/1 * * * *', () => {
+    instrumentCronJob('ReesePresenceHeartbeat', async () => {
+      const { runReesePresenceHeartbeat } = await import('./reese/reesePresenceHeartbeat');
+      await runReesePresenceHeartbeat();
+    }).catch((err) => {
+      console.error('[Scheduler] Reese presence heartbeat error:', err);
+    });
+  });
+
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {
@@ -1803,6 +1819,42 @@ export function startScheduler(): void {
       }
     }).catch((err) => {
       console.error('[Scheduler] ProofDesk outcome measurements error:', err);
+    });
+  });
+
+  // Reese Phase 2 (Autonomous Outreach) — daily scan of the approved pilot
+  // cohort for two real risk signals; on a real, non-duplicate,
+  // non-cadence-capped hit, sends one real autonomous DM + opens a ProofDesk
+  // ticket (R3, shadow-mode governance). Registered in agentRegistrySeed.ts
+  // ('ReeseAutonomousOutreachSweep') so instrumentCronJob()'s enabled/paused
+  // gate actually applies — pause from Admin > Agents, no redeploy needed.
+  cron.schedule('0 15 * * *', () => {
+    instrumentCronJob('ReeseAutonomousOutreachSweep', async () => {
+      const { runReeseAutonomousOutreachSweep } = await import('./reese/reeseAutonomousOutreachService');
+      const result = await runReeseAutonomousOutreachSweep();
+      console.log('[Scheduler] Reese autonomous outreach sweep:', {
+        evaluated: result.evaluated, sent: result.sent, skipped: result.skipped,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese autonomous outreach sweep error:', err);
+    });
+  });
+
+  // Reese Phase 2 (Autonomous Outreach) — daily follow-up/closure sweep for
+  // already-open autonomous-outreach threads. Runs an hour after the sweep
+  // above so a same-day new send's next_follow_up_due_at (+7 days) never
+  // collides with this run. Registered as 'ReeseOutreachFollowUps' for the
+  // same pause/kill-switch reason as the sweep above.
+  cron.schedule('0 16 * * *', () => {
+    instrumentCronJob('ReeseOutreachFollowUps', async () => {
+      const { processDueReeseOutreachFollowUps } = await import('./reese/reeseOutreachFollowUpService');
+      const result = await processDueReeseOutreachFollowUps();
+      console.log('[Scheduler] Reese outreach follow-ups:', {
+        processed: result.processed, signalCleared: result.signalCleared, goalMet: result.goalMet,
+        followUpSent: result.followUpSent, escalated: result.escalated, dailyCapDeferred: result.dailyCapDeferred,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese outreach follow-ups error:', err);
     });
   });
 
@@ -1938,12 +1990,64 @@ export function startScheduler(): void {
     cron.schedule('*/20 * * * *', () => {
       instrumentCronJob('AppPaymentReconcile', async () => {
         const { reconcileAppPayments } = await import('./appPaymentReconcileService');
-        await reconcileAppPayments({});
+        const summary = await reconcileAppPayments({});
+
+        // Healing via the checkout-window path means the WEBHOOK missed those payments.
+        // The reconcile succeeding is exactly why that stays invisible, so say it out
+        // loud rather than letting a broken primary path hide behind its safety net.
+        if (summary.linkedByCheckoutWindow > 0) {
+          const { emitAlert } = await import('./alertService');
+          await emitAlert({
+            type: 'warning',
+            severity: 6,
+            sourceType: 'system',
+            impactArea: 'revenue',
+            urgency: 'high',
+            title: 'PaySimple payments are being healed by reconcile, not the webhook',
+            description:
+              `The reconcile job linked ${summary.linkedByCheckoutWindow} payment(s) ` +
+              `($${(summary.linkedTotalCents / 100).toFixed(2)}) that the PaySimple webhook should have ` +
+              `activated on its own. Students were briefly left on the wrong access level. ` +
+              `Check webhook delivery and signature verification.`,
+            metadata: {
+              linked: summary.linked,
+              linkedByCheckoutWindow: summary.linkedByCheckoutWindow,
+              linkedTotalCents: summary.linkedTotalCents,
+            },
+          }).catch(() => {}); // alerting must never fail the reconcile
+        }
       }).catch((err) => {
         console.error('[Scheduler] App payment reconcile error:', err);
       });
     });
     console.log('[Scheduler] AppPaymentReconcile scheduled (*/20 * * * *)');
+
+    // Watch the webhook itself every 15 minutes. The reconcile above only notices a
+    // problem once a payment is already late; this catches a total rejection run
+    // (the 2026-08-12 shape) within minutes of it starting.
+    cron.schedule('*/15 * * * *', () => {
+      instrumentCronJob('PaySimpleWebhookHealth', async () => {
+        const { webhookHealthSnapshot, evaluateWebhookHealth } = await import('./paysimpleWebhookHealth');
+        const snapshot = webhookHealthSnapshot();
+        const verdict = evaluateWebhookHealth(snapshot);
+        if (!verdict.alert) return;
+
+        const { emitAlert } = await import('./alertService');
+        await emitAlert({
+          type: verdict.type,
+          severity: verdict.severity,
+          sourceType: 'system',
+          impactArea: 'revenue',
+          urgency: verdict.type === 'critical' ? 'immediate' : 'high',
+          title: verdict.title,
+          description: verdict.description,
+          metadata: { ...snapshot },
+        });
+      }).catch((err) => {
+        console.error('[Scheduler] PaySimple webhook health check error:', err);
+      });
+    });
+    console.log('[Scheduler] PaySimpleWebhookHealth scheduled (*/15 * * * *)');
   }
 
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
@@ -2445,6 +2549,20 @@ export function startScheduler(): void {
           }
         } catch (err: any) {
           console.error(`[Scheduler] Recording ingest failed for session ${session.id}:`, err.message);
+        }
+
+        // Class Notes — snapshot the standalone teaching deck into the Room.
+        // Independent of the recording above ON PURPOSE: Sessions 1-4 were
+        // taught on Google Meet and have no recoverable video at all, so notes
+        // must not be conditional on a recording existing. Cheap (renders HTML,
+        // no download) and idempotent, so it is safe on every sweep.
+        try {
+          const notes = await attachClassNotesForSession(session);
+          if (notes.status === 'attached') {
+            console.log(`[Scheduler] Class Notes attached for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Class Notes failed for session ${session.id}:`, err.message);
         }
       }
 
