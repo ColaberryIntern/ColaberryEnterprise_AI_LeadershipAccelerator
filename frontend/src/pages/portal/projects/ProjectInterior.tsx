@@ -142,10 +142,22 @@ const ActivityCard: React.FC<{ a: ProjectActivity }> = ({ a }) => (
   </div>
 );
 
-const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }> = ({ project, onBack }) => {
+const ProjectInterior: React.FC<{
+  project: StudentProject;
+  onBack: () => void;
+  /** True while the page header is showing the condensed next-step card. */
+  condensed?: boolean;
+  /**
+   * Which task the workspace has open, owned by the page. It lives up there so
+   * a feed card, the condensed header and a card in this list all drive the
+   * SAME drawer — when this component owned it, arriving from the feed opened
+   * the build with nothing on the right.
+   */
+  openTaskId: string | null;
+  onOpenTask: (taskId: string | null) => void;
+}> = ({ project, onBack, condensed, openTaskId, onOpenTask }) => {
   const demo = useIsExplorer();   // Explorer = demo mode
   const [sel, setSel] = useState<string>('all'); // 'all' or a list id (drives the outline filter)
-  const [wsTaskId, setWsTaskId] = useState<string | null>(null); // task open in the workspace drawer
   const prog = projectProgress(project);
   const rv = reqVerified(project);
   const nx = nextTask(project);
@@ -154,8 +166,8 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
   // sync with the store after mark-done / skip mutations). Never resolve a BLOCKED
   // task — the workspace must not open for a locked dependency (guard, alongside
   // the drawer's own).
-  const resolved = wsTaskId
-    ? project.lists.flatMap((l) => l.tasks).find((t) => t.id === wsTaskId) || null
+  const resolved = openTaskId
+    ? project.lists.flatMap((l) => l.tasks).find((t) => t.id === openTaskId) || null
     : null;
   const wsTask = resolved && !isTaskBlocked(project, resolved).blocked ? resolved : null;
 
@@ -189,6 +201,27 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
         </div>
       )}
 
+      {/* Your next action, ABOVE the build header. The first thing a student
+          should see on a build is the thing to do next — the project's name and
+          cover are context for it, not the headline. Wrapped in
+          `te-condense-body` so it rides up into the page header on scroll, the
+          same way the overview's hero does; without that the two screens
+          scrolled differently for no reason a student could see. */}
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+        {nx ? (
+          <div className="te-hero">
+            <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next action on this build</div>
+            <h2>{nx.task.title}</h2>
+            <p>{nx.task.what || 'Pick this up next — it keeps the walking skeleton moving.'}</p>
+            <div style={{ marginTop: 4 }}>
+              <TaskActions project={project} task={nx.task} onOpen={onOpenTask} />
+            </div>
+          </div>
+        ) : (
+          <div className="te-hero"><div className="eyebrow">This build</div><h2>Every open task is done</h2><p>Nice work — nothing else queued on this build right now.</p></div>
+        )}
+      </div>
+
       {/* full-width build header */}
       <div className="card pj-head">
         <div className="pj-cover" style={{ background: project.cover }}>
@@ -218,28 +251,13 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
       {/* Today-shaped two-column body */}
       <div className="te-grid">
         <div>
-          {/* hero: your next action — pinned (not header-condensed) once
-              you're inside a single build, see .pj-nexthero-pinned above */}
-          {nx ? (
-            <div className="te-hero pj-nexthero-pinned">
-              <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next action on this build</div>
-              <h2>{nx.task.title}</h2>
-              <p>{nx.task.what || 'Pick this up next — it keeps the walking skeleton moving.'}</p>
-              <div style={{ marginTop: 4 }}>
-                <TaskActions project={project} task={nx.task} onOpen={setWsTaskId} />
-              </div>
-            </div>
-          ) : (
-            <div className="te-hero pj-nexthero-pinned"><div className="eyebrow">This build</div><h2>Every open task is done</h2><p>Nice work — nothing else queued on this build right now.</p></div>
-          )}
-
           <NextSessionStrip />
 
           {/* the FB timeline, filtered by the outline selection */}
           <div className="te-sec-title">{selName ? `${selName} · tasks` : 'This build · next task due first'}</div>
-          {openTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={setWsTaskId} />)}
+          {openTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={onOpenTask} />)}
           {sel === 'all' && project.activity.map((a) => <ActivityCard key={a.id} a={a} />)}
-          {doneTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={setWsTaskId} />)}
+          {doneTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={onOpenTask} />)}
           {!openTasks.length && !doneTasks.length && <div className="fc-empty">No tasks in this section.</div>}
         </div>
 
@@ -278,7 +296,7 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
         project={project}
         task={wsTask}
         open={wsTask !== null}
-        onClose={() => setWsTaskId(null)}
+        onClose={() => onOpenTask(null)}
       />
     </>
   );
