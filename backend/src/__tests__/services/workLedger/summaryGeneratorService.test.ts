@@ -101,4 +101,37 @@ describe('generateTicketSummary', () => {
     await expect(generateTicketSummary('missing')).rejects.toThrow('Ticket missing not found');
     expect(linkFindAll).not.toHaveBeenCalled();
   });
+
+  // Regression guard for a real defect Ali found live: the outcome line used to embed
+  // a raw, unlabeled UTC timestamp ("...at 2026-08-12 15:00.") straight into generated
+  // prose. Fixed at the generation source (summaryGeneratorService.ts's formatDate now
+  // delegates to centralDate's formatCentralDateTime) — these assert the fix from the
+  // caller's side, not just centralDate's own unit tests.
+  const RAW_UTC_PATTERN = /\d{4}-\d{2}-\d{2} \d{2}:\d{2}/;
+
+  it('embeds a CST/CDT-labeled timestamp in the outcome line, never raw unlabeled UTC (success+evidence)', async () => {
+    linkFindAll.mockResolvedValue([{ event_id: 'evt-1' }]);
+    eventFindAll.mockResolvedValue([
+      { event_id: 'evt-1', intent: 'ticket.status_change', actor_id: 'PlatformFixAgent', result: 'success', occurred_at: new Date('2026-08-12T15:00:00Z'), reason_code: null },
+    ]);
+    mockGetEvidence.mockResolvedValue([{ id: 'art-1', artifact_type: 'screenshot' }]);
+
+    const result = await generateTicketSummary(TICKET_ID);
+
+    expect(result.outcome).toMatch(/CST|CDT/);
+    expect(result.outcome).not.toMatch(RAW_UTC_PATTERN);
+  });
+
+  it('embeds a CST/CDT-labeled timestamp in the outcome line, never raw unlabeled UTC (failure)', async () => {
+    linkFindAll.mockResolvedValue([{ event_id: 'evt-3' }]);
+    eventFindAll.mockResolvedValue([
+      { event_id: 'evt-3', intent: 'ticket.dispatch', actor_id: 'PlatformFixAgent', result: 'failure', occurred_at: new Date('2026-11-01T07:00:00Z'), reason_code: 'agent_threw' },
+    ]);
+    mockGetEvidence.mockResolvedValue([]);
+
+    const result = await generateTicketSummary(TICKET_ID);
+
+    expect(result.outcome).toMatch(/CST|CDT/);
+    expect(result.outcome).not.toMatch(RAW_UTC_PATTERN);
+  });
 });

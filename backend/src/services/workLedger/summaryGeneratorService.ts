@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { Ticket, TicketActionLink, WorkLedgerEvent } from '../../models';
 import { getEvidenceForTicket } from '../evidence/evidenceService';
+import { formatCentralDateTime } from '../centralDate';
 
 // ProofDesk Milestone 2 (Proof & Ticket Experience), spec section 10.2/10.3. Generates
 // the ticket detail Story tab's 3-line summary: Outcome / Proof / Human action.
@@ -25,12 +26,13 @@ export interface TicketSummary {
   hasEvidence: boolean;
 }
 
-function formatDate(d: Date | string | null | undefined): string {
-  if (!d) return 'an unknown time';
-  const date = typeof d === 'string' ? new Date(d) : d;
-  if (Number.isNaN(date.getTime())) return 'an unknown time';
-  return date.toISOString().slice(0, 16).replace('T', ' ');
-}
+// Generated prose used to embed a raw, unlabeled UTC timestamp here
+// ("...at 2026-08-12 15:00.") via `.toISOString().slice(0, 16)` — Ali flagged this
+// live as unreadable and, worse, silently wrong-timezone for anyone reading it in
+// Central. Fixed at the source (not just in display formatting) by delegating to the
+// shared centralDate formatter, so every summary this function ever produces is
+// CST/CDT-labeled from the moment it's generated.
+const formatDate = formatCentralDateTime;
 
 function describeIntent(intent: string): string {
   // work_ledger_events.intent values are dotted machine strings (e.g.

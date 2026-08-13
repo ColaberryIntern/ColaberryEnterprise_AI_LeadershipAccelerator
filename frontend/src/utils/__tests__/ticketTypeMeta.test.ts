@@ -1,4 +1,12 @@
-import { getTicketTypeLabel, getTicketTypeTone, buildTicketTypeFilterOptions } from '../ticketTypeMeta';
+import {
+  getTicketTypeLabel,
+  getTicketTypeTone,
+  buildTicketTypeFilterOptions,
+  getTicketStatusLabel,
+  getTicketStatusTone,
+  isTicketStale,
+  STALE_THRESHOLD_MS,
+} from '../ticketTypeMeta';
 import { TONE } from '../../components/admin/shell/StatusBadge';
 
 describe('ticketTypeMeta', () => {
@@ -61,6 +69,69 @@ describe('ticketTypeMeta', () => {
       expect(buildTicketTypeFilterOptions({ task: 0 })).toEqual([]);
       expect(buildTicketTypeFilterOptions(null)).toEqual([]);
       expect(buildTicketTypeFilterOptions(undefined)).toEqual([]);
+    });
+  });
+
+  describe('getTicketStatusLabel / getTicketStatusTone', () => {
+    const known: Array<[string, string]> = [
+      ['backlog', 'Backlog'],
+      ['todo', 'To Do'],
+      ['in_progress', 'In Progress'],
+      ['in_review', 'In Review'],
+      ['done', 'Done'],
+      ['cancelled', 'Cancelled'],
+    ];
+
+    it.each(known)('labels %s as "%s"', (status, label) => {
+      expect(getTicketStatusLabel(status)).toBe(label);
+    });
+
+    it('gives every real TicketStatus value its own distinct tone (no two statuses share a color)', () => {
+      const tones = known.map(([status]) => getTicketStatusTone(status));
+      expect(new Set(tones).size).toBe(tones.length);
+    });
+
+    it('uses success for done and danger for cancelled (the two statuses a human scans for first)', () => {
+      expect(getTicketStatusTone('done')).toBe('success');
+      expect(getTicketStatusTone('cancelled')).toBe('danger');
+    });
+
+    it('falls back gracefully for a status not in the map', () => {
+      expect(getTicketStatusLabel('made_up_status')).toBe('Made Up Status');
+      expect(getTicketStatusTone('made_up_status')).toBe('neutral');
+    });
+
+    it('handles empty/falsy input without throwing', () => {
+      expect(getTicketStatusLabel('')).toBe('Unknown');
+      expect(getTicketStatusTone('')).toBe('neutral');
+    });
+  });
+
+  describe('isTicketStale', () => {
+    it('flags an open ticket exactly 3 days (STALE_THRESHOLD_MS) since last activity', () => {
+      const exactly3d = new Date(Date.now() - STALE_THRESHOLD_MS).toISOString();
+      expect(isTicketStale(exactly3d, 'in_progress')).toBe(true);
+    });
+
+    it('does not flag an open ticket at 2 days 23 hours (just under the boundary)', () => {
+      const justUnder = new Date(Date.now() - (STALE_THRESHOLD_MS - 60 * 60 * 1000)).toISOString();
+      expect(isTicketStale(justUnder, 'in_progress')).toBe(false);
+    });
+
+    it('never flags a done ticket, no matter how old', () => {
+      const veryOld = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      expect(isTicketStale(veryOld, 'done')).toBe(false);
+    });
+
+    it('never flags a cancelled ticket, no matter how old', () => {
+      const veryOld = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      expect(isTicketStale(veryOld, 'cancelled')).toBe(false);
+    });
+
+    it('handles null/invalid updatedAt without throwing', () => {
+      expect(isTicketStale(null, 'in_progress')).toBe(false);
+      expect(isTicketStale(undefined, 'todo')).toBe(false);
+      expect(isTicketStale('not-a-date', 'backlog')).toBe(false);
     });
   });
 

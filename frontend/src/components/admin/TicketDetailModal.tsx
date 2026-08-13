@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { fmtCentralDateTime } from '../../utils/centralTime';
+import { timeAgo } from './shell/trust';
+import StatusBadge from './shell/StatusBadge';
+import { isTicketStale } from '../../utils/ticketTypeMeta';
 import StoryTab from './ticketDetailTabs/StoryTab';
 import VisualProofTab from './ticketDetailTabs/VisualProofTab';
 import DecisionsTab from './ticketDetailTabs/DecisionsTab';
@@ -40,6 +44,7 @@ interface Ticket {
   due_date: string | null;
   completed_at: string | null;
   created_at: string;
+  updated_at: string | null;
 }
 
 interface SubTask {
@@ -58,6 +63,7 @@ interface Props {
 
 const STATUS_OPTIONS = ['backlog', 'todo', 'in_progress', 'in_review', 'done', 'cancelled'];
 const PRIORITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 const PRIORITY_BADGES: Record<string, string> = {
   critical: 'danger',
@@ -190,11 +196,6 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
     }
   }
 
-  function formatDate(dateStr: string) {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  }
-
   function renderActivityLine(a: Activity) {
     switch (a.action) {
       case 'created':
@@ -259,7 +260,8 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
           {ticket.assigned_to_id && <span>Assigned: <strong>{ticket.assigned_to_id}</strong></span>}
           {ticket.confidence != null && <span>Confidence: <strong>{ticket.confidence}%</strong></span>}
           {ticket.estimated_effort && <span>Effort: <strong>{ticket.estimated_effort}</strong></span>}
-          <span>Created: <strong>{formatDate(ticket.created_at)}</strong></span>
+          <span>Created: <strong>{fmtCentralDateTime(ticket.created_at)}</strong></span>
+          <span>Last activity: <strong>{timeAgo(ticket.updated_at)}</strong></span>
         </div>
 
         {/* Sub-tasks */}
@@ -285,7 +287,7 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
         <div className="mb-3" style={{ maxHeight: 300, overflowY: 'auto' }}>
           {activities.map((a) => (
             <div key={a.id} className="d-flex gap-2 mb-2 small">
-              <div className="text-muted" style={{ minWidth: 100, fontSize: '0.7rem' }}>{formatDate(a.created_at)}</div>
+              <div className="text-muted" style={{ minWidth: 110, fontSize: '0.7rem' }}>{fmtCentralDateTime(a.created_at)}</div>
               <div>
                 <span className={`badge bg-${a.actor_type === 'agent' ? 'info' : a.actor_type === 'cory' ? 'primary' : 'secondary'} me-1`} style={{ fontSize: '0.6rem' }}>
                   {a.actor_type}
@@ -378,6 +380,23 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
             <div className="modal-body">
               <h5 className="fw-bold mb-2">{ticket.title}</h5>
               {ticket.description && <p className="text-muted small mb-3">{ticket.description}</p>}
+
+              {/* Stale-ticket flag — "Anything over 3 days old should have a
+                  valid reason why it's still open" (Ali, live feedback).
+                  Visibility only: never auto-closes, never auto-escalates,
+                  never changes status — see isTicketStale's own contract. */}
+              {isTicketStale(ticket.updated_at, ticket.status) && (
+                <div className="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+                  <StatusBadge label="Stale" tone="warning" icon="time-line" />
+                  <span>
+                    No activity in{' '}
+                    {ticket.updated_at
+                      ? Math.floor((Date.now() - new Date(ticket.updated_at).getTime()) / ONE_DAY_MS)
+                      : '3+'}{' '}
+                    days — needs a reason it&apos;s still open.
+                  </span>
+                </div>
+              )}
 
               {/* Tab bar */}
               <ul className="nav nav-tabs mb-3" role="tablist">

@@ -20,6 +20,7 @@ jest.mock('../reeseSignalService', () => ({
 }));
 jest.mock('../reeseOutreachMessageService', () => ({ generateOutreachMessage: jest.fn() }));
 jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
+jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import { createTicket } from '../../ticketService';
@@ -33,6 +34,7 @@ import {
 } from '../reeseSignalService';
 import { generateOutreachMessage } from '../reeseOutreachMessageService';
 import { initiateDm } from '../reeseInitiateDmService';
+import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
 import { runReeseAutonomousOutreachSweep, countAutonomousSendsToday, DAILY_SEND_CAP } from '../reeseAutonomousOutreachService';
 
 const mockReeseOutreachCount = ReeseOutreach.count as unknown as jest.Mock;
@@ -47,8 +49,10 @@ const mockEvaluateInactivity = evaluateInactivitySignal as unknown as jest.Mock;
 const mockEvaluateAnomaly = evaluateBehaviorAnomalySignal as unknown as jest.Mock;
 const mockGenerateMessage = generateOutreachMessage as unknown as jest.Mock;
 const mockInitiateDm = initiateDm as unknown as jest.Mock;
+const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
 
-const STUDENT_ID = 'student-1';
+const STUDENT_ID = 'd6a4b017-6716-4673-96b5-ab3074b70191'; // real-shaped UUID — the exact defect Ali flagged live
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const TICKET = { id: 'ticket-1', update: jest.fn().mockResolvedValue(undefined) };
 
 beforeEach(() => {
@@ -65,6 +69,7 @@ beforeEach(() => {
   mockEvaluateAnomaly.mockResolvedValue(null);
   mockGenerateMessage.mockResolvedValue('Real, unique outreach message.');
   mockInitiateDm.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-1' });
+  mockResolveStudentDisplayName.mockResolvedValue('Jordan Rivera');
 });
 
 describe('runReeseAutonomousOutreachSweep — happy path', () => {
@@ -101,6 +106,37 @@ describe('runReeseAutonomousOutreachSweep — happy path', () => {
     await runReeseAutonomousOutreachSweep(false);
 
     expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'A completely different, specifically-generated message this time.');
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — human-readable ticket text (Ali\'s live feedback: "reporting the id of the user is not helpful")', () => {
+  it('happy path: ticket title/description contain the resolved student name, never the raw enrollment UUID', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockResolveStudentDisplayName).toHaveBeenCalledWith(STUDENT_ID);
+    const call = mockCreateTicket.mock.calls[0][0];
+    expect(call.title).toContain('Jordan Rivera');
+    expect(call.description).toContain('Jordan Rivera');
+    expect(call.title).not.toMatch(UUID_PATTERN);
+    expect(call.description).not.toMatch(UUID_PATTERN);
+    // entity_id/metadata still carry the real UUID — only human-facing text changed.
+    expect(call.entity_id).toBe(`${STUDENT_ID}:inactivity`);
+    expect(call.metadata.signal_snapshot).toBeDefined();
+  });
+
+  it('failure path: an unresolvable enrollment falls back to a generic, non-UUID phrase rather than throwing or printing the raw id', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockResolveStudentDisplayName.mockResolvedValue('a student'); // resolveStudentDisplayName's own fallback
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    const call = mockCreateTicket.mock.calls[0][0];
+    expect(call.title).toContain('a student');
+    expect(call.title).not.toMatch(UUID_PATTERN);
+    expect(call.description).not.toMatch(UUID_PATTERN);
   });
 });
 

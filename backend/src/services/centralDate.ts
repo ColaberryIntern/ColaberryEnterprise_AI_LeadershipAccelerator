@@ -121,3 +121,34 @@ export function formatCentralClock(sessionDate: string, rawTime: string): string
     timeZoneName: 'short',
   }).format(instant);
 }
+
+/**
+ * A raw instant (any ISO string, epoch, or Date — as stored in Postgres `TIMESTAMPTZ`
+ * columns across ProofDesk/Workforce OS) rendered for a human, e.g. "Aug 12, 3:00 PM
+ * CDT". DST-aware and labeled for the same reason formatCentralClock is: this
+ * codebase's admin/ticket surfaces used to render bare `.toISOString()` or the
+ * browser's own local timezone with no indication a conversion happened at all — see
+ * PROGRESS.md session CC-20260812-r9x3 ("ticket UX" fixes) for the concrete instance
+ * (a generated ticket summary embedding raw UTC as unlabeled prose). Unlike
+ * formatCentralClock (which takes a Central *wall-clock* pair because live-class times
+ * are stored that way), this takes a real instant directly — the shape most call sites
+ * in this codebase actually have (a `Date`/timestamptz column, not a wall-clock pair).
+ *
+ * Pure. Returns a safe, honest fallback string for null/invalid input rather than
+ * throwing or emitting "Invalid Date" — this function backs both UI display and
+ * AI-generated prose text, where a raw exception or "Invalid Date" leaking into a
+ * ticket summary would be worse than a plain-language fallback.
+ */
+export function formatCentralDateTime(d: Date | string | null | undefined): string {
+  if (!d) return 'an unknown time';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return 'an unknown time';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: CENTRAL_TZ,
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(date);
+}
