@@ -6,10 +6,21 @@
  * shape reeseReplyService.ts produces for a student's own DM message, which a naive
  * "actor_type === 'human' means AdminUser" resolver would get wrong.
  */
-jest.mock('../../../models/AdminUser', () => ({ findByPk: jest.fn() }));
-jest.mock('../../../models/AiAgent', () => ({ findByPk: jest.fn() }));
+jest.mock('../../../models/AdminUser', () => ({ findByPk: jest.fn(), findOne: jest.fn() }));
+jest.mock('../../../models/AiAgent', () => ({ findByPk: jest.fn(), findOne: jest.fn() }));
 jest.mock('../../reese/resolveStudentDisplayName', () => ({
   resolveStudentDisplayName: jest.fn(),
+}));
+// Query-object builders only — no real DB connection. AiAgent.findOne is
+// itself fully mocked above, so the exact where-clause shape these produce
+// never reaches a real query; only that resolveViaAiAgentName() calls them
+// (proving it attempts a normalized fallback, not a crash) matters here.
+jest.mock('../../../config/database', () => ({
+  sequelize: {
+    fn: jest.fn((name: string, ...args: any[]) => ({ __fn: name, args })),
+    col: jest.fn((name: string) => ({ __col: name })),
+    where: jest.fn((left: any, right: any) => ({ __where: [left, right] })),
+  },
 }));
 
 import AdminUser from '../../../models/AdminUser';
@@ -18,7 +29,9 @@ import { resolveStudentDisplayName } from '../../reese/resolveStudentDisplayName
 import { resolveActorDisplayName } from '../resolveActorDisplayName';
 
 const mockAdminFindByPk = AdminUser.findByPk as unknown as jest.Mock;
+const mockAdminFindOne = AdminUser.findOne as unknown as jest.Mock;
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
+const mockAgentFindOne = AiAgent.findOne as unknown as jest.Mock;
 const mockResolveStudent = resolveStudentDisplayName as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = '82c2dfd2-369e-4545-8d2f-22d1ae3451ff';
@@ -86,28 +99,105 @@ describe('resolveActorDisplayName', () => {
     expect(name).toBe('Kepha Ohanga');
   });
 
-  it('agent: an already-readable non-UUID actor_id is returned unchanged with ZERO DB calls', async () => {
+  it('agent: a REGISTERED agent_name with no linked AdminUser (the Architect-agent shape, e.g. ActionPlannerAgent) resolves via a real, verified lookup to the canonical agent_name — not an accidental zero-DB-call passthrough', async () => {
+    mockAgentFindOne.mockResolvedValueOnce({ id: 'agent-1', agent_name: 'ActionPlannerAgent' });
+    mockAdminFindOne.mockResolvedValueOnce(null); // no linked staff identity
+
     const name = await resolveActorDisplayName('agent', 'ActionPlannerAgent');
 
     expect(name).toBe('ActionPlannerAgent');
+    expect(mockAgentFindOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { agent_name: 'ActionPlannerAgent' } })
+    );
+    expect(mockAdminFindOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { agent_id: 'agent-1' } })
+    );
     expect(mockAdminFindByPk).not.toHaveBeenCalled();
-    expect(mockAgentFindByPk).not.toHaveBeenCalled();
     expect(mockResolveStudent).not.toHaveBeenCalled();
   });
 
-  it('cory: an already-readable non-UUID actor_id (a real subsystem name) is returned unchanged', async () => {
-    const name = await resolveActorDisplayName('cory', 'bpos_orchestrator');
+  it('agent: a registered agent_name WITH a linked AdminUser (e.g. cory-engine) resolves to the AdminUser\'s real display_name, not the raw creator string', async () => {
+    mockAgentFindOne.mockResolvedValueOnce({ id: 'agent-cory-engine', agent_name: 'cory-engine' });
+    mockAdminFindOne.mockResolvedValueOnce({ display_name: 'Cory Engine — Autonomous Operations', email: 'cory-engine@colaberry.com' });
 
-    expect(name).toBe('bpos_orchestrator');
-    expect(mockAgentFindByPk).not.toHaveBeenCalled();
+    const name = await resolveActorDisplayName('agent', 'cory-engine');
+
+    expect(name).toBe('Cory Engine — Autonomous Operations');
   });
 
-  it('agent: a UUID-shaped actor_id resolves via AiAgent.agent_name when present', async () => {
+  it('agent: an UNREGISTERED agent_name falls back cleanly to the raw string, never a crash', async () => {
+    mockAgentFindOne.mockResolvedValue(null); // both the exact and normalized-fallback lookups miss
+
+    const name = await resolveActorDisplayName('agent', 'SomeUnregisteredFutureAgent');
+
+    expect(name).toBe('SomeUnregisteredFutureAgent');
+    expect(mockAgentFindOne).toHaveBeenCalledTimes(2);
+    expect(mockAdminFindOne).not.toHaveBeenCalled();
+  });
+
+  it('cory: a registered agent_name WITH a linked AdminUser (e.g. bpos_orchestrator) resolves to the AdminUser\'s real display_name, not the raw creator string', async () => {
+    mockAgentFindOne.mockResolvedValueOnce({ id: 'agent-bpos', agent_name: 'bpos_orchestrator' });
+    mockAdminFindOne.mockResolvedValueOnce({ display_name: 'BPOS Orchestrator — Universal Ticket Layer', email: 'bposorchestrator@colaberry.com' });
+
+    const name = await resolveActorDisplayName('cory', 'bpos_orchestrator');
+
+    expect(name).toBe('BPOS Orchestrator — Universal Ticket Layer');
+  });
+
+  it('cory: a REGISTERED agent_name with no linked AdminUser (e.g. CoryStrategicAgent) resolves via a real, verified lookup to the canonical agent_name', async () => {
+    mockAgentFindOne.mockResolvedValueOnce({ id: 'agent-csa', agent_name: 'CoryStrategicAgent' });
+    mockAdminFindOne.mockResolvedValueOnce(null);
+
+    const name = await resolveActorDisplayName('cory', 'CoryStrategicAgent');
+
+    expect(name).toBe('CoryStrategicAgent');
+  });
+
+  it('agent: an UNREGISTERED agent_name (CoryAgenticEngine — confirmed absent from AGENT_REGISTRY) falls back cleanly to the raw string, never a crash', async () => {
+    mockAgentFindOne.mockResolvedValue(null); // both the exact and normalized-fallback lookups miss
+
+    const name = await resolveActorDisplayName('cory', 'CoryAgenticEngine');
+
+    expect(name).toBe('CoryAgenticEngine');
+    expect(mockAgentFindOne).toHaveBeenCalledTimes(2); // exact match, then normalized fallback
+    expect(mockAdminFindOne).not.toHaveBeenCalled();
+  });
+
+  it('casing mismatch: cory_strategic_agent (the real ticket-creator string) and CoryStrategicAgent (the real registered agent_name) resolve to the SAME identity — one real identity, not two', async () => {
+    // Exact match on the raw creator string misses (it's snake_case; the
+    // real row is PascalCase) — the normalized fallback query is what finds it.
+    mockAgentFindOne
+      .mockResolvedValueOnce(null) // exact match miss
+      .mockResolvedValueOnce({ id: 'agent-csa', agent_name: 'CoryStrategicAgent' }); // normalized fallback hit
+    mockAdminFindOne.mockResolvedValueOnce(null); // no linked staff identity for this Architect-style agent
+
+    const viaSnakeCase = await resolveActorDisplayName('cory', 'cory_strategic_agent');
+
+    // A direct call with the canonical PascalCase name hits on the exact match.
+    mockAgentFindOne.mockResolvedValueOnce({ id: 'agent-csa', agent_name: 'CoryStrategicAgent' });
+    mockAdminFindOne.mockResolvedValueOnce(null);
+    const viaPascalCase = await resolveActorDisplayName('cory', 'CoryStrategicAgent');
+
+    expect(viaSnakeCase).toBe('CoryStrategicAgent');
+    expect(viaPascalCase).toBe('CoryStrategicAgent');
+    expect(viaSnakeCase).toBe(viaPascalCase);
+  });
+
+  it('boundary: a DB error on the new AiAgent-by-name lookup is swallowed, not thrown — falls back to the raw string', async () => {
+    mockAgentFindOne.mockRejectedValue(new Error('connection reset'));
+
+    const name = await resolveActorDisplayName('agent', 'SomeAgentName');
+
+    expect(name).toBe('SomeAgentName');
+  });
+
+  it('agent: a UUID-shaped actor_id still resolves via the existing AiAgent.findByPk path (unchanged), never the new by-name lookup', async () => {
     mockAgentFindByPk.mockResolvedValue({ agent_name: 'CurriculumArchitectAgent' });
 
     const name = await resolveActorDisplayName('agent', REESE_ADMIN_ID);
 
     expect(name).toBe('CurriculumArchitectAgent');
+    expect(mockAgentFindOne).not.toHaveBeenCalled();
   });
 
   it('boundary: an unresolvable ai_staff id (AdminUser row missing) fails closed to an honest, short, non-UUID label — never a crash', async () => {
