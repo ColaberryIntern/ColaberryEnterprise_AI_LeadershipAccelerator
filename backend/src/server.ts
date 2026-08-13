@@ -8,6 +8,7 @@ import { errorHandler } from './middlewares/errorHandler';
 import { traceMiddleware } from './middlewares/traceMiddleware';
 import healthRoutes from './routes/healthRoutes';
 import leadRoutes from './routes/leadRoutes';
+import internshipRoutes from './routes/internshipRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import unsubscribeRoutes from './routes/unsubscribeRoutes';
@@ -102,6 +103,11 @@ app.use(intelligenceMiddleware());
 
 app.use(healthRoutes);
 app.use(leadRoutes);
+// AI Internship public intake (plan §22). Mounted HERE, beside leadRoutes and
+// before the broad auth guard, for the same reason leadRoutes is: routers
+// registered after that guard are unreachable to an anonymous caller, and a
+// public application form behind an auth wall accepts nobody.
+app.use(internshipRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
 app.use(capePortalRoutes);
