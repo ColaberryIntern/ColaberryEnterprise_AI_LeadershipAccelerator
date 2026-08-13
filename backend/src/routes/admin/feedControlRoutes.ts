@@ -9,17 +9,25 @@
  * POST /api/admin/feed-control/bulk-route-types      — route MANY types {slugs, patch}
  * POST /api/admin/feed-control/route-card            — route ONE card {card_id, patch}
  * GET  /api/admin/feed-control/simulate?enrollment_id=&limit=  — dry-run "sees next + why"
+ * GET  /api/admin/feed-control/type-stats/:slug       — read-only per-type delivery analytics
+ * GET  /api/admin/feed-control/type-preview/:slug?step=  — read-only more/less slider projection
  */
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   getBoard, getFeedPolicy, setFeedPolicy, routeType, bulkRouteTypes, routeCard, simulate, listEnrollments,
 } from '../../services/timeline/feedControlService';
 import { listPresets, savePreset, deletePreset } from '../../services/timeline/feedPresetsService';
+import { getTypeStats } from '../../services/timeline/feedTypeStatsService';
+import { previewTypeAdjustment, MIN_STEP, MAX_STEP } from '../../services/timeline/feedTypeAdjustmentPreviewService';
 
 const router = Router();
 const adminId = (req: Request): string | undefined => (req as any).admin?.id || (req as any).user?.id;
 const fail = (res: Response, e: any) => res.status(e?.status || 500).json({ ok: false, error: e?.message || 'error' });
+
+const slugParamSchema = z.object({ slug: z.string().trim().min(1).max(100).regex(/^[a-z0-9_]+$/, 'invalid type slug') });
+const stepQuerySchema = z.object({ step: z.coerce.number().int().min(MIN_STEP).max(MAX_STEP).optional().default(0) });
 
 router.get('/api/admin/feed-control/board', requireAdmin, async (_req, res) => {
   try { res.json({ ok: true, ...(await getBoard()) }); } catch (e) { fail(res, e); }
@@ -72,8 +80,37 @@ router.get('/api/admin/feed-control/simulate', requireAdmin, async (req, res) =>
     const includeTypes = sandbox
       ? String(req.query.include || '').split(',').map((s) => s.trim()).filter(Boolean)
       : undefined;
-    res.json({ ok: true, ...(await simulate(enrollmentId, limit, includeTypes)) });
+    // CAPE Phase 6 (T014, design doc §12 "Explanation simulator"): `simulate()`
+    // has always accepted `opts.useCapeRanker` (Phase 4, T009) to force the
+    // CAPE pipeline in preview even when `env.capeLearningValueRankerEnabled`
+    // is off — but nothing here ever forwarded a caller's request for it until
+    // now. Default `false` is EXACTLY equivalent to the pre-existing
+    // 3-argument call this route always made (omitted === false, both fail
+    // the `opts.useCapeRanker === true` check the same way) — no behavior
+    // change for any existing caller that doesn't pass this param.
+    const useCapeRanker = req.query.use_cape_ranker === '1' || req.query.use_cape_ranker === 'true';
+    res.json({ ok: true, ...(await simulate(enrollmentId, limit, includeTypes, { useCapeRanker })) });
   } catch (e) { fail(res, e); }
+});
+
+// Per-type delivery analytics for the gear-icon drawer (pool size, creation
+// velocity, times triggered, timeline breadth, delivery velocity, and a
+// real "why isn't this appearing" diagnostic). Read-only.
+router.get('/api/admin/feed-control/type-stats/:slug', requireAdmin, async (req, res) => {
+  const parsed = slugParamSchema.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues[0]?.message || 'invalid type slug' });
+  try { res.json({ ok: true, stats: await getTypeStats(parsed.data.slug) }); } catch (e) { fail(res, e); }
+});
+
+// The more/less slider's anticipated-impact preview. Read-only — never
+// writes; the drawer only persists a change when the admin clicks the
+// existing "Save routing" button (routeType, above).
+router.get('/api/admin/feed-control/type-preview/:slug', requireAdmin, async (req, res) => {
+  const parsedSlug = slugParamSchema.safeParse(req.params);
+  if (!parsedSlug.success) return res.status(400).json({ ok: false, error: parsedSlug.error.issues[0]?.message || 'invalid type slug' });
+  const parsedStep = stepQuerySchema.safeParse(req.query);
+  if (!parsedStep.success) return res.status(400).json({ ok: false, error: parsedStep.error.issues[0]?.message || 'invalid step' });
+  try { res.json({ ok: true, preview: await previewTypeAdjustment(parsedSlug.data.slug, parsedStep.data.step) }); } catch (e) { fail(res, e); }
 });
 
 // Named, reusable feed configurations (the sandbox selection saved by name).

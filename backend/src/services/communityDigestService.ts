@@ -13,13 +13,24 @@ function log(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string
 
 export interface DigestContent {
   unread_notification_count: number;
+  unread_dm_count: number;
   new_post_count: number;
   upcoming_events: CalendarEvent[];
 }
 
+// unread_notification_count deliberately EXCLUDES 'new_message' notifications
+// (offline-DM-notification fix) — its email label describes "mentions/
+// replies", which would become inaccurate if DM notifications silently
+// inflated it. DMs get their own dedicated count/line instead, queried
+// separately below.
 async function buildDigestContent(member: CommunityMember, since: Date): Promise<DigestContent> {
-  const [unreadNotifications, newPosts, upcomingEvents] = await Promise.all([
-    CommunityNotification.count({ where: { member_id: member.id, read_at: null } }),
+  const [unreadNotifications, unreadDms, newPosts, upcomingEvents] = await Promise.all([
+    CommunityNotification.count({
+      where: { member_id: member.id, read_at: null, notification_type: { [Op.ne]: 'new_message' } },
+    }),
+    CommunityNotification.count({
+      where: { member_id: member.id, read_at: null, notification_type: 'new_message' },
+    }),
     CommunityPost.count({
       where: {
         cohort_id: (member as any).enrollment?.cohort_id,
@@ -33,6 +44,7 @@ async function buildDigestContent(member: CommunityMember, since: Date): Promise
 
   return {
     unread_notification_count: unreadNotifications,
+    unread_dm_count: unreadDms,
     new_post_count: newPosts,
     upcoming_events: upcomingEvents,
   };
@@ -78,6 +90,7 @@ export async function runDailyDigest(now: Date = new Date()): Promise<{ sent: nu
         fullName: enrollment.full_name,
         digestDate,
         unreadNotificationCount: content.unread_notification_count,
+        unreadDmCount: content.unread_dm_count,
         newPostCount: content.new_post_count,
         upcomingEvents: content.upcoming_events,
       });

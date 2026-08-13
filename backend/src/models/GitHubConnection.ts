@@ -4,6 +4,8 @@ import { sequelize } from '../config/database';
 export interface GitHubConnectionAttributes {
   id?: string;
   enrollment_id: string;
+  /** The project this repo belongs to. One repo per PROJECT (SBP-GH-v1 FR-037). */
+  project_id?: string | null;
   repo_url?: string;
   repo_owner?: string;
   repo_name?: string;
@@ -49,6 +51,7 @@ export interface GitHubConnectionAttributes {
 class GitHubConnection extends Model<GitHubConnectionAttributes> implements GitHubConnectionAttributes {
   declare id: string;
   declare enrollment_id: string;
+  declare project_id: string | null;
   declare repo_url: string;
   declare repo_owner: string;
   declare repo_name: string;
@@ -73,8 +76,15 @@ GitHubConnection.init(
     enrollment_id: {
       type: DataTypes.UUID,
       allowNull: false,
-      unique: true,
       references: { model: 'enrollments', key: 'id' },
+    },
+    // Nullable while legacy enrollment-keyed rows exist; the partial unique
+    // index (project_id) WHERE project_id IS NOT NULL is created in
+    // db/ensureWorkspaceRepoSchema.ts.
+    project_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'projects', key: 'id' },
     },
     repo_url: {
       type: DataTypes.STRING(500),

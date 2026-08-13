@@ -320,7 +320,7 @@ const OptionList: React.FC<{ name: string; options: { id: string; label: string;
     <div className="am-opts" role="radiogroup" aria-label={name}>
       {options.map((o) => (
         <button key={o.id} type="button" role="radio" aria-checked={value === o.id} className={`am-opt${value === o.id ? ' on' : ''}${o.custom ? ' custom' : ''}${invalid && !value ? ' invalid' : ''}`} onClick={() => onChoose(o.id)}>
-          <span className="am-box">{value === o.id ? '✓' : ''}</span>{o.label}
+          <span className="am-box"><i /></span>{o.label}
         </button>
       ))}
       {value === (options.find((o) => o.custom)?.id) && (
@@ -535,8 +535,16 @@ const AM_CSS = `
 .am-opt{display:flex;gap:12px;align-items:flex-start;text-align:left;border:1px solid #ffffff2b;background:#ffffff0f;color:#eaf3f6;border-radius:12px;padding:12px 14px;font:500 14px var(--am-sans);cursor:pointer;transition:.15s var(--am-ease)}
 .am-opt:hover{background:#ffffff1c;border-color:#8fc7db}.am-opt:focus-visible{outline:3px solid #8fc7db;outline-offset:2px}
 .am-opt.on{background:#8fc7db26;border-color:#8fc7db;box-shadow:inset 0 0 0 1px #8fc7db}.am-opt.custom{border-style:dashed}.am-opt.invalid{border-color:#ff7a80;box-shadow:0 0 0 1px #ff7a80}
-.am-box{flex:none;width:18px;height:18px;border-radius:5px;border:2px solid #8fc7db;margin-top:1px;display:grid;place-items:center;font-size:12px;color:#0e1a20;background:transparent}
-.am-opt.on .am-box{background:#8fc7db}
+/* Single-select affordance. These groups are role="radiogroup" and only ever accept
+   ONE answer, so the control must READ as a radio: a circle with a filled dot, never
+   a square with a tick. A square+check promises multi-select the group cannot honour
+   (Ram, 2026-08-10) — and it appeared on every question, since one component renders
+   them all. If a genuine multi-select question is ever authored (mode: 'multiple'),
+   give it a square + check then, not before. */
+.am-box{flex:none;width:18px;height:18px;border-radius:50%;border:2px solid #8fc7db;margin-top:1px;display:grid;place-items:center;background:transparent}
+.am-box>i{width:9px;height:9px;border-radius:50%;background:#8fc7db;transform:scale(0);transition:transform .13s var(--am-ease)}
+.am-opt.on .am-box>i{transform:scale(1)}
+@media(prefers-reduced-motion:reduce){.am-box>i{transition:none}}
 .am-free{width:100%;max-width:62ch;background:#0b1519;border:1px solid #ffffff2e;border-radius:10px;color:#eef6f9;font:14px var(--am-sans);padding:11px 13px;min-height:70px;resize:vertical;margin-top:6px}
 .am-free:focus-visible{outline:3px solid #8fc7db;outline-offset:1px}
 .am-flab{display:block;font:600 12px var(--am-mono);letter-spacing:.03em;color:#9fbcc7;margin:14px 0 4px;text-transform:uppercase}

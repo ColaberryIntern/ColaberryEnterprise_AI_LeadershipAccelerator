@@ -270,3 +270,46 @@ export const skillEvidenceHistoryResponseSchema = z.object({
   next_recommended_proof: z.string().nullable(),
 });
 export type SkillEvidenceHistoryResponse = z.infer<typeof skillEvidenceHistoryResponseSchema>;
+
+/**
+ * CAPE Phase 6 (design doc §12 "Pacing controls", §16 Phase 6) — the governance
+ * policy covering Stage 4 rerank caps (previously hardcoded constants in
+ * capeLearningValuePolicy.ts) and Today Plan pacing knobs (previously implicit
+ * in capeTodayPlanService.ts). Body contract for PUT /api/admin/cape/governance/policy.
+ * All fields optional (partial patch, same convention as updateSkillDefinitionSchema)
+ * but at least one must be present.
+ */
+export const updateGovernancePolicySchema = z.object({
+  same_type_max_streak: z.number().int().min(1).max(10).optional(),
+  passive_max_streak: z.number().int().min(1).max(10).optional(),
+  crowd_out_max_per_skill: z.number().int().min(1).max(10).optional(),
+  crowd_out_window: z.number().int().min(1).max(20).optional(),
+  stretch_cap_first_five: z.number().int().min(0).max(5).optional(),
+  daily_plan_target_minutes: z.number().int().min(1).max(999).optional(),
+  review_slot_share: z.number().min(0).max(1).optional(),
+  ai_pulse_slot_share: z.number().min(0).max(1).optional(),
+  reason: z.string().max(500).nullable().optional(),
+}).refine(
+  (v) => Object.entries(v).some(([k, val]) => k !== 'reason' && val !== undefined),
+  { message: 'at least one policy field must be provided' },
+);
+export type UpdateGovernancePolicyInput = z.infer<typeof updateGovernancePolicySchema>;
+
+/**
+ * CAPE Phase 6 (design doc §10 "Lifecycle mixes", §12 "Learner-stage policies") —
+ * PUT /api/admin/cape/governance/lifecycle-modes/:mode body contract. `mix` is a
+ * free-form category->percentage map (each mode's category set differs per §10's
+ * table) that must sum to ~1.0 (±0.001, same tolerance as
+ * updateEvidenceBandWeightsSchema above). Reuses `lifecycleModeSchema` (already
+ * defined above for the Phase 5 Today Plan contract) as the single source of
+ * truth for the 5 valid mode values — not redefined here.
+ */
+export const updateLifecycleModeMixSchema = z.object({
+  mix: z.record(z.string().min(1).max(60), z.number().min(0).max(1))
+    .refine((m) => Object.keys(m).length >= 1, { message: 'mix must have at least one category' })
+    .refine((m) => Math.abs(Object.values(m).reduce((s, v) => s + v, 0) - 1) < 0.001, {
+      message: 'mix percentages must sum to 1.0',
+    }),
+  reason: z.string().max(500).nullable().optional(),
+});
+export type UpdateLifecycleModeMixInput = z.infer<typeof updateLifecycleModeMixSchema>;

@@ -189,21 +189,26 @@ const video: IntelFormat = {
     <div class="vs-poster"><div class="play"><span></span></div><div class="cap">${esc(d.title)}</div></div>
     <div class="vs-meta"><span>▸ ${esc(d.speaker)}</span><span>◷ ${esc(d.length)}</span><span>◈ ${esc(d.venue)}</span></div>
     <p class="lead">${esc(d.summary)}</p>
-    <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#dc2626;margin:14px 0 4px">Key moments</h3>
-    <ul class="vs-mom">${d.moments.map((m: any) => `<li><span class="ts">${esc(m.t)}</span><span>${esc(m.text)}</span></li>`).join('')}</ul>
+    ${d.moments?.length ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#dc2626;margin:14px 0 4px">Key moments</h3>
+    <ul class="vs-mom">${d.moments.map((m: any) => `<li><span class="ts">${esc(m.t)}</span><span>${esc(m.text)}</span></li>`).join('')}</ul>` : ''}
     <div class="chips">${d.skills.map((s: string) => `<span class="chip">${esc(s)}</span>`).join('')}</div>
     <div class="vs-take"><strong>Try first:</strong> ${esc(d.take)}</div>
     <div class="foot">Source: ${esc(d.venue)}<span class="conf"><span class="dot" style="background:#dc2626"></span>Confidence: ${esc(d.confidence)}</span></div>
   </div>`,
   structure: 'A watch card: a poster hero with a play button + title caption (.vs-poster); a speaker/length/venue meta row (.vs-meta); a summary; a chaptered "Key moments" list with timestamps (.vs-mom); skill chips; a "Try first" takeaway box (.vs-take).',
   sample: {
-    title: 'How Claude Code Works in Large Codebases', speaker: 'Anthropic', length: '32 min', venue: 'Conference talk',
-    summary: 'A practical talk on running agentic coding at scale: splitting exploration from editing, using subagents, and keeping context lean.',
-    moments: [
-      { t: '02:10', text: 'Why context management is the real bottleneck' },
-      { t: '11:40', text: 'Read-only exploration subagents map the codebase' },
-      { t: '21:05', text: 'Verify-before-commit keeps changes safe' },
-    ],
+    // These values ship to students as a real published card, so they must
+    // describe the video actually linked in seedIntelSampleCards.ts. They
+    // previously did not: the copy claimed a 32-minute "Conference talk" with
+    // chapter marks at 02:10 / 11:40 / 21:05 against a 2m50s video, and the
+    // link itself was dead. Title, speaker and length below are verified via
+    // the YouTube oEmbed endpoint. `moments` is empty because real chapter
+    // marks cannot be verified without watching the video, and inventing them
+    // is what produced the wrong ones — the renderer now omits the "Key
+    // moments" block entirely when there are none.
+    title: 'How Claude Code Works', speaker: 'Claude', length: '3 min', venue: 'Anthropic video',
+    summary: 'How Claude Code runs an agentic loop: gathering context, taking action, and verifying the result.',
+    moments: [],
     skills: ['agent orchestration', 'context engineering'], take: 'Try a read-only exploration subagent on your own codebase before your next big change.',
     confidence: 'Medium',
   },

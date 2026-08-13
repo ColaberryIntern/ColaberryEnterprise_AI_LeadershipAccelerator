@@ -288,6 +288,33 @@ export async function resolveIdentity(
     }
   );
 
+  // Backfill page events the same way (D1). Without this, page_events.lead_id
+  // would only ever be populated by the historical backfill script and would go
+  // stale the moment a new visitor is identified — and contextGraphService's
+  // booking-attempt query reads exactly this column.
+  //
+  // Guarded separately and swallowed on failure: identity resolution is the
+  // caller's actual job, and it must still link the visitor, write the Activity
+  // row, and emit the ledger event even if this analytics backfill fails. The
+  // `lead_id IS NULL` predicate keeps it idempotent and stops an already-
+  // attributed event from being reassigned to a different lead.
+  try {
+    await PageEvent.update(
+      { lead_id: leadId } as any,
+      {
+        where: {
+          visitor_id: visitorId,
+          lead_id: { [Op.is]: null as any },
+        },
+      }
+    );
+  } catch (err: any) {
+    console.warn(
+      '[VisitorTracking] page_events lead_id backfill failed (non-fatal):',
+      err?.message
+    );
+  }
+
   // Log activity on the lead
   await Activity.create({
     lead_id: leadId,

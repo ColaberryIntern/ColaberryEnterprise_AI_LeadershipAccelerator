@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment, BlogReaderContent } from './runtimeApi';
 import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
 import AssessmentPanel from './AssessmentPanel';
-import { lessonDoc, readerDoc, blogReaderDoc } from '../../../components/timeline/CardDetailBody';
+import { lessonDoc, readerDoc, blogReaderDoc, READER_SANDBOX } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
@@ -403,7 +403,7 @@ const RuntimeWorkspace: React.FC = () => {
                 ref={isDeepDive ? ddIframeRef : undefined}
                 className="rt-readerframe"
                 title={isReader ? 'Self Study reading' : isDeepDive ? 'Field Guide' : 'Lesson'}
-                sandbox={isReader ? 'allow-scripts' : isDeepDive ? 'allow-scripts allow-modals' : band === 'intel' ? 'allow-popups' : ''}
+                sandbox={isReader ? READER_SANDBOX : isDeepDive ? 'allow-scripts allow-modals' : band === 'intel' ? 'allow-popups' : ''}
                 srcDoc={isReader
                   ? readerDoc(card.content?.body_html || '', card.content?.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })
                   : isDeepDive

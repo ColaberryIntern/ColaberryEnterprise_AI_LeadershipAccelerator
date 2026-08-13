@@ -17,6 +17,7 @@ jest.mock('../../services/driveService', () => ({ findRecordingForSession: jest.
 jest.mock('../../services/zoomService', () => ({
   findRecordingForSession: jest.fn(),
   findRecordingByMeetingId: jest.fn(),
+  findClassRecordingInstances: jest.fn(),
   extractZoomMeetingId: jest.fn(),
   streamZoomFile: jest.fn(),
 }));
@@ -31,7 +32,7 @@ import CommunityRoom from '../../models/CommunityRoom';
 import { ensureRoomForSession } from '../../services/communityRooms/roomService';
 import { emitRoomEvent } from '../../services/communityRooms/roomOutboxService';
 import { findRecordingForSession as findDriveMatch, streamDriveFile } from '../../services/driveService';
-import { findRecordingForSession as findZoomMatch, findRecordingByMeetingId, extractZoomMeetingId, streamZoomFile } from '../../services/zoomService';
+import { findRecordingForSession as findZoomMatch, findRecordingByMeetingId, findClassRecordingInstances, extractZoomMeetingId, streamZoomFile } from '../../services/zoomService';
 import { sequelize } from '../../config/database';
 import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom, findAlwaysOpenRoomForZoomMeeting } from '../../services/sessionRecordingService';
 
@@ -45,6 +46,7 @@ const emitMock = emitRoomEvent as jest.Mock;
 const findDriveMatchMock = findDriveMatch as jest.Mock;
 const streamDriveMock = streamDriveFile as jest.Mock;
 const findZoomMatchMock = findZoomMatch as jest.Mock;
+const findClassInstancesMock = findClassRecordingInstances as jest.Mock;
 const findByMeetingIdMock = findRecordingByMeetingId as jest.Mock;
 const extractZoomMeetingIdMock = extractZoomMeetingId as jest.Mock;
 const streamZoomMock = streamZoomFile as jest.Mock;
@@ -181,19 +183,87 @@ describe('ingestRecordingForSession — successful ingest (Google Meet / Drive)'
 });
 
 describe('ingestRecordingForSession — Zoom provider dispatch', () => {
-  it('a zoom-provider session calls the Zoom finder/streamer, not Drive', async () => {
+  /**
+   * The polling path for a Zoom class now goes through the window-aware,
+   * multi-instance selector rather than "first recording matching the meeting
+   * id". Regression cover for the Week 2 Build Day incident (2026-08-06):
+   * students were served a 5-minute pre-class test as the class while the real
+   * 93MB + 178MB recordings were never ingested. Three faults, one test each.
+   */
+  const instance = (uuid: string, over: Record<string, unknown> = {}) => ({
+    uuid,
+    match: { downloadUrl: `https://zoom.us/rec/download/${uuid}`, name: 'Build Day.mp4', mimeType: 'video/mp4', sizeBytes: 700 },
+    startedAt: new Date('2026-07-30T23:30:00Z'),
+    endedAt: new Date('2026-07-31T00:40:00Z'),
+    ...over,
+  });
+
+  it('a zoom-provider session selects by class window, not by first meeting-id match', async () => {
     findOneResource.mockResolvedValue(null);
-    findZoomMatchMock.mockResolvedValue({ downloadUrl: 'https://zoom.us/rec/download/abc', name: 'Build Day.mp4', mimeType: 'video/mp4', sizeBytes: 700 });
+    findClassInstancesMock.mockResolvedValue([instance('uuid-a')]);
     streamZoomMock.mockResolvedValue(fakeSource());
     createResource.mockResolvedValue({ id: 'zoom-resource' });
 
     const result = await ingestRecordingForSession(zoomSession);
 
     expect(result).toEqual({ status: 'ingested', resourceId: 'zoom-resource' });
-    expect(findZoomMatchMock).toHaveBeenCalledWith(zoomSession);
+    expect(findClassInstancesMock).toHaveBeenCalled();
+    // The old first-match-by-meeting-id finder must NOT drive this path anymore.
+    expect(findZoomMatchMock).not.toHaveBeenCalled();
     expect(streamZoomMock).toHaveBeenCalled();
     expect(findDriveMatchMock).not.toHaveBeenCalled();
-    expect(streamDriveMock).not.toHaveBeenCalled();
+  });
+
+  it('ingests EVERY overlapping instance, so a class split at the break keeps both halves', async () => {
+    // The real incident: Zoom was restarted at the break, producing a 71-minute
+    // part 1 and an 83-minute part 2. Returning only the first loses half the class.
+    findOneResource.mockResolvedValue(null);
+    findClassInstancesMock.mockResolvedValue([instance('uuid-part1'), instance('uuid-part2')]);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource
+      .mockResolvedValueOnce({ id: 'part-1' })
+      .mockResolvedValueOnce({ id: 'part-2' });
+
+    const result = await ingestRecordingForSession(zoomSession);
+
+    expect(createResource).toHaveBeenCalledTimes(2);
+    // recording_url points at the FIRST part, so playback starts at class start.
+    expect(result.resourceId).toBe('part-1');
+    expect(zoomSession.update).toHaveBeenCalledWith(expect.objectContaining({
+      recording_url: '/api/portal/community/rooms/room-1/resources/part-1/download',
+    }));
+  });
+
+  it('refuses to ingest before the class window has closed', async () => {
+    // The incident ingest fired at 5:33pm for a 6:30pm class and grabbed the
+    // only thing that existed then — a test start.
+    jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-07-30T20:00:00Z').getTime());
+    findOneResource.mockResolvedValue(null);
+
+    const result = await ingestRecordingForSession(zoomSession);
+
+    expect(result).toEqual({ status: 'not_found' });
+    expect(findClassInstancesMock).not.toHaveBeenCalled();
+    expect(createResource).not.toHaveBeenCalled();
+    (Date.now as jest.Mock).mockRestore();
+  });
+
+  it('keys idempotency on the Zoom instance uuid, so a later part is still collected', async () => {
+    // The old guard was "does ANY recording exist for this booking", which
+    // pinned the first (wrong) pick forever.
+    findOneResource.mockImplementation(({ where }: any) => {
+      const uuid = (where?.metadata as any)?.[Object.getOwnPropertySymbols(where?.metadata || {})[0]]?.zoom_uuid
+        ?? (where?.metadata && JSON.stringify(where.metadata).includes('uuid-part1') ? 'uuid-part1' : null);
+      return Promise.resolve(uuid === 'uuid-part1' ? { id: 'already-part-1' } : null);
+    });
+    findClassInstancesMock.mockResolvedValue([instance('uuid-part1'), instance('uuid-part2')]);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'part-2' });
+
+    await ingestRecordingForSession(zoomSession);
+
+    // part 1 already present -> skipped; part 2 is new -> ingested.
+    expect(createResource).toHaveBeenCalledTimes(1);
   });
 
   it('a webhook-supplied preResolvedMatch skips the findRecording lookup entirely', async () => {

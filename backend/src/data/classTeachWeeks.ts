@@ -221,204 +221,236 @@ export const GENERATED_WEEK_TEACH: Record<number, DayTeach> = {
       {
         "segment": "build-map",
         "eyebrow": "🗺️ Build Map",
-        "title": "Four checkpoints: folder → first fire → three skills → scoped + shared",
-        "body": "Here is the whole arc for today, and each checkpoint is a state you can screenshot as proof. CP0: your .claude/skills/ folder is ready in the Week 1 workspace. CP1: your first skill triggers on a natural ask. CP2: all three project skills are authored. CP3: one of them is multi-file, tool-scoped, and committed so the team gets it. We go deep on the first skill so the pattern is clear, then the next two are muscle memory, then we upgrade one and share.",
+        "title": "Four checkpoints: idea → diagram → stack → a demo you can show off",
+        "body": "Here is the whole arc for tonight, and each checkpoint is a state you can screenshot as proof. CP0: your .claude/skills/ folder is ready. CP1: system-architect draws your first real architecture diagram from nothing but your idea. CP2: all three Skills are authored. CP3: mvp-scoper — multi-file and tool-scoped — hands you a Week-1 plan, a visual mockup, and a one-pager, committed. Nobody's idea needs to be final tonight. It needs to be one paragraph.",
         "bullets": [
           "CP0: .claude/skills/ folder ready",
-          "CP1: first skill triggers on a natural ask",
-          "CP2: three project skills authored",
-          "CP3: one multi-file, scoped, and committed"
+          "CP1: system-architect draws your first diagram",
+          "CP2: all three Skills authored",
+          "CP3: mvp-scoper is multi-file, scoped, and shows off your idea"
         ],
-        "script": "Four checkpoints, each one you can screenshot as proof. We go deep on the first skill, then the next two are muscle memory."
+        "diagram": "flowchart LR\n  I[\"💡 Your idea\\n(one paragraph)\"] --> SA[\"🏗️ system-architect\"]\n  SA --> TS[\"🎨 tech-stack-recommender\"]\n  TS --> MVP[\"🚀 mvp-scoper\"]\n  MVP --> B[\"📦 Your Blueprint:\\ndiagram + stack + demo\"]",
+        "script": "Four checkpoints, each one you can screenshot as proof. We go deep on the first skill, then the next two build on it directly."
       },
       {
         "segment": "build-map",
-        "eyebrow": "🎯 Choose Well",
-        "title": "Pick three real, repeated, self-contained tasks — not toys",
-        "body": "The quality of your skills is decided before you write a line, when you pick the tasks. Good candidates are genuinely repeated, self-contained, and procedure-shaped: a commit-message writer, a release-notes generator, a PR-description drafter, a test-scaffolder. Bad candidates are be helpful, which is too vague; our code style, which is standing context that belongs in CLAUDE.md; and research this topic, which wants its own context so it is a subagent. Readiness check: your Week 1 workspace is open with a .claude/skills/ folder from Monday.",
+        "eyebrow": "💡 Your Idea, As-Is",
+        "title": "Your idea does not need to be final tonight — it needs to be one paragraph",
+        "body": "This is not the night your idea gets locked in. It is the night a rough idea becomes something you can actually look at: a diagram, a stack, a demo. A good starting paragraph names who it is for, what it does, and the one thing that would make it useful on day one. That is genuinely enough fuel for all three Skills tonight.",
         "bullets": [
-          "Good: commit-message, release-notes, PR-description, test-scaffold",
-          "Bad: be helpful (too vague)",
-          "Bad: our code style (that is CLAUDE.md)",
-          "Bad: research a topic (that is a subagent)"
+          "Who is this for?",
+          "What does it actually do?",
+          "What is the one thing it must do well on day one?"
         ],
-        "script": "Before we build, each of you names your three. The rule: repeated, self-contained, and a procedure. If it is an always-true rule it belongs in CLAUDE.md, not here."
+        "diagram": "flowchart LR\n  R[\"🌱 Rough idea,\\nnot finalized\"] --> P[\"📝 One paragraph:\\nwho + what + day-one job\"]\n  P --> T[\"🧰 Tonight's 3 Skills\"]\n  T --> C[\"👀 Something concrete\\nto react to\"]",
+        "script": "Give everyone 60 seconds to write their one paragraph before we build. If someone says their idea isn't ready, tell them that is exactly what tonight is for."
       },
       {
         "segment": "guided-build",
-        "eyebrow": "🧱 CP0",
-        "title": "Scaffold skill #1 — commit-summary",
-        "body": "We start by scaffolding the first skill with Claude Code so the anatomy is in front of you. Give it a precise description right in the prompt, because the scaffold is only as good as the description you ask for. When Claude generates the SKILL.md, do not just accept it. Read the description out loud and ask whether it would fire on the way you actually talk about commits.",
+        "eyebrow": "📁 Where Skill Files Live",
+        "title": "Everything tonight stays inside your own project",
+        "body": "Same rule as Monday. Project Skills live at .claude/skills/<skill-name>/SKILL.md. mvp-scoper will produce a few extra files — a task list, a visual mockup, a one-pager — and every one of them gets an exact, reported path so you never have to guess where something landed.",
         "bullets": [
-          "Scaffold the folder + SKILL.md in one prompt",
-          "Ask for a precise, trigger-naming description",
-          "Read the generated description critically before moving on"
+          "Skill: .claude/skills/<skill-name>/SKILL.md",
+          "Generated outputs: project-blueprint/ (new folder, created tonight)",
+          "Claude reports every path after every build"
         ],
-        "code": {
-          "label": "Scaffold prompt",
-          "code": "Create an Agent Skill named commit-summary at .claude/skills/commit-summary/SKILL.md that writes a conventional-commit message from staged changes. Give it a precise description that names when to use it (user asks for a commit message after staging) and what it produces (a conventional-commit summary from the staged diff). Keep the body to numbered steps."
-        },
-        "script": "Paste this. When Claude generates the SKILL.md, don't just accept it — read the description out loud and ask, would this fire on how I actually talk?"
+        "diagram": "flowchart TD\n  S[\".claude/skills/\"] --> A[\"🏗️ system-architect/\\nSKILL.md\"]\n  S --> B[\"🎨 tech-stack-recommender/\\nSKILL.md\"]\n  S --> C[\"🚀 mvp-scoper/\\nSKILL.md + template.md\"]\n  O[\"project-blueprint/\"] --> D[\"architecture.md\"]\n  O --> E[\"tech-stack.md\"]\n  O --> F[\"mockup.html + one-pager.pdf\"]",
+        "script": "Point at the diagram. Two folders tonight: the Skills themselves, and where their outputs land. Nobody should ever have to ask 'where did that go?'"
       },
       {
         "segment": "guided-build",
-        "eyebrow": "🔥 CP1",
-        "title": "Prove skill #1 triggers on a natural ask",
-        "body": "CP1 is not the skill exists, it is the skill fires when I talk like a human. Stage a real change, then ask for a commit message in natural language without naming the skill. If it auto-fires, the description routed correctly and CP1 is met. This natural-language triggering is the acceptance test for every skill you build today, so make it a habit now: never ship a skill you have only tested by naming it explicitly.",
+        "eyebrow": "🏗️ CP1 — Build system-architect",
+        "title": "Skill #1: turn one paragraph into a real system architecture",
+        "body": "This is the Skill everyone remembers. Description: use when the user has a project idea and wants a system architecture. Body: read the idea, identify the real components — frontend, backend/API, database, any external services or an AI layer — and produce a genuine mermaid diagram showing how they connect, not a toy box-and-arrow sketch. This should feel like a week of an architect's thinking, delivered in one pass.",
         "bullets": [
-          "Stage a real change first",
-          "Ask in natural language, do not name the skill",
-          "Auto-fires = CP1 met; only-when-named = weak description"
+          "Description names the trigger: 'has a project idea, wants an architecture'",
+          "Identifies real components — not a generic template",
+          "Outputs an actual mermaid diagram, extensive enough to mean something"
         ],
+        "diagram": "flowchart LR\n  D[\"💡 One-paragraph idea\"] --> SA[\"🏗️ system-architect\"]\n  SA --> F[\"🖥️ Frontend\"]\n  SA --> BE[\"⚙️ Backend / API\"]\n  SA --> DB[\"🗄️ Database\"]\n  SA --> EX[\"🔌 External services\\n/ AI layer\"]\n  F --> DIA[\"📐 Real mermaid\\narchitecture diagram\"]\n  BE --> DIA\n  DB --> DIA\n  EX --> DIA",
         "code": {
-          "label": "Trigger test",
-          "code": "git add <a file you changed>\n\nThen ask Claude Code:\n  \"give me a commit message for what I just staged\"\n\nExpected: the commit-summary skill loads and returns a conventional-commit message without you naming it."
+          "label": "Claude Code prompt — build system-architect",
+          "code": "Confirm .claude/skills/ exists (create it if not). Create .claude/skills/system-architect/SKILL.md.\n\nDescription: Use when the user has a project idea and wants a system architecture, a technical design, or a diagram of how it would work.\n\nBody must: take a one-paragraph project idea as input; identify the real components this specific idea needs (frontend, backend/API, database, external services, an AI/agent layer if relevant) — never a generic template that ignores what the idea actually said; produce a genuine mermaid flowchart showing how the components connect and how data flows between them; explain each component in one plain-English sentence a non-technical person could follow; save the result to project-blueprint/architecture.md.\n\nWHEN FINISHED, REPORT: the exact path, the final description, and the component list it identified."
         },
-        "script": "CP1 isn't the skill exists, it's the skill fires when I talk like a human. Test it that way every single time or it will bite you in production."
+        "script": "Paste this. When it comes back, do not just glance at the diagram — read it out loud, node by node, and ask the room if it actually matches their idea."
       },
       {
         "segment": "guided-build",
-        "eyebrow": "📰 CP2",
-        "title": "Skill #2 — release-notes from a commit range",
-        "body": "Now the second skill, and this goes faster because you know the shape: description first, then a tight body. This one reads a commit range from git log, groups commits by type, and outputs Markdown release notes. Pick this skill deliberately, because we are going to grow it into a multi-file skill in a few minutes, so a slightly richer output format is exactly what we want here.",
+        "eyebrow": "🧪 Test Automatic Invocation",
+        "title": "Separate slide, separate action: prove it fires without naming it",
+        "body": "Never combine building a Skill with testing it. Now, in a fresh ask, describe your idea in plain English and ask for how it would work — without naming system-architect. If it auto-fires, your description works. If you have to name it, the description is too weak, and that is exactly what we harden after the break.",
         "bullets": [
-          "Description first, then a tight body — you know the pattern now",
-          "Reads a commit range, groups by type, outputs Markdown",
-          "This is the one we will make multi-file next"
+          "Ask naturally — never say 'use system-architect'",
+          "Auto-fires = CP1 met",
+          "This ask also builds a full browsable knowledge-base site — give it time",
+          "Only-when-named = the description needs sharpening"
         ],
+        "diagram": "flowchart LR\n  ASK[\"🗣️ Natural-language ask,\\nSkill never named\"] --> SA[\"🏗️ system-architect\\n(should auto-fire)\"]\n  SA --> MD[\"📄 architecture.md\"]\n  SA --> KB[\"🌐 project-blueprint/\\nindex.html — a browsable\\nknowledge-base site\"]",
         "code": {
-          "label": "Create release-notes",
-          "code": "Create an Agent Skill named release-notes at .claude/skills/release-notes/SKILL.md. Description: use when the user asks for release notes or a changelog for a commit range; produces grouped Markdown release notes. Body: read git log for the given range, group commits into Features / Fixes / Other by conventional-commit type, and output Markdown with a version heading."
+          "label": "Claude Code prompt — test automatic invocation",
+          "code": "My idea: [describe your project in one paragraph — who it's for, what it does,\nand the one thing it must do well on day one]\n\nHow would this actually work as a system? Then build it out as a knowledge base\nI can browse.\n\n────────────────────────────────────────\n1. DESIGN THE SYSTEM\n────────────────────────────────────────\nDerive the component list from what my paragraph actually says. Every component\nmust trace back to specific words in it; every component it implies must appear.\nInclude a frontend only if a human uses one, a database only if state outlives a\nsession, a queue only if work is slow or bursty, an AI layer only if the idea\nneeds generation, extraction, or ranking by meaning. A padded diagram is a worse\nanswer than a small one.\n\nThe sentence naming what it must do well on day one outranks everything else.\nSome component exists specifically to guarantee it — name that component.\n\n────────────────────────────────────────\n2. WRITE project-blueprint/architecture.md\n────────────────────────────────────────\nSections: The Idea (my paragraph) · Components (table, each with ONE plain-English\nsentence saying what it does for THIS project, plus the words that required it) ·\nHow It Fits Together (mermaid flowchart) · Data Flow (numbered walkthrough) ·\nBuild Order (phases, and what each phase proves) · Assumptions (with impact) ·\nWhat This Design Does Not Cover (honest).\n\nMermaid rules: `flowchart TD`. Readable labels, not `DB`. EVERY arrow labelled\nwith the data or action crossing it. `[Rectangle]` services you build,\n`[(Cylinder)]` data stores, `{{Hexagon}}` third parties, `([Stadium])` entry\npoints. Quote any label with a comma or parenthesis. No reserved words as node\nIDs. Verify it parses.\n\n────────────────────────────────────────\n3. BUILD THE KNOWLEDGE BASE (multi-page)\n────────────────────────────────────────\nA small static site under project-blueprint/ — SEPARATE PAGES, not one long\nscroll, so I can open a section, read it, go back to the Command Center, and\nopen the next one:\n\n  index.html          Command Center\n  01-summary.html … 0N-<section>.html   one page per section\n  assets/blueprint.js  the data object\n  assets/site.js       shared rendering, nav, agent\n  assets/site.css      shared styles\n\nCOMMAND CENTER (index.html): a responsive grid of tiles, one per section. Each\ntile has an inline-SVG picture previewing what's inside — a miniature node graph,\nstacked flow steps, phase bars, a coverage grid — drawn from my data, not stock\nart or emoji. Plus the section name, one line of description, and a live count\n(\"11 components\", \"3 deferred\"). The whole tile is the link.\n\nEVERY SECTION PAGE: sticky top nav, a \"← Command Center\" control, breadcrumbs,\nprevious/next section links at the foot, scroll progress, back-to-top, search,\ntheme toggle, print. Keyboard reachable throughout.\n\nONE DATA OBJECT: assets/blueprint.js defines `const BLUEPRINT = {...}` holding\neverything — components, diagram source, flow steps, phases, coverage,\nassumptions. Every page renders from it. If a number appears twice in the source,\nthat's the bug. (Note `const` at top level is NOT a property of window — other\nscripts must reference the bare identifier, not window.BLUEPRINT.)\n\nSEARCH ACROSS THE WHOLE SITE: build one plain-JavaScript index over every field\nof BLUEPRINT — components, flow steps, phases, coverage rows, assumptions, KPIs,\nartifacts — each entry tagged with the section it belongs to. Typing in the nav\nsearch box does two things at once: narrows what's visible on the current page,\nAND drops down ranked matches from every OTHER section, each one a link to the\nright page with the matched words highlighted. Score by term frequency with a\ntitle boost and a whole-phrase bonus; drop stopwords; fall back to a stem match\nso \"components\" finds \"component\". No model, no network, works offline.\n\nDIAGRAMS AND CHARTS: Mermaid for the architecture, the data flow (sequence\ndiagram), and the build order (gantt). Charts only where my idea has real data to\nsupport one — never invent a metric to fill a chart. EVERY diagram and chart has\nan expand control that opens it FULL SCREEN with zoom in / zoom out / reset and\nEsc to close. Every one also carries a one-line plain-English interpretation\nbeneath it: what it means, not what it shows.\n\nILLUSTRATIONS — PICTURES THAT TELL THE STORY: alongside the technical diagrams,\ndraw purpose-built inline-SVG illustrations, generated from BLUEPRINT so they\nstay true when the data changes. Aim for one per section, for example: the whole\nidea as inputs → pipeline → output; the components grouped into layers with the\nreal names placed in them; the steps as a numbered ribbon colour-coded by which\nones the model actually touches; the build phases as a proportional timeline with\nthe make-or-break phase highlighted; coverage as a conditional-formatted grid; the\nopen question as a two-branch fork showing what changes under each answer. Use\ninline SVG only — no stock photography, no icon fonts, no emoji as the main\nvisual, no external image files. They must scale, follow the light/dark theme,\nwork offline, and expand full screen like every other figure.\n\nAI AGENT — TWO MODES, AND THE DEFAULT NEEDS NO KEY: an \"Ask\" panel on every page\nwith a mode switch.\n\n  MODE 1 (default) \"Search — no key\": answers from the same local index as the\n  nav search. No API key, no network, no model. It returns the matching passages\n  as cards, each labelled with its section, snippet highlighted, linking to the\n  page. When nothing matches it says so and points at Coverage, since a miss may\n  itself be the answer. This mode must work with the internet switched off.\n\n  MODE 2 \"Claude — needs key\": I paste my own Anthropic API key (stored in\n  localStorage, never hardcoded), pick a model, and choose scope — this section\n  or the whole blueprint. It answers ONLY from the BLUEPRINT object, which you\n  put in the system prompt, and says so plainly when the blueprint doesn't cover\n  something. Every failure path (bad key, rate limit, blocked request) tells me I\n  can fall back to Search mode. Call the API directly:\n\n  POST https://api.anthropic.com/v1/messages\n  headers: content-type: application/json\n           x-api-key: <the key the user pasted>\n           anthropic-version: 2023-06-01\n           anthropic-dangerous-direct-browser-access: true\n  body:    { model, max_tokens: 16000, system, messages: [{role, content}] }\n\n  Models: claude-opus-5 (default), claude-sonnet-5, claude-haiku-4-5.\n  Send output_config: {effort: \"low\"} on the first two ONLY — Haiku rejects it.\n  Read the reply from data.content, filtering blocks where type === \"text\".\n  Check data.stop_reason === \"refusal\" before reading content.\n  Show a readable error on a bad key, rate limit, or lost connection.\n\nCOLABERRY FORMATTING:\n  background #eef2f6   text  #0f172a   accent #0f766e\n  cards      #ffffff   muted #64748b   borders #e2e8f0\n  radius 10-12px · soft shadows · \"Segoe UI\", system-ui, sans-serif\n  Semantic colors only — green good, amber warning, red risk, blue info,\n  slate neutral. An entity keeps the same color everywhere it appears.\n  Executive and calm, not consumer SaaS. Support a dark theme too.\n\n────────────────────────────────────────\n4. PORTABILITY — THIS RUNS ON MANY MACHINES\n────────────────────────────────────────\nPlain HTML, CSS, and vanilla JS. No build step, no framework, no bundler, no\npackage install, no local server required — opening index.html from disk must\nwork. Classic <script src=\"...\"> only; no ES modules and no fetch() of local\nfiles, both of which browsers block on file:// URLs. Mermaid and Chart.js from\nCDN. No other network calls except the Anthropic one I trigger myself. Nothing\nthat depends on your operating system, your shell, or anything installed here.\n\n────────────────────────────────────────\n5. FINISH\n────────────────────────────────────────\nOpen project-blueprint/index.html in my browser.\n\nWHEN FINISHED, REPORT: the exact path of the saved architecture, the exact path\nof the knowledge base, the component list with one line on why my idea required\neach, what you assumed, the one question that would most change the design, that\nAsk works with no API key in Search mode, and that Mermaid and Chart.js need\ninternet on first load — with an offer to build an offline version."
         },
-        "script": "Second one goes faster because you know the shape now. Description first, tight body, and deliberately pick this one to grow into multi-file next."
+        "script": "CP1 isn't 'the skill exists' — it's 'the skill fires when I talk like a human.' Test it that way every time or it will bite you in production. This build is bigger than most tests — it produces a whole browsable site — so give it real time to finish before moving on."
       },
       {
         "segment": "guided-build",
-        "eyebrow": "🧾 CP2 done",
-        "title": "Skill #3 — a PR description from the branch diff",
-        "body": "Third skill authored and CP2 is met. Same discipline one more time. But now that three skills coexist, a new risk appears: overlap. If two descriptions both say something like summarizes git changes, Claude has to flip a coin between them. So after you create this one, read all three descriptions together and make sure each owns a distinct trigger: commit message versus release notes versus PR description.",
+        "eyebrow": "✨ You Just Watched This Happen",
+        "title": "An idea became a diagram in one pass",
+        "body": "A few minutes ago this was a paragraph. Now it is a real architecture with real components and a real diagram — the kind of artifact that used to mean a week with an architect. That is the whole promise of tonight: watch your idea become something you can point at.",
         "bullets": [
-          "Third skill: PR description from the branch diff vs base",
-          "Three skills now coexist — watch for overlapping triggers",
-          "Each description must own a distinct trigger phrase"
+          "A paragraph in, a real architecture out",
+          "This is the artifact you screenshot for your portfolio",
+          "Next: give this architecture a stack it actually deserves"
         ],
-        "code": {
-          "label": "Create pr-description",
-          "code": "Create an Agent Skill named pr-description at .claude/skills/pr-description/SKILL.md. Description: use when the user asks to write a pull request description for the current branch; produces a titled PR body with Summary, Changes, and Test Plan sections from the diff against the base branch. Body: diff the current branch against its base, then fill those three sections."
-        },
-        "script": "Three skills. Now the risk is overlap: if two descriptions both say summarizes git changes, Claude flips a coin. Make each description own a distinct trigger."
+        "diagram": "flowchart LR\n  B[\"📝 Before:\\na paragraph\"] -.->|\"a few minutes\"| A[\"📐 After:\\na real architecture\"]",
+        "script": "Let this land for a second before moving on. Ask one or two students to read their architecture's component list out loud."
       },
       {
         "segment": "guided-build",
-        "eyebrow": "🗂️ Multi-File",
-        "title": "Upgrade release-notes to multi-file — body + template",
-        "body": "Now we split the release-notes skill into two files: the SKILL.md holds the instructions, and a separate template.md holds the exact output format the body references. This is progressive disclosure level three in action: the template loads only when the skill actually runs, so the SKILL.md stays short and readable while the format stays consistent every time. Multi-file is how you keep a skill both powerful and legible.",
+        "eyebrow": "🎨 CP2 — Build tech-stack-recommender",
+        "title": "Skill #2: a stack recommendation a non-technical person can actually read",
+        "body": "This Skill takes your architecture and recommends real technology for each component — colorful, icon-led, with a fit rating (🟢 great fit, 🟡 good fit, 🔴 consider carefully) instead of a wall of text. Every recommendation gets one plain-English reason, and a ready-to-copy prompt for going deeper on that exact technology later, whenever you're curious.",
         "bullets": [
-          "SKILL.md = instructions, template.md = exact output format",
-          "The template loads only when the skill runs (Level 3)",
-          "Keeps SKILL.md short while enforcing a consistent format"
+          "One row per component: pick, fit rating, plain-English why",
+          "Icons and color-coded fit ratings, not paragraphs",
+          "Ends with a copy-ready 'learn more about X' prompt per technology"
         ],
+        "diagram": "flowchart LR\n  ARCH[\"📐 Your architecture\"] --> TSR[\"🎨 tech-stack-recommender\"]\n  TSR --> F1[\"🟢 Great fit\"]\n  TSR --> F2[\"🟡 Good fit\"]\n  TSR --> F3[\"🔴 Consider carefully\"]\n  F1 --> L[\"🔎 Learn-more prompt,\\nper technology\"]\n  F2 --> L\n  F3 --> L",
         "code": {
-          "label": "Make it multi-file",
-          "code": "Turn the release-notes skill into a multi-file Skill: keep SKILL.md as the instructions, and add a template.md in the same folder holding the exact Markdown format (version heading, Features, Fixes, Other, Breaking Changes). Update SKILL.md to instruct: read template.md and fill it in. Do not inline the format into SKILL.md."
+          "label": "Claude Code prompt — build tech-stack-recommender",
+          "code": "Create .claude/skills/tech-stack-recommender/SKILL.md.\n\nDescription: Use when the user has a system architecture and wants a recommended tech stack, explained simply.\n\nBody must: read project-blueprint/architecture.md; for each component recommend one real, current technology; give every recommendation a fit rating using 🟢 great fit / 🟡 good fit / 🔴 consider carefully, based on how well it matches THIS idea's actual scale and needs (not a generic default); explain the 'why' in one plain-English sentence, no jargon without a one-line definition; use icons and short labels, never a wall of text; end each row with a copy-ready prompt the user could paste later to learn more about that specific technology (e.g. 'Explain PostgreSQL to me like I'm new to databases, using my project as the example'); save the result to project-blueprint/tech-stack.md.\n\nWHEN FINISHED, REPORT: the exact path, and the fit-rating breakdown (how many 🟢/🟡/🔴)."
         },
-        "script": "Watch what multi-file buys you: the SKILL.md stays short and readable, and the exact format lives in its own file that only loads when the skill actually runs. That is Level 3 disclosure in action."
+        "script": "When this comes back, do not read it like a spec sheet. Read the fit ratings out loud like a weather report — this is the moment non-technical students realize they can actually follow an architecture conversation."
       },
       {
         "segment": "guided-build",
-        "eyebrow": "🔐 Scope Tools",
-        "title": "Restrict release-notes to reading files and running git — nothing else",
-        "body": "Now scope the release-notes skill with allowed-tools. Ask yourself what the smallest set of tools this skill needs is: it reads git history and emits text, so it needs to read files and run specific git commands, and it never needs to write files or run npm or anything arbitrary. Add allowed-tools to the frontmatter to lock that in. Now a reviewer sees the blast radius in the header without reading a single line of the body.",
+        "eyebrow": "🧪 Test Automatic Invocation",
+        "title": "Ask for a stack in plain English — confirm it reads like a human wrote it",
+        "body": "Ask naturally, without naming the Skill. A good result is scannable in ten seconds: icons, color, one line per choice — never a technical essay. Confirm at least one learn-more prompt is copy-ready.",
         "bullets": [
-          "Ask: what is the smallest tool set this needs?",
-          "release-notes needs Read + git log/diff, nothing that writes",
-          "allowed-tools makes the blast radius visible in the header"
+          "Ask naturally — never say 'use tech-stack-recommender'",
+          "Scannable in 10 seconds, not a technical essay",
+          "This ask also builds a full browsable knowledge base — give it time",
+          "At least one learn-more prompt, ready to copy"
         ],
+        "diagram": "flowchart LR\n  ASK[\"🗣️ 'what stack should I use?'\"] --> TSR[\"🎨 tech-stack-recommender\"]\n  TSR --> MD[\"📄 tech-stack.md\"]\n  TSR --> KB[\"🌐 project-blueprint/stack/\\nindex.html — a browsable\\nknowledge-base site\"]",
         "code": {
-          "label": "Scope the tools",
-          "code": "Add tool scoping to the release-notes skill frontmatter so it can only read files and run git log and git diff — no writing files, no arbitrary Bash:\n\n---\nname: release-notes\ndescription: Use when the user asks for release notes or a changelog for a commit range. Produces grouped Markdown release notes.\nallowed-tools: Read, Bash(git log:*), Bash(git diff:*)\n---"
+          "label": "Claude Code prompt — test automatic invocation",
+          "code": "Given my architecture, what stack should I actually use? Explain it like I might\nnot be technical.\n\nRead project-blueprint/architecture.md first. Everything below is about THAT\nsystem — not a generic web app.\n\n────────────────────────────────────────\n1. RECOMMEND ONE TECHNOLOGY PER COMPONENT\n────────────────────────────────────────\nWalk my architecture's component list in order. For each one, name ONE real,\ncurrent, specific technology — \"PostgreSQL 16\", not \"a database\"; \"React + Vite\",\nnot \"a frontend framework\". Use my architecture's own component names so I can\nline the two documents up side by side.\n\nThen add any technology my DATA FLOW clearly needs that the component list never\nnamed — text extraction, PDF rendering, hosting. Mark those as a separate group\nso I can see they came from the flow, not the component list.\n\n────────────────────────────────────────\n2. RATE THE FIT — AND MEAN IT\n────────────────────────────────────────\nEvery recommendation gets one of:\n\n  🟢 great fit          — matches this project's size and needs; pick it, move on\n  🟡 good fit           — works, but there is a real caveat I should read first\n  🔴 consider carefully — where this plan is most likely to hurt me\n\nRate against MY project's actual scale and constraints — how much traffic, how\nmany people building it, what kind of data — not against what is popular. A\ntechnology can be excellent and still be 🔴 here.\n\nIf everything comes back 🟢, you have not thought hard enough. Say plainly which\nchoices you are least confident about and why.\n\n────────────────────────────────────────\n3. EXPLAIN IT TO SOMEONE NON-TECHNICAL\n────────────────────────────────────────\nEach recommendation gets ONE plain-English sentence saying why it fits MY project.\nNo jargon unless you define it in the same breath, in five words or fewer —\n\"TypeScript, which checks your code's shapes before it runs\".\n\nIcons and short labels, never a wall of text. If a row needs a caveat, put it in\nits own short block labelled so I cannot miss it — don't bury it in the sentence.\n\n────────────────────────────────────────\n4. GIVE ME A PROMPT I CAN PASTE LATER\n────────────────────────────────────────\nEnd every recommendation with a copy-ready prompt I can paste into Claude to learn\nthat one technology properly. Each must already name my project so the answer is\nabout my system, not a textbook. For example:\n\n  \"Explain PostgreSQL to me like I'm new to databases, using my <project> as the\n   example. What tables would I actually have?\"\n\n────────────────────────────────────────\n5. WRITE project-blueprint/tech-stack.md\n────────────────────────────────────────\nSections: the fit-rating key and what a rating means · a one-paragraph headline\nnaming where this stack is most likely to break · the recommendations grouped\n(things a person touches / things you write / things you store / things you depend\non / things the data flow needs) · every copy-ready prompt collected in one table ·\nwhat to learn first, in order · alternatives considered and why not · how hard each\ndecision is to undo · what this document does NOT tell me.\n\n────────────────────────────────────────\n6. BUILD THE KNOWLEDGE BASE (multi-page)\n────────────────────────────────────────\nSame shape as my architecture knowledge base, under project-blueprint/stack/ so\nthe two sit side by side:\n\n  index.html           Command Center\n  01-summary.html … 08-appendix.html    one page per section\n  assets/stack.js      the data object\n  assets/site.js       shared rendering, nav, search, agent\n  assets/site.css      shared styles\n\nCOMMAND CENTER: a responsive grid of tiles, one per section, each with an inline-SVG\npicture previewing what's inside and a live count pulled from the data (\"14\nrecommendations\", \"2 to watch\"). The whole tile is the link.\n\nEVERY SECTION PAGE: sticky nav, \"← Command Center\", breadcrumbs, previous/next at\nthe foot, scroll progress, back-to-top, search, theme toggle, print.\n\nONE DATA OBJECT: assets/stack.js defines `const STACK = {...}` holding every\nrecommendation, rating, caveat, prompt, alternative and decision. Every page renders\nfrom it. Nothing typed twice. (Note `const` at top level is NOT a window property —\nother scripts must reference the bare identifier.)\n\nSEARCH ACROSS THE WHOLE SITE: one plain-JavaScript index over every field of STACK,\neach entry tagged with its section. The nav box narrows the current page AND drops\ndown ranked matches from every other section, linked and highlighted. No model, no\nnetwork, works offline.\n\nCOPY BUTTONS: every copy-ready prompt gets a working copy-to-clipboard button that\nconfirms it copied. Use navigator.clipboard with a textarea + execCommand fallback,\nbecause the clipboard API is often blocked on file:// URLs.\n\nILLUSTRATIONS: inline SVG generated from STACK — the whole stack as bands coloured\nby fit rating; a proportional bar of 🟢/🟡/🔴 with the reds called out; a topology\nshowing what runs on my machine versus somebody else's; a learning ladder; a lock-in\nscale. No stock art, no icon fonts, no external images. Every figure expands FULL\nSCREEN with zoom in / out / reset and Esc. Never draw two labels at the same\ncoordinate — offset every repeated element by its index.\n\nAI AGENT — TWO MODES, DEFAULT NEEDS NO KEY:\n  MODE 1 (default) \"Search — no key\": answers from the local index, returns matching\n  passages as linked cards. No key, no network, works offline.\n  MODE 2 \"Claude — needs key\": my own Anthropic API key in localStorage, model and\n  scope pickers, answers ONLY from STACK and says so when something isn't covered.\n  Tell it never to talk me out of a 🔴 rating. Every failure path points back to\n  Search mode. Call the API directly:\n\n  POST https://api.anthropic.com/v1/messages\n  headers: content-type: application/json\n           x-api-key: <the key the user pasted>\n           anthropic-version: 2023-06-01\n           anthropic-dangerous-direct-browser-access: true\n  body:    { model, max_tokens: 16000, system, messages: [{role, content}] }\n\n  Models: claude-opus-5 (default), claude-sonnet-5, claude-haiku-4-5.\n  Send output_config: {effort: \"low\"} on the first two ONLY — Haiku rejects it.\n  Read the reply from data.content where type === \"text\".\n  Check data.stop_reason === \"refusal\" before reading content.\n\nCOLABERRY FORMATTING:\n  background #eef2f6   text  #0f172a   accent #0f766e\n  cards      #ffffff   muted #64748b   borders #e2e8f0\n  radius 10-12px · soft shadows · \"Segoe UI\", system-ui, sans-serif\n  Fit ratings map to the semantic colours: 🟢 green, 🟡 amber, 🔴 red — and a\n  technology keeps its rating colour everywhere it appears. Support a dark theme.\n  Keep nav labels short enough that eight of them fit on one line.\n\n────────────────────────────────────────\n7. PORTABILITY — THIS RUNS ON MANY MACHINES\n────────────────────────────────────────\nPlain HTML, CSS, vanilla JS. No build step, no framework, no install, no server —\nopening index.html from disk must work. Classic <script src=\"...\"> only; no ES\nmodules and no fetch() of local files, both blocked on file:// URLs. No CDN needed\nat all: draw every figure as inline SVG rather than pulling in a chart library.\n\n────────────────────────────────────────\n8. FINISH\n────────────────────────────────────────\nOpen project-blueprint/stack/index.html in my browser.\n\nWHEN FINISHED, REPORT: the exact path of the saved recommendation, the exact path of\nthe knowledge base, the fit-rating breakdown (how many 🟢 / 🟡 / 🔴), which\nrecommendations you were least confident about, and confirmation that every\ncomponent in my architecture has a row."
         },
-        "script": "Ask for each skill: what is the smallest tool set this needs to do its job? Write that in allowed-tools. Now a reviewer sees the blast radius without reading the body."
+        "script": "If a non-technical student in the room can read the output and nod along, the Skill did its job. This build also produces a full browsable knowledge base under project-blueprint/stack/ — give it real time to finish before moving on."
       },
       {
         "segment": "guided-build",
-        "eyebrow": "🤝 Share",
-        "title": "Commit .claude/skills/ and write the README that says how to invoke",
-        "body": "Sharing skills across a team is just git. Project skills live in the repo, so committing the .claude/skills/ folder means every teammate who pulls gets all three skills automatically. Personal-only skills stay in ~/.claude/skills/ and are never committed. Write a short README listing each skill, its trigger, and one example invocation so a human knows they exist. Claude finds the skills from their descriptions; people find them from the README. If you later need this beyond one repo, packaging as a plugin is the path to org-wide distribution.",
+        "eyebrow": "✨ Your Stack Isn't Generic Anymore",
+        "title": "Every pick is justified against YOUR idea, not a template",
+        "body": "A generic stack recommendation says 'use React and Postgres' for everything. Yours says why — tied to your idea's actual scale, actual users, actual day-one job. That difference is the entire point of grounding the Skill in your real architecture file instead of a canned answer.",
         "bullets": [
-          "Commit .claude/skills/ — git is the distribution channel",
-          "Personal skills stay in ~/.claude/skills/, uncommitted",
-          "README: each skill, its trigger, an example invocation",
-          "Plugins = the path to org-wide packaging later"
+          "Generic: one stack for every idea",
+          "Yours: justified against your architecture, component by component",
+          "Next: turn this into something you can actually show someone"
         ],
-        "code": {
-          "label": "README + commit",
-          "code": "Write .claude/skills/README.md listing all three skills — for each: name, when it triggers, and one example ask.\n\nThen commit only the skills folder:\n  git add .claude/skills\n  git commit -m \"feat(skills): add commit-summary, release-notes, pr-description\""
-        },
-        "script": "Sharing is just git. Commit the folder and everyone who pulls gets the skills. The README is so a human knows they exist — Claude finds them from the descriptions, people find them from the README."
+        "diagram": "flowchart LR\n  G[\"📋 Generic stack:\\nsame answer for everyone\"] -.->|\"vs.\"| Y[\"🎯 Your stack:\\njustified per component\"]",
+        "script": "Ask one student to say their #1 fit-rated pick out loud and the one-line reason. That reason is the proof this wasn't a canned response."
       },
       {
         "segment": "guided-build",
-        "eyebrow": "✅ CP3 Done",
-        "title": "Verify all three fire, then record the 60-second demo",
-        "body": "Final acceptance is a demo, not a claim. Invoke each of the three skills with a natural-language ask, back to back, and confirm each one triggers and produces the right output. That short recording of all three firing is your portfolio proof for the week. Run the checklist: three skills authored, one multi-file, one tool-scoped, everything committed, and a README present.",
+        "eyebrow": "🚀 CP3 — Build + Scope mvp-scoper",
+        "title": "Skill #3: not just a plan — a demo you can actually show someone",
+        "body": "This is the payoff Skill, and it is multi-file on purpose. It produces three real things: a scoped Week-1 task list, a genuine visual HTML mockup of what the idea could look like, and a short marketing one-pager as a real, formatted PDF — who needs this, what it does, why it matters — so a friend, a mentor, or a recruiter can understand the idea in ten seconds. Scoped to Read, Write, and Bash: the first two write the plan and the mockup, Bash is what actually turns the one-pager into a real PDF.",
         "bullets": [
-          "Fire all three on natural asks, back to back",
-          "Confirm each triggers and produces correct output",
-          "Checklist: 3 skills, 1 multi-file, 1 scoped, committed, README",
-          "Screen-record it — that recording is your evidence"
+          "Week-1 plan: the smallest real thing that proves this idea works",
+          "A real, visual mockup.html — open it in a browser, it looks like a product",
+          "A one-pager: who it's for, what it does, why it matters — as a real PDF",
+          "allowed-tools: Read, Write, Bash — Bash only to generate the PDF"
         ],
+        "diagram": "flowchart LR\n  ARCH[\"📐 Architecture + 🎨 stack\"] --> MVP[\"🚀 mvp-scoper\"]\n  MVP --> W1[\"✅ Week-1 task list\"]\n  MVP --> VIS[\"🖼️ Visual HTML mockup\"]\n  MVP --> MKT[\"📄 One-pager PDF\"]",
         "code": {
-          "label": "Demo the three",
-          "code": "Run these three natural-language asks in a row and record the screen:\n  1. \"write a commit message for my staged changes\"\n  2. \"generate release notes for the last 10 commits\"\n  3. \"write a PR description for this branch\"\n\nEach should auto-trigger its skill. That recording is your proof."
+          "label": "Claude Code prompt — build + scope mvp-scoper",
+          "code": "Create .claude/skills/mvp-scoper/SKILL.md and .claude/skills/mvp-scoper/template.md.\n\nDescription: Use when the user wants to know what to build first, see what their idea could look like, and get a short pitch for it.\n\nBody must produce THREE files in project-blueprint/:\n1. mvp-plan.md — the smallest real slice to build in Week 1 that proves the idea works, as a short checklist, grounded in architecture.md and tech-stack.md.\n2. mockup.html — a real, self-contained, visually appealing static HTML+CSS mockup of the idea's main screen (a landing page or the core app view) — actual layout, actual sample content for THIS idea, not lorem ipsum, not a wireframe of boxes. Use color, icons, and real-feeling copy.\n3. one-pager.pdf — a short marketing one-pager, as a real single-page PDF: what it does, who needs it, one sentence on why it matters, using icons and short punchy lines, not a technical description. Generate it with whatever PDF tool is available (headless-Chrome print-to-PDF, a Python library such as reportlab, or a Node library such as puppeteer) — never save it as a renamed .md or .html file.\n\nUse template.md to keep mvp-plan.md's structure consistent every time.\n\nAdd allowed-tools: Read, Write, Bash to the frontmatter — Read and Write cover the plan and the mockup; Bash is scoped narrowly to whatever single command actually generates the PDF, nothing broader.\n\nDo not commit yet.\n\nWHEN FINISHED, REPORT: every file created, its exact path, one line on what each contains, and which tool generated the PDF."
         },
-        "script": "Final check is a demo, not a claim. Fire all three in a row on natural asks and screen-record it. That recording is your evidence for the week."
+        "script": "This is the big one. When mockup.html is ready, open it in an actual browser on the projector before you do anything else — let the room see it."
+      },
+      {
+        "segment": "guided-build",
+        "eyebrow": "🧪 Test + Demo the Full Blueprint",
+        "title": "Test mvp-scoper — open the mockup, open the PDF one-pager",
+        "body": "Confirm mvp-scoper fires naturally. This one Skill reads what system-architect and tech-stack-recommender already produced — it does not re-run them. Then do the thing that makes tonight land: open mockup.html, and open the real one-page PDF it generated. This is the moment a rough paragraph becomes something a student would screenshot and send to a friend.",
+        "bullets": [
+          "Ask naturally — confirm mvp-scoper auto-fires",
+          "Reads architecture.md + tech-stack.md — never regenerates them",
+          "Open mockup.html in an actual browser",
+          "Open one-pager.pdf — a real PDF, not a markdown file",
+          "This ask also builds a full browsable knowledge base — give it time"
+        ],
+        "diagram": "flowchart LR\n  RUN[\"🗣️ 'show me what this could\\nlook like, and how to pitch it'\"] --> MVP[\"🚀 mvp-scoper\\n(should auto-fire, reads-only\\narchitecture.md + tech-stack.md)\"]\n  MVP --> OPEN[\"🌐 mockup.html\\nin your browser\"]\n  MVP --> PDF[\"📄 one-pager.pdf\\na real PDF\"]\n  MVP --> KB[\"🌐 project-blueprint/mvp/\\nindex.html — a browsable\\nknowledge-base site\"]",
+        "code": {
+          "label": "Claude Code prompt — test + demo",
+          "code": "Given my architecture and stack, what should I build first, what could this look\nlike, and how would I pitch it to someone?\n\n────────────────────────────────────────\n0. READ FIRST — DO NOT REGENERATE\n────────────────────────────────────────\nRead project-blueprint/architecture.md and project-blueprint/tech-stack.md.\n\nBoth already exist. Do not rebuild, re-derive or overwrite either one — this run\nonly adds the MVP stage on top of them. If either file is missing, stop and tell\nme which one, rather than inventing it.\n\n────────────────────────────────────────\n1. WRITE project-blueprint/mvp-plan.md\n────────────────────────────────────────\nThe smallest real slice I could build in WEEK 1 — five working days — that\ngenuinely tests whether the idea works.\n\nThe whole discipline here is SUBTRACTION. Start from my architecture's component\nlist and cut until only the risky part is left. Expect to delete most of it. A\nWeek 1 plan containing auth, a queue, a database and a deploy pipeline is not a\nWeek 1 plan — it is week one of a six-month project, and it proves nothing by\nFriday.\n\nSections, in this order:\n\n  • The one question Week 1 answers — one sentence. Not \"build the app\": the\n    single risky assumption that, if wrong, means nothing else is worth building.\n  • What you are building — 3 to 6 items, each naming the architecture component\n    it came from.\n  • What you are NOT building, and why that's safe — a table, one row per cut,\n    each saying what it would prove and why that isn't this week's question.\n    This table should be LONGER than the one above.\n  • The stack, cut down to Week 1 — what I actually use this week versus the\n    fuller recommendation in tech-stack.md.\n  • Five days — Monday to Friday as a checklist. Each day names an OUTCOME, not\n    an activity: \"gap list renders from a real résumé\", not \"work on extraction\".\n    Friday is putting it in front of a real person.\n  • What \"it worked\" looks like — a specific, checkable bar somebody else could\n    apply without me in the room. A number or a yes/no, never \"it feels good\".\n  • What \"it didn't work\" looks like — equally specific. Name the failure you\n    actually expect.\n  • What you'll know on Friday, and what to do about it — a table with three\n    outcomes (pass / partial / fail) and the next move for each. The fail branch\n    must be allowed to say \"stop and reconsider the product\".\n  • What Week 1 deliberately proves nothing about — so nobody over-reads a good\n    result.\n\n────────────────────────────────────────\n2. WRITE project-blueprint/mockup.html\n────────────────────────────────────────\nA real, self-contained, visually appealing static HTML + CSS mockup of my idea's\nMAIN SCREEN — the landing page or the core app view, whichever better sells it.\n\n  • REAL SAMPLE CONTENT for THIS idea. Actual names, actual numbers, actual copy\n    somebody would really see on that screen. Never lorem ipsum. Never\n    \"Feature 1 / Feature 2\". Never [placeholder].\n  • A DESIGNED SCREEN, NOT A WIREFRAME. Colour, icons, hierarchy, spacing, real\n    buttons. Grey boxes with labels on them is a failure.\n  • Show the PRODUCT, not the architecture. No boxes-and-arrows diagrams here.\n  • One file. Inline CSS and inline SVG icons only — no CDN, no external images,\n    no script tags. It must open from disk.\n  • If the idea involves people's data, make the sample data obviously fictional\n    and say so in a footer line.\n\n────────────────────────────────────────\n3. WRITE project-blueprint/one-pager.pdf\n────────────────────────────────────────\nA short marketing one-pager, formatted as a real, single-page PDF: what it does,\nwho needs it, and one sentence on why it matters.\n\nBuild it as a genuine PDF file, not a renamed HTML file. Use whatever PDF\ngeneration is actually available on this machine — a headless-Chrome\nprint-to-PDF command, a Python library such as reportlab or weasyprint, or a Node\nlibrary such as puppeteer — in that order of preference. If none is available,\ninstall the lightest one that needs no compiler (prefer reportlab or similar)\nrather than leaving this as an HTML file. State which tool you used.\n\nIcons and short punchy lines, plenty of white space, one page, print-ready\nmargins. Written for a dean, a funder, or a colleague in a hallway.\n\nNO technical description: no component names, no technology names, no\narchitecture, no jargon at all. If a claim uses a number, say plainly whether it\nis measured or estimated.\n\n────────────────────────────────────────\n4. BUILD THE KNOWLEDGE BASE (multi-page)\n────────────────────────────────────────\nSame shape as my architecture and stack knowledge bases, under\nproject-blueprint/mvp/ so all three sit side by side:\n\n  index.html           Command Center\n  01-…html … 0N-…html  one page per section\n  assets/mvp.js        the data object\n  assets/site.js       shared rendering, nav, search, agent\n  assets/site.css      shared styles\n\nSections should cover: the bet · the five days · what's cut · the mockup · the\npitch · did it work · appendix.\n\nCOMMAND CENTER: a responsive grid of tiles, one per section, each with an\ninline-SVG picture previewing what's inside and a live count pulled from the data\n(\"10 cuts\", \"3 outcomes\"). The whole tile is the link.\n\nEVERY SECTION PAGE: sticky nav, \"← Command Center\", breadcrumbs, previous/next at\nthe foot, scroll progress, back-to-top, search, theme toggle, print.\n\nONE DATA OBJECT: assets/mvp.js defines `const MVP = {...}` holding the question,\nwhat's kept, every cut, the five days, the pass and fail bars, the outcomes and\nthe pitch. Every page renders from it. Nothing typed twice. (Note `const` at top\nlevel is NOT a property of window — other scripts must reference the bare\nidentifier.)\n\nSEARCH ACROSS THE WHOLE SITE: one plain-JavaScript index over every field of MVP,\neach entry tagged with its section. The nav box narrows the current page AND drops\ndown ranked matches from every other section, linked and highlighted. No model, no\nnetwork, works offline.\n\nTHE MOCKUP PAGE: link OUT to mockup.html with a large, obvious button — do NOT\nembed it in an iframe, because browsers block file:// iframes and it will render\nas a blank panel. Alongside the button, draw an inline-SVG schematic of the screen\nlayout and list the handful of things worth noticing on it.\n\nTHE PITCH PAGE: link OUT to one-pager.pdf the same way — a large, obvious button,\nnever embedded (file:// PDF embeds are just as unreliable as iframes). Summarise\nthe one-pager's actual content on the page itself so the section is still useful\nwithout opening the PDF.\n\nILLUSTRATIONS: inline SVG generated from MVP — the whole week as inputs → one\nscreen → one person's verdict; the five days as a strip; kept versus deleted; the\nFriday decision as a three-way fork. No stock art, no icon fonts, no external\nimages. Every figure expands FULL SCREEN with zoom in / out / reset and Esc.\nNever draw two labels at the same coordinate — offset every repeated element by\nits index. Keep nav labels short enough that they all fit on one line.\n\nAI AGENT — TWO MODES, DEFAULT NEEDS NO KEY:\n  MODE 1 (default) \"Search — no key\": answers from the local index, returns\n  matching passages as linked cards. No key, no network, works offline.\n  MODE 2 \"Claude — needs key\": my own Anthropic API key in localStorage, model and\n  scope pickers, answers ONLY from MVP. Tell it to protect the plan's discipline —\n  never suggest adding back something the plan deliberately cut unless I ask what\n  it would cost. Every failure path points back to Search mode. Call the API\n  directly:\n\n  POST https://api.anthropic.com/v1/messages\n  headers: content-type: application/json\n           x-api-key: <the key the user pasted>\n           anthropic-version: 2023-06-01\n           anthropic-dangerous-direct-browser-access: true\n  body:    { model, max_tokens: 16000, system, messages: [{role, content}] }\n\n  Models: claude-opus-5 (default), claude-sonnet-5, claude-haiku-4-5.\n  Send output_config: {effort: \"low\"} on the first two ONLY — Haiku rejects it.\n  Read the reply from data.content where type === \"text\".\n  Check data.stop_reason === \"refusal\" before reading content.\n\nCOLABERRY FORMATTING (mockup and knowledge base alike):\n  background #eef2f6   text  #0f172a   accent #0f766e\n  cards      #ffffff   muted #64748b   borders #e2e8f0\n  radius 10-12px · soft shadows · \"Segoe UI\", system-ui, sans-serif\n  Semantic colours only — green good, amber warning, red risk, blue info, slate\n  neutral. Support a dark theme in the knowledge base.\n\n────────────────────────────────────────\n5. PORTABILITY — THIS RUNS ON MANY MACHINES\n────────────────────────────────────────\nPlain HTML, CSS, vanilla JS. No build step, no framework, no install, no server —\nopening index.html and mockup.html from disk must work. Classic <script src=\"...\">\nonly; no ES modules and no fetch() of local files, both blocked on file:// URLs.\nNo CDN at all: draw every figure as inline SVG rather than pulling in a library.\n\nDo not commit anything.\n\n────────────────────────────────────────\n6. FINISH\n────────────────────────────────────────\nOpen project-blueprint/mockup.html in my browser, then\nproject-blueprint/mvp/index.html, then open project-blueprint/one-pager.pdf in my\ndefault PDF viewer.\n\nWHEN FINISHED, REPORT: whether mvp-scoper was invoked automatically, the exact\npaths of mvp-plan.md, mockup.html and one-pager.pdf with one line on what each\ncontains, which tool generated the PDF, the exact path of the knowledge base, how\nmany architecture components you kept versus cut, and confirmation that you did\nnot modify architecture.md or tech-stack.md."
+        },
+        "script": "This is the room-energy moment. Walk around while mockups open on screens — this is the closest thing tonight has to magic, and it should feel like it. This build also produces a full browsable knowledge base under project-blueprint/mvp/ — give it real time to finish before moving on."
+      },
+      {
+        "segment": "guided-build",
+        "eyebrow": "📦 Your Idea's Blueprint",
+        "title": "Three Skills, one committed folder: diagram, stack, and a demo",
+        "body": "Commit .claude/skills/ and project-blueprint/ together. Anyone who pulls your repo — a mentor, a teammate, future you — gets the architecture, the justified stack, the Week-1 plan, and the visual mockup, generated from one paragraph you wrote an hour ago.",
+        "diagram": "flowchart LR\n  SA[\"🏗️ system-architect\"] --> BP[\"📦 Your Blueprint\"]\n  TSR[\"🎨 tech-stack-recommender\"] --> BP\n  MVP[\"🚀 mvp-scoper\"] --> BP\n  BP --> DEMO[\"🎬 Demo it tonight\"]",
+        "code": {
+          "label": "Commit the blueprint",
+          "code": "git add .claude/skills project-blueprint\ngit commit -m \"feat(blueprint): system-architect, tech-stack-recommender, mvp-scoper\""
+        },
+        "script": "Before the break, have two or three students share their mockup on screen. This is worth the two minutes it costs."
       },
       {
         "segment": "failure",
-        "eyebrow": "💥 Failure Injection",
-        "title": "The skill you built is not firing — 'helps with git'",
-        "body": "Here is the failure you will absolutely hit at work, so let us hit it now on purpose. Point the release-notes skill at a vague description like helps with git, then ask for release notes. Claude ignores the skill and just does the work inline instead. Nothing errors, nothing warns you, the skill simply never loads. Do not start randomly tweaking the body. We diagnose this like architects.",
+        "eyebrow": "💾 The Failure Nobody Warns You About",
+        "title": "Your blueprint has one copy — and it lives on the one laptop in this room most likely to have a bad day",
+        "body": "Everything built tonight — the architecture, the stack, the mockup, the PDF — exists in exactly one place right now: this machine. No error message is coming to warn you. A crashed drive, a reformatted laptop, or one careless git checkout can erase an hour of real work in a single command, and it will look identical to success until the moment it does not. The fix is not more caution. It is a habit, and the habit is git.",
         "bullets": [
-          "Vague description: helps with git",
-          "Ask for release notes → Claude does it inline, skill never loads",
-          "No error, no warning — the worst kind of failure"
+          "Everything tonight lives in ONE place: this laptop",
+          "No warning, no error — it just quietly stays unsaved",
+          "The fix isn't caution. It's a habit: commit early, commit often"
         ],
-        "code": {
-          "label": "Reproduce the failure",
-          "code": "Set the release-notes description to a vague line:\n  description: Helps with git\n\nThen ask:\n  \"generate release notes for the last 10 commits\"\n\nObserve: Claude produces notes by hand and never loads the release-notes skill."
-        },
-        "script": "Here's the failure you WILL hit at work. You built a skill, you ask for the thing, and Claude just does it manually, ignoring your skill. Let's diagnose instead of guessing."
+        "diagram": "flowchart LR\n  A[\"🖥️ Laptop only\\n(tonight, right now)\"] -.->|\"one bad day\"| B[\"💥 Gone\"]\n  A -->|\"git commit\"| C[\"📸 Saved snapshot\"]\n  C --> D[\"🛡️ Survives a crash,\\na reformat, a bad checkout\"]",
+        "script": "This is the real failure tonight teaches — not a Skill bug, a saving bug. Ask the room: whose blueprint currently exists in exactly one place? Every hand should go up."
       },
       {
         "segment": "failure",
-        "eyebrow": "🩺 Diagnose",
-        "title": "Four checks, in order: description, name/folder, frontmatter, overlap",
-        "body": "Do not randomly tweak, run the triage in order and stop when you find it. Check one: the description, does it name the trigger and the output in the words a user would actually type? That is about eighty percent of cases. Check two: name and folder, is the skill at .claude/skills/<name>/SKILL.md and does the name match the folder? Check three: frontmatter validity, is the YAML well-formed with no bad indentation or missing colons, because a parse error silently disables the skill. Check four: overlap, is another skill or a CLAUDE.md rule absorbing the same trigger?",
+        "eyebrow": "📸 Git Basics: status → add → commit → log",
+        "title": "Four commands. That is the entire lesson.",
+        "body": "git status shows what changed since your last save point. git add stages exactly the files you want captured. git commit -m saves a permanent, named snapshot you can always return to. git log --oneline is your proof — a timestamped, ordered record that you actually built this, tonight. Run all four right now, on the blueprint you just built.",
         "bullets": [
-          "1. Description names trigger + output in the user's words (~80% of cases)",
-          "2. Skill at .claude/skills/<name>/SKILL.md, name matches folder",
-          "3. Frontmatter YAML is valid (indentation, colons)",
-          "4. No other skill or CLAUDE.md rule absorbing the trigger"
+          "git status — what changed since your last commit",
+          "git add <path> — stage exactly what you want saved",
+          "git commit -m \"message\" — a permanent, named snapshot",
+          "git log --oneline — the proof, in order, that you built this"
         ],
-        "script": "Don't randomly tweak. Run the checklist in order. Nine times out of ten you stop at step one, the description. But know all four so you can fix the rare one fast."
+        "diagram": "flowchart LR\n  S[\"🔍 git status\\nwhat changed?\"] --> Ad[\"➕ git add\\nstage it\"]\n  Ad --> C[\"📸 git commit\\nsave it, named\"]\n  C --> L[\"📜 git log\\nyour proof, in order\"]",
+        "code": {
+          "label": "Run this now — commit tonight's blueprint",
+          "code": "git status\n\ngit add .claude/skills project-blueprint\n\ngit commit -m \"feat(blueprint): system-architect, tech-stack-recommender, mvp-scoper\"\n\ngit log --oneline -5"
+        },
+        "script": "Run these four live, on your own machine, in order. When git log prints your commit, that line is the first real entry in your capstone's paper trail — point at it and say so."
       },
       {
         "segment": "failure",
-        "eyebrow": "🔧 Fix & Harden",
-        "title": "Name the trigger and the output — then re-invoke and confirm",
-        "body": "Apply the fix from check one: rewrite the description to name when and what, using the phrases you actually say. Then re-invoke with the same natural-language ask and watch it fire this time. Harden it by adding the real trigger words you use, like changelog as well as release notes, and confirm no other skill overlaps that trigger. The lesson to carry out of this week: a dead skill is almost always a description problem, and the fix is naming when and what, never rewriting the body.",
+        "eyebrow": "🧰 Repo-less Setup",
+        "title": "Get everything else ready — before you even have a live GitHub repo",
+        "body": "Most of you have not created your capstone's actual GitHub repository yet, and that is fine — that comes later in the program. But real, valuable setup work does not need to wait for a remote to exist: a README that explains what a stranger is looking at, and a .gitignore that keeps noise out of every future commit. Both are 100% local, both take two minutes, and both mean you look and act like someone who ships professionally the moment a remote does exist.",
         "bullets": [
-          "Rewrite the description to name trigger + output",
-          "Re-invoke on the same natural ask — it fires now",
-          "Harden: add the real phrases you say (release notes AND changelog)",
-          "Rule: dead skill = description problem, not a body problem"
+          "A README.md explaining what's in project-blueprint/ — future you (and a recruiter) will thank you",
+          "A .gitignore so Skill outputs never accidentally track junk (node_modules, .env, OS files)",
+          "git log --oneline is your own proof-of-work ledger — screenshot it for your portfolio",
+          "None of this needs a GitHub repo yet — all of it is fully local"
         ],
+        "diagram": "flowchart LR\n  L[\"💻 Local repo\\n(already have it)\"] --> R[\"📄 README.md\"]\n  L --> G[\"🚫 .gitignore\"]\n  R --> P[\"✅ Ready to push\\nthe moment a remote exists\"]\n  G --> P",
         "code": {
-          "label": "The fix",
-          "code": "Change the description to:\n  description: Use when the user asks for release notes or a changelog for a commit range. Generates grouped Markdown release notes (Features, Fixes, Other) from git log.\n\nThen re-ask:\n  \"generate release notes for the last 10 commits\"\n\nExpected: the release-notes skill now triggers on the natural ask."
+          "label": "Claude Code prompt — draft README + .gitignore",
+          "code": "Look at what is currently in .claude/skills/ and project-blueprint/.\n\nCreate a README.md at the project root that explains, for someone who has never seen this project before: what the idea is, what the three Skills do (system-architect, tech-stack-recommender, mvp-scoper), and the exact prompt pattern to re-run them if the blueprint ever needs to be regenerated.\n\nCreate a .gitignore appropriate for a Node + Claude Code project if one does not already exist: node_modules, .env, .DS_Store, and any local build output. Never list an actual .env file's contents — only ignore the filename.\n\nDo not commit anything yet — just create the two files.\n\nWHEN FINISHED, REPORT: the exact path of each file created, and confirm the .gitignore excludes .env without ever printing what is inside it."
         },
-        "script": "The fix is never write a longer body. It's name the trigger and the output in the words you actually use, then re-test on a natural ask. Watch it fire now."
+        "script": "This is the last mile. You don't need a live GitHub repo tonight to look like someone who ships professionally — you need a README, a .gitignore, and the habit you just practiced. Close by pointing at git log one more time: that is tonight's real deliverable, not just the blueprint."
       }
     ]
   },

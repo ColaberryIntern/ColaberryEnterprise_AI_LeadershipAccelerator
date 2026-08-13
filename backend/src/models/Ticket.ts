@@ -5,8 +5,21 @@ export type TicketStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'd
 export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
 export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_action' | 'strategic'
   | 'strategic_initiative' | 'ai_optimization' | 'agent_restructure' | 'agent_creation' | 'workflow_redesign' | 'system_automation'
-  | 'company_directive' | 'workforce_decision' | 'bpos_execution';
-export type TicketActorType = 'human' | 'cory' | 'agent';
+  | 'company_directive' | 'workforce_decision' | 'bpos_execution'
+  // Reese Phase 1 — a real student DM conversation with the Reese AI staff mentor,
+  // ProofDesk-linked. See backend/src/services/reese/.
+  | 'student_support'
+  // Reese Phase 2 — an autonomous (Reese-initiated, not student-initiated)
+  // outreach thread for one student on one detected risk signal. See
+  // backend/src/services/reese/reeseAutonomousOutreachService.ts. Distinct
+  // from 'student_support' (which is reactive-only) so ticket-board filtering
+  // and dedup never conflate the two conversation kinds.
+  | 'reese_autonomous_outreach';
+export type TicketActorType = 'human' | 'cory' | 'agent'
+  // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
+  // autonomous background agents ('agent') so ticket activity attributed to Reese
+  // reads as a first-class staff actor.
+  | 'ai_staff';
 
 interface TicketAttributes {
   id?: string;

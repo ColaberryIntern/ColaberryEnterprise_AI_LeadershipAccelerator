@@ -8,6 +8,8 @@ import { verifyKitToken } from '../services/classKit/kitToken';
 import {
   handleRecordPulse, handleGetLiveState,
   handleSetBroadcast, handleGetCompanionState, handleRecordPollResponse,
+  handleGetPresenterNotes,
+  handleGetPresenterPage,
 } from '../controllers/sessionLiveController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
@@ -72,6 +74,7 @@ import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
+import sbpRoutes from './sbpRoutes';
 import workspaceRoutes from './workspaceRoutes';
 
 const router = Router();
@@ -194,6 +197,12 @@ const kitTokenOrAdmin = (req: import('express').Request, res: import('express').
 };
 router.get('/api/portal/sessions/:id/live-state', kitTokenOrAdmin, handleGetLiveState);
 router.post('/api/portal/sessions/:id/broadcast', kitTokenOrAdmin, handleSetBroadcast);
+// Instructor's own phone: current slide's script + what's next. Same auth as
+// live-state/broadcast (kit token scoped to this session, or admin) — never
+// requireParticipant, since this is the one place presenter_tip is read back.
+router.get('/api/portal/sessions/:id/presenter-notes', kitTokenOrAdmin, handleGetPresenterNotes);
+// Instructor's own phone page (HTML) — dark, large text, polls presenter-notes above.
+router.get('/api/portal/sessions/:id/presenter-page', kitTokenOrAdmin, handleGetPresenterPage);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
@@ -409,6 +418,8 @@ router.use(studentOpsRoutes);
 // mount's own comment. Inert unless CONTENT_PAGE_GATE_ENABLED=true (ships dark).
 router.use('/api/portal/projects', requireParticipant, requireContentEntitlement('projects'));
 router.use(projectsPortalRoutes);
+// Student Build Pipeline: idea -> plan -> repo. Flag-gated on projectApiEnabled.
+router.use(sbpRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);

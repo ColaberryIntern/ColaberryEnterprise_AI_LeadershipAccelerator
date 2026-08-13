@@ -26,12 +26,21 @@ export interface AuthPayload {
  * The admin sidebar SECTIONS this identity may access. Legacy full admins
  * (admin_users role admin/super_admin, no mgmt_role) get everything — unchanged.
  * A bridge-minted staff token is scoped strictly to its management role's
- * sections. Anything else (e.g. 'sales') gets no admin sections. This is the
- * authoritative source both requireSection() and GET /api/admin/me read from.
+ * sections. Anything else gets no admin sections. This is the authoritative
+ * source both requireSection() and GET /api/admin/me read from.
+ *
+ * 'sales' (the lead-queue rep role, provisioned by
+ * backend/src/scripts/provisionSalesReps20260809.js) resolves to the single
+ * 'leads' section. Before 2026-08-09 it fell through to `[]`, so a rep logged
+ * in to a completely empty sidebar with no route to the lead queue at all,
+ * while the 16 requireSalesOrAdmin lead routes they were provisioned for sat
+ * there unreachable. The API scope is unchanged by this — requireSalesOrAdmin
+ * still decides what data they may touch; this only lets the shell render it.
  */
 export function adminAllowedSections(payload: Pick<AuthPayload, 'role' | 'mgmt_role'>): SectionKey[] {
   if (payload.mgmt_role) return sectionsForRole(payload.mgmt_role);
   if (payload.role === 'super_admin' || payload.role === 'admin') return [...ALL_SECTIONS];
+  if (payload.role === 'sales') return ['leads'];
   return [];
 }
 

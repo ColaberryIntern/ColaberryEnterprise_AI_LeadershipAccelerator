@@ -13,6 +13,7 @@ import {
   WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ClassPrompt, StoryBeat, DayKind, BuildCheckpoint,
 } from '../../data/classSessionPlan';
 import { teachSlidesFor, ORIENTATION_TEACH, TeachSlide, EvidenceClaim } from '../../data/classTeachContent';
+import { packTeach, packNarrative } from '../../data/weekPacks';
 import { detectDayKind, parseWeek, BuildKitSpecInput, KitSessionInput } from './kitSpec';
 import { buildKitSpec, defaultInteractionsFor, defaultOpeningFor, DefaultOpening } from './kitSpecDaySlides';
 import { DEFAULT_KIT_CONFIG, StoryBeatOverride, InteractionPlacement } from './kitConfig';
@@ -71,8 +72,8 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
 
   const teach =
     dayKind === 'orientation' ? ORIENTATION_TEACH
-      : dayKind === 'architecture' ? teachSlidesFor(week, 'monday')
-        : teachSlidesFor(week, 'thursday');
+      : dayKind === 'architecture' ? (packTeach(week, 'monday') ?? teachSlidesFor(week, 'monday'))
+        : (packTeach(week, 'thursday') ?? teachSlidesFor(week, 'thursday'));
 
   const prompts = dayKind === 'build' && wc ? wc.thursday.prompts : [];
 
@@ -81,8 +82,9 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
 
   const storyBeats = flattenStoryBeats(
     dayKind === 'orientation' ? ORIENTATION_PLAN.storyBeats
-      : dayKind === 'architecture' && wc ? wc.monday.storyBeats
-        : undefined, // Build Day has no authored story beats yet (kitSpecDaySlides.ts comment)
+      : dayKind === 'architecture' && wc ? (packNarrative(week, 'monday')?.storyBeats ?? wc.monday.storyBeats)
+        : dayKind === 'build' && wc ? (packNarrative(week, 'thursday')?.storyBeats ?? wc.thursday.storyBeats)
+          : undefined,
   );
 
   const input: BuildKitSpecInput = {

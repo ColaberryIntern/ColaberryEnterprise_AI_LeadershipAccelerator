@@ -86,7 +86,13 @@ function AdminLayout() {
   const pinned = PINNED_LINKS.filter(
     (l) => canSection(l.section as string) && (!l.requiresMgmtBridge || hasPortalAccount),
   );
-  const groups = NAV_GROUPS.filter((g) => canSection(g.section));
+  // Filter per LINK (a link may carry its own section, e.g. Leads/Pipeline sit
+  // in the Revenue group but belong to the narrower 'leads' section), then drop
+  // any group left with nothing in it. Group-level filtering alone would hide
+  // Leads from a sales rep who holds 'leads' but not 'revenue'.
+  const groups = NAV_GROUPS
+    .map((g) => ({ ...g, links: g.links.filter((l) => canSection(l.section ?? g.section)) }))
+    .filter((g) => g.links.length > 0);
 
   const q = query.trim().toLowerCase();
   const searchResults = q
@@ -173,6 +179,9 @@ function AdminLayout() {
           </nav>
 
           <div className="admin-sidebar-footer">
+            <Link to="/admin/change-password" className="admin-sidebar-logout" onClick={closeMobile}>
+              <i className="ri-key-2-line" aria-hidden="true" /> Change password
+            </Link>
             <button type="button" className="admin-sidebar-logout" onClick={handleLogout}>
               <i className="ri-logout-box-r-line" aria-hidden="true" /> Logout
             </button>

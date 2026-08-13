@@ -2,6 +2,7 @@ import React from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
+import AdminChangePasswordPage from '../pages/admin/AdminChangePasswordPage';
 import AdminLoginPage from '../pages/admin/AdminLoginPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import WarRoomPage from '../pages/admin/WarRoomPage';
@@ -15,6 +16,7 @@ import AdminRevenueDashboardPage from '../pages/admin/AdminRevenueDashboardPage'
 import AdminRefundsPage from '../pages/admin/AdminRefundsPage';
 import AdminSettingsPage from '../pages/admin/AdminSettingsPage';
 import AdminCapeSettingsPage from '../pages/admin/AdminCapeSettingsPage';
+import AdminFeedControlGovernancePage from '../pages/admin/AdminFeedControlGovernancePage';
 import AdminEventLedgerPage from '../pages/admin/AdminEventLedgerPage';
 import AdminCampaignsPage from '../pages/admin/AdminCampaignsPage';
 import AdminCampaignDetailPage from '../pages/admin/AdminCampaignDetailPage';
@@ -39,6 +41,7 @@ import AgentOrphansPage from '../pages/admin/AgentOrphansPage';
 import AdminMarketingDashboardPage from '../pages/admin/marketing/AdminMarketingDashboardPage';
 import AdminCommunicationsPage from '../pages/admin/AdminCommunicationsPage';
 import AdminTicketBoardPage from '../pages/admin/AdminTicketBoardPage';
+import AgentDetailPage from '../pages/admin/AgentDetailPage';
 import GovernanceCommandCenter from '../pages/admin/GovernanceCommandCenter';
 import AdminGovernancePolicyPage from '../pages/admin/AdminGovernancePolicyPage';
 import AdminProjectOverview from '../pages/admin/AdminProjectOverview';
@@ -48,6 +51,7 @@ import AdminSourcesPage from '../pages/admin/AdminSourcesPage';
 import AdminGeneratorPage from '../pages/admin/AdminGeneratorPage';
 import AdminIngestLogsPage from '../pages/admin/AdminIngestLogsPage';
 import AdminWorkLedgerHealthPage from '../pages/admin/AdminWorkLedgerHealthPage';
+import AdminExecutiveNarrativePage from '../pages/admin/AdminExecutiveNarrativePage';
 import AdminRoutingRulesPage from '../pages/admin/AdminRoutingRulesPage';
 import AdminAutonomousPage from '../pages/admin/AdminAutonomousPage';
 import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
@@ -56,6 +60,7 @@ import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
 import AdminFunnelPage from '../pages/admin/AdminFunnelPage';
 import CbSystemCommand from '../pages/admin/CbSystemCommand';
 import AdminTrustCenterPage from '../pages/admin/AdminTrustCenterPage';
+import AdminVaErpDashboardPage from '../pages/admin/AdminVaErpDashboardPage';
 import AdminPortalEnterPage from '../pages/admin/AdminPortalEnterPage';
 const adminRoutes = (
   <>
@@ -68,6 +73,9 @@ const adminRoutes = (
       <Route path="/admin/ai-training-enter" element={<AdminPortalEnterPage />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        {/* Account self-service: reachable by every admin identity regardless
+            of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
+        <Route path="/admin/change-password" element={<AdminChangePasswordPage />} />
         <Route path="/admin/war-room" element={<WarRoomPage />} />
         <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
         <Route path="/admin/pipeline" element={<AdminPipelinePage />} />
@@ -86,6 +94,7 @@ const adminRoutes = (
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route path="/admin/cape-settings" element={<AdminCapeSettingsPage />} />
+        <Route path="/admin/feed-control-governance" element={<AdminFeedControlGovernancePage />} />
         <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
@@ -107,6 +116,7 @@ const adminRoutes = (
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
         <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
+        <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
         <Route path="/admin/governance-policy" element={<AdminGovernancePolicyPage />} />
         <Route path="/admin/projects" element={<AdminProjectOverview />} />
@@ -116,6 +126,7 @@ const adminRoutes = (
         <Route path="/admin/generator/:sourceSlug/:entrySlug" element={<AdminGeneratorPage />} />
         <Route path="/admin/ingest-logs" element={<AdminIngestLogsPage />} />
         <Route path="/admin/work-ledger-health" element={<AdminWorkLedgerHealthPage />} />
+        <Route path="/admin/executive-narrative" element={<AdminExecutiveNarrativePage />} />
         <Route path="/admin/routing-rules" element={<AdminRoutingRulesPage />} />
         <Route path="/admin/autonomous" element={<AdminAutonomousPage />} />
         <Route path="/admin/automation" element={<AdminAutomationPage />} />
@@ -126,6 +137,7 @@ const adminRoutes = (
             Redirect the old URL to the CB System Command dashboard. */}
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
+        <Route path="/admin/va-erp" element={<AdminVaErpDashboardPage />} />
       </Route>
     </Route>
   </>

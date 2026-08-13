@@ -56,11 +56,20 @@ export const taskKey = (t: Pick<ProjectTask, 'storyId' | 'id'>): string => t.sto
 const totalTaskCount = (tree: BackendProjectTree): number =>
   tree.lists.reduce((n, l) => n + (Array.isArray(l.tasks) ? l.tasks.length : 0), 0);
 
-/** All story_ids present in the backend tree (the client keys it can match on). */
-function backendStoryIds(tree: BackendProjectTree): Set<string> {
-  const s = new Set<string>();
-  for (const l of tree.lists) for (const t of l.tasks) if (t.story_id) s.add(t.story_id);
-  return s;
+/**
+ * True when every task in the backend tree is already present in this local
+ * project — i.e. the local project is (at least) the source of those rows.
+ *
+ * Deliberately NOT "shares any key". Story ids are per-plan sequential, so
+ * every plan has a STORY-001 and any-key matching makes all projects look like
+ * each other. Containment asks the stronger question that actually identifies
+ * the project the backend rows came from.
+ */
+function contains(p: StudentProject, tree: BackendProjectTree): boolean {
+  const localKeys = new Set(p.lists.flatMap((l) => l.tasks.map((t) => taskKey(t))));
+  const backendKeys: string[] = [];
+  for (const l of tree.lists) for (const t of l.tasks) if (t.story_id) backendKeys.push(t.story_id);
+  return backendKeys.length > 0 && backendKeys.every((k) => localKeys.has(k));
 }
 
 /**
@@ -208,15 +217,32 @@ export function reconcileProjects(local: StudentProject[], tree: BackendProjectT
   if (!tree || !Array.isArray(tree.lists) || totalTaskCount(tree) === 0) {
     return { next: local, changed: false, mode: 'noop' };
   }
-  const keys = backendStoryIds(tree);
-  const matchIdx = local.findIndex(
-    (p) => !p.sample && p.lists.some((l) => l.tasks.some((t) => keys.has(taskKey(t)))),
-  );
-  if (matchIdx >= 0) {
-    const overlaid = overlayCompletions(local[matchIdx], tree);
-    if (overlaid === local[matchIdx]) return { next: local, changed: false, mode: 'noop' };
+
+  // MEASURED, 2026-08-13. This used to ask "does a local project share ANY task
+  // key with the backend tree?" — and task keys are story ids, which every plan
+  // numbers STORY-001 upward. A student whose browser held an OLDER build
+  // therefore matched every new one, so the new build was overlaid onto the old
+  // project and never appeared. A freshly published project was invisible on
+  // the student's own machine while being perfectly correct on the server.
+  //
+  // Two things can legitimately be "the same project":
+  //   1. one this device hydrated before — it carries the backend id
+  //      (backendTreeToProject sets `id: tree.id`), so compare ids;
+  //   2. a client-built project that was mirrored TO the backend — its local id
+  //      differs from the backend's, but the backend rows came from its tasks,
+  //      so every backend key is present locally.
+  //
+  // Containment is what separates (2) from a genuinely new build. An older
+  // project shares SOME story ids with everything, but a new plan brings keys
+  // the old one never had — STORY-000, the prep tasks — so it is not contained
+  // and is correctly treated as new.
+  const matchIdx = local.findIndex((p) => !p.sample && p.id === tree.id);
+  const containsIdx = matchIdx >= 0 ? matchIdx : local.findIndex((p) => !p.sample && contains(p, tree));
+  if (containsIdx >= 0) {
+    const overlaid = overlayCompletions(local[containsIdx], tree);
+    if (overlaid === local[containsIdx]) return { next: local, changed: false, mode: 'noop' };
     const next = local.slice();
-    next[matchIdx] = overlaid;
+    next[containsIdx] = overlaid;
     return { next, changed: true, mode: 'overlay' };
   }
   const hydrated = backendTreeToProject(tree);

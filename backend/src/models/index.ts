@@ -131,6 +131,7 @@ import TicketWorkUnit from './TicketWorkUnit';
 import WorkUnitDependency from './WorkUnitDependency';
 import ResourceLease from './ResourceLease';
 import ApprovalRequest from './ApprovalRequest';
+import OutcomeMeasurement from './OutcomeMeasurement';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -320,6 +321,7 @@ import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
 import FriendReferral from './FriendReferral';
+import SponsorPortalAuditLog from './SponsorPortalAuditLog';
 import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
 import Subscription from './Subscription';
@@ -393,6 +395,15 @@ import CurriculumSkillMap from './CurriculumSkillMap';
 import ArchitectureSkillPrerequisite from './ArchitectureSkillPrerequisite';
 // CAPE Phase 5: Today Plan learner feedback controls
 import TodayPlanFeedback from './TodayPlanFeedback';
+// CAPE Phase 6: Feed Control governance board (rerank caps, pacing knobs, lifecycle mixes)
+import CapeGovernancePolicy from './CapeGovernancePolicy';
+import CapeLifecycleModePolicy from './CapeLifecycleModePolicy';
+// --- Explorer Growth OS (docs/EXPLORER_GROWTH_OS_PLAN.md EPIC 1) ---
+import ExplorerJourneyProfile from './ExplorerJourneyProfile';
+import ExplorerJourneyDecision from './ExplorerJourneyDecision';
+import ExplorerScoreSnapshot from './ExplorerScoreSnapshot';
+import ExplorerExperimentAssignment from './ExplorerExperimentAssignment';
+import ExplorerContentAsset from './ExplorerContentAsset';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -845,6 +856,9 @@ AgentRun.hasMany(ApprovalRequest, { foreignKey: 'run_id', as: 'approvalRequests'
 ApprovalRequest.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
 WorkLedgerEvent.hasOne(ApprovalRequest, { foreignKey: 'event_id', as: 'approvalRequest' });
 ApprovalRequest.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+// ProofDesk Milestone 5 (Outcomes & Learning)
+Ticket.hasMany(OutcomeMeasurement, { foreignKey: 'ticket_id', as: 'outcomeMeasurements' });
+OutcomeMeasurement.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
@@ -1205,9 +1219,15 @@ export {
   EvidenceLink,
   DecisionRecord,
   TicketWorkUnit,
+  ExplorerJourneyProfile,
+  ExplorerJourneyDecision,
+  ExplorerScoreSnapshot,
+  ExplorerExperimentAssignment,
+  ExplorerContentAsset,
   WorkUnitDependency,
   ResourceLease,
   ApprovalRequest,
+  OutcomeMeasurement,
   StudentNavigationEvent,
   Alert,
   AlertEvent,
@@ -1397,6 +1417,7 @@ export {
   ContributionEvent,
   StudentPointsEvent,
   FriendReferral,
+  SponsorPortalAuditLog,
   OpenHouseEvent,
   OnboardingProfile,
   Subscription,
@@ -1421,6 +1442,9 @@ export {
   ArchitectureSkillPrerequisite,
   // CAPE — Colaberry Adaptive Path Engine (Phase 5: Today Plan learner feedback)
   TodayPlanFeedback,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 6: Feed Control governance board)
+  CapeGovernancePolicy,
+  CapeLifecycleModePolicy,
 };
 
 // --- Enrollment Lead associations ---
@@ -1580,3 +1604,28 @@ CurriculumSkillMap.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' }
 
 Enrollment.hasMany(TodayPlanFeedback, { foreignKey: 'enrollment_id', as: 'todayPlanFeedback' });
 TodayPlanFeedback.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- Explorer Growth OS associations (EPIC 1) ---
+// Additive only. Nothing outside the explorerGrowth services reads these tables.
+// hasOne (not hasMany) for the profile: exactly one per learner, enforced by the
+// table's PK being enrollment_id itself.
+Enrollment.hasOne(ExplorerJourneyProfile, { foreignKey: 'enrollment_id', as: 'explorerProfile' });
+ExplorerJourneyProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+// The identity bridge: a profile points at the CRM lead it resolved to. Nullable —
+// an unresolved learner is a reportable condition, not an error.
+ExplorerJourneyProfile.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasOne(ExplorerJourneyProfile, { foreignKey: 'lead_id', as: 'explorerProfile' });
+
+Enrollment.hasMany(ExplorerJourneyDecision, { foreignKey: 'enrollment_id', as: 'explorerDecisions' });
+ExplorerJourneyDecision.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(ExplorerScoreSnapshot, { foreignKey: 'enrollment_id', as: 'explorerScoreSnapshots' });
+ExplorerScoreSnapshot.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(ExplorerExperimentAssignment, { foreignKey: 'enrollment_id', as: 'explorerExperimentAssignments' });
+ExplorerExperimentAssignment.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// ExplorerContentAsset intentionally has NO association: it is an INDEX over other
+// systems (network_videos, blog_posts, cohorts, ...) keyed by (source_system,
+// source_id), not a FK-joined entity. Associating it would imply a referential
+// integrity this table deliberately does not have.

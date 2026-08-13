@@ -14,7 +14,7 @@
  * just asserting on SQL text.
  */
 import { sequelize } from '../../../config/database';
-import { pruneGeneratedContent } from '../generatedContentRetention';
+import { pruneGeneratedContent, RETENTION_DAYS } from '../generatedContentRetention';
 
 jest.mock('../../../config/database', () => ({
   sequelize: {
@@ -141,5 +141,11 @@ describe('pruneGeneratedContent', () => {
     expect(second.archived).toBe(0); // already archived -> visibility='published' guard excludes it on re-run
     expect(cards[0].visibility).toBe('archived');
     expect(intelItems[0].card_id).toBeNull(); // reset once; second run finds nothing left to reset, no error
+  });
+});
+
+describe('RETENTION_DAYS default (2026-08-10 content-supply fix)', () => {
+  it('defaults to 18, not the original 30 — a small curated list (~38-80 items after this fix\'s catalog growth) at 2/day still takes 19-40 days to first exhaust, and a 30-day window left an unavoidable gap between "list exhausted" and "oldest card ages out"', () => {
+    expect(RETENTION_DAYS).toBe(18);
   });
 });

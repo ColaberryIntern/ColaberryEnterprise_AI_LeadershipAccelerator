@@ -17,6 +17,7 @@ export const SECTION_KEYS = [
   'revenue', 'campaigns', 'lead_ingestion', 'inbox_content',
   'program', 'intelligence', 'system',     // groups
   'students',                              // support-only surface
+  'leads',                                 // lead-queue subset of the Revenue group
 ] as const;
 export type SectionKey = typeof SECTION_KEYS[number];
 
@@ -41,8 +42,9 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
   // Curriculum → the Program group (accelerator, community-roles, orchestration,
   // AI org, enterprise intelligence, projects) + a Dashboard landing.
   curriculum: { role: 'curriculum', label: 'Curriculum', sections: ['dashboard', 'program'] },
-  // Revenue → the Revenue group.
-  revenue: { role: 'revenue', label: 'Revenue', sections: ['dashboard', 'revenue'] },
+  // Revenue → the Revenue group, including its lead-queue links ('leads' is a
+  // narrower slice of that same group, carved out for the sales rep role).
+  revenue: { role: 'revenue', label: 'Revenue', sections: ['dashboard', 'revenue', 'leads'] },
   // Admissions → the Lead Ingestion group (placeholder scope until assigned).
   admissions: { role: 'admissions', label: 'Admissions', sections: ['dashboard', 'lead_ingestion'] },
   // Support → NO normal admin nav; only the read-only student-story surface.

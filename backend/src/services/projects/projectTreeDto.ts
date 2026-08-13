@@ -26,6 +26,13 @@ export interface ProjectTaskDto {
   trust: string | null;
   fulfills: unknown;               // requirement keys this story fulfills
   blocked_by: string[];            // story_ids this task waits on (release gate)
+  // Dates the schedule assigned. `due_on` moves if a student shifts their plan;
+  // `due_baseline_on` is written once at first publish and never again, so the
+  // original deadline stays visible next to the current one. Both are DATEONLY
+  // in the database and serialise as 'YYYY-MM-DD' — never a timestamp, because
+  // a due date with a time on it lands on the wrong day in another timezone.
+  due_on: string | null;
+  due_baseline_on: string | null;
 }
 
 export interface ProjectListDto {
@@ -71,6 +78,19 @@ type Plain = Record<string, any>;
 const asArray = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 const byPosition = (a: { position: number }, b: { position: number }) => a.position - b.position;
 
+/**
+ * DATEONLY columns come back from Sequelize as 'YYYY-MM-DD' strings, but a raw
+ * query or a model configured differently can yield a Date. Normalise both to
+ * the date string the portal renders, and never emit a timestamp: a due date
+ * carrying a time is a due date that lands on the wrong day somewhere.
+ */
+function asDateOnly(v: unknown): string | null {
+  if (!v) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const s = String(v);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
+}
+
 export function toTaskDto(t: Plain): ProjectTaskDto {
   return {
     id: String(t.id),
@@ -90,6 +110,8 @@ export function toTaskDto(t: Plain): ProjectTaskDto {
     trust: t.trust ?? null,
     fulfills: t.fulfills ?? null,
     blocked_by: asArray(t.blocked_by),
+    due_on: asDateOnly(t.due_on),
+    due_baseline_on: asDateOnly(t.due_baseline_on),
   };
 }
 

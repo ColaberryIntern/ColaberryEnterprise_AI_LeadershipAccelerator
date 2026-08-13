@@ -4,6 +4,7 @@ import { markEnrollmentPaid, markEnrollmentFailed, enrollInClassReadinessCampaig
 import { Cohort, EnrollmentLead } from '../models';
 import { runEnrollmentAutomation } from '../services/automationService';
 import { activateByRef, isSubscriptionRef } from '../services/subscriptionService';
+import { recordWebhookOutcome } from '../services/paysimpleWebhookHealth';
 import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
@@ -36,9 +37,13 @@ export async function handlePaySimpleWebhook(req: Request, res: Response): Promi
   // Verify webhook signature
   if (!verifyWebhookSignature(rawBody, signature)) {
     console.error('[Webhook] PaySimple signature verification failed');
+    // Feed the health window BEFORE returning: a sustained run of these is exactly the
+    // 2026-08-12 outage, and it went unnoticed because nothing counted them.
+    recordWebhookOutcome('rejected_signature');
     res.status(400).json({ error: 'Webhook signature verification failed' });
     return;
   }
+  recordWebhookOutcome('accepted');
 
   try {
     const event = Buffer.isBuffer(req.body) ? JSON.parse(rawBody) : req.body;

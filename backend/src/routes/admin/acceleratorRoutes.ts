@@ -3,7 +3,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
-  handleGetSessionKit, handleGetSessionKitDoc, handleGetSessionOutline, handleGetSessionReadiness,
+  handleGetSessionKit, handleGetPresenterLink, handleGetSessionKitDoc, handleGetSessionOutline, handleGetSessionReadiness,
   handleGetSessionKitConfig, handleSaveSessionKitConfig, handleGenerateInteraction, handleRewriteCategory,
   handleGenerateMeetLink, handleGenerateCohortMeetLinks,
   handleGetAttendance, handleMarkAttendance, handleUpdateAttendance,
@@ -108,6 +108,9 @@ router.post('/api/admin/accelerator/cohorts/:cohortId/unskip', requireAdmin, han
 router.get('/api/admin/accelerator/sessions/:id/curriculum', requireAdmin, handleGetSessionCurriculum);
 router.post('/api/admin/accelerator/sessions/:id/meet-link', requireAdmin, handleGenerateMeetLink);
 router.get('/api/admin/accelerator/sessions/:id/kit', requireAdmin, handleGetSessionKit);
+// Self-service presenter link (URL + QR) for the instructor's OWN phone — mints
+// a fresh kit token every call, never bundled with the student check-in QR above.
+router.get('/api/admin/accelerator/sessions/:id/presenter-link', requireAdmin, handleGetPresenterLink);
 // Full interactive Class Kit teaching deck (HTML) — opened in a new tab to run the class.
 router.get('/api/admin/accelerator/sessions/:id/kit-doc', requireAdmin, handleGetSessionKitDoc);
 // Plain-language class outline (teaching plan) — review / prepare / print.

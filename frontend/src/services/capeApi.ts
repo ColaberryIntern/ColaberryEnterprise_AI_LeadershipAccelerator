@@ -8,6 +8,11 @@
  * Phase 5 additions (design doc §10, §11, §16 Phase 5) live at the bottom of
  * this file: the Today Plan, learner feedback controls, "Test out", and the
  * skill-detail drawer's evidence history.
+ *
+ * Phase 6 additions (design doc §12, §16 Phase 6) live after Phase 5: the
+ * Feed Control governance board — governance policy (Stage-4 rerank caps +
+ * Today Plan pacing knobs), lifecycle-mode mix policies, the skill coverage
+ * heatmap, and the explanation simulator's personas/lookup.
  */
 import portalApi from '../utils/portalApi';
 import api from '../utils/api';
@@ -237,4 +242,154 @@ export interface SkillEvidenceHistory {
 export async function fetchSkillEvidenceHistory(skillId: string): Promise<SkillEvidenceHistory> {
   const { data } = await portalApi.get<SkillEvidenceHistory>(`/api/portal/cape/skill-profile/${encodeURIComponent(skillId)}/evidence`);
   return data;
+}
+
+// ── Admin: CAPE Phase 6 — Feed Control governance board (design doc §12,
+// §16 Phase 6). NOT the Phase 0-1 minimal settings panel above — a sibling
+// surface. Reuses the `LifecycleMode` type already defined for Phase 5's
+// Today Plan (not redefined). The existing global Feed Control policy
+// (`explorationPct` etc.) is read/written via the plain `api` instance
+// directly in the Pacing Controls panel component, matching
+// `FeedControlTab.tsx`'s own established convention (that file has no
+// separate typed client module of its own to import from).
+
+export interface GovernancePolicy {
+  id: string;
+  version: number;
+  is_current: boolean;
+  same_type_max_streak: number;
+  passive_max_streak: number;
+  crowd_out_max_per_skill: number;
+  crowd_out_window: number;
+  stretch_cap_first_five: number;
+  daily_plan_target_minutes: number;
+  review_slot_share: number;
+  ai_pulse_slot_share: number;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface UpdateGovernancePolicyInput {
+  same_type_max_streak?: number;
+  passive_max_streak?: number;
+  crowd_out_max_per_skill?: number;
+  crowd_out_window?: number;
+  stretch_cap_first_five?: number;
+  daily_plan_target_minutes?: number;
+  review_slot_share?: number;
+  ai_pulse_slot_share?: number;
+  reason?: string | null;
+}
+
+export async function fetchGovernancePolicy(): Promise<GovernancePolicy> {
+  const { data } = await api.get<{ ok: boolean; policy: GovernancePolicy }>('/api/admin/cape/governance/policy');
+  return data.policy;
+}
+
+export async function fetchGovernancePolicyHistory(): Promise<GovernancePolicy[]> {
+  const { data } = await api.get<{ ok: boolean; history: GovernancePolicy[] }>('/api/admin/cape/governance/policy/history');
+  return data.history;
+}
+
+export async function updateGovernancePolicy(
+  patch: UpdateGovernancePolicyInput
+): Promise<{ policy: GovernancePolicy; versioned: boolean }> {
+  const { data } = await api.put<{ ok: boolean; policy: GovernancePolicy; versioned: boolean }>(
+    '/api/admin/cape/governance/policy',
+    patch
+  );
+  return { policy: data.policy, versioned: data.versioned };
+}
+
+export interface LifecycleModePolicy {
+  id: string;
+  mode: LifecycleMode;
+  version: number;
+  is_current: boolean;
+  mix: Record<string, number>;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export async function fetchLifecycleModePolicies(): Promise<LifecycleModePolicy[]> {
+  const { data } = await api.get<{ ok: boolean; modes: LifecycleModePolicy[] }>('/api/admin/cape/governance/lifecycle-modes');
+  return data.modes;
+}
+
+export async function fetchLifecycleModePolicyHistory(mode: LifecycleMode): Promise<LifecycleModePolicy[]> {
+  const { data } = await api.get<{ ok: boolean; history: LifecycleModePolicy[] }>(
+    `/api/admin/cape/governance/lifecycle-modes/${mode}/history`
+  );
+  return data.history;
+}
+
+export async function updateLifecycleModeMix(
+  mode: LifecycleMode,
+  mix: Record<string, number>,
+  reason?: string | null,
+): Promise<{ policy: LifecycleModePolicy; versioned: boolean }> {
+  const { data } = await api.put<{ ok: boolean; policy: LifecycleModePolicy; versioned: boolean }>(
+    `/api/admin/cape/governance/lifecycle-modes/${mode}`,
+    { mix, reason }
+  );
+  return { policy: data.policy, versioned: data.versioned };
+}
+
+export interface HeatmapTypeRow { slug: string; label: string }
+export interface HeatmapSkillColumn { skill_id: string; name: string }
+export interface HeatmapCell {
+  type_slug: string;
+  skill_id: string;
+  weight: number;
+  credit_strength: string | null;
+  bands: string[];
+  has_proof_task: boolean;
+  source: 'type_default' | 'none';
+}
+export interface HeatmapGap { type_slug: string; skill_id: string; reason: string }
+export interface SkillCoverageHeatmap {
+  types: HeatmapTypeRow[];
+  skills: HeatmapSkillColumn[];
+  cells: HeatmapCell[];
+  gaps: HeatmapGap[];
+}
+
+export async function fetchSkillCoverageHeatmap(): Promise<SkillCoverageHeatmap> {
+  const { data } = await api.get<{ ok: boolean } & SkillCoverageHeatmap>('/api/admin/cape/governance/heatmap');
+  return { types: data.types, skills: data.skills, cells: data.cells, gaps: data.gaps };
+}
+
+export type SimulatorPersonaSlug =
+  | 'new_no_resume' | 'new_experienced_resume' | 'active_week5_learner'
+  | 'returning_learner' | 'near_architect_learner';
+
+export interface PersonaMatch {
+  persona: SimulatorPersonaSlug;
+  mode: LifecycleMode;
+  enrollment_id: string | null;
+  email: string | null;
+  note: string | null;
+}
+
+export async function fetchGovernancePersonas(): Promise<PersonaMatch[]> {
+  const { data } = await api.get<{ ok: boolean; personas: PersonaMatch[] }>('/api/admin/cape/governance/personas');
+  return data.personas;
+}
+
+/** Returns `null` on a 404 (no match) rather than throwing — callers (the
+ * Explanation Simulator panel) render "no match" as a normal empty state,
+ * matching `fetchTodayPlan`'s established null-on-404 convention above. */
+export async function lookupGovernanceEnrollment(query: string): Promise<{ enrollment_id: string; email: string } | null> {
+  try {
+    const { data } = await api.get<{ ok: boolean; enrollment_id: string; email: string }>(
+      '/api/admin/cape/governance/lookup',
+      { params: { query } }
+    );
+    return { enrollment_id: data.enrollment_id, email: data.email };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return null;
+    throw err;
+  }
 }

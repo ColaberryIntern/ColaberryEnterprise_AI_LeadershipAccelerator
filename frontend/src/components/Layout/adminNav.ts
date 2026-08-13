@@ -36,12 +36,16 @@ export const PINNED_LINKS: NavLink[] = [
 ];
 
 export const NAV_GROUPS: NavGroup[] = [
+  // Leads and Pipeline carry their own 'leads' section: it is the narrow slice
+  // of this group a sales rep may reach (backend requireSalesOrAdmin covers
+  // exactly these two surfaces). Everyone who holds 'revenue' also holds
+  // 'leads', so this changes nothing for owner/admin/revenue identities.
   { label: 'Revenue', section: 'revenue', links: [
     { path: '/admin/revenue', label: 'Revenue', icon: 'money-dollar-circle-line' },
     { path: '/admin/refunds', label: 'Refunds', icon: 'refund-2-line' },
-    { path: '/admin/pipeline', label: 'Pipeline', icon: 'filter-3-line' },
+    { path: '/admin/leads', label: 'Leads', icon: 'group-line', section: 'leads' },
+    { path: '/admin/pipeline', label: 'Pipeline', icon: 'filter-3-line', section: 'leads' },
     { path: '/admin/opportunities', label: 'Opportunities', icon: 'line-chart-line' },
-    { path: '/admin/leads', label: 'Leads', icon: 'group-line' },
     { path: '/admin/funnel', label: 'Funnel', icon: 'filter-2-line' },
   ]},
   { label: 'Campaigns', section: 'campaigns', links: [
@@ -66,6 +70,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/community-roles', label: 'Community Roles', icon: 'user-star-line' },
     { path: '/admin/orchestration', label: 'Orchestration', icon: 'flow-chart' },
     { path: '/admin/cape-settings', label: 'Architecture Skills', icon: 'radar-line' },
+    { path: '/admin/feed-control-governance', label: 'Feed Control Governance', icon: 'shield-star-line' },
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
     { path: '/admin/brain', label: 'Enterprise Intelligence', icon: 'brain-line' },
     { path: '/admin/projects', label: 'Projects', icon: 'rocket-2-line' },
@@ -91,3 +96,49 @@ export const ALL_LINKS: NavLink[] = [
   ...PINNED_LINKS,
   ...NAV_GROUPS.flatMap((g) => g.links.map((l) => ({ ...l, section: l.section ?? g.section }))),
 ];
+
+/**
+ * Admin routes every authenticated admin identity may reach regardless of
+ * section, because they are about the account itself rather than any data
+ * surface. Kept tiny on purpose.
+ */
+export const UNIVERSAL_ADMIN_PATHS: readonly string[] = ['/admin/change-password'];
+
+/**
+ * The RBAC section governing an admin route, or null when the path has no nav
+ * entry (detail routes under a nav path resolve to their parent's section).
+ *
+ * Longest-prefix wins so a more specific entry beats a shorter one, and the
+ * match is `/`-delimited so '/admin/leads' never claims '/admin/leadsomething'.
+ * `newTab` entries are external or bridge destinations, not routes in this app,
+ * so they are skipped.
+ */
+export function sectionForPath(pathname: string): string | null {
+  let best: NavLink | null = null;
+  for (const link of ALL_LINKS) {
+    if (link.newTab) continue;
+    if (pathname === link.path || pathname.startsWith(link.path + '/')) {
+      if (!best || link.path.length > best.path.length) best = link;
+    }
+  }
+  return (best?.section as string) ?? null;
+}
+
+// Where a role would rather land, in order, before falling back to whatever it
+// can reach. Keeps a sales rep on Leads instead of Pipeline purely because
+// Pipeline sorts earlier in some future nav edit.
+const LANDING_PREFERENCE = ['/admin/dashboard', '/admin/leads', '/admin/students'];
+
+/**
+ * The best landing route for an identity, given its section predicate. Used for
+ * the post-login destination and as the bounce target when someone reaches a
+ * route outside their scope, so the redirect always terminates somewhere real.
+ */
+export function firstAccessiblePath(canSection: (section: string) => boolean): string {
+  for (const path of LANDING_PREFERENCE) {
+    const section = sectionForPath(path);
+    if (section && canSection(section)) return path;
+  }
+  const link = ALL_LINKS.find((l) => !l.newTab && canSection(l.section as string));
+  return link ? link.path : UNIVERSAL_ADMIN_PATHS[0];
+}

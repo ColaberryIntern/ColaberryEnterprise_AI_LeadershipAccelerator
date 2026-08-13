@@ -48,6 +48,7 @@ export function deckScript(): string {
   // ---- navigation ----
   function show(n){
     i = Math.max(0, Math.min(slides.length - 1, n));
+    diagramFull = false; // a new slide always starts un-full-screened
     for (var k = 0; k < slides.length; k++){ slides[k].classList.toggle('active', k === i); }
     elProgress.style.width = ((i + 1) / slides.length * 100) + '%';
     elCounter.textContent = (i + 1) + ' / ' + slides.length;
@@ -87,13 +88,21 @@ export function deckScript(): string {
     }, { passive: true });
   }
 
-  // Small persistent QR for latecomers — only past the cover slide, and only
-  // once the instructor has actually started class (see kitDeckStyles.ts
-  // #klateqr for the "why" — before Start, slide 1's own big QR is enough).
+  // Small persistent QR for latecomers — shown on every slide past the cover.
+  //
+  // This used to ALSO require classStart(), on the theory that slide 1's own
+  // big QR covers everyone until the instructor presses Start class. In real
+  // classes that assumption broke: if Start is never pressed (easy to skip —
+  // it is only needed for the pace tracker), the QR existed on exactly one
+  // slide for the whole 2-hour session, so anyone who joined late, looked
+  // away, or had to re-scan had no way to check in. Students reported "the
+  // barcode is not there" while their instructor saw a working deck.
+  // The QR is cheap chrome and already hides itself in Focus/Video mode, so
+  // there is no reason to gate it on an unrelated action.
   function updateLateQr(){
     var el = document.getElementById('klateqr');
     if (!el) return;
-    el.classList.toggle('show', i > 0 && !!classStart());
+    el.classList.toggle('show', i > 0);
   }
 
   // Auto-switch the presentation mode (Teach / Story / Build) from the active
@@ -107,7 +116,22 @@ export function deckScript(): string {
     document.body.classList.add('mode-' + mode);
   }
 
+  // Full-screening a diagram means the projected screen is showing ONLY the
+  // diagram (no text) — that is exactly when the instructor's phone should
+  // surface the full script, since nothing else on screen has it anymore.
+  var diagramFull = false;
+  window.__toggleDiagramFull = function(el){
+    el.classList.toggle('kdiagram--full');
+    diagramFull = el.classList.contains('kdiagram--full');
+    broadcastCurrent();
+  };
+
   // Broadcast the deck's CURRENT view so students' phones switch to match it.
+  // Also carries the presenter's own script/next-slide preview — server-side
+  // this is stored in the same row but only ever served back out through the
+  // kit-token/admin-gated presenter-notes endpoint, never the student-facing
+  // companion-state one (see sessionLiveStateService.ts / getCompanionState,
+  // which whitelists its own return fields and does not include this).
   function broadcastCurrent(){
     var live = K.live || {};
     if (!live.enabled || !live.broadcastEndpoint) return;
@@ -118,10 +142,20 @@ export function deckScript(): string {
       options: sm.question.options, answer: sm.question.answer, revealed: !!revealed[sm.id],
       theater: sm.question.theater ? { state: theaterState[sm.id] || 'voting' } : undefined,
     } : null;
+    var tipEl = slides[i];
+    // The phone gets the FULL text — the short presenter cue plus the slide's
+    // own paragraph — so it is genuinely the "long version" of what's on
+    // screen. The projected slide itself is unchanged by this; only what
+    // reaches the instructor's own phone is affected.
+    var cue = tipEl ? (tipEl.getAttribute('data-tip') || '') : '';
+    var bodyText = tipEl ? (tipEl.getAttribute('data-body') || '') : '';
+    var presenterTip = cue && bodyText ? (cue + '\\n\\n' + bodyText) : (cue || bodyText);
+    var nextTitle = (i + 1 < slides.length) ? (slides[i + 1].getAttribute('data-slidetitle') || '') : 'End of class';
     var body = {
       slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
       phase: sm.phase, question: q, broadcast_prompts: sm.broadcast_prompts,
-      prompt: sm.prompt || undefined,
+      prompt: sm.prompt || undefined, presenter_tip: presenterTip, next_title: nextTitle,
+      diagram_fullscreen: diagramFull,
     };
     fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
