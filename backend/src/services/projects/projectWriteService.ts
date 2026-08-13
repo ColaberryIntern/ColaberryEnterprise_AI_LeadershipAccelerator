@@ -4,6 +4,11 @@
  * RequirementsMap, a different layer — reconciling the two is a P2 concern).
  * All access is scoped to the requesting enrollment. Pure helpers in
  * ./projectWriteDto; read-tree reused from ./projectReadService.
+ *
+ * ONE RULE ABOVE ALL OTHERS IN THIS FILE: a client may never write `complete`.
+ * Ownership is not verification, and points ride on completion. Client paths go
+ * through `assertClientMaySet`; the platform's path is
+ * `markTaskVerifiedComplete`, which no route may call.
  */
 import { Transaction } from 'sequelize';
 import { sequelize } from '../../config/database';
@@ -18,12 +23,78 @@ import type { ProjectTreeDto } from './projectTreeDto';
 export interface ImportListInput { cluster: string; title?: string; position?: number; tasks: ImportTaskInput[]; }
 export interface ImportProjectInput { name?: string; lists: ImportListInput[]; }
 
-/** Structured note when an import is refused rather than performed. */
-function log(event: string, ctx: Record<string, unknown>): void {
+/** Structured note for a write this service refused, downgraded, or granted. */
+function log(
+  event: string,
+  ctx: Record<string, unknown>,
+  level: 'info' | 'warn' = 'warn',
+  outcome: 'success' | 'partial' | 'failure' = 'partial',
+): void {
   console.log(JSON.stringify({
-    timestamp: new Date().toISOString(), level: 'warn', service: 'project-write',
-    event, outcome: 'partial', context: ctx,
+    timestamp: new Date().toISOString(), level, service: 'project-write',
+    event, outcome, context: ctx,
   }));
+}
+
+/**
+ * The statuses a CLIENT may set on its own task. Moving a task between these
+ * three is the student's own planning: it asserts nothing about the work and
+ * earns nothing, so it needs no proof.
+ *
+ * `complete` is deliberately absent, and that absence is the point. Completion
+ * is an assertion that the work was actually DONE, and points are awarded on
+ * the strength of it — a client asserting it about itself is not evidence of
+ * anything. Before this list existed, any participant could open devtools and
+ * PATCH their own stories to `complete`, which made the entire verification
+ * chain theatre. Completion is now granted by the platform:
+ * `markTaskVerifiedComplete` below is the only path to it.
+ *
+ * This is an allowlist rather than "TASK_STATUSES minus complete" on purpose.
+ * A denylist inherits every status added upstream later; an allowlist makes a
+ * new reward-bearing status opt IN here, in front of a human.
+ */
+const CLIENT_SETTABLE_STATUSES = ['not_started', 'in_progress', 'blocked'] as const;
+type ClientSettableStatus = typeof CLIENT_SETTABLE_STATUSES[number];
+
+/**
+ * Sent back with the 409. It tells the client how completion actually happens,
+ * because the honest answer to "why did my checkbox bounce?" is a mechanism,
+ * not a permission error.
+ */
+export const CLIENT_COMPLETE_REFUSAL =
+  'Completion is granted by the platform once your work is verified, not set by the client. '
+  + 'Move the task to in_progress and submit it; it becomes complete when verification confirms the work.';
+
+/**
+ * Gate every client-originated status write. Throws before any I/O, so a
+ * refused write cannot have touched the row.
+ *
+ * The refusal is LOUD (409), never a silent no-op: swallowing it would leave
+ * the UI rendering a `complete` the server never stored, and the student would
+ * only discover the divergence when the points failed to arrive.
+ *
+ * Declared as an assertion so the compiler carries the narrowing downstream:
+ * past this call `status` is provably one of the three, and a later edit that
+ * tried to write `complete` from a client path would not type-check.
+ */
+function assertClientMaySet(
+  status: string,
+  ctx: Record<string, unknown>,
+): asserts status is ClientSettableStatus {
+  if (!isTaskStatus(status)) {
+    const e: any = new Error('Invalid status');
+    e.status = 400;
+    e.error_class = 'ValidationError';
+    throw e;
+  }
+  if ((CLIENT_SETTABLE_STATUSES as readonly string[]).includes(status)) return;
+  // Worth a log line on its own: a burst of these is somebody probing the API,
+  // not a UI bug.
+  log('task_status_client_complete_refused', { ...ctx, requested: status }, 'warn', 'failure');
+  const e: any = new Error(CLIENT_COMPLETE_REFUSAL);
+  e.status = 409;
+  e.error_class = 'ForbiddenStateTransition';
+  throw e;
 }
 
 /**
@@ -39,17 +110,20 @@ export async function hasPublishedBuild(projectId: string): Promise<boolean> {
   return Array.isArray(rows) && rows.length > 0;
 }
 
-/** Set a task's status — scoped to the requesting enrollment. Null if not found / not owned. */
+/**
+ * Set a task's status — scoped to the requesting enrollment. Null if not found
+ * / not owned. Client-originated, so `complete` is refused with a 409 (see
+ * assertClientMaySet): owning a task was never authority to award yourself
+ * credit for finishing it.
+ */
 export async function setTaskStatus(
   enrollmentId: string,
   taskId: string,
   status: string,
 ): Promise<{ id: string; status: string } | null> {
-  if (!isTaskStatus(status)) {
-    const e: any = new Error('Invalid status');
-    e.status = 400;
-    throw e;
-  }
+  // Before any lookup: a refused write must not have read or touched the row,
+  // and refusing identically for a task that does not exist leaks nothing.
+  assertClientMaySet(status, { enrollmentId, taskId });
   const task = await StudentTask.findByPk(taskId);
   if (!task) return null;
   const project = await Project.findByPk(task.project_id);
@@ -63,23 +137,91 @@ export async function setTaskStatus(
  * ACTIVE project. This is the write-through path the localStorage store uses:
  * it holds `story_id` (the same key it imported with), never the backend UUID.
  * Null if the student has no active project or the story isn't found there.
+ *
+ * Same client, same rules: `complete` is refused here too. Closing only the
+ * by-id route would have left this one as an unlocked back door onto the
+ * identical write.
  */
 export async function setTaskStatusByStory(
   enrollmentId: string,
   storyId: string,
   status: string,
 ): Promise<{ id: string; story_id: string; status: string } | null> {
-  if (!isTaskStatus(status)) {
-    const e: any = new Error('Invalid status');
-    e.status = 400;
-    throw e;
-  }
+  assertClientMaySet(status, { enrollmentId, storyId });
   const project = await getProjectByEnrollment(enrollmentId);
   if (!project) return null;
   const task = await StudentTask.findOne({ where: { project_id: project.id, story_id: storyId } });
   if (!task) return null;
   await StudentTask.update({ status }, { where: { id: task.id } });
   return { id: String(task.id), story_id: storyId, status };
+}
+
+/**
+ * What proved the work. Required, and required to name a source: a completion
+ * nobody can trace back to a verifier is indistinguishable from the client
+ * claim this whole guard exists to stop.
+ */
+export interface VerificationEvidence {
+  /** What verified it — e.g. 'build_pipeline', 'mentor_review', 'admin_override'. */
+  source: string;
+  /** The traceable handle: a run id, a commit sha, a reviewer's id. */
+  ref?: string | null;
+  /** Correlation id of the verification run, so a completion traces back to it. */
+  correlation_id?: string | null;
+}
+
+/**
+ * Mark a task verified-complete, stamping student_tasks.verified_at /
+ * verified_by — the columns points will be gated on.
+ *
+ * THIS IS THE ONLY LEGITIMATE WAY A TASK REACHES `complete`. It is
+ * deliberately NOT wired to any route, and it takes no enrollmentId, because
+ * it is not a request: it is the verification pipeline writing down a
+ * conclusion it already reached from server-side evidence. If this ever
+ * appears behind an Express handler, the guard in `assertClientMaySet` has
+ * been routed around and completion is a client claim again — which is the
+ * exact defect this module was changed to close.
+ *
+ * Scoped by projectId + storyId rather than by enrollment because the pipeline
+ * works from a published plan, not from a browser session.
+ *
+ * Returns null when that story is not in that project, so a caller holding a
+ * stale plan writes nothing rather than completing somebody else's row.
+ */
+export async function markTaskVerifiedComplete(
+  projectId: string,
+  storyId: string,
+  evidence: VerificationEvidence,
+): Promise<{ id: string; story_id: string; status: 'complete'; verified_at: Date | string } | null> {
+  if (!evidence || typeof evidence.source !== 'string' || !evidence.source.trim()) {
+    const e: any = new Error('Verification evidence must name a source');
+    e.status = 400;
+    e.error_class = 'ValidationError';
+    throw e;
+  }
+  const task = await StudentTask.findOne({ where: { project_id: projectId, story_id: storyId } });
+  if (!task) return null;
+
+  // Idempotent by design: the FIRST verification is the one that counts. A
+  // replayed pipeline run must not move the timestamp, or "when was this
+  // verified" drifts on every retry and any points window computed from it
+  // drifts with it. Same input, same end state.
+  const verifiedAt = task.verified_at ?? new Date();
+  const verifiedBy = task.verified_at ? task.verified_by : evidence.source;
+
+  await StudentTask.update(
+    { status: 'complete', verified_at: verifiedAt, verified_by: verifiedBy },
+    { where: { id: task.id } },
+  );
+  // student_tasks.verified_at is what points will actually gate on; this line is
+  // the trail that answers "why?" — the run or reviewer behind that timestamp.
+  log('task_verified_complete', {
+    projectId, storyId, taskId: String(task.id),
+    source: evidence.source, ref: evidence.ref ?? null,
+    correlation_id: evidence.correlation_id ?? null,
+    replayed: Boolean(task.verified_at),
+  }, 'info', 'success');
+  return { id: String(task.id), story_id: storyId, status: 'complete', verified_at: verifiedAt };
 }
 
 /**
@@ -141,6 +283,15 @@ export async function importProject(enrollmentId: string, payload: ImportProject
       for (const task of l.tasks) {
         const attrs = importTaskToAttributes(task, project.id, list.id, taskPos);
         taskPos++;
+        // The same hole, a different door. This payload is client-authored too,
+        // so a `complete` in it is a claim, not a verification — leaving it
+        // writable here would have made the PATCH guard theatre, since a client
+        // refused a 409 could just re-import itself complete. Demoted to
+        // in_progress rather than not_started because the student plainly did
+        // work on it; what is withheld is the reward-bearing state, not credit
+        // for having started. Existing `complete` on the row is still preserved
+        // by the monotonic rule below — this only stops the client MINTING one.
+        if (attrs.status === 'complete') attrs.status = 'in_progress';
         // Task identity is story_id. requirement_key is NOT an identity key —
         // many stories fulfil one requirement (FR-012) — so it is only a
         // fallback for legacy requirement-based rows that carry no story_id.
@@ -153,12 +304,13 @@ export async function importProject(enrollmentId: string, payload: ImportProject
           const [row, created] = await StudentTask.findOrCreate({ where, defaults: attrs, transaction: t });
           if (!created) {
             // Mirror the client's current content onto the existing row. Status is
-            // MONOTONIC on this bulk path: a completed task never regresses because a
-            // different device (with stale localStorage) mirrored it as not_started.
-            // Un-completing, if it ever exists, goes through the explicit PATCH paths.
-            const nextStatus = row.status === 'complete' && attrs.status !== 'complete'
-              ? 'complete'
-              : attrs.status;
+            // MONOTONIC on this bulk path: a verified-complete task never regresses
+            // because a different device (with stale localStorage) mirrored it as
+            // not_started. Un-completing goes through the verification pipeline.
+            // The old `&& attrs.status !== 'complete'` arm is gone because the
+            // demotion above makes it unreachable — attrs.status can no longer BE
+            // 'complete' by the time it gets here, and the compiler now says so.
+            const nextStatus = row.status === 'complete' ? 'complete' : attrs.status;
             await row.update({
               title: attrs.title,
               description: attrs.description,
