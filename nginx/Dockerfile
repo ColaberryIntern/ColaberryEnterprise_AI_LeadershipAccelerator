@@ -11,4 +11,7 @@ RUN npm run build:frontend
 FROM nginx:alpine
 COPY --from=builder /app/frontend/build /usr/share/nginx/html
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+# default.conf includes this at server and location level; without it nginx
+# fails to start rather than serving unprotected, which is the behaviour we want.
+COPY nginx/security-headers.conf /etc/nginx/security-headers.conf
 EXPOSE 80
