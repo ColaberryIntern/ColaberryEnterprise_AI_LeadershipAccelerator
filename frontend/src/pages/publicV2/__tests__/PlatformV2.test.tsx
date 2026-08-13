@@ -91,10 +91,19 @@ describe('PlatformV2 — the how-it-is-earned explainer', () => {
     DATA_EARNED.forEach((d) => expect(text).toContain(d.title));
   });
 
+  /**
+   * The heading was changed to "When your CIO logs in, they see momentum, not
+   * courses" -- the sharpest phrasing of this argument from the old site, carried
+   * over during the cutover inventory. The assertion follows the wording, but the
+   * substance it protects is unchanged: the page must still state that readiness
+   * is earned rather than self-reported, or the whole Platform argument collapses
+   * into a training-report claim.
+   */
   it('makes the evidence-not-completion point explicitly', () => {
     const text = textOf(html());
-    expect(text).toContain('not course completion');
+    expect(text).toMatch(/momentum, not courses|not course completion/);
     expect(text).toContain('self-reported');
+    expect(text).toContain('training report');
   });
 });
 

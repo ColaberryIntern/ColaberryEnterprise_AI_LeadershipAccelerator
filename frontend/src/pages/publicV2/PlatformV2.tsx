@@ -153,7 +153,7 @@ function PlatformV2(): React.ReactElement {
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">How the data is earned</p>
-            <h2 id="cbv2-earned-title">Readiness comes from evidence, not course completion</h2>
+            <h2 id="cbv2-earned-title">When your CIO logs in, they see momentum, not courses</h2>
             <p className="cbv2-lede">
               This is the difference between a training report and a capability measurement.
               Nothing on the executive dashboard is self-reported.

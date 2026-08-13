@@ -134,3 +134,6 @@
 /* Icon tile above the service name. Spacing matches the card rhythm so the row
    does not grow taller than its paired panel. */
 .cbv2-svc__copy .cbv2-icon-tile { margin-bottom: var(--space-4); }
+
+/* Breaks the alternating engagement rows before the closing note. */
+.cbv2-svc__photo { margin-top: var(--space-9, 48px); aspect-ratio: 21 / 6; }

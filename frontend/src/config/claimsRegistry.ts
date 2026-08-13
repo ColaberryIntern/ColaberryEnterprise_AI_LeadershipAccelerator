@@ -204,6 +204,33 @@ export const CLAIMS: readonly Claim[] = [
     note: 'May ship once rendered as an attributed citation rather than a bare fact.',
   },
   {
+    /*
+     * The attributed form of the book's thesis.
+     *
+     * `research.book95` carries the same statistic and stays BLOCKED, because as
+     * a bare fact in our own voice it is unevidenced. Its registry note says it
+     * "may ship once rendered as an attributed citation rather than a bare
+     * fact" -- this key is that citation. What is verified here is not that 95%
+     * of pilots fail; it is that the book says so, and that the book and its
+     * author exist. Both are checkable from the published cover.
+     */
+    key: 'book.trust.attributed',
+    publicWording:
+      'Trust Before Intelligence, by Colaberry CEO Ram Katamaraja, asks why 95% of AI pilots ' +
+      'fail and what the 5% do differently.',
+    verification: 'VERIFIED',
+    capability: 'n/a',
+    evidenceSource:
+      'Published cover art at enterprise.colaberry.ai/img/book-cover.jpg, read 2026-08-12: ' +
+      '"A BOOK BY RAM KATAMARAJA, CEO of Colaberry Inc." and "WHY 95% OF AI PILOTS FAIL / ' +
+      'HOW 5% SUCCEED". The claim is about what the book argues, not about the statistic.',
+    owner: 'Ram',
+    lastVerifiedAt: '2026-08-12',
+    approvedRoutes: ['*'],
+    requiresSampleLabel: false,
+    note: 'Must stay attributed. Stripping the attribution turns it back into research.book95.',
+  },
+  {
     key: 'research.roi477',
     publicWording: 'a documented jump from 28 to 85, and 477% ROI in 90 days',
     verification: 'DO_NOT_PUBLISH',

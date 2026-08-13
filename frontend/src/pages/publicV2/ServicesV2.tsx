@@ -102,6 +102,17 @@ export function ServicesV2(): React.ReactElement {
             </article>
           ))}
 
+          <figure className="cbv2-photo cbv2-svc__photo">
+            <img
+              src="/site-v2/photos/mentor-coaching.jpg"
+              alt=""
+              width={1280}
+              height={960}
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
+
           <p className="cbv2-note">
             Engagement pricing is <Claim claimKey="pricing.services" route={ROUTE} /> &mdash; so the
             scope is agreed with a person who can qualify the work, rather than anchored on a

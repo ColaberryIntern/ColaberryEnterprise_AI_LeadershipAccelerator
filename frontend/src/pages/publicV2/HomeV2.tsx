@@ -233,6 +233,17 @@ function HomeV2(): React.ReactElement {
             ))}
           </div>
 
+          <figure className="cbv2-photo cbv2-engine__photo">
+            <img
+              src="/site-v2/photos/team-collab.jpg"
+              alt=""
+              width={1280}
+              height={960}
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
+
           <p className="cbv2-converge">
             <strong>Owned Enterprise AI Capability</strong>
             <span>The system runs in production, and your own people own it.</span>
@@ -306,6 +317,44 @@ function HomeV2(): React.ReactElement {
                 <span>Sample team, real event types.</span>
               </figcaption>
             </figure>
+          </div>
+        </section>
+      ) : null}
+
+      {/* 6b ─────────────────────────────────────────────────────────── book ── */}
+      {/*
+        The strongest owned asset on the old site and V2 had no equivalent. The
+        statistic is rendered as an ATTRIBUTED CITATION -- what the book argues --
+        which is the only form the registry permits. `research.book95`, the same
+        number stated as a bare fact in our own voice, stays blocked.
+      */}
+      {canShow('book.trust.attributed', ROUTE) ? (
+        <section className="cbv2-rv cbv2-section cbv2-book" aria-labelledby="cbv2-book-title">
+          <div className="cbv2-wrap cbv2-book__grid">
+            <figure className="cbv2-book__cover">
+              <img
+                src="/site-v2/photos/book-cover.jpg"
+                alt="Cover of Trust Before Intelligence, a book by Ram Katamaraja, CEO of Colaberry Inc., subtitled: why 95% of AI pilots fail, how 5% succeed."
+                width={334}
+                height={500}
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
+            <div>
+              <p className="cbv2-eyebrow">The thesis behind the work</p>
+              <h2 id="cbv2-book-title">Trust before intelligence</h2>
+              <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
+                <Claim claimKey="book.trust.attributed" route={ROUTE} />
+              </p>
+              <p className="cbv2-book__body">
+                The argument the platform is built on: capability that cannot be evidenced is
+                not capability, and an organization earns trust in its AI the same way it
+                earns trust in its people, by seeing what they have actually shipped. That is
+                why readiness here is computed from evidence rather than from attendance.
+              </p>
+              <p className="cbv2-book__by">Ram Katamaraja, CEO, Colaberry</p>
+            </div>
           </div>
         </section>
       ) : null}
