@@ -41,7 +41,15 @@
 
 const path = require('path');
 
-try { require('dotenv').config({ path: path.resolve(__dirname, '../../.env') }); } catch (_e) { /* optional */ }
+// Env comes from two places and we need both. cron-env-wrapper.sh exports
+// MANDRILL_* out of the running container, but its grep list does NOT include
+// the GMAIL_* OAuth trio, and those live only in the repo-root .env on prod.
+// dotenv does not override an already-set variable, so loading the files after
+// the wrapper has run lets the wrapper win where they overlap and fills the
+// Gmail gap where they do not. Root first, then backend/.env for local dev.
+for (const rel of ['../../../.env', '../../.env']) {
+  try { require('dotenv').config({ path: path.resolve(__dirname, rel) }); } catch (_e) { /* optional */ }
+}
 
 const { SEQUENCE, SEQUENCE_LENGTH } = require(path.resolve(__dirname, './lib/anthropicFollowUpMessages'));
 const { renderMessage } = require(path.resolve(__dirname, './lib/anthropicFollowUpRender'));
