@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { updateLeadSchema, leadFilterSchema } from '../schemas/leadAdminSchema';
+import { updateLeadSchema, leadFilterSchema, apolloImportSchema } from '../schemas/leadAdminSchema';
 import { redactForLogs } from '../utils/piiRedaction';
 import {
   listLeads,
@@ -13,6 +13,11 @@ import {
   batchUpdateLeads,
   getLeadSourceGroups,
 } from '../services/leadService';
+import {
+  importApolloContacts,
+  listApolloLists,
+  ApolloImportError,
+} from '../services/leads/apolloContactImportService';
 import { logStageChange } from '../services/activityService';
 import { getTemperatureHistory, classifyLeadManual } from '../services/leadClassificationService';
 import StrategyCall from '../models/StrategyCall';
@@ -52,6 +57,59 @@ export async function handleAdminGetLeadSourceGroups(
     const groups = await getLeadSourceGroups();
     res.json({ groups });
   } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * The Apollo lists available to import from, so a rep can pick a real target
+ * list ("Nate - Ai4 Targets") instead of pulling the whole account.
+ */
+export async function handleAdminGetApolloLists(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    res.json({ lists: await listApolloLists() });
+  } catch (error) {
+    if (error instanceof ApolloImportError) {
+      res.status(502).json({ error: error.message, error_class: error.errorClass });
+      return;
+    }
+    next(error);
+  }
+}
+
+/**
+ * Pull saved Apollo contacts into the lead queue.
+ *
+ * Safe for a sales rep to call: the underlying client can only reach
+ * account-scoped reads over contacts we already own, so this cannot spend
+ * Apollo credits. Bounded per call and idempotent on apollo_id, so a double
+ * click costs nothing and creates nothing twice.
+ */
+export async function handleAdminApolloImport(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const input = apolloImportSchema.parse(req.body ?? {});
+    const result = await importApolloContacts(input);
+    res.json({ result });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      res.status(400).json({
+        error: 'Validation failed',
+        details: error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
+      });
+      return;
+    }
+    if (error instanceof ApolloImportError) {
+      res.status(502).json({ error: error.message, error_class: error.errorClass });
+      return;
+    }
     next(error);
   }
 }
