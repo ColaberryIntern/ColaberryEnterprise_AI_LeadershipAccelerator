@@ -43,6 +43,7 @@ import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
+import { ensureInternshipSchema } from './db/ensureInternshipSchema';
 import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // Student Build Pipeline. These two were dropped from server.ts when the
 // sponsor magic-link fix (c21cd66e) resolved a conflict in this file by
@@ -2347,6 +2348,11 @@ async function start(): Promise<void> {
   // layer (idempotent DDL, additive only). Nothing reads or writes them until the
   // EXPLORER_GROWTH_OS_ENABLED flag is on, which it is not by default.
   await ensureExplorerGrowthSchema();
+  // AI Internship (plan §22): the offering is a real product that has never been
+  // marketed and had NO software at all — no table, route, or application flow.
+  // Additive DDL only; nothing reads these tables until the application flow and
+  // admin surface ship.
+  await ensureInternshipSchema();
   // D1 fix: page_events.lead_id. contextGraphService has always queried this
   // column and it has never existed, so buildCompositeContext() throws and every
   // campaign email silently falls back to the legacy prompt. Additive + nullable.
