@@ -32,6 +32,14 @@ export interface StudentTaskAttributes {
   due_on?: Date | string | null;
   /** The FIRST due date this task ever had. Written once, never updated. */
   due_baseline_on?: Date | string | null;
+  /**
+   * When the platform CONFIRMED this story is done — not when the student said
+   * so (that is `status`). Points will be gated on this being set, so it must
+   * never be writable as a side effect of a student updating their own task.
+   */
+  verified_at?: Date | string | null;
+  /** Who or what confirmed it: a reviewer's identity, or the check that passed. */
+  verified_by?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -59,6 +67,8 @@ class StudentTask extends Model<StudentTaskAttributes> implements StudentTaskAtt
   declare blocked_by: string[] | null;
   declare due_on: Date | string | null;
   declare due_baseline_on: Date | string | null;
+  declare verified_at: Date | string | null;
+  declare verified_by: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -96,6 +106,14 @@ StudentTask.init(
     // with a null date. Found end-to-end on a real account, not in a test.
     due_on: { type: DataTypes.DATEONLY, allowNull: true },
     due_baseline_on: { type: DataTypes.DATEONLY, allowNull: true },
+    // Same reason as the two dates above, and the reason is worth repeating
+    // because it costs a whole feature every time it is forgotten: an attribute
+    // absent from this init block is stripped from the INSERT/UPDATE by
+    // Sequelize before the query is built. No error, no warning, column stays
+    // null. DATE (not DATEONLY) — this is an instant a verification happened,
+    // not a calendar day, and it is stored as TIMESTAMPTZ.
+    verified_at: { type: DataTypes.DATE, allowNull: true },
+    verified_by: { type: DataTypes.TEXT, allowNull: true },
   },
   {
     sequelize,
