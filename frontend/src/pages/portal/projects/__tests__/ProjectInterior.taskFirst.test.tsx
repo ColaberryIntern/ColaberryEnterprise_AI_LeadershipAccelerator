@@ -3,9 +3,9 @@
  *
  * Three things a student reported, all on the same screen:
  *
- *  1. Clicking "Open build" on a feed card opened the project with nothing on
- *     the right. The drawer state lived inside this component, so anything
- *     arriving from outside it could not ask for a task.
+ *  1. "Open" gave a slide-over drawer rather than a workspace. It now reports
+ *     the task upward and the page navigates to /portal/projects/workspace,
+ *     the build-side twin of the classroom runtime.
  *  2. Scrolling behaved differently inside a build than on the overview: the
  *     overview's next task rides up into the page header, the interior's stuck
  *     halfway down (`.pj-nexthero-pinned`, now removed).
@@ -23,13 +23,6 @@ import type { StudentProject, ProjectTask } from '../projectsStore';
 
 jest.mock('../../useIsExplorer', () => ({ useIsExplorer: () => false }));
 jest.mock('../NextSessionStrip', () => ({ __esModule: true, default: () => null }));
-jest.mock('../ProjectWorkspaceDrawer', () => ({
-  __esModule: true,
-  default: ({ task, open }: any) => (
-    open ? <div data-testid="drawer">{task ? task.title : 'no task'}</div> : null
-  ),
-}));
-
 import ProjectInterior from '../ProjectInterior';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -72,7 +65,7 @@ const noop = () => { /* */ };
 describe('the next task is the first thing on the page', () => {
   it('renders the next action ABOVE the project header', async () => {
     await mount(
-      <ProjectInterior project={PROJECT} onBack={noop} openTaskId={null} onOpenTask={noop} />,
+      <ProjectInterior project={PROJECT} onBack={noop} onOpenTask={noop} />,
     );
 
     const hero = container.querySelector('.te-hero');
@@ -85,7 +78,7 @@ describe('the next task is the first thing on the page', () => {
 
   it('names the actual next task in the hero, not the project', async () => {
     await mount(
-      <ProjectInterior project={PROJECT} onBack={noop} openTaskId={null} onOpenTask={noop} />,
+      <ProjectInterior project={PROJECT} onBack={noop} onOpenTask={noop} />,
     );
 
     expect(container.querySelector('.te-hero h2')!.textContent).toBe('Build your Command Center');
@@ -93,7 +86,7 @@ describe('the next task is the first thing on the page', () => {
 
   it('condenses with the page header, the same mechanism the overview uses', async () => {
     await mount(
-      <ProjectInterior project={PROJECT} onBack={noop} openTaskId={null} onOpenTask={noop} condensed />,
+      <ProjectInterior project={PROJECT} onBack={noop} onOpenTask={noop} condensed />,
     );
 
     const body = container.querySelector('.te-condense-body');
@@ -104,29 +97,11 @@ describe('the next task is the first thing on the page', () => {
   });
 });
 
-describe('one drawer, driven from anywhere', () => {
-  it('opens the task the PAGE asked for — the feed-card case', async () => {
-    // Arriving from "Open build" on a feed card about STORY-001.
+describe('Open hands the task to the page, which opens the workspace', () => {
+  it('reports the task the student opened', async () => {
+    const opened: string[] = [];
     await mount(
-      <ProjectInterior project={PROJECT} onBack={noop} openTaskId="STORY-001" onOpenTask={noop} />,
-    );
-
-    expect(container.querySelector('[data-testid="drawer"]')!.textContent)
-      .toBe('Read and approve agreements');
-  });
-
-  it('shows nothing on the right when no task was asked for', async () => {
-    await mount(
-      <ProjectInterior project={PROJECT} onBack={noop} openTaskId={null} onOpenTask={noop} />,
-    );
-
-    expect(container.querySelector('[data-testid="drawer"]')).toBeNull();
-  });
-
-  it('reports a task the student opens back up to the page', async () => {
-    const opened: (string | null)[] = [];
-    await mount(
-      <ProjectInterior project={PROJECT} onBack={noop} openTaskId={null} onOpenTask={(id) => opened.push(id)} />,
+      <ProjectInterior project={PROJECT} onBack={noop} onOpenTask={(id) => opened.push(id)} />,
     );
 
     // The button carries an icon alongside its label, so match on trimmed text.
@@ -138,21 +113,32 @@ describe('one drawer, driven from anywhere', () => {
     expect(opened).toEqual(['STORY-000']);
   });
 
-  it('refuses to open a blocked task, even when asked directly', async () => {
-    // The release gate is the point; arriving from a stale link must not bypass it.
+  it('renders no drawer of its own — the workspace is a page now', async () => {
+    await mount(<ProjectInterior project={PROJECT} onBack={noop} onOpenTask={noop} />);
+
+    expect(container.querySelector('[data-testid="drawer"]')).toBeNull();
+  });
+
+  it('will not open a blocked task — the release gate still holds', async () => {
+    const opened: string[] = [];
     const gated: StudentProject = {
       ...PROJECT,
       lists: [{
         ...PROJECT.lists[0],
-        tasks: [task('STORY-000', 'Build your Command Center'),
-          task('STORY-009', 'Optimise performance', { blockedBy: ['STORY-000'] })],
+        tasks: [task('STORY-009', 'Optimise performance', { blockedBy: ['STORY-000'] })],
       }],
     };
 
     await mount(
-      <ProjectInterior project={gated} onBack={noop} openTaskId="STORY-009" onOpenTask={noop} />,
+      <ProjectInterior project={gated} onBack={noop} onOpenTask={(id) => opened.push(id)} />,
     );
 
-    expect(container.querySelector('[data-testid="drawer"]')).toBeNull();
+    // Its card renders, but nothing on it asks the page to open the workspace.
+    const buttons = Array.from(container.querySelectorAll('button'))
+      .filter((b) => (b.textContent || '').trim().toLowerCase() === 'open');
+    for (const b of buttons) {
+      await act(async () => { b.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    }
+    expect(opened).toEqual([]);
   });
 });
