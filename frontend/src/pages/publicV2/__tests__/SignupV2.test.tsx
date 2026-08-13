@@ -24,7 +24,7 @@ import {
 
 const html = (): string =>
   renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/v2/start']}>
+    <MemoryRouter initialEntries={['/start']}>
       <SignupV2 />
     </MemoryRouter>,
   );
@@ -85,7 +85,7 @@ describe('validateAccount — required, but not obstructive', () => {
 });
 
 describe('buildContextPayload — everything collected lands somewhere real', () => {
-  const payload = buildContextPayload(account, ctx, {}, '/v2/start');
+  const payload = buildContextPayload(account, ctx, {}, '/start');
 
   it('sends only keys the leads schema accepts', () => {
     const allowed = new Set([

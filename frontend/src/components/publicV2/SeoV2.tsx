@@ -6,7 +6,7 @@ import SEOHead from '../SEOHead';
  * SeoV2 -- SEOHead plus the two things it does not do: a canonical URL and a
  * robots directive.
  *
- * WHY V2 PAGES MUST BE noindex FOR NOW
+ * WHY THIS WAS noindex BEFORE CUTOVER
  * This site is mounted at /v2 alongside the live public site, and the two say
  * overlapping things about the same company. Letting a search engine index both
  * produces duplicate content that competes with the real site for its own terms,
@@ -23,7 +23,12 @@ import SEOHead from '../SEOHead';
  */
 
 /** Flip to false as part of the cutover that makes V2 the real "/". */
-export const PREVIEW_NOINDEX = true;
+/*
+ * CUTOVER 2026-08-13: V2 is the live site, so it must be indexable. While it was
+ * a preview at /v2 this was true, to stop a shadow copy competing with the real
+ * site for its own terms.
+ */
+export const PREVIEW_NOINDEX = false;
 
 export interface SeoV2Props {
   title: string;

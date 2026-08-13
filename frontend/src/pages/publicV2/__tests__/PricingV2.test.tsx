@@ -14,7 +14,7 @@ import { publicClaim } from '../../../config/claimsRegistry';
 
 const html = (): string =>
   renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/v2/pricing']}>
+    <MemoryRouter initialEntries={['/pricing']}>
       <PricingV2 />
     </MemoryRouter>,
   );

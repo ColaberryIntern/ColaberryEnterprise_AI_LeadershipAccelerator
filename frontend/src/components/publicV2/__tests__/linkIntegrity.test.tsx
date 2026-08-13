@@ -36,17 +36,18 @@ import { SERVICE_DETAILS } from '../../../config/v2Services';
  * not exist fails here rather than in a customer's browser.
  */
 const V2_ROUTES = [
-  '/v2',
-  '/v2/services',
-  '/v2/platform',
-  '/v2/proof',
-  '/v2/lab',
-  '/v2/try',
-  '/v2/privacy',
-  '/v2/start',
-  '/v2/pricing',
-  '/v2/stories',
-  ...SERVICE_DETAILS.map((s) => `/v2/services/${s.slug}`),
+  '/',
+  '/services',
+  '/platform',
+  '/proof',
+  '/lab',
+  '/try',
+  '/privacy',
+  '/free-workspace',
+  '/start',
+  '/pricing',
+  '/stories',
+  ...SERVICE_DETAILS.map((s) => `/services/${s.slug}`),
 ];
 
 /** Routes outside the V2 tree that exist in publicRoutes/portalRoutes. */
@@ -55,16 +56,16 @@ const LIVE_ROUTES = ['/pricing', '/contact', '/try', '/portal/login'];
 const ALL_ROUTES = [...V2_ROUTES, ...LIVE_ROUTES];
 
 const PAGES: [string, React.ReactElement, string][] = [
-  ['HomeV2', <HomeV2 />, '/v2'],
-  ['ServicesV2', <ServicesV2 />, '/v2/services'],
-  ['ServiceDetailV2', <ServiceDetailV2 />, `/v2/services/${SERVICE_DETAILS[0].slug}`],
-  ['PlatformV2', <PlatformV2 />, '/v2/platform'],
-  ['ProofV2', <ProofV2 />, '/v2/proof'],
-  ['OpportunityLabV2', <OpportunityLabV2 />, '/v2/lab'],
-  ['TryV2', <TryV2 />, '/v2/try'],
-  ['PrivacyV2', <PrivacyV2 />, '/v2/privacy'],
-  ['PublicHeaderV2', <PublicHeaderV2 />, '/v2'],
-  ['PublicFooterV2', <PublicFooterV2 />, '/v2'],
+  ['HomeV2', <HomeV2 />, '/'],
+  ['ServicesV2', <ServicesV2 />, '/services'],
+  ['ServiceDetailV2', <ServiceDetailV2 />, `/services/${SERVICE_DETAILS[0].slug}`],
+  ['PlatformV2', <PlatformV2 />, '/platform'],
+  ['ProofV2', <ProofV2 />, '/proof'],
+  ['OpportunityLabV2', <OpportunityLabV2 />, '/lab'],
+  ['TryV2', <TryV2 />, '/try'],
+  ['PrivacyV2', <PrivacyV2 />, '/privacy'],
+  ['PublicHeaderV2', <PublicHeaderV2 />, '/'],
+  ['PublicFooterV2', <PublicFooterV2 />, '/'],
 ];
 
 /** Every internal href in the rendered markup, ignoring anchors and externals. */
@@ -95,7 +96,7 @@ describe('link integrity — every internal link resolves to a declared route', 
 describe('link integrity — the specific paths that were broken', () => {
   it('primary nav points into the V2 tree, not at root paths', () => {
     V2_NAV.forEach((item) => {
-      expect(item.to.startsWith('/v2')).toBe(true);
+      expect(item.to.startsWith('/')).toBe(true);
       expect(ALL_ROUTES).toContain(item.to);
     });
   });
@@ -107,24 +108,24 @@ describe('link integrity — the specific paths that were broken', () => {
 
   it('header CTA and brand link stay inside V2', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/v2']}>
+      <MemoryRouter initialEntries={['/']}>
         <PublicHeaderV2 />
       </MemoryRouter>,
     );
-    expect(html).toContain('href="/v2/platform"');
-    expect(html).toContain('href="/v2"');
+    expect(html).toContain('href="/platform"');
+    expect(html).toContain('href="/"');
     // The brand used to send visitors to the LIVE homepage from inside V2.
     expect(html).not.toMatch(/class="cbv2-brand" href="\/"/);
   });
 
   it('homepage hero CTAs resolve', () => {
     const html = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/v2']}>
+      <MemoryRouter initialEntries={['/']}>
         <HomeV2 />
       </MemoryRouter>,
     );
-    expect(html).toContain('href="/v2/platform"');
-    expect(html).toContain('href="/v2/lab"');
+    expect(html).toContain('href="/platform"');
+    expect(html).toContain('href="/lab"');
     expect(html).not.toContain('href="/opportunity-lab"');
   });
 });

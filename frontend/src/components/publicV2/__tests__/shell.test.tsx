@@ -33,7 +33,7 @@ describe('PublicHeaderV2', () => {
 
   it('marks the active route with aria-current', () => {
     // Nav moved under /v2 in 1.11; the old '/platform' never existed as a route.
-    const html = at('/v2/platform', <PublicHeaderV2 />);
+    const html = at('/platform', <PublicHeaderV2 />);
     expect(html).toContain('aria-current="page"');
   });
 
@@ -77,7 +77,7 @@ describe('PublicFooterV2', () => {
    */
   it('links a data notice that actually resolves, and claims no terms page', () => {
     const html = at('/', <PublicFooterV2 />);
-    expect(html).toContain('href="/v2/privacy"');
+    expect(html).toContain('href="/privacy"');
     expect(textOf(html)).toContain('What we collect');
     expect(html).not.toContain('href="/terms"');
   });

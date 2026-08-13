@@ -52,7 +52,7 @@ function ConsentBanner({ onChoice }: ConsentBannerProps): React.ReactElement | n
             id stored in your browser. If you followed a link from one of our emails, that
             record includes your email address, so it is not anonymous. Decline and none of
             it starts, and anything already stored is deleted.{' '}
-            <Link to="/v2/privacy">What we collect, in detail</Link>.
+            <Link to="/privacy">What we collect, in detail</Link>.
           </p>
         </div>
         <div className="cbv2-consent-banner__actions">

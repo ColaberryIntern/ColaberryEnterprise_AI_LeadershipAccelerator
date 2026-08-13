@@ -86,10 +86,10 @@ function StoriesV2(): React.ReactElement {
             Map the workflow you would want on this page, and a person will reply.
           </p>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/lab">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/lab">
               Map an opportunity
             </Link>
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/proof">
+            <Link className="cbv2-btn cbv2-btn--ghost" to="/proof">
               Read the proof standard
             </Link>
           </div>

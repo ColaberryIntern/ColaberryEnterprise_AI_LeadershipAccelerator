@@ -136,7 +136,7 @@ function TryV2(): React.ReactElement {
             <Link className="cbv2-btn cbv2-btn--primary" to="/try">
               Open the free workspace
             </Link>
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/lab">
+            <Link className="cbv2-btn cbv2-btn--ghost" to="/lab">
               Map an opportunity instead
             </Link>
           </div>

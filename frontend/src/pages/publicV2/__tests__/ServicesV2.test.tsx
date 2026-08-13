@@ -13,16 +13,16 @@ import { SERVICE_DETAILS } from '../../../config/v2Services';
 
 const indexHtml = (): string =>
   renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/v2/services']}>
+    <MemoryRouter initialEntries={['/services']}>
       <ServicesV2 />
     </MemoryRouter>,
   );
 
 const detailHtml = (slug: string): string =>
   renderToStaticMarkup(
-    <MemoryRouter initialEntries={[`/v2/services/${slug}`]}>
+    <MemoryRouter initialEntries={[`/services/${slug}`]}>
       <Routes>
-        <Route path="/v2/services/:slug" element={<ServiceDetailV2 />} />
+        <Route path="/services/:slug" element={<ServiceDetailV2 />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -43,7 +43,7 @@ describe('ServicesV2 index', () => {
 
   it('links each service to its detail route', () => {
     const h = indexHtml();
-    SERVICE_DETAILS.forEach((s) => expect(h).toContain(`/v2/services/${s.slug}`));
+    SERVICE_DETAILS.forEach((s) => expect(h).toContain(`/services/${s.slug}`));
   });
 
   it('renders NO currency figure anywhere', () => {

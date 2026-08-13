@@ -28,13 +28,26 @@ import ConsultingPage from '../pages/ConsultingPage';
 
 const publicRoutes = (
   <>
-    <Route path="/" element={<HomePage />} />
-    <Route path="/program" element={<ProgramPage />} />
-    <Route path="/pricing" element={<PricingPage />} />
+  {/*
+      CUTOVER: V2 is the site now.
+
+      These marketing paths were served by the old pages and are now owned by V2
+      or redirected to their nearest equivalent. They REDIRECT rather than 404,
+      because inbound links, the sitemap and search results still point at them.
+
+      Everything below this block is deliberately untouched: /enroll and its
+      success/cancel pair carry the payment flow, /sponsor/dashboard is how
+      sponsors get in, and /challenge, /leaderboard, the pilot, membership and
+      strategy-call pages are functional surfaces rather than marketing. Deleting
+      those because "the old site is not needed" would break paying customers.
+  */}
+  <Route path="/program" element={<Navigate to="/platform" replace />} />
+  <Route path="/case-studies" element={<Navigate to="/stories" replace />} />
+  <Route path="/demo-day" element={<Navigate to="/stories" replace />} />
+  <Route path="/advisory" element={<Navigate to="/services" replace />} />
+  <Route path="/consulting" element={<Navigate to="/services" replace />} />
+  <Route path="/about" element={<Navigate to="/" replace />} />
     <Route path="/sponsorship" element={<SponsorshipPage />} />
-    <Route path="/advisory" element={<AdvisoryPage />} />
-    <Route path="/consulting" element={<ConsultingPage />} />
-    <Route path="/case-studies" element={<CaseStudiesPage />} />
     <Route path="/enroll" element={<EnrollPage />} />
     <Route path="/enroll/success" element={<EnrollSuccessPage />} />
     <Route path="/enroll/cancel" element={<EnrollCancelPage />} />
@@ -56,8 +69,6 @@ const publicRoutes = (
     <Route path="/membership/builders" element={<BuildersPage />} />
     <Route path="/challenge" element={<SponsorChallengePage />} />
     <Route path="/leaderboard" element={<LeaderboardPage />} />
-    <Route path="/demo-day" element={<DemoDayPage />} />
-    <Route path="/about" element={<Navigate to="/" replace />} />
     <Route path="*" element={<NotFoundPage />} />
   </>
 );

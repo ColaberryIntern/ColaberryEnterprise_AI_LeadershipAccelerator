@@ -102,3 +102,64 @@
   margin-bottom: var(--space-2);
 }
 .cbv2-faq dd { margin: 0; color: var(--text-muted); line-height: 1.7; max-width: 68ch; }
+
+/* ============================================================================
+   Per-tier accent, restored from the previous site's pricing cards.
+
+   One accent across three cards made them read as a list. Three accents make
+   them read as three choices, which is the decision the page is actually
+   asking for. The accent is carried by the full outline AND the badge pill, so
+   the grouping survives greyscale through weight and position rather than hue
+   alone.
+   ========================================================================== */
+
+.cbv2-tier {
+  border-radius: 18px;
+  border-width: var(--border-2, 2px);
+}
+
+.cbv2-tier--green  { border-color: color-mix(in srgb, var(--green-600) 55%, transparent); }
+.cbv2-tier--cherry { border-color: color-mix(in srgb, var(--color-cherry, #fb2832) 55%, transparent); }
+.cbv2-tier--blue   { border-color: color-mix(in srgb, var(--chart-1) 55%, transparent); }
+
+/* The badge becomes a filled pill in the tier's accent. */
+.cbv2-tier__badge {
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--fs-caption);
+}
+.cbv2-tier--green .cbv2-tier__badge {
+  background: color-mix(in srgb, var(--green-600) 16%, transparent);
+  color: var(--green-700);
+}
+.cbv2-tier--cherry .cbv2-tier__badge {
+  background: color-mix(in srgb, var(--color-cherry, #fb2832) 12%, transparent);
+  color: var(--color-cherry, #fb2832);
+}
+.cbv2-tier--blue .cbv2-tier__badge {
+  background: color-mix(in srgb, var(--chart-1) 14%, transparent);
+  color: var(--blue-700);
+}
+
+/* A dot on the recommended tier's badge, as the old card had -- a second signal
+   beyond colour for which one to start on. */
+.cbv2-tier--featured .cbv2-tier__badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: middle;
+  background: currentColor;
+}
+
+/* Prices carried the page on the old design; they were too small here. */
+.cbv2-tier__price { font-size: clamp(2.75rem, 6vw, 4rem); }
+
+/* The featured top bar is replaced by the full outline, so it goes. */
+.cbv2-tier--featured::before { content: none; }
+.cbv2-tier--featured { box-shadow: var(--shadow-xl); }

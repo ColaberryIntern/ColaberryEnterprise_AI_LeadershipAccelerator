@@ -67,7 +67,7 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
       'build with us, and every assumption behind the ROI model is written down rather than ' +
       'embedded in a spreadsheet you cannot inspect.',
     nextStep: 'Run the AI Opportunity Lab, then book a discovery conversation.',
-    nextRoute: '/v2/opportunity-lab',
+    nextRoute: '/opportunity-lab',
   },
   {
     slug: 'claude-production-pilot',
@@ -99,7 +99,7 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
       'A running pilot plus an evaluation report, including an honest recommendation not to ' +
       'productionize where that is the right call.',
     nextStep: 'Bring one workflow to a scoping call.',
-    nextRoute: '/v2/contact',
+    nextRoute: '/contact',
   },
   {
     slug: 'enterprise-build-modernization',
@@ -133,7 +133,7 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
       'Deployed systems, architecture documentation and an operations runbook your team owns ' +
       'and can run without us.',
     nextStep: 'Book an architecture review.',
-    nextRoute: '/v2/contact',
+    nextRoute: '/contact',
   },
   {
     slug: 'workforce-architect-accelerator',
@@ -196,7 +196,7 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
       'Review records, standards documentation and a capability-transfer plan with named ' +
       'internal owners.',
     nextStep: 'Talk to an architect about capacity and scope.',
-    nextRoute: '/v2/contact',
+    nextRoute: '/contact',
   },
 ] as const;
 

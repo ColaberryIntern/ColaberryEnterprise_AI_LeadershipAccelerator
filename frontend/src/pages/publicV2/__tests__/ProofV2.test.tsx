@@ -19,7 +19,7 @@ import { blockedClaims, CLAIMS } from '../../../config/claimsRegistry';
 
 const html = (): string =>
   renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/v2/proof']}>
+    <MemoryRouter initialEntries={['/proof']}>
       <ProofV2 />
     </MemoryRouter>,
   );

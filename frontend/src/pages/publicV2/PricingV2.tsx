@@ -47,7 +47,7 @@ function PricingV2(): React.ReactElement {
           <div className="cbv2-tiers">
             {PRICING_TIERS.map((t) => (
               <article
-                className={`cbv2-tier${t.featured ? ' cbv2-tier--featured' : ''}`}
+                className={`cbv2-tier cbv2-tier--${t.accent}${t.featured ? ' cbv2-tier--featured' : ''}`}
                 key={t.key}
               >
                 <div className="cbv2-tier__head">
@@ -97,7 +97,7 @@ function PricingV2(): React.ReactElement {
           <p className="cbv2-note">
             Engagements are priced separately:{' '}
             <Claim claimKey="pricing.services" route={ROUTE} />. {SERVICES_PRICING_NOTE}{' '}
-            <Link to="/v2/services">Compare the five engagements</Link>.
+            <Link to="/services">Compare the five engagements</Link>.
           </p>
         </div>
       </section>
@@ -123,7 +123,7 @@ function PricingV2(): React.ReactElement {
         <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
           <h2 id="cbv2-pricing-cta">Start on the free tier and decide later.</h2>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/start">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/start">
               Create a free account
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">

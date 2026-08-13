@@ -27,21 +27,22 @@ import {
 
 /** Routes actually declared in App.tsx, plus the live routes V2 links out to. */
 const DECLARED_ROUTES = [
-  '/v2',
-  '/v2/services',
-  '/v2/services/ai-opportunity-sprint',
-  '/v2/services/claude-production-pilot',
-  '/v2/services/enterprise-build-modernization',
-  '/v2/services/workforce-architect-accelerator',
-  '/v2/services/embedded-ai-operations',
-  '/v2/platform',
-  '/v2/proof',
-  '/v2/lab',
-  '/v2/try',
-  '/v2/privacy',
-  '/v2/start',
-  '/v2/pricing',
-  '/v2/stories',
+  '/',
+  '/services',
+  '/services/ai-opportunity-sprint',
+  '/services/claude-production-pilot',
+  '/services/enterprise-build-modernization',
+  '/services/workforce-architect-accelerator',
+  '/services/embedded-ai-operations',
+  '/platform',
+  '/proof',
+  '/lab',
+  '/try',
+  '/privacy',
+  '/free-workspace',
+  '/start',
+  '/pricing',
+  '/stories',
   '/pricing',
   '/contact',
   '/try',
@@ -122,9 +123,15 @@ describe('consent banner — not a dark pattern', () => {
   });
 });
 
-describe('SEO — the preview must not be indexed while it shadows the live site', () => {
-  it('is noindex until cutover', () => {
-    expect(PREVIEW_NOINDEX).toBe(true);
+describe('SEO — indexable now that this IS the site', () => {
+  /**
+   * This asserted `true` while V2 was a preview at /v2, to stop a shadow copy
+   * competing with the live site for its own terms. The cutover made V2 the real
+   * "/", so the flag flipped and this assertion flipped with it. Leaving it at
+   * `true` would have quietly de-indexed the whole site.
+   */
+  it('is indexable after cutover', () => {
+    expect(PREVIEW_NOINDEX).toBe(false);
   });
 });
 
@@ -134,11 +141,16 @@ describe('footer — every link resolves', () => {
     expect(dead).toEqual([]);
   });
 
-  it('links no V2 page by a bare root path', () => {
-    // The original bug: /platform and /proof instead of /v2/platform, /v2/proof.
-    ['/platform', '/proof', '/privacy', '/terms', '/services'].forEach((bare) => {
-      expect(FOOTER_LINKS).not.toContain(bare);
-    });
+  it('links V2 pages by root path, which is what they are now', () => {
+    /*
+     * INVERTED AT CUTOVER, deliberately. Before cutover this asserted the
+     * opposite: the bug then was /platform instead of /v2/platform, because V2
+     * lived under /v2. V2 now owns "/", so a /v2/... link in the footer would be
+     * the dead one. The assertion tracks the mount point rather than a fixed
+     * string.
+     */
+    ['/platform', '/proof', '/privacy'].forEach((p) => expect(FOOTER_LINKS).toContain(p));
+    FOOTER_LINKS.forEach((h) => expect(h.startsWith('/v2')).toBe(false));
   });
 
   it('claims no terms page, because none exists', () => {
