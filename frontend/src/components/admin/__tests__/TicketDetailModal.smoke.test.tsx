@@ -227,3 +227,83 @@ describe('TicketDetailModal — stale-ticket (3+ day) visible flag', () => {
     expect(container.querySelector('.alert-warning')).toBeFalsy();
   });
 });
+
+// Round 2 of the raw-actor-UUID fix (this run). Ali reviewed a live ticket and found
+// the Technical tab's "Assigned" field and activity feed still showing a raw actor
+// UUID (Reese's own AdminUser id) after the prior run fixed titles/descriptions —
+// "You fixed the name in part of the ticket, but not all the ticket." These pin the
+// resolved name rendering getTicketById() now provides, while proving backward
+// compatibility with the pre-existing fixtures above (which never carry the new
+// fields and must keep rendering exactly as before).
+describe('TicketDetailModal — resolved actor names, not raw UUIDs (Technical tab)', () => {
+  const REESE_ADMIN_ID = '82c2dfd2-369e-4545-8d2f-22d1ae3451ff';
+  const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+  function mockFetchWithResolvedNames() {
+    (global as any).fetch = jest.fn((url: string) => {
+      if (url === '/api/admin/tickets/ticket-1') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ticket: { ...TICKET, assigned_to_id: REESE_ADMIN_ID, assigned_to_display_name: 'Reese' },
+            activities: [
+              { ...ACTIVITY[0], actor_id: REESE_ADMIN_ID, actor_display_name: 'Reese' },
+            ],
+            subTasks: [],
+          }),
+        });
+      }
+      if (url === '/api/admin/tickets/ticket-1/summary') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ outcome: 'Outcome: dispatch completed.', proof: 'Proof: none yet.', humanAction: 'Human action: none.', hasEvidence: false }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+  }
+
+  async function openTechnicalTab() {
+    await renderModal();
+    const technicalTabButton = Array.from(container.querySelectorAll('button.nav-link')).find(
+      (el) => el.textContent === 'Technical',
+    ) as HTMLElement;
+    await act(async () => {
+      technicalTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  }
+
+  it('shows the resolved name as the visible "Assigned" text, with the raw id only as a secondary parenthetical — never the bare UUID alone', async () => {
+    mockFetchWithResolvedNames();
+    await openTechnicalTab();
+
+    expect(container.textContent).toContain('Assigned:');
+    expect(container.textContent).toContain('Reese');
+    // The raw id IS still shown (technical fidelity), but only inside the
+    // parenthetical alongside the name — never as the sole visible identifier.
+    expect(container.textContent).toContain(`(${REESE_ADMIN_ID})`);
+  });
+
+  it('shows the resolved name as the activity row\'s visible text, with the raw id moved to a hover tooltip (title attribute), not visible body text', async () => {
+    mockFetchWithResolvedNames();
+    await openTechnicalTab();
+
+    // The activity row's actor span shows "Reese", not the raw UUID, as its
+    // rendered text content.
+    const actorSpan = Array.from(container.querySelectorAll('span')).find(
+      (el) => el.getAttribute('title') === REESE_ADMIN_ID,
+    );
+    expect(actorSpan).toBeTruthy();
+    expect(actorSpan?.textContent).toBe('Reese');
+    expect(actorSpan?.textContent).not.toMatch(UUID_PATTERN);
+  });
+
+  it('backward compatibility: a response WITHOUT the new display-name fields (matching every pre-existing fixture in this file) renders no literal "undefined" anywhere, falling back to the raw id', async () => {
+    mockFetch(); // the file's original mock — TICKET/ACTIVITY have no *_display_name fields
+    await openTechnicalTab();
+
+    expect(container.textContent).not.toContain('undefined');
+    // Falls back to the raw assigned_to_id ('reese-admin-1' per the shared fixture).
+    expect(container.textContent).toContain('reese-admin-1');
+  });
+});

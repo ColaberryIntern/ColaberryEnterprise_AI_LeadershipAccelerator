@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { Ticket, TicketActionLink, WorkLedgerEvent } from '../../models';
 import { getEvidenceForTicket } from '../evidence/evidenceService';
 import { formatCentralDateTime } from '../centralDate';
+import { resolveActorDisplayName } from '../actorIdentity/resolveActorDisplayName';
 
 // ProofDesk Milestone 2 (Proof & Ticket Experience), spec section 10.2/10.3. Generates
 // the ticket detail Story tab's 3-line summary: Outcome / Proof / Human action.
@@ -80,8 +81,9 @@ export async function generateTicketSummary(ticketId: string): Promise<TicketSum
 
   if (successEvents.length > 0 && hasEvidence) {
     const latest = successEvents[0];
+    const actorName = await resolveActorDisplayName(latest.actor_type, latest.actor_id);
     return {
-      outcome: `Outcome: ${describeIntent(latest.intent)} completed successfully by ${latest.actor_id} at ${formatDate(latest.occurred_at)}.`,
+      outcome: `Outcome: ${describeIntent(latest.intent)} completed successfully by ${actorName} at ${formatDate(latest.occurred_at)}.`,
       proof: proofLine,
       humanAction: 'Human action: review the linked evidence in the Visual Proof tab; no action required unless a discrepancy is found.',
       hasEvidence,
@@ -90,8 +92,9 @@ export async function generateTicketSummary(ticketId: string): Promise<TicketSum
 
   if (successEvents.length > 0 && !hasEvidence) {
     const latest = successEvents[0];
+    const actorName = await resolveActorDisplayName(latest.actor_type, latest.actor_id);
     return {
-      outcome: `Outcome: ${describeIntent(latest.intent)} was reported successful by ${latest.actor_id} at ${formatDate(latest.occurred_at)}, but no evidence has been recorded to confirm it.`,
+      outcome: `Outcome: ${describeIntent(latest.intent)} was reported successful by ${actorName} at ${formatDate(latest.occurred_at)}, but no evidence has been recorded to confirm it.`,
       proof: proofLine,
       humanAction: 'Human action: attach evidence (screenshot, log, or diff) to confirm this outcome.',
       hasEvidence,
@@ -100,6 +103,14 @@ export async function generateTicketSummary(ticketId: string): Promise<TicketSum
 
   if (failureEvents.length > 0) {
     const latest = failureEvents[0];
+    // Correction during implementation: the execution contract's DISCOVER notes
+    // claimed this branch embeds actor_id raw too, alongside the two success
+    // branches above. Re-checked against the real pre-existing code here and it does
+    // NOT — this branch never named an actor at all. Left unchanged rather than
+    // adding a new actor reference, since that would be a content change beyond this
+    // run's scope ("fix existing raw-ID leaks," not "add actor attribution to a
+    // message that never had it"). Logged here so the next person doesn't rediscover
+    // the same false claim from execution-contract.md.
     return {
       outcome: `Outcome: ${describeIntent(latest.intent)} failed at ${formatDate(latest.occurred_at)} (${latest.reason_code || 'no reason code recorded'}).`,
       proof: proofLine,
