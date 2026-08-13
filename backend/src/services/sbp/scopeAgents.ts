@@ -34,7 +34,20 @@
 import { BuildPlan, PlanAgent, PlanRequirement } from './planContract';
 
 const MODEL_DEFAULT = 'gpt-4o';
-const TIMEOUT_MS = 60_000;
+
+/*
+ * No `timeout` in the request body. It reads like a per-call option and the
+ * unit tests — which mock the client — accept it happily, but the real API
+ * rejects the whole request:
+ *
+ *   400 Unrecognized request argument supplied: timeout
+ *
+ * The timeout belongs on the client, which decomposeService already configures
+ * (REQUEST_TIMEOUT_MS with SDK retries); this module is handed that same client
+ * and inherits it. Caught only by running it against the real model — the
+ * scoping silently failed on a live build and the plan published with its
+ * original owners, exactly as the fail-soft path intends.
+ */
 
 export interface ScopeAgentsDeps {
   client: { create: (args: any) => Promise<any> };
@@ -204,7 +217,6 @@ export async function scopeAgents(plan: BuildPlan, deps: ScopeAgentsDeps): Promi
         type: 'json_schema',
         json_schema: { name: 'agent_roster', strict: true, schema: AGENT_ROSTER_SCHEMA },
       },
-      timeout: TIMEOUT_MS,
     });
     raw = JSON.parse(completion?.choices?.[0]?.message?.content ?? 'null');
   } catch (err: any) {
