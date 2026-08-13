@@ -1253,17 +1253,92 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
     `[Accelerator] ${urgency}: Session ${data.sessionNumber} - ${data.sessionTitle}`
   );
   const html = buildSessionReminderHtml(data, urgency);
-  const info = await guardedSendMail({
-    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    to: r.to,
-    subject: r.subject,
-    html,
-    text: htmlToPlainText(html),
-    headers: emailHeaders('accelerator-session-reminder'),
-  });
 
+  let info: any;
+  try {
+    info = await guardedSendMail({
+      from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+      replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+      to: r.to,
+      subject: r.subject,
+      html,
+      text: htmlToPlainText(html),
+      headers: emailHeaders('accelerator-session-reminder'),
+    });
+  } catch (err: any) {
+    // Log the failure before rethrowing. The scheduler's per-recipient .catch()
+    // swallows this into a console line, so without a row here a failed reminder
+    // leaves no queryable trace at all.
+    await recordSessionReminderLog(data, r, urgency, null, err);
+    throw err;
+  }
+
+  await recordSessionReminderLog(data, r, urgency, info, null);
   console.log(`[Email] Session reminder sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+}
+
+/**
+ * Audit row for one session-reminder send.
+ *
+ * Added because the 2026-08-13 "Tomorrow"-on-the-day incident could not be
+ * queried: `SELECT ... FROM communication_logs WHERE subject ILIKE '%Session 7%'`
+ * returned zero rows for an email 55 people had received, so who-got-what had to
+ * be reconstructed from Docker container timestamps and a git pull time. Every
+ * other outbound channel in this codebase (admissions email/SMS/calls, alerts,
+ * callbacks, the Mandrill webhooks) already writes here; session reminders were
+ * the gap.
+ *
+ * NEVER throws. logCommunication() rethrows on failure by contract, and this runs
+ * inside the send path — a DB hiccup must not turn a delivered email into a
+ * thrown reminder, nor a failed one into a lost error. Audit is strictly
+ * best-effort relative to delivery.
+ */
+async function recordSessionReminderLog(
+  data: SessionReminderData,
+  r: { to: string; subject: string },
+  urgency: string,
+  info: any | null,
+  err: any | null
+): Promise<void> {
+  try {
+    // Required lazily, NOT imported at the top of the file — do not "tidy" this
+    // into a static import. communicationLogService imports ../models, which
+    // loads the whole Sequelize model graph and constructs the connection at
+    // module load. A static import therefore makes emailService unimportable
+    // without a live DATABASE_URL, which immediately broke two existing suites
+    // (emailService.digest, trainingWelcomeEmail) that mock ./config/env with no
+    // databaseUrl. Same deferral pattern schedulerService uses for its heavier
+    // service requires.
+    const { logCommunication } = require('./communicationLogService');
+    await logCommunication({
+      channel: 'email',
+      direction: 'outbound',
+      // resolveEmailRecipient rewrites the recipient when the test-override
+      // setting is on; recording which mode was in play is the difference
+      // between "55 students were mailed" and "55 copies went to one inbox".
+      delivery_mode: r.to === data.to ? 'live' : 'test_redirect',
+      status: err ? 'failed' : 'sent',
+      to_address: r.to,
+      from_address: env.emailFrom,
+      subject: r.subject,
+      provider: 'smtp',
+      provider_message_id: info?.messageId || null,
+      error_message: err ? String(err?.message || err) : null,
+      metadata: {
+        email_type: 'accelerator-session-reminder',
+        reminder_type: data.isOneHour ? '1h' : '24h',
+        // The rendered day word, so a future "why did it say that?" is one query
+        // rather than another forensic reconstruction.
+        urgency_label: urgency,
+        session_number: data.sessionNumber,
+        session_date: data.sessionDate,
+        start_time: data.startTime,
+        intended_to: data.to,
+      },
+    });
+  } catch (logErr: any) {
+    console.error('[Email] Session reminder audit log failed:', logErr?.message);
+  }
 }
 
 function buildSessionReminderHtml(data: SessionReminderData, urgencyLabel: string): string {
