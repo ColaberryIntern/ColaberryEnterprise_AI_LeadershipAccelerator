@@ -28,6 +28,14 @@ jest.mock('../planStore', () => ({
 }));
 jest.mock('../repoWriter', () => ({ writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a) }));
 jest.mock('../materializeTasks', () => ({ materializePlanAsTasks: (...a: any[]) => mockMaterialize(...a) }));
+// publishBuild ends by setting the enrollment's active project, which pulls in
+// the real database config through a dynamic import. Left unmocked that loads
+// Sequelize inside the test run — slow (~500ms) and intermittently failing
+// under parallel suites (observed twice on 2026-08-13, passing in isolation
+// every time). The pointer write itself has its own test; here it is noise.
+jest.mock('../../../config/database', () => ({
+  sequelize: { query: jest.fn().mockResolvedValue([[{ id: 'enr-1' }], []]) },
+}));
 
 import { startBuild, publishBuild, getBuildState, buildBriefText } from '../sbpOrchestrator';
 import { BuildPlan } from '../planContract';
