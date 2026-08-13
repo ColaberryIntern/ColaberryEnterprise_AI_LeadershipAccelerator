@@ -44,8 +44,18 @@ export interface TypeRouting {
 }
 
 async function getRoutingMapInternal(): Promise<Record<string, TypeRouting>> {
-  const raw = await getSetting(ROUTING_KEY);
-  return raw && typeof raw === 'object' ? raw : {};
+  try {
+    const raw = await getSetting(ROUTING_KEY);
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    // Fail-soft, matching getFeedPolicy()'s convention: a transient settings-read
+    // failure must degrade every caller to "no routing overrides" (identical to a
+    // freshly-seeded system), never take down the whole Today feed request. This
+    // is now on the hot path for every request (ambient + anchored suppression
+    // both read this per call), so a bare rejection here is a single point of
+    // failure for the entire page, not just the suppression feature.
+    return {};
+  }
 }
 
 /** Read-only accessor for the durable per-type routing map (the `feed_type_routing`
