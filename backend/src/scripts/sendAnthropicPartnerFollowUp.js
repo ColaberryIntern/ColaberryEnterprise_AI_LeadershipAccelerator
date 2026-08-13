@@ -58,8 +58,13 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 const CAMPAIGN_SINCE = '2026/08/05';
 
 const TO = 'partner-support@anthropic.com';
-const CC = 'ram@colaberry.com';
+// Ram asked for the campaign and added William to the original 2026-08-05
+// thread, so both are visible on every letter.
+const CC = 'ram@colaberry.com, william@colaberry.com';
 const BCC = 'ali@colaberry.com';
+// Operator alerts (send failed, reply detected, sequence over) are machinery
+// notes, not correspondence, so they stay with the two people running this.
+const OPS_CC = 'ram@colaberry.com';
 const FROM = '"Ali Muwwakkil" <ali@colaberry.com>';
 const OPERATOR = 'ali@colaberry.com';
 
@@ -125,7 +130,7 @@ async function notifyOperator(subject, text) {
     await transport().sendMail({
       from: '"CB Partner Followup" <ali@colaberry.com>',
       to: OPERATOR,
-      cc: CC,
+      cc: OPS_CC,
       subject,
       text,
       headers: { 'X-MC-Track': 'none' },
