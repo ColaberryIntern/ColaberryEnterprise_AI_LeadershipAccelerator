@@ -39,30 +39,44 @@ export interface AccoladeTile {
   readonly label: string;
 }
 
+/*
+ * FIGURES ONLY. Every claim here must be a short figure, because the tile sets
+ * it at display size.
+ *
+ * The first version also listed `credential.cca.safe` and `anthropic.capability`
+ * -- both correct claims, both full sentences. Rendered at 2rem they became
+ * walls of type that blew the tile heights out and wrecked the row. Those two
+ * belong in the card section above, where they already are, and `FIGURE_MAX`
+ * below stops the same mistake being repeated.
+ *
+ * `trackrecord.since2012` is also gone: "8,588 students since 2012" already
+ * carries the year, so a separate "since 2012" tile said it twice.
+ */
 export const ACCOLADE_TILES: readonly AccoladeTile[] = [
-  {
-    claimKey: 'program.duration',
-    icon: 'ladder',
-    label: 'from AI Aware to a deployed build',
-  },
-  {
-    claimKey: 'credential.cca.safe',
-    icon: 'medal',
-    label: 'what builders prepare for',
-  },
-  {
-    claimKey: 'anthropic.capability',
-    icon: 'cpu',
-    label: 'the models the work is built on',
-  },
   {
     claimKey: 'trackrecord.students',
     icon: 'people',
     label: 'enrolled in a class, counted from our own records',
   },
   { claimKey: 'trackrecord.certified', icon: 'shieldCheck', label: 'completed and certified' },
-  { claimKey: 'trackrecord.since2012', icon: 'clipboard', label: 'and every year since' },
+  {
+    claimKey: 'trackrecord.hired',
+    icon: 'trend',
+    label: 'a floor, not a total: only the ones who told us',
+  },
+  {
+    claimKey: 'program.duration',
+    icon: 'ladder',
+    label: 'from AI Aware to a deployed build',
+  },
 ];
+
+/**
+ * A tile renders a figure, not a paragraph. Anything longer than this is a
+ * sentence that belongs in prose, and rendering it here would break the row
+ * rather than merely look odd.
+ */
+export const FIGURE_MAX = 44;
 
 /** Accolades that exist but cannot ship yet, with the reason. */
 export function withheldAccolades(): { key: string; why: string }[] {
@@ -77,7 +91,12 @@ export function withheldAccolades(): { key: string; why: string }[] {
 }
 
 function Accolades(): React.ReactElement | null {
-  const visible = ACCOLADE_TILES.filter((t) => canShow(t.claimKey));
+  const visible = ACCOLADE_TILES.filter((t) => {
+    if (!canShow(t.claimKey)) return false;
+    const c = getClaim(t.claimKey);
+    // Skip rather than deform the row. See FIGURE_MAX.
+    return Boolean(c && c.publicWording.length <= FIGURE_MAX);
+  });
   if (!visible.length) return null;
 
   return (

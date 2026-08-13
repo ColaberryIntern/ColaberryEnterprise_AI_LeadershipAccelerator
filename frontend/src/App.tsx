@@ -15,6 +15,7 @@ import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
 import SignupV2 from './pages/publicV2/SignupV2';
 import PricingV2 from './pages/publicV2/PricingV2';
+import StoriesV2 from './pages/publicV2/StoriesV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -63,6 +64,7 @@ function App() {
           <Route path="privacy" element={<PrivacyV2 />} />
           <Route path="start" element={<SignupV2 />} />
           <Route path="pricing" element={<PricingV2 />} />
+          <Route path="stories" element={<StoriesV2 />} />
         </Route>
         <Route element={<PublicLayout />}>
           {publicRoutes}

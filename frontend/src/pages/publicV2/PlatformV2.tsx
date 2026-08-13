@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import MaturityLadder from '../../components/publicV2/MaturityLadder';
+import Roadmap12 from '../../components/publicV2/Roadmap12';
 import { Claim, canShow, Metric, SampleBadge, CapabilityNotice } from '../../components/publicV2/Claim';
 import { SHOWROOM_SURFACES, STUDIO_DESCRIPTION, DATA_EARNED } from '../../config/v2Platform';
 import './platformV2.css';
@@ -170,7 +171,23 @@ function PlatformV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-earned-title">
+      {/* The class itself: how a person climbs the ladder above. */}
+      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-roadmap-title">
+        <div className="cbv2-wrap">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">The programme</p>
+            <h2 id="cbv2-roadmap-title">How they climb: one continuous 12-week path</h2>
+            <p className="cbv2-lede">
+              Four phases across twelve weeks. The project starts in week three and the
+              certification track in week seven, so they converge at the finish rather than
+              running one after the other.
+            </p>
+          </div>
+          <Roadmap12 />
+        </div>
+      </section>
+
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-earned-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">How the data is earned</p>

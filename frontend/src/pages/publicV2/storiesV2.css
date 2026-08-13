@@ -1,0 +1,72 @@
+/* ============================================================================
+   storiesV2.css -- the case-study format.
+   Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+.cbv2-stories { display: grid; gap: var(--space-6); }
+
+.cbv2-story {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+  display: grid;
+  gap: var(--space-5);
+}
+
+.cbv2-story__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+}
+.cbv2-story__who {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-subtle);
+}
+.cbv2-story__sector { color: var(--chart-1); }
+.cbv2-story__headline {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  line-height: 1.2;
+  color: var(--text-strong);
+  text-wrap: balance;
+}
+
+.cbv2-story__body {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+.cbv2-story__part h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-subtle);
+}
+.cbv2-story__part p { margin: 0; color: var(--text-muted); line-height: 1.65; }
+
+/* The evidence requirement is part of the card rather than a footnote: it is
+   what separates this format from the fabricated version it replaces. */
+.cbv2-story__needed {
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+  border-left: var(--border-3) solid var(--chart-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.cbv2-story__needed strong { color: var(--text-strong); }
+
+@media (max-width: 900px) {
+  .cbv2-story__body { grid-template-columns: minmax(0, 1fr); }
+  .cbv2-story__head { grid-template-columns: auto minmax(0, 1fr); }
+  .cbv2-story__head .cbv2-evidence { grid-column: 1 / -1; }
+}

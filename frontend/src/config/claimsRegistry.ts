@@ -243,6 +243,28 @@ export const CLAIMS: readonly Claim[] = [
     requiresSampleLabel: false,
   },
   {
+    /*
+     * Published as a FLOOR, not a total, and the wording has to carry that.
+     * HiredDate is only set when someone told us, and Ali confirms many students
+     * were hired, promoted or given raises without reporting back. So the true
+     * number is higher than this and unknowable from our records -- which makes
+     * "at least" honest and "691 careers launched" not.
+     */
+    key: 'trackrecord.hired',
+    publicWording: 'at least 691 hires we can verify',
+    verification: 'VERIFIED',
+    capability: 'n/a',
+    evidenceSource:
+      'CCPP dbo.ADF_ClassSignups, read-only query 2026-08-13: COUNT(DISTINCT StudentID) ' +
+      'where HiredDate IS NOT NULL = 691. Confirmed by Ali 2026-08-13 as an undercount -- ' +
+      'HiredDate is populated only when a student reported back, and many did not.',
+    owner: 'Ali',
+    lastVerifiedAt: '2026-08-13',
+    approvedRoutes: ['*'],
+    requiresSampleLabel: false,
+    note: 'Must stay worded as a floor. Dropping "at least" turns a verified minimum into an unverified total.',
+  },
+  {
     key: 'trackrecord.wageimpact',
     publicWording: '$100M+ in wage impact generated',
     verification: 'NEEDS_VERIFICATION',

@@ -60,6 +60,7 @@ const GROUPS: readonly FooterGroup[] = [
     links: [
       { label: 'Proof Room', to: '/v2/proof' },
       { label: 'Map an opportunity', to: '/v2/lab' },
+      { label: 'Builder stories', to: '/v2/stories' },
     ],
   },
   {

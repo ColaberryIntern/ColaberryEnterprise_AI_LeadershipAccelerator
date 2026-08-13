@@ -45,6 +45,7 @@ const V2_ROUTES = [
   '/v2/privacy',
   '/v2/start',
   '/v2/pricing',
+  '/v2/stories',
   ...SERVICE_DETAILS.map((s) => `/v2/services/${s.slug}`),
 ];
 
