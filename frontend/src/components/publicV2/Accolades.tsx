@@ -12,9 +12,13 @@ import './accolades.css';
  * "12 wks", "CCA-F", under the subhead "an Anthropic-partner curriculum". Three
  * of those five are registry-blocked:
  *
- *   - `trackrecord.careers`  NEEDS_VERIFICATION. No source located, and it
- *     conflicts with a "10,000+ trained" claim elsewhere in the same codebase.
- *   - `trackrecord.since2012` NEEDS_VERIFICATION against incorporation records.
+ *   - `trackrecord.careers`  still blocked, but now for a measured reason: CCPP
+ *     shows 8,588 enrolled, 2,844 certified and 691 hired, so "5,000+ careers
+ *     launched" overstates the outcome even though it understates enrolment.
+ *     Superseded by `trackrecord.students` and `trackrecord.certified`, which
+ *     carry their counting method in the wording.
+ *   - `trackrecord.since2012` is now VERIFIED: the earliest class StartDate in
+ *     CCPP is 2012-04-07, with enrolments in every year through 2026.
  *   - `credential.cca`       blocked; the safe wording is certification
  *     PREPARATION with the credential issued by the certifying body.
  *   - the partner designation is blocked outright.
@@ -51,8 +55,13 @@ export const ACCOLADE_TILES: readonly AccoladeTile[] = [
     icon: 'cpu',
     label: 'the models the work is built on',
   },
-  { claimKey: 'trackrecord.careers', icon: 'people', label: 'careers launched' },
-  { claimKey: 'trackrecord.since2012', icon: 'clipboard', label: 'building in data and AI' },
+  {
+    claimKey: 'trackrecord.students',
+    icon: 'people',
+    label: 'enrolled in a class, counted from our own records',
+  },
+  { claimKey: 'trackrecord.certified', icon: 'shieldCheck', label: 'completed and certified' },
+  { claimKey: 'trackrecord.since2012', icon: 'clipboard', label: 'and every year since' },
 ];
 
 /** Accolades that exist but cannot ship yet, with the reason. */

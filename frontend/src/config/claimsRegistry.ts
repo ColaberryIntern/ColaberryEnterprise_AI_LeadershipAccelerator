@@ -178,22 +178,68 @@ export const CLAIMS: readonly Claim[] = [
     verification: 'NEEDS_VERIFICATION',
     capability: 'n/a',
     evidenceSource:
-      'No source located. Also conflicts with MembershipLanding.tsx:33 ("10,000+ trained").',
+      'Measured 2026-08-13 and the wording does not survive it. CCPP shows 8,588 distinct ' +
+      'students enrolled, 2,844 certified, and 691 with a HiredDate. "Careers launched" ' +
+      'most naturally means the last of those, which is 691 -- so "5,000+ careers launched" ' +
+      'overstates the outcome by roughly an order of magnitude, even though 5,000+ would be ' +
+      'an understatement of ENROLMENT. Also still conflicts with MembershipLanding.tsx:33 ' +
+      '("10,000+ trained").',
     owner: 'Ali',
-    lastVerifiedAt: '2026-08-07',
+    lastVerifiedAt: '2026-08-13',
     approvedRoutes: [],
     requiresSampleLabel: false,
-    note: 'Needs a defined counting method (enrolled? graduated? placed?) and a date range.',
+    note:
+      'Superseded rather than fixed. Use trackrecord.students (enrolment) or ' +
+      'trackrecord.certified (completion), both VERIFIED with their method stated. ' +
+      'A hires figure would need HiredDate provenance checked first.',
   },
   {
     key: 'trackrecord.since2012',
-    publicWording: 'Since 2012',
-    verification: 'NEEDS_VERIFICATION',
+    publicWording: 'Teaching this since 2012',
+    verification: 'VERIFIED',
     capability: 'n/a',
-    evidenceSource: 'Almost certainly the founding year; not confirmed against incorporation records.',
+    evidenceSource:
+      'CCPP dbo.ADF_ClassSignups, read-only query 2026-08-13: earliest StartDate is ' +
+      '2012-04-07 and earliest InsertDate is 2012-06-02, with enrolments recorded in every ' +
+      'year from 2012 to 2026. Independently corroborated by Ali Muwwakkil, who built ' +
+      'app.colaberry.com and taught the first classes.',
     owner: 'Ali',
-    lastVerifiedAt: '2026-08-07',
-    approvedRoutes: [],
+    lastVerifiedAt: '2026-08-13',
+    approvedRoutes: ['*'],
+    requiresSampleLabel: false,
+  },
+  {
+    /*
+     * The counting method is IN the wording, which is what `trackrecord.careers`
+     * lacked. "Students enrolled" is a fact about our records; "careers
+     * launched" is a claim about outcomes, and the two differ by an order of
+     * magnitude (see that claim's note).
+     */
+    key: 'trackrecord.students',
+    publicWording: '8,588 students since 2012',
+    verification: 'VERIFIED',
+    capability: 'n/a',
+    evidenceSource:
+      'CCPP dbo.ADF_ClassSignups, read-only query 2026-08-13: COUNT(DISTINCT StudentID) = ' +
+      '8,588 across 13,964 signup rows, spanning StartDate 2012-04-07 to 2026-07-16. ' +
+      'Definition: distinct people who enrolled in a class, not graduates and not hires.',
+    owner: 'Ali',
+    lastVerifiedAt: '2026-08-13',
+    approvedRoutes: ['*'],
+    requiresSampleLabel: false,
+    note: 'Re-run the query before quoting; the figure grows. Last read 2026-08-13.',
+  },
+  {
+    key: 'trackrecord.certified',
+    publicWording: '2,844 certified',
+    verification: 'VERIFIED',
+    capability: 'n/a',
+    evidenceSource:
+      'CCPP dbo.ADF_ClassSignups, read-only query 2026-08-13: COUNT(DISTINCT StudentID) ' +
+      'where CertifiedDate IS NOT NULL = 2,844.',
+    owner: 'Ali',
+    lastVerifiedAt: '2026-08-13',
+    approvedRoutes: ['*'],
     requiresSampleLabel: false,
   },
   {

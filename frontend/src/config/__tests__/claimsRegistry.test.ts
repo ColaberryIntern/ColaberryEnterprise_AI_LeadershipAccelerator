@@ -68,10 +68,28 @@ describe('publicClaim — the publish gate (failure paths)', () => {
     expect(publicClaim('credential.cca.safe')).toContain('certification preparation');
   });
 
-  it('blocks unevidenced track-record figures', () => {
+  it('blocks track-record figures that are still unevidenced', () => {
+    // "5,000+ careers launched" survived measurement badly: CCPP shows 8,588
+    // enrolled, 2,844 certified and 691 hired, so the outcome wording overstates
+    // by roughly an order of magnitude. Superseded, not repaired.
     expect(publicClaim('trackrecord.careers')).toBeNull();
     expect(publicClaim('trackrecord.wageimpact')).toBeNull();
-    expect(publicClaim('trackrecord.since2012')).toBeNull();
+  });
+
+  it('publishes track-record figures once measured, with the method in the wording', () => {
+    // Verified 2026-08-13 by read-only query against CCPP dbo.ADF_ClassSignups.
+    expect(publicClaim('trackrecord.students')).toContain('8,588');
+    expect(publicClaim('trackrecord.students')).toContain('students');
+    expect(publicClaim('trackrecord.certified')).toContain('2,844');
+    // Earliest class StartDate 2012-04-07, enrolments in every year since.
+    expect(publicClaim('trackrecord.since2012')).toContain('2012');
+  });
+
+  it('states a counting method rather than an unqualified total', () => {
+    // The defect in the old claim was not the number, it was that "careers
+    // launched" named no method. Each replacement says what it counts.
+    expect(publicClaim('trackrecord.students')).toMatch(/students/i);
+    expect(publicClaim('trackrecord.certified')).toMatch(/certified/i);
   });
 
   it('blocks the retired $4,500 price', () => {
