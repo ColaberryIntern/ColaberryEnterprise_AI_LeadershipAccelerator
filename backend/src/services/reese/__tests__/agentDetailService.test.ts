@@ -11,6 +11,7 @@ jest.mock('../../../models/CommunityMember', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn() } }));
 jest.mock('../../communityService', () => ({ derivePresence: jest.fn() }));
 
+import { Op } from 'sequelize';
 import AiAgent from '../../../models/AiAgent';
 import AdminUser from '../../../models/AdminUser';
 import Enrollment from '../../../models/Enrollment';
@@ -60,27 +61,50 @@ describe('getAgentDetail', () => {
     expect(result!.tickets).toHaveLength(1);
   });
 
-  it('boundary (the core check): a Ticket.findAll filtered on assigned_to_type/assigned_to_id returns ONLY the agent\'s own tickets, not every ticket in the system', async () => {
+  it('boundary (the core check): a Ticket.findAll filtered on the real match list returns ONLY the agent\'s own tickets, not every ticket in the system', async () => {
     // Simulate the real DB filter's effect: the mock only "returns" what a real
-    // WHERE assigned_to_id = 'admin-1' clause would — proving the SERVICE
-    // constructs that filter correctly, which is what actually protects this.
+    // WHERE clause would — proving the SERVICE constructs that filter correctly,
+    // which is what actually protects this.
     mockTicketFindAll.mockImplementation(async (query: any) => {
       const allTickets = [
-        { id: 't-reese', assigned_to_type: 'ai_staff', assigned_to_id: 'admin-1', title: 'Reese ticket', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date() },
-        { id: 't-other', assigned_to_type: 'ai_staff', assigned_to_id: 'some-other-agent-admin-id', title: 'Someone else\'s ticket', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date() },
+        { id: 't-reese', assigned_to_type: 'ai_staff', assigned_to_id: 'admin-1', created_by_id: null, title: 'Reese ticket', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date() },
+        { id: 't-other', assigned_to_type: 'ai_staff', assigned_to_id: 'some-other-agent-admin-id', created_by_id: null, title: 'Someone else\'s ticket', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date() },
       ];
-      return allTickets.filter(
-        (t) => t.assigned_to_type === query.where.assigned_to_type && t.assigned_to_id === query.where.assigned_to_id,
-      );
+      const matchIds: string[] = query.where[Op.or][0].assigned_to_id[Op.in];
+      return allTickets.filter((t) => t.assigned_to_type === 'ai_staff' && matchIds.includes(t.assigned_to_id));
     });
 
     const result = await getAgentDetail('agent-1');
 
     expect(result!.tickets).toHaveLength(1);
     expect(result!.tickets[0].id).toBe('t-reese');
-    expect(mockTicketFindAll).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { assigned_to_type: 'ai_staff', assigned_to_id: 'admin-1' } }),
-    );
+    const callArgs = mockTicketFindAll.mock.calls[0][0];
+    const orClauses = callArgs.where[Op.or];
+    expect(orClauses[0].assigned_to_id[Op.in]).toEqual(['admin-1']); // Reese has zero legacy aliases — match list is exactly her own id
+    expect(orClauses[1].created_by_id[Op.in]).toEqual(['admin-1']);
+  });
+
+  it('alias-matching: an agent WITH legacy aliases sees its historical tickets (assigned_to_id null, created_by_id = raw legacy string) in its detail ticket list', async () => {
+    const processAgent = { ...reeseAgent, id: 'agent-process-1', agent_name: 'cory-engine', config: { legacy_creator_ids: ['cory-engine'] } };
+    const processAdmin = { ...reeseAdmin, id: 'admin-process-1' };
+    mockAgentFindByPk.mockResolvedValue(processAgent);
+    mockAdminFindOne.mockResolvedValue(processAdmin);
+    mockTicketFindAll.mockImplementation(async (query: any) => {
+      const allTickets = [
+        { id: 't-legacy', assigned_to_type: null, assigned_to_id: null, created_by_id: 'cory-engine', title: 'Legacy autonomous decision', status: 'in_progress', priority: 'medium', type: 'agent_action', created_at: new Date(), updated_at: new Date() },
+      ];
+      const orClauses = query.where[Op.or];
+      const assignedMatch = orClauses[0].assigned_to_id[Op.in];
+      const createdMatch = orClauses[1].created_by_id[Op.in];
+      return allTickets.filter(
+        (t) => (t.assigned_to_type === 'ai_staff' && assignedMatch.includes(t.assigned_to_id)) || createdMatch.includes(t.created_by_id),
+      );
+    });
+
+    const result = await getAgentDetail('agent-process-1');
+
+    expect(result!.tickets).toHaveLength(1);
+    expect(result!.tickets[0].id).toBe('t-legacy');
   });
 
   it('boundary: returns null for a non-existent agent id, rather than throwing or fabricating a shape', async () => {

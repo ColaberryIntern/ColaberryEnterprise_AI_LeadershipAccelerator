@@ -32,10 +32,21 @@ const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockTicketCount = Ticket.count as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
 
-const reeseAdmin = { id: 'admin-reese', email: 'reese@colaberry.com', agent_id: 'agent-reese', is_ai_operated: true };
+const reeseAdmin = { id: 'admin-reese', email: 'reese@colaberry.com', agent_id: 'agent-reese', is_ai_operated: true, display_name: 'Reese' };
 const reeseAgent = {
   id: 'agent-reese', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success',
-  description: 'Reese', enabled: true,
+  description: 'Reese', enabled: true, config: {},
+};
+
+// A Stage-1-style process — real display_name sharply different from the raw
+// agent_name (mirrors production: agent_name 'cory-engine', display_name 'Cory
+// Engine — Autonomous Operations'), WITH a legacy alias equal to its own
+// agent_name (mirrors production: 100% of its historical tickets are keyed on
+// created_by_id='cory-engine', 0% on assigned_to_id).
+const processAdmin = { id: 'admin-process-1', email: 'process@colaberry.com', agent_id: 'agent-process-1', is_ai_operated: true, display_name: 'Cory Engine — Autonomous Operations' };
+const processAgent = {
+  id: 'agent-process-1', agent_name: 'cory-engine', agent_type: 'autonomous_engine', category: 'autonomous',
+  description: null, enabled: true, config: { legacy_creator_ids: ['cory-engine'] },
 };
 
 beforeEach(() => {
@@ -59,10 +70,63 @@ describe('listLiveAgents', () => {
     expect(agents[0]).toMatchObject({
       id: 'agent-reese',
       agent_name: 'Reese',
+      display_name: 'Reese',
       agent_type: 'ai_staff_mentor',
       live_status: 'online',
       ticket_count: 4,
     });
+  });
+
+  it('display name fix: shows the real AdminUser.display_name, not the raw agent_name, when they differ (the exact bug Ali flagged)', async () => {
+    mockAdminUserFindAll.mockResolvedValue([processAdmin]);
+    mockAiAgentFindAll.mockResolvedValue([processAgent]);
+
+    const agents = await listLiveAgents();
+
+    expect(agents[0].agent_name).toBe('cory-engine'); // raw technical id, still available
+    expect(agents[0].display_name).toBe('Cory Engine — Autonomous Operations'); // the fix
+  });
+
+  it('display name fallback: uses agent_name if display_name is somehow unset, never a blank card', async () => {
+    mockAdminUserFindAll.mockResolvedValue([{ ...processAdmin, display_name: null }]);
+    mockAiAgentFindAll.mockResolvedValue([processAgent]);
+
+    const agents = await listLiveAgents();
+
+    expect(agents[0].display_name).toBe('cory-engine');
+  });
+
+  it('alias-matching ticket count: an agent WITH legacy aliases correctly counts its historical tickets, keyed on the raw created_by_id string, not just assigned_to_id', async () => {
+    mockAdminUserFindAll.mockResolvedValue([processAdmin]);
+    mockAiAgentFindAll.mockResolvedValue([processAgent]);
+    mockTicketCount.mockResolvedValue(9606); // real cory-engine historical volume
+
+    const agents = await listLiveAgents();
+
+    expect(agents[0].ticket_count).toBe(9606);
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    // The real query must be able to match EITHER identifier — assert the actual
+    // match lists include both the real AdminUser id and the legacy raw string,
+    // not just one or the other.
+    const orClauses = countArgs.where[Op.or];
+    const assignedClause = orClauses.find((c: any) => 'assigned_to_id' in c);
+    const createdClause = orClauses.find((c: any) => 'created_by_id' in c);
+    expect(assignedClause.assigned_to_id[Op.in]).toEqual(expect.arrayContaining(['admin-process-1', 'cory-engine']));
+    expect(createdClause.created_by_id[Op.in]).toEqual(expect.arrayContaining(['admin-process-1', 'cory-engine']));
+  });
+
+  it('alias-matching is a pure superset for an agent with ZERO legacy aliases (Reese): the match list is exactly her own id, never expanded to unrelated strings', async () => {
+    mockAdminUserFindAll.mockResolvedValue([reeseAdmin]);
+    mockAiAgentFindAll.mockResolvedValue([reeseAgent]);
+    mockTicketCount.mockResolvedValue(22); // Reese's real ticket count is unaffected by this change
+
+    const agents = await listLiveAgents();
+
+    expect(agents[0].ticket_count).toBe(22);
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    const orClauses = countArgs.where[Op.or];
+    const assignedClause = orClauses.find((c: any) => 'assigned_to_id' in c);
+    expect(assignedClause.assigned_to_id[Op.in]).toEqual(['admin-reese']);
   });
 
   it('is generic: a second real blueprint-built AiAgent appears automatically, with zero code change', async () => {
@@ -124,13 +188,43 @@ describe('listLiveAgentActivity', () => {
     mockAdminUserFindAll.mockResolvedValue([reeseAdmin]);
     mockAiAgentFindAll.mockResolvedValue([reeseAgent]);
     mockTicketFindAll.mockResolvedValue([
-      { id: 't1', ticket_number: 1, title: 'Reached out to a struggling student', status: 'in_progress', priority: 'high', type: 'reese_autonomous_outreach', assigned_to_id: 'admin-reese', updated_at: new Date('2026-08-10') },
+      { id: 't1', ticket_number: 1, title: 'Reached out to a struggling student', status: 'in_progress', priority: 'high', type: 'reese_autonomous_outreach', assigned_to_id: 'admin-reese', created_by_id: null, updated_at: new Date('2026-08-10') },
     ]);
 
     const events = await listLiveAgentActivity();
 
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ agent_id: 'agent-reese', agent_name: 'Reese', ticket_id: 't1', type: 'reese_autonomous_outreach' });
+    expect(events[0]).toMatchObject({ agent_id: 'agent-reese', agent_name: 'Reese', agent_display_name: 'Reese', ticket_id: 't1', type: 'reese_autonomous_outreach' });
+  });
+
+  it('alias-matching: attributes a HISTORICAL ticket (assigned_to_id null, created_by_id = raw legacy string) to the right agent, with the real display name', async () => {
+    mockAdminUserFindAll.mockResolvedValue([processAdmin]);
+    mockAiAgentFindAll.mockResolvedValue([processAgent]);
+    mockTicketFindAll.mockResolvedValue([
+      { id: 't-legacy-1', ticket_number: 9001, title: '[Review] Fix a flagged incident', status: 'todo', priority: 'high', type: 'agent_action', assigned_to_id: null, created_by_id: 'cory-engine', updated_at: new Date('2026-08-10') },
+    ]);
+
+    const events = await listLiveAgentActivity();
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      agent_id: 'agent-process-1',
+      agent_name: 'cory-engine',
+      agent_display_name: 'Cory Engine — Autonomous Operations',
+      ticket_id: 't-legacy-1',
+    });
+  });
+
+  it('a ticket matching neither a real id nor any known alias falls back to "Unknown Agent" honestly, never a crash', async () => {
+    mockAdminUserFindAll.mockResolvedValue([reeseAdmin]);
+    mockAiAgentFindAll.mockResolvedValue([reeseAgent]);
+    mockTicketFindAll.mockResolvedValue([
+      { id: 't-orphan', ticket_number: 42, title: 'Orphaned', status: 'todo', priority: 'low', type: 'task', assigned_to_id: null, created_by_id: 'some-unrelated-process', updated_at: new Date('2026-08-10') },
+    ]);
+
+    const events = await listLiveAgentActivity();
+
+    expect(events[0]).toMatchObject({ agent_id: '', agent_name: 'Unknown Agent', agent_display_name: 'Unknown Agent' });
   });
 
   it('is empty when no blueprint agents exist — proves the timeline is Reese-only-today honestly, not fabricated for AI_ORG directors', async () => {

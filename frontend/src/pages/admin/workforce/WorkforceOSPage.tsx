@@ -5,6 +5,7 @@ import { workforceCss, readTheme, writeTheme } from './themeKit';
 import StatusBadge from '../../../components/admin/shell/StatusBadge';
 import { getTicketTypeTone, getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
 import { fmtCentralDateTime } from '../../../utils/centralTime';
+import { agentAvatarColor } from '../../../utils/agentAvatarColor';
 
 /**
  * WorkforceOSPage — the AI Workforce Operating System. An executive opens one
@@ -23,8 +24,8 @@ interface Meeting { meeting_date: string; agenda: any; contributions: Array<{ sl
 // Distinct shape from Employee above on purpose: a Live Agent is a real, ticketed,
 // ProofDesk-governed operating agent, not a conceptual department-strategy persona
 // like the static AI_ORG directors — see the "Live Agents" section below.
-interface LiveAgent { id: string; agent_name: string; agent_type: string; category: string | null; description: string | null; enabled: boolean; live_status: string; ticket_count: number }
-interface LiveAgentActivityEvent { agent_id: string; agent_name: string; ticket_id: string; ticket_number: number | null; title: string; type: string; status: string; priority: string; occurred_at: string | null }
+interface LiveAgent { id: string; agent_name: string; display_name: string; agent_type: string; category: string | null; description: string | null; enabled: boolean; live_status: string; ticket_count: number }
+interface LiveAgentActivityEvent { agent_id: string; agent_name: string; agent_display_name: string; ticket_id: string; ticket_number: number | null; title: string; type: string; status: string; priority: string; occurred_at: string | null }
 
 const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 const av = (color: string, name: string, cls = '') => <span className={`wf-av ${cls}`} style={{ background: color }}>{initials(name)}</span>;
@@ -160,9 +161,9 @@ const WorkforceOSPage: React.FC = () => {
           <div className="wf-dirs">
             {liveAgents.map((a) => (
               <Link to={`/admin/agents/${a.id}`} className="wf-emp" key={a.id} style={{ display: 'flex', textDecoration: 'none', color: 'inherit' }}>
-                {av('#7A5AF0', a.agent_name)}
+                {av(agentAvatarColor(a.id), a.display_name)}
                 <div style={{ minWidth: 0 }}>
-                  <div className="nm">{a.agent_name}</div>
+                  <div className="nm">{a.display_name}</div>
                   <div className="rl">{a.category || a.agent_type}</div>
                 </div>
                 <div className={`wl ${a.live_status === 'online' ? 'busy' : ''}`}><b>{a.ticket_count}</b><br />tickets</div>
@@ -191,7 +192,7 @@ const WorkforceOSPage: React.FC = () => {
                 key={ev.ticket_id}
                 style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
               >
-                <div className="rt">{ev.agent_name} · TK-{ev.ticket_number ?? '—'} · {ev.occurred_at ? fmtCentralDateTime(ev.occurred_at) : ''}</div>
+                <div className="rt">{ev.agent_display_name} · TK-{ev.ticket_number ?? '—'} · {ev.occurred_at ? fmtCentralDateTime(ev.occurred_at) : ''}</div>
                 <div className="sb" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {ev.title}
                   <StatusBadge label={getTicketTypeLabel(ev.type)} tone={getTicketTypeTone(ev.type)} />

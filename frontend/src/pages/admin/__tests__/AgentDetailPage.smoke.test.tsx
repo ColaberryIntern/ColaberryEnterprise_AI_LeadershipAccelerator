@@ -174,3 +174,43 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
     expect(container.textContent).toContain('unknown');
   });
 });
+
+// Agent Alias & Identity Fix — page title/breadcrumb prefer the real
+// AdminUser.display_name over the raw technical agent_name (same bug, same fix
+// as the Live Agents card list).
+describe('AgentDetailPage — title prefers identity.display_name over raw agent_name', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('display name fix: renders the real display_name in the title when identity exists and differs from agent_name', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      agent: { ...DETAIL.agent, id: 'agent-process-1', agent_name: 'cory-engine' },
+      identity: { admin_user_id: 'admin-process-1', email: 'cory-engine@colaberry.com', display_name: 'Cory Engine — Autonomous Operations', is_ai_operated: true },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Cory Engine — Autonomous Operations');
+    // The h1/page title must never show the raw technical id.
+    const h1 = container.querySelector('h1, .page-title, [class*="title"]');
+    expect(h1?.textContent).not.toBe('cory-engine');
+  });
+
+  it('boundary: falls back to agent_name when identity is null (a non-blueprint agent with no linked AdminUser)', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, identity: null });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Reese');
+  });
+});
