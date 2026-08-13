@@ -22,6 +22,13 @@ import {
  *
  * Route: /portal/projects/workspace/:projectId/:taskId  (taskId is the STORY id,
  * which is what a student sees and what survives a republish).
+ *
+ * HALF SCREEN IS THE DESIGN TARGET. Students build with this page in one half
+ * of the display and their editor in the other, so ~700px is the normal width,
+ * not the degraded one. The center column therefore reads in one order — what
+ * this story IS, what DONE MEANS, then HOW TO BUILD IT — with the Claude Code
+ * prompt collapsed behind an affordance rather than occupying the fold. See the
+ * <=760px block in runtimeCss for the matching density pass.
  */
 
 type Msg = { role: 'user' | 'assistant'; content: string };
@@ -53,6 +60,32 @@ const ProjectWorkspacePage: React.FC = () => {
   const [ghLogin, setGhLogin] = useState('');
   const [repoError, setRepoError] = useState<string | null>(null);
   const mentorEnd = useRef<HTMLDivElement | null>(null);
+
+  // The prompt opens CLOSED. At half screen — the posture this page is actually
+  // used in, editor in the other half — a 340px <pre> IS the column, so the page
+  // led with the thing a student pastes instead of the thing they have to
+  // understand before pasting it. Reset per task so every story reads the same
+  // way the last one did.
+  const [promptOpen, setPromptOpen] = useState(false);
+  useEffect(() => { setPromptOpen(false); }, [taskId]);
+
+  // Acceptance ticks are the student's own working memory ("have I got that one
+  // yet?"), so they survive a reload. Deliberately localStorage and NOT the
+  // project store: the server knows nothing about them, and putting them in the
+  // store would dress them up as reportable progress. Only "Mark done" reports.
+  const accKey = `te_ws_acc_${projectId}_${taskId}`;
+  const [ticked, setTicked] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try { setTicked(JSON.parse(localStorage.getItem(accKey) || '{}')); }
+    catch { setTicked({}); }
+  }, [accKey]);
+  const toggleAcc = useCallback((i: number) => {
+    setTicked((prev) => {
+      const next = { ...prev, [i]: !prev[i] };
+      try { localStorage.setItem(accKey, JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+  }, [accKey]);
 
   useEffect(() => { setProject(getProject(projectId) ?? null); }, [projectId, tick]);
 
@@ -139,6 +172,11 @@ const ProjectWorkspacePage: React.FC = () => {
   const done = task.state === 'done';
   const prog = projectProgress(project);
   const prompt = task.prompt || '';
+  const acceptance = task.acceptance ?? [];
+  const tickedCount = acceptance.reduce((n, _a, i) => (ticked[i] ? n + 1 : n), 0);
+  // "How to build it" is step 1 when there is no acceptance list to be step 1 —
+  // a lone step numbered 2 reads like something failed to load.
+  const buildStepNo = acceptance.length ? 2 : 1;
 
   const copyPrompt = () => {
     if (navigator.clipboard && prompt) navigator.clipboard.writeText(prompt);
@@ -158,11 +196,31 @@ const ProjectWorkspacePage: React.FC = () => {
           <div className="rt-kick">{listName || project.name}{task.storyId ? ` · ${task.storyId}` : ''}</div>
           <div className="rt-title">{task.title}</div>
         </div>
-        <span className={`rt-pill ${done ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{done ? '✓ Completed' : blocked.blocked ? 'Waiting on another task' : 'In progress'}</span>
+        <div className="rt-topright">
+          {/* Only rendered once the student's Command Center is actually running.
+              An <a> rather than a <button> because it navigates: middle-click,
+              copy-link and the screen-reader link role all come free, and a
+              button faking navigation gives up all three. The URL is
+              https-validated server-side (projectTreeDto.commandCenterUrl), so
+              there is nothing left to check here. */}
+          {project.commandCenterUrl && (
+            <a
+              className="rt-btn"
+              href={project.commandCenterUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Open your Command Center in a new tab"
+            >
+              Command Center ↗
+            </a>
+          )}
+          <span className={`rt-pill ${done ? 'done' : ''}`}>{done ? '✓ Completed' : blocked.blocked ? 'Waiting on another task' : 'In progress'}</span>
+        </div>
       </header>
 
       <div className="rt-body">
-        {/* CENTER — the story, then the prompt that builds it */}
+        {/* CENTER — read in one order: what this story is, what done means,
+            then how to build it. */}
         <main className="rt-mid">
           {blocked.blocked && (
             <div className="rt-card" style={{ marginBottom: 14 }}>
@@ -173,64 +231,114 @@ const ProjectWorkspacePage: React.FC = () => {
             </div>
           )}
 
-          <section className="rt-card">
-            <div className="rt-lab">What you are building</div>
-            <p style={{ margin: '6px 0 0' }}>{task.what || task.title}</p>
-            {task.req && <p className="rt-muted" style={{ marginTop: 10 }}>Fulfils <b>{task.req}</b></p>}
+          {/* THE STORY. Prose, not a card — at half screen the first thing on
+              the page should read like a sentence someone wrote you. This used
+              to be a card identical to the two below it, which left all three
+              competing for the same attention and none of them winning. */}
+          <section className="rt-lead">
+            <p>{task.what || task.title}</p>
+            {task.req && <span className="rt-req">Fulfils {task.req}</span>}
           </section>
 
-          {task.acceptance && task.acceptance.length > 0 && (
-            <section className="rt-card" style={{ marginTop: 14 }}>
-              <div className="rt-lab">Done means</div>
-              <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                {task.acceptance.map((a, i) => <li key={i} style={{ marginBottom: 6 }}>{a}</li>)}
-              </ul>
+          {/* WHAT DONE MEANS — checkable, because acceptance criteria are a
+              pre-flight the student walks, not a paragraph they re-read. The
+              count in the header answers "how close am I?" without scrolling. */}
+          {acceptance.length > 0 && (
+            <section className="rt-step">
+              <div className="rt-step-h">
+                <span className="rt-step-n">1</span>
+                <span className="rt-step-t">Done means</span>
+                <span className="rt-step-c">{tickedCount} of {acceptance.length}</span>
+              </div>
+              <div className="rt-card">
+                <ul className="rt-acc">
+                  {acceptance.map((a, i) => (
+                    <li key={i}>
+                      <label>
+                        <input type="checkbox" checked={!!ticked[i]} onChange={() => toggleAcc(i)} />
+                        <span>{a}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </section>
           )}
 
-          <section className="rt-card" style={{ marginTop: 14 }}>
-            <div className="rt-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="rt-lab" style={{ margin: 0 }}>Your Claude Code prompt</div>
-              <button className={`rt-btn${copied ? ' pri' : ''}`} onClick={copyPrompt} disabled={!prompt}>
-                {copied ? 'Copied' : 'Copy prompt'}
-              </button>
+          {/* HOW TO BUILD IT — the prompt and the repo are the same job (get to
+              work), so they sit under one heading instead of reading as two
+              more peers of the story. */}
+          <section className="rt-step">
+            <div className="rt-step-h">
+              <span className="rt-step-n">{buildStepNo}</span>
+              <span className="rt-step-t">How to build it</span>
             </div>
-            <pre className="rt-in mono" style={{ marginTop: 10, maxHeight: 340, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-              {prompt || 'This task has no prompt yet.'}
-            </pre>
-          </section>
 
-          <section className="rt-card" style={{ marginTop: 14 }}>
-            <div className="rt-lab">Your workspace repo</div>
-            {repo?.provisioned ? (
-              <>
-                <p style={{ margin: '8px 0' }}>
-                  <a href={repo.repo_url || '#'} target="_blank" rel="noreferrer">{repo.repo_owner}/{repo.repo_name}</a>
-                  {typeof repo.file_count === 'number' && <span className="rt-muted"> · {repo.file_count} files</span>}
-                </p>
-                <button className="rt-btn" disabled={busy === 'repo'} onClick={doSync}>{busy === 'repo' ? 'Syncing…' : 'Sync from GitHub'}</button>
-                {repo.recent_commits?.length > 0 && (
-                  <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
-                    {repo.recent_commits.slice(0, 3).map((c) => (
-                      <li key={c.sha} className="rt-muted" style={{ marginBottom: 4 }}>{c.message}</li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="rt-muted" style={{ margin: '8px 0' }}>
-                  No repo yet. Give me your GitHub username and I'll create a private one and add you to it.
-                </p>
-                <div className="rt-row">
-                  <input className="rt-in" value={ghLogin} onChange={(e) => setGhLogin(e.target.value)} placeholder="your-github-username" />
-                  <button className="rt-btn pri" disabled={busy === 'repo' || !ghLogin.trim()} onClick={doProvision}>
-                    {busy === 'repo' ? 'Creating…' : 'Create my repo'}
+            <div className="rt-card">
+              <div className="rt-prompt-h">
+                <div className="rt-lab" style={{ margin: 0 }}>Your Claude Code prompt</div>
+                <div className="rt-prompt-acts">
+                  {/* Copy is ALWAYS visible: collapsing the prompt must not cost
+                      the student the one action they came here for. */}
+                  <button className={`rt-btn${copied ? ' pri' : ''}`} onClick={copyPrompt} disabled={!prompt}>
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                  <button
+                    className="rt-btn"
+                    onClick={() => setPromptOpen((o) => !o)}
+                    aria-expanded={promptOpen}
+                    aria-controls="rt-prompt-body"
+                    disabled={!prompt}
+                  >
+                    {promptOpen ? 'Hide the full prompt' : 'Show the full prompt'}
                   </button>
                 </div>
-              </>
-            )}
-            {repoError && <p style={{ color: 'var(--cherry, #E5121D)', margin: '8px 0 0' }}>{repoError}</p>}
+              </div>
+              {promptOpen ? (
+                <pre id="rt-prompt-body" className="rt-in mono rt-prompt-full">
+                  {prompt || 'This task has no prompt yet.'}
+                </pre>
+              ) : (
+                // A two-line clamp, so the student can still recognise the
+                // prompt without it swallowing the column.
+                <p id="rt-prompt-body" className="rt-prompt-peek">
+                  {prompt || 'This task has no prompt yet.'}
+                </p>
+              )}
+            </div>
+
+            <div className="rt-card">
+              <div className="rt-lab" style={{ marginTop: 0 }}>Your workspace repo</div>
+              {repo?.provisioned ? (
+                <>
+                  <p style={{ margin: '8px 0' }}>
+                    <a href={repo.repo_url || '#'} target="_blank" rel="noreferrer">{repo.repo_owner}/{repo.repo_name}</a>
+                    {typeof repo.file_count === 'number' && <span className="rt-muted"> · {repo.file_count} files</span>}
+                  </p>
+                  <button className="rt-btn" disabled={busy === 'repo'} onClick={doSync}>{busy === 'repo' ? 'Syncing…' : 'Sync from GitHub'}</button>
+                  {repo.recent_commits?.length > 0 && (
+                    <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+                      {repo.recent_commits.slice(0, 3).map((c) => (
+                        <li key={c.sha} className="rt-muted" style={{ marginBottom: 4 }}>{c.message}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="rt-muted" style={{ margin: '8px 0' }}>
+                    No repo yet. Give me your GitHub username and I'll create a private one and add you to it.
+                  </p>
+                  <div className="rt-row">
+                    <input className="rt-in" value={ghLogin} onChange={(e) => setGhLogin(e.target.value)} placeholder="your-github-username" />
+                    <button className="rt-btn pri" disabled={busy === 'repo' || !ghLogin.trim()} onClick={doProvision}>
+                      {busy === 'repo' ? 'Creating…' : 'Create my repo'}
+                    </button>
+                  </div>
+                </>
+              )}
+              {repoError && <p style={{ color: 'var(--cherry, #E5121D)', margin: '8px 0 0' }}>{repoError}</p>}
+            </div>
           </section>
 
           {!done && !blocked.blocked && (
