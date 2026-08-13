@@ -6,7 +6,7 @@
 // 2026-08-05 about the Learning Path completion submitted 2026-06-24.
 //
 //   To:  partner-support@anthropic.com
-//   Cc:  ram@colaberry.com
+//   Cc:  ram@colaberry.com, william@colaberry.com
 //   Bcc: ali@colaberry.com
 //
 // STOPS ITSELF ON ANY OF:
@@ -36,7 +36,7 @@
 // unverifiable inbox (skip the day, alert); Mandrill transient blip (3 attempts
 // via sendMailWithRetry); crash between claim and send (day stays blocked);
 // duplicate cron tick (ledger refuses); weekend tick (quiet exit 0).
-// Not handled: a reply sent only to Ram and never forwarded. See
+// Not handled: a reply sent only to Ram or William and never forwarded. See
 // anthropicReplyWatch.js for why, and use --stop when that happens.
 
 const path = require('path');
