@@ -72,3 +72,57 @@ export function buildTicketTypeFilterOptions(byType: Record<string, number> | nu
     .map(([value, count]) => ({ value, label: getTicketTypeLabel(value), count }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
+
+// ─── Ticket Status Meta ──────────────────────────────────────────────────────
+// Same "single source of truth" pattern as TICKET_TYPE_META above, for the
+// backend's TicketStatus union (backend/src/models/Ticket.ts). Fixes a real bug
+// Ali found live: the Agent Dashboard's ticket-activity table rendered Status as
+// plain text with a single fixed gray badge class for every row — no color varied
+// by value. `StatusBadge`'s own WORD_TONE fallback doesn't cover these exact status
+// strings (e.g. 'in_progress', 'in_review' aren't in its generic word list), so
+// this module supplies the same kind of explicit, tested mapping TICKET_TYPE_META
+// already supplies for type.
+
+const TICKET_STATUS_META: Record<string, TicketTypeMetaEntry> = {
+  backlog: { label: 'Backlog', tone: 'neutral' },
+  todo: { label: 'To Do', tone: 'info' },
+  in_progress: { label: 'In Progress', tone: 'primary' },
+  in_review: { label: 'In Review', tone: 'warning' },
+  done: { label: 'Done', tone: 'success' },
+  cancelled: { label: 'Cancelled', tone: 'danger' },
+};
+
+/** A status not in TICKET_STATUS_META still renders (humanized fallback, neutral
+ * tone) rather than vanishing — same never-vanishes guarantee as getTicketTypeLabel. */
+export function getTicketStatusLabel(status: string): string {
+  if (!status) return 'Unknown';
+  return TICKET_STATUS_META[status]?.label ?? humanize(status);
+}
+
+export function getTicketStatusTone(status: string): Tone {
+  return TICKET_STATUS_META[status]?.tone ?? 'neutral';
+}
+
+// ─── Staleness ───────────────────────────────────────────────────────────────
+// "Anything over 3 days old should have a valid reason why it's still open"
+// (Ali, live feedback). Visibility only — this never changes a ticket's status,
+// never auto-closes, never auto-escalates; it just answers "is this stale" for a
+// banner/chip to render conditionally.
+
+export const STALE_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000;
+
+const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
+
+/**
+ * A closed ticket is never "stale" regardless of age — closure means the work
+ * concluded, not that it's languishing. Only an open ticket whose last activity
+ * (tickets.updated_at, reliably bumped by every activity-producing path in
+ * ticketService.ts) is 3+ days old is flagged.
+ */
+export function isTicketStale(updatedAt: string | Date | null | undefined, status: string): boolean {
+  if (TERMINAL_STATUSES.has(status)) return false;
+  if (!updatedAt) return false;
+  const d = updatedAt instanceof Date ? updatedAt : new Date(updatedAt);
+  if (Number.isNaN(d.getTime())) return false;
+  return Date.now() - d.getTime() >= STALE_THRESHOLD_MS;
+}

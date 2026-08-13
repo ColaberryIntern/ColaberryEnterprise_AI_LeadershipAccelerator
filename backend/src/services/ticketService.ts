@@ -3,31 +3,8 @@ import { Op } from 'sequelize';
 import { Ticket, TicketActivity } from '../models';
 import type { TicketStatus, TicketPriority, TicketType, TicketActorType } from '../models/Ticket';
 import type { AgentExecutionResult } from './agents/types';
-import { emitEvent } from './workLedger/workLedgerService';
-import type { WorkLedgerEventInput } from '../schemas/workLedgerEventSchema';
-
-// ProofDesk Work Ledger (Milestone 1 - Foundation, shadow mode): wraps this file's
-// three side-effecting functions with an emitEvent() call each. This helper NEVER
-// throws — a ledger-write failure must never change createTicket / updateTicketStatus
-// / addAgentOutput's existing return value or error behavior for their callers. See
-// workLedgerService.ts's header comment for the full Failure-First Design rationale.
-async function emitLedgerEventSafe(input: WorkLedgerEventInput): Promise<void> {
-  try {
-    await emitEvent(input);
-  } catch (err: any) {
-    console.error(
-      JSON.stringify({
-        timestamp: new Date().toISOString(),
-        level: 'error',
-        service: 'ticketService',
-        event: 'work_ledger_emit_failed',
-        outcome: 'failure',
-        error_class: err?.error_class || err?.name || 'Error',
-        context: { action_class: input.actionClass, idempotency_key: input.idempotencyKey, message: err?.message },
-      }),
-    );
-  }
-}
+import { emitLedgerEventSafe } from './workLedger/emitLedgerEventSafe';
+import { tryReuseStudentSupportTicket } from './ticketStudentSupportReuse';
 
 // ── State Machine ────────────────────────────────────────────────────────
 
@@ -80,8 +57,17 @@ export interface TicketFilters {
 // ── Create ───────────────────────────────────────────────────────────────
 
 export async function createTicket(data: CreateTicketData) {
-  // Deduplication: check for existing open ticket on same entity
-  if (data.entity_type && data.entity_id && data.type) {
+  // "One ticket per person per hour" (Ali, live feedback) — the student_support
+  // reuse/reopen rule lives in ticketStudentSupportReuse.ts (extracted so this
+  // function stays under CLAUDE.md's size ceiling); every other ticket type
+  // keeps the original, unbounded-while-open dedup below completely unchanged.
+  if (data.type === 'student_support') {
+    const reused = await tryReuseStudentSupportTicket(data);
+    if (reused) return reused;
+  } else if (data.entity_type && data.entity_id && data.type) {
+    // Original behavior, unchanged for every ticket type other than
+    // student_support: reuse any still-open ticket on the same entity, with
+    // no time window.
     const existing = await Ticket.findOne({
       where: {
         entity_type: data.entity_type,
