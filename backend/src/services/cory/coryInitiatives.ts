@@ -11,6 +11,7 @@ import { createTicket, createSubTasks, updateTicketStatus, addTicketComment } fr
 import AgentTask from '../../models/AgentTask';
 import { logAiEvent } from '../aiEventService';
 import { Op } from 'sequelize';
+import { getTicketCreatorAdminUserId } from '../agentBlueprint/ticketCreatorIdentitySeed';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,6 +62,12 @@ export async function createStrategicInitiative(input: CreateInitiativeInput): P
   if (existing) return existing;
 
   // 1. Create the parent ticket in the ticket system
+  // Agent Alias & Identity Fix (forward-fix) — stamp CoryBrain's real AdminUser
+  // identity on the assignee fields going forward, without touching
+  // created_by_type/created_by_id (never null/undefined — createTicket() always
+  // creates with status:'backlog' by default here, which never intersects
+  // ticketManagementAgent.ts's status:'todo' auto-dispatch sweep, so this is safe).
+  const coryBrainAdminUserId = await getTicketCreatorAdminUserId('CoryBrain');
   const ticket = await createTicket({
     title: `[Initiative] ${input.title}`,
     description: input.description,
@@ -69,6 +76,7 @@ export async function createStrategicInitiative(input: CreateInitiativeInput): P
     source: 'cory:evolution',
     created_by_type: 'cory',
     created_by_id: 'CoryBrain',
+    ...(coryBrainAdminUserId ? { assigned_to_type: 'ai_staff' as const, assigned_to_id: coryBrainAdminUserId } : {}),
     metadata: {
       initiative_type: input.initiative_type,
       involved_departments: input.involved_departments || [],

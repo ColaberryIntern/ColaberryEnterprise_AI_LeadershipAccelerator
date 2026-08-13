@@ -5,6 +5,7 @@
  * Ensures every action in the company layer is tracked via tickets.
  * Creates TicketActivity audit trail entries automatically.
  */
+import { getTicketCreatorAdminUserId } from '../agentBlueprint/ticketCreatorIdentitySeed';
 
 interface TicketInput {
   title: string;
@@ -83,6 +84,11 @@ export async function createDirectiveTicket(directiveId: string, companyId: stri
 }
 
 export async function createWorkforceTicket(companyId: string, agentName: string, decision: string, reasoning: string, priority: string = 'medium') {
+  // Agent Alias & Identity Fix (forward-fix) — createTrackedTicket() always
+  // creates with status:'backlog' (see below), which never intersects
+  // ticketManagementAgent.ts's status:'todo' auto-dispatch sweep, so it's safe
+  // to fully stamp workforce_intelligence_engine's real AdminUser id as assignee.
+  const workforceEngineAdminUserId = await getTicketCreatorAdminUserId('workforce_intelligence_engine');
   return createTrackedTicket({
     title: `[Workforce] ${decision.substring(0, 200)}`,
     description: reasoning,
@@ -94,11 +100,17 @@ export async function createWorkforceTicket(companyId: string, agentName: string
     companyId,
     entityType: 'agent',
     entityId: agentName,
+    ...(workforceEngineAdminUserId ? { assignedToType: 'ai_staff', assignedToId: workforceEngineAdminUserId } : {}),
     metadata: { agent_name: agentName, decision, reasoning },
   });
 }
 
 export async function createBPOSTicket(companyId: string, bpName: string, stage: string, bpId: string, parentTicketId?: string) {
+  // Agent Alias & Identity Fix (forward-fix) — createTrackedTicket() always
+  // creates with status:'backlog', and the caller (projectRoutes.ts) always
+  // immediately transitions it to 'in_progress' right after (never 'todo'), so
+  // it's safe to fully stamp bpos_orchestrator's real AdminUser id as assignee.
+  const bposAdminUserId = await getTicketCreatorAdminUserId('bpos_orchestrator');
   return createTrackedTicket({
     title: `[BPOS] ${bpName} — ${stage}`,
     description: `BPOS execution stage: ${stage} for business process "${bpName}"`,
@@ -111,6 +123,7 @@ export async function createBPOSTicket(companyId: string, bpName: string, stage:
     entityType: 'capability',
     entityId: bpId,
     parentTicketId,
+    ...(bposAdminUserId ? { assignedToType: 'ai_staff', assignedToId: bposAdminUserId } : {}),
     metadata: { bp_name: bpName, stage, bp_id: bpId },
   });
 }

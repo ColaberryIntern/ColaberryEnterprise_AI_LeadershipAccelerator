@@ -9,15 +9,18 @@
  */
 jest.mock('../agentIdentitySeed', () => ({
   seedAgentIdentity: jest.fn(),
+  getAgentAdminUserId: jest.fn(),
 }));
 
-import { seedAgentIdentity } from '../agentIdentitySeed';
+import { seedAgentIdentity, getAgentAdminUserId } from '../agentIdentitySeed';
 import {
   seedTicketCreatorIdentities,
+  getTicketCreatorAdminUserId,
   TICKET_CREATOR_IDENTITIES,
 } from '../ticketCreatorIdentitySeed';
 
 const mockSeedAgentIdentity = seedAgentIdentity as unknown as jest.Mock;
+const mockGetAgentAdminUserId = getAgentAdminUserId as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -61,6 +64,38 @@ describe('TICKET_CREATOR_IDENTITIES', () => {
     for (const config of TICKET_CREATOR_IDENTITIES) {
       expect(config.pilotCohortGate).toBe(false);
     }
+  });
+
+  it('every entry carries its own real, verified legacyCreatorIds equal to its own agentName (matches production tickets.created_by_id exactly)', () => {
+    for (const config of TICKET_CREATOR_IDENTITIES) {
+      expect(config.legacyCreatorIds).toEqual([config.agentName]);
+    }
+  });
+});
+
+describe('getTicketCreatorAdminUserId', () => {
+  it('happy path: resolves a known agentName to its real AdminUser id via the shared per-email cache', async () => {
+    mockGetAgentAdminUserId.mockResolvedValue('admin-cory-engine-1');
+
+    const id = await getTicketCreatorAdminUserId('cory-engine');
+
+    expect(id).toBe('admin-cory-engine-1');
+    expect(mockGetAgentAdminUserId).toHaveBeenCalledWith('cory-engine@colaberry.com');
+  });
+
+  it('boundary: an unknown agentName returns null without ever calling getAgentAdminUserId', async () => {
+    const id = await getTicketCreatorAdminUserId('SomeUnregisteredProcess');
+
+    expect(id).toBeNull();
+    expect(mockGetAgentAdminUserId).not.toHaveBeenCalled();
+  });
+
+  it('failure path: identity not yet seeded (getAgentAdminUserId resolves null) propagates null, never throws', async () => {
+    mockGetAgentAdminUserId.mockResolvedValue(null);
+
+    const id = await getTicketCreatorAdminUserId('bpos_orchestrator');
+
+    expect(id).toBeNull();
   });
 });
 
