@@ -62,6 +62,17 @@ const importSchema = z.object({
   })),
 });
 
+// Mirrors the classroom runtime's mentor contract exactly, so the two
+// workspaces speak the same language and a client can share code.
+const mentorSchema = z.object({
+  mode: z.enum(['ask', 'hint', 'explain', 'review']).default('ask'),
+  message: z.string().max(4000).default(''),
+  history: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().max(8000),
+  })).max(40).optional(),
+});
+
 router.get('/api/portal/projects', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!gate(res)) return;
@@ -116,5 +127,28 @@ router.post('/api/portal/projects/import', requireParticipant, async (req: Reque
     res.json(await importProject(eid(req), payload));
   } catch (e) { fail(res, e, next); }
 });
+
+/**
+ * The AI mentor for one project task — the SAME coach the classroom runtime
+ * uses, handed the task instead of a Timeline card. A student inside a build
+ * should not get a weaker mentor than a student inside a lesson.
+ *
+ * 404 covers both "no such task" and "not yours", so probing for other
+ * students' project ids tells you nothing.
+ */
+router.post(
+  '/api/portal/projects/:projectId/tasks/:taskId/mentor',
+  requireParticipant,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!gate(res)) return;
+      const body = mentorSchema.parse(req.body || {});
+      const { loadOwnedTask, coachOnTask } = await import('../services/projects/projectMentorService');
+      const task = await loadOwnedTask(eid(req), String(req.params.projectId), String(req.params.taskId));
+      if (!task) return res.status(404).json({ error: 'Task not found' });
+      res.json(await coachOnTask(eid(req), task, body.mode, body.message, body.history || []));
+    } catch (e) { fail(res, e, next); }
+  },
+);
 
 export default router;

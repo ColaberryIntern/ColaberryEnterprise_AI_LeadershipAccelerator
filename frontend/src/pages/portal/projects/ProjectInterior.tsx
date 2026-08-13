@@ -4,7 +4,6 @@ import {
   projectProgress, reqVerified, nextTask, skipTask, isTaskBlocked,
 } from './projectsStore';
 import NextSessionStrip from './NextSessionStrip';
-import ProjectWorkspaceDrawer from './ProjectWorkspaceDrawer';
 import { CorySpark } from '../../../components/portal/CoryMark';
 import { useIsExplorer } from '../useIsExplorer';
 
@@ -148,28 +147,18 @@ const ProjectInterior: React.FC<{
   /** True while the page header is showing the condensed next-step card. */
   condensed?: boolean;
   /**
-   * Which task the workspace has open, owned by the page. It lives up there so
-   * a feed card, the condensed header and a card in this list all drive the
-   * SAME drawer — when this component owned it, arriving from the feed opened
-   * the build with nothing on the right.
+   * Open a task. The page navigates to the project WORKSPACE — the full page
+   * with the mentor on the right, the build-side twin of the classroom runtime.
+   * This component used to own a slide-over drawer instead, which is not the
+   * same thing and did not feel like the same product.
    */
-  openTaskId: string | null;
-  onOpenTask: (taskId: string | null) => void;
-}> = ({ project, onBack, condensed, openTaskId, onOpenTask }) => {
+  onOpenTask: (taskId: string) => void;
+}> = ({ project, onBack, condensed, onOpenTask }) => {
   const demo = useIsExplorer();   // Explorer = demo mode
   const [sel, setSel] = useState<string>('all'); // 'all' or a list id (drives the outline filter)
   const prog = projectProgress(project);
   const rv = reqVerified(project);
   const nx = nextTask(project);
-
-  // Resolve the task currently open in the drawer (re-derived so it stays in
-  // sync with the store after mark-done / skip mutations). Never resolve a BLOCKED
-  // task — the workspace must not open for a locked dependency (guard, alongside
-  // the drawer's own).
-  const resolved = openTaskId
-    ? project.lists.flatMap((l) => l.tasks).find((t) => t.id === openTaskId) || null
-    : null;
-  const wsTask = resolved && !isTaskBlocked(project, resolved).blocked ? resolved : null;
 
   // stat tiles (whole project, regardless of filter)
   let open = 0, today = 0, overdue = 0, done = 0;
@@ -291,13 +280,6 @@ const ProjectInterior: React.FC<{
           </div>
         </aside>
       </div>
-
-      <ProjectWorkspaceDrawer
-        project={project}
-        task={wsTask}
-        open={wsTask !== null}
-        onClose={() => onOpenTask(null)}
-      />
     </>
   );
 };

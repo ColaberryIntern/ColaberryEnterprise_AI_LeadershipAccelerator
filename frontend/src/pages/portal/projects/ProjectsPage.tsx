@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
@@ -130,6 +131,7 @@ const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => 
 };
 
 const ProjectsPage: React.FC = () => {
+  const navigate = useNavigate();
   const projects = useProjectsList();
   // Backend-source flip: pull the student's persisted build (completions from
   // other devices, or a build this browser has never seen) then mirror back up.
@@ -146,9 +148,25 @@ const ProjectsPage: React.FC = () => {
     setView({ kind: 'interior', id, taskId: taskId ?? null });
     window.scrollTo(0, 0);
   };
-  // Opening/closing a task never leaves the build, so it edits the view in place.
-  const setOpenTask = (taskId: string | null) =>
-    setView((v) => (v.kind === 'interior' ? { ...v, taskId } : v));
+  /**
+   * Open a task in the project WORKSPACE — the full page with the mentor on the
+   * right, the build-side twin of the classroom runtime. This used to open a
+   * slide-over drawer, which is not the same thing and did not feel like the
+   * same product. `from` is stamped so the workspace's back button returns to
+   * wherever the student actually came from.
+   */
+  const openTaskWorkspace = (projectId: string, task: ProjectTask | null) => {
+    if (!task) return;
+    const key = task.storyId || task.id;
+    navigate(`/portal/projects/workspace/${projectId}/${encodeURIComponent(key)}`,
+      { state: { from: window.location.pathname } });
+  };
+  const openTaskById = (projectId: string, taskId: string | null) => {
+    if (!taskId) return;
+    const p = projects.find((x) => x.id === projectId);
+    const t = p?.lists.flatMap((l) => l.tasks).find((x) => x.id === taskId) ?? null;
+    openTaskWorkspace(projectId, t);
+  };
 
   /**
    * Start a build.
@@ -223,7 +241,7 @@ const ProjectsPage: React.FC = () => {
   // primary build + hero next-step
   const primary = projects[0] || null;
   const primaryNext = primary ? nextTask(primary) : null;
-  const openBuildPrimary = () => { if (primary) openInterior(primary.id, primaryNext?.task.id ?? null); };
+  const openBuildPrimary = () => { if (primary) openTaskWorkspace(primary.id, primaryNext?.task ?? null); };
   const copyPrompt = () => { if (navigator.clipboard && primaryNext?.task.prompt) navigator.clipboard.writeText(primaryNext.task.prompt); };
   const startBuild = () => setView({ kind: 'wizard' });
 
@@ -236,7 +254,7 @@ const ProjectsPage: React.FC = () => {
     opens.slice(0, 4).forEach(({ t, l }) => feed.push({
       id: `t-${t.id}`, source: 'projects', sourceLabel: p.name, color: p.accent, icon: PROJ_ICON,
       title: t.title, meta: l.name, desc: t.what,
-      cta: { label: 'Open build', onClick: () => openInterior(p.id, t.id), variant: 'berry' },
+      cta: { label: 'Open build', onClick: () => openTaskWorkspace(p.id, t), variant: 'berry' },
     }));
   });
   const feedTop = feed.slice(0, 6);
@@ -264,7 +282,7 @@ const ProjectsPage: React.FC = () => {
             primary={active}
             primaryNext={activeNext}
             demo={demo}
-            onOpenBuild={() => setOpenTask(activeNext?.task.id ?? null)}
+            onOpenBuild={() => openTaskWorkspace(active.id, activeNext?.task ?? null)}
             onCopyPrompt={() => { if (navigator.clipboard && activeNext?.task.prompt) navigator.clipboard.writeText(activeNext.task.prompt); }}
             onStartBuild={startBuild}
           />
@@ -275,8 +293,7 @@ const ProjectsPage: React.FC = () => {
             <ProjectInterior
               project={active}
               condensed={condensed}
-              openTaskId={view.taskId ?? null}
-              onOpenTask={setOpenTask}
+              onOpenTask={(taskId) => openTaskById(active.id, taskId)}
               onBack={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }}
             />
           </div>
