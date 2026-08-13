@@ -1,0 +1,161 @@
+/* ============================================================================
+   maturityLadder.css -- "From AI Aware to AI Organization".
+
+   The climb is layout, not artwork: the track is rotated and the dots ride it,
+   so adding or renaming a level needs no new geometry. On narrow viewports the
+   diagonal collapses and only the cards remain, because a five-point diagonal at
+   390px is unreadable rather than merely small.
+   ========================================================================== */
+
+.cbv2-ladder { display: grid; gap: var(--space-8); }
+
+/* ------------------------------------------------------------- the climb -- */
+
+/*
+ * The dots and the connector are derived from ONE rotation, so they are
+ * collinear by construction. The first version rotated a line by a fixed angle
+ * while raising each dot with padding -- two independent systems that agreed at
+ * the left and drifted apart by the fifth dot, which sat visibly off the line.
+ *
+ * Now the whole track is rotated and every dot is vertically centred within it,
+ * which puts them exactly on the bar. Each dot and label is counter-rotated so
+ * the type stays upright at any width.
+ */
+.cbv2-ladder__row {
+  list-style: none;
+  /* Rotation grows the bounding box in BOTH directions, and the highest step
+     carries its label above the dot, so the top needs the most room -- without
+     it the fifth label was clipped off. Horizontal inset keeps the end labels
+     inside the section rather than against its edge. */
+  margin: 88px 0 64px;
+  padding: 0 3%;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  position: relative;
+  transform: rotate(-8deg);
+}
+
+/* The connector: one bar through the middle of the rotated track. */
+.cbv2-ladder__row::before {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg,
+    var(--blue-700),
+    var(--chart-1) 26%,
+    var(--green-600) 50%,
+    var(--amber-500, #e8a33d) 74%,
+    var(--color-cherry, #fb2832));
+}
+
+.cbv2-ladder__step {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  position: relative;
+  z-index: 1;
+  /* Counter-rotate so the label and numeral read horizontally. */
+  transform: rotate(8deg);
+}
+
+/* Restored: the replacement that introduced the rotation also removed these,
+   which left the numerals floating on the line with no dot behind them. */
+.cbv2-ladder__dot {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-body-sm);
+  color: #fff;
+  background: var(--chart-1);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--chart-1) 22%, transparent);
+}
+.cbv2-ladder__step:nth-child(1) .cbv2-ladder__dot { background: var(--blue-700); box-shadow: 0 0 0 5px color-mix(in srgb, var(--blue-700) 20%, transparent); }
+.cbv2-ladder__step:nth-child(2) .cbv2-ladder__dot { background: var(--chart-1); box-shadow: 0 0 0 5px color-mix(in srgb, var(--chart-1) 20%, transparent); }
+.cbv2-ladder__step:nth-child(3) .cbv2-ladder__dot { background: var(--green-600); box-shadow: 0 0 0 5px color-mix(in srgb, var(--green-600) 20%, transparent); }
+.cbv2-ladder__step:nth-child(4) .cbv2-ladder__dot { background: var(--amber-500, #e8a33d); box-shadow: 0 0 0 5px color-mix(in srgb, var(--amber-500, #e8a33d) 22%, transparent); }
+.cbv2-ladder__step:nth-child(5) .cbv2-ladder__dot { background: var(--color-cherry, #fb2832); box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-cherry, #fb2832) 20%, transparent); }
+
+.cbv2-ladder__name {
+  order: -1;
+  font-size: var(--fs-body-sm);
+  font-weight: 700;
+  color: var(--text-strong);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- cards ---- */
+
+.cbv2-ladder__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.cbv2-ladder__card {
+  padding: var(--space-5);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  /* The top rule repeats the step colour, so card and dot are legible as a pair
+     without relying on position alone. */
+  border-top: 3px solid var(--border-default);
+}
+.cbv2-ladder__card:nth-child(1) { border-top-color: var(--blue-700); }
+.cbv2-ladder__card:nth-child(2) { border-top-color: var(--chart-1); }
+.cbv2-ladder__card:nth-child(3) { border-top-color: var(--green-600); }
+.cbv2-ladder__card:nth-child(4) { border-top-color: var(--amber-500, #e8a33d); }
+.cbv2-ladder__card:nth-child(5) { border-top-color: var(--color-cherry, #fb2832); }
+
+.cbv2-ladder__n {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+}
+.cbv2-ladder__title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  color: var(--text-strong);
+}
+.cbv2-ladder__what { margin: 0 0 var(--space-3); color: var(--text-muted); line-height: 1.55; }
+.cbv2-ladder__measures {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.cbv2-ladder__measures strong { color: var(--text-strong); }
+
+@media (max-width: 1080px) {
+  .cbv2-ladder__cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  /* A five-point diagonal is unreadable at this width, so it goes rather than
+     shrinking into noise. The cards carry the same information in order. */
+  .cbv2-ladder__row { display: none; }
+}
+@media (max-width: 620px) {
+  .cbv2-ladder__cards { grid-template-columns: minmax(0, 1fr); }
+}

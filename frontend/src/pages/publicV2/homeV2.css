@@ -1,0 +1,425 @@
+/* ============================================================================
+   homeV2.css -- Homepage V2.
+   Extends publicV2.css. Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+.cbv2-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  font-weight: 700;
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--brand-accent);
+  margin: 0;
+}
+.cbv2-eyebrow--info { color: var(--brand-tertiary); }
+.cbv2-eyebrow--warn { color: var(--status-warning); }
+
+.cbv2-section { padding-block: var(--space-24); }
+.cbv2-section--sunken { background: var(--surface-sunken); }
+.cbv2-section--inverse {
+  background: var(--surface-inverse, #0e1420);
+  color: var(--text-on-inverse, #f8f8f7);
+}
+.cbv2-section--inverse h2 { color: var(--text-on-inverse, #f8f8f7); }
+.cbv2-section--inverse .cbv2-lede { color: var(--text-on-inverse-muted, #a9b4c4); }
+
+.cbv2-section__head { max-width: 64ch; margin-bottom: var(--space-12); }
+.cbv2-section__head h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-heading);
+  color: var(--text-strong);
+  margin: var(--space-3) 0;
+}
+.cbv2-lede {
+  font-size: var(--fs-body-lg);
+  color: var(--text-muted);
+  line-height: var(--lh-relaxed);
+  margin: 0;
+}
+.cbv2-wrap--narrow { max-width: var(--container-sm, 820px); }
+
+/* ------------------------------------------------------------------ hero -- */
+
+.cbv2-hero {
+  background: var(--surface-inverse, #0e1420);
+  color: var(--text-on-inverse, #f8f8f7);
+  padding-block: var(--space-20);
+  position: relative;
+  overflow: hidden;
+}
+.cbv2-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(820px 440px at 82% -10%, rgba(251, 40, 50, 0.22), transparent 62%),
+    radial-gradient(640px 360px at 2% 10%, rgba(54, 120, 149, 0.20), transparent 60%);
+}
+.cbv2-hero__grid {
+  position: relative;
+  display: grid;
+  gap: var(--space-12);
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+  align-items: center;
+}
+@media (max-width: 1080px) {
+  .cbv2-hero__grid { grid-template-columns: minmax(0, 1fr); }
+}
+.cbv2-hero__title {
+  font-family: var(--font-display);
+  font-size: clamp(38px, 5.2vw, 60px);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tighter);
+  color: var(--text-on-inverse, #f8f8f7);
+  margin: var(--space-5) 0;
+}
+.cbv2-hero__title em { font-style: normal; color: #ff5a63; }
+.cbv2-hero__body {
+  font-size: var(--fs-body-lg);
+  color: var(--text-on-inverse-muted, #a9b4c4);
+  max-width: 56ch;
+  margin-bottom: var(--space-8);
+}
+.cbv2-hero__ctas { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; }
+.cbv2-btn--ghost {
+  background: transparent;
+  color: var(--text-on-inverse, #f8f8f7);
+  border-color: rgba(248, 248, 247, 0.28);
+}
+
+/* hero product panel -- the readiness rollup is a LIVE surface */
+.cbv2-hero__panel {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  min-width: 0;
+}
+.cbv2-panel__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-sunken);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-panel__url { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); }
+.cbv2-panel__body { padding: var(--space-6); }
+
+/* The hero panel is a light card inside a dark section: it must opt out of the
+   section colour or its headings render near-invisible. This exact defect
+   (1.03:1 contrast) shipped once in the prototype. */
+.cbv2-hero .cbv2-hero__panel,
+.cbv2-hero .cbv2-hero__panel h1,
+.cbv2-hero .cbv2-hero__panel h2,
+.cbv2-hero .cbv2-hero__panel h3,
+.cbv2-hero .cbv2-hero__panel .cbv2-metric__value { color: var(--text-strong); }
+.cbv2-hero .cbv2-hero__panel .cbv2-metric__label,
+.cbv2-hero .cbv2-hero__panel .cbv2-track { color: var(--text-muted); }
+
+.cbv2-tracks { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-6); }
+.cbv2-track {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+.cbv2-track > span:first-child { flex: 0 0 104px; }
+.cbv2-track__rail {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+  min-width: 0;
+}
+.cbv2-track__rail i { display: block; height: 100%; background: var(--chart-1); border-radius: 3px; }
+.cbv2-track b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+
+/* ----------------------------------------------------------------- cards -- */
+
+.cbv2-grid { display: grid; gap: var(--space-6); }
+.cbv2-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .cbv2-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .cbv2-grid--3 { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-card {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+.cbv2-card--dashed { border-style: dashed; }
+.cbv2-card__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h5);
+  color: var(--text-strong);
+  margin: var(--space-2) 0;
+}
+.cbv2-card__body { font-size: var(--fs-body-sm); color: var(--text-muted); margin: 0; }
+
+/* --------------------------------------------------------- goal chooser --- */
+
+.cbv2-chooser {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: var(--space-8);
+}
+@media (max-width: 980px) { .cbv2-chooser { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cbv2-chooser { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-chooser__btn {
+  min-height: var(--target-min, 44px);
+  text-align: left;
+  padding: var(--space-4);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: var(--fs-body-sm);
+  color: var(--text-strong);
+}
+.cbv2-chooser__btn[aria-pressed="true"] {
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 1px var(--brand-accent);
+}
+.cbv2-chooser__out {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 980px) { .cbv2-chooser__out { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cbv2-chooser__out { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-field {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+}
+.cbv2-field h3 {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin: 0 0 var(--space-2);
+}
+.cbv2-field p { font-size: var(--fs-body-sm); color: var(--text-body); margin: 0; }
+
+/* ---------------------------------------------------------------- engine -- */
+
+.cbv2-engine { display: grid; gap: var(--space-6); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .cbv2-engine { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-lane {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+.cbv2-lane--system { border-top: var(--border-3) solid var(--chart-1); }
+.cbv2-lane--people { border-top: var(--border-3) solid var(--chart-3); }
+.cbv2-lane h3 { font-family: var(--font-display); font-size: var(--fs-h5); margin: 0 0 var(--space-4); }
+.cbv2-lane__steps {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.cbv2-lane__steps li {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.cbv2-lane__n {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  border-radius: var(--radius-pill);
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-default);
+  color: var(--text-muted);
+}
+.cbv2-lane__t { font-weight: 700; font-size: var(--fs-body-sm); color: var(--text-strong); display: block; }
+.cbv2-lane__d { font-size: var(--fs-caption); color: var(--text-muted); display: block; }
+.cbv2-converge {
+  margin: var(--space-6) 0 0;
+  text-align: center;
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--surface-brand-subtle, rgba(251, 40, 50, 0.06));
+  border: var(--border-1) solid var(--brand-accent);
+}
+.cbv2-converge strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--fs-h5);
+  color: var(--text-strong);
+}
+.cbv2-converge span {
+  display: block;
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+}
+
+/* ------------------------------------------------------- services ribbon -- */
+/* Five items in five columns, so the row cannot orphan. The audit found
+   auto-fit grids producing stranded cards on 5- and 6-item blocks. */
+
+.cbv2-ribbon { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; }
+@media (max-width: 1080px) { .cbv2-ribbon { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .cbv2-ribbon { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-ribbon__item {
+  padding: var(--space-5);
+  border: var(--border-1) solid var(--border-subtle);
+  background: var(--surface-card);
+  text-decoration: none;
+  display: block;
+  min-width: 0;
+}
+.cbv2-ribbon__item + .cbv2-ribbon__item { border-left: none; }
+@media (max-width: 1080px) {
+  .cbv2-ribbon__item + .cbv2-ribbon__item { border-left: var(--border-1) solid var(--border-subtle); }
+}
+.cbv2-ribbon__item:hover { background: var(--surface-sunken); }
+.cbv2-ribbon__n { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--brand-accent); }
+.cbv2-ribbon__title {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-body-sm);
+  color: var(--text-strong);
+  margin: var(--space-2) 0 4px;
+}
+.cbv2-ribbon__body {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: var(--lh-normal);
+}
+
+/* ------------------------------------------------------------------ book -- */
+
+/* Warm, low-contrast ground so the section reads as a pause between the product
+   argument and the closing ask, rather than another card wall. */
+.cbv2-book {
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--chart-1) 7%, var(--surface-sunken)),
+    var(--surface-sunken) 60%);
+}
+.cbv2-book__grid {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--space-9, 48px);
+  align-items: center;
+}
+.cbv2-book__cover {
+  margin: 0;
+  /* Lift and tilt, so a flat scan of a cover reads as a physical object. */
+  transform: rotate(-2.2deg);
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cbv2-book__cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.16),
+    0 18px 40px rgba(0, 0, 0, 0.22),
+    /* the spine edge */
+    -6px 0 0 -2px rgba(0, 0, 0, 0.10);
+}
+.cbv2-book:hover .cbv2-book__cover { transform: rotate(-0.8deg) translateY(-4px); }
+
+.cbv2-book__body {
+  margin: var(--space-5) 0 0;
+  max-width: 62ch;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.cbv2-book__by {
+  margin: var(--space-5) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+@media (max-width: 860px) {
+  .cbv2-book__grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+  .cbv2-book__cover { max-width: 200px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-book__cover,
+  .cbv2-book:hover .cbv2-book__cover { transition: none; transform: rotate(-2.2deg); }
+}
+
+/* ----------------------------------------------------------- photography -- */
+
+/*
+ * Photographs are ATMOSPHERE, never evidence. They carry no caption asserting
+ * who the people are, because they are licensed stock rather than Colaberry
+ * staff or customers -- see docs/V2_CUTOVER_CARRYOVER.md. A picture presented as
+ * proof of something that did not happen is a fabricated claim made of pixels.
+ */
+.cbv2-photo {
+  margin: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+}
+.cbv2-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A cherry wash ties stock imagery to the palette instead of leaving it generic. */
+.cbv2-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(150deg,
+    color-mix(in srgb, var(--color-cherry, #fb2832) 12%, transparent),
+    transparent 55%);
+  pointer-events: none;
+}
+
+.cbv2-engine__photo { margin-top: var(--space-8); aspect-ratio: 21 / 7; }
+
+/* ============================================================================
+   D7 -- the service ribbon was a wall of five identical cards.
+   The first engagement is the one most buyers start with, so it takes a wider
+   cell and heavier type; the rest read as a supporting row. Asymmetry that
+   encodes something true beats five equal boxes.
+   ========================================================================== */
+@media (min-width: 1000px) {
+  .cbv2-ribbon {
+    grid-template-columns: 1.5fr repeat(4, 1fr);
+    align-items: stretch;
+  }
+  .cbv2-ribbon__item:first-child {
+    background: linear-gradient(160deg,
+      color-mix(in srgb, var(--color-cherry, #fb2832) 6%, var(--surface-card)),
+      var(--surface-card) 65%);
+    border-color: color-mix(in srgb, var(--color-cherry, #fb2832) 28%, transparent);
+  }
+  .cbv2-ribbon__item:first-child .cbv2-ribbon__title {
+    font-size: var(--fs-h4);
+    line-height: 1.2;
+  }
+}
+/* Reveal the reading order on hover without moving anything around it. */
+.cbv2-ribbon__item { transition: border-color 220ms ease, transform 220ms ease; }
+.cbv2-ribbon__item:hover { transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-ribbon__item, .cbv2-ribbon__item:hover { transition: none; transform: none; }
+}

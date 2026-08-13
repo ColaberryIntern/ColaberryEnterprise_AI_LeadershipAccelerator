@@ -1,0 +1,79 @@
+/* ============================================================================
+   platformV2.css -- Platform Showroom.
+   Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+.cbv2-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+.cbv2-tab {
+  min-height: var(--target-min, 44px);
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-pill);
+  border: var(--border-1) solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.cbv2-tab:hover { border-color: var(--text-subtle); }
+.cbv2-tab[aria-selected="true"] {
+  background: var(--text-strong);
+  color: var(--surface-card);
+  border-color: var(--text-strong);
+}
+
+/* ---------------------------------------------------------- surface panel -- */
+
+.cbv2-surface {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+.cbv2-surface__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-5);
+  background: var(--surface-sunken);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-surface__bar strong {
+  font-family: var(--font-display);
+  font-size: var(--fs-body-sm);
+  color: var(--text-strong);
+}
+.cbv2-surface__where {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+.cbv2-surface__body { padding: var(--space-6); }
+
+.cbv2-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .cbv2-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cbv2-grid--4 { grid-template-columns: minmax(0, 1fr); } }
+
+/* The surface panel is a light card; if it is ever placed on an inverse section
+   its headings must opt out of the section colour. Recorded because the inverse
+   of this rule shipped a 1.03:1 heading during prototype review. */
+.cbv2-section--inverse .cbv2-surface,
+.cbv2-section--inverse .cbv2-surface strong,
+.cbv2-section--inverse .cbv2-surface .cbv2-metric__value { color: var(--text-strong); }
+
+/* The member-record capture sits between the claim and the six ways it is
+   earned, so it reads as the evidence for that heading. */
+.cbv2-earned__shot {
+  margin: 0 0 var(--space-8);
+  max-width: 1100px;
+}
+.cbv2-earned__shot .cbv2-shot-caption { padding: var(--space-3) var(--space-4); }

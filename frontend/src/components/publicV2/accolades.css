@@ -1,0 +1,42 @@
+/* ============================================================================
+   accolades.css -- the governed "built for outcomes" band.
+   Tiles are sized to whatever survives the registry, so a shorter list still
+   fills the row rather than leaving gaps where withheld claims would have been.
+   ========================================================================== */
+
+.cbv2-accolades {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-5);
+}
+
+.cbv2-accolade {
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  border-top: 3px solid var(--color-cherry, #fb2832);
+  display: grid;
+  gap: var(--space-2);
+}
+.cbv2-accolade:nth-child(2) { border-top-color: var(--chart-1); }
+.cbv2-accolade:nth-child(3) { border-top-color: var(--green-600); }
+.cbv2-accolade:nth-child(4) { border-top-color: var(--amber-500, #e8a33d); }
+
+.cbv2-accolade__icon { color: var(--text-subtle); }
+
+.cbv2-accolade__figure {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+  text-wrap: balance;
+}
+.cbv2-accolade__label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.5;
+}

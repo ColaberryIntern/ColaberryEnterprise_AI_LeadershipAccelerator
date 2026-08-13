@@ -1,0 +1,139 @@
+/* ============================================================================
+   servicesV2.css -- Services index and detail.
+   Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+/* ------------------------------------------------------------ page hero -- */
+
+.cbv2-pagehero {
+  background: var(--surface-inverse, #0e1420);
+  color: var(--text-on-inverse, #f8f8f7);
+  padding-block: var(--space-16);
+  position: relative;
+  overflow: hidden;
+}
+.cbv2-pagehero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(760px 400px at 84% -12%, rgba(251, 40, 50, 0.20), transparent 62%);
+}
+.cbv2-pagehero > * { position: relative; }
+
+/* Dark surfaces must override the base heading colour, or headings inherit the
+   light-theme text token and render dark-on-dark. This exact defect (1.03:1)
+   shipped once during prototype review. */
+.cbv2-pagehero h1,
+.cbv2-pagehero h2 { color: var(--text-on-inverse, #f8f8f7); }
+
+.cbv2-pagehero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  margin: var(--space-4) 0 var(--space-4);
+}
+.cbv2-pagehero__lede {
+  font-size: var(--fs-body-lg);
+  color: var(--text-on-inverse-muted, #a9b4c4);
+  max-width: 62ch;
+  margin: 0;
+}
+.cbv2-eyebrow--onDark { color: #ff8a90; }
+.cbv2-breadcrumb {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--text-on-inverse-muted, #a9b4c4);
+  margin: 0 0 var(--space-4);
+}
+.cbv2-breadcrumb a { color: var(--text-on-inverse, #f8f8f7); }
+
+/* -------------------------------------------------------------- listing -- */
+/* Alternating splits rather than a grid: five items in a 4-wide grid orphans
+   the fifth card, which independent review flagged twice. */
+
+.cbv2-svc-list { display: flex; flex-direction: column; gap: var(--space-20); }
+
+.cbv2-svc {
+  display: grid;
+  gap: var(--space-12);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  align-items: start;
+}
+@media (max-width: 980px) {
+  .cbv2-svc { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+}
+
+/* Flip via CSS order only. Reordering the DOM as well cancels it out and every
+   row renders identically -- a real defect found during prototype review. */
+.cbv2-svc--flip .cbv2-svc__copy { order: 2; }
+@media (max-width: 980px) {
+  .cbv2-svc--flip .cbv2-svc__copy { order: 0; }
+}
+
+.cbv2-svc__name {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+  color: var(--text-strong);
+  margin: var(--space-2) 0 var(--space-4);
+}
+.cbv2-svc__name a { color: inherit; text-decoration: none; }
+.cbv2-svc__name a:hover { text-decoration: underline; }
+
+.cbv2-svc__dlv-head {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin: 0 0 var(--space-4);
+}
+.cbv2-svc__dlv {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cbv2-svc__dlv--wide { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) {
+  .cbv2-svc__dlv,
+  .cbv2-svc__dlv--wide { grid-template-columns: minmax(0, 1fr); }
+}
+.cbv2-svc__dlv li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  font-size: var(--fs-body-sm);
+  color: var(--text-body);
+  min-width: 0;
+}
+.cbv2-svc__dlv li span {
+  color: var(--status-success);
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.cbv2-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) { .cbv2-grid--2 { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-note {
+  margin-top: var(--space-10);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  font-style: italic;
+  border-left: var(--border-3) solid var(--border-default);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-sunken);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* Icon tile above the service name. Spacing matches the card rhythm so the row
+   does not grow taller than its paired panel. */
+.cbv2-svc__copy .cbv2-icon-tile { margin-bottom: var(--space-4); }
+
+/* Breaks the alternating engagement rows before the closing note. */
+.cbv2-svc__photo { margin-top: var(--space-9, 48px); aspect-ratio: 21 / 6; }

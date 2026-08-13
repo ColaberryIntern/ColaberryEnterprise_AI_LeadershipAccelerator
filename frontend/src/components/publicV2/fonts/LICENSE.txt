@@ -1,0 +1,11 @@
+Space Grotesk
+Copyright (c) 2020 Florian Karsten, with Reserved Font Name 'Space Grotesk'.
+Licensed under the SIL Open Font License, Version 1.1 (OFL-1.1).
+https://openfontlicense.org
+
+OFL-1.1 permits self-hosting and redistribution with the software, including
+bundling in a website, provided the font is not sold on its own and the
+Reserved Font Name is not used for modified versions.
+
+Files here are the Latin subset (U+0000-00FF etc.) as served by Google Fonts.
+Self-hosted deliberately: the prototype makes no external requests.
