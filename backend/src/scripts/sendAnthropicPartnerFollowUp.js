@@ -6,7 +6,7 @@
 // 2026-08-05 about the Learning Path completion submitted 2026-06-24.
 //
 //   To:  partner-support@anthropic.com
-//   Cc:  ram@colaberry.com
+//   Cc:  ram@colaberry.com, william@colaberry.com
 //   Bcc: ali@colaberry.com
 //
 // STOPS ITSELF ON ANY OF:
@@ -36,12 +36,20 @@
 // unverifiable inbox (skip the day, alert); Mandrill transient blip (3 attempts
 // via sendMailWithRetry); crash between claim and send (day stays blocked);
 // duplicate cron tick (ledger refuses); weekend tick (quiet exit 0).
-// Not handled: a reply sent only to Ram and never forwarded. See
+// Not handled: a reply sent only to Ram or William and never forwarded. See
 // anthropicReplyWatch.js for why, and use --stop when that happens.
 
 const path = require('path');
 
-try { require('dotenv').config({ path: path.resolve(__dirname, '../../.env') }); } catch (_e) { /* optional */ }
+// Env comes from two places and we need both. cron-env-wrapper.sh exports
+// MANDRILL_* out of the running container, but its grep list does NOT include
+// the GMAIL_* OAuth trio, and those live only in the repo-root .env on prod.
+// dotenv does not override an already-set variable, so loading the files after
+// the wrapper has run lets the wrapper win where they overlap and fills the
+// Gmail gap where they do not. Root first, then backend/.env for local dev.
+for (const rel of ['../../../.env', '../../.env']) {
+  try { require('dotenv').config({ path: path.resolve(__dirname, rel) }); } catch (_e) { /* optional */ }
+}
 
 const { SEQUENCE, SEQUENCE_LENGTH } = require(path.resolve(__dirname, './lib/anthropicFollowUpMessages'));
 const { renderMessage } = require(path.resolve(__dirname, './lib/anthropicFollowUpRender'));
