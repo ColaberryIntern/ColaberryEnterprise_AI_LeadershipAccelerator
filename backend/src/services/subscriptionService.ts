@@ -144,14 +144,30 @@ async function resolvePaidCohortFor(enrollment: { cohort_id?: string | null } | 
   return resolveTargetCohort();
 }
 
-/** The student's current subscription = newest non-failed row. */
+/**
+ * The student's current subscription.
+ *
+ * An ACTIVE row always wins, no matter how many checkout rows were created after it.
+ * Previously this returned the newest non-failed row, which two real conditions break:
+ *
+ *  - A student who clicks checkout again after paying leaves a newer 'pending' row,
+ *    and the portal rendered "no subscription" for someone who had paid.
+ *  - Retiring those duplicates as 'canceled' (what reconcileAppPayments does, and what
+ *    the 2026-08-12 repair did) made it worse: the newest row was then a CANCELED one,
+ *    so a paying student rendered as canceled. Found live 2026-08-12 across 7 students.
+ *
+ * The `limit: 5` was a second, independent trap: one student had 14 checkout rows, so
+ * the active one could sit outside the window and be invisible regardless of status.
+ * These sets are tiny per enrollment, so there is no reason to cap them.
+ */
 async function currentSubscription(enrollmentId: string): Promise<Subscription | null> {
   const rows = await Subscription.findAll({
     where: { enrollment_id: enrollmentId },
     order: [['created_at', 'DESC']],
-    limit: 5,
   });
-  return rows.find((r) => r.status !== 'failed') || null;
+  return rows.find((r) => r.status === 'active')
+      || rows.find((r) => r.status !== 'failed')
+      || null;
 }
 
 export interface SubscriptionView {

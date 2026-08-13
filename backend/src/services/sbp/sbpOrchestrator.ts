@@ -30,6 +30,7 @@ import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
 import { writeDocsToRepo } from './repoWriter';
 import { materializePlanAsTasks } from './materializeTasks';
+import { buildSchedule, Schedule } from './buildSchedule';
 import { hashPlan } from './planHash';
 import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
@@ -297,7 +298,9 @@ export async function publishBuild(
     // student completes a build and sees nothing change on screen, which is the
     // exact failure this pipeline was built to fix. Prompts fall back to
     // inlining their context instead of citing paths (FR-031).
-    const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, {});
+    const schedule = await scheduleFor(opts.enrollmentId, published.plan as BuildPlan, correlationId);
+    const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule });
+    await makeActiveProject(opts.enrollmentId, projectId, correlationId);
     await setStatus(projectId, 'awaiting_repo');
     log('sbp_build_published_no_repo', correlationId, 'partial', {
       projectId, version: published.version, lists: m.lists, tasks: m.tasks,
@@ -321,10 +324,13 @@ export async function publishBuild(
   );
 
   // Materialize AFTER the write, so prompts can cite paths now proven to exist.
+  const schedule = await scheduleFor(opts.enrollmentId, published.plan as BuildPlan, correlationId);
   const materialized = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, {
     repoUrl: opts.repo.url,
     manifestPaths: files.map((f) => f.path),
+    schedule,
   });
+  await makeActiveProject(opts.enrollmentId, projectId, correlationId);
 
   await setStatus(projectId, 'published');
   log('sbp_build_published', correlationId, 'success', {
@@ -344,4 +350,82 @@ export async function publishBuild(
 /** Verify the stored plan still hashes to what a reviewer was shown. */
 export function planMatchesReviewed(plan: BuildPlan, expectedSha: string): boolean {
   return hashPlan(plan) === expectedSha;
+}
+
+
+/**
+ * Real dates for this student's cohort, or null when the cohort has no start
+ * date recorded.
+ *
+ * Null is a normal outcome, not an error: tasks materialize without due dates
+ * exactly as they did before. A missing cohort date must never cost a student
+ * their build.
+ */
+async function scheduleFor(
+  enrollmentId: string, plan: BuildPlan, correlationId: string | null,
+): Promise<Schedule | null> {
+  try {
+    const { sequelize } = await import('../../config/database');
+    const [rows]: any = await sequelize.query(
+      `SELECT c.start_date FROM enrollments e
+         JOIN cohorts c ON c.id = e.cohort_id
+        WHERE e.id = $eid AND c.start_date IS NOT NULL LIMIT 1`,
+      { bind: { eid: enrollmentId } },
+    );
+    const start = rows?.[0]?.start_date;
+    if (!start) {
+      log('sbp_schedule_skipped', correlationId, 'partial', { enrollmentId, reason: 'cohort has no start_date' });
+      return null;
+    }
+
+    const storiesByRelease = new Map<string, string[]>();
+    for (const rel of plan.releases) {
+      storiesByRelease.set(rel.key, plan.stories.filter((s) => s.release === rel.key).map((s) => s.id));
+    }
+    const schedule = buildSchedule({
+      window: { cohortStart: new Date(start) },
+      releases: plan.releases,
+      storiesByRelease,
+    });
+    log('sbp_schedule_built', correlationId, 'success', {
+      buildWeeks: schedule.buildWeeks, capacity: schedule.capacity, totalTasks: schedule.totalTasks,
+      demoRelease: schedule.demoReleaseKey, demoDay: schedule.demoDay.toISOString().slice(0, 10),
+    });
+    return schedule;
+  } catch (err: any) {
+    log('sbp_schedule_failed', correlationId, 'failure', { enrollmentId, message: err?.message });
+    return null;
+  }
+}
+
+/**
+ * Point the student's portal at the project they just published.
+ *
+ * WHY THIS IS HERE: the Projects page reads `GET /api/portal/projects/active`,
+ * which resolves `enrollments.active_project_id`. Publishing wrote tasks and
+ * never touched it — so a student whose active project was something else
+ * completed a whole build and saw nothing change. Found on 2026-08-12 against
+ * a real account: 12 tasks materialized correctly and were invisible.
+ *
+ * Only ever sets it when it is empty or points at a different project; never
+ * steals focus from a project the student is actively working, because
+ * republishing an old plan should not move their portal.
+ */
+async function makeActiveProject(
+  enrollmentId: string, projectId: string, correlationId: string | null,
+): Promise<void> {
+  try {
+    const { sequelize } = await import('../../config/database');
+    const [rows]: any = await sequelize.query(
+      `UPDATE enrollments SET active_project_id = $pid, updated_at = NOW()
+        WHERE id = $eid AND (active_project_id IS NULL OR active_project_id <> $pid)
+        RETURNING id`,
+      { bind: { eid: enrollmentId, pid: projectId } },
+    );
+    if (rows?.length) log('sbp_active_project_set', correlationId, 'success', { enrollmentId, projectId });
+  } catch (err: any) {
+    // Never fatal: the plan and its tasks are already written. Losing the
+    // pointer costs visibility, not work.
+    log('sbp_active_project_failed', correlationId, 'failure', { enrollmentId, projectId, message: err?.message });
+  }
 }

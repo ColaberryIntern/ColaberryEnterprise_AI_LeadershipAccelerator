@@ -1990,12 +1990,64 @@ export function startScheduler(): void {
     cron.schedule('*/20 * * * *', () => {
       instrumentCronJob('AppPaymentReconcile', async () => {
         const { reconcileAppPayments } = await import('./appPaymentReconcileService');
-        await reconcileAppPayments({});
+        const summary = await reconcileAppPayments({});
+
+        // Healing via the checkout-window path means the WEBHOOK missed those payments.
+        // The reconcile succeeding is exactly why that stays invisible, so say it out
+        // loud rather than letting a broken primary path hide behind its safety net.
+        if (summary.linkedByCheckoutWindow > 0) {
+          const { emitAlert } = await import('./alertService');
+          await emitAlert({
+            type: 'warning',
+            severity: 6,
+            sourceType: 'system',
+            impactArea: 'revenue',
+            urgency: 'high',
+            title: 'PaySimple payments are being healed by reconcile, not the webhook',
+            description:
+              `The reconcile job linked ${summary.linkedByCheckoutWindow} payment(s) ` +
+              `($${(summary.linkedTotalCents / 100).toFixed(2)}) that the PaySimple webhook should have ` +
+              `activated on its own. Students were briefly left on the wrong access level. ` +
+              `Check webhook delivery and signature verification.`,
+            metadata: {
+              linked: summary.linked,
+              linkedByCheckoutWindow: summary.linkedByCheckoutWindow,
+              linkedTotalCents: summary.linkedTotalCents,
+            },
+          }).catch(() => {}); // alerting must never fail the reconcile
+        }
       }).catch((err) => {
         console.error('[Scheduler] App payment reconcile error:', err);
       });
     });
     console.log('[Scheduler] AppPaymentReconcile scheduled (*/20 * * * *)');
+
+    // Watch the webhook itself every 15 minutes. The reconcile above only notices a
+    // problem once a payment is already late; this catches a total rejection run
+    // (the 2026-08-12 shape) within minutes of it starting.
+    cron.schedule('*/15 * * * *', () => {
+      instrumentCronJob('PaySimpleWebhookHealth', async () => {
+        const { webhookHealthSnapshot, evaluateWebhookHealth } = await import('./paysimpleWebhookHealth');
+        const snapshot = webhookHealthSnapshot();
+        const verdict = evaluateWebhookHealth(snapshot);
+        if (!verdict.alert) return;
+
+        const { emitAlert } = await import('./alertService');
+        await emitAlert({
+          type: verdict.type,
+          severity: verdict.severity,
+          sourceType: 'system',
+          impactArea: 'revenue',
+          urgency: verdict.type === 'critical' ? 'immediate' : 'high',
+          title: verdict.title,
+          description: verdict.description,
+          metadata: { ...snapshot },
+        });
+      }).catch((err) => {
+        console.error('[Scheduler] PaySimple webhook health check error:', err);
+      });
+    });
+    console.log('[Scheduler] PaySimpleWebhookHealth scheduled (*/15 * * * *)');
   }
 
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).

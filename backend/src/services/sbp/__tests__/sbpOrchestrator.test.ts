@@ -250,7 +250,17 @@ describe('publishBuild', () => {
 
   it('materializes even with NO repo — the plan must still be visible', async () => {
     await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo: null });
-    expect(mockMaterialize).toHaveBeenCalledWith(PROJECT, ENROLLMENT, goodPlan, {});
+    expect(mockMaterialize).toHaveBeenCalledWith(PROJECT, ENROLLMENT, goodPlan,
+      expect.objectContaining({ schedule: null }));
+  });
+
+  it('publishes without dates rather than failing when the cohort has no start date', async () => {
+    // A missing cohort start must cost the student their due dates, never their
+    // build. `schedule: null` is a normal outcome, not an error path.
+    await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo: null });
+    const ctx = mockMaterialize.mock.calls[0][3];
+    expect(ctx.schedule).toBeNull();
+    expect(mockPublishPlan).toHaveBeenCalled();
   });
 
   it('does not materialize a plan blocked on coverage', async () => {

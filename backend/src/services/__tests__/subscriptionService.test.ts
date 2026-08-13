@@ -243,6 +243,71 @@ describe('subscriptionService', () => {
       expect(v.subscription?.access_until).not.toBeNull();
       expect(v.subscription?.next_payment).toBeNull();
     });
+
+    /*
+     * A paying student must never be rendered as unsubscribed or canceled because of
+     * leftover checkout rows. Both shapes below were live on 2026-08-12 across 7
+     * students: clicking checkout again after paying leaves a newer 'pending' row, and
+     * retiring those duplicates as 'canceled' (what reconcileAppPayments does) then made
+     * the newest row a canceled one. findAll is ordered created_at DESC, so index 0 is
+     * newest.
+     */
+    const ACTIVE = {
+      plan: 'monthly', status: 'active', amount_cents: 19900,
+      started_at: new Date(NOW), current_period_end: new Date(NOW + 20 * 864e5), cancel_reason: null,
+    };
+
+    it('an ACTIVE plan wins over a NEWER abandoned pending checkout', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'monthly', status: 'pending', amount_cents: 19900, cancel_reason: null },
+        ACTIVE,
+      ]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.status).toBe('active');
+      expect(v.needs_subscription).toBe(false);
+    });
+
+    it('an ACTIVE plan wins over a NEWER canceled duplicate', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'monthly', status: 'canceled', amount_cents: 19900, cancel_reason: 'duplicate checkout submission (reconcile)' },
+        ACTIVE,
+      ]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.status).toBe('active');
+      expect(v.subscription?.canceled).toBe(false);
+    });
+
+    it('finds the ACTIVE plan even behind many newer checkout rows (no 5-row cap)', async () => {
+      // One real student had 14 rows; a cap of 5 hid the active one entirely.
+      const noise = Array.from({ length: 12 }, () => ({ plan: 'monthly', status: 'pending', amount_cents: 19900, cancel_reason: null }));
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([...noise, ACTIVE]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.status).toBe('active');
+      // The query must not cap rows, or the active row falls outside the window.
+      expect((Subscription.findAll as jest.Mock).mock.calls[0][0]).not.toHaveProperty('limit');
+    });
+
+    it('with NO active plan, a genuine cancellation is still reported as canceled', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'annual', status: 'canceled', amount_cents: 178800, started_at: new Date(NOW), current_period_end: new Date(NOW + 30 * 864e5), cancel_reason: 'Too busy' },
+      ]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.canceled).toBe(true);
+    });
+
+    it('ignores failed rows entirely, even when they are newest', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'monthly', status: 'failed', amount_cents: 19900, cancel_reason: null },
+        ACTIVE,
+      ]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.subscription?.status).toBe('active');
+    });
   });
 
   describe('startCheckout', () => {
