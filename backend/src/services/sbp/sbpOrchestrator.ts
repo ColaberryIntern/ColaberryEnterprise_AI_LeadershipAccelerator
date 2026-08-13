@@ -416,16 +416,36 @@ async function makeActiveProject(
 ): Promise<void> {
   try {
     const { sequelize } = await import('../../config/database');
+    // No `updated_at` here: the enrollments table does not have that column in
+    // production. The first version of this function set it out of habit, the
+    // statement threw on every publish, the catch below swallowed it, and the
+    // bug it was written to fix stayed fixed only in the unit tests — which
+    // mock sequelize.query and so never see a column name at all. Any column
+    // added to this statement must exist on the table; ACTIVE_PROJECT_COLUMNS
+    // and its test are what hold that true.
     const [rows]: any = await sequelize.query(
-      `UPDATE enrollments SET active_project_id = $pid, updated_at = NOW()
+      `UPDATE enrollments SET active_project_id = $pid
         WHERE id = $eid AND (active_project_id IS NULL OR active_project_id <> $pid)
         RETURNING id`,
       { bind: { eid: enrollmentId, pid: projectId } },
     );
     if (rows?.length) log('sbp_active_project_set', correlationId, 'success', { enrollmentId, projectId });
+    else log('sbp_active_project_noop', correlationId, 'success', { enrollmentId, projectId });
   } catch (err: any) {
-    // Never fatal: the plan and its tasks are already written. Losing the
-    // pointer costs visibility, not work.
-    log('sbp_active_project_failed', correlationId, 'failure', { enrollmentId, projectId, message: err?.message });
+    // Not fatal — the plan and its tasks are already written, so losing the
+    // pointer costs visibility, not work. But it is the difference between a
+    // student seeing their project and seeing nothing, so it is an error, not
+    // a shrug: it carries an error_class and names the statement that failed.
+    log('sbp_active_project_failed', correlationId, 'failure', {
+      enrollmentId, projectId, error_class: err?.name ?? 'Error',
+      statement: 'UPDATE enrollments SET active_project_id', message: err?.message,
+    });
   }
 }
+
+/**
+ * Every column `makeActiveProject` writes or reads. Asserted against the real
+ * Enrollment model by sbpOrchestrator.activeProject.test.ts, so a column that
+ * does not exist cannot reach production a second time.
+ */
+export const ACTIVE_PROJECT_COLUMNS = ['active_project_id', 'id'] as const;
