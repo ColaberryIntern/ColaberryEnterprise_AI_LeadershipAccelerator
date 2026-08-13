@@ -9,6 +9,7 @@
 
 import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse } from '../../../models';
+import { emitAlert } from '../../alertService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,28 @@ export async function checkCircuitBreaker(platform: string): Promise<CircuitStat
   // Update in-memory state
   if (state === 'OPEN' && existing?.state !== 'OPEN') {
     circuitStates.set(platform, { state: 'OPEN', opened_at: new Date(), half_open_successes: 0 });
+
+    // Ops alerting (BC #10099862873 P0): this breaker previously failed safe
+    // but silent — a trip was only discoverable via getAllCircuitStatus() on
+    // a dashboard. Fire-and-forget: alert delivery must never block posting
+    // logic. emitAlert()'s 1h title+type dedup prevents re-paging on every
+    // subsequent check while the breaker stays OPEN.
+    const errorRate = totalCount > 0 ? Math.round((errorCount / totalCount) * 100) : 0;
+    emitAlert({
+      type: 'critical',
+      severity: 5,
+      title: `Circuit Breaker Tripped: openclaw_posting_${platform}`,
+      description:
+        `OpenClaw has stopped posting to ${platform}; automated content distribution to this platform is paused. ` +
+        `Error rate hit ${errorRate}% (${errorCount}/${totalCount} tasks) over the last hour. ` +
+        'Recommended action: check recent OpenClaw task failures for this platform before the cooldown auto-resets it to half-open.',
+      sourceType: 'system',
+      impactArea: 'openclaw_posting',
+      urgency: 'immediate',
+      metadata: { platform, error_count: errorCount, total_count: totalCount, error_rate: errorRate },
+    }).catch((err: any) => {
+      console.error(`[OpenClawCircuitBreaker] emitAlert failed for ${platform} trip: ${err.message}`);
+    });
   } else if (state === 'HALF_OPEN') {
     const prev = circuitStates.get(platform);
     if (prev) {

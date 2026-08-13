@@ -14,6 +14,7 @@ import ClassCheckinPage from '../pages/portal/ClassCheckinPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
 import PageGate from '../components/paywall/PageGate';
 import RuntimeWorkspace from '../pages/portal/runtime/RuntimeWorkspace';
+import ProjectWorkspacePage from '../pages/portal/projects/ProjectWorkspacePage';
 import PortalLessonPage from '../pages/portal/PortalLessonPage';
 import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
 import PortalAssignmentsPage from '../pages/portal/PortalAssignmentsPage';
@@ -73,6 +74,9 @@ const portalRoutes = (
       <Route path="/portal/classroom" element={<PageGate feature="classroom"><ClassroomPage /></PageGate>} />
       {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
       <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />
+      {/* The build-side twin of the runtime: same page shape, a story instead
+          of a card. Keyed on the STORY id, which is what a student sees. */}
+      <Route path="/portal/projects/workspace/:projectId/:taskId" element={<ProjectWorkspacePage />} />
       {/* Retired AI Project Builder entry points → student home. */}
       <Route path="/portal/home" element={<Navigate to="/portal/today" replace />} />
       <Route path="/portal/dashboard" element={<Navigate to="/portal/today" replace />} />

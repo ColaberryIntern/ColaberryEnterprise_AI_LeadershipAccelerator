@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { sectionsForRole, ALL_SECTIONS, isMgmtRole, type SectionKey } from '../services/access/mgmtRoles';
+import { logAuthFailure } from './authFailureLog';
 
 export interface AuthPayload {
   sub: string;
@@ -70,7 +71,8 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     }
     req.admin = payload;
     next();
-  } catch {
+  } catch (err) {
+    logAuthFailure('admin_auth_failed', err, 'admin', req.ip);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
@@ -152,7 +154,8 @@ export function requireSalesOrAdmin(req: Request, res: Response, next: NextFunct
     }
     req.admin = payload;
     next();
-  } catch {
+  } catch (err) {
+    logAuthFailure('sales_or_admin_auth_failed', err, 'admin', req.ip);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
@@ -204,7 +207,8 @@ export function requireCoryAuthorized(req: Request, res: Response, next: NextFun
       role: payload.role || 'admin',
     };
     next();
-  } catch {
+  } catch (err) {
+    logAuthFailure('cory_auth_failed', err, 'admin', req.ip);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

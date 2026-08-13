@@ -39,6 +39,7 @@ const FIXTURE_POOL = Array.from({ length: 40 }, (_, i) => mkFixtureItem(i));
 
 jest.mock('../todayAnchoredSources', () => ({
   gatherAnchored: jest.fn().mockResolvedValue({ weekBound: [], evergreenByType: new Map([['ai_news_flash', []]]) }),
+  rehydrateCardItems: jest.fn().mockResolvedValue(undefined),
   rehydrateCommunityItems: jest.fn().mockResolvedValue(undefined),
   rehydrateSessionItems: jest.fn().mockResolvedValue(undefined),
 }));

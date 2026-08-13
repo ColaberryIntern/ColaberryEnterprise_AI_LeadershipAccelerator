@@ -36,7 +36,7 @@ import { sequelize } from '../../config/database';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
-import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
+import { gatherAnchored, rehydrateCardItems, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
 import { isDailyRefreshDue } from './todayDailyRefreshService';
 import { getAmbientDistinctSeenCounts } from './ambientTypeExposureService';
@@ -394,6 +394,7 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   // live, different-each-refresh timeline rather than the member's frozen set.
   if (opts.readOnly) {
     const items = await composeReadOnlyPage(enrollmentId, from, size, opts.seed);
+    await rehydrateCardItems(items);
     await rehydrateCommunityItems(items);
     await rehydrateSessionItems(items);
     return { items, nextCursor: from + items.length, exhausted: items.length < size };
@@ -430,9 +431,11 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   }
 
   const items = served.slice(from, targetEnd);
-  // Community + session cards are dynamic — refresh community media/author/text
-  // and session recording/recap from the live rows so the append-only snapshot
-  // never shows stale content (both fail-soft).
+  // Class, community + session cards are all dynamic — refresh curriculum card
+  // text/content, community media/author/text, and session recording/recap from
+  // the live rows so the append-only snapshot never shows stale content (all
+  // three fail-soft).
+  await rehydrateCardItems(items);
   await rehydrateCommunityItems(items);
   await rehydrateSessionItems(items);
   return { items, nextCursor: from + items.length, exhausted: exhausted && items.length < size };

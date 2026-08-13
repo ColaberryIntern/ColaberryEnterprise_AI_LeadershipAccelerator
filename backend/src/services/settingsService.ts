@@ -17,6 +17,7 @@ const DEFAULTS: Record<string, any> = {
   email_from: 'ali@colaberry.com',
   email_from_name: 'Colaberry Enterprise AI',
   admin_notification_emails: '', // comma-separated list; falls back to email_from
+  cognitive_incident_notification_emails: '', // comma-separated list; falls back to email_from
   // Voice (Synthflow) configuration
   synthflow_api_key: '',
   synthflow_welcome_agent_id: '',

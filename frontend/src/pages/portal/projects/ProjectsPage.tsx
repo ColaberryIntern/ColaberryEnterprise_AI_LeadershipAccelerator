@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
@@ -22,7 +23,16 @@ import '../today/TodayShell.css';
 // your builds, and a timeline of what's next across builds — with a right-side
 // dashboard. Builds are portal-native (lists + tasks, FB vibe), not Basecamp.
 
-type View = { kind: 'overview' } | { kind: 'wizard' } | { kind: 'preview'; id: string } | { kind: 'interior'; id: string };
+// `taskId` is which task the workspace should open on the right. It lives in
+// the view rather than inside the interior so that everything which can ask
+// for a task — a feed card, the condensed header, a card inside the build —
+// drives the SAME drawer. Two sources of truth here meant clicking "Open
+// build" in the feed landed you in the project with nothing open.
+type View =
+  | { kind: 'overview' }
+  | { kind: 'wizard' }
+  | { kind: 'preview'; id: string }
+  | { kind: 'interior'; id: string; taskId?: string | null };
 
 const PROJ_ICON = (
   <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>
@@ -121,6 +131,7 @@ const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => 
 };
 
 const ProjectsPage: React.FC = () => {
+  const navigate = useNavigate();
   const projects = useProjectsList();
   // Backend-source flip: pull the student's persisted build (completions from
   // other devices, or a build this browser has never seen) then mirror back up.
@@ -133,7 +144,29 @@ const ProjectsPage: React.FC = () => {
   const [pipeline, setPipeline] = useState<PipelineState>({ state: 'idle' });
 
   const active = (view.kind === 'preview' || view.kind === 'interior') ? projects.find((p) => p.id === view.id) : null;
-  const openInterior = (id: string) => { setView({ kind: 'interior', id }); window.scrollTo(0, 0); };
+  const openInterior = (id: string, taskId?: string | null) => {
+    setView({ kind: 'interior', id, taskId: taskId ?? null });
+    window.scrollTo(0, 0);
+  };
+  /**
+   * Open a task in the project WORKSPACE — the full page with the mentor on the
+   * right, the build-side twin of the classroom runtime. This used to open a
+   * slide-over drawer, which is not the same thing and did not feel like the
+   * same product. `from` is stamped so the workspace's back button returns to
+   * wherever the student actually came from.
+   */
+  const openTaskWorkspace = (projectId: string, task: ProjectTask | null) => {
+    if (!task) return;
+    const key = task.storyId || task.id;
+    navigate(`/portal/projects/workspace/${projectId}/${encodeURIComponent(key)}`,
+      { state: { from: window.location.pathname } });
+  };
+  const openTaskById = (projectId: string, taskId: string | null) => {
+    if (!taskId) return;
+    const p = projects.find((x) => x.id === projectId);
+    const t = p?.lists.flatMap((l) => l.tasks).find((x) => x.id === taskId) ?? null;
+    openTaskWorkspace(projectId, t);
+  };
 
   /**
    * Start a build.
@@ -208,7 +241,7 @@ const ProjectsPage: React.FC = () => {
   // primary build + hero next-step
   const primary = projects[0] || null;
   const primaryNext = primary ? nextTask(primary) : null;
-  const openBuildPrimary = () => { if (primary) openInterior(primary.id); };
+  const openBuildPrimary = () => { if (primary) openTaskWorkspace(primary.id, primaryNext?.task ?? null); };
   const copyPrompt = () => { if (navigator.clipboard && primaryNext?.task.prompt) navigator.clipboard.writeText(primaryNext.task.prompt); };
   const startBuild = () => setView({ kind: 'wizard' });
 
@@ -221,7 +254,7 @@ const ProjectsPage: React.FC = () => {
     opens.slice(0, 4).forEach(({ t, l }) => feed.push({
       id: `t-${t.id}`, source: 'projects', sourceLabel: p.name, color: p.accent, icon: PROJ_ICON,
       title: t.title, meta: l.name, desc: t.what,
-      cta: { label: 'Open build', onClick: () => openInterior(p.id), variant: 'berry' },
+      cta: { label: 'Open build', onClick: () => openTaskWorkspace(p.id, t), variant: 'berry' },
     }));
   });
   const feedTop = feed.slice(0, 6);
@@ -236,7 +269,37 @@ const ProjectsPage: React.FC = () => {
         </div></PortalShell>
       );
     }
-    return <PortalShell><div className="pj-root"><ProjectInterior project={active} onBack={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }} /></div></PortalShell>;
+    // The interior gets the SAME condensed header the overview has. Without it,
+    // scrolling inside a build left the next task pinned mid-page instead of
+    // riding up into the header, so the two screens behaved differently for no
+    // reason a student could see.
+    const activeNext = nextTask(active);
+    return (
+      <PortalShell
+        condensedSlot={(
+          <ProjectsNextStepHero
+            variant="condensed"
+            primary={active}
+            primaryNext={activeNext}
+            demo={demo}
+            onOpenBuild={() => openTaskWorkspace(active.id, activeNext?.task ?? null)}
+            onCopyPrompt={() => { if (navigator.clipboard && activeNext?.task.prompt) navigator.clipboard.writeText(activeNext.task.prompt); }}
+            onStartBuild={startBuild}
+          />
+        )}
+      >
+        {(condensed) => (
+          <div className="pj-root">
+            <ProjectInterior
+              project={active}
+              condensed={condensed}
+              onOpenTask={(taskId) => openTaskById(active.id, taskId)}
+              onBack={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }}
+            />
+          </div>
+        )}
+      </PortalShell>
+    );
   }
 
   if (view.kind === 'preview' && active) {
