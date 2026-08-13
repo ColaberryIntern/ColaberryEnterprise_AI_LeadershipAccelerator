@@ -80,7 +80,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
     <header className="cbv2-header">
       <div className="cbv2-wrap cbv2-nav">
         <Link className="cbv2-brand" to="/v2" aria-label="Colaberry Enterprise AI, home">
-          <img src="/colaberry-logo.png" alt="" width={291} height={82} />
+          <img src="/colaberry-logo-transparent.png" alt="" width={291} height={82} />
           <span className="cbv2-brand__text">Enterprise AI</span>
         </Link>
 

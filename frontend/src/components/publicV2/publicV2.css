@@ -422,3 +422,14 @@
   white-space: nowrap;
   border: 0;
 }
+
+/*
+ * The logo ships as two files and only one of them is actually transparent.
+ * `colaberry-logo.png` is 100% opaque with corner alpha 255 -- measured, not
+ * assumed -- so it carried a solid white box that was invisible on the white
+ * header and rendered as a white rectangle on the dark footer.
+ * `colaberry-logo-transparent.png` is 26% opaque with corner alpha 0. Both
+ * surfaces now use the transparent one, so the mark sits on whatever is behind it.
+ */
+.cbv2-brand img,
+.cbv2-footer__brand img { background: transparent; }

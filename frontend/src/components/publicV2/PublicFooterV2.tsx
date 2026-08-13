@@ -83,7 +83,7 @@ function PublicFooterV2(): React.ReactElement {
         <div className="cbv2-footer__grid">
           <div>
             <div className="cbv2-footer__brand">
-              <img src="/colaberry-logo.png" alt="Colaberry" width={291} height={82} />
+              <img src="/colaberry-logo-transparent.png" alt="Colaberry" width={291} height={82} />
             </div>
             <p style={{ fontSize: 'var(--fs-caption)', maxWidth: '32ch', margin: 0 }}>
               <Claim claimKey="positioning.primary" />
