@@ -36,6 +36,13 @@ export interface BackendTaskNode {
   acceptance: unknown;            // string[] when present
   build: string | null;           // the Claude Code prompt
   blocked_by: string[];           // story_ids this task waits on
+  /**
+   * Optional because not every deployed backend emits it yet. Reading it as
+   * optional means an older server simply yields `null` here instead of the
+   * client tripping over a shape it cannot see — the field can start being
+   * sent without a coordinated release.
+   */
+  verified_at?: string | null;
 }
 export interface BackendListNode {
   id: string;
@@ -48,6 +55,12 @@ export interface BackendProjectTree {
   name: string | null;
   organization_name: string | null;
   lists: BackendListNode[];
+  /**
+   * https-validated server-side (projectTreeDto.commandCenterUrl) — the client
+   * does not re-validate, it just renders or omits. Optional for the same
+   * reason as `verified_at`: an older server omits the key entirely.
+   */
+  command_center_url?: string | null;
 }
 
 // The client's link key for a task — the same value it imported as `story_id`.
@@ -93,8 +106,23 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
     });
     return changed ? { ...l, tasks } : l;
   });
-  if (!changed) return p;
-  return { ...p, lists };
+
+  // The Command Center URL is recorded AFTER the student has built and deployed
+  // one — which is to say, on exactly the devices that already hold this project
+  // and therefore take the overlay path, never the hydrate path. Carrying it
+  // only in backendTreeToProject would mean the button appeared on every device
+  // EXCEPT the one that did the work. Compared normalised so "absent on both
+  // sides" is not mistaken for a change and does not defeat the same-reference
+  // fast path callers rely on to skip a write.
+  const nextUrl = tree.command_center_url ?? null;
+  const urlChanged = nextUrl !== (p.commandCenterUrl ?? null);
+
+  if (!changed && !urlChanged) return p;
+  return {
+    ...p,
+    ...(changed ? { lists } : {}),
+    ...(urlChanged ? { commandCenterUrl: nextUrl } : {}),
+  };
 }
 
 // ── reconstruction of a project not present on this device ────────────────────
@@ -154,6 +182,10 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
             release: t.release_key || undefined,
             storyId: t.story_id || undefined,
             blockedBy: Array.isArray(t.blocked_by) && t.blocked_by.length ? t.blocked_by : undefined,
+            // Normalised to null rather than left undefined: "the server has not
+            // verified this" and "this server does not report verification" are
+            // the same fact to every reader, and one shape is easier to assert on.
+            verifiedAt: t.verified_at ?? null,
             state,
             due,
           };
@@ -189,6 +221,7 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
     idea: descriptor,
     reqs,
     lists,
+    commandCenterUrl: tree.command_center_url ?? null,
     activity: [
       { id: 'a-restored', kind: 'note', who: 'Cory', time: 'just now',
         title: 'Restored from your account',
