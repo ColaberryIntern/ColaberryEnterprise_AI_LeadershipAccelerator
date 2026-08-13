@@ -1258,17 +1258,19 @@ Governor behaviour: registration **immediately suppresses** event-discovery and 
 
 ---
 
-## 22. INTERNSHIP INTEGRATION — BLOCKED
+## 22. INTERNSHIP INTEGRATION — UNBLOCKED (corrected 2026-08-13)
 
-**Internships do not exist in this repository.** No model, no table, no route, no application flow. The only trace is the string `'internship'` in a `CurriculumBlueprint.scope` comment.
+**Correction.** The original text here said internships "do not exist". That was accurate about the **codebase** — no model, no table, no route, no application flow, and the only trace is the string `'internship'` in a `CurriculumBlueprint.scope` comment — but **wrong about the business**. The AI Internship is a real Colaberry product, evolved from the Data Analytics class internship, and it has **never been marketed**.
+
+That inverts the conclusion. This is not a gap to defer around; it is a real offering the system is currently **forbidden to mention**, because the "AI may select, never invent" rule has nothing authoritative to select from. Given it has never been marketed, it is plausibly the highest-leverage content gap in this plan.
 
 Consequently:
-- Experience 22 and campaign #16 are **deferred**, not built.
-- `INTERNSHIP_READY` is still computed (from affinity + E), so the audience is measurable before any build.
+- Experience 22 and campaign #16 are **buildable once the data model lands** — no longer deferred.
+- `INTERNSHIP_READY` is still computed (from affinity + E), so the audience is measurable before the build.
 - The affinity tag `ai_internship` is still tracked.
-- **No internship claim may appear in any Explorer message**, because there is no authoritative source and the "never invent" rule is absolute.
+- **Until the table exists, no internship claim may appear in any Explorer message** — the "never invent" rule holds. The fix is to give it a source, not to relax the rule.
 
-**Minimum to unblock** (§35 D-8, a separate scoped decision): an `internships` table (title, description, url, eligibility, opens_at, deadline, active), an application record, and a public route. Until then this is honestly reported as out of scope rather than quietly stubbed.
+**Minimum to unblock** (§35 D-8): an `internships` table (title, description, url, eligibility, opens_at, deadline, active) projected into the content registry (§10), so the AI can cite a real offering from an authoritative source. An application record and public route follow if you want conversion tracked rather than just interest. Small enough to fold into EPIC 5 (Content Registry) or EPIC 7 rather than needing an epic of its own.
 
 ---
 
@@ -1839,13 +1841,15 @@ Everything else in this plan proceeds without you. These change strategy, legal 
 | # | Decision | Context | Recommendation |
 |---|---|---|---|
 | **D-1** | **Consent enforcement: stay `'shadow'` or move to `'enforce'`?** | `consent_enforcement` defaults to `'shadow'` — the gate computes verdicts and blocks nothing. §7 of `docs/ai-governance/consent-capture-design.md` has been awaiting your sign-off since 2026-06-22. **Voice and SMS cannot ship without this.** | Move voice+SMS to `'enforce'` (fail-closed); leave US B2B email on opt-out per CAN-SPAM. This blocks Stages 6-7 and nothing else. |
-| **D-2** | **Automated voice to free learners at all?** | TCPA requires prior express written consent for AI voice. We capture none, and there is no consent UI. Penalties $500-$1,500/call. | **Do not enable voice for Explorers in this project.** Build the eligibility gate (fail-closed, so it correctly permits zero people today), ship it disabled, and revisit after consent capture exists. |
+| **D-2** | ✅ **DECIDED 2026-08-13 — capture consent at signup.** | TCPA requires prior express written consent for AI voice. We captured none and had no consent UI. | **Ali's call: add the consent checkbox to the signup forms.** This is exactly `consent-capture-design.md` §5 capture point 1, so it is a build task rather than an open question. See D-2a below for what "written consent" requires to actually hold. |
+| **D-2a** | **What the checkbox must look like for the consent to count** | Derived from TCPA's "prior express written consent" standard. Engineering's read, not legal advice — D-2b remains a counsel question. | Separate and **unticked by default** (a pre-ticked box is not consent). Clearly states they may receive **automated/AI phone calls and texts** at the number given — not buried in a general "I agree to the terms". **Not a condition of signing up** for the free account. Store the form URL, IP, user agent and timestamp in `consent_records.evidence`. Write `express_written` when the phone + voice/SMS box is ticked, `opt_in_form` for email-only. |
+| **D-2b** | **Timing: consent only counts going forward** | The 153 existing Explorers signed up before any checkbox exists, so none of them will have a record. | Voice/SMS stay effectively empty until consent accumulates from **new** signups. Do not backfill `express_written` for existing learners from any other source — inferring written consent is precisely the thing the standard forbids. |
 | **D-3** | **Per-learner timezone — collect or infer?** | No per-lead timezone exists; call/send windows use the *campaign's* timezone. Required for lawful voice/SMS timing. | Infer from `visitors.country`/`city` and area code; **refuse to dial when unknown**. Add an explicit field at signup later. |
 | **D-4** | **Per-channel suppression?** (defect D3) | `processOptOut` accepts a channel then suppresses globally. An SMS STOP kills email. Fixing it means some people who are currently fully suppressed become email-eligible again. | Fix it — but **only for opt-outs recorded after the change**. Never retroactively un-suppress anyone. |
 | **D-5** | **`sendTrainingWelcome` omits `List-Unsubscribe`.** | The Explorer welcome email deliberately ships without the unsubscribe header. Defensible as transactional; risky as the first message of a nurture programme. | Add the header. It costs nothing and removes ambiguity. |
 | **D-6** | **Cohorts have no `application_deadline` column.** | Experience 27 (Cohort Decision) needs a legitimate deadline. Without one, any urgency language would be fabricated. | Add the column, or accept that experience 27 ships **without urgency framing**. Do not manufacture scarcity. |
 | **D-7** | **Which case studies are real and consented?** | `CaseStudiesPage.tsx` says its content is *"realistic, specific placeholders pending client consent."* | Supply consented case studies, or experience 19/23 uses testimonials only. **Placeholders will not be cited as proof.** |
-| **D-8** | **Build internships, or defer?** | Nothing exists — no table, route, or application flow. Experience 22 and campaign #16 are blocked. | Defer. Scope separately. Track `INTERNSHIP_READY` now so the audience is measurable when you decide. |
+| **D-8** | ✅ **CORRECTED 2026-08-13 — the internship is a real product; the software just cannot see it.** | My original finding said internships were "absent". That was true of the **codebase** — no table, route, or application flow — but **wrong about the business**. Ali: the AI Internship is a real offering, evolved from the Data Analytics class internship, and **has never been marketed**. Those are different claims and I conflated them. | Not deferred any more. Build a small `internships` table (title, description, url, eligibility, opens_at, deadline, active) so the content registry can cite it truthfully. This is the difference between the AI being **forbidden to mention** a real product and being able to promote it from an authoritative source — and since it has never been marketed, this is arguably the highest-leverage content gap in the whole plan. Experience 22 and campaign #16 unblock with it. |
 | **D-9** | **Is 125 an Explorer-only target?** | 154 Explorers cannot produce 125 paid students. | Treat 125 as multi-source; hold Explorer Growth OS accountable for **stage-conversion lift**, measured against holdouts, not for the absolute number. |
 | **D-10** | **Continuous decay instead of your step decay?** | Your 1.00/0.85/0.65/0.40 steps vs `2^(-d/14)`. Steps create score cliffs that pollute trend and holdout analysis. | Use continuous; it is the house pattern (`intentScoringService`) and closely reproduces your curve. One-constant change if you disagree. |
 | **D-11** | **AI cost.** | ~154 learners × ~2 sends/week ≈ 1,300 generations/month at Stage 4, `gpt-4o-mini`. Small today; scales linearly with the pool. | Proceed; revisit if the pool exceeds ~2,000. |

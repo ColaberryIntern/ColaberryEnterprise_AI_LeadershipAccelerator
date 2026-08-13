@@ -87,8 +87,13 @@ export const EXPLORER_SIGNAL_DEFINITIONS: Record<string, ExplorerSignalDefinitio
  * building its source is how a dimension silently reads zero forever.
  */
 export const STILL_UNINSTRUMENTED: ReadonlyArray<{ signal: string; reason: string }> = [
-  { signal: 'internship_page_view', reason: 'No internship route, table, or application flow exists (plan §22).' },
-  { signal: 'internship_application_started', reason: 'Same — internships are absent from the product entirely.' },
+  // CORRECTED 2026-08-13: the AI Internship IS a real product (evolved from the Data
+  // Analytics class internship) and has never been marketed. What is missing is the
+  // SOFTWARE, not the offering — no internships table, route, or application flow — so
+  // these signals still have no source to read. Fix by building the data model (plan
+  // §22), not by defining signals nothing emits.
+  { signal: 'internship_page_view', reason: 'The AI Internship is a real product, but no internship route or table exists yet to emit page views (plan §22).' },
+  { signal: 'internship_application_started', reason: 'No application flow exists in the codebase yet — the offering is real, the software is not built (plan §22).' },
   { signal: 'certification_progress', reason: 'No learner-level certification record exists (plan §6, §22).' },
   { signal: 'failed_event_registration', reason: 'Eventbrite integration is read-only here; a failed registration never reaches us (plan §19).' },
 ];
