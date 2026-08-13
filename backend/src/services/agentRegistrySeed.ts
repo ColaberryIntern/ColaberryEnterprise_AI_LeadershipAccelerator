@@ -2,6 +2,7 @@ import AiAgent from '../models/AiAgent';
 import type { AiAgentType, AiAgentTriggerType, AiAgentCategory } from '../models/AiAgent';
 import { Op } from 'sequelize';
 import { seedReeseIdentity } from './reese/reeseIdentitySeed';
+import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
 import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
 
 interface AgentSeedEntry {
@@ -2250,6 +2251,106 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'reached.',
     enabled: true,
   },
+
+  // ─── Agent Registration Stage 1 — ticket-creator identities ────────────────
+  // Identity-only registrations for real, high-volume ticket-creator processes
+  // that had no backing AiAgent/AdminUser row before this. Each row exists so
+  // resolveActorDisplayName() (backend/src/services/actorIdentity/
+  // resolveActorDisplayName.ts) can resolve the process's real created_by_id
+  // string to a real display name — nothing else. These are NOT the same rows
+  // as the scheduler run-tracking entries above with different names for the
+  // same underlying cron (e.g. 'AutonomousEngine' tracks run_count/status for
+  // the 10-min cron; 'cory-engine' below is the separate identity that cron's
+  // OWN ticket-creation code stamps onto every ticket it makes). See
+  // agentBlueprint/ticketCreatorIdentitySeed.ts for the AdminUser/Enrollment/
+  // CommunityMember identity wiring, and .loop-architect/runs/
+  // 20260813-agent-registration-stage1/execution-contract.md for the full
+  // 31-pair production cross-reference this registration set was derived from.
+  {
+    agent_name: 'cory-engine',
+    agent_type: 'ticket_creator_identity',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/autonomousEngine.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'executive',
+    description:
+      'Ticket-creator identity for the COO autonomous operations loop (the ' +
+      '"AutonomousEngine" cron, every 10 min — see that separate registry row ' +
+      'for run-tracking). Every ticket this loop opens is stamped ' +
+      "created_by_type='cory', created_by_id='cory-engine'; this row exists so " +
+      'those tickets resolve to a real display name instead of the raw string. ' +
+      "Colaberry's single highest-volume ticket creator.",
+  },
+  {
+    agent_name: 'CoryBrain',
+    agent_type: 'ticket_creator_identity',
+    module: 'cory',
+    source_file: 'backend/src/services/cory/coryInitiatives.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'executive',
+    description:
+      'Ticket-creator identity for strategic-initiative tickets ' +
+      "(createStrategicInitiative()). Fires from both the AICOOStrategicCycle " +
+      "cron (every 30 min) and the CoryEvolutionCycle cron (every 6h) — see " +
+      "those separate registry rows for run-tracking. Every initiative + " +
+      "subtask ticket is stamped created_by_type='cory', " +
+      "created_by_id='CoryBrain'; this row exists so those tickets resolve to " +
+      "a real display name instead of the raw string.",
+  },
+  {
+    agent_name: 'InboxCaseEngine',
+    agent_type: 'ticket_creator_identity',
+    module: 'inboxCase',
+    source_file: 'backend/src/services/inboxCase/caseTicketService.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Inbox Intel Case Resolution Engine — ' +
+      'bridges every inbox case into the tickets board (one ticket per case, ' +
+      'walked through backlog -> todo -> in_progress -> in_review -> done as ' +
+      "the case progresses). Event-driven on case open/reopen, not cron. " +
+      "Every case ticket is stamped created_by_type='agent', " +
+      "created_by_id='InboxCaseEngine'; this row exists so those tickets " +
+      'resolve to a real display name instead of the raw string.',
+  },
+  {
+    agent_name: 'workforce_intelligence_engine',
+    agent_type: 'ticket_creator_identity',
+    module: 'company',
+    source_file: 'backend/src/services/company/workforceIntelligenceEngine.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Workforce Intelligence Engine ' +
+      '(runWorkforceAnalysis()) — analyzes the agent fleet\'s run/error counts ' +
+      'and opens a workforce-decision ticket per insight, deterministic rules, ' +
+      "no LLM. Fires from the WorkforceIntelligence cron (every 6h — see that " +
+      "separate registry row for run-tracking). Every ticket is stamped " +
+      "created_by_type='agent', created_by_id='workforce_intelligence_engine'; " +
+      'this row exists so those tickets resolve to a real display name instead ' +
+      'of the raw string.',
+  },
+  {
+    agent_name: 'bpos_orchestrator',
+    agent_type: 'ticket_creator_identity',
+    module: 'company',
+    source_file: 'backend/src/services/company/ticketOrchestrator.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Universal Ticket Creation Layer\'s BPOS ' +
+      '(business-process) execution tickets (createBPOSTicket() and the ' +
+      'direct-Ticket.create() bypass in projectRoutes.ts\'s execution-ticket ' +
+      "route). Event-driven on build actions, not cron. Every BPOS ticket is " +
+      "stamped created_by_type='cory', created_by_id='bpos_orchestrator'; " +
+      'this row exists so those tickets resolve to a real display name instead ' +
+      'of the raw string.',
+  },
 ];
 
 /**
@@ -2305,6 +2406,15 @@ export async function seedAgentRegistry(): Promise<void> {
     await seedReeseIdentity();
   } catch (err: any) {
     console.warn('[AI Ops] Reese identity seed failed:', err?.message);
+  }
+
+  // Agent Registration Stage 1 — identity-only registrations for the 5
+  // ticket-creator processes registered above. Same fail-open posture: one
+  // agent's identity-seed failure must never block another's or boot.
+  try {
+    await seedTicketCreatorIdentities();
+  } catch (err: any) {
+    console.warn('[AI Ops] Ticket-creator identity seed failed:', err?.message);
   }
 }
 
