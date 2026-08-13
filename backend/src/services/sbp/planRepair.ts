@@ -111,7 +111,18 @@ const REMEDIES: Record<string, string> = {
     'REPLACE the story with the same id, adding exactly one acceptance line starting "Trust".',
   r0_no_trust_spine:
     'ADD one r0 story that proves the correctness guarantee end to end — the idempotency / ' +
-    'exactly-once promise and its audit trail. That is r0\'s whole point.',
+    'exactly-once promise and its audit trail. That is r0\'s whole point. Its `fulfills` MUST ' +
+    'cite requirement ids that already exist (see the list below) — you cannot create a new one.',
+  dangling_requirement:
+    'A story cites a requirement id that does not exist. Either REPLACE the story with the same id ' +
+    'and a `fulfills` naming only ids from the list below, or drop the bad id. Never invent a ' +
+    'requirement id to justify a story.',
+  dangling_release:
+    'A story names a release that is not in the plan. REPLACE it with the same id and a release ' +
+    'key that exists.',
+  dangling_blocked_by:
+    'A story waits on a story that does not exist. REPLACE it with the same id and either a real ' +
+    'story id or an empty `blocked_by`.',
 };
 
 /** Remedies for the rules actually violated, deduped and in violation order. */
@@ -124,6 +135,14 @@ function remedyText(gate: GateResult): string {
     lines.push(`- ${v.rule}: ${REMEDIES[v.rule]}`);
   }
   return lines.length ? `\nHOW TO FIX EACH KIND OF VIOLATION:\n${lines.join('\n')}\n` : '';
+}
+
+/** Structured note when repair has to correct the model's own output. */
+function log(event: string, correlationId: string | undefined, ctx: Record<string, unknown>): void {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'warn', service: 'sbp-plan-repair',
+    event, correlation_id: correlationId ?? null, outcome: 'partial', context: ctx,
+  }));
 }
 
 /** Deep-ish copy so a rejected attempt cannot leave mutations behind. */
@@ -179,7 +198,9 @@ export async function gateAndRepair(
             `introduce no new ones.\n\n` +
             `VIOLATIONS:\n${bestGate.violations.map((v) => `- [${v.rule}] ${v.message}`).join('\n')}\n` +
             `${reqContext}${remedyText(bestGate)}\n` +
-            `RELEASES: ${best.releases.map((r) => `${r.key}=${r.name} (wk${r.week_start}-${r.week_end})`).join(', ')}\n\n` +
+            `RELEASES: ${best.releases.map((r) => `${r.key}=${r.name} (wk${r.week_start}-${r.week_end})`).join(', ')}\n` +
+            `THE ONLY REQUIREMENT IDS THAT EXIST — a story may cite no other:\n` +
+            `${best.requirements.map((r) => r.id).join(', ')}\n\n` +
             `CURRENT STORIES:\n${storyContext}\n\n` +
             `Return the SMALLEST edit that clears the list:\n` +
             `- \`stories\`: stories to ADD or REPLACE. Same id = replace it. New id = add it, ` +
@@ -219,10 +240,41 @@ export async function gateAndRepair(
       // requirements would let it move the goalposts it is being graded against.
       if (i >= 0) { candidate.requirements[i] = fix; touched.push(fix.id); }
     }
+    // A repair must not be able to introduce a BLOCKING violation of its own.
+    // Measured: asked to add an r0 trust-spine story, the model cited REQ-019 on
+    // a plan holding 18 requirements — because repair is (correctly) forbidden
+    // from adding requirements, so the id it wanted did not exist. That single
+    // dangling reference is blocking, so the whole build failed to publish and
+    // the student got nothing. Sanitising here is deterministic; asking the
+    // model more nicely is not.
+    const knownReqs = new Set(candidate.requirements.map((r) => r.id));
+    const knownReleases = new Set(candidate.releases.map((r) => r.key));
     for (const fix of fixStories) {
+      const cited = fix.fulfills ?? [];
+      const kept = cited.filter((id) => knownReqs.has(id));
+      if (kept.length !== cited.length) {
+        log('repair_dropped_dangling_fulfills', deps.correlationId, {
+          story: fix.id, dropped: cited.filter((id) => !knownReqs.has(id)),
+        });
+      }
+      fix.fulfills = kept;
+      // A story pointing at a release that does not exist is equally blocking.
+      if (!knownReleases.has(fix.release)) {
+        const fallback = [...knownReleases].sort()[0];
+        log('repair_remapped_unknown_release', deps.correlationId, {
+          story: fix.id, from: fix.release, to: fallback,
+        });
+        fix.release = fallback;
+      }
+
       const i = candidate.stories.findIndex((s) => s.id === fix.id);
       if (i >= 0) candidate.stories[i] = fix; else candidate.stories.push(fix);
       touched.push(fix.id);
+    }
+    // Same for blocked_by, which the gate also treats as blocking.
+    const knownStories = new Set(candidate.stories.map((s) => s.id));
+    for (const s of candidate.stories) {
+      if (s.blocked_by?.length) s.blocked_by = s.blocked_by.filter((b) => knownStories.has(b));
     }
     if (removeIds.length) {
       const drop = new Set(removeIds);

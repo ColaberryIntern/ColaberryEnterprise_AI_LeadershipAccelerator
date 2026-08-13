@@ -308,3 +308,77 @@ describe('loop safety', () => {
     expect(calls[0]).toMatch(/Never add a story whose title or scope overlaps/);
   });
 });
+
+describe('repair cannot introduce a blocking violation of its own', () => {
+  /**
+   * MEASURED, 2026-08-12. Asked to add an r0 trust-spine story, the model cited
+   * REQ-019 on a plan holding 18 requirements — because repair is (correctly)
+   * forbidden from adding requirements, so the id it wanted did not exist.
+   * `dangling_requirement` is BLOCKING, so publish 409'd and a real build
+   * produced zero tasks. Repair turned a style problem into a dead build.
+   */
+  /**
+   * Each case gives the model a plan whose ONLY violation is the unfalsifiable
+   * requirement, and a repair that fixes it while smuggling in one bad reference.
+   * Sanitised, the candidate reaches zero violations and is accepted. Unsanitised
+   * it reaches one — not strictly fewer than the one it started with — so
+   * monotonicity rejects the whole repair and the plan stays broken. Every
+   * assertion below therefore fails without the fix.
+   */
+  const fixReq = req('REQ-008', {
+    statement: 'Every screen the director uses must complete its primary action in three clicks or fewer.',
+    kind: 'NFR', priority: 'should',
+  });
+
+  it('drops a fulfills id that does not exist rather than shipping a dangling reference', async () => {
+    const plan = planWithUnfalsifiableRequirement();
+    const { client } = stubClient([{
+      requirements: [fixReq], remove_story_ids: [],
+      stories: [story('STORY-001', { title: 'Establish trust spine', fulfills: ['REQ-001', 'REQ-019'] })],
+    }]);
+
+    const out = await gateAndRepair(plan, 'brief', deps(client));
+
+    expect(out.plan.stories.find((s) => s.id === 'STORY-001')!.fulfills).toEqual(['REQ-001']);
+    expect(out.gate.violations.filter((v) => v.rule === 'dangling_requirement')).toHaveLength(0);
+    expect(out.gate.ok).toBe(true);
+  });
+
+  it('remaps a story pointing at a release that does not exist', async () => {
+    const plan = planWithUnfalsifiableRequirement();
+    const { client } = stubClient([{
+      requirements: [fixReq], remove_story_ids: [],
+      stories: [story('STORY-001', { fulfills: ['REQ-001'], release: 'r9' })],
+    }]);
+
+    const out = await gateAndRepair(plan, 'brief', deps(client));
+
+    expect(out.plan.stories.find((s) => s.id === 'STORY-001')!.release).toBe('r0');
+    expect(out.gate.violations.filter((v) => v.rule === 'dangling_release')).toHaveLength(0);
+    expect(out.gate.ok).toBe(true);
+  });
+
+  it('strips a blocked_by pointing at a story that does not exist', async () => {
+    const plan = planWithUnfalsifiableRequirement();
+    const { client } = stubClient([{
+      requirements: [fixReq], remove_story_ids: [],
+      stories: [story('STORY-001', { fulfills: ['REQ-001'], blocked_by: ['STORY-404'] })],
+    }]);
+
+    const out = await gateAndRepair(plan, 'brief', deps(client));
+
+    expect(out.plan.stories.find((s) => s.id === 'STORY-001')!.blocked_by).toEqual([]);
+    expect(out.gate.violations.filter((v) => v.rule === 'dangling_blocked_by')).toHaveLength(0);
+    expect(out.gate.ok).toBe(true);
+  });
+
+  it('tells the model which requirement ids actually exist', async () => {
+    const plan = planWithUnfalsifiableRequirement();
+    const { calls, client } = stubClient([{ stories: [], requirements: [], remove_story_ids: [] }]);
+
+    await gateAndRepair(plan, 'brief', deps(client));
+
+    expect(calls[0]).toMatch(/THE ONLY REQUIREMENT IDS THAT EXIST/);
+    expect(calls[0]).toContain('REQ-001, REQ-002, REQ-008');
+  });
+});
