@@ -23,6 +23,9 @@ import StudentTask from '../../models/StudentTask';
 import { BuildPlan, PlanStory } from './planContract';
 import { buildStoryPrompt } from './buildStoryPrompt';
 import { Schedule } from './buildSchedule';
+import {
+  COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_ACCEPTANCE, commandCenterPrompt,
+} from './commandCenterStory';
 
 export interface MaterializeResult {
   lists: number;
@@ -100,6 +103,42 @@ export async function materializePlanAsTasks(
 
       const inRel = plan.stories.filter((s) => s.release === rel.key);
       let taskPos = 0;
+
+      // STORY-000 — the Command Center, first task of the first release, before
+      // any of the student's own stories. Injected here rather than generated
+      // so it is identical in shape across the cohort (it is taught and demoed
+      // as one thing) and cannot be renamed or merged away by the decomposer.
+      // It stays out of the plan and the traceability gate on purpose: it
+      // fulfils no requirement of the student's system because it is not part
+      // of that system — it is the window onto it.
+      if (rel.key === ordered[0].key) {
+        const ccAttrs = {
+          project_id: projectId, task_list_id: list.id, story_id: COMMAND_CENTER_STORY_ID,
+          title: COMMAND_CENTER_TITLE, description: COMMAND_CENTER_TITLE,
+          narrative: 'As a builder, I want one page that shows what I am building and how far along it is, so that I can see my own project and demo from it.',
+          status: 'not_started', position: taskPos, release_key: rel.key,
+          acceptance: [...COMMAND_CENTER_ACCEPTANCE], fulfills: [],
+          build: commandCenterPrompt(plan, ctx.schedule ?? null),
+          blocked_by: null,
+          // Day one. It is the thing they run at the start of the first class.
+          due_on: ctx.schedule?.buildStart ?? null,
+        };
+        taskPos += 1;
+        const [ccRow, ccCreated] = await StudentTask.findOrCreate({
+          where: { project_id: projectId, story_id: COMMAND_CENTER_STORY_ID },
+          defaults: { ...ccAttrs, due_baseline_on: ccAttrs.due_on } as any,
+          transaction: t,
+        });
+        if (!ccCreated) {
+          const keepComplete = ccRow.status === 'complete';
+          if (keepComplete) result.preservedComplete += 1;
+          await ccRow.update(
+            { ...ccAttrs, status: keepComplete ? 'complete' : ccRow.status } as any,
+            { transaction: t },
+          );
+        }
+        result.tasks += 1;
+      }
       for (const story of inRel) {
         const attrs = taskAttrs(projectId, list.id, story, plan, gates.get(story.id) ?? [], taskPos, ctx,
           dueByStory.get(story.id) ?? null);
