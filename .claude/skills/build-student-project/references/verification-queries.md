@@ -223,6 +223,34 @@ Events worth knowing by name:
 | `task_status_client_complete_refused` | H-8 guard firing (expect a lot of these) |
 | `sbp_schema_incomplete` | **DDL did not land** — read the `missing` array |
 
+## Q9 — re-grade a `gate_failed` label instead of believing it
+
+`build_intake.status` is written at generation time and never revisited. A plan generated
+before the advisory/blocking split can carry `gate_failed` on violations that do not
+block — one student sat stranded three days on `requirement_unfalsifiable`, which is not
+in `BLOCKING_RULES`. Count the blocking rules yourself:
+
+```sql
+SELECT bp.project_id, bp.version, i.status AS labelled,
+       ARRAY(SELECT DISTINCT v->>'rule'
+               FROM jsonb_array_elements(bp.gate_violations) v
+              WHERE v->>'rule' IN (
+                'must_uncovered','dangling_requirement','dangling_release',
+                'dangling_blocked_by','malformed_requirement','malformed_story',
+                'r0_missing','r0_not_ungated','invented_vendor')) AS blocking_rules,
+       ARRAY(SELECT DISTINCT v->>'rule'
+               FROM jsonb_array_elements(bp.gate_violations) v) AS all_rules
+FROM build_plans bp
+JOIN build_intake i ON i.project_id = bp.project_id
+WHERE i.status = 'gate_failed'
+ORDER BY bp.created_at;
+```
+
+Empty `blocking_rules` ⇒ the plan is publishable and the label is stale; publish it.
+Keep that list in sync with `BLOCKING_RULES` in `planGate.ts:79` — PR #1461's audit has a
+test that parses the constant out of the source to stop exactly this drift.
+**Nothing sweeps for stale labels**, so run this whenever a `gate_failed` looks wrong.
+
 ## Q8 — schema post-condition (H-7)
 
 Never trust that `ensureSbpSchema` ran. It swallows every statement failure.

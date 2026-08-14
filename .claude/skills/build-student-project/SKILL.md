@@ -31,6 +31,7 @@ verified against `origin/main` `4078338f` plus **PR #1462** (auto-publish) and *
 | **PR #1461** audit script | **open, not merged** | `auditStudentBuilds.js` replaces the hand-written cohort sweep. Its verdict ladder and this skill's readiness query are deliberately the same definition |
 | Repo provisioning | **has never run in production** | Every publish takes the `awaiting_repo` branch. No student repo has ever received the document set — see Phase 4 |
 | Task verification | **has never run** | 0 tasks carry `verified_at`; `markTaskVerifiedComplete` still has no caller. Points gated on it award nothing |
+| The 2026-08-13 backlog | **cleared** | 18 students published by hand; `plan_unpublished` 10 → 0. Latest sweep: READY 14, `tasks_undated` 4 (preserved completed work), `no_project` 35 |
 
 The rest of this document is written for the merged world, with the pre-merge behaviour
 called out wherever it differs. **Nothing here stops being verified because it became
@@ -47,14 +48,27 @@ comes back.
    `enrollments.active_project_id`. A plan that is not published sits at
    `build_plans.status='draft'` and materialises **nothing**.
 
-   *The incident.* On 2026-08-12/13 five students finished the wizard, the server
-   generated a plan for each, the gate passed all five — and every one of them spent the
-   evening looking at the browser's ten-task fallback template. Their real plans existed
-   the whole time, correct, at `status='draft'`. `runGeneration` ended one line short of
-   publishing, and `publishBuild` had exactly one caller: an HTTP route no screen in the
-   product ever called. The chain comment described a `[review]` step with no UI on
-   either end of it, so `drafted` was not a waiting room, it was a dead end. The cohort
-   audit later found **11 enrollments** sitting in that state.
+   *The incident.* On 2026-08-12/13 students finished the wizard, the server generated a
+   plan for each, the gate passed them — and they spent the evening looking at the
+   browser's ten-task fallback template. Their real plans existed the whole time,
+   correct, at `status='draft'`. `runGeneration` ended one line short of publishing, and
+   `publishBuild` had exactly one caller: an HTTP route no screen in the product ever
+   called. The chain comment described a `[review]` step with no UI on either end of it,
+   so `drafted` was not a waiting room, it was a dead end.
+
+   *How many students? The answer moved four times, and that is the lesson.*
+
+   | Count | Who measured | Lens |
+   |---|---|---|
+   | **5** | the first audit, and the number in PR #1462 | projects created in the last 16 hours |
+   | **9** | the fix agent, while fixing those five | found 4 more in the same state whose projects predated the window |
+   | **11** | PR #1461's cohort tool, snapshot at 03:06Z | everyone at "plan drafted but never published", cumulative |
+   | **18** | the same tool, sweeping after all writes | 17 fixed, **plus one student who appeared on no list at all** |
+
+   **Every time someone widened the lens, the population grew.** A time-boxed query, a
+   hand-written list and a cohort sweep gave three different answers, and only the sweep
+   was right. Final state after the fixes: `plan_unpublished` went **10 → 0**; READY 14,
+   `tasks_undated` 4 (all preserved completed work, not defects), `no_project` 35.
 
    *What changed.* **PR #1462 makes publish automatic.** `runGeneration` now ends by
    calling `autoPublish()` in the same queued job whenever `isPublishable(gate.violations)`,
@@ -71,6 +85,14 @@ comes back.
    meaning "the plan is good and something downstream refused". Phase 4 and the
    verification checklist are unchanged in substance for exactly this reason. Until
    #1462 merges and deploys, publish is still entirely manual in production.
+
+> ### Audit before you believe a list
+>
+> Any list of affected students handed to you — including one in this file — is a lens,
+> not a population. Sweep the whole cohort first (`auditStudentBuilds.js`, or
+> [Q1b](references/verification-queries.md)), then work the list the sweep gives you. The
+> eighteenth student was on nobody's list and was found only because the tool looked at
+> everyone. Report what the sweep says, not what the list said.
 
 2. **The browser has its own fallback build, and it looks plausible.**
    `handleCreate` writes an optimistic localStorage build *unconditionally*, before any
@@ -199,6 +221,14 @@ only.
 Only create if there genuinely is none. `POST /api/portal/projects` calls
 `createNewProjectForEnrollment`, which **always creates** and activates — a careless call
 leaves an empty project behind and moves the student's portal to it.
+
+> **Never "clean up" a duplicate project.** A dedupe was proposed on 2026-08-13 and
+> refused, correctly: **no real student has more than one project.** The only
+> multi-project account is Ali's, and one of those — `fcce50ef` — is **the platform's own
+> project record**: roughly 144,000 rows across 15+ tables, including the BuildManifest
+> telemetry target named in `CLAUDE.md`. A project id can be infrastructure. If a
+> deduplication ever looks warranted, count the dependent rows first and assume the
+> outlier is load-bearing until proven otherwise.
 
 ```sql
 SELECT id, name, enrollment_id, created_at FROM projects WHERE enrollment_id = :eid ORDER BY created_at DESC;
@@ -412,6 +442,7 @@ deployed.
 |---|---|---|
 | "I don't see my project" | Plan is at `status='draft'`. Pre-#1462: publish has no caller. Post-#1462: auto-publish ran and **failed** (rule 1) | [Q2](references/verification-queries.md) to confirm; grep `sbp_autopublish_failed` for the `error_class`; then `POST …/publish` |
 | A tool reports most of the cohort as broken | It read `gate_ok` as "the gate failed". It is `violations.length === 0`, so healthy published plans carry `false` (rule 9) | Judge on `gate.blocking` / the nine `BLOCKING_RULES`, never on `gate_ok` |
+| "My build says it failed the gate" — but the violations look harmless | **A stale `gate_failed` label.** The status was written at generation time; a plan generated before the advisory/blocking split can carry `gate_failed` on violations that do not block. One student sat stranded for three days on `requirement_unfalsifiable`, which is **not** in `BLOCKING_RULES` — her real blocking count was zero and publishing simply worked | Re-grade rather than believe the label: count blocking violations ([Q9](references/verification-queries.md)). Zero ⇒ publish. **Nothing sweeps for this**, so old `gate_failed` rows need checking by hand |
 | "I don't see my project" (plan **is** published) | `enrollments.active_project_id` points elsewhere, or `makeActiveProject` threw | Grep `sbp_active_project_failed`; `PUT /api/portal/projects/active` with `{project_id}` |
 | "I don't see my project" (published **and** active) | Their browser is rendering a cached localStorage tree | Hard reload. The real plan only lands on reload — the post-create sync call is a no-op |
 | "My tasks have no dates" | `cohorts.start_date` is null ⇒ `sbp_schedule_skipped` ⇒ every `due_on` null and no prep week (rule 4) | Set the cohort start date, then republish; materialize backfills |

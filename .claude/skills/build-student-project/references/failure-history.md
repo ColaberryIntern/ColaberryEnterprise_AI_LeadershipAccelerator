@@ -11,7 +11,24 @@ not the date it started. Nothing here is hypothetical.
 **Found:** 2026-08-13, by auditing `build_plans.status` for the cohort rather than by
 reading a bug report.
 
-**What happened.** Five students finished the wizard, watched it say their build was
+**The count moved four times, and that is the most instructive part of this incident.**
+
+| Count | Measured by | Lens | Why it was short |
+|---|---|---|---|
+| **5** | the first audit; the number in PR #1462 | projects created in the last 16 hours | a time box |
+| **9** | the fix agent, mid-fix | the same state, projects predating that window | found 4 more the window had excluded |
+| **11** | PR #1461's cohort tool, 03:06Z | everyone at "plan drafted but never published" | cumulative, but a point-in-time snapshot |
+| **18** | the same tool, swept after all writes | the whole cohort | 17 fixed **plus one student on no list at all** |
+
+Every widening of the lens grew the population. Three methods — a time-boxed query, a
+hand-written list, and a cohort sweep — gave three answers, and only the sweep was right.
+The eighteenth student was found for no reason other than that the tool looked at
+everyone. **Audit before you believe a list**, including any list in this file.
+
+Outcome: `plan_unpublished` **10 → 0**. Final sweep: READY 14, `tasks_undated` 4 (all
+preserved completed work, not defects), `no_project` 35.
+
+**What happened.** Students finished the wizard, watched it say their build was
 ready, and ended class with nothing to work on. Their plans existed — `build_plans`
 held a perfectly good gate-clean row for each of them — at `status='draft'`. A draft
 materialises nothing: no `student_task_lists`, no `student_tasks`, no STORY-000, no
@@ -36,7 +53,7 @@ simply never called by a browser.
 **Why it looked fine.** `runGeneration` set the intake status to `drafted` on success,
 and `drafted` is a terminal state for the poller. The wizard polls, sees a terminal
 non-failure state, and stops with a success shape. Every log line says the build
-succeeded, because generation *did*. Three of the five students got that far; **two never
+succeeded, because generation *did*. Of the first five found, three got that far; **two never
 reached the server at all** and were shown the same plausible template with no indication
 anything had gone wrong.
 
@@ -64,8 +81,8 @@ same queued job whenever `isPublishable(gate.violations)`:
   find one: no UI on either end, and `publishBuild`'s only caller was an uncalled route
 
 **Why this rule is rewritten and not deleted.** The reason a reader trusts the checklist
-in SKILL.md is that this cost five students an evening and left 11 more sitting in the
-same state. A verification step that gets dropped because "it is automatic now" is
+in SKILL.md is that this cost eighteen students an evening, and that the first count of
+it was five. A verification step that gets dropped because "it is automatic now" is
 exactly how this comes back. Concretely, three things are still true after #1462:
 
 1. Auto-publish cannot throw, so its failures are one log line and a build at `drafted` —
@@ -469,3 +486,36 @@ done.
 **Still only prevented by remembering:** both. Nothing alerts on either. The only way
 these surface is someone asking "has this ever actually run?" and checking — which is how
 they surfaced.
+
+---
+
+## H-12 · Two things that were nearly got wrong during the fix
+
+**Found:** 2026-08-13, while clearing the H-1 backlog.
+
+**(a) A stale `gate_failed` label stranded a publishable plan for three days.**
+`build_intake.status` is written once, at generation time, and never revisited. One
+student's plan was generated on 10 Aug — *before* the advisory/blocking split shipped —
+and was labelled `gate_failed` on `requirement_unfalsifiable`. That rule is **not** in
+`BLOCKING_RULES`. Her real blocking count was zero; publishing simply worked.
+
+The label is a historical artefact of the gate as it stood when the plan was graded, and
+the gate has since become more permissive. So a `gate_failed` older than the split can be
+wrong in the student's favour, and nothing re-grades it. Re-derive from
+`gate_violations` rather than trusting `status` — [Q9](verification-queries.md). Nothing
+sweeps for this today.
+
+**(b) A "duplicate project" cleanup was proposed and correctly refused.** The audit
+surfaced accounts with more than one project and the obvious next move was a dedupe. It
+was refused, for two reasons that hold generally:
+
+1. **No real student has more than one project.** The multi-project accounts were not a
+   data-quality problem to solve.
+2. The only multi-project account is Ali's, and one of those projects — `fcce50ef` — is
+   **the platform's own project record**: roughly 144,000 rows across 15+ tables,
+   including the BuildManifest telemetry target named in `CLAUDE.md`.
+
+**A project id can be infrastructure.** Before any cleanup that deletes or merges a
+project, count the dependent rows and assume the outlier is load-bearing until proven
+otherwise. The row that looks anomalous in a student-shaped query is the one most likely
+not to be a student.
