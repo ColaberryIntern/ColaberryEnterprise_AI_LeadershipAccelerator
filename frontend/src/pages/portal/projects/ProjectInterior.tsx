@@ -254,6 +254,16 @@ const ProjectInterior: React.FC<{
               <div className="mt">
                 <span className="chip sm">{project.stage}</span>
                 {project.sample && <span className="chip sm warn">Training example</span>}
+                {/* Inside the build too, not just on the card that got you
+                    here. A student reading their task list is exactly who needs
+                    to know whether these are their generated stories or the
+                    browser's ten-task template. */}
+                {!project.sample && project.origin === 'pipeline' && (
+                  <span className="chip sm" title="Generated from your answers, scheduled against your cohort, every requirement traced to a story.">Your tailored plan</span>
+                )}
+                {!project.sample && project.origin === 'local' && (
+                  <span className="chip sm warn" title="A general starter template built in your browser — no schedule, no Command Center, generic prompts.">Starter template</span>
+                )}
               </div>
               <a className="prev" href={`https://${project.slug}.preview.colaberry.ai`} target="_blank" rel="noreferrer">
                 {project.slug}.preview.colaberry.ai
