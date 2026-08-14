@@ -24,8 +24,12 @@ Verified against `origin/main` `4078338f` (2026-08-13). Everything in
 | `materializeTasks.ts` | I/O | Plan → `student_task_lists` + `student_tasks`, one transaction |
 | `buildStoryPrompt.ts` | pure | The Claude Code prompt stored on each task's `build` column |
 | `renderDocs.ts` | pure | The ~16-19 file document set + the path allowlist |
-| `repoWriter.ts` | I/O | One GitHub commit, content-hash idempotent, allowlist enforced by throwing |
+| `repoWriter.ts` | I/O | One GitHub commit, content-hash idempotent, allowlist enforced by throwing. Two co-owned files are merged rather than replaced: `CLAUDE.md` via `spliceManagedBlock`, `.colaberry/progress.json` via `mergeProgressFile` (#1463) |
 | `managedBlock.ts` | pure | The delimited block inside the student's CLAUDE.md |
+| `verification/progressContract.ts` | pure | `.colaberry/progress.json` — Zod schema, render, parse, and the merge that keeps the agent's `passed` flags across a republish |
+| `verification/repoProgressReader.ts` | I/O | The read half: the progress file and the pushed commits, out of GitHub |
+| `verification/verifyDecision.ts` | pure | Per story: verified / submitted / in_progress / not_started, plus why not |
+| `verification/buildVerificationService.ts` | I/O | The loop end to end — writes `verification_json`, calls `markTaskVerifiedComplete`. Called from `POST /api/portal/workspace/repo/sync` |
 | `boundedQueue.ts` | I/O | Concurrency ceiling for generation |
 | `workspaceRepo.ts` | I/O | `repoForProject(projectId)` — the single repo lookup shared by the HTTP publish route and auto-publish, extracted in #1462 so the two paths cannot drift. Returns null (never throws) when unprovisioned, which is currently **always** |
 
@@ -236,7 +240,17 @@ message prefix `chore(colaberry):` so the push webhook can recognise its own wri
 skip them — otherwise our write triggers a sync that triggers a write. The ref update is
 never forced: a concurrent human push must win, not be erased.
 
-`CLAUDE.md` is spliced through `managedBlock.ts`, never replaced. See H-5.
+**Two of these eight paths are co-owned and are merged, not replaced.** Everything else
+in the set is ours and is overwritten on every sync.
+
+| Path | Who owns what | Mechanism |
+|---|---|---|
+| `CLAUDE.md` | we own the delimited block, the student owns the rest of the file | `managedBlock.spliceManagedBlock` — see H-5 |
+| `.colaberry/progress.json` | we own the story list and the exact criterion text, the agent owns `passed`, `files_touched`, `tests_added`, notes | `progressContract.mergeProgressFile` — see H-5's #1463 update |
+
+`.colaberry/plan.json` and `.colaberry/manifest.json` are platform bookkeeping and are
+still replaced wholesale. If you are about to describe `.colaberry/**` as "overwritten on
+every sync", that sentence was true before #1463 and is now wrong for one file in it.
 
 ---
 
@@ -312,8 +326,10 @@ build, so the key is mutated even on a pure page load.
 | Publish | early-returns if already `published` | `planStore.publishPlan` |
 | Materialize | `findOrCreate` on `(project_id, story_id)`; `complete` preserved; `due_baseline_on` written once | `materializeTasks.ts` |
 | Repo write | content-hash comparison against the committed manifest | `repoWriter.changedFiles` — **but see H-10(a), the call site passes `null`** |
+| Repo write over a co-owned file | merge, not replace, so a republish cannot discard what the student or their agent wrote | `spliceManagedBlock` (CLAUDE.md), `mergeProgressFile` (`.colaberry/progress.json`) |
 | Active project | `WHERE active_project_id IS NULL OR <> $pid` | `makeActiveProject` |
 | Verification | `verified_at = existing ?? now()` — a replay does not move the timestamp | `markTaskVerifiedComplete` |
+| Re-verification | `verification_json` is deliberately **not** first-write-wins — it is the live verdict and is rewritten on every sync, while `verified_at` beside it never moves | `buildVerificationService` |
 
 ---
 

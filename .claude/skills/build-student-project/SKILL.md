@@ -10,8 +10,9 @@ requirements-traced, release-gated, dated plan; materializes it into the tasks t
 portal renders; and commits the document set into their workspace repo. The spine is
 `backend/src/services/sbp/sbpOrchestrator.ts`; every other module in that folder is a
 component it calls. Routes: `backend/src/routes/sbpRoutes.ts`. Everything here is
-verified against `origin/main` `4078338f` plus **PR #1462** (auto-publish) and **PR
-#1461** (the cohort audit script), both open at the time of writing — 2026-08-13.
+verified against `origin/main` `4078338f`, plus **PR #1463** (the build-verification loop,
+**merged into main 2026-08-14**), **PR #1462** (auto-publish) and **PR #1461** (the cohort
+audit script).
 
 > **This skill was hardened from the night five real students ended class unable to see
 > any work.** Nothing below is defensive theory — each rule is a failure that already
@@ -20,18 +21,56 @@ verified against `origin/main` `4078338f` plus **PR #1462** (auto-publish) and *
 > first" before touching anything. The audit that found the top rule was worth more
 > than any feature shipped that night.
 >
-> **Read the status box below first.** Two PRs changed this subsystem after the first
-> draft of this skill, and one of them fixed its headline rule.
+> **Read the status box below first.** Three PRs changed this subsystem after the first
+> draft of this skill: one fixed its headline rule, one gave its longest-standing dead end
+> a caller.
 
 ## Status — what is true right now
 
 | | State | Effect on this runbook |
 |---|---|---|
-| **PR #1462** auto-publish | **open, not merged, not deployed** | Once merged, a gate-clean plan publishes itself. Until then, rule 1 applies in production exactly as originally written |
-| **PR #1461** audit script | **open, not merged** | `auditStudentBuilds.js` replaces the hand-written cohort sweep. Its verdict ladder and this skill's readiness query are deliberately the same definition |
-| Repo provisioning | **has never run in production** | Every publish takes the `awaiting_repo` branch. No student repo has ever received the document set — see Phase 4 |
-| Task verification | **has never run** | 0 tasks carry `verified_at`; `markTaskVerifiedComplete` still has no caller. Points gated on it award nothing |
+| **PR #1463** build-verification loop | **merged into main 2026-08-14** | `markTaskVerifiedComplete` finally has a caller. New column `student_tasks.verification_json`, new `sbp/verification/` subtree, and `.colaberry/progress.json` is now **co-owned and merged**, not overwritten — see "What #1463 changed" below |
+| **PR #1462** auto-publish | **approved, landing in the same batch as this skill** | A gate-clean plan publishes itself. Until it deploys, rule 1 applies in production exactly as originally written |
+| **PR #1461** audit script | **approved, landing in the same batch as this skill** | `auditStudentBuilds.js` replaces the hand-written cohort sweep. Its verdict ladder and this skill's readiness query are deliberately the same definition |
+| Repo provisioning | **has never run in production** | Every publish takes the `awaiting_repo` branch. No student repo has ever received the document set — see Phase 4. This also means the #1463 verification loop has **nothing to read from** until repos exist |
+| Task verification | **wired, but never yet run against a real repo** | The loop exists and is triggered by workspace sync (#1463). It reads `.colaberry/progress.json` out of the student's repo — and there are no student repos, so 0 tasks still carry `verified_at`. Wired ≠ run |
 | The 2026-08-13 backlog | **cleared** | 18 students published by hand; `plan_unpublished` 10 → 0. Latest sweep: READY 14, `tasks_undated` 4 (preserved completed work), `no_project` 35 |
+
+### What #1463 changed, in the terms this runbook uses
+
+**The completion loop has a caller.** `POST /api/portal/workspace/repo/sync` — the button
+that pulls the student's repo — now also runs `verifyBuildFromRepo()`
+(`backend/src/services/sbp/verification/buildVerificationService.ts`). It reads
+`.colaberry/progress.json` plus the pushed commits, decides per story, writes
+`student_tasks.verification_json`, and calls `markTaskVerifiedComplete` for stories that
+pass. Verification **never fails the sync**: every expected state (no plan, no repo, rate
+limit, malformed file) comes back as a classified result, and an unexpected throw is logged
+`workspace_verification_failed` while the pull still succeeds. There is deliberately **no
+webhook** — the reasoning is in `docs/BUILD_VERIFICATION_CONTRACT.md`.
+
+**`.colaberry/progress.json` is no longer platform-only bookkeeping.** It is now the
+two-way contract, and it is co-owned exactly the way `CLAUDE.md` is (H-5):
+
+- `renderDocs` seeds it with every story and the **exact text** of every acceptance
+  criterion, all `passed: false`. Seeding the text is what lets the reader be strict
+  without being hostile — the agent flips a boolean instead of retyping a sentence, so an
+  honest claim matches the plan and an invented criterion matches nothing and is discarded.
+- `repoWriter` then **merges** that render over whatever is already in the repo
+  (`mergeProgressFile`, right beside the CLAUDE.md splice): our side — the story list and
+  criterion text — replaces; their side — the `passed` flags, `files_touched`,
+  `tests_added`, notes — is carried across by story id and normalised criterion text.
+
+So the old sentence "`.colaberry/` is platform bookkeeping and is overwritten on every
+sync" is **no longer true**, and repeating it is now actively wrong: a republish that
+blindly replaced this file would reset every story sitting at "3 of 4" back to "not
+started", which reads to a student as the platform losing their work.
+`.colaberry/plan.json` and `.colaberry/manifest.json` are still overwritten wholesale.
+
+**One new column.** `student_tasks.verification_json` (JSONB, nullable) holds the live
+verdict — state, which criteria are outstanding, the evidence commit, and why it is not
+verified yet. It is in `REQUIRED_COLUMNS`, so [Q8](references/verification-queries.md) now
+expects **six** columns, not five. Distinct from `verified_at`, which is written once and
+never moves; `verification_json` is allowed to change on every sync.
 
 The rest of this document is written for the merged world, with the pre-merge behaviour
 called out wherever it differs. **Nothing here stops being verified because it became
@@ -152,7 +191,10 @@ Then four more that will bite you specifically:
 7. **`complete` cannot be set by the client.** Client status writes are allowlisted to
    `not_started` / `in_progress` / `blocked`; `complete` is refused **409** before any
    I/O, and the import path demotes a client-authored `complete` to `in_progress`. The
-   only path to `complete` is `markTaskVerifiedComplete()`, which is wired to no route.
+   only path to `complete` is `markTaskVerifiedComplete()`, which is still wired to no
+   *client* route — since #1463 its one caller is the verification loop, reached through
+   `POST /api/portal/workspace/repo/sync`, which writes down a conclusion it reached from
+   the repo rather than accepting a claim from a body.
    Points gate on `verified_at`, not on `status`. Expect a steady stream of
    `task_status_client_complete_refused` in the logs — the frontend still maps a ticked
    task to `complete` and eats the 409.
@@ -366,7 +408,7 @@ for `sbp_active_project_failed`, which names the statement.
 Do not tell anyone a student is ready until every line has evidence next to it.
 
 - [ ] `SBP_PIPELINE_ENABLED=true` and `PROJECT_API_ENABLED=true` in the running container
-- [ ] Schema post-condition clean — 5 columns present, 2 tables, 2 indexes ([Q8](references/verification-queries.md)); no `sbp_schema_incomplete` in the boot log
+- [ ] Schema post-condition clean — **6** columns present (the sixth is `student_tasks.verification_json`, added by #1463), 2 tables, 2 indexes ([Q8](references/verification-queries.md)); no `sbp_schema_incomplete` / `SchemaInvariantViolation` in the boot log
 - [ ] `cohorts.start_date` is set for this student's cohort ([Q4](references/verification-queries.md))
 - [ ] `build_intake.status` = `drafted`, `published` or `awaiting_repo` — never `generating`, `failed` or `captured`
 - [ ] `build_plans` has a row at `status='published'`; note its `version`
@@ -454,7 +496,8 @@ deployed.
 | "It says my build failed" | `gate_failed` (blocking violations) or `failed` (generation threw) | `gate_failed` → read the violations, sharpen the brief. `failed` → correlation id, [Q7](references/verification-queries.md), re-POST |
 | "It's been spinning for ages" | Bounded queue during a class rush — ~237s for the 20th student | Wait. Over ~10 min in `generating` means a restart dropped the job; re-POST |
 | "The build pipeline is not enabled for your account" | `SBP_PIPELINE_ENABLED` unset ⇒ 404 ⇒ hard local fallback | Set the flag; restart; re-run the build |
-| "I ticked a task and it didn't stick" | Client `complete` refused 409 by design (rule 7) | Expected. Completion is granted on verification; `markTaskVerifiedComplete` is the only path and is not yet wired to a route |
+| "I ticked a task and it didn't stick" | Client `complete` refused 409 by design (rule 7) | Expected. Completion is granted on verification, not on ticking. Since #1463 the path is: update `.colaberry/progress.json` in the repo, commit naming the story, push, then **Sync** — that is what calls `markTaskVerifiedComplete`. Read `student_tasks.verification_json` for which criteria are still outstanding |
+| "I did the work and Sync says it is still not verified" | The verdict is in `verification_json` and it names the missing half — criteria not all `passed`, or no commit naming the story | Read `verification_json.reason` rather than guessing. Both halves are required: every criterion passing **and** a pushed commit that names the story |
 | "My repo has no docs" | No project has ever had a provisioned repo — all `github_connections` rows are legacy enrollment-keyed, so `repoForProject` returns null every time and publish takes `awaiting_repo` | Not a per-student fix. Repo provisioning has to be run at all before any student repo can receive documents. Tasks were fine all along |
 | "I have two copies of my project" (post-#1462) | The placeholder was kept deliberately because the student had ticked work off it — the supersede guard | Expected. Both are labelled with their `origin` chip; the `pipeline` one is real |
 | "The pipeline overwrote my CLAUDE.md" | Should be impossible since PR #1453 — we own only the delimited block | Verify the `COLABERRY:BEGIN/END` markers survived; if their content is gone, that is a regression in `managedBlock` and is a stop-everything bug |
@@ -484,7 +527,10 @@ deployed.
 | The two build shapes being indistinguishable | `origin: 'local' \| 'pipeline'` on `StudentProject`, chipped on the card and in the build |
 | The student never being told they were degraded | The banner renders on **every** Projects view, not only the wizard it was unmounting from |
 | Two lookalike builds after a create | The placeholder claims its backend project via `pipelineProjectId` and is superseded in place — guarded so completed work is kept and labelled, not discarded |
-| A student self-awards completion | Status allowlist + 409 + import demotion; `markTaskVerifiedComplete` wired to no route |
+| A student self-awards completion | Status allowlist + 409 + import demotion; `markTaskVerifiedComplete` is reachable only from the verification loop, never from a request body |
+| A republish resetting the student's ticked criteria | **PR #1463**: `repoWriter` merges `.colaberry/progress.json` (`mergeProgressFile`) instead of replacing it — our story/criterion list replaces, their `passed` flags and notes are carried across by story id and criterion text |
+| An agent inventing acceptance criteria to award itself credit | `renderDocs` seeds the exact criterion text; the reader matches claims back to the plan by normalised text, so an invented criterion matches nothing and is discarded rather than counted |
+| A verification failure breaking the student's repo sync | Every expected state comes back classified; an unexpected throw logs `workspace_verification_failed` and the sync still returns the pull it succeeded at |
 | A missing cohort date kills the build | `scheduleFor` fail-soft returning null |
 | Agent scoping failure kills the build | `scopeAgents` returns the plan unchanged on upstream/malformed/placeholder |
 | A non-existent column reaches production | `ACTIVE_PROJECT_COLUMNS` asserted against the real `Enrollment` model, statically, with no database |
@@ -530,9 +576,14 @@ deployed.
    `getPublishedPlan()` and the orchestrator does not use it. The new `delivered` field
    on the poll response is derived from the intake status, so it is trustworthy; the
    `plan` block on the same response may still be describing a newer draft.
-9. **Verification has never run.** `markTaskVerifiedComplete` still has no caller,
-   **0 tasks carry `verified_at`**, and 0 `evidence_records` carry source
-   `github_commit`. Points gated on `verified_at` award nothing, and no surface says so.
+9. **Verification is now wired, and still has never run.** #1463 gave
+   `markTaskVerifiedComplete` its caller and the loop is triggered by workspace sync — but
+   the loop reads `.colaberry/progress.json` **out of the student's repo**, and item 5
+   above says there are no student repos. So **0 tasks still carry `verified_at`** and 0
+   `evidence_records` carry source `github_commit`, for a different reason than before.
+   Do not read "the verification loop shipped" as "verification works": it is blocked
+   behind repo provisioning, and the first real proof will be a `verified_at` that is not
+   null. Points gated on `verified_at` still award nothing today.
 10. **`SET TRANSACTION READ ONLY` is a no-op through node-postgres**, which sends each
     query as its own implicit transaction — it guards the statement carrying it and
     nothing after, while looking identical in the source. Use

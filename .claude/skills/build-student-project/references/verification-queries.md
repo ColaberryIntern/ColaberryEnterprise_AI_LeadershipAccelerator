@@ -181,15 +181,27 @@ publish.
 ## Q6 — completion vs verification (H-8)
 
 ```sql
-SELECT story_id, title, status, verified_at, verified_by
+SELECT story_id, title, status, verified_at, verified_by,
+       verification_json ->> 'state'  AS verify_state,
+       verification_json ->> 'reason' AS verify_reason
 FROM student_tasks
-WHERE project_id = :project_id AND (status = 'complete' OR verified_at IS NOT NULL)
+WHERE project_id = :project_id
+  AND (status = 'complete' OR verified_at IS NOT NULL OR verification_json IS NOT NULL)
 ORDER BY position;
 ```
 
 `status='complete'` with `verified_at IS NULL` earns no points. That combination is
 legitimate only for rows that predate the verification columns; anything new means
 something wrote `complete` down a path that is not `markTaskVerifiedComplete`.
+
+Since PR #1463 the two columns answer different questions and both are worth reading.
+`verified_at` is written once and never moves — "was it confirmed". `verification_json` is
+the **live** verdict, rewritten on every repo sync — "what is left", which is the question
+a student sitting at 3 of 4 criteria is actually asking. A row with
+`verification_json IS NOT NULL` and `verified_at IS NULL` is the healthy, expected state
+of work in progress, not a defect; `verify_reason` says which half is missing (criteria
+still outstanding, or no pushed commit naming the story). All-NULL `verification_json`
+across an entire cohort means the loop has never had a repo to read — see H-10.
 
 ## Q7 — the logs, by correlation id
 
@@ -264,12 +276,16 @@ WHERE table_schema = 'public'
       ('student_tasks','due_on'),
       ('student_tasks','due_baseline_on'),
       ('student_tasks','verified_at'),
-      ('student_tasks','verified_by'))
+      ('student_tasks','verified_by'),
+      ('student_tasks','verification_json'))
 ORDER BY 1, 2;
 ```
 
-Five rows expected. Fewer means an `ALTER` was skipped and the code is writing values
-Postgres is silently dropping. Also check the tables and indexes:
+**Six** rows expected — the sixth, `student_tasks.verification_json`, arrived with PR
+#1463 and is in `REQUIRED_COLUMNS`. Fewer means an `ALTER` was skipped and the code is
+writing values Postgres is silently dropping; specifically, a missing `verification_json`
+means the verification loop writes a verdict Sequelize discards without a word, so every
+story renders "not started" while the run logs success. Also check the tables and indexes:
 
 ```sql
 SELECT tablename FROM pg_tables
@@ -282,7 +298,7 @@ SELECT indexname FROM pg_indexes
 And the boot log:
 
 ```bash
-docker logs accelerator-backend 2>&1 | grep -E "sbp schema stmt skipped|sbp_schema_incomplete|SBP schema ensured"
+docker logs accelerator-backend 2>&1 | grep -E "sbp schema stmt skipped|sbp_schema_incomplete|SchemaInvariantViolation|SBP schema ensured"
 ```
 
 ---

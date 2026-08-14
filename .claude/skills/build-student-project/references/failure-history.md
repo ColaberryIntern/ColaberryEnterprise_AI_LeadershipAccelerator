@@ -227,7 +227,19 @@ appends rather than clobbering a file we could not see.
 splice did not disturb the student's own lines.
 **Still only prevented by remembering:** the allowlist is `CLAUDE.md`, `docs/**`,
 `.colaberry/**` (`renderDocs.ts:41`). Any *new* file the pipeline ever writes into a
-path a student also authors needs the same treatment. Only CLAUDE.md has it today.
+path a student also authors needs the same treatment.
+
+**Update, PR #1463:** a second file joined the co-owned set, which is the first evidence
+that this was a pattern and not a one-off. `.colaberry/progress.json` is now the two-way
+contract between the platform and the Claude Code session in the student's repo — the
+platform owns the story list and the criterion text, the agent owns the `passed` flags and
+its notes — so `repoWriter` merges it (`mergeProgressFile`) rather than replacing it, in
+the same loop and for the same reason as the CLAUDE.md splice above. Replacing it on a
+republish would reset every story sitting at "3 of 4 criteria" to "not started", which is
+the same failure as H-5 wearing different clothes. `.colaberry/plan.json` and
+`.colaberry/manifest.json` remain platform-only and are still replaced wholesale. The
+count is now **two of the eight** rendered paths that are co-owned; the next one will need
+deciding on deliberately, not discovering.
 
 ---
 
@@ -325,10 +337,14 @@ Now:
   the row. Zod deliberately keeps `complete` in the enum so the answer is a 409 that
   explains, not a generic 400 "invalid enum value" that reads like a client bug
 - `markTaskVerifiedComplete(projectId, storyId, evidence)` is the only path to
-  `complete`. It is wired to **no route** and takes no `enrollmentId`, because it is not
-  a request — it is the verification pipeline writing down a conclusion it already
+  `complete`. It is wired to **no client route** and takes no `enrollmentId`, because it
+  is not a request — it is the verification pipeline writing down a conclusion it already
   reached. It stamps `student_tasks.verified_at` / `verified_by` (PR #1456) and is
-  replay-safe: the first verification is the one that counts
+  replay-safe: the first verification is the one that counts. **Since PR #1463 it has
+  exactly one caller:** `buildVerificationService.verifyBuildFromRepo()`, reached from
+  `POST /api/portal/workspace/repo/sync`. The important property survives — the input is
+  the repo (a pushed commit plus `.colaberry/progress.json`), never a request body, so a
+  student still cannot assert their way to `complete`
 - same hole, second door: the **import payload** is client-authored too, so a `complete`
   in it is a claim as well, and is demoted to `in_progress` on the way in
 
@@ -475,17 +491,32 @@ terminal state of every successful build.
 
 **(b) Task verification has never run.** **0 tasks carry `verified_at`** and **0
 `evidence_records` carry source `github_commit`**. `markTaskVerifiedComplete` — the only
-path to `status='complete'` since H-8 — still has no caller anywhere.
+path to `status='complete'` since H-8 — had no caller anywhere.
 
-So the completion story is currently closed at both ends: a student cannot set `complete`
-(409, by design), and nothing else sets it either. Points gated on `verified_at` award
+So the completion story was closed at both ends: a student cannot set `complete`
+(409, by design), and nothing else set it either. Points gated on `verified_at` award
 nothing, and no surface tells anyone that. H-8 closed a real hole and left a door with
-nothing behind it; that is the correct order to do it in, but the second half is not
+nothing behind it; that is the correct order to do it in, but the second half was not
 done.
+
+**Update, PR #1463 — the door now has something behind it, and the counts have not
+moved.** The build-verification loop shipped: `verifyBuildFromRepo()` reads
+`.colaberry/progress.json` and the pushed commits out of the student's repo, decides per
+story, writes the live verdict to the new `student_tasks.verification_json`, and calls
+`markTaskVerifiedComplete` for the ones that pass. Triggered by
+`POST /api/portal/workspace/repo/sync`.
+
+**And `verified_at` is still 0, because (b) is now blocked behind (a).** The loop's only
+input is a repo, and per (a) no project has one. The two halves of H-10 turned out to be
+one dependency, which was not obvious when they were written down as separate
+observations — and the reason to keep this entry rather than tick it off is precisely
+that: **"wired" and "has run" are different claims, and only the second one is worth
+telling anyone about.** The first honest proof that verification works will be a
+`verified_at` that is not null on a real student's task, and nothing before that counts.
 
 **Still only prevented by remembering:** both. Nothing alerts on either. The only way
 these surface is someone asking "has this ever actually run?" and checking — which is how
-they surfaced.
+they surfaced, and which the #1463 merge does not change.
 
 ---
 
