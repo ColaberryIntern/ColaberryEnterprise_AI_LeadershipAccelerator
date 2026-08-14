@@ -20,6 +20,12 @@
 import { createHash } from 'crypto';
 import { RenderedFile, isAllowedPath } from './renderDocs';
 import { spliceManagedBlock } from './managedBlock';
+import {
+  PROGRESS_FILE_PATH,
+  mergeProgressFile,
+  parseProgressFile,
+  serialiseProgressFile,
+} from './verification/progressContract';
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_RETRIES = 3;
@@ -256,6 +262,26 @@ export async function writeDocsToRepo(
     if (changed[i].path !== 'CLAUDE.md') continue;
     const existing = await readRepoFile(target, 'CLAUDE.md', token, fetchImpl, opts.correlationId);
     changed[i] = { ...changed[i], content: spliceManagedBlock(existing, changed[i].content) };
+  }
+
+  // `.colaberry/progress.json` is co-owned for exactly the same reason CLAUDE.md
+  // is. The platform owns the story list and the criterion text; Claude Code
+  // owns the `passed` flags it wrote back. Replacing the whole file on a
+  // republish would drop every tick the student's agent had recorded — stories
+  // sitting at "3 of 4" would silently reset to "not started", which reads as
+  // the platform losing their work. Merge instead: our side replaced, their side
+  // carried across by story id and criterion text.
+  for (let i = 0; i < changed.length; i++) {
+    if (changed[i].path !== PROGRESS_FILE_PATH) continue;
+    const existing = await readRepoFile(target, PROGRESS_FILE_PATH, token, fetchImpl, opts.correlationId);
+    const parsed = parseProgressFile(changed[i].content);
+    // Our own render failing to parse is a defect in renderDocs, not a student
+    // problem — leave the rendered bytes alone rather than merging blind.
+    if (!parsed.ok) continue;
+    changed[i] = {
+      ...changed[i],
+      content: serialiseProgressFile(mergeProgressFile(parsed.file, existing)),
+    };
   }
 
   const branch = target.branch
