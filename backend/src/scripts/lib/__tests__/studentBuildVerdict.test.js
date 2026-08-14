@@ -174,6 +174,57 @@ describe('the undated reason distinguishes the ways dates go missing', () => {
   });
 });
 
+// PR #1463 gave student_tasks.verified_at its first writer. These lock in that
+// it stayed OUT of the readiness ladder. READY means "can this student start",
+// verification means "did they finish"; gating the first on the second would
+// suppress the start-here email for everyone who has not finished their
+// capstone, which is every student on the day their build is set up.
+describe('verification is reported, never gated on (PR #1463)', () => {
+  test('a build with nothing verified is still READY, and says nothing about it', () => {
+    const r = v({ verifiedTaskCount: 0, completeUnverifiedCount: 0 });
+    expect(r.verdict).toBe('READY');
+    // Silent at zero on purpose: no project has a provisioned repo today, so
+    // zero is the expected reading on every row and a note would be pure noise.
+    expect(r.notes).toEqual([]);
+  });
+
+  test('a fully verified build is READY for exactly the same reason as an unverified one', () => {
+    const none = v({ verifiedTaskCount: 0 });
+    const all = v({ verifiedTaskCount: 20 });
+    expect(all.verdict).toBe('READY');
+    expect(all.stage).toBe(none.stage);
+    expect(all.reason).toBe(none.reason);
+    expect(all.notes).toContain('20 of 20 tasks verified complete');
+  });
+
+  test('partial verification is a note, not a NOT_READY', () => {
+    const r = v({ verifiedTaskCount: 3 });
+    expect(r.verdict).toBe('READY');
+    expect(r.notes).toContain('3 of 20 tasks verified complete');
+  });
+
+  test('complete with no verified_at is flagged, because it earns no points', () => {
+    const r = v({ completeUnverifiedCount: 2 });
+    expect(r.verdict).toBe('READY');
+    expect(r.notes.join(' ')).toMatch(/2 task\(s\) marked complete with no verified_at/);
+  });
+
+  test('verification notes ride along on a NOT_READY verdict too', () => {
+    // The notes are the operator's context; losing them because a different
+    // stage blocked first would hide the thing they were added to surface.
+    const r = v({ isActiveProject: false, completeUnverifiedCount: 1 });
+    expect(r.stage).toBe(STAGES.NO_ACTIVE_PROJECT);
+    expect(r.notes.join(' ')).toMatch(/marked complete with no verified_at/);
+  });
+
+  test('no verification stage exists in the ladder', () => {
+    // A stage key would be the first step toward gating on it. If someone adds
+    // one, the build-student-project skill's canonical readiness query has to
+    // change in the same commit or the two tools start disagreeing.
+    expect(Object.keys(STAGES).some((k) => /VERIF/i.test(k))).toBe(false);
+  });
+});
+
 describe('hostile and empty input', () => {
   test('an empty snapshot is NOT_READY rather than a crash', () => {
     expect(deriveVerdict({}).verdict).toBe('NOT_READY');

@@ -52,6 +52,8 @@ SELECT
   COALESCE(t.n_tasks, 0)           AS task_count,
   COALESCE(t.n_dated, 0)           AS dated_task_count,
   COALESCE(t.has_story_000, false) AS has_story_000,
+  COALESCE(t.n_verified, 0)        AS verified_task_count,
+  COALESCE(t.n_complete_unverified, 0) AS complete_unverified_count,
   COALESCE(il.n_import_lists, 0)   AS browser_imported_lists
 FROM enrollments e
 LEFT JOIN cohorts c ON c.id = e.cohort_id
@@ -75,9 +77,21 @@ LEFT JOIN LATERAL (
   SELECT x.id FROM build_plans x WHERE x.project_id = p.id AND x.status = 'published' LIMIT 1
 ) pub ON true
 LEFT JOIN LATERAL (
+  -- n_verified / n_complete_unverified are read from verified_at and status
+  -- ONLY, deliberately not from the verification_json added by PR #1463. This
+  -- script is a read-only diagnostic run by hand against production, and a
+  -- SELECT naming a column an un-migrated database does not have fails the
+  -- whole sweep for every enrollment. verified_at has existed since PR #1456;
+  -- verification_json depends on an ALTER that ensureSbpSchema is documented to
+  -- swallow on failure, which is precisely the case this tool gets run to
+  -- diagnose. Reporting slightly less, always, beats reporting nothing exactly
+  -- when the schema is the problem.
   SELECT count(*)::int AS n_tasks,
          count(x.due_on)::int AS n_dated,
-         bool_or(x.story_id = 'STORY-000') AS has_story_000
+         bool_or(x.story_id = 'STORY-000') AS has_story_000,
+         count(x.verified_at)::int AS n_verified,
+         count(*) FILTER (WHERE x.status = 'complete' AND x.verified_at IS NULL)::int
+           AS n_complete_unverified
     FROM student_tasks x WHERE x.project_id = p.id
 ) t ON true
 LEFT JOIN LATERAL (
@@ -115,6 +129,8 @@ function toSnapshot(r) {
     isActiveProject: !!r.project_id && r.project_id === r.active_project_id,
     cohortStartDate: r.cohort_start_date || null,
     browserImportedLists: Number(r.browser_imported_lists || 0),
+    verifiedTaskCount: Number(r.verified_task_count || 0),
+    completeUnverifiedCount: Number(r.complete_unverified_count || 0),
   };
 }
 

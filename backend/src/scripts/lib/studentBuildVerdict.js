@@ -20,6 +20,25 @@
 // that is the stage a human has to go fix. Reporting "no tasks" when the real
 // story is "the intake never reached the server" sends the operator to the
 // wrong place.
+//
+// WHAT READY DOES *NOT* MEAN, AND WHY VERIFICATION IS NOT IN THE LADDER
+// PR #1463 shipped the build-verification loop, so student_tasks.verified_at is
+// finally written by something. It is deliberately NOT a readiness gate. READY
+// answers "can this student open their board and start", which is true before
+// they have built anything; verification answers "did they finish", which is the
+// far end of the same pipeline. Gating READY on it would mark every student who
+// has not finished their capstone as NOT_READY and suppress the email telling
+// them to start, which is exactly backwards.
+//
+// This matters because the readiness definition here is deliberately identical
+// to the one in the build-student-project skill's canonical query - published
+// AND STORY-000 AND tasks > 0 AND undated_tasks = 0 AND active project - and
+// #1463 did not change that query. So this ladder does not change either.
+// Verification surfaces as NOTES instead, which is also where the skill's own
+// checklist puts it ("no complete rows with verified_at IS NULL that you cannot
+// account for"). If a future change ever does move verification into the ladder,
+// the skill's query has to move in the same commit, or the two start disagreeing
+// about what "ready" means - which is the failure this pair exists to prevent.
 
 /**
  * @typedef {object} BuildSnapshot
@@ -35,6 +54,8 @@
  * @property {boolean} isActiveProject      projects.id === enrollments.active_project_id
  * @property {string|null} cohortStartDate  cohorts.start_date as YYYY-MM-DD, or null
  * @property {number} [browserImportedLists] task lists whose cluster is not r<n>/prep
+ * @property {number} [verifiedTaskCount]   student_tasks with verified_at set (PR #1463's loop)
+ * @property {number} [completeUnverifiedCount] status='complete' with verified_at NULL
  */
 
 /**
@@ -179,6 +200,22 @@ function deriveVerdict(snap) {
   // is the signature of a stale tab having written over the real build.
   if (Number(s.browserImportedLists || 0) > 0) {
     notes.push(`${s.browserImportedLists} task list(s) look browser-imported, not materialized by publish`);
+  }
+  // Verification progress, from PR #1463's loop. A note, never a gate - see the
+  // header. Silent at zero on purpose: today NO project has a provisioned repo,
+  // so the loop has nothing to read and zero is the expected reading for every
+  // student. A note on every row would be noise that says nothing about that row.
+  const verified = Number(s.verifiedTaskCount || 0);
+  if (verified > 0) {
+    notes.push(`${verified} of ${taskCount} tasks verified complete`);
+  }
+  // status='complete' with no verified_at earns no points and no surface says so.
+  // Legitimate only for rows predating the verification columns; anything newer
+  // means something wrote 'complete' down a path that is not
+  // markTaskVerifiedComplete, which is the hole PR #1459 closed.
+  const unverified = Number(s.completeUnverifiedCount || 0);
+  if (unverified > 0) {
+    notes.push(`${unverified} task(s) marked complete with no verified_at - these earn no points`);
   }
 
   // 7. Published, but materialization never ran or died part way through.
