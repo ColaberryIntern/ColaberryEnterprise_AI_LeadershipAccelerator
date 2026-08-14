@@ -90,12 +90,47 @@ router.post('/api/portal/workspace/repo/provision', requireParticipant, async (r
 });
 
 // POST sync — pull the repo (no commit). No body.
+//
+// Sync is also the TRIGGER for the completion-verification loop: pulling the
+// repo is exactly the moment we have fresh commits and a fresh
+// `.colaberry/progress.json`, so re-deriving what is done costs one extra read
+// and no new button for the student to learn.
+//
+// A webhook is the better trigger and is deliberately NOT built. See
+// docs/BUILD_VERIFICATION_CONTRACT.md — the pieces it needs (a public endpoint,
+// signature verification, the bot-commit filter that stops our own writes
+// re-triggering a sync) are a workstream of their own, and half of it would be
+// worse than none.
 router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, res) => {
   try {
     const projectId = projectIdSchema.parse(req.body?.project_id);
+    const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
     const svc = await import('../services/studentWorkspaceService');
     const view = await svc.syncWorkspaceRepo(req.participant!.sub, projectId);
-    res.json(view);
+
+    // Ownership was already proven by syncWorkspaceRepo above; reaching here
+    // means this project is the caller's. Verification NEVER fails the sync: the
+    // repo pull is the thing the student asked for, and a rate-limited or
+    // unreadable verification pass must not turn a successful pull into an
+    // error. It returns its own classified reason instead.
+    let verification: unknown = null;
+    try {
+      const { verifyBuildFromRepo } = await import('../services/sbp/verification/buildVerificationService');
+      verification = await verifyBuildFromRepo(projectId, { correlationId });
+    } catch (verifyErr: any) {
+      // Only an UNEXPECTED failure reaches here — every expected state
+      // (no plan, no repo, rate limit, malformed file) comes back as a
+      // classified result. So this is logged loudly as a defect, not swallowed,
+      // and the sync still succeeds because the pull did.
+      logError('workspace_verification_failed', req, verifyErr);
+      verification = {
+        ok: false,
+        error_class: 'VerificationUnavailable',
+        reason: 'Your repo synced, but the platform could not re-check your stories just now. Try Sync again shortly.',
+      };
+    }
+
+    res.json({ ...view, verification });
   } catch (err: any) {
     if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
     logError('workspace_repo_sync_failed', req, err);

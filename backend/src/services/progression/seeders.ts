@@ -81,10 +81,48 @@ export async function seedPointsConfigFromRegistry(): Promise<number> {
   return n;
 }
 
+/**
+ * The XP knob for a VERIFIED Student Build Pipeline story.
+ *
+ * A key of its own rather than reusing the `project_task` card type: the
+ * curriculum economy and the build economy should be tunable independently.
+ *
+ * `builder_xp` IS DELIBERATELY NULL. Ali has not decided whether a story is
+ * worth a fixed amount or a share of a fixed per-build budget divided across
+ * its stories, and the two produce different numbers. `getTypeXp` resolves NULL
+ * to 0, so verification records complete, auditable evidence today and awards
+ * nothing until somebody sets the value. Seeding a plausible placeholder would
+ * ship a number nobody chose as though somebody had, and it would be
+ * indistinguishable from a decision once it was live.
+ *
+ * `findOrCreate`, so setting the value in the table survives every redeploy.
+ */
+export const BUILD_STORY_POINTS_KEY = 'project_story_verified';
+
+export async function seedBuildStoryPointsConfig(): Promise<number> {
+  const [, created] = await PointsConfig.findOrCreate({
+    where: { scope: 'type_default', key: BUILD_STORY_POINTS_KEY },
+    defaults: {
+      scope: 'type_default',
+      key: BUILD_STORY_POINTS_KEY,
+      learning_xp: 0,
+      builder_xp: null,      // UNSET — pending a decision, not "zero on purpose"
+      community_xp: 0,
+      config: {
+        award_model: 'undecided',
+        note: 'Set builder_xp to award XP for a verified build story. Left NULL because the '
+          + 'fixed-per-story vs fixed-budget-per-build question is not decided. See '
+          + 'docs/BUILD_VERIFICATION_CONTRACT.md.',
+      },
+      is_active: true,
+    },
+  });
+  return created ? 1 : 0;
+}
+
 export async function seedProgressionConfig(): Promise<{ domains: number; levels: number; points: number }> {
-  return {
-    domains: await seedCompetencyDomains(),
-    levels: await seedBuilderLevels(),
-    points: await seedPointsConfigFromRegistry(),
-  };
+  const domains = await seedCompetencyDomains();
+  const levels = await seedBuilderLevels();
+  const points = (await seedPointsConfigFromRegistry()) + (await seedBuildStoryPointsConfig());
+  return { domains, levels, points };
 }

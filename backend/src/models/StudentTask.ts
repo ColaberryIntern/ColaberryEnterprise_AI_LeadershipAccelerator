@@ -40,6 +40,16 @@ export interface StudentTaskAttributes {
   verified_at?: Date | string | null;
   /** Who or what confirmed it: a reviewer's identity, or the check that passed. */
   verified_by?: string | null;
+  /**
+   * The LATEST verification verdict for this story, refreshed on every sync:
+   * state (not_started / in_progress / submitted / verified), which acceptance
+   * criteria are still outstanding, the evidence commit, and why it is not
+   * verified yet. Distinct from `verified_at`, which is written once and never
+   * moves — this field is allowed to change, because "3 of 4 criteria, waiting
+   * on a commit" is a live answer a student needs to see now, not a historical
+   * fact. Shape: StoryVerificationRecord in sbp/verification.
+   */
+  verification_json?: unknown;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -69,6 +79,7 @@ class StudentTask extends Model<StudentTaskAttributes> implements StudentTaskAtt
   declare due_baseline_on: Date | string | null;
   declare verified_at: Date | string | null;
   declare verified_by: string | null;
+  declare verification_json: unknown;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -114,6 +125,10 @@ StudentTask.init(
     // not a calendar day, and it is stored as TIMESTAMPTZ.
     verified_at: { type: DataTypes.DATE, allowNull: true },
     verified_by: { type: DataTypes.TEXT, allowNull: true },
+    // Same warning as the four above: omit it here and Sequelize strips it from
+    // the UPDATE without a word, and every story renders as "not started"
+    // forever while the loop reports success.
+    verification_json: { type: DataTypes.JSONB, allowNull: true },
   },
   {
     sequelize,
