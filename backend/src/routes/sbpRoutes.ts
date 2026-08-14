@@ -95,9 +95,14 @@ async function requireOwnedProject(req: Request, projectId: string): Promise<any
 }
 
 /**
- * The student's workspace repo for this project, or null when unprovisioned.
+ * The student's workspace repo for this project, or null when there is not one
+ * the platform can write to yet.
+ *
  * Shared with the orchestrator's auto-publish so the two publish paths cannot
- * disagree about whether a project has a repo — see services/sbp/workspaceRepo.
+ * disagree about whether a project has a repo — see services/sbp/workspaceRepo,
+ * which is also where "writable" is decided. Both mid-connect states resolve to
+ * null there, so publish takes the already-built `awaiting_repo` path instead of
+ * failing at the GitHub boundary on a missing ref.
  */
 async function repoFor(projectId: string): Promise<{ owner: string; repo: string; url: string } | null> {
   const { repoForProject } = await import('../services/sbp/workspaceRepo');
