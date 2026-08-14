@@ -27,6 +27,7 @@ Verified against `origin/main` `4078338f` (2026-08-13). Everything in
 | `repoWriter.ts` | I/O | One GitHub commit, content-hash idempotent, allowlist enforced by throwing |
 | `managedBlock.ts` | pure | The delimited block inside the student's CLAUDE.md |
 | `boundedQueue.ts` | I/O | Concurrency ceiling for generation |
+| `workspaceRepo.ts` | I/O | `repoForProject(projectId)` — the single repo lookup shared by the HTTP publish route and auto-publish, extracted in #1462 so the two paths cannot drift. Returns null (never throws) when unprovisioned, which is currently **always** |
 
 Schema: `backend/src/db/ensureSbpSchema.ts`, called once at boot from `server.ts:2422`,
 **after** `ensureStudentTaskMergeSchema()` (2406) because it ALTERs `student_tasks`.
@@ -53,8 +54,16 @@ startBuild ──► saveIntake(status='generating') ──► 202 to the caller
                               │
                      savePlanDraft(status='draft')
                               │
-                setStatus('drafted' | 'gate_failed')      ◄── the chain STOPS here
+                setStatus('drafted' | 'gate_failed')
+                              │
+              if publishable: autoPublish(expectedSha)    ◄── PR #1462; cannot throw
 ```
+
+Before PR #1462 the chain stopped at `setStatus`, with a `[review]` step in the comment
+that had no UI on either end. `autoPublish` calls the same `publishBuild` below, passing
+the draft's `plan_sha256` so a concurrent generation cannot substitute a plan this run
+never graded, and swallowing every failure into `sbp_autopublish_failed` so a publish
+problem is never reported as a generation failure.
 
 ```
 publishBuild
@@ -70,7 +79,15 @@ publishBuild
 
 `materializePlanAsTasks` has **no caller anywhere except these two branches of
 `publishBuild`.** That is the whole reason STORY-000's absence is proof publish did not
-run.
+run. `publishBuild` now has two callers: the HTTP route, and `autoPublish`.
+
+**The repo branch has never executed in production.** `repoForProject()`
+(`services/sbp/workspaceRepo.ts`, extracted in #1462 so the route and the auto path
+cannot drift) queries `github_connections WHERE project_id = :projectId`.
+`enrollment_id` on that table is `NOT NULL`; `project_id` was added later by the FR-037
+re-key and is nullable. All 11 rows in production are legacy enrollment-keyed with a null
+`project_id`, so the lookup returns null for all 31 projects and every publish takes the
+`awaiting_repo` branch.
 
 ---
 
@@ -80,17 +97,42 @@ run.
 |---|---|---|
 | `captured` | intake saved, nothing generated | no |
 | `generating` | a model call is in flight | no |
-| `gate_failed` | generated, but has blocking violations — not publishable | yes |
-| `drafted` | generated and publishable, **awaiting publish** | yes |
+| `gate_failed` | generated, but has **blocking** violations — not publishable | yes |
+| `drafted` | gate-clean and stored but not promoted. **Since PR #1462 this is a failure state, not a resting one** | yes |
 | `published` | promoted, documents written | yes |
 | `awaiting_repo` | promoted, tasks materialized, no repo to write into | yes |
 | `failed` | generation itself threw; the intake is replayable | yes |
 
-`drafted` and `awaiting_repo` are the two that get misread. `drafted` looks like success
-and is not finished. `awaiting_repo` looks like a failure and **is** finished as far as
-the student's task list is concerned.
+`DELIVERED_STATUSES` = `{published, awaiting_repo}` — exported from the orchestrator and
+surfaced as `delivered` on the poll response. That boolean is the single honest answer to
+"did the plan reach the student".
+
+`drafted` and `awaiting_repo` are the two that get misread, in opposite directions.
+`drafted` looks like success on the wire and means generated-but-not-promoted.
+`awaiting_repo` looks like a failure and **is** finished as far as the student's task
+list is concerned — and since no project has ever had a provisioned repo, it is the
+normal terminal state of every successful build in production.
 
 Plan statuses (`build_plans.status`) are separate: `draft` | `published` | `superseded`.
+
+### The poll response (`BuildStateResponse`)
+
+Declared as a type at the route boundary in #1462 and mirrored in
+`frontend/src/services/sbpApi.ts` — changing either side without the other is a breaking
+contract change.
+
+```ts
+{
+  project_id, status, correlation_id,
+  gate: { ok, violations, blocking, advisory } | null,
+  delivered: boolean,        // DELIVERED_STATUSES.has(status)
+  plan:  { version, sha256, status, requirements, releases[], stories[] } | null
+}
+```
+
+Read `delivered` and `gate.blocking`. Do **not** read `gate.ok` as health (it is
+`violations.length === 0`), and remember the `plan` block describes the **latest** plan,
+which may be a newer draft than the published one.
 
 ---
 
@@ -203,6 +245,7 @@ never forced: a concurrent human push must win, not be erased.
 | Variable | Default | Effect |
 |---|---|---|
 | `SBP_PIPELINE_ENABLED` | off | **All five SBP endpoints 404 without it.** Deliberately its own flag, not `PROJECT_API_ENABLED`, so it can be turned off without breaking the projects API. Unsetting it is an instant rollback |
+| `SBP_AUTO_PUBLISH` | **on** | The one default-ON flag in this subsystem, on purpose: a second default-OFF flag in front of the auto-publish fix would have shipped it and left production in the exact state it exists to end. `off` restores manual publish, and the build is then visibly `drafted` rather than silently stuck |
 | `PROJECT_API_ENABLED` | — | `/api/portal/projects/active` and the task PATCHes 404 without it |
 | `OPENAI_API_KEY` | — | absent ⇒ decomposition throws `ConfigError`; the interview degrades to the generic set |
 | `GITHUB_TOKEN` | — | absent ⇒ no repo write; publish lands `awaiting_repo`, prompts inline their context instead of citing paths (FR-031). Tasks still materialize |
@@ -232,20 +275,27 @@ status === 'gate_failed'             ⇒ show the first 3 violations
 otherwise                            ⇒ 'ready'
 ```
 
-Three consequences a newcomer will not guess:
+Three consequences a newcomer will not guess. All three were the reason nobody noticed
+the H-1 incident for a whole evening; **PR #1462 fixes the first two:**
 
-1. **The degradation banner is effectively unreachable after a create.** `PipelineBanner`
-   is rendered only inside the `view.kind === 'wizard'` branch, and `handleCreate`
-   switches to `preview` before the first `await`. The student sees the ready path with
-   no notice. Do not rely on it; use the shape table in SKILL.md.
-2. **The local build is never deleted.** `reconcileProjects` matches by backend id, else
-   by containment; a real SBP plan carries keys the template never had (STORY-000, prep
-   tasks) so it is not contained, and the reconciler returns `[hydrated, ...local]`. The
-   student ends up with **two build cards**. There is no `removeItem` for
-   `te_projects_v1` anywhere in the repo.
-3. **The real plan appears only on reload.** `handleCreate` ends with
+1. ~~**The degradation banner is effectively unreachable after a create.**~~ It was
+   rendered only inside the `view.kind === 'wizard'` branch while `handleCreate` switches
+   to `preview` before the first `await`, so every failure path set banner state on an
+   unmounted component. **Fixed:** it renders on every Projects view, with real copy per
+   outcome including the `drafted` case.
+2. ~~**The local build is never deleted.**~~ **Fixed:** the placeholder claims its backend
+   project via `pipelineProjectId` (persisted to localStorage so it survives a reload
+   mid-generation), and `reconcileProjects` gained a `supersede` mode that replaces it in
+   place. Guarded by `hasCompletedWork` — a placeholder the student has ticked work off is
+   kept alongside rather than discarded, and both carry their `origin` chip. The
+   reconciler's modes are now `overlay | hydrate | supersede | noop`.
+3. **The real plan still appears only on reload.** `handleCreate` ends with
    `void syncProjectsWithBackend()`, but that function is one-shot per page session and
-   the mount effect already ran it, so that call is a no-op.
+   the mount effect already ran it, so that call remains a no-op.
+
+`origin: 'local' | 'pipeline'` is stamped at birth — `createProjectFromAnswers` sets
+`local`, `backendTreeToProject` sets `pipeline` — and is the field to read when asking
+which build a student is looking at.
 
 The localStorage key is `te_projects_v1`. Reading it re-seeds the `sample-salon` demo
 build, so the key is mutated even on a pure page load.
@@ -269,7 +319,13 @@ build, so the key is mutated even on a pure page load.
 
 ## Tests
 
-22 suites in `backend/src/services/sbp/__tests__/`, ~362 tests at last full run. The
+23 suites in `backend/src/services/sbp/__tests__/`, 395 tests as of PR #1462, which adds
+`sbpOrchestrator.autoPublish.test.ts` (a gate-clean plan reaches the student
+automatically; a `must_uncovered` plan does not promote, materialize or commit; a publish
+failure rests at `drafted` and never `failed`) and `materializeTasks.idempotency.test.ts`
+(publishing twice creates nothing the second time; one Command Center across three runs;
+`due_baseline_on` survives a cohort date slip while `due_on` moves) — proven against an
+in-memory model layer rather than call counts. The
 fixture `fixtures/pilot-dryrun-plan.json` is the real plan the pilot produced; the gate
 rules are asserted against it, and asserted **not** to catch the genuine slices
 alongside the four layer stories.

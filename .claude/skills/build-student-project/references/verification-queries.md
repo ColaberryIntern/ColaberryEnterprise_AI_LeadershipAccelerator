@@ -20,6 +20,30 @@ values out of `/opt/colaberry-accelerator/.env` if they were overridden).
 
 Read-only queries are safe at any hour. Anything that writes waits for after hours.
 
+**If you reach for a read-only guard, use the right one.**
+`SET TRANSACTION READ ONLY` is a **no-op** through node-postgres: the driver sends each
+query as its own implicit transaction, so it guards the statement carrying it and nothing
+after, while looking perfectly correct in the source. Proven on 2026-08-13 by attempting a
+write after issuing it (allowed), then again after switching to the session form
+(rejected):
+
+```sql
+SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY;
+```
+
+`psql -c` is a single session per invocation, so for one-shot queries the guard buys
+little; it matters for any script holding a connection.
+
+**Prefer the script over hand-written SQL for a cohort.** PR #1461 adds
+`backend/src/scripts/auditStudentBuilds.js` — one row per active enrollment, a READY /
+NOT_READY verdict naming the first stage that did not complete, `--cohort` / `--only` /
+`--with-project` / `--json`. Its readiness definition is deliberately the same as Q1's,
+including `undated_tasks = 0`.
+
+```bash
+docker exec accelerator-backend node /app/dist/scripts/auditStudentBuilds.js --cohort <id>
+```
+
 ---
 
 ## Q1 — THE query. Is this student genuinely ready?
@@ -84,10 +108,12 @@ localStorage import.
 
 ---
 
-## Q2 — the draft sweep (H-1). Run this before every class.
+## Q2 — the draft sweep (H-1). Run this before every class, still.
 
 Plans that were generated and never published. Each row is a student who will open the
-portal to nothing.
+portal to nothing. **PR #1462 does not retire this query.** Auto-publish cannot throw, so
+its failures land here silently, and it only fires on *new* generations — the 11 students
+already sitting at `drafted` on 2026-08-13 will stay there until someone publishes them.
 
 ```sql
 SELECT bp.project_id,
@@ -181,7 +207,10 @@ Events worth knowing by name:
 |---|---|
 | `sbp_build_started` | intake persisted, job queued |
 | `sbp_build_repairing` | gate found violations, repair attempt N running |
-| `sbp_build_generated` | plan written as **draft** — note this is not published |
+| `sbp_build_generated` | plan written as **draft** — on its own this is not delivery |
+| `sbp_autopublished` | **PR #1462**: the plan promoted itself; carries `status`, `version`, `files`, `has_repo` |
+| `sbp_autopublish_failed` | auto-publish refused. Carries `error_class` and a `recovery` hint. The build rests at `drafted` and nothing else will retry it |
+| `sbp_autopublish_disabled` | `SBP_AUTO_PUBLISH=off` — publish is manual again |
 | `sbp_build_failed` | generation threw; `error_class` says which boundary |
 | `sbp_build_queue_failed` | the job never ran |
 | `sbp_schedule_skipped` | **no cohort start_date** — tasks will be undated |

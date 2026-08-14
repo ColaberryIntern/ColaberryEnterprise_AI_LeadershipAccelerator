@@ -18,8 +18,9 @@ materialises nothing: no `student_task_lists`, no `student_tasks`, no STORY-000,
 `enrollments.active_project_id`. The Projects page reads materialized tasks, so it had
 nothing to render.
 
-**The evidence, still true at `origin/main` 4078338f.** `publishBuild()` is exported
-from `frontend/src/services/sbpApi.ts:141` and **imported by nothing**:
+**The evidence, as it stood at `origin/main` 4078338f** — still what is deployed until
+PR #1462 merges. `publishBuild()` is exported from `frontend/src/services/sbpApi.ts:141`
+and **imported by nothing**:
 
 ```
 $ grep -rn "from '.*sbpApi'" frontend/src --include=*.tsx | grep -v __tests__
@@ -32,16 +33,50 @@ side is complete and correct — `POST /api/portal/sbp/builds/:projectId/publish
 and `publishBuild()` in `sbpOrchestrator.ts:290` does the whole downstream chain. It is
 simply never called by a browser.
 
-**Why it looked fine.** `runGeneration` sets the intake status to `drafted` on success
-(`sbpOrchestrator.ts:187`), and `drafted` is a terminal state for the poller
-(`isTerminal`). The wizard polls, sees a terminal non-failure state, and stops with a
-success shape. Every log line says the build succeeded, because generation *did*.
+**Why it looked fine.** `runGeneration` set the intake status to `drafted` on success,
+and `drafted` is a terminal state for the poller. The wizard polls, sees a terminal
+non-failure state, and stops with a success shape. Every log line says the build
+succeeded, because generation *did*. Three of the five students got that far; **two never
+reached the server at all** and were shown the same plausible template with no indication
+anything had gone wrong.
 
-**What changed:** nothing in code yet, as of this skill being written. This is the
-open one.
+Two other silences had to hold at the same time, and did: the degradation banner was
+rendering only inside `view.kind === 'wizard'` while `handleCreate` switches to `preview`
+before its first `await`, so every failure path set banner state on an unmounted
+component; and `handleCreate` ends with `void syncProjectsWithBackend()`, which is latched
+once per page session and had already fired on mount, so even a successful publish did
+not appear without a manual reload.
 
-**Still only prevented by remembering:** publish must be triggered by hand for every
-student until a caller lands. See SKILL.md Phase 5.
+**What changed — PR #1462.** `runGeneration` now ends by calling `autoPublish()` in the
+same queued job whenever `isPublishable(gate.violations)`:
+
+- it passes the just-written draft's `plan_sha256` as `expectedSha`, so a concurrent
+  generation cannot slip a plan this run never graded into the promotion
+- it **cannot throw**. By the time it runs the plan is durable, so a failure is caught,
+  logged as `sbp_autopublish_failed` with an `error_class` and a `recovery` hint, and
+  leaves the build at `drafted` — deliberately *not* `failed`, because `failed` means
+  "regenerate" and telling a student to regenerate a perfectly good plan burns minutes of
+  model time for nothing
+- kill switch `SBP_AUTO_PUBLISH=off`, **defaulting on** — the one default-ON flag in this
+  subsystem, because a second default-OFF flag in front of the fix would have shipped it
+  and left production in the exact state it exists to end
+- the author looked for the review step that would make auto-publish wrong and did not
+  find one: no UI on either end, and `publishBuild`'s only caller was an uncalled route
+
+**Why this rule is rewritten and not deleted.** The reason a reader trusts the checklist
+in SKILL.md is that this cost five students an evening and left 11 more sitting in the
+same state. A verification step that gets dropped because "it is automatic now" is
+exactly how this comes back. Concretely, three things are still true after #1462:
+
+1. Auto-publish cannot throw, so its failures are one log line and a build at `drafted` —
+   no exception, no alert, nothing sweeping for it
+2. It only fires on **new** generations. The 11 existing drafts are not rescued by it
+3. `drafted` has flipped meaning: it was the normal resting state of a healthy plan, and
+   it is now a failure state. Anything that treated `drafted` as success is now wrong in
+   the opposite direction
+
+**Still only prevented by remembering:** that auto-publish landed at all. Run the draft
+sweep, or `auditStudentBuilds.js`, before every class.
 
 ---
 
@@ -75,10 +110,23 @@ cluster ids are localStorage release ids (UUIDs) rather than `r0`, `r1`, `prep`.
 are looking at that, **the server pipeline never landed** — do not debug the plan, debug
 the pipeline.
 
-**Prevented in code:** the banner naming which path produced the plan.
-**Still only prevented by remembering:** the banner is a banner. A student who does not
-read it, or a staff member looking over their shoulder, cannot tell the difference from
-the task list alone without checking the shape above.
+**Prevented in code — after PR #1462.** Three changes, because the banner alone was not
+enough and in fact was not even rendering:
+
+- `origin: 'local' | 'pipeline'` on `StudentProject`, stamped at birth by
+  `createProjectFromAnswers` and `backendTreeToProject`, rendered as a chip on the card
+  and inside the build ("starter template" / "your tailored plan", reason in the tooltip)
+- the banner now renders on **every** Projects view, with real copy per outcome including
+  the `drafted` case, which previously reported itself as success
+- the placeholder claims its backend project (`pipelineProjectId`, persisted to
+  localStorage so it survives a reload mid-generation) and `reconcileProjects` supersedes
+  it **in place** when the real plan lands, so the student ends with one build rather than
+  two lookalikes — guarded by `hasCompletedWork`, so a placeholder they actually ticked
+  something off is kept alongside and both are labelled
+
+**Still only prevented by remembering:** the shape itself, because that is what you check
+in the database, where there is no chip. The four canned list names and the absent
+STORY-000 are the tell.
 
 ---
 
@@ -340,10 +388,16 @@ materialize is `findOrCreate` keyed on `(project_id, story_id)` and preserves an
 `complete` — but it is not a no-op, and it will produce a repo commit every time (see
 (a)).
 
-**(d) Advisory violations are expected on published plans.** Nine rules block
-(`BLOCKING_RULES`, `planGate.ts:79`); everything else rides along as a warning.
-`story_is_layer` or `story_redundant_scaffold` on a published plan is **normal**, not a
-symptom. `gate_ok=false` with `status='published'` is a valid, intended state.
+**(d) `gate_ok = false` does not mean the gate failed.** It is `violations.length === 0`,
+nothing more. Nine rules block (`BLOCKING_RULES`, `planGate.ts:79`); everything else rides
+along as a warning, so a healthy published plan routinely carries `gate_ok = false` with
+a `story_is_layer` or `story_redundant_scaffold` on it. This graduated from a footnote to
+a real incident on 2026-08-13: a tool reading `gate_ok` as the health signal would have
+reported most of a working cohort as broken. Judge on `blockingViolations(violations)`.
+PR #1462 splits `gate.blocking` from `gate.advisory` in the poll response so the client
+cannot make this mistake either — it previously showed the first three of the whole
+array as the refusal reason, so a student blocked on an uncovered must-have was told
+about a stylistically redundant story.
 
 **(e) The tier is not a duration.** `size` is `workflow` | `project` | `autonomous` and
 selects generation depth (`buildTiers.ts`): 8-12 / 18-24 / 30-40 requirements, 3 / 5 / 7
@@ -366,6 +420,52 @@ the twentieth student in a synchronised rush waits about **237 seconds**. That i
 the frontend's poll deadline. A build sitting in `generating` for four minutes during a
 class rush is the design working.
 
-**(h) Local `npx tsc` in an SBP worktree is a trap.** It resolves the junctioned OneDrive
+**(h) `SET TRANSACTION READ ONLY` is a no-op through node-postgres.** The driver sends
+each query as its own implicit transaction, so it guards the statement carrying it and
+nothing after — while looking exactly like a working safety guard in the source. Found
+2026-08-13 by attempting a write after issuing it (allowed), then after switching to
+`SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY` (rejected). If an audit script
+claims to be write-guarded, check which form it used.
+
+**(i) Local `npx tsc` in an SBP worktree is a trap.** It resolves the junctioned OneDrive
 `node_modules` (TypeScript 4.9.5), which misparses zod v4 and reports ~267 phantom errors
 inside `node_modules`. Invoke a 5.x binary explicitly. CI has its own and is unaffected.
+
+---
+
+## H-11 · Two halves of this pipeline have never run in production
+
+**Found:** 2026-08-13, by auditing production rather than by a failure report. No incident
+yet — which is the point of writing them down now.
+
+**(a) Repo-per-project has never been provisioned.** **0 of 31 projects** have a repo.
+All **11** `github_connections` rows are legacy **enrollment**-keyed, and no repo has
+synced since **2026-05-22**.
+
+The mechanism is visible in the model. `github_connections.enrollment_id` is `NOT NULL`;
+`project_id` was added later by the FR-037 re-key ("a repo belongs to a project") and is
+nullable. `repoForProject()` queries `WHERE project_id = :projectId`, so a legacy row can
+never match. Every publish therefore takes the `awaiting_repo` branch, and **no student
+repo has ever received the document set.**
+
+What follows from that, and is easy to get wrong: `renderDocs`, `repoWriter`,
+`managedBlock` and the whole path allowlist are correct, thoroughly tested, proven once
+against a scratch repo by `sbpLiveEndToEnd.ts` — and have never run for a real student.
+The CLAUDE.md managed block (H-5) has never protected a real student's file, because no
+real student's file has ever been written to. Do not report document delivery as a
+working feature, and do not treat `awaiting_repo` as an exception: today it is the normal
+terminal state of every successful build.
+
+**(b) Task verification has never run.** **0 tasks carry `verified_at`** and **0
+`evidence_records` carry source `github_commit`**. `markTaskVerifiedComplete` — the only
+path to `status='complete'` since H-8 — still has no caller anywhere.
+
+So the completion story is currently closed at both ends: a student cannot set `complete`
+(409, by design), and nothing else sets it either. Points gated on `verified_at` award
+nothing, and no surface tells anyone that. H-8 closed a real hole and left a door with
+nothing behind it; that is the correct order to do it in, but the second half is not
+done.
+
+**Still only prevented by remembering:** both. Nothing alerts on either. The only way
+these surface is someone asking "has this ever actually run?" and checking — which is how
+they surfaced.
