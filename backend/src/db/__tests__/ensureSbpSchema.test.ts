@@ -35,6 +35,9 @@ const FULL_CATALOG = {
     { table_name: 'student_tasks', column_name: 'due_baseline_on' },
     { table_name: 'student_tasks', column_name: 'verified_at' },
     { table_name: 'student_tasks', column_name: 'verified_by' },
+    // The evidence sha frozen at award time. Without it the XP lookup has
+    // nothing durable to key on and falls back to matching the live repo.
+    { table_name: 'student_tasks', column_name: 'verified_ref' },
     { table_name: 'student_tasks', column_name: 'verification_json' },
   ],
 };

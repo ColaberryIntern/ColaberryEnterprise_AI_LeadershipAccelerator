@@ -208,9 +208,15 @@ export async function markTaskVerifiedComplete(
   // drifts with it. Same input, same end state.
   const verifiedAt = task.verified_at ?? new Date();
   const verifiedBy = task.verified_at ? task.verified_by : evidence.source;
+  // The evidence sha is frozen on the SAME first-write-wins rule, and it has to
+  // be: `evidence_records` keys the award on `<story>@<this sha>`, so if this
+  // moved when a student force-pushed, the XP read would go looking for a row
+  // under a sha nothing was ever awarded under. Before this line the sha lived
+  // only in the log below, which no query can join to.
+  const verifiedRef = task.verified_at ? task.verified_ref : (evidence.ref ?? null);
 
   await StudentTask.update(
-    { status: 'complete', verified_at: verifiedAt, verified_by: verifiedBy },
+    { status: 'complete', verified_at: verifiedAt, verified_by: verifiedBy, verified_ref: verifiedRef },
     { where: { id: task.id } },
   );
   // student_tasks.verified_at is what points will actually gate on; this line is
