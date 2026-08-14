@@ -63,6 +63,47 @@ export const runtimeCss = `
 .rt-artifact{background:var(--leaf-soft);border:1px solid rgba(91,166,60,.3);border-radius:13px;padding:16px 18px;margin-top:16px}
 .rt-artifact b{font-size:15px}
 .rt-complete{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+
+/* ── build workspace: story hierarchy ──────────────────────────────────────
+   A story is read in one order — what this is, what done means, how to build
+   it — so the blocks carry different WEIGHT. Three identically-styled cards
+   flatten that order and leave the student scanning for the entry point,
+   which is worst at half screen where only one card is visible at a time. */
+.rt-topright{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+/* A flex item will not shrink below its min-content width by default, so a long
+   story title would push the header actions off the edge rather than wrapping. */
+.rt-top>div{min-width:0}
+/* Links that LOOK like buttons: the class was written for <button>, which has no
+   underline of its own. Command Center is an anchor because it navigates. */
+a.rt-btn{text-decoration:none}
+/* The lead is prose, not chrome: the first thing on the page should read like
+   a sentence someone wrote you, not like another panel. */
+.rt-lead{padding:4px 2px 0}
+.rt-lead p{margin:0;font-size:16.5px;line-height:1.5;font-weight:500;letter-spacing:-.005em}
+.rt-req{display:inline-block;margin-top:11px;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--berry);background:var(--berry-soft);border-radius:999px;padding:4px 10px}
+.rt-step{margin-top:22px}
+.rt-step-h{display:flex;align-items:center;gap:9px;margin:0 0 9px}
+.rt-step-n{flex:none;width:19px;height:19px;border-radius:50%;background:var(--sunken);color:var(--muted);font-family:var(--mono);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.rt-step-t{font-size:13.5px;font-weight:700;letter-spacing:-.005em}
+.rt-step-c{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted2)}
+.rt-step .rt-card{margin-top:0}
+.rt-step .rt-card+.rt-card{margin-top:10px}
+/* Acceptance is a pre-flight the student WALKS, so it ticks. Bullets invite
+   re-reading; checkboxes invite finishing. Ticks are working memory only —
+   "Mark done" is still the one thing that reports progress. */
+.rt-acc{list-style:none;margin:0;padding:0}
+.rt-acc li{margin:0;border-top:1px solid var(--line-soft)}
+.rt-acc li:first-child{border-top:0}
+.rt-acc label{display:flex;gap:10px;align-items:flex-start;padding:9px 2px;cursor:pointer;font-size:13.5px;line-height:1.5}
+.rt-acc input{margin:3px 0 0;flex:none;width:15px;height:15px;accent-color:var(--leaf);cursor:pointer}
+.rt-acc input:checked+span{color:var(--muted);text-decoration:line-through}
+/* The prompt is a TOOL you carry to the editor, not the page you read. It is
+   collapsed so the story, the requirement and the acceptance are what a
+   student meets first; Copy stays visible so collapsing costs nothing. */
+.rt-prompt-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rt-prompt-acts{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.rt-prompt-peek{margin:10px 0 0;font-family:var(--mono);font-size:12.5px;line-height:1.5;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rt-prompt-full{margin:10px 0 0;max-height:340px;overflow:auto;white-space:pre-wrap}
 /* Self Study reader in the workstation: the iframe FILLS the center as the single scroll
    (no nested/adjacent scrollbars); the complete gate sits in a slim fixed foot, and the
    cohort comments move to the right rail (under the mentor). */
@@ -93,4 +134,37 @@ export const runtimeCss = `
 .rt[data-theme="dark"] .rt-bar{background:#0F1214}
 .rt[data-theme="dark"] .rt-list.warn li{color:#E8920C}
 .rt[data-theme="dark"] .rt-readerframe{background:#151515}
+/* --berry is a mid-tone picked against white; on the dark chip background it
+   falls below AA, so the requirement pill gets a lifted ink of its own. */
+.rt[data-theme="dark"] .rt-req{color:#8FC3D6}
+
+/* ── half screen (≈700px, VS Code in the other half) ───────────────────────
+   This is the posture the workspace is actually USED in: a student reads the
+   story here and types in the editor beside it. It is not a phone — it is a
+   desktop page at half width, and the failure mode is density, not layout.
+   The 900px rule above already stacks the mentor rail; this block buys back
+   the vertical space that stacking costs and stops the reading column from
+   feeling like a squeezed desktop page. Overrides only — every base rule
+   above still applies at full width. */
+@media(max-width:760px){
+  .rt{font-size:14px}
+  .rt-top{padding:9px 12px;gap:9px;flex-wrap:wrap}
+  .rt-title{font-size:15px}
+  .rt-kick{font-size:10px}
+  .rt-mid{padding:16px 14px}
+  .rt-card{padding:13px 14px;border-radius:11px}
+  .rt-lead{padding:2px 0 0}
+  .rt-lead p{font-size:15.5px}
+  .rt-step{margin-top:17px}
+  .rt-acc label{padding:8px 0}
+  /* A short prompt preview beats a tall one when the whole column is 700px. */
+  .rt-prompt-full{max-height:240px}
+  /* Stacked, the rail has no column to fill, so give it a usable band that
+     still leaves the story as the majority of the screen. */
+  .rt-mentor{min-height:250px;max-height:48vh}
+  .rt-thread{padding:11px}
+  .rt-bar{gap:14px;padding:9px 12px}
+  .rt-stat .v{font-size:14px}
+  .rt-stat .v.sm{font-size:11.5px}
+}
 `;

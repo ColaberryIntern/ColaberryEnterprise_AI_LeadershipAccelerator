@@ -4,12 +4,16 @@ const mockCreateTicket = jest.fn();
 const mockUpdateTicketStatus = jest.fn(async () => ({}));
 const mockAddTicketComment = jest.fn(async () => ({}));
 const mockGetTicketsByEntity = jest.fn();
+const mockGetTicketCreatorAdminUserId = jest.fn();
 
 jest.mock('../../ticketService', () => ({
   createTicket: (...args: any[]) => mockCreateTicket(...args),
   updateTicketStatus: (...args: any[]) => mockUpdateTicketStatus(...args),
   addTicketComment: (...args: any[]) => mockAddTicketComment(...args),
   getTicketsByEntity: (...args: any[]) => mockGetTicketsByEntity(...args),
+}));
+jest.mock('../../agentBlueprint/ticketCreatorIdentitySeed', () => ({
+  getTicketCreatorAdminUserId: (...args: any[]) => mockGetTicketCreatorAdminUserId(...args),
 }));
 
 import { ensureCaseTicket, syncTicketForCase, postCaseProgressNote } from '../caseTicketService';
@@ -23,6 +27,7 @@ beforeEach(() => {
   mockUpdateTicketStatus.mockReset().mockResolvedValue({});
   mockAddTicketComment.mockReset().mockResolvedValue({});
   mockGetTicketsByEntity.mockReset();
+  mockGetTicketCreatorAdminUserId.mockReset().mockResolvedValue('admin-inboxcaseengine-1');
 });
 
 describe('ensureCaseTicket', () => {
@@ -44,6 +49,33 @@ describe('ensureCaseTicket', () => {
   it('never throws when ticket creation fails (best-effort)', async () => {
     mockCreateTicket.mockRejectedValueOnce(new Error('DB unavailable'));
     await expect(ensureCaseTicket('case-1', 'Title', 'PERSON', 'ali@colaberry.com')).resolves.toBeUndefined();
+  });
+
+  // Agent Alias & Identity Fix (forward-fix)
+  it('forward-fix: stamps InboxCaseEngine\'s real AdminUser id as assignee, without touching created_by_type/created_by_id', async () => {
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-1', 'Title', 'PERSON', 'ali@colaberry.com');
+
+    expect(mockGetTicketCreatorAdminUserId).toHaveBeenCalledWith('InboxCaseEngine');
+    expect(mockCreateTicket).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assigned_to_type: 'ai_staff',
+        assigned_to_id: 'admin-inboxcaseengine-1',
+        created_by_type: 'agent',
+        created_by_id: 'InboxCaseEngine',
+      })
+    );
+  });
+
+  it('forward-fix failure path: identity not yet resolvable (null) never writes a literal null/undefined assignee id', async () => {
+    mockGetTicketCreatorAdminUserId.mockResolvedValueOnce(null);
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+
+    await ensureCaseTicket('case-1', 'Title', 'PERSON', 'ali@colaberry.com');
+
+    const callArgs = mockCreateTicket.mock.calls[0][0];
+    expect(callArgs).not.toHaveProperty('assigned_to_type');
+    expect(callArgs).not.toHaveProperty('assigned_to_id');
   });
 });
 

@@ -155,9 +155,23 @@ describe('CLAUDE.md — the conventions the agent inherits', () => {
     }
   });
 
-  it('teaches the commit convention the progress signal depends on', () => {
+  it('teaches BOTH halves of the completion rule the verification loop reads', () => {
+    // Ticking the criteria and naming the story in a commit are each necessary
+    // and neither is sufficient. If the block stops saying so, students stop
+    // doing one half and their work silently never verifies.
     expect(doc()).toMatch(/STORY-001: /);
-    expect(doc()).toMatch(/commit message names the story/i);
+    expect(doc()).toMatch(/naming the story in a trailer/i);
+    expect(doc()).toMatch(/Story: STORY-001/);
+    expect(doc()).toMatch(/\.colaberry\/progress\.json/);
+    expect(doc()).toMatch(/every.+acceptance criterion/i);
+  });
+
+  it('does not tell the student their progress file is disposable', () => {
+    // `.colaberry/progress.json` is co-owned and merged on sync. The old blanket
+    // "`.colaberry/` is overwritten on every sync" would read as "do not bother
+    // writing to it", which is the opposite of what the loop needs.
+    expect(doc()).not.toMatch(/`\.colaberry\/` is platform bookkeeping/);
+    expect(doc()).toMatch(/progress\.json` is shared/i);
   });
 
   it('states the non-negotiables: timeouts, idempotency, no swallowed errors', () => {

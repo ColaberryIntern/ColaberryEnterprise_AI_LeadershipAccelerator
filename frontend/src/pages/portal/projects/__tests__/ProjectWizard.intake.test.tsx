@@ -124,11 +124,20 @@ describe('step 2 — questions come from the student\'s own idea (A2)', () => {
     expect(mockQuestions).toHaveBeenCalledTimes(1);
     expect(mockQuestions.mock.calls[0][0].idea).toBe(IDEA);
 
-    const text = container.textContent || '';
+    // ONE question at a time now: the first is on screen, the second is not,
+    // and the count tells the student how many are left. Seven boxes at once
+    // read as a form and got form answers.
+    let text = container.textContent || '';
     expect(text).toContain('How are pallets identified today');
-    expect(text).toContain('What happens when a pallet weight is outside');
+    expect(text).not.toContain('What happens when a pallet weight is outside');
+    expect(text).toMatch(/Question 1 of 2/);
     // and none of the old fixed questions
     expect(text).not.toContain('What data sources must it connect to?');
+
+    await click(buttonByText('Skip this one')!);
+    text = container.textContent || '';
+    expect(text).toContain('What happens when a pallet weight is outside');
+    expect(text).toMatch(/Question 2 of 2/);
   });
 
   it('does not claim the questions were tailored when the server degraded', async () => {
@@ -208,7 +217,8 @@ describe('step 3 — nothing fabricated is presented as generated (A4)', () => {
     await mount(<ProjectWizard onCreate={onCreate} />);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea')!);
-    await setValue(container.querySelector('#q-p1') as HTMLInputElement, 'RFID tags');
+    await setValue(container.querySelector('#q-p1') as HTMLTextAreaElement, 'RFID tags');
+    // One question in this fixture, so the last-question button is Review.
     await click(buttonByText('Review & confirm')!);
     await click(buttonByText('Confirm & build in background')!);
 
@@ -218,6 +228,32 @@ describe('step 3 — nothing fabricated is presented as generated (A4)', () => {
     expect(submitted.answers).toEqual([
       { id: 'p1', question: 'How are pallets identified today?', answer: 'RFID tags' },
     ]);
+  });
+
+  it('fills the box from a suggestion instead of answering for the student', async () => {
+    // The chips are what make this answerable for someone new to AI — and where
+    // they discover they can ask for an undo. Tapping one must leave the answer
+    // editable rather than submitting it.
+    mockQuestions.mockResolvedValue({
+      ok: true,
+      result: {
+        generated: true, model: 'gpt-4o', attempts: 1,
+        questions: [{
+          ...q('p1', 'What would you need to see before letting it run on its own?'),
+          suggestions: ['Let me undo it afterwards', 'Send me a summary at the end of the day'],
+        }],
+      },
+    });
+
+    await reachStep2();
+    const chip = buttonByText('Let me undo it afterwards');
+    expect(chip).toBeTruthy();
+    await click(chip!);
+
+    const box = container.querySelector('#q-p1') as HTMLTextAreaElement;
+    expect(box.value).toBe('Let me undo it afterwards');
+    // still on the question — nothing was submitted on their behalf
+    expect(container.textContent).toContain('What would you need to see');
   });
 
   it('omits unanswered questions rather than sending empty answers', async () => {
@@ -232,7 +268,9 @@ describe('step 3 — nothing fabricated is presented as generated (A4)', () => {
     await mount(<ProjectWizard onCreate={onCreate} />);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea')!);
-    await setValue(container.querySelector('#q-p1') as HTMLInputElement, 'RFID tags');
+    await setValue(container.querySelector('#q-p1') as HTMLTextAreaElement, 'RFID tags');
+    // Answering reveals Next; the second question is left blank on purpose.
+    await click(buttonByText('Next')!);
     await click(buttonByText('Review & confirm')!);
     await click(buttonByText('Confirm & build in background')!);
 

@@ -32,6 +32,36 @@ export interface StudentTaskAttributes {
   due_on?: Date | string | null;
   /** The FIRST due date this task ever had. Written once, never updated. */
   due_baseline_on?: Date | string | null;
+  /**
+   * When the platform CONFIRMED this story is done — not when the student said
+   * so (that is `status`). Points will be gated on this being set, so it must
+   * never be writable as a side effect of a student updating their own task.
+   */
+  verified_at?: Date | string | null;
+  /** Who or what confirmed it: a reviewer's identity, or the check that passed. */
+  verified_by?: string | null;
+  /**
+   * The evidence commit sha, FROZEN at award time. Write-once, like
+   * `verified_at` beside it, and for the same reason: `evidence_records` keys
+   * an award on `<story_id>@<this sha>`, so it is the only durable way to find
+   * what a story was actually awarded once the student rewrites their history.
+   */
+  verified_ref?: string | null;
+  /**
+   * The LATEST verification verdict for this story, refreshed on every sync:
+   * state (not_started / in_progress / submitted / verified), which acceptance
+   * criteria are still outstanding, the evidence commit, and why it is not
+   * verified yet.
+   *
+   * A MUTABLE VIEW, not the record. `verified_at` above is the record. This
+   * field is a snapshot of the last repo read and is allowed to change, because
+   * "3 of 4 criteria, waiting on a commit" is a live answer a student needs
+   * now. It is NOT allowed to lower a story below `verified` — see
+   * `applyVerificationLatch` in sbp/verification/verificationLatch.ts, which
+   * every read and every write of this field goes through. Shape:
+   * StoryVerificationRecord in sbp/verification.
+   */
+  verification_json?: unknown;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -59,6 +89,10 @@ class StudentTask extends Model<StudentTaskAttributes> implements StudentTaskAtt
   declare blocked_by: string[] | null;
   declare due_on: Date | string | null;
   declare due_baseline_on: Date | string | null;
+  declare verified_at: Date | string | null;
+  declare verified_by: string | null;
+  declare verified_ref: string | null;
+  declare verification_json: unknown;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -96,6 +130,19 @@ StudentTask.init(
     // with a null date. Found end-to-end on a real account, not in a test.
     due_on: { type: DataTypes.DATEONLY, allowNull: true },
     due_baseline_on: { type: DataTypes.DATEONLY, allowNull: true },
+    // Same reason as the two dates above, and the reason is worth repeating
+    // because it costs a whole feature every time it is forgotten: an attribute
+    // absent from this init block is stripped from the INSERT/UPDATE by
+    // Sequelize before the query is built. No error, no warning, column stays
+    // null. DATE (not DATEONLY) — this is an instant a verification happened,
+    // not a calendar day, and it is stored as TIMESTAMPTZ.
+    verified_at: { type: DataTypes.DATE, allowNull: true },
+    verified_by: { type: DataTypes.TEXT, allowNull: true },
+    verified_ref: { type: DataTypes.TEXT, allowNull: true },
+    // Same warning as the four above: omit it here and Sequelize strips it from
+    // the UPDATE without a word, and every story renders as "not started"
+    // forever while the loop reports success.
+    verification_json: { type: DataTypes.JSONB, allowNull: true },
   },
   {
     sequelize,

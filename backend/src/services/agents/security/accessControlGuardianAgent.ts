@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Department, DepartmentEvent } from '../../../models';
 import { createTicket } from '../../ticketService';
+import { resolveProjectRoot } from './sourceTreeRoot';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const AGENT_NAME = 'AccessControlGuardianAgent';
@@ -45,11 +46,30 @@ export async function runAccessControlGuardianAgent(
   const findings: RouteFinding[] = [];
 
   try {
-    const projectRoot = process.env.PROJECT_ROOT || path.resolve(__dirname, '../../../../..');
-    const routesDir = path.join(projectRoot, 'backend', 'src', 'routes');
+    const projectRoot = resolveProjectRoot();
+    const routesDir = projectRoot === null ? null : path.join(projectRoot, 'backend', 'src', 'routes');
 
-    if (!fs.existsSync(routesDir)) {
-      errors.push(`Routes directory not found: ${routesDir}`);
+    // This agent statically scans TypeScript source. The production image ships
+    // only compiled `dist` — no source tree — so there is nothing to scan there.
+    // That is an expected environment condition, NOT a failure: reporting it as
+    // an error marked every run failed and raised a permanent severity-5
+    // "100% of last 10 runs failed" alert. Skip cleanly instead; this scan
+    // belongs in CI, where the source is present.
+    if (projectRoot === null || routesDir === null || !fs.existsSync(routesDir)) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'backend', event: 'source_scan_skipped_no_source_tree',
+        outcome: 'partial', context: { agent: AGENT_NAME, looked_for: routesDir || '<no project root>' },
+      }));
+      actions.push({
+        campaign_id: null,
+        action: 'scan_skipped_no_source',
+        reason: 'Source tree not present in this runtime (compiled build) — static route scan is a CI-time check.',
+        confidence: 1,
+        before_state: null,
+        after_state: { skipped: true },
+        result: 'skipped',
+        entity_type: 'system',
+      } as AgentAction);
       return { agent_name: AGENT_NAME, campaigns_processed: 0, actions_taken: actions, errors, duration_ms: Date.now() - start };
     }
 

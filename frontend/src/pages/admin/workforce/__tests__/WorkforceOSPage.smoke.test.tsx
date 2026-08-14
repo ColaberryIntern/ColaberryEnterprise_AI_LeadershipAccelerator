@@ -30,10 +30,18 @@ const DIRECTOR = { slug: 'curriculum', name: 'Dr. Elena Vasquez', role: 'Curricu
 const CEO = { slug: 'ceo', name: 'Ada Sterling', role: 'Chief Executive', department: 'Executive', avatar: '#1F2A33', supervisor: null, mission: 'm', ops_domain: null, workload: 0, status: 'active' };
 const COS = { slug: 'chief_of_staff', name: 'Miles Chen', role: 'Chief of Staff', department: 'Executive', avatar: '#2E6A86', supervisor: 'ceo', mission: 'm', ops_domain: null, workload: 1, status: 'active' };
 
-const REESE_AGENT = { id: 'agent-reese', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success', description: '', enabled: true, live_status: 'online', ticket_count: 3 };
-const SECOND_AGENT = { id: 'agent-2', agent_name: 'SecondAgent', agent_type: 'ai_staff_mentor', category: null, description: '', enabled: true, live_status: 'offline', ticket_count: 1 };
+const REESE_AGENT = { id: 'agent-reese', agent_name: 'Reese', display_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success', description: '', enabled: true, live_status: 'online', ticket_count: 3 };
+const SECOND_AGENT = { id: 'agent-2', agent_name: 'SecondAgent', display_name: 'SecondAgent', agent_type: 'ai_staff_mentor', category: null, description: '', enabled: true, live_status: 'offline', ticket_count: 1 };
+// A Stage-1-style process — display_name sharply different from agent_name, mirroring
+// production exactly (agent_name 'cory-engine' -> display_name 'Cory Engine —
+// Autonomous Operations'), proving the card renders the real name, not the raw one.
+// Uses the REAL production AiAgent.id (see execution-contract.md) rather than a
+// synthetic one, so the color-collision regression test below exercises the exact
+// pair that collided live (loop-production-verifier, deploy cycle 1).
+const PROCESS_AGENT = { id: 'b3fbddfc-8c74-43dc-8525-e96acc7f6644', agent_name: 'cory-engine', display_name: 'Cory Engine — Autonomous Operations', agent_type: 'autonomous_engine', category: 'autonomous', description: '', enabled: true, live_status: 'unknown', ticket_count: 9606 };
+const PROCESS_AGENT_2 = { id: '2a301fe3-be8d-4e98-8918-04cf9527f85a', agent_name: 'InboxCaseEngine', display_name: 'Inbox Case Engine', agent_type: 'ticket_creator_identity', category: 'autonomous', description: '', enabled: true, live_status: 'unknown', ticket_count: 815 };
 
-const REESE_EVENT = { agent_id: 'agent-reese', agent_name: 'Reese', ticket_id: 't1', ticket_number: 12, title: 'Reached out to a struggling student', type: 'reese_autonomous_outreach', status: 'in_progress', priority: 'high', occurred_at: '2026-08-10T00:00:00Z' };
+const REESE_EVENT = { agent_id: 'agent-reese', agent_name: 'Reese', agent_display_name: 'Reese', ticket_id: 't1', ticket_number: 12, title: 'Reached out to a struggling student', type: 'reese_autonomous_outreach', status: 'in_progress', priority: 'high', occurred_at: '2026-08-10T00:00:00Z' };
 
 function mockApi({ liveAgents = [REESE_AGENT], activity = [REESE_EVENT] }: { liveAgents?: any[]; activity?: any[] }) {
   api.get.mockImplementation((url: string) => {
@@ -111,6 +119,31 @@ describe('Live Agents section — generic, real data', () => {
     expect(container.textContent).toContain('Reese');
     expect(container.textContent).toContain('SecondAgent');
     expect(container.querySelector('a[href="/admin/agents/agent-2"]')).toBeTruthy();
+  });
+
+  it('display name fix: renders the real display_name, not the raw agent_name, on the card (the exact bug Ali flagged)', async () => {
+    mockApi({ liveAgents: [PROCESS_AGENT] });
+    await renderPage();
+
+    const link = container.querySelector(`a[href="/admin/agents/${PROCESS_AGENT.id}"]`) as HTMLElement;
+    expect(link).toBeTruthy();
+    expect(link.textContent).toContain('Cory Engine — Autonomous Operations');
+    // The card must never show the raw technical id as the visible name.
+    expect(link.querySelector('.nm')?.textContent).not.toBe('cory-engine');
+  });
+
+  // loop-production-verifier (deploy cycle 1) found this exact pair — real ids,
+  // real deployed bundle — rendering the identical avatar color live. This is the
+  // regression test for that fix at the component level (agentAvatarColor.test.ts
+  // covers the underlying assignDistinctAvatarColors() utility in isolation).
+  it('distinct color fix: the two real agents that collided live (cory-engine, InboxCaseEngine) now render two different inline avatar background colors', async () => {
+    mockApi({ liveAgents: [PROCESS_AGENT, PROCESS_AGENT_2] });
+    await renderPage();
+
+    const avatars = Array.from(container.querySelectorAll('.wf-av')) as HTMLElement[];
+    expect(avatars.length).toBeGreaterThanOrEqual(2);
+    const backgrounds = avatars.map((el) => el.style.background);
+    expect(new Set(backgrounds).size).toBeGreaterThan(1);
   });
 
   it('renders an honest empty state when there are zero live agents — never a fabricated card', async () => {

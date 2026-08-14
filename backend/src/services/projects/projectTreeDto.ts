@@ -6,7 +6,19 @@
  *
  * This is the read half of the Project Backend (P1) — it serves the unified
  * StudentTask hierarchy the localStorage `projectsStore` will migrate onto.
+ *
+ * ONE RULE THIS FILE ENFORCES: verification is recorded in our database, and
+ * `verification_json` is only a view of the last repo read. Every verification
+ * field served from here goes through `applyVerificationLatch`, so nothing a
+ * student does to their repo can make already-verified work look undone. See
+ * sbp/verification/verificationLatch.ts.
  */
+import {
+  applyVerificationLatch, isLatched, latchNote,
+  VerificationLatch, VerificationRecord,
+} from '../sbp/verification/verificationLatch';
+
+export type { VerificationLatch };
 
 export interface ProjectTaskDto {
   id: string;
@@ -33,6 +45,79 @@ export interface ProjectTaskDto {
   // a due date with a time on it lands on the wrong day in another timezone.
   due_on: string | null;
   due_baseline_on: string | null;
+  /**
+   * When the platform confirmed this story is actually done, as opposed to
+   * `status` which is only what the student claims. Null means unverified, and
+   * unverified is what the points gate will read — so the portal needs this on
+   * the same payload it already renders the task from, not behind a second call
+   * nobody makes. Full ISO timestamp (not a date): unlike a due date, the
+   * instant of verification is a real point in time and the client decides how
+   * to display it.
+   */
+  verified_at: string | null;
+  /**
+   * The live verdict from the last repo read: how far this story actually got,
+   * what is still outstanding, and the commit behind it. Null until the project
+   * has been synced at least once.
+   *
+   * Separate from `verified_at` on purpose. That field is a one-way latch — set
+   * once, never moved. This one changes every sync, because "2 of 4 criteria,
+   * waiting on the other two" is the answer a student needs while they are
+   * still working, and it has to be allowed to go up.
+   */
+  verification: TaskVerificationDto | null;
+}
+
+/** Per-story verification state. The portal and the student's Command Center both read this. */
+export interface TaskVerificationDto {
+  /**
+   * `submitted` is a real resting state, not a failure: it means some criteria
+   * pass and some do not, or all pass but no commit names the story yet. Most
+   * stories live here for a while, and the UI must say which criteria are
+   * outstanding rather than leaving the student wondering why nothing happened.
+   */
+  state: 'not_started' | 'in_progress' | 'submitted' | 'verified';
+  criteria_total: number;
+  criteria_passed: number;
+  /** Exact text of every criterion still outstanding — this is what the UI lists. */
+  outstanding: string[];
+  commit_sha: string | null;
+  commit_at: string | null;
+  /** Plain-language "why not verified yet". Empty once verified. */
+  reasons: string[];
+  /** Claims in the progress file that match no criterion in the published plan. */
+  rejected_claims: string[];
+  checked_at: string | null;
+  /**
+   * True when this story is held at `verified` by the immutable
+   * `student_tasks.verified_at` latch rather than by the current repo read —
+   * the student deleted the progress file, rewrote history, or the evidence
+   * commit aged out of the read window. The UI uses it to say "still verified,
+   * we just cannot re-check it" instead of silently showing complete work.
+   */
+  latched: boolean;
+  /**
+   * What the CURRENT repo read concluded, when it disagrees with the latch.
+   * Diagnostic only. Never render this as the story's state.
+   */
+  live_state: TaskVerificationDto['state'] | null;
+}
+
+/** Build-level roll-up, derived from the per-story verdicts already on the tree. */
+export interface BuildVerificationRollupDto {
+  stories_total: number;
+  stories_verified: number;
+  stories_submitted: number;
+  stories_in_progress: number;
+  stories_not_started: number;
+  criteria_total: number;
+  criteria_passed: number;
+  /** Distinct evidence commits behind the verified stories. */
+  commits: number;
+  /** Builder XP earned from verified stories, as recorded on the tasks. */
+  xp_earned: number;
+  /** Most recent per-story check, or null when the project has never been synced. */
+  last_checked_at: string | null;
 }
 
 export interface ProjectListDto {
@@ -62,6 +147,20 @@ export interface ProjectTreeDto {
   health_score: number | null;
   lists: ProjectListDto[];
   task_counts: TaskCounts;
+  /**
+   * Where this project's Command Center is running, once STORY-000 is built and
+   * deployed. Held in `project_variables` rather than its own column: it is one
+   * nullable string, and a migration on a core table hours before a class is a
+   * bad trade for a field a JSONB blob already holds.
+   */
+  command_center_url: string | null;
+  /**
+   * How the build is actually going, rolled up from the per-story verdicts.
+   * Null until the project has been synced at least once — a zeroed roll-up and
+   * a never-checked project must not look the same, because the first means
+   * "you have not started" and the second means "we have not looked".
+   */
+  build_verification: BuildVerificationRollupDto | null;
 }
 
 export interface ProjectSummaryDto {
@@ -91,6 +190,127 @@ function asDateOnly(v: unknown): string | null {
   return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
 }
 
+/**
+ * TIMESTAMPTZ columns come back from Sequelize as a Date, but a raw query, a
+ * JSON round-trip, or a cached row can hand over a string instead. Everything
+ * leaves here as one shape — an ISO-8601 string or null — because a DTO field
+ * that is sometimes a Date and sometimes a string is a field every consumer has
+ * to defend against, and `JSON.stringify` quietly papering over the difference
+ * is why nobody notices until something compares two of them.
+ *
+ * Anything unparseable becomes null rather than being passed through: this
+ * field will gate points, and a garbage value must read as "not verified", not
+ * as "verified at ???".
+ */
+function asIsoTimestamp(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null;
+  const d = v instanceof Date ? v : new Date(v as string | number);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+const VERIFICATION_STATES = ['not_started', 'in_progress', 'submitted', 'verified'] as const;
+
+/**
+ * Read the stored verdict defensively, then apply the immutable latch over it.
+ *
+ * The blob is a JSONB snapshot of the last repo read, written by some release
+ * of this code, so a row can predate any field added later — and an
+ * unrecognised `state` must read as "we do not know", never as `verified`. The
+ * generous direction on a field that gates credit is the wrong direction.
+ *
+ * THE LATCH IS APPLIED HERE AS WELL AS AT THE WRITE, deliberately. This is the
+ * one function every display surface goes through, so putting the rule here
+ * means a blob written by a buggy path, an older release, a replay, or a future
+ * caller that forgets still cannot show a student that verified work has
+ * vanished. The write-side latch keeps the stored data honest; this one keeps
+ * the screen honest regardless.
+ */
+export function toTaskVerificationDto(v: unknown, latch?: VerificationLatch | null): TaskVerificationDto | null {
+  const latched = isLatched(latch);
+  if (!v || typeof v !== 'object' || Array.isArray(v)) {
+    // No blob at all. Normally "never synced" ⇒ null. But a task carrying
+    // `verified_at` with no verdict beside it is a real state — a row verified
+    // before this field existed, or one whose blob was lost — and rendering it
+    // as "never checked" would erase a completion we hold the record for.
+    return latched ? latchedFromNothing(latch!) : null;
+  }
+  const raw = v as Record<string, unknown>;
+  const state = (VERIFICATION_STATES as readonly string[]).includes(String(raw.state))
+    ? (raw.state as TaskVerificationDto['state'])
+    : 'not_started';
+  const stored: VerificationRecord = {
+    state,
+    criteria_total: Number(raw.criteria_total ?? 0) || 0,
+    criteria_passed: Number(raw.criteria_passed ?? 0) || 0,
+    outstanding: asArray(raw.outstanding),
+    commit_sha: typeof raw.commit_sha === 'string' ? raw.commit_sha : null,
+    commit_at: asIsoTimestamp(raw.commit_at),
+    reasons: asArray(raw.reasons),
+    rejected_claims: asArray(raw.rejected_claims),
+    checked_at: asIsoTimestamp(raw.checked_at),
+  };
+  const applied = applyVerificationLatch(stored, latch, stored);
+  return {
+    ...applied,
+    commit_at: asIsoTimestamp(applied.commit_at),
+    latched: Boolean(applied.latched),
+    live_state: applied.live_state ?? null,
+  };
+}
+
+/** A verified task with no verdict blob beside it. The record still stands. */
+function latchedFromNothing(latch: VerificationLatch): TaskVerificationDto {
+  return {
+    state: 'verified',
+    criteria_total: 0,
+    criteria_passed: 0,
+    outstanding: [],
+    commit_sha: typeof latch.verified_ref === 'string' ? latch.verified_ref : null,
+    commit_at: null,
+    reasons: [latchNote('not_started')],
+    rejected_claims: [],
+    checked_at: asIsoTimestamp(latch.verified_at),
+    latched: true,
+    live_state: null,
+  };
+}
+
+/**
+ * Roll the per-story verdicts up to a build. PURE — derived from the tree that
+ * was already assembled, so the roll-up can never disagree with the stories
+ * underneath it.
+ *
+ * `commits` counts DISTINCT evidence commits on verified stories. Two stories
+ * genuinely finished in one commit are one commit, not two: this number is
+ * meant to answer "how much did they push", and double-counting a single push
+ * would inflate it.
+ */
+export function toBuildVerificationRollup(
+  lists: ProjectListDto[],
+  xpEarned = 0,
+): BuildVerificationRollupDto | null {
+  const seen = lists.flatMap((l) => l.tasks).map((t) => t.verification).filter((v): v is TaskVerificationDto => v !== null);
+  if (seen.length === 0) return null;
+
+  const commits = new Set(
+    seen.filter((v) => v.state === 'verified' && v.commit_sha).map((v) => v.commit_sha as string),
+  );
+  const checked = seen.map((v) => v.checked_at).filter((s): s is string => !!s).sort();
+
+  return {
+    stories_total: seen.length,
+    stories_verified: seen.filter((v) => v.state === 'verified').length,
+    stories_submitted: seen.filter((v) => v.state === 'submitted').length,
+    stories_in_progress: seen.filter((v) => v.state === 'in_progress').length,
+    stories_not_started: seen.filter((v) => v.state === 'not_started').length,
+    criteria_total: seen.reduce((n, v) => n + v.criteria_total, 0),
+    criteria_passed: seen.reduce((n, v) => n + v.criteria_passed, 0),
+    commits: commits.size,
+    xp_earned: xpEarned,
+    last_checked_at: checked.length ? checked[checked.length - 1] : null,
+  };
+}
+
 export function toTaskDto(t: Plain): ProjectTaskDto {
   return {
     id: String(t.id),
@@ -112,6 +332,14 @@ export function toTaskDto(t: Plain): ProjectTaskDto {
     blocked_by: asArray(t.blocked_by),
     due_on: asDateOnly(t.due_on),
     due_baseline_on: asDateOnly(t.due_baseline_on),
+    verified_at: asIsoTimestamp(t.verified_at),
+    // The latch columns travel with the blob, always. A caller that passes the
+    // blob alone gets the repo's opinion of the student's work instead of ours.
+    verification: toTaskVerificationDto(t.verification_json, {
+      verified_at: t.verified_at ?? null,
+      verified_by: t.verified_by ?? null,
+      verified_ref: t.verified_ref ?? null,
+    }),
   };
 }
 
@@ -146,7 +374,16 @@ function countTasks(lists: ProjectListDto[]): TaskCounts {
  * `tasks: Plain[]` array (assembled by the I/O layer). Lists are sorted by
  * position; counts are derived across all tasks.
  */
-export function toProjectTreeDto(p: Plain, lists: Array<Plain & { tasks?: Plain[] }>): ProjectTreeDto {
+export function toProjectTreeDto(
+  p: Plain,
+  lists: Array<Plain & { tasks?: Plain[] }>,
+  /**
+   * Builder XP already recorded for this project's verified stories. Injected
+   * because it lives in `evidence_records`, not on the task — and this mapper
+   * stays I/O-free.
+   */
+  verificationXpEarned = 0,
+): ProjectTreeDto {
   const listDtos = lists
     .map((l) => toListDto(l, Array.isArray(l.tasks) ? l.tasks : []))
     .sort(byPosition);
@@ -160,7 +397,21 @@ export function toProjectTreeDto(p: Plain, lists: Array<Plain & { tasks?: Plain[
     health_score: p.health_score ?? null,
     lists: listDtos,
     task_counts: countTasks(listDtos),
+    command_center_url: commandCenterUrl(p),
+    build_verification: toBuildVerificationRollup(listDtos, verificationXpEarned),
   };
+}
+
+/**
+ * Only ever an https URL. A student pastes whatever their host gave them, and
+ * this is rendered as a link that opens in a new tab — so `javascript:` and
+ * friends are refused here rather than trusted to the browser.
+ */
+export function commandCenterUrl(p: Plain): string | null {
+  const raw = (p?.project_variables as any)?.command_center_url;
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const url = raw.trim();
+  return /^https:\/\/[^\s]+$/i.test(url) ? url : null;
 }
 
 export function toProjectSummaryDto(p: Plain, activeProjectId: string | null): ProjectSummaryDto {

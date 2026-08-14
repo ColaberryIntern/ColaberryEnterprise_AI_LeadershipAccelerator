@@ -59,6 +59,41 @@ export async function ensureSbpSchema(): Promise<void> {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS due_baseline_on DATE`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_due ON student_tasks (due_on) WHERE due_on IS NOT NULL`,
 
+    // Verification, as distinct from self-report. `status = 'complete'` is the
+    // student's claim; `verified_at` is the platform having CONFIRMED the story
+    // is actually done, and `verified_by` is who or what confirmed it (a human
+    // reviewer's identity, or the agent/check that passed). They are separate
+    // columns rather than a richer status value because points will be gated on
+    // `verified_at` being set, and a gate needs a field that cannot be reached
+    // by a student toggling their own checkbox.
+    //
+    // Nullable with no DEFAULT on purpose: a default would backdate every task a
+    // live cohort has already marked complete into "verified", which is the one
+    // outcome this column exists to prevent. Nullable + no default also keeps
+    // this a catalog-only change in Postgres — no table rewrite, no exclusive
+    // lock held while rows are copied — which is what makes it safe to run on
+    // every boot against a table a cohort is using right now.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_by TEXT`,
+
+    // The evidence commit sha, FROZEN at award time. Same write-once discipline
+    // as verified_at, and added for a specific defect: `evidence_records` keys
+    // an award on `<story>@<sha-at-award-time>`, and the XP read was rebuilding
+    // that key from the CURRENT repo state. A student who force-pushes or
+    // squashes therefore orphaned their own banked award and the story read
+    // 0 XP forever. The sha existed only inside a log line until now, so there
+    // was nothing durable to look it up by.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_ref TEXT`,
+
+    // The live verdict, refreshed on every sync: state, which acceptance
+    // criteria are outstanding, the evidence commit, and why it is not verified
+    // yet. `verified_at` above answers "was it confirmed"; this answers "what is
+    // left", which is the question a student sitting at 3 of 4 criteria is
+    // actually asking. JSONB rather than a second table because it is read
+    // exactly once per task, always alongside the task, and never queried
+    // across rows. Nullable, no default — same catalog-only, lock-free change.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verification_json JSONB`,
+
     `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS answers JSONB`,
     `CREATE UNIQUE INDEX IF NOT EXISTS build_intake_unique_project ON build_intake (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_enrollment ON build_intake (enrollment_id)`,
@@ -105,6 +140,17 @@ const REQUIRED_COLUMNS = [
   'build_intake.answers',
   'student_tasks.due_on',
   'student_tasks.due_baseline_on',
+  // If these two are missing, every task looks unverified forever and the points
+  // gate silently awards nothing — a failure with no error attached to it.
+  'student_tasks.verified_at',
+  'student_tasks.verified_by',
+  // Missing ⇒ the frozen evidence sha is never persisted, and every XP lookup
+  // falls back to matching the current repo state — which is the defect the
+  // column exists to close.
+  'student_tasks.verified_ref',
+  // Missing ⇒ the verification loop writes a verdict Sequelize silently drops,
+  // and every story renders "not started" while the run logs success.
+  'student_tasks.verification_json',
 ] as const;
 const REQUIRED_INDEXES = [
   'build_intake_unique_project',
@@ -159,7 +205,7 @@ export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[
       error_class: 'SchemaInvariantViolation',
       context: {
         missing,
-        impact: 'build intake cannot be persisted, so a failed generation is not replayable and the reviewed plan is not the plan that ships',
+        impact: 'build intake cannot be persisted, so a failed generation is not replayable and the reviewed plan is not the plan that ships; a missing student_tasks column means the pipeline writes a value the table cannot hold and it is dropped without an error',
         remedy: 'inspect the [DB] sbp schema stmt skipped warnings above; the CREATE statements are idempotent and safe to re-run',
       },
     }));

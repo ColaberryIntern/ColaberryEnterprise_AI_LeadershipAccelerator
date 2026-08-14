@@ -14,6 +14,26 @@ import { executeAction } from '../agents/ExecutionAgent';
 import { updateFromDecision } from '../memory/learningEngine';
 import { getVectorMemory } from '../memory/vectorMemory';
 import { createTicket } from '../../services/ticketService';
+import { getTicketCreatorAdminUserId } from '../../services/agentBlueprint/ticketCreatorIdentitySeed';
+
+// Agent Alias & Identity Fix — forward-fix for cory-engine's ticket-creator
+// identity, scoped narrowly to the auto-executable branch only. cory-engine's
+// non-auto-executable "Review" tickets are created with status:'todo' and
+// genuinely rely on assigned_to_id IS NULL to reach
+// backend/src/services/agents/ticketManagementAgent.ts's real 15-minute
+// auto-dispatch sweep (`status:'todo' AND assigned_to_id IS NULL`) — stamping
+// those would silently remove them from real dispatch logic, not just cosmetics.
+// "Auto" tickets (status:'in_progress') never enter that sweep (it only scans
+// status:'todo'), so attributing them to cory-engine's own real identity is both
+// accurate and safe. Extracted as a small pure function so it's testable in
+// isolation without mocking the full 8-step autonomous cycle.
+export function resolveCoryEngineTicketAssignee(
+  isAutoExec: boolean,
+  adminUserId: string | null,
+): { assigned_to_type: 'ai_staff'; assigned_to_id: string } | Record<string, never> {
+  if (!isAutoExec || !adminUserId) return {};
+  return { assigned_to_type: 'ai_staff', assigned_to_id: adminUserId };
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -150,6 +170,9 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
       const effortEstimate = estimateEffort(risk.risk_score, impact);
       const dueDate = estimateDueDate(effortEstimate);
       try {
+        // Forward-fix (Agent Alias & Identity Fix) — see resolveCoryEngineTicketAssignee's
+        // header comment for why this is scoped to isAutoExec only.
+        const coryEngineAdminUserId = await getTicketCreatorAdminUserId('cory-engine');
         const ticket = await createTicket({
           title: `[${isAutoExec ? 'Auto' : 'Review'}] ${recommendation.action}`,
           description: [
@@ -179,6 +202,7 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
             impact_metric: impact.metric,
             impact_change_pct: impact.change_pct,
           },
+          ...resolveCoryEngineTicketAssignee(isAutoExec, coryEngineAdminUserId),
         });
 
         tickets.push({

@@ -68,8 +68,10 @@ describe('the next task is the first thing on the page', () => {
       <ProjectInterior project={PROJECT} onBack={noop} onOpenTask={noop} />,
     );
 
-    const hero = container.querySelector('.te-hero');
-    const header = container.querySelector('.pj-head');
+    // The hero is now the shared Classroom-format card (.tl-nextweek) and the
+    // header is a few-line bar (.pj-headbar) rather than a full-bleed banner.
+    const hero = container.querySelector('.tl-nextweek');
+    const header = container.querySelector('.pj-headbar');
     expect(hero).toBeTruthy();
     expect(header).toBeTruthy();
     // DOCUMENT_POSITION_FOLLOWING === the header comes after the hero.
@@ -81,7 +83,7 @@ describe('the next task is the first thing on the page', () => {
       <ProjectInterior project={PROJECT} onBack={noop} onOpenTask={noop} />,
     );
 
-    expect(container.querySelector('.te-hero h2')!.textContent).toBe('Build your Command Center');
+    expect(container.querySelector('.tl-nextweek h2')!.textContent).toBe('Build your Command Center');
   });
 
   it('condenses with the page header, the same mechanism the overview uses', async () => {

@@ -59,14 +59,18 @@ export default function AgentDetailPage() {
   }
 
   const { agent, identity, live_status, tickets } = detail;
+  // Agent Alias & Identity Fix — same fix as the Live Agents card list: prefer the
+  // real AdminUser.display_name over the raw technical agent_name. Falls back to
+  // agent_name for a non-blueprint agent (identity is null — no linked AdminUser).
+  const displayName = identity?.display_name || agent.agent_name;
 
   return (
     <>
       <PageHeader
-        title={agent.agent_name}
+        title={displayName}
         icon="robot-2-line"
         subtitle={agent.description || undefined}
-        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: agent.agent_name }]}
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: displayName }]}
         actions={
           <button className="btn btn-outline-primary btn-sm" onClick={fetchDetail} disabled={loading}>
             <i className="ri-refresh-line" aria-hidden="true" /> Refresh

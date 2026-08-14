@@ -123,3 +123,62 @@ describe('the schedule reaches the portal', () => {
     expect(dto.due_on).toBeNull();
   });
 });
+
+describe('verification reaches the portal', () => {
+  /**
+   * `status` is the student's claim. `verified_at` is the platform's. Points
+   * will be gated on the second one, so the DTO is where that distinction has
+   * to survive — `due_on` reached the database and died right here, invisible
+   * to the only surface a student looks at, and there is no reason to believe
+   * this field is any less likely to.
+   */
+  it('carries verified_at when the story has been confirmed', () => {
+    const dto = toTaskDto({
+      id: 't1', title: 'Build your Command Center', position: 0, status: 'complete',
+      verified_at: '2026-08-13T14:30:00.000Z',
+    });
+
+    expect(dto.verified_at).toBe('2026-08-13T14:30:00.000Z');
+  });
+
+  it('is null — not undefined — when nobody has verified it', () => {
+    const dto = toTaskDto({ id: 't1', title: 'x', position: 0 });
+
+    expect(dto.verified_at).toBeNull();
+    // `undefined` would vanish from the JSON body entirely, and a gate reading
+    // an absent key cannot tell "unverified" from "field never shipped".
+    expect('verified_at' in dto).toBe(true);
+  });
+
+  it('a Date from the driver becomes an ISO string, never a raw Date', () => {
+    const dto = toTaskDto({ id: 't1', title: 'x', position: 0,
+      verified_at: new Date('2026-08-13T14:30:00.000Z') });
+
+    expect(dto.verified_at).toBe('2026-08-13T14:30:00.000Z');
+    expect(typeof dto.verified_at).toBe('string');
+    expect(dto.verified_at).not.toBeInstanceOf(Date);
+  });
+
+  it('keeps the instant, unlike due_on which is deliberately truncated to a day', () => {
+    // A due date must not carry a time; a verification timestamp must.
+    const dto = toTaskDto({ id: 't1', title: 'x', position: 0,
+      due_on: '2026-08-13', verified_at: '2026-08-13T23:59:59.000Z' });
+
+    expect(dto.due_on).toBe('2026-08-13');
+    expect(dto.verified_at).toBe('2026-08-13T23:59:59.000Z');
+  });
+
+  it('a task the student marked complete but nobody verified reads as unverified', () => {
+    const dto = toTaskDto({ id: 't1', title: 'x', position: 0, status: 'complete' });
+
+    expect(dto.status).toBe('complete');
+    expect(dto.verified_at).toBeNull();
+  });
+
+  it('boundary: garbage reads as unverified rather than as verified-at-nonsense', () => {
+    for (const bad of ['soon', '', 'not-a-date']) {
+      expect(toTaskDto({ id: 't1', title: 'x', position: 0, verified_at: bad } as any).verified_at)
+        .toBeNull();
+    }
+  });
+});

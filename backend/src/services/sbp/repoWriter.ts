@@ -19,6 +19,13 @@
  */
 import { createHash } from 'crypto';
 import { RenderedFile, isAllowedPath } from './renderDocs';
+import { spliceManagedBlock } from './managedBlock';
+import {
+  PROGRESS_FILE_PATH,
+  mergeProgressFile,
+  parseProgressFile,
+  serialiseProgressFile,
+} from './verification/progressContract';
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_RETRIES = 3;
@@ -90,6 +97,34 @@ function log(event: string, correlationId: string | undefined, outcome: string, 
  * Bounded GitHub call. Retries only transient failures (429/5xx); a 4xx is
  * terminal because retrying a rejected request just burns rate limit.
  */
+/**
+ * Read a file from the default branch, or null when it is not there.
+ *
+ * Deliberately soft: a 404 is the normal "they have no CLAUDE.md yet" case, and
+ * any other failure must not abort a publish — the caller splices against null,
+ * which appends our block rather than replacing a file we could not read.
+ */
+async function readRepoFile(
+  target: RepoTarget,
+  path: string,
+  token: string,
+  fetchImpl: typeof fetch,
+  correlationId?: string,
+): Promise<string | null> {
+  try {
+    const res = await gh(
+      `/repos/${target.owner}/${target.repo}/contents/${encodeURIComponent(path)}`,
+      { method: 'GET' }, token, fetchImpl,
+    );
+    if (!res?.content) return null;
+    return Buffer.from(String(res.content), 'base64').toString('utf8');
+  } catch (err: any) {
+    if (/404/.test(String(err?.message ?? ''))) return null;
+    log('sbp_repo_read_failed', correlationId, 'partial', { path, message: err?.message });
+    return null;
+  }
+}
+
 async function gh(
   path: string,
   init: RequestInit,
@@ -206,11 +241,47 @@ export async function writeDocsToRepo(
 
   const token = requireToken();
   const { owner, repo } = target;
+
+  // The change check runs on the RENDERED content, before any splicing, so an
+  // unchanged plan still makes zero network calls.
   const changed = changedFiles(files, parseManifestHashes(existingManifest));
 
   if (changed.length === 0) {
     log('sbp_repo_write_noop', opts.correlationId, 'success', { owner, repo, files: files.length });
     return { committed: false, changedPaths: [], skippedUnchanged: files.length };
+  }
+
+  // CLAUDE.md belongs to the STUDENT. They arrive with one that already carries
+  // their own conventions, and this used to replace the whole file — so a
+  // republish silently deleted work they had written. Read theirs and splice
+  // our delimited block into it, leaving every other line as found. Done only
+  // for a file we are already committing, so the no-op path above stays silent.
+  // A failed read splices against null, which APPENDS rather than clobbering
+  // a file we could not see.
+  for (let i = 0; i < changed.length; i++) {
+    if (changed[i].path !== 'CLAUDE.md') continue;
+    const existing = await readRepoFile(target, 'CLAUDE.md', token, fetchImpl, opts.correlationId);
+    changed[i] = { ...changed[i], content: spliceManagedBlock(existing, changed[i].content) };
+  }
+
+  // `.colaberry/progress.json` is co-owned for exactly the same reason CLAUDE.md
+  // is. The platform owns the story list and the criterion text; Claude Code
+  // owns the `passed` flags it wrote back. Replacing the whole file on a
+  // republish would drop every tick the student's agent had recorded — stories
+  // sitting at "3 of 4" would silently reset to "not started", which reads as
+  // the platform losing their work. Merge instead: our side replaced, their side
+  // carried across by story id and criterion text.
+  for (let i = 0; i < changed.length; i++) {
+    if (changed[i].path !== PROGRESS_FILE_PATH) continue;
+    const existing = await readRepoFile(target, PROGRESS_FILE_PATH, token, fetchImpl, opts.correlationId);
+    const parsed = parseProgressFile(changed[i].content);
+    // Our own render failing to parse is a defect in renderDocs, not a student
+    // problem — leave the rendered bytes alone rather than merging blind.
+    if (!parsed.ok) continue;
+    changed[i] = {
+      ...changed[i],
+      content: serialiseProgressFile(mergeProgressFile(parsed.file, existing)),
+    };
   }
 
   const branch = target.branch

@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import AiAgent from '../../models/AiAgent';
 import AdminUser from '../../models/AdminUser';
 import Enrollment from '../../models/Enrollment';
@@ -5,6 +6,7 @@ import CommunityMember from '../../models/CommunityMember';
 import { Ticket } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
+import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
 
 // Agent Detail — the transparency page Ali asked for: real identity, real
 // system prompt, real tools, live status, real linked ticket activity. Written
@@ -62,12 +64,22 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     }
   }
 
-  // The core "who is Reese targeting, why, and follow up over time" view — only
-  // tickets actually assigned to THIS agent's real staff identity, never every
-  // ticket in the system.
+  // The core "who is this agent targeting, why, and follow up over time" view —
+  // only tickets actually belonging to THIS agent's real staff identity, never
+  // every ticket in the system. Agent Alias & Identity Fix: matches EITHER the
+  // real AdminUser.id (assigned_to_id, going forward) OR any of this agent's
+  // known legacy raw creator strings (created_by_id — the only field this
+  // agent's historical tickets may have ever populated, e.g. cory-engine's
+  // 9,606 tickets). An agent with zero legacy aliases (Reese) gets a match list
+  // of exactly its own id, so this is unchanged for Reese.
   const tickets = adminUser
     ? await Ticket.findAll({
-        where: { assigned_to_type: 'ai_staff', assigned_to_id: adminUser.id },
+        where: {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: buildCreatorIdMatchList(adminUser.id, agent) } },
+            { created_by_id: { [Op.in]: buildCreatorIdMatchList(adminUser.id, agent) } },
+          ],
+        },
         order: [['created_at', 'DESC']],
         limit: MAX_TICKETS,
       })

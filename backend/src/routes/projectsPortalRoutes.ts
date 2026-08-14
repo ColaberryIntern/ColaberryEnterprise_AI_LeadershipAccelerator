@@ -37,6 +37,11 @@ function fail(res: Response, err: any, next: NextFunction) {
   return next(err);
 }
 
+// `complete` stays in the enum on purpose. Zod's job here is shape — "is this a
+// status this system knows about" — and the service decides who may set which.
+// Dropping it would answer a client's completion attempt with a generic 400
+// "invalid enum value", which reads like a client bug; keeping it lets the
+// service answer 409 and explain that completion is granted, not claimed.
 const statusSchema = z.object({ status: z.enum(['not_started', 'in_progress', 'complete', 'blocked']) });
 const importTaskSchema = z.object({
   story_id: z.string().nullish(),
@@ -96,7 +101,10 @@ router.get('/api/portal/projects/:projectId', requireParticipant, async (req: Re
   } catch (e) { fail(res, e, next); }
 });
 
-// Set a task's status (not_started | in_progress | complete | blocked).
+// Set a task's status. A student may move a task freely between not_started,
+// in_progress and blocked — that is their own planning. `complete` is refused
+// with 409: it is granted by the platform when the work is verified, never
+// claimed by the client. `fail()` carries the service's status and message out.
 router.patch('/api/portal/projects/tasks/:taskId', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!gate(res)) return;
@@ -109,6 +117,8 @@ router.patch('/api/portal/projects/tasks/:taskId', requireParticipant, async (re
 
 // Write-through by story_id, scoped to the active project. The localStorage store
 // holds story_ids, not backend UUIDs, so this is its per-task status write path.
+// Under the same completion rule as the by-id route above — it reaches the same
+// guard, so this is not a second way in.
 router.patch('/api/portal/projects/tasks/by-story/:storyId', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!gate(res)) return;
@@ -147,6 +157,33 @@ router.post(
       const task = await loadOwnedTask(eid(req), String(req.params.projectId), String(req.params.taskId));
       if (!task) return res.status(404).json({ error: 'Task not found' });
       res.json(await coachOnTask(eid(req), task, body.mode, body.message, body.history || []));
+    } catch (e) { fail(res, e, next); }
+  },
+);
+
+/**
+ * Point a project at its Command Center. Set once STORY-000 is built and
+ * deployed; every workspace on that build then shows a link to it.
+ *
+ * https only, and the URL is validated here rather than at render time — the
+ * portal opens it in a new tab, so a `javascript:` URL would be a stored XSS
+ * with a student as the author.
+ */
+const commandCenterSchema = z.object({
+  url: z.string().trim().url().refine((u) => u.startsWith('https://'), 'must be https'),
+});
+
+router.patch(
+  '/api/portal/projects/:projectId/command-center',
+  requireParticipant,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!gate(res)) return;
+      const { url } = commandCenterSchema.parse(req.body || {});
+      const { setCommandCenterUrl } = await import('../services/projects/projectWriteService');
+      const tree = await setCommandCenterUrl(eid(req), String(req.params.projectId), url);
+      if (!tree) return res.status(404).json({ error: 'Project not found' });
+      res.json(tree);
     } catch (e) { fail(res, e, next); }
   },
 );

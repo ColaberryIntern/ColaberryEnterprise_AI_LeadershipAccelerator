@@ -36,6 +36,20 @@ export type ProjectTask = {
   blockedBy?: string[];   // storyIds of prerequisite tasks that must be DONE first
   state: TaskState;
   due: TaskDue;
+  /**
+   * Points this task is worth, when the backend has said. Optional and never
+   * defaulted: the hero shows the badge only when a real number exists, because
+   * an invented one would be the dashboard lying on the first screen a student
+   * sees. Wired to points_config once story verification lands.
+   */
+  points?: number;
+  /**
+   * When the backend recorded this story as VERIFIED, if it ever did. Distinct
+   * from `state: 'done'`, which is the student saying so — this is the server
+   * saying so. Carried now so the verification signal survives a hydrate;
+   * nothing renders it yet.
+   */
+  verifiedAt?: string | null;
 };
 
 export type ProjectList = {
@@ -84,6 +98,13 @@ export type StudentProject = {
   lists: ProjectList[];
   activity: ProjectActivity[];
   preview: ToolPreview;
+  /**
+   * Where this build's Command Center is running, once STORY-000 ships it.
+   * Absent until the student has deployed one, so every consumer must treat
+   * "no URL" as the normal first-week state and render nothing rather than a
+   * dead link.
+   */
+  commandCenterUrl?: string | null;
 };
 
 export type NewBuildAnswers = {
