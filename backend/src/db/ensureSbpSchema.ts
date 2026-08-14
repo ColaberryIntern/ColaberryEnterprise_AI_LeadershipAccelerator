@@ -76,6 +76,15 @@ export async function ensureSbpSchema(): Promise<void> {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_by TEXT`,
 
+    // The evidence commit sha, FROZEN at award time. Same write-once discipline
+    // as verified_at, and added for a specific defect: `evidence_records` keys
+    // an award on `<story>@<sha-at-award-time>`, and the XP read was rebuilding
+    // that key from the CURRENT repo state. A student who force-pushes or
+    // squashes therefore orphaned their own banked award and the story read
+    // 0 XP forever. The sha existed only inside a log line until now, so there
+    // was nothing durable to look it up by.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_ref TEXT`,
+
     // The live verdict, refreshed on every sync: state, which acceptance
     // criteria are outstanding, the evidence commit, and why it is not verified
     // yet. `verified_at` above answers "was it confirmed"; this answers "what is
@@ -135,6 +144,10 @@ const REQUIRED_COLUMNS = [
   // gate silently awards nothing — a failure with no error attached to it.
   'student_tasks.verified_at',
   'student_tasks.verified_by',
+  // Missing ⇒ the frozen evidence sha is never persisted, and every XP lookup
+  // falls back to matching the current repo state — which is the defect the
+  // column exists to close.
+  'student_tasks.verified_ref',
   // Missing ⇒ the verification loop writes a verdict Sequelize silently drops,
   // and every story renders "not started" while the run logs success.
   'student_tasks.verification_json',
