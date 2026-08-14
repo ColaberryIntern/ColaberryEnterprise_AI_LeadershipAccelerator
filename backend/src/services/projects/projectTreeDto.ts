@@ -6,7 +6,19 @@
  *
  * This is the read half of the Project Backend (P1) — it serves the unified
  * StudentTask hierarchy the localStorage `projectsStore` will migrate onto.
+ *
+ * ONE RULE THIS FILE ENFORCES: verification is recorded in our database, and
+ * `verification_json` is only a view of the last repo read. Every verification
+ * field served from here goes through `applyVerificationLatch`, so nothing a
+ * student does to their repo can make already-verified work look undone. See
+ * sbp/verification/verificationLatch.ts.
  */
+import {
+  applyVerificationLatch, isLatched, latchNote,
+  VerificationLatch, VerificationRecord,
+} from '../sbp/verification/verificationLatch';
+
+export type { VerificationLatch };
 
 export interface ProjectTaskDto {
   id: string;
@@ -76,6 +88,19 @@ export interface TaskVerificationDto {
   /** Claims in the progress file that match no criterion in the published plan. */
   rejected_claims: string[];
   checked_at: string | null;
+  /**
+   * True when this story is held at `verified` by the immutable
+   * `student_tasks.verified_at` latch rather than by the current repo read —
+   * the student deleted the progress file, rewrote history, or the evidence
+   * commit aged out of the read window. The UI uses it to say "still verified,
+   * we just cannot re-check it" instead of silently showing complete work.
+   */
+  latched: boolean;
+  /**
+   * What the CURRENT repo read concluded, when it disagrees with the latch.
+   * Diagnostic only. Never render this as the story's state.
+   */
+  live_state: TaskVerificationDto['state'] | null;
 }
 
 /** Build-level roll-up, derived from the per-story verdicts already on the tree. */
@@ -186,18 +211,34 @@ function asIsoTimestamp(v: unknown): string | null {
 const VERIFICATION_STATES = ['not_started', 'in_progress', 'submitted', 'verified'] as const;
 
 /**
- * Read the stored verdict defensively. It is a JSONB blob written by an earlier
- * release of this code, so a row can predate any field added later — and an
+ * Read the stored verdict defensively, then apply the immutable latch over it.
+ *
+ * The blob is a JSONB snapshot of the last repo read, written by some release
+ * of this code, so a row can predate any field added later — and an
  * unrecognised `state` must read as "we do not know", never as `verified`. The
  * generous direction on a field that gates credit is the wrong direction.
+ *
+ * THE LATCH IS APPLIED HERE AS WELL AS AT THE WRITE, deliberately. This is the
+ * one function every display surface goes through, so putting the rule here
+ * means a blob written by a buggy path, an older release, a replay, or a future
+ * caller that forgets still cannot show a student that verified work has
+ * vanished. The write-side latch keeps the stored data honest; this one keeps
+ * the screen honest regardless.
  */
-export function toTaskVerificationDto(v: unknown): TaskVerificationDto | null {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+export function toTaskVerificationDto(v: unknown, latch?: VerificationLatch | null): TaskVerificationDto | null {
+  const latched = isLatched(latch);
+  if (!v || typeof v !== 'object' || Array.isArray(v)) {
+    // No blob at all. Normally "never synced" ⇒ null. But a task carrying
+    // `verified_at` with no verdict beside it is a real state — a row verified
+    // before this field existed, or one whose blob was lost — and rendering it
+    // as "never checked" would erase a completion we hold the record for.
+    return latched ? latchedFromNothing(latch!) : null;
+  }
   const raw = v as Record<string, unknown>;
   const state = (VERIFICATION_STATES as readonly string[]).includes(String(raw.state))
     ? (raw.state as TaskVerificationDto['state'])
     : 'not_started';
-  return {
+  const stored: VerificationRecord = {
     state,
     criteria_total: Number(raw.criteria_total ?? 0) || 0,
     criteria_passed: Number(raw.criteria_passed ?? 0) || 0,
@@ -207,6 +248,30 @@ export function toTaskVerificationDto(v: unknown): TaskVerificationDto | null {
     reasons: asArray(raw.reasons),
     rejected_claims: asArray(raw.rejected_claims),
     checked_at: asIsoTimestamp(raw.checked_at),
+  };
+  const applied = applyVerificationLatch(stored, latch, stored);
+  return {
+    ...applied,
+    commit_at: asIsoTimestamp(applied.commit_at),
+    latched: Boolean(applied.latched),
+    live_state: applied.live_state ?? null,
+  };
+}
+
+/** A verified task with no verdict blob beside it. The record still stands. */
+function latchedFromNothing(latch: VerificationLatch): TaskVerificationDto {
+  return {
+    state: 'verified',
+    criteria_total: 0,
+    criteria_passed: 0,
+    outstanding: [],
+    commit_sha: typeof latch.verified_ref === 'string' ? latch.verified_ref : null,
+    commit_at: null,
+    reasons: [latchNote('not_started')],
+    rejected_claims: [],
+    checked_at: asIsoTimestamp(latch.verified_at),
+    latched: true,
+    live_state: null,
   };
 }
 
@@ -268,7 +333,13 @@ export function toTaskDto(t: Plain): ProjectTaskDto {
     due_on: asDateOnly(t.due_on),
     due_baseline_on: asDateOnly(t.due_baseline_on),
     verified_at: asIsoTimestamp(t.verified_at),
-    verification: toTaskVerificationDto(t.verification_json),
+    // The latch columns travel with the blob, always. A caller that passes the
+    // blob alone gets the repo's opinion of the student's work instead of ours.
+    verification: toTaskVerificationDto(t.verification_json, {
+      verified_at: t.verified_at ?? null,
+      verified_by: t.verified_by ?? null,
+      verified_ref: t.verified_ref ?? null,
+    }),
   };
 }
 
