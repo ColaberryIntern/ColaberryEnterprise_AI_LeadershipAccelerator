@@ -16,6 +16,7 @@
  */
 import { createHash } from 'crypto';
 import { BuildPlan, PlanRelease, PlanRequirement, PlanStory, isConstraint } from './planContract';
+import { PROGRESS_FILE_PATH, renderProgressFile, serialiseProgressFile } from './verification/progressContract';
 
 export interface RenderedFile {
   /** Repo-relative, forward slashes, inside the allowlist. */
@@ -130,8 +131,9 @@ function renderStoryFile(plan: BuildPlan, story: PlanStory, release?: PlanReleas
     '',
     '## Acceptance — your stop condition',
     '',
-    'Tick each box as it genuinely passes. These boxes are how the platform knows',
-    'this story is done — it reads them from this file, so ticking one you have not',
+    'Tick each box as it genuinely passes. This file is yours — the platform reads',
+    'the same criteria out of `.colaberry/progress.json`, which Claude Code keeps in',
+    'step (see the managed block in CLAUDE.md). Ticking something you have not',
     'actually met only misleads you.',
     '',
     ...(story.acceptance ?? []).map((a) => `- [ ] ${a}`),
@@ -230,19 +232,35 @@ function renderClaudeMd(plan: BuildPlan, ctx: RenderContext): string {
     '',
     '## Definition of done',
     '',
-    'A story is done when every acceptance box in its story file genuinely passes:',
+    'A story is done when **every** acceptance criterion on it passes **and** a commit',
+    'names it. Both halves. All of the criteria, not the important ones; and the work in',
+    'git, not just ticked off.',
     '',
     '1. Tests cover the happy path **and** at least one failure path.',
     '2. No secrets in code, commits, or logs.',
-    '3. The commit message names the story, e.g. `STORY-001: add the roster endpoint`.',
-    '   The platform reads that to track your progress — without it your work is invisible.',
-    '4. You tick the acceptance boxes in `docs/stories/STORY-nnn.md` only for what actually passes.',
+    '3. Every acceptance criterion in `docs/stories/STORY-nnn.md` genuinely passes.',
+    '',
+    '## When you finish a story',
+    '',
+    'Two steps, in this order. The platform reads both — skip either and the story stays',
+    'unverified, and it will tell you which half is missing.',
+    '',
+    '1. Update `.colaberry/progress.json`: find the story by `id`, set `passed` on each',
+    '   criterion to what is actually true, and fill in `files_touched` and `tests_added`.',
+    '   Leave the ones that do not pass as `false` — a partly finished story is a real,',
+    '   expected state and reports honestly. Do not add criteria of your own: only the ones',
+    '   from the plan are counted, and invented ones are discarded.',
+    '2. Commit, naming the story in a trailer, e.g. `STORY-001: add the roster endpoint`',
+    '   with `Story: STORY-001` on its own line below. The commit must change at least one',
+    '   file. Then push — the platform reads pushed commits, not your working tree.',
     '',
     ...(ctx.repoUrl ? ['## This repo', '', ctx.repoUrl, ''] : []),
     '## What not to edit',
     '',
-    '`.colaberry/` is platform bookkeeping and is overwritten on every sync. Everything',
-    'else — including the docs above — is yours to change.',
+    '`.colaberry/plan.json` and `.colaberry/manifest.json` are platform bookkeeping and are',
+    'overwritten on every sync. `.colaberry/progress.json` is shared: the platform owns the',
+    'story and criterion list in it, you own the `passed` flags and the notes, and a sync',
+    'keeps your side. Everything else — including the docs above — is yours to change.',
     '',
   ].join('\n');
 }
@@ -288,13 +306,18 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       stories: byKey(plan.stories, (s) => s.id),
     }, null, 2)}\n`,
   });
+  // The two-way contract. The platform writes the plan side — every story, every
+  // acceptance criterion, all `passed: false`; Claude Code writes the completion
+  // side back. Seeding the criterion TEXT here is what makes the reader strict
+  // without being hostile: the agent flips a boolean rather than retyping a
+  // sentence, so honest claims match the plan exactly and only invented ones get
+  // rejected. repoWriter merges this over whatever is already in the repo so a
+  // republish does not wipe the student's ticks.
   files.push({
-    path: '.colaberry/progress.json',
-    content: `${JSON.stringify({
-      stories: byKey(plan.stories, (s) => s.id).map((s) => ({
-        id: s.id, release: s.release, acceptance_total: (s.acceptance ?? []).length,
-      })),
-    }, null, 2)}\n`,
+    path: PROGRESS_FILE_PATH,
+    content: serialiseProgressFile(
+      renderProgressFile(byKey(plan.stories, (s) => s.id), plan.project_name),
+    ),
   });
   files.push({
     path: '.colaberry/manifest.json',
