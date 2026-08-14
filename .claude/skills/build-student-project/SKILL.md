@@ -11,8 +11,9 @@ portal renders; and commits the document set into their workspace repo. The spin
 `backend/src/services/sbp/sbpOrchestrator.ts`; every other module in that folder is a
 component it calls. Routes: `backend/src/routes/sbpRoutes.ts`. Everything here is
 verified against `origin/main` `4078338f`, plus **PR #1463** (the build-verification loop,
-**merged into main 2026-08-14**), **PR #1462** (auto-publish) and **PR #1461** (the cohort
-audit script).
+**merged into main 2026-08-14**), **PR #1462** (auto-publish, **merged 2026-08-14**) and
+**PR #1461** (the cohort audit script). **Merged is not deployed** — that distinction is
+load-bearing throughout this runbook, and the status box below records both separately.
 
 > **This skill was hardened from the night five real students ended class unable to see
 > any work.** Nothing below is defensive theory — each rule is a failure that already
@@ -30,11 +31,37 @@ audit script).
 | | State | Effect on this runbook |
 |---|---|---|
 | **PR #1463** build-verification loop | **merged into main 2026-08-14** | `markTaskVerifiedComplete` finally has a caller. New column `student_tasks.verification_json`, new `sbp/verification/` subtree, and `.colaberry/progress.json` is now **co-owned and merged**, not overwritten — see "What #1463 changed" below |
-| **PR #1462** auto-publish | **approved, landing in the same batch as this skill** | A gate-clean plan publishes itself. Until it deploys, rule 1 applies in production exactly as originally written |
-| **PR #1461** audit script | **approved, landing in the same batch as this skill** | `auditStudentBuilds.js` replaces the hand-written cohort sweep. Its verdict ladder and this skill's readiness query are deliberately the same definition |
+| **PR #1462** auto-publish | **merged into main 2026-08-14. NOT deployed** | A gate-clean plan publishes itself — *in main*. Production has not taken it yet, so rule 1 still applies there exactly as originally written. See "What is actually running in production" below |
+| **PR #1461** audit script | **approved, merging immediately after #1462. NOT deployed** | `auditStudentBuilds.js` replaces the hand-written cohort sweep. Its verdict ladder and this skill's readiness query are deliberately the same definition, and #1463 did **not** change that definition — the script reports verification as a note and deliberately does not gate readiness on it. Not in the running image: to run it before the next deploy, copy it under `/app` in the container so `pg` resolves (node walks up from the script's path, so `/tmp` cannot see `/app/node_modules`) |
 | Repo provisioning | **has never run in production** | Every publish takes the `awaiting_repo` branch. No student repo has ever received the document set — see Phase 4. This also means the #1463 verification loop has **nothing to read from** until repos exist |
 | Task verification | **wired, but never yet run against a real repo** | The loop exists and is triggered by workspace sync (#1463). It reads `.colaberry/progress.json` out of the student's repo — and there are no student repos, so 0 tasks still carry `verified_at`. Wired ≠ run |
 | The 2026-08-13 backlog | **cleared** | 18 students published by hand; `plan_unpublished` 10 → 0. Latest sweep: READY 14, `tasks_undated` 4 (preserved completed work), `no_project` 35 |
+
+### What is actually running in production
+
+**Measured 2026-08-14, not inferred.** Production `/opt/colaberry-accelerator` is at
+`4078338f` — the commit *before* #1463. So of the four PRs named above, **none of them is
+running on the live box.** Concretely, all verified by query rather than by reading a
+merge log:
+
+| Check | Result |
+|---|---|
+| Prod `git rev-parse HEAD` | `4078338f`, i.e. pre-#1463 |
+| `dist/services/sbp/verification` in the running image | does not exist |
+| `student_tasks.verification_json` in `information_schema` | **absent** — 4 of the 5 SBP columns present (`due_on`, `due_baseline_on`, `verified_at`, `verified_by`) |
+| Boot log | `SBP schema ensured`, and **no** `sbp_schema_incomplete`, **no** `SchemaInvariantViolation` |
+
+That last row is the trap, and it is worth understanding before the next deploy. The boot
+log is clean **because** the running code predates the column: its `REQUIRED_COLUMNS` list
+does not mention `verification_json`, so the assertion it passes is not the assertion you
+care about. A green boot log today says nothing about whether #1463's `ALTER` will land
+tomorrow. After the deploy that carries #1463, **re-run [Q8](references/verification-queries.md)
+against `information_schema` and confirm six columns** — do not accept the boot log as the
+answer, because `ensureSbpSchema` swallows statement failures into a `console.warn` and
+resolves identically on total success and total failure (rule 6, H-7).
+
+Until that deploy happens: publish is manual, verification cannot run, and the counts
+below are the live numbers.
 
 ### What #1463 changed, in the terms this runbook uses
 
@@ -122,8 +149,10 @@ comes back.
    it is a call you have to **confirm landed**. `drafted` has flipped meaning: it used to
    be the normal resting state of a healthy plan, and it is now a **failure state**
    meaning "the plan is good and something downstream refused". Phase 4 and the
-   verification checklist are unchanged in substance for exactly this reason. Until
-   #1462 merges and deploys, publish is still entirely manual in production.
+   verification checklist are unchanged in substance for exactly this reason. **#1462 is
+   merged, and that is not the same as running.** Until it *deploys*, publish is still
+   entirely manual in production and rule 1 holds there in full — a plan generated on the
+   live box today still sits at `drafted` forever with nobody to promote it.
 
 > ### Audit before you believe a list
 >
@@ -472,6 +501,22 @@ First production run (2026-08-13): **337 active enrollments, 18 with a project, 
 — 319 no project, **11 plan drafted but never published**, 1 no intake, 1 gate_failed.
 Those 11 are the population PR #1462 exists to prevent, and they still need a manual
 publish because auto-publish only fires on new generations.
+
+Second run (2026-08-14, read-only against production, still pre-deploy):
+**339 active enrollments, 20 with a project, READY 14 / NOT_READY 325** —
+`no_project` 319, `ready` 14, `tasks_undated` 4, `no_intake` 2. Read that against the
+first run rather than on its own: **`plan_unpublished` is now 0**, which is the 2026-08-13
+backlog staying cleared, and `gate_failed` is 0, which is the stale-label student from
+H-12(a) staying fixed. The population barely moved (337 → 339) and `no_project` did not
+move at all, so the cohort's real gap is still that **319 active enrollments have never
+started a build** — a funnel problem, not a pipeline one. Do not read a NOT_READY count of
+325 as 325 broken builds.
+
+Zero rows carried a "verified complete" note, which is the same finding as H-10(b) arriving
+from a different direction: nothing in production has ever been verified. One row carried
+**10 tasks marked `complete` with no `verified_at`** alongside 4 browser-imported task
+lists — that pairing is the localStorage import path (rule 5), and those 10 tasks earn no
+points.
 
 [Q1b](references/verification-queries.md) remains the raw SQL for when the script is not
 deployed.

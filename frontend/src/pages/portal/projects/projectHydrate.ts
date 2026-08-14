@@ -214,6 +214,12 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
     cover: preset.cover,
     icon: preset.icon,
     status: 'ready',
+    // This one came off the server pipeline: a gated plan materialized into
+    // student_tasks, with dates and real prompts. Recorded so the UI can say so
+    // — the local fallback and this looked identical, which is how a degraded
+    // build went unnoticed for a whole evening.
+    origin: 'pipeline',
+    pipelineProjectId: tree.id,
     createdAt: 1,               // stable, non-zero (0 is reserved for the demo)
     stage: lists[0] ? `${lists[0].name}` : 'Build',
     curStep: 2,
@@ -238,7 +244,15 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
 }
 
 // ── the merge ─────────────────────────────────────────────────────────────────
-export interface ReconcileResult { next: StudentProject[]; changed: boolean; mode: 'overlay' | 'hydrate' | 'noop'; }
+export interface ReconcileResult {
+  next: StudentProject[];
+  changed: boolean;
+  mode: 'overlay' | 'hydrate' | 'supersede' | 'noop';
+}
+
+/** Has the student actually done work on this build? */
+const hasCompletedWork = (p: StudentProject): boolean =>
+  p.lists.some((l) => l.tasks.some((t) => t.state === 'done'));
 
 /**
  * Merge the backend `tree` into the local project list. If a local project shares
@@ -270,6 +284,29 @@ export function reconcileProjects(local: StudentProject[], tree: BackendProjectT
   // the old one never had — STORY-000, the prep tasks — so it is not contained
   // and is correctly treated as new.
   const matchIdx = local.findIndex((p) => !p.sample && p.id === tree.id);
+
+  // A local placeholder that CLAIMED this backend project is superseded by it.
+  //
+  // The wizard creates an optimistic local build the instant the student
+  // submits, so the page has something to show while the server takes minutes.
+  // When the server's plan arrives, that placeholder has done its job. Without
+  // this branch the student ends up with two builds — a ten-task template and
+  // their real plan, sitting side by side looking equally legitimate.
+  //
+  // Guarded on completed work: if the student ticked something off the
+  // placeholder while waiting, both are kept (and both are labelled by
+  // `origin`) rather than silently discarding what they did. Losing a real plan
+  // is the bug being fixed here; losing a student's clicks would just be a
+  // different one.
+  if (matchIdx < 0) {
+    const claimIdx = local.findIndex((p) => !p.sample && p.pipelineProjectId === tree.id);
+    if (claimIdx >= 0 && !hasCompletedWork(local[claimIdx])) {
+      const next = local.slice();
+      next[claimIdx] = backendTreeToProject(tree);   // in place: keeps its position
+      return { next, changed: true, mode: 'supersede' };
+    }
+  }
+
   const containsIdx = matchIdx >= 0 ? matchIdx : local.findIndex((p) => !p.sample && contains(p, tree));
   if (containsIdx >= 0) {
     const overlaid = overlayCompletions(local[containsIdx], tree);

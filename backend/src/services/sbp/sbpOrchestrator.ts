@@ -4,10 +4,10 @@
  * Everything else in services/sbp/ is a correct, tested component that nothing
  * called. This is what calls them, in order:
  *
- *   intake → generate → gate → repair → persist(draft) → [review] → publish
+ *   intake → generate → gate → repair → persist(draft) → publish
  *          → render → commit to the workspace repo
  *
- * Two design rules the pilot taught us the hard way:
+ * Three design rules the pilot taught us the hard way:
  *
  *  1. **Generate once.** The draft is written at generation and `publish`
  *     promotes THAT row. The pilot regenerated between review and commit, which
@@ -15,6 +15,17 @@
  *  2. **Fail closed, and say why.** A plan that cannot pass the gate is never
  *     persisted as publishable. The violations are stored so the student sees
  *     what is missing rather than a spinner that stops.
+ *  3. **Nothing waits on a human.** Generation ends by publishing a gate-clean
+ *     plan itself (see `autoPublish`). There used to be a `[review]` step in
+ *     this chain with nothing on either end of it: no UI offered the review, no
+ *     UI offered the publish, and `publishBuild` had exactly one caller — an
+ *     HTTP route nothing in the product called. So every gate-clean plan came
+ *     to rest in `build_plans.status = 'draft'` and never became the lists,
+ *     dates and prompts in `student_tasks` that the portal renders. Measured on
+ *     2026-08-12/13: five students finished the wizard, five correct plans were
+ *     generated, and all five students were left looking at the browser's local
+ *     fallback build. Publishing is what makes a plan real, so publishing is
+ *     part of generating.
  *
  * Generation is minutes long, so `startBuild` returns immediately and the work
  * runs on the bounded queue. State lives in `build_intake.status` and
@@ -43,11 +54,18 @@ import { getProvisionQueue } from './boundedQueue';
 export type BuildStatus =
   | 'captured'        // intake saved, nothing generated yet
   | 'generating'      // a model call is in flight
-  | 'gate_failed'     // generated, but the plan has violations — not publishable
-  | 'drafted'         // generated and gate-clean, awaiting review
+  | 'gate_failed'     // generated, but the plan has BLOCKING violations — not publishable
+  | 'drafted'         // gate-clean and stored, but not yet promoted. Since
+                      // auto-publish this is a FAILURE state, not a resting
+                      // one: the plan is good and something downstream of it
+                      // (repo lookup, materialization, the database) refused.
+                      // The student is told, and POST .../publish retries it.
   | 'published'       // promoted; documents written if a repo exists
   | 'awaiting_repo'   // published, but no repo to write documents into
   | 'failed';         // generation itself failed; intake is replayable
+
+/** Statuses in which the plan has actually reached the student's portal. */
+export const DELIVERED_STATUSES: ReadonlySet<BuildStatus> = new Set<BuildStatus>(['published', 'awaiting_repo']);
 
 export interface BuildState {
   projectId: string;
@@ -183,7 +201,7 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       });
     }
 
-    await savePlanDraft(input.projectId, scoped.plan, { gate, model, attempts, correlationId });
+    const draft = await savePlanDraft(input.projectId, scoped.plan, { gate, model, attempts, correlationId });
     await setStatus(input.projectId, publishable ? 'drafted' : 'gate_failed');
 
     log('sbp_build_generated', correlationId, gate.ok ? 'success' : 'partial', {
@@ -205,6 +223,15 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       advisory: advisoryViolations(gate.violations).map((v) => v.rule),
     });
     if (!gate.ok) console.log(formatViolations(gate));
+
+    // The step that was missing. A gate-clean plan is promoted here, in the same
+    // job that generated it, so it becomes lists/dates/prompts the student can
+    // actually see. A plan with blocking violations deliberately falls through:
+    // it stays `gate_failed` with its violations stored, and the poll endpoint
+    // hands the student the reason.
+    if (publishable) {
+      await autoPublish(input.projectId, input.enrollmentId, draft.plan_sha256, correlationId);
+    }
   } catch (err: any) {
     await setStatus(input.projectId, 'failed').catch(() => { /* status write must not mask the real error */ });
     log('sbp_build_failed', correlationId, 'failure', {
@@ -214,6 +241,74 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       message: err?.message,
     });
   }
+}
+
+/**
+ * Promote the plan generation just produced, without waiting for anyone.
+ *
+ * WHY IT CANNOT THROW: by the time this runs the plan is already durable. The
+ * student's work is safe whatever happens next, and a publish failure must not
+ * be reported as a generation failure — `failed` means "regenerate", `drafted`
+ * means "the plan is good, retry the promotion", and telling a student to
+ * regenerate a perfectly good plan burns minutes of model time for nothing.
+ * So every failure is contained here, logged with its class, and leaves the
+ * status at `drafted` for `POST /builds/:id/publish` to retry.
+ *
+ * `expectedSha` is the hash of the draft we just wrote. Passing it makes "the
+ * plan we generated is the plan we published" enforced rather than assumed: if
+ * a concurrent generation slipped a newer version underneath us, publishPlan
+ * refuses on the mismatch instead of promoting a plan this run never graded.
+ *
+ * Idempotent, because everything it calls is: publishPlan returns the existing
+ * row when the version is already published, materializePlanAsTasks upserts on
+ * (project_id, story_id) and preserves completed work, and the active-project
+ * write is a guarded UPDATE. Re-running it is a no-op, which is what makes the
+ * manual retry safe.
+ */
+async function autoPublish(
+  projectId: string, enrollmentId: string, expectedSha: string, correlationId: string | null,
+): Promise<void> {
+  if (!autoPublishEnabled()) {
+    log('sbp_autopublish_disabled', correlationId, 'partial', { projectId });
+    return;
+  }
+  const started = Date.now();
+  try {
+    const { repoForProject } = await import('./workspaceRepo');
+    const repo = await repoForProject(projectId);
+    const result = await publishBuild(projectId, { enrollmentId, expectedSha, repo });
+    log('sbp_autopublished', correlationId, 'success', {
+      projectId, duration_ms: Date.now() - started,
+      status: result.status, version: result.planVersion,
+      files: result.filesWritten, has_repo: Boolean(repo),
+    });
+  } catch (err: any) {
+    // Named loudly. This is the difference between a student seeing their plan
+    // and a student seeing the browser's fallback, so it is an error with a
+    // class on it, not a swallowed exception.
+    log('sbp_autopublish_failed', correlationId, 'failure', {
+      projectId, duration_ms: Date.now() - started,
+      error_class: err?.error_class ?? err?.name ?? 'Error',
+      status: typeof err?.status === 'number' ? err.status : null,
+      message: err?.message,
+      recovery: 'plan is drafted and intact; POST /api/portal/sbp/builds/:projectId/publish retries',
+    });
+  }
+}
+
+/**
+ * Auto-publish is ON unless explicitly switched off.
+ *
+ * Deliberately not a default-OFF flag like the rest of this subsystem. The whole
+ * SBP surface already sits behind SBP_PIPELINE_ENABLED; a second default-OFF
+ * flag in front of this one would mean shipping the fix and leaving production
+ * in the exact broken state it is meant to end. `SBP_AUTO_PUBLISH=off` is the
+ * kill switch if a review step is ever genuinely wanted — and when it is off,
+ * the plan is still visibly `drafted` rather than silently stuck, and the
+ * publish route is still there to promote it.
+ */
+function autoPublishEnabled(): boolean {
+  return (process.env.SBP_AUTO_PUBLISH ?? 'on').trim().toLowerCase() !== 'off';
 }
 
 /**
