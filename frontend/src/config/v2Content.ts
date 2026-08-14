@@ -10,9 +10,15 @@
  * belongs in the registry, not here.
  */
 
+import type { IconName } from '../components/publicV2/Icon';
+
 export interface Goal {
   readonly key: string;
   readonly label: string;
+  /** Decorative: the label beside it carries the meaning. */
+  readonly icon: IconName;
+  /** One-line restatement of the goal, shown under the label on the card. */
+  readonly hint: string;
   readonly service: string;
   readonly explain: string;
   readonly proof: string;
@@ -24,6 +30,8 @@ export interface Goal {
 export const GOALS: readonly Goal[] = [
   {
     key: 'opportunity',
+    icon: 'compass',
+    hint: 'You have ideas but no ranked list',
     label: 'Find our best AI opportunity',
     service: 'AI Opportunity and Readiness Sprint',
     explain:
@@ -36,6 +44,8 @@ export const GOALS: readonly Goal[] = [
   },
   {
     key: 'workflow',
+    icon: 'bolt',
+    hint: 'One process is slower than it should be',
     label: 'Build or improve a workflow',
     service: 'Claude Production Pilot',
     explain:
@@ -49,6 +59,8 @@ export const GOALS: readonly Goal[] = [
   },
   {
     key: 'people',
+    icon: 'ladder',
+    hint: 'Your team needs to build, not just use',
     label: 'Develop our employees',
     service: 'Workforce Architect Accelerator',
     explain:
@@ -61,6 +73,8 @@ export const GOALS: readonly Goal[] = [
   },
   {
     key: 'team',
+    icon: 'people',
+    hint: 'You need capacity or leadership inside the team',
     label: 'Create or extend our AI team',
     service: 'Embedded Architecture and AI Operations',
     explain:
