@@ -23,6 +23,8 @@ export async function runOpenclawMarketSignalAgent(
   const start = Date.now();
   const actions: AgentAction[] = [];
   const errors: string[] = [];
+  /** Per-platform failures, promoted to run-level `errors` only if every platform fails. */
+  const platformErrors: string[] = [];
   const baseKeywords: string[] = config.keywords || ['AI training', 'enterprise AI', 'AI leadership'];
   const platforms: string[] = config.platforms || ['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt', 'facebook_groups', 'linkedin_comments'];
   const baseMaxSignals = config.max_signals_per_scan || 50;
@@ -84,7 +86,7 @@ export async function runOpenclawMarketSignalAgent(
         entity_type: 'system',
       });
     } catch (err: any) {
-      errors.push(`${platform}: ${err.message}`);
+      platformErrors.push(`${platform}: ${err.message}`);
       actions.push({
         campaign_id: '',
         action: 'scan_platform_error',
@@ -96,6 +98,22 @@ export async function runOpenclawMarketSignalAgent(
         entity_type: 'system',
       });
     }
+  }
+
+  // A multi-source scanner is not "failed" because one source is unavailable.
+  // Reddit persistently 403s this datacenter IP, which alone marked all 52 daily
+  // runs failed and raised a standing severity-5 alert while the other ten
+  // platforms were scanning fine. Only a total outage — every platform down —
+  // is an agent failure; partial loss is recorded in actions and logged.
+  const allPlatformsFailed = platformErrors.length > 0 && platformErrors.length === platforms.length;
+  if (allPlatformsFailed) {
+    errors.push(...platformErrors);
+  } else if (platformErrors.length > 0) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'backend', event: 'market_signal_partial_scan',
+      outcome: 'partial',
+      context: { failed: platformErrors.length, total: platforms.length, details: platformErrors },
+    }));
   }
 
   return {

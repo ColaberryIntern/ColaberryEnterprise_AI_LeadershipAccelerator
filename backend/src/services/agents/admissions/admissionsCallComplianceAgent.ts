@@ -1,4 +1,4 @@
-import { Op, fn, col } from 'sequelize';
+import { Op, fn, col, where } from 'sequelize';
 import CallContactLog from '../../../models/CallContactLog';
 import { logAgentActivity } from '../../aiEventService';
 import type { AgentExecutionResult, AgentAction } from '../types';
@@ -39,7 +39,11 @@ export async function runAdmissionsCallComplianceAgent(
         call_status: { [Op.in]: ['completed', 'pending'] },
       },
       group: ['visitor_id'],
-      having: { [Op.and]: [{ call_count: { [Op.gt]: 1 } } as any] },
+      // Postgres does not resolve SELECT-list aliases inside HAVING, so the
+      // previous `{ call_count: { [Op.gt]: 1 } }` produced
+      // `column "call_count" does not exist` on every run. The aggregate has to
+      // be repeated in the HAVING clause itself.
+      having: where(fn('COUNT', col('id')), Op.gt, 1),
       raw: true,
     }) as any[];
 
