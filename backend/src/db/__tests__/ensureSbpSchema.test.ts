@@ -35,6 +35,7 @@ const FULL_CATALOG = {
     { table_name: 'student_tasks', column_name: 'due_baseline_on' },
     { table_name: 'student_tasks', column_name: 'verified_at' },
     { table_name: 'student_tasks', column_name: 'verified_by' },
+    { table_name: 'student_tasks', column_name: 'verification_json' },
   ],
 };
 
