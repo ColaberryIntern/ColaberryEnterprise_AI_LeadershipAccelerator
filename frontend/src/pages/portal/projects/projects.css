@@ -485,3 +485,25 @@
 .pj-root .pw-btn.ghost{background:var(--surface-sunken);color:var(--text-body);border:1px solid var(--border-default)}
 .pj-root .pw-btn.ghost:hover{border-color:var(--berry);color:var(--berry)}
 .pj-root .pw-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── build provenance: which pipeline produced what you are looking at ─────
+   The local starter template and a real generated plan render as the same
+   card. On 2026-08-12/13 five students were served the template and had no
+   way to tell, which is also why nobody reported it for a whole evening.
+   These two chips are the difference, so they are meant to be read, not
+   decorative — colour is a reinforcement, never the only signal (the label
+   itself says which is which). */
+.pj-bc-st.pj-origin{font-weight:700}
+.pj-bc-st.pj-origin.real{color:var(--leaf-deep);background:var(--leaf-wash,var(--surface-sunken));border-color:var(--leaf-action)}
+.pj-bc-st.pj-origin.real svg{color:var(--leaf-action)}
+.pj-bc-st.pj-origin.starter{color:var(--cherry-deep);background:var(--surface-sunken);border-color:var(--cherry)}
+.pj-bc-st.pj-origin.starter svg{color:var(--cherry)}
+
+/* ── the pipeline banner ───────────────────────────────────────────────────
+   Rendered on every Projects view rather than only the wizard, because
+   `handleCreate` leaves the wizard on its first line and the banner used to
+   be unmounted before a student could read it. */
+.pj-root .pj-pipe{margin-bottom:16px;border-left:3px solid var(--berry)}
+.pj-root .pj-pipe strong{display:block;margin-bottom:4px;color:var(--text-strong)}
+.pj-root .pj-pipe.ok{border-left-color:var(--leaf-action)}
+.pj-root .pj-pipe.warn{border-left-color:var(--cherry)}

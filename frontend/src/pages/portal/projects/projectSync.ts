@@ -159,3 +159,21 @@ export async function syncProjectsWithBackend(): Promise<void> {
   await reconcileFromBackend();
   await mirrorToBackend();
 }
+
+/**
+ * PULL only, and NOT subject to the once-per-session latch above.
+ *
+ * Called when we know the server has something new: the wizard has just watched
+ * a build reach `published`. Re-calling `syncProjectsWithBackend` there did
+ * nothing at all — the latch was already tripped by the page-mount sync — so a
+ * plan that had genuinely been published still did not appear until the student
+ * reloaded. That is the second half of why tonight's builds looked missing even
+ * on the accounts where the server side worked.
+ *
+ * Deliberately pull-only. The push half would mirror this device's snapshot
+ * back over rows the server just wrote, which is the wrong direction to run
+ * immediately after the server became authoritative.
+ */
+export async function refreshProjectsFromBackend(): Promise<void> {
+  await reconcileFromBackend();
+}

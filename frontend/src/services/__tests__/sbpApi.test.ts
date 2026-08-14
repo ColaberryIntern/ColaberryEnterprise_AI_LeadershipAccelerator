@@ -13,7 +13,7 @@ jest.mock('../../utils/portalApi', () => ({
 import portalApi from '../../utils/portalApi';
 import {
   startBuild, getBuildState, publishBuild, getStoryPrompt, pollBuild, isTerminal,
-  resolveBackendProjectId,
+  resolveBackendProjectId, isDelivered, blockingReasons, type BuildState,
 } from '../sbpApi';
 
 const api = portalApi as unknown as { get: jest.Mock; post: jest.Mock };
@@ -225,5 +225,63 @@ describe('resolveBackendProjectId', () => {
     const result = await resolveBackendProjectId();
     expect(result.ok).toBe(false);
     expect(api.post).not.toHaveBeenCalled();
+  });
+});
+
+// ── "is this actually in front of the student?" ─────────────────────────────
+// `drafted` is the trap. It reads like success — generated, gate-clean, stored
+// — and means the plan was never materialized into `student_tasks`, so the
+// student is looking at the browser's fallback. Five students spent an evening
+// in this state while the UI told them their plan was ready.
+describe('isDelivered', () => {
+  const state = (over: Partial<BuildState>): BuildState => ({
+    project_id: PROJECT, status: 'published', correlation_id: null, gate: null, plan: null, ...over,
+  });
+
+  it('trusts the server\'s own flag when it sends one', () => {
+    expect(isDelivered(state({ delivered: true, status: 'published' }))).toBe(true);
+    expect(isDelivered(state({ delivered: false, status: 'drafted' }))).toBe(false);
+  });
+
+  it('treats drafted as NOT delivered — the whole point', () => {
+    expect(isDelivered(state({ status: 'drafted' }))).toBe(false);
+  });
+
+  it('treats awaiting_repo as delivered — no repo still means real tasks', () => {
+    expect(isDelivered(state({ status: 'awaiting_repo' }))).toBe(true);
+  });
+
+  it('falls back to the status when an older backend omits the flag', () => {
+    expect(isDelivered(state({ status: 'published' }))).toBe(true);
+    expect(isDelivered(state({ status: 'gate_failed' }))).toBe(false);
+    expect(isDelivered(state({ status: 'failed' }))).toBe(false);
+  });
+});
+
+describe('blockingReasons', () => {
+  const withGate = (gate: BuildState['gate']): BuildState =>
+    ({ project_id: PROJECT, status: 'gate_failed', correlation_id: null, gate, plan: null });
+
+  it('returns only the blocking violations, never the advisory ones', () => {
+    // The bug this closes: the client took the first three of `violations` and
+    // showed them as the reason. A student blocked on an uncovered must-have
+    // was told about a stylistically redundant story instead.
+    const advisory = { rule: 'story_redundant_scaffold', message: 'STORY-010 subsumes STORY-003' };
+    const blocking = { rule: 'must_uncovered', message: 'must-have REQ-007 is fulfilled by no story' };
+    const reasons = blockingReasons(withGate({
+      ok: false, violations: [advisory, blocking], blocking: [blocking], advisory: [advisory],
+    }));
+    expect(reasons).toEqual([blocking]);
+  });
+
+  it('returns nothing rather than guessing when an older backend sends no split', () => {
+    const reasons = blockingReasons(withGate({
+      ok: false, violations: [{ rule: 'release_unbalanced', message: 'r0 holds 4 of 10' }],
+    }));
+    expect(reasons).toEqual([]);
+  });
+
+  it('is empty when there is no gate at all', () => {
+    expect(blockingReasons(withGate(null))).toEqual([]);
   });
 });

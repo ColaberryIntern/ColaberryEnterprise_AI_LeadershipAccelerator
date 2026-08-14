@@ -94,6 +94,29 @@ export type StudentProject = {
   size: BuildSize;
   idea: string;
   sample?: boolean;     // seeded demo build
+  /**
+   * WHICH PIPELINE PRODUCED THIS BUILD. The single most important field on this
+   * type for anyone debugging what a student is looking at.
+   *
+   *  - `'pipeline'` — the real thing: a server-generated, gate-checked plan
+   *    materialized into `student_tasks`, with dates, STORY-000 and full prompts.
+   *  - `'local'`    — the browser's fallback: a fixed ten-task template from
+   *    `generateSkeleton` below, no dates, no Command Center, prompts written
+   *    from three form fields rather than the student's requirements.
+   *
+   * The two used to be indistinguishable on screen. On 2026-08-12/13 five
+   * students were served the fallback and had no way to know — which is also
+   * why nobody reported it as a bug for the whole evening. Absent on projects
+   * stored before this field existed; treat absent as unknown, not as real.
+   */
+  origin?: 'local' | 'pipeline';
+  /**
+   * The backend `projects.id` this local build is standing in for, once the
+   * wizard has resolved one. Set on the optimistic placeholder so that when the
+   * server's plan arrives it REPLACES the placeholder instead of sitting next
+   * to it as a second, near-identical build. See projectHydrate.reconcileProjects.
+   */
+  pipelineProjectId?: string | null;
   reqs: ProjectReq[];
   lists: ProjectList[];
   activity: ProjectActivity[];
@@ -180,6 +203,23 @@ export function getProject(id: string): StudentProject | undefined {
  * a fresh device). This is the store's only backend-authoritative write entry.
  */
 export function hydrateProjects(list: StudentProject[]): void { write(list); notify(); }
+
+/**
+ * Record that a local placeholder is standing in for a specific backend project.
+ *
+ * Written to localStorage rather than held in React state on purpose: the
+ * server build takes minutes, and a student who reloads or navigates away in
+ * the meantime must still get their real plan folded into the placeholder
+ * rather than added alongside it. A claim is a promise that survives a refresh.
+ */
+export function claimBackendProject(localId: string, backendProjectId: string): void {
+  const list = read();
+  const p = list.find((x) => x.id === localId);
+  if (!p || p.pipelineProjectId === backendProjectId) return;
+  p.pipelineProjectId = backendProjectId;
+  write(list);
+  notify();
+}
 
 // Fire-and-forget the task's status through to the backend (best-effort, flag-
 // gated inside projectSync). Dynamic import keeps the store free of any static
@@ -394,6 +434,10 @@ export function createProjectFromAnswers(answers: NewBuildAnswers): string {
   // empty so the workspace shows an assembling state.
   const creating: StudentProject = {
     id, status: 'creating', createdAt: Date.now(),
+    // Honest from the moment it exists. This is the browser's template, and it
+    // stays labelled as such until the server's plan supersedes it.
+    origin: 'local',
+    pipelineProjectId: null,
     ...skeleton,
     lists: [],
     activity: [{ id: 'a-init', kind: 'note', who: 'Cory', time: 'now', title: `Building ${skeleton.name}…`, body: 'Generating your requirements, lists, and tasks in the background.' }],

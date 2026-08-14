@@ -6,14 +6,17 @@ import { useIsExplorer } from '../useIsExplorer';
 import ProjectPreview from './ProjectPreview';
 import ProjectInterior from './ProjectInterior';
 import NextSessionStrip from './NextSessionStrip';
-import { resolveBackendProjectId, startBuild as startServerBuild, pollBuild } from '../../../services/sbpApi';
+import {
+  resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
+  isDelivered, blockingReasons,
+} from '../../../services/sbpApi';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
 import FeedCard, { FeedItem } from '../feed/FeedCard';
 import {
-  useProjectsList, createProjectFromAnswers, projectProgress, reqVerified, nextTask,
+  useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, reqVerified, nextTask,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
-import { syncProjectsWithBackend } from './projectSync';
+import { syncProjectsWithBackend, refreshProjectsFromBackend } from './projectSync';
 import { deriveLegacyScope } from './deriveLegacyScope';
 import './projects.css';
 import '../today/TodayShell.css';
@@ -39,6 +42,35 @@ const PROJ_ICON = (
 );
 const DUE_RANK: Record<string, number> = { overdue: 0, today: 1, up: 2, done: 9 };
 
+/**
+ * Says which pipeline produced this build, on the card itself.
+ *
+ * The whole point is that a student can tell the two apart at a glance. A local
+ * starter template and a real generated plan rendered identically — same card,
+ * same progress bar, same task list — so the only way to know you had been
+ * served the lesser one was to notice the missing dates and count to ten.
+ */
+const OriginChip: React.FC<{ p: StudentProject }> = ({ p }) => {
+  if (p.sample) return <span className="pj-bc-st">training example</span>;
+  if (p.origin === 'pipeline') {
+    return (
+      <span className="pj-bc-st pj-origin real" title="Generated from your answers by the build pipeline, with scheduled dates and full prompts.">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+        your tailored plan
+      </span>
+    );
+  }
+  if (p.origin === 'local') {
+    return (
+      <span className="pj-bc-st pj-origin starter" title="A general starter template built in your browser. It has no schedule and no Command Center. Regenerate for the tailored version.">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+        starter template
+      </span>
+    );
+  }
+  return null;
+};
+
 function BuildCard({ p, onOpen }: { p: StudentProject; onOpen: () => void }) {
   const prog = projectProgress(p);
   const rv = reqVerified(p);
@@ -58,7 +90,7 @@ function BuildCard({ p, onOpen }: { p: StudentProject; onOpen: () => void }) {
         <div className="pj-bc-stats">
           <span className="pj-bc-st"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>{prog.done}/{prog.total} tasks done</span>
           <span className="pj-bc-st"><svg viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L20 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>{rv.v}/{rv.total} verified</span>
-          {p.sample && <span className="pj-bc-st">training example</span>}
+          <OriginChip p={p} />
         </div>
       </div>
     </div>
@@ -68,24 +100,33 @@ function BuildCard({ p, onOpen }: { p: StudentProject; onOpen: () => void }) {
 type PipelineState =
   | { state: 'idle' }
   | { state: 'generating'; projectId: string; status?: string }
-  | { state: 'ready'; projectId: string }
-  | { state: 'gate_failed'; projectId: string; reason: string }
+  /** Generated, gate-clean, AND materialized into the portal. The real thing. */
+  | { state: 'delivered'; projectId: string }
+  /**
+   * Generated and gate-clean, but not promoted. Rare and always a server-side
+   * problem — it is the state five students were silently parked in. It is a
+   * failure and is worded as one.
+   */
+  | { state: 'stalled'; projectId: string }
+  | { state: 'gate_failed'; projectId: string; reasons: string[] }
   | { state: 'local'; reason: string };
 
 /**
  * Tells the student which path produced their plan, and why.
  *
- * Deliberately visible. The original defect survived for months precisely
- * because a degraded result looked identical to a good one — a student saw a
- * build and had no way to know it was a generic template rather than a plan
- * derived from what they wrote.
+ * Deliberately visible, and deliberately rendered on EVERY view rather than
+ * only inside the wizard. It used to live on the wizard screen alone, while
+ * `handleCreate` switched to the preview screen on its very first line — so the
+ * banner was mounted for about one frame and no student ever read a word of it.
+ * A warning nobody can see is the same as no warning, which is precisely how a
+ * silent fallback stayed silent.
  */
 const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => {
   if (pipeline.state === 'idle') return null;
 
   if (pipeline.state === 'generating') {
     return (
-      <div className="card pjw-pane" role="status" aria-live="polite">
+      <div className="card pjw-pane pj-pipe" role="status" aria-live="polite">
         <strong>Designing your system…</strong>
         <p className="lead" style={{ marginBottom: 0 }}>
           We are writing your requirements and breaking them into releases and stories.
@@ -95,12 +136,28 @@ const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => 
     );
   }
 
-  if (pipeline.state === 'ready') {
+  if (pipeline.state === 'delivered') {
     return (
-      <div className="card pjw-pane" role="status" aria-live="polite">
-        <strong>Your plan is ready.</strong>
+      <div className="card pjw-pane pj-pipe ok" role="status" aria-live="polite">
+        <strong>Your plan is ready, and it is in your build.</strong>
         <p className="lead" style={{ marginBottom: 0 }}>
-          Built from your own answers, with every requirement traced to a story.
+          Built from your own answers, with every requirement traced to a story,
+          scheduled against your cohort's dates, and each task carrying its own
+          Claude Code prompt.
+        </p>
+      </div>
+    );
+  }
+
+  if (pipeline.state === 'stalled') {
+    return (
+      <div className="card pjw-pane pj-pipe warn" role="alert" aria-live="assertive">
+        <strong>Your plan generated, but we could not open it up for you.</strong>
+        <p className="lead" style={{ marginBottom: 0 }}>
+          Nothing is lost — the plan is saved and the gate passed it. What failed
+          is the step that turns it into your tasks and dates, so what you are
+          looking at right now is the starter template, not your plan. Reload in
+          a few minutes; we are told about this automatically.
         </p>
       </div>
     );
@@ -108,23 +165,31 @@ const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => 
 
   if (pipeline.state === 'gate_failed') {
     return (
-      <div className="card pjw-pane" role="status" aria-live="polite">
-        <strong>Your plan has a gap.</strong>
-        <p className="lead" style={{ marginBottom: 0 }}>
-          {pipeline.reason} We would rather tell you than hand you a plan that
-          quietly misses something. Regenerate to try again.
+      <div className="card pjw-pane pj-pipe warn" role="alert" aria-live="assertive">
+        <strong>Your plan has a gap, so we have not opened it up yet.</strong>
+        <p className="lead" style={{ marginBottom: 8 }}>
+          We would rather tell you than hand you a plan that quietly misses
+          something. Until it is fixed you are looking at the starter template.
+        </p>
+        <ul className="lead" style={{ margin: 0, paddingLeft: 20 }}>
+          {pipeline.reasons.map((r) => <li key={r}>{r}</li>)}
+        </ul>
+        <p className="lead" style={{ margin: '8px 0 0' }}>
+          Start the build again with more detail on the missing part, and it
+          should close.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="card pjw-pane" role="status" aria-live="polite">
-      <strong>We built you a starter plan.</strong>
+    <div className="card pjw-pane pj-pipe warn" role="alert" aria-live="assertive">
+      <strong>We built you a starter template, not your plan.</strong>
       <p className="lead" style={{ marginBottom: 0 }}>
-        The full requirements service was unavailable, so this is a general
-        template rather than a plan written from your answers. Everything still
-        works — regenerate later for the tailored version. ({pipeline.reason})
+        We could not reach the requirements service, so this is a general
+        ten-task template rather than a plan written from your answers — no
+        schedule, no Command Center, generic prompts. It is worth starting the
+        build again once you are back online. ({pipeline.reason})
       </p>
     </div>
   );
@@ -178,9 +243,20 @@ const ProjectsPage: React.FC = () => {
    *
    * The fallback is deliberate rather than defensive: the local path still
    * produces something a student can work with, so a pipeline problem degrades
-   * the quality of their plan instead of leaving them with nothing. The banner
-   * tells them which one they got — silently serving the worse result is how
-   * the original defect stayed invisible for months.
+   * the quality of their plan instead of leaving them with nothing.
+   *
+   * What was NOT deliberate was how quiet it had become. The optimistic local
+   * build is created first, the view flips to it immediately, and every
+   * downstream failure just set a banner on a screen that was no longer
+   * mounted. Two of the five students on 2026-08-12/13 never reached the server
+   * at all and were shown a template with no indication anything had gone
+   * wrong. Three reached it, got correct plans, and were shown the same
+   * template because nothing published those plans.
+   *
+   * So: the placeholder now CLAIMS the backend project (so the real plan
+   * replaces it rather than joining it), every exit sets a pipeline state the
+   * student can actually see, and success is defined as `delivered` — the plan
+   * is in `student_tasks` — not merely as "the poll stopped".
    */
   const handleCreate = useCallback(async (raw: NewBuildAnswers) => {
     if (demo) return;   // demo — the wizard's create button is disabled; guard the store too
@@ -191,13 +267,18 @@ const ProjectsPage: React.FC = () => {
     const a: NewBuildAnswers = { ...raw, ...deriveLegacyScope(raw.answers) };
 
     // Optimistic local build first, so the student sees their project
-    // immediately either way and the page has something to show.
+    // immediately either way and the page has something to show. It is stamped
+    // `origin: 'local'` by the store, so it is labelled from birth.
     const localId = createProjectFromAnswers(a);
     setView({ kind: 'preview', id: localId });
     window.scrollTo(0, 0);
 
     const resolved = await resolveBackendProjectId();
     if (!resolved.ok) { setPipeline({ state: 'local', reason: resolved.error.message }); return; }
+
+    // Durable, so a reload mid-generation still folds the real plan into this
+    // placeholder instead of leaving the student with two lookalike builds.
+    claimBackendProject(localId, resolved.projectId);
 
     const started = await startServerBuild({
       project_id: resolved.projectId,
@@ -218,24 +299,39 @@ const ProjectsPage: React.FC = () => {
     });
 
     if (!result.ok) { setPipeline({ state: 'local', reason: result.error.message }); return; }
+
     if (result.state.status === 'gate_failed') {
-      // Say what is actually wrong. The backend only reports gate_failed for
-      // BLOCKING violations now — uncovered must-haves, broken references, an
-      // r0 nobody can start — and those are not all "not covered by a story",
-      // which is what this used to claim regardless of the real cause.
-      const blocking = result.state.gate?.violations ?? [];
+      // Say what is actually wrong, using the server's BLOCKING list rather
+      // than the whole violation array. That array is mostly advisory quality
+      // warnings, so taking the first three of it told a student blocked on an
+      // uncovered must-have about a stylistically redundant story instead.
+      const blocking = blockingReasons(result.state);
       setPipeline({
         state: 'gate_failed',
         projectId: resolved.projectId,
-        reason: blocking.length
-          ? blocking.slice(0, 3).map((v) => v.message).join(' ')
-          : 'The plan could not be verified against your requirements.',
+        reasons: blocking.length
+          ? blocking.slice(0, 3).map((v) => v.message)
+          : ['The plan could not be verified against your requirements.'],
       });
       return;
     }
-    setPipeline({ state: 'ready', projectId: resolved.projectId });
-    // The persisted plan is pulled in by the normal sync on next load.
-    void syncProjectsWithBackend();
+
+    if (!isDelivered(result.state)) {
+      // `drafted`: generated, gate-clean, and never promoted. This is exactly
+      // the hole this whole change closes, so it is reported loudly rather than
+      // celebrated as a ready plan the way it used to be.
+      setPipeline({ state: 'stalled', projectId: resolved.projectId });
+      return;
+    }
+
+    // Pull the published plan in NOW. `syncProjectsWithBackend` is latched to
+    // once per page session and had already fired on mount, so calling it here
+    // was a no-op — the plan existed on the server and still did not appear.
+    await refreshProjectsFromBackend();
+    setPipeline({ state: 'delivered', projectId: resolved.projectId });
+    // The placeholder has been superseded by the real project, which carries
+    // the backend id. Point the view at it so the student lands on their plan.
+    setView({ kind: 'preview', id: resolved.projectId });
   }, [demo]);
 
   // primary build + hero next-step
@@ -306,6 +402,10 @@ const ProjectsPage: React.FC = () => {
     return (
       <PortalShell><div className="pj-root">
         <div className="page-h"><div className="crumbs0">Building</div><h1>{active.name}</h1><div className="sub">A preview of the AI tool you're building. It's assembling in the background — open the workspace to watch it fill in, or keep exploring.</div></div>
+        {/* The screen the student is actually on after creating a build. The
+            banner used to render only in the wizard branch they had already
+            left, so every degraded path arrived here saying nothing at all. */}
+        <PipelineBanner pipeline={pipeline} />
         <ProjectPreview project={active} onOpen={() => openInterior(active.id)} onExplore={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }} />
       </div></PortalShell>
     );
@@ -344,6 +444,11 @@ const ProjectsPage: React.FC = () => {
         <h1>Projects</h1>
         <div className="sub">Your builds live here — every project you ship, as lists and tasks in the same feed you see across the platform.</div>
       </div>
+
+      {/* Also here: a student who navigates back to the overview while their
+          build is generating (or after it degraded) must not lose the only
+          explanation they were given. */}
+      <PipelineBanner pipeline={pipeline} />
 
       {demo && (
         <div className="te-card" style={{ borderLeft: '3px solid var(--cherry)', padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
