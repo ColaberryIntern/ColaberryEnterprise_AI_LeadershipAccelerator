@@ -32,8 +32,49 @@ export interface BuildState {
   project_id: string;
   status: BuildStatus;
   correlation_id: string | null;
-  gate: { ok: boolean; violations: GateViolation[] } | null;
+  /**
+   * `blocking` and `advisory` are split server-side (see sbpRoutes'
+   * BuildStateResponse). Both are optional here so an older backend mid-deploy
+   * simply yields nothing rather than the client tripping on a missing key.
+   *
+   * Do NOT show `violations` to a student as "why your build was refused": it
+   * is mostly advisory quality warnings, and doing exactly that is how someone
+   * blocked on an uncovered must-have got told about a redundant story instead.
+   */
+  gate: {
+    ok: boolean;
+    violations: GateViolation[];
+    blocking?: GateViolation[];
+    advisory?: GateViolation[];
+  } | null;
+  /**
+   * True once the plan is materialized into the portal's own tasks — the only
+   * signal that means "the student can actually see this". Optional for the
+   * same mid-deploy reason; `isDelivered` below falls back to the status.
+   */
+  delivered?: boolean;
   plan: BuildPlanSummary | null;
+}
+
+/**
+ * Did the plan actually reach the portal?
+ *
+ * `drafted` is the trap this helper exists to close. It reads like a success —
+ * the plan generated, the gate passed, the row is in the database — and it is
+ * not: nothing has been written to `student_tasks`, so the student sees the
+ * browser's fallback build. Only `published` and `awaiting_repo` mean delivered.
+ */
+export function isDelivered(state: BuildState): boolean {
+  if (typeof state.delivered === 'boolean') return state.delivered;
+  return state.status === 'published' || state.status === 'awaiting_repo';
+}
+
+/** The violations a student must act on, never the advisory ones. */
+export function blockingReasons(state: BuildState): GateViolation[] {
+  const gate = state.gate;
+  if (!gate) return [];
+  if (Array.isArray(gate.blocking)) return gate.blocking;
+  return [];
 }
 
 export interface StartBuildAnswers {

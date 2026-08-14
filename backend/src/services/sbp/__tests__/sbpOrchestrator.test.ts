@@ -17,6 +17,7 @@ const mockPublishPlan = jest.fn();
 const mockWriteDocs = jest.fn();
 const mockRepairCreate = jest.fn();
 const mockMaterialize = jest.fn();
+const mockRepoFor = jest.fn();
 
 jest.mock('../decomposeService', () => ({ decomposeBuild: (...a: any[]) => mockDecompose(...a) }));
 jest.mock('../planStore', () => ({
@@ -28,6 +29,12 @@ jest.mock('../planStore', () => ({
 }));
 jest.mock('../repoWriter', () => ({ writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a) }));
 jest.mock('../materializeTasks', () => ({ materializePlanAsTasks: (...a: any[]) => mockMaterialize(...a) }));
+// Generation now ends by publishing itself, which looks up the workspace repo.
+// Mocked so this suite stays hermetic: unmocked it pulls the whole Sequelize
+// model index in behind a mocked `sequelize`, where model init throws and the
+// auto-publish silently no-ops — every assertion below would still pass while
+// testing nothing. Auto-publish has its own suite (sbpOrchestrator.autoPublish).
+jest.mock('../workspaceRepo', () => ({ repoForProject: (...a: any[]) => mockRepoFor(...a) }));
 // publishBuild ends by setting the enrollment's active project, which pulls in
 // the real database config through a dynamic import. Left unmocked that loads
 // Sequelize inside the test run — slow (~500ms) and intermittently failing
@@ -90,6 +97,7 @@ beforeEach(() => {
   mockPublishPlan.mockResolvedValue(storedPlan({ status: 'published', published_at: 'now' }));
   mockWriteDocs.mockResolvedValue({ committed: true, commitSha: 'abc1234', changedPaths: ['docs/REQUIREMENTS.md'], skippedUnchanged: 0 });
   mockMaterialize.mockResolvedValue({ lists: 5, tasks: 12, preservedComplete: 0 });
+  mockRepoFor.mockResolvedValue(null);
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -141,12 +149,16 @@ describe('startBuild', () => {
     expect(call.document).toContain('Expanded detail');
   });
 
-  it('records a gate-clean plan as drafted', async () => {
+  it('records a gate-clean plan as drafted and then does not stop there', async () => {
     await startBuild(INPUT as any);
     await flush();
     expect(mockSaveDraft).toHaveBeenCalled();
     const statuses = mockSaveIntake.mock.calls.map((c) => c[0].status);
     expect(statuses).toContain('drafted');
+    // `drafted` used to be where every build came to rest, which is why five
+    // students got the browser fallback instead of their plan. It is now a
+    // waypoint: generation publishes what it generated.
+    expect(statuses[statuses.length - 1]).toBe('awaiting_repo');
   });
 
   it('records a gate-FAILING plan as gate_failed and still stores it, so the student sees why', async () => {
