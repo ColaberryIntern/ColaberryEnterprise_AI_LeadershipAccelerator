@@ -59,11 +59,22 @@ async function requireOwnedProject(req: Request, projectId: string): Promise<any
   return project;
 }
 
-/** The student's workspace repo for this project, or null when unprovisioned. */
+/**
+ * The student's workspace repo for this project, or null when there is not one
+ * the platform can write to yet.
+ *
+ * "Not yet" now covers two mid-connect states as well as "never had one": a repo
+ * awaiting the student's proof push is a candidate rather than a binding, and a
+ * just-provisioned repo has no branch for a commit to sit on until they push.
+ * Both return null so publish takes the already-built `awaiting_repo` path,
+ * which materializes the plan into the portal and inlines prompt context —
+ * instead of failing at the GitHub boundary with a 404 on a missing ref.
+ */
 async function repoFor(projectId: string): Promise<{ owner: string; repo: string; url: string } | null> {
   const { GitHubConnection } = await import('../models');
   const conn: any = await GitHubConnection.findOne({ where: { project_id: projectId } });
-  if (!conn?.repo_owner || !conn?.repo_name) return null;
+  const { isWritableConnection } = await import('../services/sbp/repoConnect/repoConnectService');
+  if (!isWritableConnection(conn)) return null;
   return { owner: conn.repo_owner, repo: conn.repo_name, url: conn.repo_url || `https://github.com/${conn.repo_owner}/${conn.repo_name}` };
 }
 
