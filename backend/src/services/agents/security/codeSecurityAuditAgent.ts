@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Department, DepartmentEvent } from '../../../models';
 import { createTicket } from '../../ticketService';
+import { resolveProjectRoot } from './sourceTreeRoot';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const AGENT_NAME = 'CodeSecurityAuditAgent';
@@ -69,11 +70,26 @@ export async function runCodeSecurityAuditAgent(
   const findings: CodeFinding[] = [];
 
   try {
-    const projectRoot = process.env.PROJECT_ROOT || path.resolve(__dirname, '../../../../..');
-    const backendSrc = path.join(projectRoot, 'backend', 'src');
+    const projectRoot = resolveProjectRoot();
+    const backendSrc = projectRoot === null ? null : path.join(projectRoot, 'backend', 'src');
 
-    if (!fs.existsSync(backendSrc)) {
-      errors.push(`Backend src not found at ${backendSrc}`);
+    // See accessControlGuardianAgent: the production image has no source tree,
+    // so a missing backend/src is an expected skip, not an agent failure.
+    if (projectRoot === null || backendSrc === null || !fs.existsSync(backendSrc)) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'backend', event: 'source_scan_skipped_no_source_tree',
+        outcome: 'partial', context: { agent: AGENT_NAME, looked_for: backendSrc || '<no project root>' },
+      }));
+      actions.push({
+        campaign_id: null,
+        action: 'scan_skipped_no_source',
+        reason: 'Source tree not present in this runtime (compiled build) — static security scan is a CI-time check.',
+        confidence: 1,
+        before_state: null,
+        after_state: { skipped: true },
+        result: 'skipped',
+        entity_type: 'system',
+      } as AgentAction);
       return { agent_name: AGENT_NAME, campaigns_processed: 0, actions_taken: actions, errors, duration_ms: Date.now() - start };
     }
 

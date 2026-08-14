@@ -208,22 +208,36 @@ async function checkEmptyQueues(
             result: `Requeued ${rebuild.leadsRequeued} leads, created ${rebuild.actionsCreated} actions`,
           });
 
-          await emitAlert({
-            type: 'warning',
-            severity: 2,
-            title: `Watchdog: Auto-rebuilt queue for "${campaign.name}"`,
-            description: `Campaign had ${activeLeadCount} active leads but 0 pending actions. Rebuilt queue: ${rebuild.leadsRequeued} leads re-enrolled.`,
-            sourceType: 'system',
-            impactArea: 'campaigns',
-            entityType: 'campaign',
-            entityId: campaign.id,
-            urgency: 'medium',
-            metadata: {
-              active_leads: activeLeadCount,
-              leads_requeued: rebuild.leadsRequeued,
-              actions_created: rebuild.actionsCreated,
-            },
-          }).catch(() => {});
+          // Only alert when the rebuild actually changed something. A rebuild that
+          // re-enrolls 0 leads and creates 0 actions is a no-op: the campaign has
+          // active leads that are legitimately un-enrollable (suppressed, bounced,
+          // completed-but-not-marked). Alerting on it fired every watchdog cycle
+          // forever and produced the bulk of the alert email volume without ever
+          // representing a new or actionable event.
+          if (rebuild.leadsRequeued > 0 || rebuild.actionsCreated > 0) {
+            await emitAlert({
+              type: 'warning',
+              severity: 2,
+              title: `Watchdog: Auto-rebuilt queue for "${campaign.name}"`,
+              description: `Campaign had ${activeLeadCount} active leads but 0 pending actions. Rebuilt queue: ${rebuild.leadsRequeued} leads re-enrolled.`,
+              sourceType: 'system',
+              impactArea: 'campaigns',
+              entityType: 'campaign',
+              entityId: campaign.id,
+              urgency: 'medium',
+              metadata: {
+                active_leads: activeLeadCount,
+                leads_requeued: rebuild.leadsRequeued,
+                actions_created: rebuild.actionsCreated,
+              },
+            }).catch(() => {});
+          } else {
+            console.warn(JSON.stringify({
+              level: 'warn', service: 'backend', event: 'campaign_queue_rebuild_noop',
+              outcome: 'partial',
+              context: { campaign_id: campaign.id, campaign_name: campaign.name, active_leads: activeLeadCount },
+            }));
+          }
         } catch (err: any) {
           autoActions.push({
             campaignId: campaign.id,
