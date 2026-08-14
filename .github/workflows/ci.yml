@@ -49,11 +49,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Jest (pure unit tests)
-        working-directory: backend
+      # Root deps first, for the same reason the typecheck job does it: some
+      # backend suites import deps hoisted to the ROOT package.json (axios,
+      # playwright). The old 3-suite pattern never touched them, so installing
+      # backend alone was enough; running the real suite is not.
+      - name: Install deps (root + backend)
         run: |
           npm install --no-audit --no-fund
-          npx jest --ci --testPathPattern "trustRubric|aiCost|piiRedaction"
+          cd backend && npm install --no-audit --no-fund
+      # Runs EVERY backend suite except a documented list of ones that need a
+      # live database — see backend/jest.ci.config.ts for the list and the
+      # reason each is on it. This replaced an allow-list of three suites that
+      # checked 28 tests; it now checks 8,229 across 588 suites.
+      - name: Jest (backend suites)
+        working-directory: backend
+        run: npx jest -c jest.ci.config.ts --ci
 
   guards:
     name: Secret scan + route-auth lint
