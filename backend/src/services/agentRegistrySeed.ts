@@ -2428,6 +2428,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "created_by_type='cory', created_by_id='cory-engine'; this row exists so " +
       'those tickets resolve to a real display name instead of the raw string. ' +
       "Colaberry's single highest-volume ticket creator.",
+    // Agent Quality Cleanup, Item 5 — re-verified against autonomousEngine.ts's
+    // real runAutonomousCycle() 8-step pipeline: discoverProblems() (via
+    // ProblemDiscoveryAgent), IntelligenceDecision.create(), createTicket(),
+    // and executeAction() (ExecutionAgent, transactional mutation of
+    // ai_agents.config/status/error_count for low-risk safe actions only).
+    tools_granted: [
+      'detect_problems',
+      'create_intelligence_decisions',
+      'create_tickets',
+      'auto_execute_safe_actions',
+    ],
   },
   {
     agent_name: 'CoryBrain',
@@ -2445,6 +2456,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "subtask ticket is stamped created_by_type='cory', " +
       "created_by_id='CoryBrain'; this row exists so those tickets resolve to " +
       "a real display name instead of the raw string.",
+    // Agent Quality Cleanup, Item 5 — re-verified against coryBrain.ts's
+    // generateStrategicActions() (creates AgentTask rows),
+    // coryInitiatives.ts's createStrategicInitiative() (creates
+    // StrategicInitiative rows + tickets), and proposeNewAgent() (creates
+    // AgentCreationProposal rows for admin approval — never auto-creates an
+    // agent itself).
+    tools_granted: [
+      'create_agent_tasks',
+      'create_strategic_initiatives',
+      'propose_new_agents',
+    ],
   },
   {
     agent_name: 'InboxCaseEngine',
@@ -2462,6 +2484,16 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "Every case ticket is stamped created_by_type='agent', " +
       "created_by_id='InboxCaseEngine'; this row exists so those tickets " +
       'resolve to a real display name instead of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // caseTicketService.ts's real exports: ensureCaseTicket() (creates,
+    // deduped via createTicket()'s entity dedup), syncTicketForCase() (walks
+    // the ticket through the board's real state machine as the case
+    // progresses), postCaseProgressNote() (narrative comments on the ticket).
+    tools_granted: [
+      'create_case_tickets',
+      'sync_case_ticket_status',
+      'post_case_progress_notes',
+    ],
   },
   {
     agent_name: 'workforce_intelligence_engine',
@@ -2480,6 +2512,16 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "created_by_type='agent', created_by_id='workforce_intelligence_engine'; " +
       'this row exists so those tickets resolve to a real display name instead ' +
       'of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // workforceIntelligenceEngine.ts's real runWorkforceAnalysis(): queries
+    // ai_agents fleet stats (run_count/error_count) directly via SQL, and
+    // creates workforce-decision tickets through createWorkforceTicket()
+    // (now dedup'd — Item 2 of this same cleanup — while a finding for the
+    // same agent/condition stays open).
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'create_workforce_tickets',
+    ],
   },
   {
     agent_name: 'bpos_orchestrator',
@@ -2497,6 +2539,18 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "stamped created_by_type='cory', created_by_id='bpos_orchestrator'; " +
       'this row exists so those tickets resolve to a real display name instead ' +
       'of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // ticketOrchestrator.ts's real exports: createBPOSTicket() (creates/
+    // transitions [BPOS] tickets tracking build stages),
+    // updateTicketStatus() (the same status-transition primitive every
+    // ticket-creator shares), and addTicketOutput() (attaches real build
+    // outputs to a ticket's activity feed — a capability unique to this
+    // agent among the 5).
+    tools_granted: [
+      'create_bpos_tickets',
+      'transition_bpos_ticket_status',
+      'attach_build_outputs',
+    ],
   },
 ];
 

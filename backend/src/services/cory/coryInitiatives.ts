@@ -106,10 +106,20 @@ export async function createStrategicInitiative(input: CreateInitiativeInput): P
 
   // 3. Create subtask tickets
   if (input.subtasks && input.subtasks.length > 0) {
+    // Agent Quality Cleanup, Item 4 — some subtask tickets shipped with
+    // literally no description body, just a bare hardcoded title ("Validate
+    // resolution", "Implement fix or optimization") with zero text
+    // connecting it to what's actually being validated/implemented. The real
+    // parent finding is already on hand right here as input.title/
+    // input.description (the initiative this subtask belongs to) — grounded,
+    // not fabricated: if that's the only real context available, the
+    // description says exactly that ("this subtask belongs to investigation
+    // X, which found Y"), nothing invented beyond it.
     await createSubTasks(
       ticket.id,
       input.subtasks.map(st => ({
         title: st.title,
+        description: `Subtask of investigation: ${input.title}\n\n${input.description}`,
         type: 'task' as any,
         priority: (input.priority as any) || 'medium',
         source: 'cory:evolution',
