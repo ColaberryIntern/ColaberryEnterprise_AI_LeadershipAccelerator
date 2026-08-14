@@ -76,6 +76,15 @@ export async function ensureSbpSchema(): Promise<void> {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_by TEXT`,
 
+    // The live verdict, refreshed on every sync: state, which acceptance
+    // criteria are outstanding, the evidence commit, and why it is not verified
+    // yet. `verified_at` above answers "was it confirmed"; this answers "what is
+    // left", which is the question a student sitting at 3 of 4 criteria is
+    // actually asking. JSONB rather than a second table because it is read
+    // exactly once per task, always alongside the task, and never queried
+    // across rows. Nullable, no default — same catalog-only, lock-free change.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verification_json JSONB`,
+
     `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS answers JSONB`,
     `CREATE UNIQUE INDEX IF NOT EXISTS build_intake_unique_project ON build_intake (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_enrollment ON build_intake (enrollment_id)`,
@@ -126,6 +135,9 @@ const REQUIRED_COLUMNS = [
   // gate silently awards nothing — a failure with no error attached to it.
   'student_tasks.verified_at',
   'student_tasks.verified_by',
+  // Missing ⇒ the verification loop writes a verdict Sequelize silently drops,
+  // and every story renders "not started" while the run logs success.
+  'student_tasks.verification_json',
 ] as const;
 const REQUIRED_INDEXES = [
   'build_intake_unique_project',
