@@ -35,6 +35,32 @@ export function resolveCoryEngineTicketAssignee(
   return { assigned_to_type: 'ai_staff', assigned_to_id: adminUserId };
 }
 
+// Agent Quality Cleanup, Item 2 — cory-engine's ticket dedup key. Before this,
+// every ticket was keyed on entity_type:'decision' + the freshly-created (and
+// therefore always-unique) IntelligenceDecision id, so createTicket()'s own
+// proven "reuse any still-open ticket on the same entity, no time window"
+// dedup (ticketService.ts:68-81) never fired here — a still-unresolved
+// finding (e.g. an agent stuck in status:'error') refiled a brand-new ticket
+// roughly every hour, forever, once the separate 60-minute IntelligenceDecision
+// merge window lapsed. When the triggering problem carries a stable identity
+// (populated by ProblemDiscoveryAgent for agent_failure: 'agent' + the real
+// AiAgent.id), key the ticket on that identity + the recommended action
+// instead — createTicket()'s dedup then naturally reuses the open ticket
+// while the condition persists, and opens a fresh one once it's resolved
+// (done/cancelled) and the same or a different finding recurs. Falls back to
+// the original decision-id key when the problem has no stable identity
+// (conversion_drop, error_spike) — zero behavior change for those.
+export function resolveCoryEngineTicketDedupKey(
+  problem: Pick<DetectedProblem, 'entity_type' | 'entity_id'>,
+  action: string,
+  decisionId: string,
+): { entity_type: string; entity_id: string } {
+  if (problem.entity_type && problem.entity_id) {
+    return { entity_type: problem.entity_type, entity_id: `${problem.entity_id}:${action}` };
+  }
+  return { entity_type: 'decision', entity_id: decisionId };
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface TicketSummary {
@@ -173,6 +199,11 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
         // Forward-fix (Agent Alias & Identity Fix) — see resolveCoryEngineTicketAssignee's
         // header comment for why this is scoped to isAutoExec only.
         const coryEngineAdminUserId = await getTicketCreatorAdminUserId('cory-engine');
+        const dedupKey = resolveCoryEngineTicketDedupKey(
+          problem,
+          recommendation.action,
+          decision.get('decision_id') as string,
+        );
         const ticket = await createTicket({
           title: `[${isAutoExec ? 'Auto' : 'Review'}] ${recommendation.action}`,
           description: [
@@ -190,13 +221,14 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
           source: 'cory_autonomous_cycle',
           created_by_type: 'cory',
           created_by_id: 'cory-engine',
-          entity_type: 'decision',
-          entity_id: decision.get('decision_id') as string,
+          entity_type: dedupKey.entity_type,
+          entity_id: dedupKey.entity_id,
           confidence: risk.confidence_score / 100,
           estimated_effort: effortEstimate,
           due_date: dueDate,
           metadata: {
             trace_id: traceId,
+            decision_id: decision.get('decision_id'),
             risk_tier: risk.risk_tier,
             auto_executed: isAutoExec,
             impact_metric: impact.metric,

@@ -102,9 +102,16 @@ export async function ensureCaseTicket(caseId: string, title: string, mode: Case
     // shrinks the tiny pre-existing window where that transient hop could
     // theoretically race the sweep — it never widens it.
     const inboxCaseAdminUserId = await getTicketCreatorAdminUserId('InboxCaseEngine');
+    // Agent Quality Cleanup, Item 4 — every ticket used to get the byte-
+    // identical description below regardless of what the case was actually
+    // about, so the board's ticket list told you nothing beyond "some case
+    // exists." `title` is already real, per-case content this function
+    // receives (the case's real subject) — it was just never threaded into
+    // the description. No fabricated detail: leads with the real title,
+    // keeps the process-narrative sentence after it (nothing lost, only added).
     await createTicket({
       title: `[Inbox Case] ${title}`,
-      description: `Resolve-Work case (${mode.toLowerCase()}) opened by ${openedBy}. Tracks Discover -> Assess -> Plan -> Approve -> Execute -> Verify -> Close.`,
+      description: `${title}\n\nResolve-Work case (${mode.toLowerCase()}) opened by ${openedBy}. Tracks Discover -> Assess -> Plan -> Approve -> Execute -> Verify -> Close.`,
       type: 'inbox_case' as any,
       source: 'inbox_case',
       created_by_type: ACTOR_TYPE,
