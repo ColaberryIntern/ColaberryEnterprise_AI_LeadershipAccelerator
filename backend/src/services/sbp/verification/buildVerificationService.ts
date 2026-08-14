@@ -48,6 +48,7 @@ import {
   RepoReadError,
   RepoReadErrorClass,
 } from './repoProgressReader';
+import { applyVerificationLatch, VerificationRecord } from './verificationLatch';
 
 /**
  * The points_config key a verified story awards against.
@@ -84,16 +85,15 @@ export type VerificationErrorClass =
   | 'NoWorkspaceRepo'
   | 'ProjectNotFound';
 
-/** Per-story state, as stored on the task and served to the portal. */
-export interface StoryVerificationRecord {
+/**
+ * Per-story state, as stored on the task and served to the portal.
+ *
+ * A MUTABLE VIEW of the last repo read — not the record. `verified_at` on the
+ * task is the record. This is never allowed to lower a story below `verified`;
+ * see verificationLatch.ts.
+ */
+export interface StoryVerificationRecord extends VerificationRecord {
   state: StoryVerdict['state'];
-  criteria_total: number;
-  criteria_passed: number;
-  outstanding: string[];
-  commit_sha: string | null;
-  commit_at: string | null;
-  reasons: string[];
-  rejected_claims: string[];
   /** When this verdict was reached. Distinct from verified_at, which never moves. */
   checked_at: string;
 }
@@ -239,7 +239,7 @@ export async function verifyBuildFromRepo(
   let xpAwarded = 0;
 
   for (const verdict of decision.verdicts) {
-    const record: StoryVerificationRecord = {
+    const live: StoryVerificationRecord = {
       state: verdict.state,
       criteria_total: verdict.criteria_total,
       criteria_passed: verdict.criteria_passed,
@@ -250,7 +250,6 @@ export async function verifyBuildFromRepo(
       rejected_claims: verdict.rejected_claims,
       checked_at: checkedAt,
     };
-    stories.push({ story_id: verdict.story_id, ...record });
 
     const task = await StudentTask.findOne({ where: { project_id: projectId, story_id: verdict.story_id } });
     if (!task) {
@@ -258,6 +257,7 @@ export async function verifyBuildFromRepo(
       // line — it means the student cannot see this story at all — but not
       // worth aborting the rest of the run over.
       log('sbp_verification_task_missing', opts.correlationId, 'partial', { projectId, storyId: verdict.story_id });
+      stories.push({ story_id: verdict.story_id, ...live });
       continue;
     }
 
@@ -265,8 +265,32 @@ export async function verifyBuildFromRepo(
     // (recordEvidence's unique idempotency key) covers the race where two syncs
     // both read null here.
     const wasVerified = Boolean(task.verified_at);
+
+    // THE LATCH. A story the platform already verified cannot be lowered by a
+    // later read of the repo, because the verification is recorded here and the
+    // repo is only where it happened. Applied before the write, so the stored
+    // blob never states something the record contradicts — and applied again on
+    // the read side, so a blob written by any other path cannot lie either.
+    const record = applyVerificationLatch(
+      live,
+      { verified_at: task.verified_at, verified_by: task.verified_by, verified_ref: task.verified_ref },
+      task.verification_json as Partial<VerificationRecord> | null,
+    ) as StoryVerificationRecord;
+
+    if (record.latched) {
+      log('sbp_verification_latch_held', opts.correlationId, 'partial', {
+        projectId, storyId: verdict.story_id, live_state: verdict.state,
+        reason: 'already verified; the repo read is no longer able to confirm it',
+      });
+    }
+
+    stories.push({ story_id: verdict.story_id, ...record });
     await StudentTask.update({ verification_json: record }, { where: { id: task.id } });
 
+    // Awarding still requires a LIVE verified verdict with a commit behind it.
+    // The latch protects what was already earned; it must never be a second
+    // route to earning something, or a story could be awarded off a record it
+    // wrote itself.
     if (verdict.state !== 'verified' || !verdict.commit_sha) continue;
 
     await markTaskVerifiedComplete(projectId, verdict.story_id, {
@@ -293,6 +317,10 @@ export async function verifyBuildFromRepo(
     }
   }
 
+  // Recount from the LATCHED records, not from the raw verdicts. Otherwise the
+  // summary the sync response hands back still says "0 verified" for a build
+  // whose stories the platform is holding at verified — the same defect one
+  // layer up, and the number a student actually looks at after pressing Sync.
   const summary: BuildVerificationSummary = {
     project_id: projectId,
     ok: true,
@@ -300,7 +328,16 @@ export async function verifyBuildFromRepo(
     reason: null,
     plan_version: stored.version,
     checked_at: checkedAt,
-    rollup: { ...decision.rollup, xp_awarded: xpAwarded, newly_verified: newlyVerified },
+    rollup: {
+      ...decision.rollup,
+      stories_verified: stories.filter((s) => s.state === 'verified').length,
+      stories_submitted: stories.filter((s) => s.state === 'submitted').length,
+      stories_in_progress: stories.filter((s) => s.state === 'in_progress').length,
+      stories_not_started: stories.filter((s) => s.state === 'not_started').length,
+      criteria_passed: stories.reduce((n, s) => n + s.criteria_passed, 0),
+      xp_awarded: xpAwarded,
+      newly_verified: newlyVerified,
+    },
     stories,
     unknown_stories: decision.unknown_stories,
     window_truncated: inputs.window_truncated,

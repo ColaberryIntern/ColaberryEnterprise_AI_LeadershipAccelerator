@@ -215,13 +215,39 @@ or is needed.
 ## 6. What happens on verification
 
 1. `markTaskVerifiedComplete(projectId, storyId, evidence)` — stamps
-   `student_tasks.verified_at` / `verified_by`, with the commit sha as `ref`.
-   This function existed with **no caller** until now; the verification loop is
-   its first and only one. It is still not reachable from any route.
+   `student_tasks.verified_at` / `verified_by` / `verified_ref`, the last being
+   the commit sha frozen at award time. This function existed with **no caller**
+   until now; the verification loop is its first and only one. It is still not
+   reachable from any route.
 2. `recordEvidence({ source: 'github_commit', sourceRef: 'STORY-001@<sha>' })` —
    the commit sha is the evidence reference, so every award traces back to a
    specific push. The story id is prefixed so two stories legitimately finished
    in one commit each get their own record.
+
+### The rule: evidence lives in our database, the repo is only where verification happens
+
+> When a story verifies, the commit sha, which criteria passed, the timestamp
+> and the XP are written to **our** tables. If the student deletes the repo,
+> revokes our access, or rewrites history, **their record and their points
+> survive**. We lose the ability to verify NEW work and nothing else.
+
+`student_tasks.verified_at` is an **immutable latch**. `verification_json` is a
+**mutable view** of the last repo read. Three defects were caught by auditing
+this loop against that one sentence, and all three were the same mistake — the
+repo-derived blob was read as though it were the record: a successful sync of a
+repo whose `.colaberry/` had been deleted rendered six verified stories as
+`not_started`; a story whose evidence commit aged out of the 100-commit window
+silently dropped from `verified` to `submitted` with no misbehaviour at all; and
+`xp_earned` was looked up under a key re-derived from the *current* sha, so a
+force-push orphaned a banked award and that story read 0 XP forever. The fix is
+`applyVerificationLatch` in
+`backend/src/services/sbp/verification/verificationLatch.ts`, applied on the
+write **and** again in `toTaskVerificationDto` on the read. **If you are adding
+a new display surface for verification state, read it through that function and
+pass the latch columns with the blob.** Reaching for `verification_json` alone
+is exactly what this code did, and it is a reasonable-looking mistake: the blob
+is right there, it has a `state` field, and it is correct almost all of the
+time — right up until the one moment a student is most likely to panic.
 
 ### Idempotency: three independent layers
 
@@ -329,12 +355,15 @@ already refused just burns the rate limit that refused it.
 - **Test execution.** We read that `tests_added` names files. We do not run them
   and we do not check they exist. See §3 for where CI slots in.
 - **Revocation.** Nothing un-verifies a story. If a student force-pushes away
-  the evidence commit, `verified_at` stays. Deliberate: a one-way latch is
+  the evidence commit, `verified_at` stays — and since the latch landed, so does
+  everything derived from it: the story still reads `verified`, still names the
+  original sha, and still carries its XP. Deliberate: a one-way latch is
   predictable, and un-awarding credit is a conversation, not an automation.
 - **A commit window beyond 100.** A story whose only qualifying commit has
-  scrolled out of the window cannot verify. Acceptable while a build is a
-  13-week project with a few dozen commits; if that stops holding, the fix is to
-  search commits by story id rather than paginate, not to raise the number.
+  scrolled out of the window cannot **newly** verify. One that already verified
+  is unaffected — the latch holds it (§6). Acceptable while a build is a 13-week
+  project with a few dozen commits; if that stops holding, the fix is to search
+  commits by story id rather than paginate, not to raise the number.
 - **Multi-branch.** Only the default branch is read.
 - **A portal UI for the new state.** The DTO carries `task.verification` and
   `project.build_verification`; nothing renders them yet.
@@ -347,6 +376,7 @@ already refused just burns the rate limit that refused it.
 |---|---|
 | `backend/src/services/sbp/verification/progressContract.ts` | Zod schema, parse/reject, render, merge. Pure. |
 | `backend/src/services/sbp/verification/verifyDecision.ts` | The completion rule. Pure, no I/O, fully unit-tested. |
+| `backend/src/services/sbp/verification/verificationLatch.ts` | The rule in §6: a verified story cannot be lowered by a later repo read. Pure. Applied on both the write and the read. |
 | `backend/src/services/sbp/verification/repoProgressReader.ts` | The GitHub boundary: timeouts, capped retries, error classes. |
 | `backend/src/services/sbp/verification/buildVerificationService.ts` | Orchestration, persistence, evidence, idempotency. |
 | `backend/src/services/sbp/renderDocs.ts` | Writes the managed `CLAUDE.md` block and the seeded progress file. |
