@@ -21,6 +21,7 @@ import { getSetting } from './settingsService';
 import { emitAlert } from './alertService';
 import { logAiEvent } from './aiEventService';
 import { rebuildCampaignQueue } from './campaignRecoveryService';
+import { isCampaignWithinSendWindow } from './campaignSendWindow';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,22 +121,48 @@ async function checkNoRecentSends(checks: WatchdogCheck[]): Promise<void> {
     },
   });
 
+  // Silence outside the send window. Overnight, at weekends, and before the
+  // window opens, "0 sends with a pending backlog" is the CORRECT state — the
+  // scheduler is deliberately holding traffic until morning, exactly as
+  // isWithinSendWindow() instructs it to. Alerting on it fired this warning
+  // every cycle, all night, every night, about healthy campaigns; the backlog
+  // it quoted was simply tomorrow's queue.
+  //
+  // Deliberately evaluated per campaign against each campaign's OWN window
+  // rather than one global business-hours guess, because send_time_start/end
+  // and send_active_days are per-campaign settings.
+  const activeCampaigns = await Campaign.findAll({ where: { status: 'active' } });
+  const sendingCampaigns = activeCampaigns.filter((c) => isCampaignWithinSendWindow(c));
+
+  if (recentSends === 0 && overduePending > 0 && sendingCampaigns.length === 0) {
+    checks.push({
+      name: 'no_recent_sends',
+      status: 'ok',
+      detail: `0 sends in last 10 min, ${overduePending} pending — no campaign is inside its send window (quiet period)`,
+    });
+    return;
+  }
+
   if (recentSends === 0 && overduePending > 0) {
     checks.push({
       name: 'no_recent_sends',
       status: 'warning',
-      detail: `0 sends in last 10 min but ${overduePending} overdue pending actions exist`,
+      detail: `0 sends in last 10 min but ${overduePending} overdue pending actions exist (${sendingCampaigns.length} campaign(s) inside send window)`,
     });
 
     await emitAlert({
       type: 'warning',
       severity: 3,
       title: 'Campaign Watchdog: No sends in 10 minutes',
-      description: `No outbound messages sent in the last 10 minutes, but ${overduePending} actions are overdue. The scheduler may be stalled or paused.`,
+      description: `No outbound messages sent in the last 10 minutes, but ${overduePending} actions are overdue and ${sendingCampaigns.length} campaign(s) are inside their send window. The scheduler may be stalled or paused.`,
       sourceType: 'system',
       impactArea: 'campaigns',
       urgency: 'high',
-      metadata: { overdue_pending: overduePending, recent_sends: 0 },
+      metadata: {
+        overdue_pending: overduePending,
+        recent_sends: 0,
+        campaigns_in_send_window: sendingCampaigns.length,
+      },
     }).catch(() => {});
   } else {
     checks.push({

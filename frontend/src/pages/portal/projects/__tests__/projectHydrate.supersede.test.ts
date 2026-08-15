@@ -63,10 +63,22 @@ describe('a placeholder that claimed this backend project', () => {
     expect(r.next[0].origin).toBe('pipeline');
   });
 
-  it('keeps its position in the list, so the student\'s build does not jump', () => {
+  /**
+   * CHANGED 2026-08-15. This used to assert the superseded build KEPT its index
+   * ("so the student's build does not jump"). That rule lost to a stronger one:
+   * the enrollment's ACTIVE server project must lead, because ProjectsPage
+   * renders `projects[0]` as the primary build. Holding position meant a browser
+   * template could sit in front of the student's real published plan, which is
+   * the defect this file's sibling (projectHydrate.inventory.test.ts) documents.
+   *
+   * What the original test was protecting — that the build is not shuffled
+   * arbitrarily — still holds: ordering is a stable rank, so nothing moves
+   * except the active build moving to the front. See orderProjects.
+   */
+  it('is promoted to the front, because the active build leads the page', () => {
     const other = localProject('other', [localTask('other-t1', undefined)]);
     const r = reconcileProjects([other, placeholder()], publishedTree());
-    expect(r.next.map((p) => p.id)).toEqual(['other', 'proj-uuid']);
+    expect(r.next.map((p) => p.id)).toEqual(['proj-uuid', 'other']);
   });
 
   it('brings the real plan\'s tasks with it, including STORY-000', () => {
