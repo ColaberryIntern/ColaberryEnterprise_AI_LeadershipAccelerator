@@ -134,7 +134,13 @@ export default function useCountUp(text: string, durationMs = 1100): CountUp {
       if (frame) cancelAnimationFrame(frame);
     };
     // `text` is the claim wording; re-running on change is correct.
-  }, [text, durationMs]); // eslint-disable-line react-hooks/exhaustive-deps
+    //
+    // No eslint-disable here: this is a .ts file, where CRA does not register
+    // the react-hooks rules, so a disable comment naming
+    // `react-hooks/exhaustive-deps` is itself the error — "Definition for rule
+    // ... was not found" — and `CI=true` promotes it to a failed build. The
+    // rule cannot fire on this file, so there is nothing to suppress.
+  }, [text, durationMs]);
 
   return { ref, display, settled };
 }
