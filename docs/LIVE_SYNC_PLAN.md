@@ -125,6 +125,22 @@ The endpoint exists. These are the properties being added, and why each one is n
 
 **Secrets:** `GITHUB_WEBHOOK_SECRET` is an environment variable on the production backend. It is never logged, never returned in a response, never in the repo.
 
+### The one open item: getting the webhook ONTO a repo
+
+The handler is done. Installing the hook on a student's repo is a separate question, and it is not fully solved.
+
+The platform can install a webhook automatically **only for repos connected through the old GitHub OAuth flow**, because installing one requires admin rights and the code uses the student's OAuth token to get them.
+
+**Repos bound through the newer "connect your own repo" flow — which is how `AcceleratorTesting` is bound — have no OAuth token.** That flow deliberately has none: student repos are student-owned, the platform holds a pointer and the evidence, and push access is proven with a commit challenge rather than by taking an access grant. So there is nothing for the platform to install a hook with.
+
+Three ways forward, and this is a decision rather than an implementation detail:
+
+1. **The student adds it themselves**, once, from their repo's Settings → Webhooks — payload URL and secret shown in the connect panel. No new permissions, no token to store. Costs the student one minute of setup.
+2. **Ask for the OAuth scope at connect time.** Automatic, but it means taking an access grant on a student-owned repo, which is exactly the posture the connect flow was designed to avoid.
+3. **A GitHub App** the student installs on the one repo. The cleanest long-term answer and the largest piece of work; it also replaces the platform PAT.
+
+Until one of those lands, every repo connected the new way runs on the Sync button, and everything else in this document behaves identically — the student presses Sync instead of GitHub telling us, and the same sequence plays. **That is not a broken state; it is the documented fallback working.** I have not picked between the three because the choice is about how much access we ask students for, which is yours to make.
+
 ---
 
 ## What happens when the webhook is not there
@@ -202,6 +218,14 @@ Each of these was independently shippable and useful on its own. All five landed
 **(e) The moment.** ✅ Sequenced ticks at 90ms, then the verified card, then the points chip — and only for changes the page actually witnessed.
 
 Even if (d) had not landed, (a) through (c) would still be worth shipping: with the Sync button as the trigger, the student presses Sync and watches the same sequence play. (d) removes the button press. Nothing else changes — which is exactly why it was safe to add last.
+
+### What you will see on `AcceleratorTesting` today
+
+Open a story in the workspace, then in Claude Code tick its criteria in `.colaberry/progress.json`, commit with the story id in the message, and push.
+
+Because that repo is bound through the connect flow, **no webhook is installed on it yet** (see the open item above), so press **Sync from GitHub** once. Within about five seconds the poll picks the new verdict up and the page moves on its own: the criteria tick in sequence, the story flips to verified, and the button changes from "Mark done — waiting on GitHub" to "Mark done".
+
+Add a webhook to the repo by hand — payload URL `GITHUB_WEBHOOK_URL`, content type JSON, secret `GITHUB_WEBHOOK_SECRET`, push events only — and the Sync press disappears from that sequence. Nothing else changes.
 
 ### One thing that is waiting on you
 
