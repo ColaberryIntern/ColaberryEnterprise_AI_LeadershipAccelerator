@@ -85,38 +85,117 @@ export function isChallengeExpired(issuedAt: string | null | undefined, now: Dat
 }
 
 /**
- * The exact commands for a student whose folder already exists and already has
- * a remote — Door A. Written as a list so the UI can render one copy button per
- * block without re-deriving the shell.
+ * ── The command blocks ───────────────────────────────────────────────────────
+ *
+ * WHO ACTUALLY RUNS THESE. Not a student typing into a terminal — a student
+ * pasting them into Claude Code, which reads them, reasons about them, and
+ * refuses anything it cannot justify. The first version of this block was
+ * written for the terminal and an agent stopped dead on it (2026-08-15), for
+ * four reasons that were all correct:
+ *
+ *   1. The folder was not a git repo, so `git add` failed. The block had no
+ *      `git init` because it assumed a clone. Almost nobody has a clone: they
+ *      have two weeks of class work in a folder they made by hand.
+ *   2. `git push` with no remote and no upstream. The agent said "I'd be
+ *      guessing at the URL" and declined to guess. It was right to. We know the
+ *      URL — the student just pasted it — so it is in the commands now.
+ *   3. Nothing said the first push uploads the WHOLE folder. `git add <one
+ *      file>` looks narrow and is, but the push that follows carries every
+ *      untracked file with it, including a stray `.env`.
+ *   4. The repo's own "no secrets" rule vs an unexplained 32-hex string. The
+ *      agent could not tell a pairing ID from a credential and correctly
+ *      refused to commit something that might be the latter.
+ *
+ * So every comment below is load-bearing: each one closes one of those four,
+ * plus the two failure modes a student hits next (a remote that already exists,
+ * and a non-fast-forward push). Comments are the interface here, not decoration.
+ * Trim them and the agent stalls again.
  */
-export function connectCommands(token: string): string[] {
+
+/**
+ * Written only when the student has no `.gitignore` at all — never over one they
+ * wrote. `printf` rather than a heredoc keeps it to a single line and avoids the
+ * backslash-escape traps a heredoc brings.
+ */
+const GITIGNORE_GUARD =
+  "[ -f .gitignore ] || printf '%s\\n' '.env' '.env.*' 'tmp/' 'node_modules/' '__pycache__/' > .gitignore";
+
+/** Staged, so it respects `.gitignore` and shows exactly what the push will carry. */
+const REVIEW_STAGED = 'git status --short          # this list is exactly what goes to GitHub — check it now';
+
+/**
+ * NOT HERE: the OneDrive warning. A folder inside a sync client is a real hazard
+ * — the client and git fight over `.git` locks and can corrupt the repo — and it
+ * is what the first agent to run this block flagged. It is still not in the
+ * panel, because the person it happened to was Ali on his own machine and
+ * roughly twenty-nine students in thirty will never have a synced folder. A line
+ * every student reads to warn one of them is noise, and noise is what makes the
+ * other lines here stop being read. It lives in the build-student-project
+ * skill's troubleshooting table instead, where whoever is helping the one stuck
+ * student looks it up by symptom. (Ali Muwwakkil, 2026-08-15.)
+ */
+
+/**
+ * Door A — connect the repo the student already made. Assumes the LEAST: a
+ * plain folder, no git, no remote, and a repo on the other end that may or may
+ * not be empty.
+ *
+ * `git init` on an existing repo re-initialises harmlessly, so this block is
+ * safe to re-run; the only non-idempotent command is `git remote add`, which is
+ * why its recovery sits on the very next line.
+ */
+export function connectCommands(token: string, repoUrl: string): string[] {
   return [
+    '# Your folder is probably not a git repo yet. That is the normal starting point.',
+    'git init',
+    'git branch -M main',
+    `git remote add origin ${repoUrl}`,
+    `# ^ "remote origin already exists" just means you were set up: git remote set-url origin ${repoUrl}`,
+    '',
+    '# The code below is a one-time proof that you can push to this repo. It expires',
+    '# in 7 days and grants no access to anything: a pairing ID, not a credential.',
+    '# It is meant to be committed.',
     'mkdir -p .colaberry',
     `echo "${token}" > ${CONNECT_FILE_PATH}`,
-    `git add ${CONNECT_FILE_PATH}`,
-    'git commit -m "chore: connect this folder to Colaberry"',
-    'git push',
+    '',
+    '# This first push uploads EVERYTHING in this folder, not just the file above.',
+    GITIGNORE_GUARD,
+    'git add -A',
+    REVIEW_STAGED,
+    'git commit -m "Connect this folder to Colaberry"',
+    'git push -u origin main',
+    '',
+    '# Push rejected? The repo already has commits. Run:',
+    '#   git pull --rebase origin main --allow-unrelated-histories',
+    '# then push again. Never --force: that erases what is already up there.',
   ];
 }
 
 /**
- * Door B — the folder exists, the remote does not. `git branch -M main` is
- * GitHub's own snippet and matters here: a folder initialised before 2020, or
- * by a tool that still defaults to `master`, would otherwise push a branch the
- * platform does not read.
+ * Door B — the folder exists, the remote does not, and the platform just made
+ * one. `git branch -M main` is GitHub's own snippet and matters here: a folder
+ * initialised before 2020, or by a tool that still defaults to `master`, would
+ * otherwise push a branch the platform does not read.
  *
  * Nothing in this list rewrites history or forces anything. The repo on the
  * other end is created EMPTY precisely so this push is a fast-forward and their
- * existing commits arrive untouched.
+ * existing commits arrive untouched — which is also why, unlike Door A, there
+ * is no non-fast-forward recovery note to write.
  */
 export function adoptCommands(repoUrl: string): string[] {
   return [
-    '# run these inside the folder you are already working in',
-    'git init                      # skip if this is already a git repo',
-    `git remote add origin ${repoUrl}   # use "set-url" instead if origin exists`,
-    'git add -A',
-    'git commit -m "Initial commit"     # skip if everything is already committed',
+    '# Run these inside the folder you are already working in.',
+    '# Not a git repo yet? That is the normal starting point — this makes it one.',
+    'git init',
     'git branch -M main',
+    `git remote add origin ${repoUrl}`,
+    `# ^ "remote origin already exists"? Instead run: git remote set-url origin ${repoUrl}`,
+    '',
+    '# This first push uploads EVERYTHING in this folder. Your history goes up intact.',
+    GITIGNORE_GUARD,
+    'git add -A',
+    REVIEW_STAGED,
+    'git commit -m "Initial commit"     # skip if everything is already committed',
     'git push -u origin main',
   ];
 }

@@ -204,12 +204,31 @@ export function connectViewFrom(connection: any): ConnectStateView {
   // A row can exist with no repo on it yet (a connect in flight), and a legacy
   // provisioned row can exist with no `connect` key at all. Both resolve here
   // rather than at four call sites.
-  const state: ConnectStateName = c.state
+  const stored: ConnectStateName = c.state
     ?? (bound ? 'connected' : 'not_connected');
 
   const owner = connection.repo_owner || c.owner || null;
   const repo = connection.repo_name || c.repo || null;
   const url = connection.repo_url || c.url || (owner && repo ? `https://github.com/${owner}/${repo}` : null);
+
+  /**
+   * An expired challenge is reported as `not_connected`, not as a challenge.
+   *
+   * The row keeps saying `awaiting_proof` long after the token stopped being
+   * accepted, and rendering it faithfully hands a student a block of commands
+   * that CANNOT succeed: they run it, push, click "I've pushed", and only then
+   * does `confirmConnect` tell them the code expired. A dead token shown as a
+   * live one is worse than no token, so the view degrades to the paste-your-repo
+   * step, where `startConnect` mints a fresh one.
+   *
+   * Nothing is written here — this is a read path. `owner`/`repo`/`url` survive
+   * the degrade so the panel can offer their repo back to them pre-filled and
+   * the recovery stays one click.
+   */
+  const challengeLive = isChallengeToken(c.challenge_token) && !isChallengeExpired(c.challenge_issued_at);
+  const state: ConnectStateName = stored === 'awaiting_proof' && !challengeLive
+    ? 'not_connected'
+    : stored;
 
   return {
     state,
@@ -217,12 +236,16 @@ export function connectViewFrom(connection: any): ConnectStateView {
     owner, repo, url,
     private: typeof c.private === 'boolean' ? c.private : null,
     default_branch: c.default_branch ?? null,
-    challenge: state === 'awaiting_proof' && isChallengeToken(c.challenge_token)
+    // `url` is part of the guard, not just the payload: the commands name the
+    // remote, and a block that says `git remote add origin undefined` is worse
+    // than no block. `startConnect` always records the URL, so falling through
+    // to the paste-your-repo view is a degradation nobody should ever see.
+    challenge: state === 'awaiting_proof' && challengeLive && url
       ? {
         path: CONNECT_FILE_PATH,
         token: c.challenge_token!,
         file_content: renderChallengeFile(c.challenge_token!),
-        commands: connectCommands(c.challenge_token!),
+        commands: connectCommands(c.challenge_token!, url),
       }
       : null,
     adopt_commands: state === 'awaiting_push' && url ? adoptCommands(url) : null,

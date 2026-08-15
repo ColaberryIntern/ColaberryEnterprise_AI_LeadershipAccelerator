@@ -220,8 +220,21 @@ describe('door A — proving the push', () => {
     await mount(awaitingProof);
     expect(text()).toMatch(/Run in your project folder/i);
     expect(text()).toContain('git push');
-    expect(text()).toMatch(/Nothing else in your folder is touched/i);
     expect(buttonNamed("I've pushed")).toBeDefined();
+  });
+
+  /**
+   * This copy used to promise "Nothing else in your folder is touched". It was
+   * false: the commands `git add -A` and the first push carries every untracked
+   * file with it. On a folder holding two weeks of class work — and, in the case
+   * that found this, pointed at a PUBLIC repo — the gap between that sentence
+   * and the behaviour is how a student uploads a .env without knowing.
+   */
+  it('warns that the first push carries the whole folder, and never claims otherwise', async () => {
+    await mount(awaitingProof);
+    expect(text()).toMatch(/uploads everything in the folder/i);
+    expect(text()).toMatch(/git status/i);
+    expect(text()).not.toMatch(/Nothing else in your folder is touched/i);
   });
 
   it('confirms by project alone', async () => {

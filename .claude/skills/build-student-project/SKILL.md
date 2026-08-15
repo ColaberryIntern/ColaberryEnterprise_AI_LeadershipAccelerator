@@ -548,6 +548,8 @@ deployed.
 | "The pipeline overwrote my CLAUDE.md" | Should be impossible since PR #1453 — we own only the delimited block | Verify the `COLABERRY:BEGIN/END` markers survived; if their content is gone, that is a regression in `managedBlock` and is a stop-everything bug |
 | "My tasks changed to someone else's" | A stale tab imported over a published project (rule 5) | Should now be refused — look for `project_import_skipped_published`. If it happened anyway, republish from the intact stored plan |
 | Tasks exist but no plan row | They came from the localStorage import path, not publish | Generate and publish properly; import will now refuse to clobber it |
+| "Claude Code refused to run the connect commands" | Pre-#1484 the block assumed a clone: no `git init`, no remote, and a bare `git push`. An agent in a plain folder correctly stopped rather than guess the URL or commit an unexplained 32-hex string | Fixed in `connectCommands`. If you see the old five-line block, the backend is behind — the current one opens with `git init` and names the remote |
+| "git keeps corrupting / index.lock errors / the repo went weird" | **The folder is inside OneDrive, Dropbox or iCloud.** The sync client and git both write `.git`, and they fight over locks and half-synced objects. Deliberately *not* warned about in the panel — it is rare enough that a line for every student would be noise | Move the project folder out of the synced tree (e.g. `C:\Users\<name>\projects\<folder>`), then re-run the connect commands. Nothing is lost: the remote already has whatever was pushed |
 
 ---
 
