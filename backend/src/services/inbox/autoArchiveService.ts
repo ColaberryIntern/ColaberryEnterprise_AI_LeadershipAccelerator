@@ -221,13 +221,17 @@ async function archiveGmail(
 async function archiveHotmail(providerMessageId: string): Promise<void> {
   const client = resolveGraphArchiveClient();
   if (!client) {
-    // Name the missing credentials rather than saying "not configured" — the
-    // vague message hid a wiring mismatch for months while sync worked fine.
+    // THROW, do not return. Returning quietly here is what made this failure
+    // invisible for months: archiveEmail() carries on and writes an `archived`
+    // audit event, so the database recorded ~1,638 Hotmail archives while 171 of
+    // those messages were still sitting in the inbox. Nothing ever retried them,
+    // because the system believed the work was done. Throwing routes this into
+    // archiveEmail's catch, which records `archive_failed` — visibly wrong
+    // instead of silently wrong.
     const present = ['MS_GRAPH_CLIENT_ID', 'MS_GRAPH_CLIENT_SECRET', 'MS_GRAPH_TENANT_ID', 'MS_GRAPH_REFRESH_TOKEN']
       .map((v) => `${v}=${process.env[v] ? 'set' : 'MISSING'}`)
       .join(' ');
-    console.warn(`${LOG_PREFIX} No configured MS Graph client — cannot archive Hotmail message. ${present}`);
-    return;
+    throw new Error(`No configured MS Graph client — cannot archive Hotmail message. ${present}`);
   }
 
   await client.archiveMessage(providerMessageId);
