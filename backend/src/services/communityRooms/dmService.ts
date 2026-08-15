@@ -162,7 +162,11 @@ export async function sendDmMessage(
   attachments: Array<{ id: string; name?: string | null }> = [],
 ): Promise<RoomMessage> {
   await assertDmRoom(roomId);
-  const message = await postMessage(ctx, roomId, { content, attachments });
+  // `attachments` is added to the payload only when there is something to add,
+  // so a plain text DM reaches postMessage with the exact input shape it always
+  // had. CI caught the alternative: passing `attachments: []` unconditionally
+  // changed the call signature for every existing caller to no purpose.
+  const message = await postMessage(ctx, roomId, attachments.length ? { content, attachments } : { content });
   await notifyDmRecipient(roomId, ctx.enrollmentId, message.id);
   // Reese Phase 1 — reactive-only reply trigger. maybeTriggerReeseReply() is a
   // strict no-op for any room Reese isn't a member of, and for any message

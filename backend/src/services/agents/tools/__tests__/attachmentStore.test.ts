@@ -57,13 +57,31 @@ describe('storeAttachment — first upload', () => {
     expect(mockCreate.mock.calls[0][0].sha256).toHaveLength(64);
   });
 
-  it('strips any path a browser sent in the display name', async () => {
+  // The display name is handed to the model as `[attached file: ...]`, so a
+  // leaked path would put the student's local directory structure in the
+  // prompt. Both separators are asserted regardless of the host OS — the
+  // Windows case is the one that matters, and it is exactly the one a Linux
+  // `path.basename` silently lets through.
+  it.each([
+    ['C:\\Users\\me\\secret\\shot.png', 'windows path'],
+    ['/home/me/secret/shot.png', 'posix path'],
+    ['shot.png', 'bare name'],
+  ])('reduces %s (%s) to the bare filename', async (given) => {
     mockFindOne.mockResolvedValue(null);
     mockCreate.mockImplementation(async (v: any) => ({ id: 'new-id', ...v }));
 
-    await storeAttachment(OWNER, file('C:\\Users\\me\\secret\\shot.png'));
+    await storeAttachment(OWNER, file(given));
 
     expect(mockCreate.mock.calls[0][0].filename).toBe('shot.png');
+  });
+
+  it('falls back to a generic name when the client sends none', async () => {
+    mockFindOne.mockResolvedValue(null);
+    mockCreate.mockImplementation(async (v: any) => ({ id: 'new-id', ...v }));
+
+    await storeAttachment(OWNER, { originalname: '', mimetype: 'image/png', buffer: Buffer.from('x') });
+
+    expect(mockCreate.mock.calls[0][0].filename).toBe('attachment.png');
   });
 });
 

@@ -31,9 +31,21 @@ export interface UploadedFile {
   size?: number;
 }
 
-/** Strip any path components a browser may have sent, and cap the length. */
+/**
+ * Strip any path components a client may have sent, and cap the length.
+ *
+ * Both separators are stripped explicitly rather than via `path.basename`:
+ * production is Linux, where basename does NOT treat `\` as a separator, so a
+ * Windows client sending `C:\Users\me\secret\shot.png` would have kept the
+ * whole string. That name is handed to the model as `[attached file: ...]`, so
+ * it would have leaked the student's local directory structure into the prompt.
+ * Caught by CI running this suite on Linux after it passed on Windows.
+ */
 function safeDisplayName(name: string, mime: string): string {
-  const base = path.basename(String(name || '')).replace(/[\r\n\t]/g, '').trim();
+  const base = String(name || '')
+    .split(/[\\/]/).pop()!
+    .replace(/[\r\n\t]/g, '')
+    .trim();
   const fallback = `attachment${AGENT_ATTACHMENT_MIMES[mime] || ''}`;
   return (base || fallback).slice(0, 255);
 }
