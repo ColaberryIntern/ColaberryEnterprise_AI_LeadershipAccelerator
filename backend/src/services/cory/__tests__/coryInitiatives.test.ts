@@ -133,6 +133,27 @@ describe('createStrategicInitiative — initiative created before its ticket, re
     expect(ticketArgs).not.toHaveProperty('assigned_to_id');
   });
 
+  it('failure path (hardening): a createTicket() failure cancels the just-created initiative instead of leaving it permanently stuck, and rethrows', async () => {
+    mockGetAdminUserId.mockResolvedValue('admin-corybrain-1');
+    mockCreateTicket.mockRejectedValue(new Error('DB connection dropped'));
+    let capturedInitiative: any;
+    mockCreate.mockImplementation(() => {
+      capturedInitiative = makeInitiativeInstance({ id: 'initiative-orphan-risk' });
+      return Promise.resolve(capturedInitiative);
+    });
+
+    await expect(createStrategicInitiative(INPUT)).rejects.toThrow('DB connection dropped');
+
+    // The compensating action: without this, the initiative would sit forever at
+    // status:'proposed'/ticket_id:null, silently blocking the dedup check above on
+    // every future run for this same title -- reproducing the exact bug this run
+    // exists to fix, just via a different code path (a DB write failure instead of
+    // "nothing ever completes it").
+    expect(capturedInitiative.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'cancelled' }));
+    expect(mockSendApprovalEmail).not.toHaveBeenCalled();
+    expect(mockCreateSubTasks).not.toHaveBeenCalled();
+  });
+
   it('idempotency: an existing active initiative with the same title short-circuits before any ticket, initiative row, or email is created', async () => {
     mockFindOne.mockResolvedValue({ id: 'existing-1' });
 

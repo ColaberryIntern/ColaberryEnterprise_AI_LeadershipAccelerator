@@ -100,31 +100,53 @@ export async function createStrategicInitiative(input: CreateInitiativeInput): P
   // created_by_type/created_by_id.
   const coryBrainAdminUserId = await getTicketCreatorAdminUserId('CoryBrain');
   const replyToken = randomBytes(4).toString('hex');
-  const ticket = await createTicket({
-    title: `[Initiative] ${input.title}`,
-    description: input.description,
-    status: 'in_review',
-    type: input.initiative_type as any, // Extended ticket types
-    priority: (input.priority as any) || 'medium',
-    source: 'cory:evolution',
-    created_by_type: 'cory',
-    created_by_id: 'CoryBrain',
-    entity_type: 'strategic_initiative',
-    entity_id: initiative.id,
-    ...(coryBrainAdminUserId ? { assigned_to_type: 'ai_staff' as const, assigned_to_id: coryBrainAdminUserId } : {}),
-    metadata: {
-      initiative_type: input.initiative_type,
-      involved_departments: input.involved_departments || [],
-      involved_agents: input.involved_agents || [],
-      strategic_priority: input.strategic_priority || input.priority || 'medium',
-      created_by: 'cory',
-      reply_token: replyToken,
-    },
-    confidence: 0.8,
-    estimated_effort: 'large',
-  });
-
-  await initiative.update({ ticket_id: ticket.id });
+  // Compensating action, not a transaction: the initiative row above is already
+  // committed by the time this runs. If createTicket() (a real DB write) or the
+  // ticket_id backfill below throws, an untouched initiative would be left forever
+  // at status:'proposed'/ticket_id:null — invisible (no ticket, no email) yet still
+  // blocking the dedup check at the top of this function exactly like the bug this
+  // whole fix exists to close. Cancelling it here on failure means the SAME finding
+  // is retryable on the next evolution cycle instead of silently wedged. The caller
+  // (coryEvolution.ts's runEvolutionCycle) already treats a thrown error here as
+  // non-fatal for one finding and continues to the next, so rethrowing is safe.
+  let ticket;
+  try {
+    ticket = await createTicket({
+      title: `[Initiative] ${input.title}`,
+      description: input.description,
+      status: 'in_review',
+      type: input.initiative_type as any, // Extended ticket types
+      priority: (input.priority as any) || 'medium',
+      source: 'cory:evolution',
+      created_by_type: 'cory',
+      created_by_id: 'CoryBrain',
+      entity_type: 'strategic_initiative',
+      entity_id: initiative.id,
+      ...(coryBrainAdminUserId ? { assigned_to_type: 'ai_staff' as const, assigned_to_id: coryBrainAdminUserId } : {}),
+      metadata: {
+        initiative_type: input.initiative_type,
+        involved_departments: input.involved_departments || [],
+        involved_agents: input.involved_agents || [],
+        strategic_priority: input.strategic_priority || input.priority || 'medium',
+        created_by: 'cory',
+        reply_token: replyToken,
+      },
+      confidence: 0.8,
+      estimated_effort: 'large',
+    });
+    await initiative.update({ ticket_id: ticket.id });
+  } catch (err) {
+    console.warn(
+      `[coryInitiatives] Ticket creation failed for initiative ${initiative.id} — cancelling it so "${input.title}" is retryable on the next evolution cycle instead of stuck forever:`,
+      (err as Error).message,
+    );
+    await initiative.update({ status: 'cancelled' }).catch(() => {
+      // Genuinely nothing more this function can do if even the compensating write
+      // fails — logged above with enough context (initiative id, title) for manual
+      // recovery. Rethrowing the original error below still surfaces the failure.
+    });
+    throw err;
+  }
 
   // Best-effort — a failed email must never block the initiative/ticket/subtasks
   // that are already real and complete by this point. Matches mirrorTicket()'s own
