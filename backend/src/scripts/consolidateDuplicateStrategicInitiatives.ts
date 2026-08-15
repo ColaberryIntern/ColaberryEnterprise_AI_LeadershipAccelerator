@@ -109,10 +109,41 @@ function toInitiativeLike(row: InstanceType<typeof StrategicInitiative>): Initia
   };
 }
 
-/** Live `status='proposed'` rows, ordered by created_at — the full candidate pool. */
+/** Live `status='proposed'` rows, ordered by created_at — the full candidate pool for a NEW plan. */
 async function fetchLiveProposedCandidates(): Promise<InitiativeLike[]> {
   const rows = await StrategicInitiative.findAll({
     where: { status: 'proposed' },
+    order: [['created_at', 'ASC']],
+  });
+  return rows.map(toInitiativeLike);
+}
+
+/**
+ * Live `status IN ('proposed', 'cancelled')` rows — the candidate pool used ONLY for
+ * --apply's drift check, deliberately broader than fetchLiveProposedCandidates().
+ * `cancelled` is included on purpose: this script is the only writer of that status
+ * on this table (confirmed live — zero `cancelled` rows existed before this script's
+ * first run), so a `cancelled` row here means "already processed by a prior --apply
+ * of this exact undo log," not an unrelated rejection. Scoping the drift check by
+ * status='proposed' ALONE (an earlier version of this file did) breaks idempotency:
+ * once --apply cancels a group's non-survivor rows, a second --apply run would no
+ * longer see them among 'proposed' candidates, duplicateGroups() would find no
+ * group left (the lone still-'proposed' survivor doesn't group with anything), and
+ * checkDrift() would wrongly report all those rows as "no longer match a live
+ * duplicate group" and abort — turning a legitimate no-op re-run into a hard error.
+ * Including 'cancelled' rows keeps every already-applied group's full membership
+ * (survivor + its now-cancelled duplicates) visible to duplicateGroups()/
+ * pickSurvivor(), which only look at title/created_at and are status-agnostic, so a
+ * second run against fully-applied data reconstructs an IDENTICAL non-survivor id
+ * set and survivor mapping to the undo log — zero drift, exactly the "second --apply
+ * makes zero further writes" contract this script is supposed to honor. A row that
+ * moved to any OTHER status (e.g. a human `approved` it via the API between --plan
+ * and --apply) is correctly excluded here and therefore correctly still trips a real
+ * drift abort, which is the safety behavior we want.
+ */
+async function fetchLiveDriftCheckCandidates(): Promise<InitiativeLike[]> {
+  const rows = await StrategicInitiative.findAll({
+    where: { status: { [Op.in]: ['proposed', 'cancelled'] } },
     order: [['created_at', 'ASC']],
   });
   return rows.map(toInitiativeLike);
@@ -209,7 +240,7 @@ export interface ApplyRunResult {
 /** --apply --undo-log <path>. Batched, transaction-per-batch, idempotent, ticket-free. */
 export async function runApply(undoLogPath: string, batchSize: number): Promise<ApplyRunResult> {
   const undoLog = readUndoLog(undoLogPath);
-  const liveCandidates = await fetchLiveProposedCandidates();
+  const liveCandidates = await fetchLiveDriftCheckCandidates();
   checkDrift(undoLog, liveCandidates);
 
   const consolidatedAt = new Date().toISOString().slice(0, 10);
