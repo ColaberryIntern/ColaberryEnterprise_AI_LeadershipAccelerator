@@ -14,6 +14,7 @@ const mockConnectionFindOne = jest.fn();
 const mockGetPublishedPlan = jest.fn();
 const mockMarkVerified = jest.fn();
 const mockRecordEvidence = jest.fn();
+const mockGetBudgetPerUnitXp = jest.fn();
 
 jest.mock('../../../../models/Project', () => ({
   __esModule: true,
@@ -38,6 +39,9 @@ jest.mock('../../../projects/projectWriteService', () => ({
 }));
 jest.mock('../../../progression/evidenceEngine', () => ({
   recordEvidence: (...a: any[]) => mockRecordEvidence(...a),
+}));
+jest.mock('../../../progression/pointsConfigService', () => ({
+  getBudgetPerUnitXp: (...a: any[]) => mockGetBudgetPerUnitXp(...a),
 }));
 
 import { verifyBuildFromRepo, STORY_XP_KEY, VERIFIER_SOURCE } from '../buildVerificationService';
@@ -127,6 +131,8 @@ beforeEach(() => {
   mockTaskUpdate.mockResolvedValue([1]);
   mockMarkVerified.mockResolvedValue({ id: 'x', story_id: 'STORY-001', status: 'complete', verified_at: new Date() });
   mockRecordEvidence.mockResolvedValue({ builder_xp: 0, created: true });
+  // The 2-story PLAN against an 800 budget: 400 a story.
+  mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 400, budget: 800, reason: null });
 });
 
 describe('verifyBuildFromRepo — the happy path', () => {
@@ -185,6 +191,47 @@ describe('idempotency — reading the same commit twice awards once', () => {
     const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
     expect(summary.rollup.xp_awarded).toBe(0);
     expect(summary.rollup.newly_verified).toEqual([]);
+  });
+});
+
+describe('the award is a share of the capstone budget, not a per-story rate', () => {
+  it('divides by the PUBLISHED PLAN story count, not by what the student finished', async () => {
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+    // The plan has 2 stories; only STORY-001 verified. The divisor must be 2.
+    expect(mockGetBudgetPerUnitXp).toHaveBeenCalledWith(STORY_XP_KEY, 2);
+  });
+
+  it('resolves the rate ONCE per run, not once per story', async () => {
+    await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+    expect(mockGetBudgetPerUnitXp).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the divided figure to the award, so every story on a run pays the same', async () => {
+    mockRecordEvidence.mockResolvedValue({ builder_xp: 400, created: true });
+    const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+    expect(mockRecordEvidence).toHaveBeenCalledWith(expect.objectContaining({
+      typeSlug: STORY_XP_KEY,
+      builderXpOverride: 400,
+    }));
+    expect(summary.rollup.xp_awarded).toBe(400);
+  });
+
+  it('a bigger plan pays less per story for the same budget', async () => {
+    mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 27, budget: 800, reason: null });
+    mockRecordEvidence.mockResolvedValue({ builder_xp: 27, created: true });
+    const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+    expect(summary.rollup.xp_awarded).toBe(27);
+  });
+
+  it('still records the evidence trail when the budget is unset, awarding nothing', async () => {
+    mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 0, budget: null, reason: 'no_budget_set' });
+    mockRecordEvidence.mockResolvedValue({ builder_xp: 0, created: true });
+    const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.rollup.newly_verified).toEqual(['STORY-001']);   // the story still counts
+    expect(summary.rollup.xp_awarded).toBe(0);                      // but no XP moves
+    expect(mockRecordEvidence).toHaveBeenCalledWith(expect.objectContaining({ builderXpOverride: 0 }));
   });
 });
 

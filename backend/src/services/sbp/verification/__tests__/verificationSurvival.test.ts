@@ -18,6 +18,7 @@ const mockConnectionFindOne = jest.fn();
 const mockGetPublishedPlan = jest.fn();
 const mockMarkVerified = jest.fn();
 const mockRecordEvidence = jest.fn();
+const mockGetBudgetPerUnitXp = jest.fn();
 
 jest.mock('../../../../models/Project', () => ({
   __esModule: true, default: { findByPk: (...a: any[]) => mockProjectFindByPk(...a) },
@@ -35,6 +36,9 @@ jest.mock('../../../projects/projectWriteService', () => ({
 }));
 jest.mock('../../../progression/evidenceEngine', () => ({
   recordEvidence: (...a: any[]) => mockRecordEvidence(...a),
+}));
+jest.mock('../../../progression/pointsConfigService', () => ({
+  getBudgetPerUnitXp: (...a: any[]) => mockGetBudgetPerUnitXp(...a),
 }));
 
 import { verifyBuildFromRepo } from '../buildVerificationService';
@@ -134,6 +138,7 @@ beforeEach(() => {
   mockTaskUpdate.mockResolvedValue([1]);
   mockMarkVerified.mockResolvedValue({ id: 'x', story_id: 'STORY-001', status: 'complete', verified_at: new Date() });
   mockRecordEvidence.mockResolvedValue({ builder_xp: 25, created: true });
+  mockGetBudgetPerUnitXp.mockResolvedValue({ per_unit: 25, budget: 800, reason: null });
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
