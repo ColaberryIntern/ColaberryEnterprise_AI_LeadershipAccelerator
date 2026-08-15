@@ -1940,7 +1940,7 @@ export async function sendTicketApprovalEmail(data: {
   ${safeDescription ? `<div class="detail">${safeDescription}</div>` : ''}
   <div class="meta"><strong>Raised by:</strong> ${escapeHtml(data.directorName)}</div>
   <p><a href="${ticketUrl}" class="cta">Review the ticket</a></p>
-  <p style="font-size: 13px; color: #718096;">Nothing has been published or sent. This director works independently on everything else — you're only hearing from it because this one action needs a decision first.</p>
+  <p style="font-size: 13px; color: #718096;">Nothing has been published or sent. Everything else here runs on its own — you're only hearing about this one because it needs a decision first.</p>
   <div class="footer">
     <p>Colaberry AI Workforce</p>
   </div>

@@ -6,12 +6,14 @@
  * automatic subtask creation.
  */
 
+import { randomBytes } from 'crypto';
 import StrategicInitiative, { type InitiativeType, type InitiativeStatus } from '../../models/StrategicInitiative';
 import { createTicket, createSubTasks, updateTicketStatus, addTicketComment } from '../ticketService';
 import AgentTask from '../../models/AgentTask';
 import { logAiEvent } from '../aiEventService';
 import { Op } from 'sequelize';
 import { getTicketCreatorAdminUserId } from '../agentBlueprint/ticketCreatorIdentitySeed';
+import { sendTicketApprovalEmail } from '../emailService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,34 +63,12 @@ export async function createStrategicInitiative(input: CreateInitiativeInput): P
   });
   if (existing) return existing;
 
-  // 1. Create the parent ticket in the ticket system
-  // Agent Alias & Identity Fix (forward-fix) — stamp CoryBrain's real AdminUser
-  // identity on the assignee fields going forward, without touching
-  // created_by_type/created_by_id (never null/undefined — createTicket() always
-  // creates with status:'backlog' by default here, which never intersects
-  // ticketManagementAgent.ts's status:'todo' auto-dispatch sweep, so this is safe).
-  const coryBrainAdminUserId = await getTicketCreatorAdminUserId('CoryBrain');
-  const ticket = await createTicket({
-    title: `[Initiative] ${input.title}`,
-    description: input.description,
-    type: input.initiative_type as any, // Extended ticket types
-    priority: (input.priority as any) || 'medium',
-    source: 'cory:evolution',
-    created_by_type: 'cory',
-    created_by_id: 'CoryBrain',
-    ...(coryBrainAdminUserId ? { assigned_to_type: 'ai_staff' as const, assigned_to_id: coryBrainAdminUserId } : {}),
-    metadata: {
-      initiative_type: input.initiative_type,
-      involved_departments: input.involved_departments || [],
-      involved_agents: input.involved_agents || [],
-      strategic_priority: input.strategic_priority || input.priority || 'medium',
-      created_by: 'cory',
-    },
-    confidence: 0.8,
-    estimated_effort: 'large',
-  });
-
-  // 2. Create the strategic initiative record
+  // 1. Create the strategic initiative record FIRST — ticket_id is filled in once the
+  // ticket exists below. Creating the initiative before its ticket lets the ticket
+  // carry a real entity_type/entity_id back to this row, the same linkage
+  // workforceAgentRuntime.ts's mirrorTicket() already uses for the AI Workforce's
+  // proposed_agent_action tickets — and what ticketReplyService.ts's syncInitiative()
+  // reads on the way back once a human replies to the approval email below.
   const initiative = await StrategicInitiative.create({
     title: input.title,
     description: input.description,
@@ -97,12 +77,74 @@ export async function createStrategicInitiative(input: CreateInitiativeInput): P
     source_decision_id: input.source_decision_id || null,
     involved_departments: input.involved_departments || null,
     involved_agents: input.involved_agents || null,
-    ticket_id: ticket.id,
+    ticket_id: null,
     created_by: 'CoryBrain',
     status: 'proposed',
     strategic_priority: input.strategic_priority || null,
     expected_impact: input.expected_impact || null,
   });
+
+  // 2. Create the parent ticket in the ticket system. Starts at 'in_review' (not the
+  // previous 'backlog') carrying a one-time reply token in metadata — CoryBrain's
+  // strategic initiatives now go through the same real human-in-the-loop path the AI
+  // Workforce Marketing director already uses in production (runDirectorProposal /
+  // mirrorTicket in workforceAgentRuntime.ts): a human approves or rejects by
+  // replying to the approval email sent below, and THAT reply is what finally lets
+  // this initiative reach a terminal state (completed/cancelled) via
+  // ticketReplyService.ts's syncInitiative(). Before this fix, nothing in the
+  // codebase ever moved a strategic_initiatives row to completed/cancelled, so the
+  // dedup check above blocked the same finding from ever being re-raised, forever,
+  // once it had fired once.
+  // Agent Alias & Identity Fix (forward-fix) — stamp CoryBrain's real AdminUser
+  // identity on the assignee fields going forward, without touching
+  // created_by_type/created_by_id.
+  const coryBrainAdminUserId = await getTicketCreatorAdminUserId('CoryBrain');
+  const replyToken = randomBytes(4).toString('hex');
+  const ticket = await createTicket({
+    title: `[Initiative] ${input.title}`,
+    description: input.description,
+    status: 'in_review',
+    type: input.initiative_type as any, // Extended ticket types
+    priority: (input.priority as any) || 'medium',
+    source: 'cory:evolution',
+    created_by_type: 'cory',
+    created_by_id: 'CoryBrain',
+    entity_type: 'strategic_initiative',
+    entity_id: initiative.id,
+    ...(coryBrainAdminUserId ? { assigned_to_type: 'ai_staff' as const, assigned_to_id: coryBrainAdminUserId } : {}),
+    metadata: {
+      initiative_type: input.initiative_type,
+      involved_departments: input.involved_departments || [],
+      involved_agents: input.involved_agents || [],
+      strategic_priority: input.strategic_priority || input.priority || 'medium',
+      created_by: 'cory',
+      reply_token: replyToken,
+    },
+    confidence: 0.8,
+    estimated_effort: 'large',
+  });
+
+  await initiative.update({ ticket_id: ticket.id });
+
+  // Best-effort — a failed email must never block the initiative/ticket/subtasks
+  // that are already real and complete by this point. Matches mirrorTicket()'s own
+  // contract in workforceAgentRuntime.ts: the ticket still exists and sits visibly at
+  // 'in_review' on the board even if this notification side-channel fails; there is
+  // no retry queue for it, same as the proven precedent.
+  try {
+    await sendTicketApprovalEmail({
+      ticketId: ticket.id,
+      replyToken,
+      title: input.title,
+      description: input.description,
+      directorName: 'CoryBrain',
+    });
+  } catch (err) {
+    console.warn(
+      `[coryInitiatives] Approval email failed for initiative ${initiative.id} / ticket ${ticket.id}:`,
+      (err as Error).message,
+    );
+  }
 
   // 3. Create subtask tickets
   if (input.subtasks && input.subtasks.length > 0) {
@@ -160,9 +202,13 @@ export async function approveInitiative(initiativeId: string, reviewedBy: string
     updated_at: new Date(),
   });
 
-  // Move parent ticket to todo
+  // Move parent ticket to in_progress. NOT 'todo': the ticket now starts life at
+  // 'in_review' (see createStrategicInitiative above), and in_review -> todo is not a
+  // valid transition in ticketService.ts's VALID_TRANSITIONS state machine (it would
+  // throw "Invalid transition: in_review -> todo"). in_review -> in_progress is valid
+  // and is also the more accurate status for "a human approved this, work proceeds."
   if (initiative.ticket_id) {
-    await updateTicketStatus(initiative.ticket_id, 'todo', 'human', reviewedBy);
+    await updateTicketStatus(initiative.ticket_id, 'in_progress', 'human', reviewedBy);
     await addTicketComment(initiative.ticket_id, `Initiative approved by ${reviewedBy}`, 'human', reviewedBy);
   }
 
