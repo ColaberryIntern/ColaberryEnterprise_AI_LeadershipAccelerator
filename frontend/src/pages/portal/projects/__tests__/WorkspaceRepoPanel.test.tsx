@@ -100,6 +100,36 @@ const type = async (placeholderFragment: string, value: string) => {
 
 // ── day one ─────────────────────────────────────────────────────────────────
 
+describe('a student whose challenge expired while they were away', () => {
+  const repoInput = () => Array.from(container.querySelectorAll('input'))
+    .find((i) => (i.placeholder ?? '').includes('github.com'));
+
+  /**
+   * The backend degrades an expired `awaiting_proof` to `not_connected` but
+   * keeps owner/repo/url on the view. That is only useful if the panel offers
+   * the repo back: otherwise the student is asked to retype an address they
+   * already gave us, having been shown nothing about why.
+   */
+  it('offers their repo back, pre-filled, so reconnecting is one click', async () => {
+    await mount(view({
+      connect: connectState({ owner: 'me', repo: 'nightshift', url: 'https://github.com/me/nightshift' }),
+    }));
+    expect(repoInput()!.value).toBe('https://github.com/me/nightshift');
+    expect(buttonNamed('Connect this repo')).toBeDefined();
+  });
+
+  it('leaves the box empty when there is no repo to offer', async () => {
+    await mount(view());
+    expect(repoInput()!.value).toBe('');
+  });
+
+  it('does not fight the student for the field once they edit it', async () => {
+    await mount(view({ connect: connectState({ url: 'https://github.com/me/nightshift' }) }));
+    await type('github.com', 'https://github.com/me/a-different-repo');
+    expect(repoInput()!.value).toBe('https://github.com/me/a-different-repo');
+  });
+});
+
 describe('a student with a folder and no connection', () => {
   it('leads with connecting the repo they already have', async () => {
     await mount(view());
