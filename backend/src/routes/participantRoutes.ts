@@ -21,7 +21,8 @@ import {
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import path from 'path';
 import fs from 'fs';
-import { strategyPrepUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR } from '../config/upload';
+import { strategyPrepUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR, agentAttachmentUpload } from '../config/upload';
+import { attachmentsSchema } from '../services/agents/tools/attachmentSchema';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
@@ -747,6 +748,57 @@ router.get('/api/portal/community/media/:id', (req, res) => {
   res.sendFile(path.join(COMMUNITY_MEDIA_DIR, file));
 });
 
+// ── Agent attachments — what a student hands to Cory or Reese ────────────────
+// Upload first, then reference the returned id on the chat turn. Splitting it
+// this way keeps the chat request small, lets one file be reused across turns,
+// and turns "is this yours" into a row lookup instead of a trust decision about
+// a request body. Idempotent: the same bytes return the same id.
+router.post('/api/portal/agent-attachments', requireParticipant, (req, res) => {
+  agentAttachmentUpload.single('file')(req, res, async (err: any) => {
+    // Multer's own errors are the student's problem to fix (too big, wrong
+    // type), so they come back as 400 with multer's message, not a 500.
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
+    try {
+      const { storeAttachment } = await import('../services/agents/tools/attachmentStore');
+      const stored = await storeAttachment(req.participant!.sub, req.file as any);
+      res.status(201).json({
+        id: stored.id,
+        name: stored.filename,
+        mime: stored.mime,
+        byte_size: stored.byte_size,
+        url: `/api/portal/agent-attachments/${stored.id}`,
+      });
+    } catch (e: any) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'agent_attachments', event: 'store_failed',
+        error_class: e?.name || 'Error', message: String(e?.message || e),
+      }));
+      res.status(500).json({ error: 'Could not save that file. Try again.' });
+    }
+  });
+});
+
+// Owner-scoped serve, for the thumbnail the student sees on their own message.
+// "No such id", "not yours", and "file missing" all answer 404, so probing for
+// another student's attachments tells you nothing.
+router.get('/api/portal/agent-attachments/:id', requireParticipant, async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[a-f0-9-]{36}$/i.test(id)) { res.status(400).end(); return; }
+  try {
+    const { loadAttachmentFile } = await import('../services/agents/tools/attachmentStore');
+    const file = await loadAttachmentFile(req.participant!.sub, id);
+    if (!file) { res.status(404).end(); return; }
+    res.setHeader('Content-Type', file.mime);
+    // inline: this is the student's own screenshot rendered in their own chat,
+    // never a download prompt.
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(file.path);
+  } catch {
+    res.status(404).end();
+  }
+});
+
 router.get('/api/portal/community/calendar', requireParticipant, async (req, res) => {
   try {
     const { getUpcomingEvents } = await import('../services/communityCalendarService');
@@ -1082,12 +1134,25 @@ router.get('/api/portal/dm/:roomId/messages', requireParticipant, async (req, re
 
 router.post('/api/portal/dm/:roomId/send', requireParticipant, async (req, res) => {
   const params = z.object({ roomId: z.string().uuid() }).safeParse(req.params);
-  const body = z.object({ content: z.string().min(1).max(4000) }).safeParse(req.body);
+  // Content may be empty ONLY when something is attached — sending a
+  // screenshot with no caption is a normal thing to do in a DM, and the
+  // refinement keeps a genuinely empty message rejected as before.
+  const body = z.object({
+    content: z.string().max(4000).default(''),
+    attachments: attachmentsSchema,
+  }).refine(
+    (b) => b.content.trim().length > 0 || (b.attachments?.length ?? 0) > 0,
+    { message: 'Message is empty' },
+  ).safeParse(req.body);
   if (!params.success || !body.success) { res.status(400).json({ error: 'Invalid message' }); return; }
   try {
     const { sendDmMessage } = await import('../services/communityRooms/dmService');
     const ctx = { enrollmentId: req.participant!.sub, cohortId: req.participant!.cohort_id, isAdmin: false };
-    const message = await sendDmMessage(ctx, params.data.roomId, body.data.content);
+    // RoomMessage.content is NOT NULL and postMessage rejects blank content for
+    // every caller. Rather than loosening that for everyone, an attachment-only
+    // message gets a short stand-in that also reads correctly in a transcript.
+    const content = body.data.content.trim() || '(attached a file)';
+    const message = await sendDmMessage(ctx, params.data.roomId, content, body.data.attachments || []);
     res.status(201).json({ message });
   } catch (err: any) {
     if (err?.name === 'DmError') { res.status(400).json({ error: err.message }); return; }
