@@ -124,7 +124,15 @@ const UNINSTRUMENTED_AGENTS = new Set([
 // for five months (seeded `enabled=false` the day the governance feature
 // shipped) while the UI reported the change as applied. A control that silently
 // does nothing is worse than no control.
-const activeTasks = new Map<string, { task: ScheduledTask; schedule: string }>();
+// NOTE: agent_name is NOT unique across the registry. `CompanyStrategicCycle`
+// is registered twice, with two different runners and two different schedules
+// ('15,45 * * * *' and '0 */4 * * *'), so that agent has always been scheduled
+// twice and run on both. Whether that is intended is a separate question — what
+// matters here is that a Map keyed by agent_name would keep only the LAST task
+// and silently orphan the first, leaving a live cron job that reload could
+// never stop. Storing a list per agent keeps every task tracked and stoppable,
+// and preserves the existing run-on-both-schedules behaviour exactly.
+const activeTasks = new Map<string, { task: ScheduledTask; schedule: string }[]>();
 
 export interface ScheduleReloadResult {
   started: string[];
@@ -414,7 +422,7 @@ function startStandardTask(entry: ScheduleEntry, schedule: string): void {
     });
   }, { timezone: 'America/Chicago' });
 
-  activeTasks.set(entry.agentName, { task, schedule });
+  trackTask(entry.agentName, task, schedule);
 }
 
 /** Create + register the cron task for a dynamic-import registry entry. */
@@ -425,20 +433,29 @@ function startDynamicTask(entry: DynamicScheduleEntry, schedule: string): void {
     });
   }, { timezone: 'America/Chicago' });
 
-  activeTasks.set(entry.agentName, { task, schedule });
+  trackTask(entry.agentName, task, schedule);
 }
 
-/** Stop and forget a running task. Safe to call for an agent that isn't running. */
-async function stopTask(agentName: string): Promise<boolean> {
+/** Append a task to an agent's task list (never replace — see activeTasks note). */
+function trackTask(agentName: string, task: ScheduledTask, schedule: string): void {
+  const existing = activeTasks.get(agentName);
+  if (existing) existing.push({ task, schedule });
+  else activeTasks.set(agentName, [{ task, schedule }]);
+}
+
+/** Stop and forget EVERY task for an agent. Safe to call for an agent that isn't running. */
+async function stopTasks(agentName: string): Promise<boolean> {
   const running = activeTasks.get(agentName);
-  if (!running) return false;
-  try {
-    await running.task.stop();
-    await running.task.destroy();
-  } catch (err: any) {
-    // A task that fails to stop cleanly must not wedge the reload for every
-    // other agent — drop our reference either way and keep going.
-    console.error(`[AI Ops] Failed to stop task ${agentName}: ${err.message}`);
+  if (!running || running.length === 0) return false;
+  for (const { task } of running) {
+    try {
+      await task.stop();
+      await task.destroy();
+    } catch (err: any) {
+      // A task that fails to stop cleanly must not wedge the reload for every
+      // other agent — drop our reference either way and keep going.
+      console.error(`[AI Ops] Failed to stop task ${agentName}: ${err.message}`);
+    }
   }
   activeTasks.delete(agentName);
   return true;
@@ -460,51 +477,74 @@ export async function reloadAIOpsSchedules(): Promise<ScheduleReloadResult> {
   // operator had deliberately switched off.
   const dbSchedules = await resolveAllCronSchedules();
 
-  const reconcile = (
-    agentName: string,
-    label: string,
-    hardcodedSchedule: string,
-    start: (schedule: string) => void,
-  ) => {
+  // Group by agent_name FIRST. A duplicated agent_name (see the activeTasks
+  // note) must be reconciled as one unit — reconciling each entry separately
+  // made the two CompanyStrategicCycle registrations stop and restart each
+  // other on every reload, flapping its schedule back and forth forever.
+  interface Reconcilable {
+    label: string;
+    hardcodedSchedule: string;
+    start: (schedule: string) => void;
+  }
+  const byAgent = new Map<string, Reconcilable[]>();
+  const add = (agentName: string, item: Reconcilable) => {
+    const list = byAgent.get(agentName);
+    if (list) list.push(item);
+    else byAgent.set(agentName, [item]);
+  };
+
+  for (const entry of SCHEDULE_REGISTRY) {
+    add(entry.agentName, {
+      label: entry.label,
+      hardcodedSchedule: entry.hardcodedSchedule,
+      start: (s) => startStandardTask(entry, s),
+    });
+  }
+  for (const entry of DYNAMIC_SCHEDULE_REGISTRY) {
+    add(entry.agentName, {
+      label: entry.label,
+      hardcodedSchedule: entry.hardcodedSchedule,
+      start: (s) => startDynamicTask(entry, s),
+    });
+  }
+
+  for (const [agentName, entries] of byAgent) {
     const dbEntry = dbSchedules.get(agentName);
-    const schedule = dbEntry?.schedule || hardcodedSchedule;
     const enabled = dbEntry?.enabled ?? true;
-    const running = activeTasks.get(agentName);
+    // One governance row can cover several registrations; the DB schedule
+    // overrides all of them, otherwise each keeps its own hardcoded default.
+    const desired = entries.map((e) => dbEntry?.schedule || e.hardcodedSchedule);
+    const running = activeTasks.get(agentName) || [];
+    const label = entries.map((e) => e.label).join(' + ');
 
     if (!enabled) {
-      if (running) {
-        void stopTask(agentName);
+      if (running.length > 0) {
+        await stopTasks(agentName);
         result.stopped.push(agentName);
         console.log(`[AI Ops] Reload: STOPPED ${label} (disabled in governance DB)`);
       } else {
         result.unchanged++;
       }
-      return;
+      continue;
     }
 
-    if (!running) {
-      start(schedule);
+    if (running.length === 0) {
+      entries.forEach((e, i) => e.start(desired[i]));
       result.started.push(agentName);
-      console.log(`[AI Ops] Reload: STARTED ${label}: ${schedule}`);
-      return;
+      console.log(`[AI Ops] Reload: STARTED ${label}: ${desired.join(', ')}`);
+      continue;
     }
 
-    if (running.schedule !== schedule) {
-      void stopTask(agentName);
-      start(schedule);
+    const runningSchedules = running.map((r) => r.schedule).join('|');
+    if (runningSchedules !== desired.join('|')) {
+      await stopTasks(agentName);
+      entries.forEach((e, i) => e.start(desired[i]));
       result.rescheduled.push(agentName);
-      console.log(`[AI Ops] Reload: RESCHEDULED ${label}: ${running.schedule} -> ${schedule}`);
-      return;
+      console.log(`[AI Ops] Reload: RESCHEDULED ${label}: ${runningSchedules} -> ${desired.join('|')}`);
+      continue;
     }
 
     result.unchanged++;
-  };
-
-  for (const entry of SCHEDULE_REGISTRY) {
-    reconcile(entry.agentName, entry.label, entry.hardcodedSchedule, (s) => startStandardTask(entry, s));
-  }
-  for (const entry of DYNAMIC_SCHEDULE_REGISTRY) {
-    reconcile(entry.agentName, entry.label, entry.hardcodedSchedule, (s) => startDynamicTask(entry, s));
   }
 
   return result;
