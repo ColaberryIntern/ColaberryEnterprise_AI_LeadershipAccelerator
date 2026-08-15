@@ -6,6 +6,7 @@
  * is covered separately in lib/__tests__/strategicInitiativeDedupGroups.test.ts.
  */
 import fs from 'fs';
+import { Op } from 'sequelize';
 
 const mockFindAll = jest.fn();
 const mockFindByPk = jest.fn();
@@ -206,17 +207,27 @@ describe('runApply — failure mid-batch', () => {
 });
 
 describe('runApply — idempotency', () => {
-  it('running apply twice against a fixture where rows are already cancelled makes zero additional writes', async () => {
+  it('running apply twice against a REALISTIC post-first-apply fixture (rows already cancelled, live fetch reflects that) makes zero additional writes', async () => {
+    // Regression test for a real bug caught during this run's actual production
+    // execution: the live drift-check fetch must include status='cancelled' rows,
+    // not just 'proposed' ones, or a second --apply run sees an empty duplicate
+    // group (the lone still-proposed survivor doesn't group with anything once its
+    // duplicates are gone) and checkDrift() wrongly aborts as "drifted" instead of
+    // recognizing "already fully applied, nothing left to do." This fixture mirrors
+    // real post-apply DB state exactly — the non-survivor rows are 'cancelled', not
+    // 'proposed' — which the earlier (buggy) version of this test did NOT do.
     const rows = [
       { initiative_id: 'i-1', previous_status: 'proposed', previous_description: 'd1' },
       { initiative_id: 'i-2', previous_status: 'proposed', previous_description: 'd2' },
     ];
     mockUndoLogFile(fakeUndoLog(rows));
-    // Live candidates must still pass the drift check (id set AND survivor identity),
-    // even though every row is already cancelled at the findByPk layer below.
+    // Live candidates reflect REAL post-first-apply state: the two non-survivors are
+    // now 'cancelled' (with their note already appended), the survivor is still
+    // 'proposed'. duplicateGroups()/pickSurvivor() are status-agnostic, so this
+    // group is still correctly reconstructed and matches the undo log -> no drift.
     mockFindAll.mockResolvedValue([
-      fakeInitiativeRow('i-1', 'proposed', 'd1', '2026-05-07T00:00:00.000Z'),
-      fakeInitiativeRow('i-2', 'proposed', 'd2', '2026-06-01T00:00:00.000Z'),
+      fakeInitiativeRow('i-1', 'cancelled', 'd1\n\n---\n[CONSOLIDATED ...]', '2026-05-07T00:00:00.000Z'),
+      fakeInitiativeRow('i-2', 'cancelled', 'd2\n\n---\n[CONSOLIDATED ...]', '2026-06-01T00:00:00.000Z'),
       fakeInitiativeRow('survivor-1', 'proposed', 'survivor', '2026-08-07T00:00:00.000Z'),
     ]);
     mockFindByPk.mockImplementation(async (id: string) => fakeInitiativeRow(id, 'cancelled', 'already cancelled'));
@@ -225,6 +236,28 @@ describe('runApply — idempotency', () => {
 
     expect(result).toMatchObject({ cancelled: 0, skippedAlreadyCancelled: 2 });
     expect(mockLogAiEvent).not.toHaveBeenCalled();
+  });
+
+  it('the live drift-check fetch queries status IN (proposed, cancelled), not proposed alone', async () => {
+    const rows = [{ initiative_id: 'i-1', previous_status: 'proposed', previous_description: 'd1' }];
+    mockUndoLogFile(fakeUndoLog(rows));
+    mockFindAll.mockResolvedValue([
+      fakeInitiativeRow('i-1', 'cancelled', 'd1', '2026-05-07T00:00:00.000Z'),
+      fakeInitiativeRow('survivor-1', 'proposed', 'survivor', '2026-08-07T00:00:00.000Z'),
+    ]);
+    mockFindByPk.mockImplementation(async (id: string) => fakeInitiativeRow(id, 'cancelled', 'd1'));
+
+    await runApply('/tmp/undo.json', 200);
+
+    const whereArg = mockFindAll.mock.calls[0][0].where;
+    // The bug: an earlier version queried `{ status: 'proposed' }` (a bare string),
+    // which excludes already-cancelled rows and breaks idempotency (see the test
+    // above). The fix uses `{ status: { [Op.in]: [...] } }`. Whatever the exact
+    // shape, it must NOT be the literal string 'proposed' alone.
+    expect(whereArg.status).not.toBe('proposed');
+    expect(typeof whereArg.status).toBe('object');
+    const inClause = whereArg.status[Op.in];
+    expect(inClause).toEqual(expect.arrayContaining(['proposed', 'cancelled']));
   });
 });
 
