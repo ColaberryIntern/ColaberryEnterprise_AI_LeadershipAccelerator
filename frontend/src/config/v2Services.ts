@@ -14,9 +14,37 @@
 
 import type { IconName } from '../components/publicV2/Icon';
 
+/**
+ * A photograph attached to a service.
+ *
+ * WHAT THESE ARE AND ARE NOT. Each photo depicts the *mode of work* an
+ * engagement involves -- a discovery session, hands on a keyboard, an
+ * experienced person guiding a team. None of them depicts a Colaberry customer,
+ * employee, engagement or outcome, and none is captioned as though it did.
+ * Presenting stock photography as documentation of real work would be a
+ * fabricated proof claim, which is the one thing this site is built not to do.
+ * So: `alt` describes what is literally in the frame, never what it proves.
+ *
+ * SOURCING RULE, learned the hard way. `public/img/` is a mixed bag. Three files
+ * in it carry burned-in Creative Commons watermarks and creator credits --
+ * `ai-network.jpg` (cc / Graham B Finney), `architect-plan.jpg` (cc-nc /
+ * ARJWright, and it is a photo of a real identifiable person's private screen),
+ * and `data-dashboard.jpg` (cc-nc-sa / Bevan R). NC means non-commercial, which
+ * this site is not. All EXIF was stripped from every file in that folder, so a
+ * metadata scan finds nothing and cannot protect you; the marks are in the
+ * pixels. Every photo referenced here was opened and inspected before use, and
+ * `v2ServicePhotos.test.ts` fails the build if any of the three ever appears.
+ */
+export interface ServicePhoto {
+  readonly src: string;
+  /** What is literally visible. Not a claim about who these people are. */
+  readonly alt: string;
+}
+
 export interface ServiceDetail {
   /** Icon name from components/publicV2/Icon. Decorative; the name beside it carries the meaning. */
   readonly icon: IconName;
+  readonly photo: ServicePhoto;
   readonly slug: string;
   readonly number: string;
   readonly name: string;
@@ -38,6 +66,11 @@ export interface ServiceDetail {
 export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   {
     slug: 'ai-opportunity-sprint',
+    photo: {
+      src: '/img/workshop.jpg',
+      alt:
+        'Four colleagues gathered around a laptop in a bright room, one of them leaning in to point at something on the screen.',
+    },
     icon: 'compass',
     number: '01',
     name: 'AI Opportunity and Readiness Sprint',
@@ -67,10 +100,15 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
       'build with us, and every assumption behind the ROI model is written down rather than ' +
       'embedded in a spreadsheet you cannot inspect.',
     nextStep: 'Run the AI Opportunity Lab, then book a discovery conversation.',
-    nextRoute: '/opportunity-lab',
+    nextRoute: '/lab',
   },
   {
     slug: 'claude-production-pilot',
+    photo: {
+      src: '/img/developer-code.jpg',
+      alt:
+        'Close view over the shoulder of someone typing on a laptop, source code filling the screen.',
+    },
     icon: 'bolt',
     number: '02',
     name: 'Claude Production Pilot',
@@ -103,6 +141,11 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   },
   {
     slug: 'enterprise-build-modernization',
+    photo: {
+      src: '/img/outcome-builder.jpg',
+      alt:
+        'A person at a desk with printed plans, sticky notes and a tablet spread out beside an open laptop.',
+    },
     icon: 'blocks',
     number: '03',
     name: 'Enterprise Build and Modernization',
@@ -137,6 +180,11 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   },
   {
     slug: 'workforce-architect-accelerator',
+    photo: {
+      src: '/img/team-collab.jpg',
+      alt:
+        'Three colleagues around a wooden table, one typing on a laptop while another takes notes.',
+    },
     icon: 'ladder',
     number: '04',
     name: 'Workforce Architect Accelerator',
@@ -171,6 +219,11 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   },
   {
     slug: 'embedded-ai-operations',
+    photo: {
+      src: '/img/mentor-coaching.jpg',
+      alt:
+        'A more experienced colleague reaching in to point at a laptop screen while three teammates follow along.',
+    },
     icon: 'people',
     number: '05',
     name: 'Embedded Architecture and AI Operations',

@@ -83,6 +83,16 @@ export function ServicesV2(): React.ReactElement {
               </div>
 
               <div className="cbv2-svc__panel">
+                <figure className="cbv2-svc__shot">
+                  <img
+                    src={s.photo.src}
+                    alt={s.photo.alt}
+                    width={1280}
+                    height={960}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </figure>
                 <div className="cbv2-card">
                   <h3 className="cbv2-svc__dlv-head">Deliverables</h3>
                   <ul className="cbv2-svc__dlv">
@@ -102,16 +112,11 @@ export function ServicesV2(): React.ReactElement {
             </article>
           ))}
 
-          <figure className="cbv2-photo cbv2-svc__photo">
-            <img
-              src="/site-v2/photos/mentor-coaching.jpg"
-              alt=""
-              width={1280}
-              height={960}
-              loading="lazy"
-              decoding="async"
-            />
-          </figure>
+          {/* A lone mentor-coaching.jpg used to sit here with alt="" and no
+              relationship to anything around it. Every service row now carries
+              its own photograph, so this one was duplicated content by the time
+              it was reached -- the same image is service 05's. Removed rather
+              than reassigned. */}
 
           <p className="cbv2-note">
             Engagement pricing is <Claim claimKey="pricing.services" route={ROUTE} /> &mdash; so the
@@ -150,14 +155,38 @@ export function ServiceDetailV2(): React.ReactElement {
     <>
       <SeoV2 title={service.name} description={service.happens} />
 
+      {/*
+        The drill-through used to open on a dark band of text and nothing else,
+        so all five detail pages looked identical above the fold and read as a
+        spec sheet. The service photograph now sits beside the copy, which is
+        the only element that differs per service at first glance.
+
+        The photo is decorative-adjacent but NOT decorative: it carries a real
+        alt description, because a screen-reader user asking "what is on this
+        page" should get the same scene a sighted visitor gets. It is not
+        captioned, because a caption would imply it documents this engagement,
+        and it does not -- see the ServicePhoto note in config/v2Services.ts.
+      */}
       <section className="cbv2-pagehero" aria-labelledby="cbv2-svcd-title">
-        <div className="cbv2-wrap">
-          <p className="cbv2-breadcrumb">
-            <Link to="/services">Services</Link> / {service.name}
-          </p>
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Service {service.number}</p>
-          <h1 id="cbv2-svcd-title">{service.name}</h1>
-          <p className="cbv2-pagehero__lede">{service.happens}</p>
+        <div className="cbv2-wrap cbv2-pagehero__split">
+          <div>
+            <p className="cbv2-breadcrumb">
+              <Link to="/services">Services</Link> / {service.name}
+            </p>
+            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Service {service.number}</p>
+            <h1 id="cbv2-svcd-title">{service.name}</h1>
+            <p className="cbv2-pagehero__lede">{service.happens}</p>
+          </div>
+          <figure className="cbv2-svcd__photo">
+            <img
+              src={service.photo.src}
+              alt={service.photo.alt}
+              width={1280}
+              height={960}
+              loading="eager"
+              decoding="async"
+            />
+          </figure>
         </div>
       </section>
 
