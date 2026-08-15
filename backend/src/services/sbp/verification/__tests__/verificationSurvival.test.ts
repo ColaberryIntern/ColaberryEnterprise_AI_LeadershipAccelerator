@@ -169,7 +169,11 @@ describe('A student deletes .colaberry/ and presses Sync', () => {
     const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch({ progress: null }) });
 
     expect(summary.ok).toBe(true);
-    expect(summary.rollup.stories_verified).toBe(6);
+    // 7, not 6: STORY-000 is judged alongside the plan's six and this fixture
+    // latches every task, so the Command Center stays verified too. The property
+    // under test is unchanged — nothing a student does to the repo un-verifies
+    // work already banked.
+    expect(summary.rollup.stories_verified).toBe(7);
     expect(summary.rollup.stories_not_started).toBe(0);
     for (const story of summary.stories) expect(story.state).toBe('verified');
   });
@@ -178,7 +182,7 @@ describe('A student deletes .colaberry/ and presses Sync', () => {
     await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch({ progress: null }) });
 
     const written = persisted();
-    expect(Object.keys(written)).toHaveLength(6);
+    expect(Object.keys(written)).toHaveLength(7);   // six plan stories + STORY-000
     for (const record of Object.values(written)) {
       expect(record.state).toBe('verified');
       expect(record.latched).toBe(true);
@@ -189,7 +193,9 @@ describe('A student deletes .colaberry/ and presses Sync', () => {
 
   it('tells the student it cannot re-check, rather than pretending nothing happened', async () => {
     const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch({ progress: null }) });
-    const story = summary.stories[0];
+    // A PLAN story specifically: STORY-000 now sorts first, and this assertion is
+    // about the six stories whose commits are still in the repo.
+    const story = summary.stories.find((s) => s.story_id === 'STORY-001')!;
 
     // Their commits are all still there — it is only the progress file that is
     // gone — so the live read lands on `in_progress`: something happened here,
@@ -261,7 +267,9 @@ describe('A story verifies, then 100+ more commits land on the build', () => {
       fetchImpl: githubFetch({ commits: RECENT_COMMITS }),
     });
 
-    const others = summary.stories.filter((s) => s.story_id !== 'STORY-001');
+    // The plan's other five. STORY-000 is excluded: it is not part of this
+    // fixture's "100 commits landed on a six-story plan" scenario.
+    const others = summary.stories.filter((s) => s.story_id !== 'STORY-001' && s.story_id !== 'STORY-000');
     expect(others).toHaveLength(5);
     for (const story of others) {
       expect(story.state).toBe('submitted');   // criteria pass, no qualifying commit

@@ -46,6 +46,7 @@ jest.mock('../../../progression/pointsConfigService', () => ({
 
 import { verifyBuildFromRepo, STORY_XP_KEY, VERIFIER_SOURCE } from '../buildVerificationService';
 import { PROGRESS_SCHEMA_VERSION } from '../progressContract';
+import { COMMAND_CENTER_ACCEPTANCE } from '../../commandCenterStory';
 
 const PROJECT_ID = '11111111-1111-1111-1111-111111111111';
 const ENROLLMENT_ID = '22222222-2222-2222-2222-222222222222';
@@ -161,8 +162,11 @@ describe('verifyBuildFromRepo — the happy path', () => {
   it('writes a verdict for EVERY story, not only the verified one', async () => {
     await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
     const written = mockTaskUpdate.mock.calls.map((c) => c[0].verification_json);
-    expect(written).toHaveLength(2);
-    expect(written.map((w: any) => w.state).sort()).toEqual(['not_started', 'verified']);
+    // 3, not 2: the plan's two stories PLUS STORY-000, which is judged on the
+    // Command Center's own acceptance constant because the plan never lists it.
+    expect(written).toHaveLength(3);
+    // STORY-000 and STORY-002 are untouched by this fixture; STORY-001 verifies.
+    expect(written.map((w: any) => w.state).sort()).toEqual(['not_started', 'not_started', 'verified']);
   });
 });
 
@@ -197,8 +201,12 @@ describe('idempotency — reading the same commit twice awards once', () => {
 describe('the award is a share of the capstone budget, not a per-story rate', () => {
   it('divides by the PUBLISHED PLAN story count, not by what the student finished', async () => {
     await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
-    // The plan has 2 stories; only STORY-001 verified. The divisor must be 2.
-    expect(mockGetBudgetPerUnitXp).toHaveBeenCalledWith(STORY_XP_KEY, 2);
+    // The plan has 2 stories and only STORY-001 verified, so the divisor is not
+    // "what they finished". It is 3 rather than 2 because STORY-000 is a story
+    // the student genuinely builds and is now verifiable — which is what the
+    // seeded config always said should happen ("STORY-000 counts as an ordinary
+    // story and takes an equal share") and what the divisor previously did not.
+    expect(mockGetBudgetPerUnitXp).toHaveBeenCalledWith(STORY_XP_KEY, 3);
   });
 
   it('resolves the rate ONCE per run, not once per story', async () => {
@@ -302,5 +310,74 @@ describe('failure paths never look like "nothing done"', () => {
     const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch() });
     expect(summary.ok).toBe(false);
     expect(summary.error_class).toBe('NoWorkspaceRepo');
+  });
+});
+
+/**
+ * STORY-000 — the Command Center — is scaffolding the platform authors, so it is
+ * deliberately absent from `plan.stories`. This loop used to build its spec list
+ * from `plan.stories` alone, which meant STORY-000 got no verdict, no
+ * `verification_json` and no route to `verified_at`.
+ *
+ * That was invisible while completion was a client-side checkbox. The moment the
+ * button was gated on the latch it became the one story on every build that
+ * could never be finished — including the very first thing every student builds.
+ */
+describe('STORY-000 is verifiable even though the plan does not list it', () => {
+  const CC_CRIT = [...COMMAND_CENTER_ACCEPTANCE];
+
+  const ccProgress = () => JSON.stringify({
+    schema_version: PROGRESS_SCHEMA_VERSION,
+    stories: [{ id: 'STORY-000', criteria: CC_CRIT.map((text) => ({ text, passed: true })) }],
+  });
+
+  it('verifies the Command Center from its own acceptance constant', async () => {
+    const summary = await verifyBuildFromRepo(PROJECT_ID, {
+      fetchImpl: githubFetch({
+        progress: ccProgress(),
+        commitMessage: 'STORY-000: build the Command Center',
+      }),
+    });
+
+    const cc = summary.stories.find((s) => s.story_id === 'STORY-000');
+    expect(cc).toBeDefined();
+    expect(cc!.state).toBe('verified');
+    expect(cc!.criteria_total).toBe(CC_CRIT.length);
+    expect(cc!.outstanding).toEqual([]);
+    expect(mockMarkVerified).toHaveBeenCalledWith(
+      PROJECT_ID, 'STORY-000', expect.objectContaining({ ref: SHA }),
+    );
+  });
+
+  it('reports what is outstanding when the criteria are only partly ticked', async () => {
+    const partial = JSON.stringify({
+      schema_version: PROGRESS_SCHEMA_VERSION,
+      stories: [{
+        id: 'STORY-000',
+        criteria: [{ text: CC_CRIT[0], passed: true }, { text: CC_CRIT[1], passed: false }],
+      }],
+    });
+    const summary = await verifyBuildFromRepo(PROJECT_ID, {
+      fetchImpl: githubFetch({ progress: partial, commitMessage: 'STORY-000: partial' }),
+    });
+
+    const cc = summary.stories.find((s) => s.story_id === 'STORY-000')!;
+    expect(cc.state).toBe('submitted');
+    // The exact remaining lines, so the workspace can name them.
+    expect(cc.outstanding).toContain(CC_CRIT[1]);
+    expect(cc.outstanding).toContain(CC_CRIT[2]);
+  });
+
+  it('does not double-count when a plan already carries its own STORY-000', async () => {
+    // The plan is the authority on every story it actually contains.
+    mockGetPublishedPlan.mockResolvedValue({
+      version: 3,
+      plan_sha256: 'abc',
+      plan: { stories: [{ id: 'STORY-000', acceptance: ['a plan-authored criterion'] }] },
+    });
+    const summary = await verifyBuildFromRepo(PROJECT_ID, { fetchImpl: githubFetch({ progress: null }) });
+
+    expect(summary.stories.filter((s) => s.story_id === 'STORY-000')).toHaveLength(1);
+    expect(summary.stories[0].criteria_total).toBe(1);
   });
 });
