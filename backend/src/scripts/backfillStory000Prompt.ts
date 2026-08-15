@@ -50,12 +50,12 @@
  * a dateless prompt; that is a supported state, not an error.
  *
  * Run (dry run, writes nothing):
- *   node backfillStory000Prompt.js
- *   node backfillStory000Prompt.js --cohort "July 2026" --verbose
+ *   node dist/scripts/backfillStory000Prompt.js
+ *   node dist/scripts/backfillStory000Prompt.js --cohort "July 2026" --verbose
  *
  * Apply:
- *   node backfillStory000Prompt.js --apply
- *   node backfillStory000Prompt.js --apply --only <projectId>
+ *   node dist/scripts/backfillStory000Prompt.js --apply
+ *   node dist/scripts/backfillStory000Prompt.js --apply --only <projectId>
  *
  * Flags:
  *   --apply            Actually write. WITHOUT THIS NOTHING IS WRITTEN.
@@ -67,35 +67,33 @@
  * Output: a table of project / student / outcome, and a count of
  * would-update / unchanged / skipped / failed.
  */
-const path = require('path');
+import { sequelize } from '../config/database';
+import { commandCenterPrompt, COMMAND_CENTER_STORY_ID } from '../services/sbp/commandCenterStory';
+import { buildSchedule, Schedule } from '../services/sbp/buildSchedule';
+import type { BuildPlan } from '../services/sbp/planContract';
 
-// Compiled TS lives in dist when this runs inside the backend container. The
-// relative hop differs depending on whether the script is run from src (ts-node)
-// or copied next to dist, so both are attempted before giving up loudly — a
-// backfill that silently rendered the WRONG prompt would be worse than one that
-// refuses to start.
-function load(moduleId) {
-  const candidates = [
-    // Explicit override first, so the script can be docker-cp'd anywhere
-    // (SBP_MODULE_DIR=/app/dist/services/sbp) without guessing hops.
-    ...(process.env.SBP_MODULE_DIR ? [path.join(process.env.SBP_MODULE_DIR, moduleId)] : []),
-    `../services/sbp/${moduleId}`,
-    `../../dist/services/sbp/${moduleId}`,
-    `./dist/services/sbp/${moduleId}`,
-    path.join(process.cwd(), 'dist', 'services', 'sbp', moduleId),
-  ];
-  const tried = [];
-  for (const c of candidates) {
-    try { return require(c); } catch (err) { tried.push(`${c} (${err.code || err.message})`); }
-  }
-  throw new Error(`Cannot load ${moduleId}. Tried:\n  ${tried.join('\n  ')}`);
+// TypeScript, not JavaScript, deliberately: this repo has no `allowJs`, so a
+// .js file under backend/src never reaches dist and the deploy step
+// `node dist/scripts/backfillStory000Prompt.js` would fail with MODULE_NOT_FOUND
+// on a production box at the exact moment somebody is trying to run a migration.
+
+interface SweepRow {
+  project_id: string;
+  enrollment_id: string;
+  email: string | null;
+  enrollment_status: string | null;
+  cohort_name: string | null;
+  cohort_start: string | Date | null;
+  plan_version: number;
+  plan_json: unknown;
+  task_id: string;
+  task_status: string;
+  verified_at: Date | string | null;
+  current_build: string | null;
 }
 
-const { commandCenterPrompt, COMMAND_CENTER_STORY_ID } = load('commandCenterStory');
-const { buildSchedule } = load('buildSchedule');
-
-function flag(name) { return process.argv.includes(`--${name}`); }
-function value(name, fallback = null) {
+function flag(name: string): boolean { return process.argv.includes(`--${name}`); }
+function value(name: string, fallback: string | null = null): string | null {
   const i = process.argv.indexOf(`--${name}`);
   return i > -1 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : fallback;
 }
@@ -139,11 +137,11 @@ const SWEEP_SQL = `
 `;
 
 /** The orchestrator's schedule derivation, per student. Null is a valid answer. */
-function scheduleFor(plan, cohortStart) {
+function scheduleFor(plan: BuildPlan, cohortStart: string | Date | null): Schedule | null {
   if (!cohortStart) return null;
-  const storiesByRelease = new Map();
+  const storiesByRelease = new Map<string, string[]>();
   for (const rel of plan.releases || []) {
-    storiesByRelease.set(rel.key, (plan.stories || []).filter((s) => s.release === rel.key).map((s) => s.id));
+    storiesByRelease.set(rel.key, (plan.stories || []).filter((x) => x.release === rel.key).map((x) => x.id));
   }
   return buildSchedule({
     window: { cohortStart: new Date(cohortStart) },
@@ -152,27 +150,30 @@ function scheduleFor(plan, cohortStart) {
   });
 }
 
-function matchesCohort(row, needle) {
+function matchesCohort(row: SweepRow, needle: string | null): boolean {
   if (!needle) return true;
   const name = String(row.cohort_name || '');
   return name.toLowerCase().includes(needle.toLowerCase());
 }
 
 async function main() {
-  const { sequelize } = require(process.env.DB_MODULE || '../config/database');
-
-  const [rows] = await sequelize.query(SWEEP_SQL, { bind: [COMMAND_CENTER_STORY_ID] });
+  const [rows] = await sequelize.query(SWEEP_SQL, { bind: [COMMAND_CENTER_STORY_ID] }) as unknown as [SweepRow[], unknown];
 
   const scoped = rows
     .filter((r) => matchesCohort(r, COHORT))
     .filter((r) => !ONLY || String(r.project_id) === ONLY);
 
-  const out = { would_update: [], unchanged: [], failed: [], skipped_no_plan: [] };
+  const out = {
+    would_update: [] as Array<Record<string, unknown>>,
+    unchanged: [] as Array<Record<string, unknown>>,
+    failed: [] as Array<Record<string, unknown>>,
+    skipped_no_plan: [] as Array<Record<string, unknown>>,
+  };
 
   for (const row of scoped) {
     const label = `${String(row.project_id).slice(0, 8)} ${row.email}`;
     try {
-      const plan = typeof row.plan_json === 'string' ? JSON.parse(row.plan_json) : row.plan_json;
+      const plan = (typeof row.plan_json === 'string' ? JSON.parse(row.plan_json) : row.plan_json) as BuildPlan;
       if (!plan || !Array.isArray(plan.stories) || plan.stories.length === 0) {
         out.skipped_no_plan.push({ project_id: row.project_id, email: row.email, reason: 'plan has no stories' });
         continue;
@@ -210,9 +211,10 @@ async function main() {
         console.log(`  ${APPLY ? 'updated  ' : 'would-upd'}  ${label}  ${current.length} -> ${next.length} chars`
           + `${row.task_status === 'complete' ? '  [complete — status untouched]' : ''}`);
       }
-    } catch (err) {
-      out.failed.push({ project_id: row.project_id, email: row.email, error: err.message });
-      console.error(`  FAILED     ${label}: ${err.message}`);
+    } catch (err: unknown) {
+      const message = (err as { message?: string })?.message ?? String(err);
+      out.failed.push({ project_id: row.project_id, email: row.email, error: message });
+      console.error(`  FAILED     ${label}: ${message}`);
     }
   }
 
@@ -249,7 +251,7 @@ async function main() {
   if (out.failed.length > 0) process.exit(1);
 }
 
-main().catch((err) => {
-  console.error(`[backfillStory000Prompt] ${err.error_class || 'Error'}: ${err.message}`);
+main().catch((err: any) => {
+  console.error(`[backfillStory000Prompt] ${err?.error_class || 'Error'}: ${err?.message}`);
   process.exit(1);
 });
