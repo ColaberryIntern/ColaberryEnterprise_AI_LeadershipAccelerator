@@ -10,9 +10,7 @@
  * (so a genuine cert isn't rejected on a wording mismatch) but strict on "is
  * this actually a completion certificate at all."
  */
-import { spawn } from 'child_process';
 import fs from 'fs/promises';
-import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
 import TimelineCard from '../../models/TimelineCard';
@@ -20,6 +18,12 @@ import TimelineCardProgress from '../../models/TimelineCardProgress';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { CERT_DIR } from '../../config/upload';
 import { COLABERRY_LOGO_PNG_BASE64 } from '../../assets/colaberryLogo';
+// Both proven here first; now shared with the agents' read_attachments tool,
+// which needs exactly the same "make these bytes acceptable to a vision model"
+// handling. Behaviour is unchanged apart from the vision edge cap, which moved
+// from 2000 to the shared MAX_VISION_EDGE — passed explicitly below to keep
+// certificate verification on the resolution it was tuned against.
+import { normalizeImageForVision as normalizeImage, rasterizePdfFirstPage } from '../agents/tools/imageNormalizer';
 
 const VERIFY_MODEL = 'gpt-4o-mini'; // supports vision + cheap
 const IMAGE_MIME_BY_EXT: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
@@ -41,16 +45,13 @@ export function resolveCertClassName(course: { name?: string | null; certName?: 
 }
 
 /**
- * OpenAI vision rejects some uploaded bytes outright — e.g. "You uploaded an
- * unsupported image" — even when the browser labeled them image/png, because
- * screenshot tools and some phone cameras write non-standard encodings (seen
- * in prod ai_events for workflow_id=skillsjar_cert_verify). Re-encode through
- * sharp into a guaranteed-valid PNG (honouring EXIF rotation) and cap the
- * longest edge so oversized captures don't hit payload/token limits either.
+ * Certificate verification reads small print (course title, recipient name), so
+ * it keeps the 2000px edge it was tuned against rather than the shared default.
+ * See agents/tools/imageNormalizer for why re-encoding is required at all.
  */
+const CERT_VISION_EDGE = 2000;
 async function normalizeImageForVision(buf: Buffer): Promise<{ mime: string; dataUrl: string }> {
-  const out = await sharp(buf).rotate().resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true }).png().toBuffer();
-  return { mime: 'image/png', dataUrl: `data:image/png;base64,${out.toString('base64')}` };
+  return normalizeImage(buf, CERT_VISION_EDGE);
 }
 
 /**
@@ -80,31 +81,12 @@ async function extractPdfText(buf: Buffer): Promise<string> {
  * text extraction alone can never see the course name, "Certificate of
  * Completion" wording, or issuer — every PDF failed verification in prod
  * (confirmed: 0 of 5 real student PDF uploads ever passed, going back to
- * July). Rasterize page 1 to a PNG via poppler's `pdftoppm` (installed in the
- * backend Docker image) and route it through the same proven vision path
- * already used for image uploads. Returns null (caller falls back to text
- * extraction) if `pdftoppm` is missing or the PDF can't be rasterized.
+ * July). rasterizePdfFirstPage (now shared, in agents/tools/imageNormalizer)
+ * renders page 1 to a PNG via poppler's `pdftoppm` and routes it through the
+ * same vision path used for image uploads. It returns null when `pdftoppm` is
+ * missing or the PDF can't be rendered — below, that falls back to text
+ * extraction.
  */
-async function rasterizePdfFirstPage(buf: Buffer): Promise<Buffer | null> {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cert-pdf-'));
-  const inPath = path.join(tmpDir, 'in.pdf');
-  const outPrefix = path.join(tmpDir, 'page');
-  try {
-    await fs.writeFile(inPath, buf);
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn('pdftoppm', ['-png', '-r', '150', '-f', '1', '-l', '1', '-singlefile', inPath, outPrefix]);
-      let stderr = '';
-      proc.stderr.on('data', (d) => { stderr += d; });
-      proc.on('error', reject);
-      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`pdftoppm exited ${code}: ${stderr}`))));
-    });
-    return await fs.readFile(`${outPrefix}.png`);
-  } catch {
-    return null;
-  } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-  }
-}
 
 const SYSTEM = 'You verify whether an uploaded file is a genuine course/exam COMPLETION or ACHIEVEMENT certificate issued to a person. Be strict about it actually being a certificate; do not accept random screenshots, photos, invoices, or unrelated documents. Return STRICT json.';
 

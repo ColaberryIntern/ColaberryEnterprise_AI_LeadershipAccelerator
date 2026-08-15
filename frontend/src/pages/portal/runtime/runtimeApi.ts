@@ -1,4 +1,5 @@
 import portalApi from '../../../utils/portalApi';
+import type { AttachmentRef } from '../../../services/agentAttachmentApi';
 
 /**
  * runtimeApi — the Learning Runtime client + types. The Runtime consumes the
@@ -184,8 +185,10 @@ export const runtimeApi = {
     portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/complete`, {}).then((r) => r.data as { already: boolean; outcome?: any; artifact?: any; readiness?: Readiness; receipt: AmReceipt; evaluation: AmProgress['evaluation']; baseline: boolean; ledger: AmLedger }),
   architectLedger: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/architect/ledger`).then((r) => r.data as { ledger: AmLedger }),
   nudge: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/nudge`).then((r) => r.data as Nudge),
-  mentor: (cardId: string, mode: string, message: string, history: Array<{ role: string; content: string }>) =>
-    portalApi.post(`/api/portal/runtime/cards/${cardId}/mentor`, { mode, message, history }).then((r) => r.data as MentorReply),
+  // `attachments` = ids of files the student handed Cory on this turn
+  // (read_attachments tool); the bytes were uploaded separately.
+  mentor: (cardId: string, mode: string, message: string, history: Array<{ role: string; content: string }>, attachments: AttachmentRef[] = []) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/mentor`, { mode, message, history, attachments }).then((r) => r.data as MentorReply),
   reflection: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/reflection`).then((r) => r.data as { questions: string[] }),
   promptLab: (cardId: string, prompt: string, output?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/prompt-lab`, { prompt, output }).then((r) => r.data as PromptEval),
   complete: (cardId: string, work?: string, reflection?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/complete`, { work, reflection }).then((r) => r.data as { outcome: any; artifact: any; readiness: Readiness }),

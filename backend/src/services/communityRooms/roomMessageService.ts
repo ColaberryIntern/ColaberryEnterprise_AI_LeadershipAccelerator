@@ -30,6 +30,12 @@ export interface PostMessageInput {
   kind?: RoomMessageKind;
   thread_root_id?: string;
   resource_id?: string;
+  /**
+   * Files handed to an agent on this message (read_attachments tool). Distinct
+   * from `resource_id`, which links a room's Docs & Files entry: these are
+   * ad-hoc uploads owned by the sender, not room library documents.
+   */
+  attachments?: Array<{ id: string; name?: string | null }>;
 }
 
 export async function postMessage(ctx: RoomAccessContext, roomId: string, input: PostMessageInput): Promise<RoomMessage> {
@@ -53,6 +59,28 @@ export async function postMessage(ctx: RoomAccessContext, roomId: string, input:
       throw validationError('That file could not be attached to this message');
     }
     metadata = { resource_id: resource.id };
+  }
+
+  // Agent attachments follow the SAME rule as resource_id above: never trust a
+  // client-supplied id pairing. Each id is re-verified as belonging to the
+  // sender before it is persisted, so a message can never carry a reference to
+  // another student's file — even though the tool would refuse to read it
+  // anyway. Unknown ids are dropped rather than rejected: a stale id should not
+  // cost the student the message they typed.
+  if (Array.isArray(input.attachments) && input.attachments.length) {
+    // Non-uuid ids are filtered BEFORE the query: a malformed id reaching the
+    // uuid column makes Postgres throw `invalid input syntax for type uuid`,
+    // turning a bad reference into a 500 on someone's chat message.
+    const ids = input.attachments
+      .map((a) => String(a?.id || ''))
+      .filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+    const AgentAttachment = (await import('../../models/AgentAttachment')).default;
+    const owned = ids.length
+      ? await AgentAttachment.findAll({ where: { id: ids, enrollment_id: ctx.enrollmentId } })
+      : [];
+    if (owned.length) {
+      metadata = { ...metadata, attachments: owned.map((a) => ({ id: a.id, name: a.filename })) };
+    }
   }
 
   const member = await getOrCreateMember(ctx.enrollmentId);

@@ -53,6 +53,7 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 import { ensureSbpSchema } from './db/ensureSbpSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
+import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
@@ -2433,6 +2434,8 @@ async function start(): Promise<void> {
   // dead credential that only an interactive re-consent can recover.
   await ensureOauthTokenVaultSchema();
   await ensureWorkspaceRepoSchema();
+  // Files a student hands to an agent (Cory, Reese) for the read_attachments tool.
+  await ensureAgentAttachmentSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).

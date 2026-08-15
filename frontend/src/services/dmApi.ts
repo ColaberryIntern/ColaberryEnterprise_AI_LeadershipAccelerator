@@ -1,5 +1,6 @@
 import portalApi from '../utils/portalApi';
 import { getParticipantToken } from '../utils/participantToken';
+import type { AttachmentRef } from './agentAttachmentApi';
 
 // 1:1 direct messages. Talks to /api/portal/dm/* (a DM is a 2-person private
 // room server-side; this client only ever sees a roomId + messages).
@@ -29,8 +30,17 @@ export async function fetchDmMessages(roomId: string, since?: string): Promise<D
   return data.messages || [];
 }
 
-export async function sendDmMessage(roomId: string, content: string): Promise<DmMessage> {
-  const { data } = await portalApi.post<{ message: DmMessage }>(`/api/portal/dm/${roomId}/send`, { content });
+/**
+ * Send a DM. `attachments` are ids of files uploaded via the agent-attachment
+ * endpoint — an agent on the other end (Reese) reads them; a human peer just
+ * sees them on the message. Content may be empty when something is attached.
+ */
+export async function sendDmMessage(
+  roomId: string,
+  content: string,
+  attachments: AttachmentRef[] = [],
+): Promise<DmMessage> {
+  const { data } = await portalApi.post<{ message: DmMessage }>(`/api/portal/dm/${roomId}/send`, { content, attachments });
   return data.message;
 }
 

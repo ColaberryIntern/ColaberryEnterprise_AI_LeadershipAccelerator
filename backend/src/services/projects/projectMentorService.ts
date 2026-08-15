@@ -15,6 +15,7 @@
 import { coach, MentorMode } from '../runtime/mentorService';
 import StudentTask from '../../models/StudentTask';
 import Project from '../../models/Project';
+import type { AttachmentRef } from '../agents/tools/types';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -74,6 +75,7 @@ export async function coachOnTask(
   mode: MentorMode,
   message: string,
   history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+  attachments: AttachmentRef[] = [],
 ) {
   return coach(
     enrollmentId,
@@ -97,5 +99,8 @@ export async function coachOnTask(
     mode,
     message,
     history,
+    // Straight through — the grant check and the owner check both live in
+    // coach()/the tool, so this surface adds no rules of its own.
+    attachments,
   );
 }
