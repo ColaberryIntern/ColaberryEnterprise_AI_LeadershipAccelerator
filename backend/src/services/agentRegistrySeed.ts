@@ -2581,6 +2581,50 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
  * Seed the full agent registry (129 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
+/**
+ * Agents deliberately taken out of service, with the reason. The cron
+ * registration in aiOpsScheduler.ts is removed separately; this keeps the
+ * AiAgent row disabled so health alerting does not fire on a job nobody
+ * intends to run. Value is the reason, surfaced in the boot log.
+ */
+const RETIRED_AGENTS: Record<string, string> = {
+  // Detected stalled students, missing artifacts and gating checkpoints, but an
+  // exhaustive search of the build found NOTHING reading its output. Had been
+  // silently disabled for five months with no student-facing impact, because
+  // the agent has no side effects (no writes, no sends).
+  StudentProgressMonitor: 'retired 2026-08-15 — nothing consumed its output',
+  // Was registered twice under one agent_name with two different runners and
+  // two different schedules, so it ran on both while a single governance row
+  // covered them ambiguously. The manual admin trigger in companyRoutes.ts is
+  // left working, so the cycle can still be run on demand.
+  CompanyStrategicCycle: 'retired 2026-08-15 — duplicate registration; run manually via companyRoutes',
+};
+
+/**
+ * Hold every retired agent disabled, whether or not it appears in
+ * AGENT_REGISTRY — CompanyStrategicCycle, for one, was never seeded there, so a
+ * check inside the seed loop would silently skip it.
+ *
+ * Removing the cron registration alone is NOT enough: the AiAgent row would stay
+ * `enabled` with `trigger_type: 'cron'`, and cronHealthAlertService selects on
+ * exactly that pair — it would raise a severity-5 "missed runs" alert forever
+ * about a job we retired on purpose. Runs every boot so it cannot drift back on.
+ */
+async function enforceRetiredAgents(): Promise<void> {
+  for (const [agentName, reason] of Object.entries(RETIRED_AGENTS)) {
+    try {
+      const agent = await AiAgent.findOne({ where: { agent_name: agentName } });
+      if (!agent) continue; // never registered here — nothing to hold down
+      if (!agent.enabled) continue; // already retired; stay quiet on every boot
+      await agent.update({ enabled: false, status: 'paused' });
+      console.warn(`[AI Ops] RETIRED: Disabled ${agentName} — ${reason}`);
+    } catch (err: any) {
+      // One bad row must not abort seeding for everything else.
+      console.error(`[AI Ops] Failed to enforce retirement for ${agentName}: ${err.message}`);
+    }
+  }
+}
+
 export async function seedAgentRegistry(): Promise<void> {
   for (const entry of AGENT_REGISTRY) {
     const [agent, created] = await AiAgent.findOrCreate({
@@ -2617,7 +2661,10 @@ export async function seedAgentRegistry(): Promise<void> {
       await agent.update({ enabled: false, status: 'paused' });
       console.warn(`[AI Ops] SAFETY: Disabled ${entry.agent_name} — must use suggestion-only mode`);
     }
+
   }
+
+  await enforceRetiredAgents();
 
   // Assign agent_group to existing agents for super-agent aggregation
   await assignAgentGroups();

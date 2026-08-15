@@ -9,7 +9,6 @@ import {
   runContentOptimization,
   runConversationOptimization,
   runOrchestrationHealth,
-  runStudentProgress,
   runPromptMonitor,
   runOrchestrationRepair,
   runCampaignQA,
@@ -50,7 +49,6 @@ import {
   runWeeklyReportAgent,
   runWorkforceIntelligenceAgent,
   runWorkforceTicketAutoResolverAgent,
-  runCompanyStrategicCycleAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
   runStrategyFuturesArchitect,
@@ -125,14 +123,13 @@ const UNINSTRUMENTED_AGENTS = new Set([
 // for five months (seeded `enabled=false` the day the governance feature
 // shipped) while the UI reported the change as applied. A control that silently
 // does nothing is worse than no control.
-// NOTE: agent_name is NOT unique across the registry. `CompanyStrategicCycle`
-// is registered twice, with two different runners and two different schedules
-// ('15,45 * * * *' and '0 */4 * * *'), so that agent has always been scheduled
-// twice and run on both. Whether that is intended is a separate question — what
-// matters here is that a Map keyed by agent_name would keep only the LAST task
-// and silently orphan the first, leaving a live cron job that reload could
-// never stop. Storing a list per agent keeps every task tracked and stoppable,
-// and preserves the existing run-on-both-schedules behaviour exactly.
+// NOTE: agent_name is not guaranteed unique across the registry, so tasks are
+// stored as a LIST per agent. `CompanyStrategicCycle` was registered twice
+// (two runners, two schedules) until it was retired on 2026-08-15; a Map holding
+// a single task per agent kept only the LAST one and silently orphaned the
+// first, leaving a live cron job that reload could never stop. The list keeps
+// every task tracked and stoppable, and is retained deliberately — nothing
+// prevents a duplicate agent_name from being reintroduced.
 const activeTasks = new Map<string, { task: ScheduledTask; schedule: string }[]>();
 
 export interface ScheduleReloadResult {
@@ -163,7 +160,16 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Platform agents
   { agentName: 'OrchestrationHealthAgent', hardcodedSchedule: '*/5 * * * *', runner: runOrchestrationHealth, label: 'Orchestration health' },
-  { agentName: 'StudentProgressMonitor', hardcodedSchedule: '*/2 * * * *', runner: runStudentProgress, label: 'Student progress monitor' },
+  // RETIRED 2026-08-15 (Ali's decision, session CC-20260814-k4m9): StudentProgressMonitor.
+  // It detected genuinely useful things — students stalled >48h on a lesson, missing
+  // artifacts, gating checkpoints — but an exhaustive search of the build showed NOTHING
+  // read its output: `stuck_student_detected`, `missing_artifacts_detected` and
+  // `gating_checkpoint_detected` appeared only in the agent that wrote them. It had
+  // already been silently disabled in the governance DB for five months with no
+  // student-facing impact, because the agent has no side effects at all (no writes, no
+  // sends). Retired rather than left enabled-and-alarming. The manual trigger in
+  // aiOpsController.ts ('student_monitor') is left in place and safely no-ops via
+  // runAgent()'s enabled check.
   { agentName: 'PromptMonitorAgent', hardcodedSchedule: '*/1 * * * *', runner: runPromptMonitor, label: 'Prompt monitor' },
   { agentName: 'OrchestrationAutoRepairAgent', hardcodedSchedule: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *', runner: runOrchestrationRepair, label: 'Orchestration auto-repair' },
 
@@ -177,15 +183,14 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // file calls AiAgent.update for its own row.
   { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: () => trackAgentRun('AutonomousEngine', runAutonomousCycle), label: 'Autonomous engine' },
   { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: () => trackAgentRun('AICOOStrategicCycle', runCoryStrategicCycle), label: 'Cory Brain strategic cycle' },
-  { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '15,45 * * * *', runner: async () => {
-    const { isCompanyLayerEnabled } = await import('./company/companyToCoryAdapter');
-    if (!(await isCompanyLayerEnabled())) return;
-    const { getActiveCompany } = await import('./company/companyService');
-    const company = await getActiveCompany();
-    if (!company) return;
-    const { runCompanyStrategicCycle } = await import('./company/companyStrategyAgent');
-    return runCompanyStrategicCycle((company as any).id);
-  }, label: 'Company CEO strategic cycle' },
+  // RETIRED 2026-08-15 (Ali's decision, session CC-20260814-k4m9): both
+  // CompanyStrategicCycle registrations removed. It was registered TWICE under
+  // one agent_name with two different runners and two different schedules
+  // ('15,45 * * * *' here and '0 */4 * * *' below), so it ran on both — and one
+  // governance row covered both, making any schedule override ambiguous.
+  // Retired entirely rather than de-duplicated. The manual admin trigger in
+  // routes/admin/companyRoutes.ts calls runCompanyStrategicCycle() directly and
+  // is deliberately left working, so the cycle can still be run on demand.
   { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: () => trackAgentRun('MetaAgentLoop', runMetaAgentLoop), label: 'Meta-agent loop' },
   { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
   { agentName: 'ApolloWeeklyEnrollmentAgent', hardcodedSchedule: '0 14 * * 1-5', runner: runWeeklyLeadEnrollment, label: 'Daily cold lead enrollment (Mon-Fri 9 AM CT, 20/day)' },
@@ -237,7 +242,7 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // current stats; the offset just avoids simultaneous DB load, not a real ordering
   // dependency). See workforceTicketAutoResolver.ts for the re-check/close logic.
   { agentName: 'WorkforceTicketAutoResolver', hardcodedSchedule: '15 */6 * * *', runner: runWorkforceTicketAutoResolverAgent, label: 'Workforce ticket auto-resolve (re-check + close on recovery)' },
-  { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '0 */4 * * *', runner: runCompanyStrategicCycleAgent, label: 'Company strategic cycle (CEO Agent)' },
+  // RETIRED 2026-08-15 — second of the two CompanyStrategicCycle registrations. See note above.
 
   // Department Strategy Architects (every 6 hours, staggered)
   { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },
