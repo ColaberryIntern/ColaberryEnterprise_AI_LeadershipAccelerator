@@ -115,7 +115,10 @@ const ProjectWorkspacePage: React.FC = () => {
     if (!task || msgs.length) return;
     setMsgs([{
       role: 'assistant',
-      content: `I'm Cory, your mentor for "${task.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`,
+      // The screenshot line is here rather than in a tooltip because a
+      // paperclip nobody notices is the same as no paperclip. Cory saying it
+      // in the opening turn is the one place every student actually reads.
+      content: `I'm Cory, your mentor for "${task.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers. Stuck on an error? Paste or drag a screenshot straight in and I'll read it.`,
     }]);
   }, [task, msgs.length]);
 
@@ -396,7 +399,7 @@ const ProjectWorkspacePage: React.FC = () => {
               value={mentorInput}
               onChange={(e) => setMentorInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && canSend && ask('ask', mentorInput || 'Take a look at this.')}
-              placeholder="Ask your mentor…"
+              placeholder="Ask your mentor, or paste a screenshot…"
               {...attach.pasteProps}
             />
             <button className="rt-btn pri" disabled={busy === 'mentor' || !canSend} onClick={() => ask('ask', mentorInput || 'Take a look at this.')}>Send</button>
