@@ -79,6 +79,14 @@ describe('the command', () => {
     expect(cmd).toContain('if [ -n "$HOOK_ID" ]; then');
   });
 
+  it('IS ONE LINE, because the student pastes it into a chat', async () => {
+    // Story 000 asks the student to paste this to Claude Code. A message box
+    // sends on the first newline, so a multi-line block ships truncated and the
+    // student gets an unterminated-`if` error instead of a working webhook.
+    const cmd = (await getWebhookSetup(ENROLLMENT, PROJECT))!.gh_command!;
+    expect(cmd).not.toContain('\n');
+  });
+
   it('registers for push events only, as JSON', async () => {
     const cmd = (await getWebhookSetup(ENROLLMENT, PROJECT))!.gh_command!;
     expect(cmd).toContain("-f 'events[]=push'");

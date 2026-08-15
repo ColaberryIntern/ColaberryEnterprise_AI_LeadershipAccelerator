@@ -83,19 +83,22 @@ const unavailable = (): WebhookSetupView => ({
  */
 function buildGhCommand(owner: string, repo: string, url: string, secret: string): string {
   const slug = `${owner}/${repo}`;
+  // ONE LINE, deliberately, even though it reads worse than the block form.
+  //
+  // The student pastes this into a CHAT with Claude Code, not only into a
+  // terminal. A multi-line block pasted into a message box gets sent on the
+  // first newline, so the student ships a truncated first line, gets an error
+  // about an unterminated `if`, and now has a debugging problem instead of a
+  // setup step. One line survives every paste target we actually use.
   return [
-    `HOOK_ID=$(gh api repos/${slug}/hooks --jq '.[] | select(.config.url=="${url}") | .id' | head -1)`,
-    `if [ -n "$HOOK_ID" ]; then`,
-    `  gh api repos/${slug}/hooks/$HOOK_ID --method PATCH \\`,
-    `    -f 'config[url]=${url}' -f 'config[content_type]=json' \\`,
-    `    -f 'config[secret]=${secret}' -F active=true`,
-    `else`,
-    `  gh api repos/${slug}/hooks --method POST \\`,
-    `    -f name=web -F active=true -f 'events[]=push' \\`,
-    `    -f 'config[url]=${url}' -f 'config[content_type]=json' \\`,
-    `    -f 'config[secret]=${secret}'`,
+    `HOOK_ID=$(gh api repos/${slug}/hooks --jq '.[] | select(.config.url=="${url}") | .id' | head -1);`,
+    `if [ -n "$HOOK_ID" ];`,
+    `then gh api repos/${slug}/hooks/$HOOK_ID --method PATCH`,
+    `-f 'config[url]=${url}' -f 'config[content_type]=json' -f 'config[secret]=${secret}' -F active=true;`,
+    `else gh api repos/${slug}/hooks --method POST -f name=web -F active=true -f 'events[]=push'`,
+    `-f 'config[url]=${url}' -f 'config[content_type]=json' -f 'config[secret]=${secret}';`,
     `fi`,
-  ].join('\n');
+  ].join(' ');
 }
 
 /**
