@@ -11,6 +11,14 @@
  * These tests pin that isolation and the diagnosis quality of the failure.
  */
 jest.mock('axios', () => ({ __esModule: true, default: { post: jest.fn(), get: jest.fn() } }));
+// graphMailService now resolves its refresh token through the vault, which
+// pulls in config/database -> config/env and would demand a real JWT_SECRET at
+// import time. Stubbed so this suite stays a pure unit test of the send path.
+jest.mock('../graphTokenStore', () => ({
+  getRefreshToken: jest.fn().mockResolvedValue('refresh-token'),
+  saveRotatedToken: jest.fn().mockResolvedValue(undefined),
+  invalidateStoredToken: jest.fn().mockResolvedValue(undefined),
+}));
 
 import axios from 'axios';
 import { replyToMessage, MailSendConsentError } from '../graphMailService';

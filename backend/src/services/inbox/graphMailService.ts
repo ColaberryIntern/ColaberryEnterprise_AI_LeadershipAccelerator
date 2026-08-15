@@ -3,6 +3,7 @@
  * Uses OAuth2 public client with refresh token — no client secret needed.
  */
 import axios from 'axios';
+import { getRefreshToken, saveRotatedToken, invalidateStoredToken } from './graphTokenStore';
 
 const LOG_PREFIX = '[InboxCOS][Graph]';
 
@@ -74,11 +75,24 @@ function wrapGraphError(error: any, context: string): Error {
   return wrapped;
 }
 
+/** True for the AAD responses that mean "this refresh token is no longer usable". */
+function isRejectedGrant(error: any): boolean {
+  const data = error?.response?.data;
+  const code = typeof data?.error === 'string' ? data.error : '';
+  const description = typeof data?.error_description === 'string' ? data.error_description : '';
+  // AADSTS70000 is scope-not-consented, NOT a dead token — excluded on purpose,
+  // since clearing the vault for it would discard a perfectly good credential.
+  if (/AADSTS70000/.test(description)) return false;
+  return code === 'invalid_grant' || /AADSTS70008|AADSTS50173|expired|revoked/i.test(description);
+}
+
 async function getAccessToken(): Promise<string> {
   if (cachedAccessToken && Date.now() < tokenExpiry) return cachedAccessToken;
 
   const clientId = process.env.MS_GRAPH_CLIENT_ID!;
-  const refreshToken = process.env.MS_GRAPH_REFRESH_TOKEN!;
+  // Vault first, env second — see graphTokenStore. Rotations are persisted, so
+  // the env var is only the initial seed, not the running source of truth.
+  const refreshToken = (await getRefreshToken())!;
 
   let res;
   try {
@@ -93,14 +107,21 @@ async function getAccessToken(): Promise<string> {
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
   } catch (error: any) {
+    // If the token we just used came from the vault and AAD has rejected it,
+    // clear it so the next attempt falls back to the env var. Without this the
+    // vault would keep serving a dead token forever, since it always wins.
+    if (isRejectedGrant(error) && refreshToken !== process.env.MS_GRAPH_REFRESH_TOKEN) {
+      await invalidateStoredToken();
+    }
     throw wrapGraphError(error, 'Token refresh');
   }
 
   cachedAccessToken = res.data.access_token;
   tokenExpiry = Date.now() + (res.data.expires_in - 60) * 1000;
 
+  // Persist the rotation instead of logging and discarding it.
   if (res.data.refresh_token && res.data.refresh_token !== refreshToken) {
-    console.log(`${LOG_PREFIX} Refresh token rotated — update MS_GRAPH_REFRESH_TOKEN env var`);
+    await saveRotatedToken(res.data.refresh_token);
   }
 
   return cachedAccessToken!;
@@ -184,17 +205,23 @@ export class MailSendConsentError extends Error {
  * consent state we expect to change would just delay picking up the fix.
  */
 async function getSendAccessToken(): Promise<string> {
+  const refreshToken = (await getRefreshToken())!;
   try {
     const res = await axios.post(
       'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
       new URLSearchParams({
         client_id: process.env.MS_GRAPH_CLIENT_ID!,
         grant_type: 'refresh_token',
-        refresh_token: process.env.MS_GRAPH_REFRESH_TOKEN!,
+        refresh_token: refreshToken,
         scope: SEND_SCOPE,
       }).toString(),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 20000 },
     );
+    // The send refresh rotates too — persist it, or a send would silently undo
+    // the read path's bookkeeping by leaving a newer token unrecorded.
+    if (res.data.refresh_token && res.data.refresh_token !== refreshToken) {
+      await saveRotatedToken(res.data.refresh_token);
+    }
     return res.data.access_token;
   } catch (error: any) {
     const { message } = extractGraphErrorDetail(error);
