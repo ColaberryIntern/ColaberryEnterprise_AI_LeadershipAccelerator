@@ -36,7 +36,13 @@ jest.mock('../planStore', () => ({
   getPlan: (...a: any[]) => mockGetPlan(...a),
   publishPlan: (...a: any[]) => mockPublishPlan(...a),
 }));
-jest.mock('../repoWriter', () => ({ writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a) }));
+jest.mock('../repoWriter', () => ({
+  writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a),
+  readRepoManifest: async () => null,
+}));
+jest.mock('../buildProgressSnapshot', () => ({
+  loadBuildProgress: async () => ({ progress: [], baselineByStory: {} }),
+}));
 jest.mock('../materializeTasks', () => ({ materializePlanAsTasks: (...a: any[]) => mockMaterialize(...a) }));
 jest.mock('../workspaceRepo', () => ({ repoForProject: (...a: any[]) => mockRepoFor(...a) }));
 // The active-project pointer write and the cohort schedule lookup both reach

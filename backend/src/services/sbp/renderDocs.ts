@@ -16,7 +16,12 @@
  */
 import { createHash } from 'crypto';
 import { BuildPlan, PlanRelease, PlanRequirement, PlanStory, isConstraint } from './planContract';
-import { PROGRESS_FILE_PATH, renderProgressFile, serialiseProgressFile } from './verification/progressContract';
+import {
+  PROGRESS_FILE_PATH, StoryProgressInput, renderProgressFile, serialiseProgressFile,
+} from './verification/progressContract';
+import { PLAN_FILE_PATH, buildPlanDocument, serialisePlanDocument } from './planDocument';
+import { PROFILE_FILE_PATH, renderProfileSeed, serialiseProfileFile } from './profileContract';
+import type { Schedule } from './buildSchedule';
 
 export interface RenderedFile {
   /** Repo-relative, forward slashes, inside the allowlist. */
@@ -27,11 +32,31 @@ export interface RenderedFile {
 export interface RenderContext {
   /** Clone URL, when a repo is provisioned. Omitted ⇒ prompts must not cite paths. */
   repoUrl?: string | null;
-  /** Stamped into the manifest. Passed in, never read from a clock — purity. */
+  /**
+   * Stamped into the MANIFEST ONLY, never into plan.json or progress.json.
+   *
+   * This is the freshness signal the Command Center reads, and it lives in the
+   * manifest because the manifest is excluded from the change comparison in
+   * `changedFiles`. Put a clock in either of the other two files and every sync
+   * commits a file whose only difference is the time it was written — churning
+   * the student's git history to say nothing. Passed in, never read from a
+   * clock here, so rendering stays pure.
+   */
   generatedAt?: string;
   planVersion?: number;
   planSha256?: string;
   correlationId?: string;
+  /** Real cohort dates. Null ⇒ the plan renders without due dates, as before. */
+  schedule?: Schedule | null;
+  /**
+   * Server-side build progress, mirrored into progress.json so a static page
+   * can show what is verified with no API call. Omitted ⇒ the plan side only.
+   */
+  progress?: StoryProgressInput[] | null;
+  /** story_id ⇒ `YYYY-MM-DD` from `student_tasks.due_baseline_on` (write-once). */
+  baselineByStory?: Record<string, string | null> | null;
+  /** Where the student's Command Center is published, when it is. */
+  commandCenterUrl?: string | null;
 }
 
 /**
@@ -289,22 +314,21 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
     });
   }
 
-  // Machine-readable bookkeeping. The manifest is what conflict detection and
-  // prompt-path assertion both read, so it is built from the files above rather
-  // than restated — it cannot describe a file that was not rendered.
-  // Serialize a canonically ORDERED plan, not the plan as handed to us. Two
-  // structurally identical plans whose arrays arrived in a different order must
-  // produce byte-identical output, or repoWriter sees a changed hash and makes a
-  // commit that changes nothing — breaking the "unchanged ⇒ no commit" guarantee
-  // (FR-026) and churning the student's history.
+  // The data half of the Command Center. Canonically ORDERED, never the plan as
+  // handed to us: two structurally identical plans whose arrays arrived in a
+  // different order must produce byte-identical output, or repoWriter sees a
+  // changed hash and makes a commit that changes nothing — breaking the
+  // "unchanged ⇒ no commit" guarantee (FR-026) and churning the student's
+  // history. buildPlanDocument sorts every collection for exactly that reason.
   files.push({
-    path: '.colaberry/plan.json',
-    content: `${JSON.stringify({
-      ...plan,
-      requirements: byKey(plan.requirements, (r) => r.id),
-      releases: byKey(plan.releases, (r) => r.key),
-      stories: byKey(plan.stories, (s) => s.id),
-    }, null, 2)}\n`,
+    path: PLAN_FILE_PATH,
+    content: serialisePlanDocument(buildPlanDocument(plan, {
+      repoUrl: ctx.repoUrl ?? null,
+      planVersion: ctx.planVersion ?? null,
+      planSha256: ctx.planSha256 ?? null,
+      schedule: ctx.schedule ?? null,
+      baselineByStory: ctx.baselineByStory ?? null,
+    })),
   });
   // The two-way contract. The platform writes the plan side — every story, every
   // acceptance criterion, all `passed: false`; Claude Code writes the completion
@@ -316,8 +340,22 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
   files.push({
     path: PROGRESS_FILE_PATH,
     content: serialiseProgressFile(
-      renderProgressFile(byKey(plan.stories, (s) => s.id), plan.project_name),
+      renderProgressFile(byKey(plan.stories, (s) => s.id), plan.project_name, {
+        progress: ctx.progress ?? null,
+        repoUrl: ctx.repoUrl ?? null,
+      }),
     ),
+  });
+  // The portfolio layer. SEEDED ONLY — repoWriter replaces this with whatever
+  // the student already has, so the bytes below are what a repo gets exactly
+  // once and never again. Emitted here rather than at the writer so it appears
+  // in the manifest and in the downloadable bundle like every other file.
+  files.push({
+    path: PROFILE_FILE_PATH,
+    content: serialiseProfileFile(renderProfileSeed({
+      repoUrl: ctx.repoUrl ?? null,
+      commandCenterUrl: ctx.commandCenterUrl ?? null,
+    })),
   });
   files.push({
     path: '.colaberry/manifest.json',

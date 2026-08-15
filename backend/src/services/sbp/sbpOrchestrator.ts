@@ -41,9 +41,11 @@ import { scopeAgents, agentScopingEnabledFor } from './scopeAgents';
 import { env } from '../../config/env';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
-import { writeDocsToRepo } from './repoWriter';
+import { writeDocsToRepo, readRepoManifest } from './repoWriter';
+import { loadBuildProgress } from './buildProgressSnapshot';
 import { materializePlanAsTasks } from './materializeTasks';
-import { buildSchedule, Schedule } from './buildSchedule';
+import { Schedule } from './buildSchedule';
+import { scheduleForEnrollment } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
 import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
@@ -421,23 +423,50 @@ export async function publishBuild(
     return { status: 'awaiting_repo', planVersion: published.version, commitSha: null, filesWritten: 0, repoUrl: null };
   }
 
+  // The schedule is now computed BEFORE the render, not after it. Real dates
+  // (due dates, baselines, demo day, the demo target release) are part of the
+  // Command Center's data contract, and a page cannot show a Gantt chart of
+  // dates the file does not carry. Materialization still consumes the same
+  // object further down, so this is a hoist, not a second computation.
+  const schedule = await scheduleFor(opts.enrollmentId, published.plan as BuildPlan, correlationId);
+
+  // What the platform already knows about this build, mirrored into the repo so
+  // a static page can render verified/points/commit without an API call.
+  const snapshot = await loadBuildProgress(projectId, opts.enrollmentId);
+
   const files = renderDocs(published.plan as BuildPlan, {
     repoUrl: opts.repo.url,
     generatedAt: new Date().toISOString(),
     planVersion: published.version,
     planSha256: published.plan_sha256,
     correlationId: correlationId ?? undefined,
+    schedule,
+    progress: snapshot.progress,
+    baselineByStory: snapshot.baselineByStory,
   });
+
+  // Read the manifest that is already in the repo, so the content-hash check in
+  // `changedFiles` can actually run.
+  //
+  // This argument was `null` with a TODO against it, and the cost was concrete:
+  // `parseManifestHashes(null)` returns `{}`, every file therefore looked
+  // changed, and every republish committed the whole document set. The
+  // "unchanged ⇒ no commit" guarantee was fully implemented and unit-tested but
+  // never once exercised in production — students got a commit per publish that
+  // touched nothing.
+  const existingManifest = await readRepoManifest(
+    { owner: opts.repo.owner, repo: opts.repo.repo },
+    { correlationId: correlationId ?? undefined },
+  );
 
   const write = await writeDocsToRepo(
     { owner: opts.repo.owner, repo: opts.repo.repo },
     files,
-    null,   // TODO(step 6): read the existing manifest so conflict detection can run
+    existingManifest,
     { correlationId: correlationId ?? undefined },
   );
 
   // Materialize AFTER the write, so prompts can cite paths now proven to exist.
-  const schedule = await scheduleFor(opts.enrollmentId, published.plan as BuildPlan, correlationId);
   const materialized = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, {
     repoUrl: opts.repo.url,
     manifestPaths: files.map((f) => f.path),
@@ -467,49 +496,11 @@ export function planMatchesReviewed(plan: BuildPlan, expectedSha: string): boole
 
 
 /**
- * Real dates for this student's cohort, or null when the cohort has no start
- * date recorded.
- *
- * Null is a normal outcome, not an error: tasks materialize without due dates
- * exactly as they did before. A missing cohort date must never cost a student
- * their build.
+ * Real dates for this student's cohort. Lives in `scheduleForEnrollment` now,
+ * because the sync-time document refresh needs the same answer and a second
+ * copy is how the two paths would drift.
  */
-async function scheduleFor(
-  enrollmentId: string, plan: BuildPlan, correlationId: string | null,
-): Promise<Schedule | null> {
-  try {
-    const { sequelize } = await import('../../config/database');
-    const [rows]: any = await sequelize.query(
-      `SELECT c.start_date FROM enrollments e
-         JOIN cohorts c ON c.id = e.cohort_id
-        WHERE e.id = $eid AND c.start_date IS NOT NULL LIMIT 1`,
-      { bind: { eid: enrollmentId } },
-    );
-    const start = rows?.[0]?.start_date;
-    if (!start) {
-      log('sbp_schedule_skipped', correlationId, 'partial', { enrollmentId, reason: 'cohort has no start_date' });
-      return null;
-    }
-
-    const storiesByRelease = new Map<string, string[]>();
-    for (const rel of plan.releases) {
-      storiesByRelease.set(rel.key, plan.stories.filter((s) => s.release === rel.key).map((s) => s.id));
-    }
-    const schedule = buildSchedule({
-      window: { cohortStart: new Date(start) },
-      releases: plan.releases,
-      storiesByRelease,
-    });
-    log('sbp_schedule_built', correlationId, 'success', {
-      buildWeeks: schedule.buildWeeks, capacity: schedule.capacity, totalTasks: schedule.totalTasks,
-      demoRelease: schedule.demoReleaseKey, demoDay: schedule.demoDay.toISOString().slice(0, 10),
-    });
-    return schedule;
-  } catch (err: any) {
-    log('sbp_schedule_failed', correlationId, 'failure', { enrollmentId, message: err?.message });
-    return null;
-  }
-}
+const scheduleFor = scheduleForEnrollment;
 
 /**
  * Point the student's portal at the project they just published.
