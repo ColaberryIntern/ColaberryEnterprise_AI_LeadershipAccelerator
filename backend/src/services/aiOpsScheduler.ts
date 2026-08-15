@@ -49,6 +49,7 @@ import {
   runSkoolNotificationResponseAgent,
   runWeeklyReportAgent,
   runWorkforceIntelligenceAgent,
+  runWorkforceTicketAutoResolverAgent,
   runCompanyStrategicCycleAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
@@ -223,6 +224,11 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Company layer agents
   { agentName: 'WorkforceIntelligence', hardcodedSchedule: '0 */6 * * *', runner: runWorkforceIntelligenceAgent, label: 'Workforce intelligence analysis' },
+  // Runs 15 minutes after each analysis pass (offset only — the two are independent:
+  // analysis creates tickets from current stats, this closes existing tickets from
+  // current stats; the offset just avoids simultaneous DB load, not a real ordering
+  // dependency). See workforceTicketAutoResolver.ts for the re-check/close logic.
+  { agentName: 'WorkforceTicketAutoResolver', hardcodedSchedule: '15 */6 * * *', runner: runWorkforceTicketAutoResolverAgent, label: 'Workforce ticket auto-resolve (re-check + close on recovery)' },
   { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '0 */4 * * *', runner: runCompanyStrategicCycleAgent, label: 'Company strategic cycle (CEO Agent)' },
 
   // Department Strategy Architects (every 6 hours, staggered)
