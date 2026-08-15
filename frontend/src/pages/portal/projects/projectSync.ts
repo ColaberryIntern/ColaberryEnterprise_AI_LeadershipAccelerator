@@ -15,8 +15,11 @@
  */
 import portalApi from '../../../utils/portalApi';
 import type { StudentProject, ProjectTask, TaskState } from './projectsStore';
-import { loadProjects, hydrateProjects } from './projectsStore';
-import { reconcileProjects, type BackendProjectTree } from './projectHydrate';
+import { loadProjects, hydrateProjects, claimBackendProject } from './projectsStore';
+import {
+  reconcileProjects, UNKNOWN_INVENTORY,
+  type BackendProjectTree, type ServerInventory,
+} from './projectHydrate';
 
 function toBackendStatus(state: TaskState): string {
   if (state === 'done') return 'complete';
@@ -66,7 +69,7 @@ function statusOf(err: unknown): number | undefined {
   return (err as { response?: { status?: number } })?.response?.status;
 }
 
-export type SyncFailure = { op: 'pull' | 'push' | 'task-status'; status?: number; message: string };
+export type SyncFailure = { op: 'pull' | 'push' | 'task-status' | 'inventory'; status?: number; message: string };
 
 type SyncFailureListener = (failure: SyncFailure) => void;
 const failureListeners = new Set<SyncFailureListener>();
@@ -121,12 +124,62 @@ export async function pushTaskStatusByStory(storyKey: string, state: TaskState):
   }
 }
 
+/**
+ * Ask the server which projects this enrollment actually owns.
+ *
+ * Separate from the active-tree fetch because it answers a different question:
+ * /active says "here is your current build", this says "here is everything you
+ * have". Only the second can tell the browser that a project it is still
+ * showing was DELETED — /active is silent about projects that no longer exist,
+ * which is why dead cards survived every refresh forever.
+ *
+ * Fails CLOSED to `known: false`: a 404 (API flag off), a network error, or a
+ * body that is not an array all mean "we did not learn anything", and
+ * pruneDeadProjects removes nothing on a false. Never throws — a failure here
+ * must not cost the student the merge that the active tree still provides.
+ */
+async function fetchInventory(): Promise<ServerInventory> {
+  try {
+    const res = await portalApi.get('/api/portal/projects');
+    const rows = res.data?.projects;
+    if (!Array.isArray(rows)) return UNKNOWN_INVENTORY;
+    const ids = rows.map((r: { id?: unknown }) => String(r?.id ?? '')).filter(Boolean);
+    const active = rows.find((r: { is_active?: unknown }) => r?.is_active === true);
+    return { known: true, ids, activeId: active ? String(active.id) : null };
+  } catch (err) {
+    if (!isApiDisabled(err)) reportFailure('inventory', err);
+    return UNKNOWN_INVENTORY;
+  }
+}
+
 /** PULL: overlay backend completions onto local, or hydrate a build this device lacks. */
 async function reconcileFromBackend(): Promise<void> {
   try {
-    const res = await portalApi.get('/api/portal/projects/active');
-    const tree = (res.data && Array.isArray(res.data.lists)) ? (res.data as BackendProjectTree) : null;
-    const { next, changed } = reconcileProjects(loadProjects(), tree);
+    // Both reads in flight together: they are independent, and the pull already
+    // sits in front of the student's first paint of the Projects page.
+    const [treeRes, inventory] = await Promise.all([
+      portalApi.get('/api/portal/projects/active'),
+      fetchInventory(),
+    ]);
+    const tree = (treeRes.data && Array.isArray(treeRes.data.lists))
+      ? (treeRes.data as BackendProjectTree)
+      : null;
+    const { next, changed, mode, removed } = reconcileProjects(loadProjects(), tree, inventory);
+
+    // Removing a card from a student's own machine is the one thing here that
+    // destroys local state, so it is never silent — it leaves a record naming
+    // exactly what went and why.
+    if (removed && removed.length > 0) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'frontend', event: 'project_sync_pruned_deleted_projects',
+        outcome: 'success',
+        context: {
+          mode,
+          removed: removed.map((p) => ({ id: p.id, name: p.name, origin: p.origin ?? null })),
+          server_project_count: inventory.ids.length,
+        },
+      }));
+    }
     if (changed) hydrateProjects(next);
   } catch (err) {
     reportFailure('pull', err);
@@ -138,7 +191,18 @@ async function mirrorToBackend(): Promise<void> {
   const project = loadProjects().find((p) => !p.sample);
   if (!project) return; // only the seeded demo (or nothing) — nothing real to persist
   try {
-    await portalApi.post('/api/portal/projects/import', toImportPayload(project));
+    const res = await portalApi.post('/api/portal/projects/import', toImportPayload(project));
+
+    // RECORD THE BACKEND ID. The import response is the only moment this local
+    // project learns which server row it became, and the response used to be
+    // thrown away — so a mirrored project never had a backend identity, and the
+    // reconciler had to guess at it from story ids. That guess is what let a
+    // stale project impersonate a freshly published one. With the claim written
+    // here, every subsequent pull matches on id and never has to guess.
+    const backendId = res?.data?.id;
+    if (backendId && project.pipelineProjectId !== String(backendId)) {
+      claimBackendProject(project.id, String(backendId));
+    }
   } catch (err) {
     // localStorage remains the working source either way, but a failure here
     // means the build exists ONLY in this browser — the student must be told.
