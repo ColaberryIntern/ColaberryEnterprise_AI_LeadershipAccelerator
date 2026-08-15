@@ -44,6 +44,12 @@ export const env = {
   paysimpleAppReconcileEnabled: process.env.PAYSIMPLE_APP_RECONCILE_ENABLED === 'true',
   // Only look at payments on/after this date (membership program launch).
   paysimpleReconcileStart: process.env.PAYSIMPLE_RECONCILE_START || '2026-06-01',
+  // Daily renewal reminders: mail a student a checkout link before their
+  // subscription period ends, because nothing on this platform charges them
+  // automatically (docs/RECURRING_BILLING_EXPOSURE.md). OFF by default so it
+  // ships dark. Turning this on starts mailing real paying customers about
+  // their money, so it is a deliberate switch, not a default.
+  renewalRemindersEnabled: process.env.RENEWAL_REMINDERS_ENABLED === 'true',
 
   // JWT
   jwtSecret: resolveJwtSecret(),
