@@ -16,10 +16,18 @@
  * test coverage; both get real coverage here for the first time, including the
  * approveInitiative ticket-target fix (todo -> in_progress, since in_review -> todo
  * is not a valid ticket-status transition).
+ *
+ * Dedup normalization fix (2026-08-15) — the dedup check moved from a single
+ * `findOne({where:{title:...}})` exact-string match to `findAll()` over active-status
+ * rows plus an in-process `normalizeInitiativeDedupTitle()` comparison (see
+ * coryInitiatives.ts). `mockFindOne` is gone; `mockFindAll` takes its place
+ * throughout. See .loop-architect/runs/20260815-214613-strategic-initiative-dedup-consolidation/
+ * for the full rationale (282 of 350 stuck production rows were exact-title-dedup
+ * failures against titles carrying a volatile embedded number).
  */
 jest.mock('../../../models/StrategicInitiative', () => ({
   __esModule: true,
-  default: { findOne: jest.fn(), create: jest.fn(), findByPk: jest.fn() },
+  default: { findAll: jest.fn(), create: jest.fn(), findByPk: jest.fn() },
 }));
 jest.mock('../../ticketService', () => ({
   createTicket: jest.fn(),
@@ -39,10 +47,11 @@ import {
   createStrategicInitiative,
   approveInitiative,
   rejectInitiative,
+  normalizeInitiativeDedupTitle,
   type CreateInitiativeInput,
 } from '../coryInitiatives';
 
-const mockFindOne = StrategicInitiative.findOne as unknown as jest.Mock;
+const mockFindAll = StrategicInitiative.findAll as unknown as jest.Mock;
 const mockFindByPk = StrategicInitiative.findByPk as unknown as jest.Mock;
 const mockCreate = StrategicInitiative.create as unknown as jest.Mock;
 const mockCreateTicket = createTicket as unknown as jest.Mock;
@@ -75,7 +84,7 @@ function makeInitiativeInstance(overrides: Record<string, any> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockFindOne.mockResolvedValue(null);
+  mockFindAll.mockResolvedValue([]);
   mockCreate.mockImplementation((_fields: Record<string, any>) => Promise.resolve(makeInitiativeInstance()));
   mockCreateTicket.mockResolvedValue({ id: 'ticket-1' });
   mockSendApprovalEmail.mockResolvedValue(undefined);
@@ -155,11 +164,11 @@ describe('createStrategicInitiative — initiative created before its ticket, re
   });
 
   it('idempotency: an existing active initiative with the same title short-circuits before any ticket, initiative row, or email is created', async () => {
-    mockFindOne.mockResolvedValue({ id: 'existing-1' });
+    mockFindAll.mockResolvedValue([{ id: 'existing-1', title: INPUT.title }]);
 
     const result = await createStrategicInitiative(INPUT);
 
-    expect(result).toEqual({ id: 'existing-1' });
+    expect(result).toEqual({ id: 'existing-1', title: INPUT.title });
     expect(mockCreate).not.toHaveBeenCalled();
     expect(mockCreateTicket).not.toHaveBeenCalled();
     expect(mockGetAdminUserId).not.toHaveBeenCalled();
@@ -167,15 +176,15 @@ describe('createStrategicInitiative — initiative created before its ticket, re
   });
 
   it('end-to-end: once a finding reaches a terminal state, the SAME title is creatable again (the actual bug this run fixes)', async () => {
-    // First call: title is active (findOne returns null -> not deduped).
+    // First call: title is active (findAll returns [] -> not deduped).
     mockGetAdminUserId.mockResolvedValue('admin-corybrain-1');
     await createStrategicInitiative(INPUT);
     expect(mockCreate).toHaveBeenCalledTimes(1);
 
     // Simulate the initiative having reached a terminal state (what syncInitiative()
     // in ticketReplyService.ts now does on a reply) — the dedup query itself excludes
-    // completed/cancelled, so re-querying now returns null again.
-    mockFindOne.mockResolvedValue(null);
+    // completed/cancelled, so re-querying now returns [] again.
+    mockFindAll.mockResolvedValue([]);
     mockCreate.mockClear();
     mockCreateTicket.mockClear();
 
@@ -183,11 +192,77 @@ describe('createStrategicInitiative — initiative created before its ticket, re
 
     // Before this fix, nothing could ever flip status to completed/cancelled, so in
     // production this second call would have kept finding the still-'proposed' row
-    // via findOne and short-circuited forever. Here, findOne genuinely reflects "no
-    // active row" (as it would in production once syncInitiative has run), and a
-    // fresh initiative + ticket are created — proving the finding is re-raisable.
+    // via the dedup query and short-circuited forever. Here, the active-row set
+    // genuinely reflects "no active row" (as it would in production once
+    // syncInitiative has run), and a fresh initiative + ticket are created — proving
+    // the finding is re-raisable.
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(mockCreateTicket).toHaveBeenCalledTimes(1);
+  });
+
+  it('dedup normalization: same condition, different embedded number — collides, no new initiative created', async () => {
+    mockFindAll.mockResolvedValue([
+      { id: 'existing-slow', title: 'CampaignQAAgent is slow (136.6s avg)' },
+    ]);
+
+    const result = await createStrategicInitiative({
+      ...INPUT,
+      title: 'CampaignQAAgent is slow (139.9s avg)',
+    });
+
+    expect(result).toEqual({ id: 'existing-slow', title: 'CampaignQAAgent is slow (136.6s avg)' });
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockCreateTicket).not.toHaveBeenCalled();
+  });
+
+  it('dedup normalization: same shape, different agent — does NOT collide, both are created', async () => {
+    mockGetAdminUserId.mockResolvedValue('admin-corybrain-1');
+    mockFindAll.mockResolvedValue([
+      { id: 'existing-slow', title: 'CampaignQAAgent is slow (136.6s avg)' },
+    ]);
+
+    await createStrategicInitiative({ ...INPUT, title: 'OtherAgent is slow (50.0s avg)' });
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreateTicket).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('normalizeInitiativeDedupTitle — the exact regex table the dedup fix depends on', () => {
+  it('duration titles with different values normalize to the same key', () => {
+    expect(normalizeInitiativeDedupTitle('CampaignQAAgent is slow (136.6s avg)')).toBe(
+      normalizeInitiativeDedupTitle('CampaignQAAgent is slow (139.9s avg)'),
+    );
+  });
+
+  it('error-rate titles with different percentages normalize to the same key', () => {
+    expect(
+      normalizeInitiativeDedupTitle('OpenclawLearningOptimizationAgent has 41% error rate'),
+    ).toBe(normalizeInitiativeDedupTitle('OpenclawLearningOptimizationAgent has 31% error rate'));
+  });
+
+  it('department-alert titles with different counts normalize to the same key', () => {
+    expect(
+      normalizeInitiativeDedupTitle('Admissions department triggered 6 alerts in 24h'),
+    ).toBe(normalizeInitiativeDedupTitle('Admissions department triggered 7 alerts in 24h'));
+  });
+
+  it('stale-task-count titles with different counts normalize to the same key', () => {
+    expect(normalizeInitiativeDedupTitle('12 agent tasks stale for 48+ hours')).toBe(
+      normalizeInitiativeDedupTitle('5 agent tasks stale for 48+ hours'),
+    );
+  });
+
+  it('different departments in the same alert-count shape do NOT normalize to the same key', () => {
+    expect(
+      normalizeInitiativeDedupTitle('Admissions department triggered 6 alerts in 24h'),
+    ).not.toBe(normalizeInitiativeDedupTitle('Finance department triggered 6 alerts in 24h'));
+  });
+
+  it('a title with no digits is returned unchanged', () => {
+    expect(normalizeInitiativeDedupTitle('AgentBehaviorMonitorAgent is in error state')).toBe(
+      'AgentBehaviorMonitorAgent is in error state',
+    );
   });
 });
 

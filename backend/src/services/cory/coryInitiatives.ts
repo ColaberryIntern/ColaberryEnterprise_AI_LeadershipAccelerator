@@ -32,6 +32,37 @@ export interface CreateInitiativeInput {
   subtasks?: Array<{ title: string; effort?: string }>;
 }
 
+/**
+ * Normalizes a strategic-initiative title for dedup comparison so a volatile embedded
+ * number (a duration, a percentage, a count) never defeats the dedup check below and
+ * spawns a fresh row forever for the SAME underlying condition. Root cause: several of
+ * coryEvolution.ts's finding-generators bake a live-changing measurement directly into
+ * the title string — detectAgentPerformanceIssues()'s `"${agent} is slow
+ * (${ms/1000}s avg)"` and `"${agent} has ${rate}% error rate"`, and
+ * detectWorkflowInefficiencies()'s `"${dept} department triggered ${count} alerts in
+ * 24h"` and `"${n} agent tasks stale for 48+ hours"` — so an exact-title match (the
+ * dedup's only comparison before this fix) never matches two observations of the same
+ * still-true condition taken hours or days apart. Confirmed live in production
+ * (2026-08-15): 282 of 350 stuck `proposed` rows were exactly this — 201
+ * "CampaignQAAgent is slow" rows differing only by the reported duration, 54
+ * "OpenclawLearningOptimizationAgent has N% error rate" rows differing only by the
+ * percentage, and 27 more across 8 "N department triggered N alerts"/"is in error
+ * state" clusters.
+ *
+ * Deliberately targeted, not generic NLP: each replacement below corresponds to one
+ * specific, verified volatile-number pattern in this codebase's actual title
+ * templates, not a speculative catch-all. A title with none of these patterns
+ * (the common case — most findings have static titles) is returned unchanged, so two
+ * genuinely different findings never collide just because they both contain a number.
+ */
+export function normalizeInitiativeDedupTitle(title: string): string {
+  return title
+    .replace(/\d+(\.\d+)?s avg/gi, 'Ns avg')
+    .replace(/\d+%/g, 'N%')
+    .replace(/\d+ alerts/gi, 'N alerts')
+    .replace(/\d+ agent tasks/gi, 'N agent tasks');
+}
+
 export interface InitiativeSummary {
   id: string;
   title: string;
@@ -54,13 +85,22 @@ export interface InitiativeSummary {
  * This is the primary integration point between CoryBrain and the ticket system.
  */
 export async function createStrategicInitiative(input: CreateInitiativeInput): Promise<StrategicInitiative> {
-  // Dedup: check if an identical initiative already exists and is active
-  const existing = await StrategicInitiative.findOne({
-    where: {
-      title: input.title,
-      status: { [Op.notIn]: ['completed', 'cancelled'] },
-    },
+  // Dedup: compare against every currently-ACTIVE initiative's NORMALIZED title, not
+  // an exact string match (see normalizeInitiativeDedupTitle() above for why). The
+  // active-row set is inherently small — the terminal-state fix (this same file,
+  // approveInitiative/rejectInitiative/completeInitiative + ticketReplyService.ts's
+  // syncInitiative()) plus the one-time historical consolidation this fix shipped
+  // alongside keep it bounded to roughly the genuinely-distinct conditions, not an
+  // unbounded backlog — so one findAll + an in-process comparison stays simple and
+  // fully unit-testable instead of adding a DB-side normalized/indexed column for a
+  // targeted fix at this scope.
+  const activeInitiatives = await StrategicInitiative.findAll({
+    where: { status: { [Op.notIn]: ['completed', 'cancelled'] } },
   });
+  const normalizedInputTitle = normalizeInitiativeDedupTitle(input.title);
+  const existing = activeInitiatives.find(
+    (i) => normalizeInitiativeDedupTitle(i.title) === normalizedInputTitle,
+  );
   if (existing) return existing;
 
   // 1. Create the strategic initiative record FIRST — ticket_id is filled in once the
