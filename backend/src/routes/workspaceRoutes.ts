@@ -24,6 +24,10 @@ const router = Router();
 // verified JWT and never from the request — a student can only reach their own
 // project, and the service re-checks ownership before any GitHub call.
 const projectIdSchema = z.string().uuid('A valid projectId is required');
+// Story ids are plan-authored (`STORY-001`), not UUIDs, and the column is
+// VARCHAR(60). Bounded here so an oversized query string is rejected at the
+// boundary rather than becoming a wide LIKE-free equality scan downstream.
+const storyIdSchema = z.string().min(1, 'A story id is required').max(60);
 const provisionSchema = z.object({
   project_id: z.string().uuid(),
   github_login: z.string().min(1),
@@ -117,6 +121,35 @@ router.get('/api/portal/workspace/repo', requireParticipant, async (req, res) =>
     if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
     logError('workspace_repo_get_failed', req, err);
     res.status(statusFor(err)).json(errorBody(err, 'Failed to load workspace repo'));
+  }
+});
+
+/**
+ * GET the verification state of ONE story. The workspace page polls this while
+ * a student has the story open, so the boxes and the completion gate can follow
+ * what the repo actually says without a manual refresh.
+ *
+ * READ-ONLY BY DESIGN. It reports the verdict the last sync wrote; it does not
+ * run one. A student holding the page open therefore cannot drive GitHub calls
+ * or move their own state no matter how long they leave it there — which is the
+ * property that makes a poll safe to ship. The write path stays exactly where it
+ * was: `/repo/sync` and the push webhook, both rate-limited by GitHub itself.
+ *
+ * 404 covers "not yours", "no such project" and "no such story" alike, so this
+ * cannot be used to probe for somebody else's build.
+ */
+router.get('/api/portal/workspace/story-verification', requireParticipant, async (req, res) => {
+  try {
+    const projectId = projectIdSchema.parse(req.query.project_id);
+    const storyId = storyIdSchema.parse(req.query.story_id);
+    const { readStoryVerification } = await import('../services/sbp/verification/storyVerificationRead');
+    const view = await readStoryVerification(req.participant!.sub, projectId, storyId);
+    if (!view) { res.status(404).json({ error: 'Story not found' }); return; }
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
+    logError('workspace_story_verification_get_failed', req, err);
+    res.status(statusFor(err)).json(errorBody(err, 'Failed to load story verification'));
   }
 });
 

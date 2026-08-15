@@ -107,8 +107,40 @@ router.post('/api/webhook/github', express.raw({ type: 'application/json' }), as
         });
       }
     }
+
+    // 4. STORY VERIFICATION — the build pipeline's completion loop.
+    //
+    // Deliberately OUTSIDE the `enrollmentId` branch above. That lookup is
+    // enrollment-keyed and predates project-scoped repos (FR-037); story
+    // verification resolves the repo to a PROJECT on its own, so a repo bound to
+    // a project but not matched by the legacy path still verifies.
+    //
+    // Fire-and-forget, like its three siblings, because GitHub counts a slow
+    // response against the endpoint's health and the work here includes several
+    // GitHub reads. The handler never throws and classifies its own failures.
+    const { handlePushForVerification } = await import('../services/sbp/verification/githubPushVerification');
+    handlePushForVerification({
+      deliveryId: String(req.headers['x-github-delivery'] ?? ''),
+      event: String(req.headers['x-github-event'] ?? 'push'),
+      owner,
+      repo,
+      // Used ONLY to answer "was this push entirely our own bot?". Nothing that
+      // decides credit is read from the payload — see the module header.
+      commits: Array.isArray(payload.commits) ? payload.commits : [],
+    }).catch((err: Error) => {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+        event: 'github_webhook_story_verification_failed', outcome: 'failure',
+        error_class: err?.constructor?.name ?? 'Error',
+        context: { message: err?.message, owner, repo },
+      }));
+    });
   }
 
+  // 200 regardless of what the work above concludes. GitHub retries non-2xx,
+  // and a retry driven by our own downstream failure would re-read the repo
+  // without changing the outcome. Everything that could go wrong past this
+  // point is logged with a correlation id instead.
   res.status(200).json({ ok: true });
 });
 

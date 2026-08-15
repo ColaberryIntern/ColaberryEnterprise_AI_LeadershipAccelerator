@@ -164,3 +164,63 @@ export async function syncWorkspaceRepo(projectId: string): Promise<WorkspaceRep
   );
   return data;
 }
+
+// ── story verification ───────────────────────────────────────────────────────
+
+/** What the platform concluded about one story, last time it looked at the repo. */
+export interface StoryVerificationDto {
+  state: 'not_started' | 'in_progress' | 'submitted' | 'verified';
+  criteria_total: number;
+  criteria_passed: number;
+  /** The exact text of every criterion still outstanding. Drives the checkboxes. */
+  outstanding: string[];
+  commit_sha: string | null;
+  commit_at: string | null;
+  /** Plain-language "why this is not verified yet". Drives the disabled-button copy. */
+  reasons: string[];
+  rejected_claims: string[];
+  checked_at: string | null;
+  /**
+   * Held at `verified` by the immutable latch rather than by the current repo
+   * read — history rewritten, progress file deleted, evidence commit aged out.
+   * Still verified; we just cannot re-check it.
+   */
+  latched: boolean;
+  /** What the CURRENT read concluded, when it disagrees with the latch. Diagnostic only. */
+  live_state: StoryVerificationDto['state'] | null;
+}
+
+export interface StoryVerificationView {
+  project_id: string;
+  story_id: string;
+  status: string;
+  /** The completion gate. Non-null means the platform confirmed it. Never moves. */
+  verified_at: string | null;
+  verified_by: string | null;
+  verification: StoryVerificationDto | null;
+  /** The criteria as the PLAN has them, in plan order. The authority for pairing. */
+  acceptance: string[];
+  /**
+   * Builder XP banked for this story. Zero until `points_config` carries a
+   * value, so the UI shows the points beat only when this is above zero — a
+   * "+0" celebration would be announcing a number nobody has set.
+   */
+  xp_awarded: number;
+}
+
+/**
+ * GET one story's verification state.
+ *
+ * Read-only and cheap — this is the endpoint the workspace page polls while a
+ * story is open. It reports the last verdict; it never triggers a GitHub read,
+ * so polling it cannot cost the student their rate limit.
+ */
+export async function getStoryVerification(
+  projectId: string, storyId: string,
+): Promise<StoryVerificationView> {
+  const { data } = await workspaceApi.get<StoryVerificationView>(
+    '/api/portal/workspace/story-verification',
+    { params: { project_id: projectId, story_id: storyId } },
+  );
+  return data;
+}
