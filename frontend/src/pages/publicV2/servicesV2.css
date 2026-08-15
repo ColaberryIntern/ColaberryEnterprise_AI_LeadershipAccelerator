@@ -135,5 +135,59 @@
    does not grow taller than its paired panel. */
 .cbv2-svc__copy .cbv2-icon-tile { margin-bottom: var(--space-4); }
 
-/* Breaks the alternating engagement rows before the closing note. */
-.cbv2-svc__photo { margin-top: var(--space-9, 48px); aspect-ratio: 21 / 6; }
+/* ------------------------------------------------ service photography ----- */
+/*
+   Two treatments, one source. Each engagement carries a photograph of the mode
+   of work it involves (see the ServicePhoto note in config/v2Services.ts for
+   what these images do and do not claim, and for why three files in public/img/
+   are barred from use).
+
+   `.cbv2-svcd__photo`  -- beside the copy in the drill-through page hero.
+   `.cbv2-svc__shot`    -- above the deliverables panel on the /services list.
+
+   The old single `.cbv2-svc__photo` band is gone with its markup: it showed
+   mentor-coaching.jpg with alt="" and no relationship to the rows above it, and
+   once every row carried its own image it was simply a duplicate of service 05.
+*/
+
+/* Drill-through hero. The hero ground is dark, so the photo gets a light hairline
+   rather than a shadow -- a shadow is invisible against it. */
+.cbv2-svcd__photo {
+  margin: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: var(--border-1) solid rgba(248, 248, 247, 0.16);
+  aspect-ratio: 4 / 3;
+  max-height: 340px;
+  background: var(--surface-sunken);
+}
+.cbv2-svcd__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+@media (max-width: 980px) {
+  /* Stacked, the 4:3 crop eats the whole viewport before the copy is reached.
+     Kept (it is the only per-service visual) but flattened to a banner.
+     Note this does NOT inherit the `display: none` that cinematicV2.css applies
+     to .cbv2-shot-frame in the same breakpoint -- that rule drops a product
+     screenshot whose detail is unreadable small, which is not true of a photo. */
+  .cbv2-svcd__photo { aspect-ratio: 16 / 7; max-height: 200px; }
+}
+
+/* /services list: photo caps the deliverables panel on each alternating row. */
+.cbv2-svc__shot {
+  margin: 0 0 var(--space-5);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: var(--border-1) solid var(--border-subtle);
+  aspect-ratio: 16 / 9;
+  background: var(--surface-sunken);
+}
+.cbv2-svc__shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

@@ -4,7 +4,11 @@ import SeoV2 from '../../components/publicV2/SeoV2';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
 import Accolades from '../../components/publicV2/Accolades';
-import { GOALS, ENGINE, SERVICES } from '../../config/v2Content';
+import { GOALS, ENGINE } from '../../config/v2Content';
+// SERVICE_DETAILS rather than v2Content's SERVICES: the cards now carry the
+// photograph, which only the detail records hold. The two lists are the same
+// five engagements in the same order, and HomeV2.test asserts they stay in sync.
+import { SERVICE_DETAILS } from '../../config/v2Services';
 import './homeV2.css';
 
 /**
@@ -355,12 +359,42 @@ function HomeV2(): React.ReactElement {
             <p className="cbv2-eyebrow">Services</p>
             <h2 id="cbv2-services-title">Five ways an engagement starts</h2>
           </div>
-          <div className="cbv2-ribbon">
-            {SERVICES.map((s) => (
-              <Link className="cbv2-ribbon__item" to={`/services/${s.slug}`} key={s.slug}>
-                <span className="cbv2-ribbon__n">{s.number}</span>
-                <span className="cbv2-ribbon__title">{s.name}</span>
-                <span className="cbv2-ribbon__body">{s.fit}</span>
+          {/*
+            Five picture cards on a six-column grid: the first three span two
+            columns, the last two span three. Five items in an even grid always
+            leaves a hole in the final row; spanning the last pair wider fills it
+            by construction, so the layout reads as composed rather than as a row
+            that ran out.
+
+            The photographs depict the mode of work each engagement involves.
+            They are not captioned as customers, engagements or results, because
+            they are not -- see the sourcing note on ServicePhoto in
+            config/v2Services.ts.
+          */}
+          <div className="cbv2-svcgrid">
+            {SERVICE_DETAILS.map((s) => (
+              <Link className="cbv2-svccard" to={`/services/${s.slug}`} key={s.slug}>
+                <span className="cbv2-svccard__media">
+                  <img
+                    src={s.photo.src}
+                    alt={s.photo.alt}
+                    width={1280}
+                    height={960}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span className="cbv2-svccard__n" aria-hidden="true">
+                    {s.number}
+                  </span>
+                </span>
+                <span className="cbv2-svccard__text">
+                  <span className="cbv2-svccard__title">{s.name}</span>
+                  <span className="cbv2-svccard__body">{s.fit}</span>
+                  <span className="cbv2-svccard__go">
+                    <span>See what it includes</span>
+                    <Icon name="arrowRight" size={15} />
+                  </span>
+                </span>
               </Link>
             ))}
           </div>

@@ -13,6 +13,7 @@
 jest.mock('../../../models/Ticket', () => ({ __esModule: true, default: { findByPk: jest.fn() } }));
 jest.mock('../../../models/TicketActivity', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 jest.mock('../../../models/ProposedAgentAction', () => ({ __esModule: true, default: { update: jest.fn() } }));
+jest.mock('../../../models/StrategicInitiative', () => ({ __esModule: true, default: { update: jest.fn() } }));
 jest.mock('../../ticketService', () => ({ updateTicketStatus: jest.fn(), addTicketComment: jest.fn() }));
 jest.mock('../../settingsService', () => ({ getSetting: jest.fn() }));
 jest.mock('../../emailService', () => ({ sendTicketReplyConfirmation: jest.fn().mockResolvedValue(undefined) }));
@@ -24,6 +25,7 @@ jest.mock('../../../config/env', () => ({ env: { emailFrom: 'ali@colaberry.com' 
 import Ticket from '../../../models/Ticket';
 import TicketActivity from '../../../models/TicketActivity';
 import ProposedAgentAction from '../../../models/ProposedAgentAction';
+import StrategicInitiative from '../../../models/StrategicInitiative';
 import { updateTicketStatus, addTicketComment } from '../../ticketService';
 import { getSetting } from '../../settingsService';
 import { sendTicketReplyConfirmation } from '../../emailService';
@@ -32,6 +34,7 @@ import { handleTicketReplyEmail } from '../ticketReplyService';
 const ticketFindByPk = Ticket.findByPk as jest.Mock;
 const activityFindOne = TicketActivity.findOne as jest.Mock;
 const proposalUpdate = ProposedAgentAction.update as jest.Mock;
+const initiativeUpdate = StrategicInitiative.update as jest.Mock;
 const updateStatus = updateTicketStatus as jest.Mock;
 const addComment = addTicketComment as jest.Mock;
 const settingGet = getSetting as jest.Mock;
@@ -46,6 +49,14 @@ function inReviewTicket(over: any = {}) {
     metadata: { reply_token: TOKEN },
     ...over,
   };
+}
+
+function initiativeLinkedTicket(over: any = {}) {
+  return inReviewTicket({
+    title: '[Initiative] Redundant agent detected: EmailFollowUpAgent',
+    entity_type: 'strategic_initiative', entity_id: 'initiative-9',
+    ...over,
+  });
 }
 
 function reply(over: any = {}) {
@@ -198,6 +209,7 @@ describe('intent parsing', () => {
 
     expect(result.reason).toBe('approve');
     expect(proposalUpdate).not.toHaveBeenCalled();
+    expect(initiativeUpdate).not.toHaveBeenCalled();
   });
 
   it('a proposal-sync failure does not undo the already-applied ticket status change', async () => {
@@ -217,5 +229,68 @@ describe('intent parsing', () => {
     const result = await handleTicketReplyEmail(reply());
 
     expect(result).toEqual({ handled: true, reason: 'approve', newStatus: 'done' });
+  });
+});
+
+describe('syncInitiative — CoryBrain Initiative Terminal-State Fix: a strategic-initiative-linked ticket reaching a terminal state also terminates its initiative', () => {
+  it('approve: ticket -> done, and the linked StrategicInitiative is synced to completed (never through completeInitiative/updateTicketStatus, which would re-touch the already-terminal ticket)', async () => {
+    ticketFindByPk.mockResolvedValue(initiativeLinkedTicket());
+
+    const result = await handleTicketReplyEmail(reply({ rawBody: 'Approved.' }));
+
+    expect(result).toEqual({ handled: true, reason: 'approve', newStatus: 'done' });
+    expect(updateStatus).toHaveBeenCalledWith('ticket-1', 'done', 'human', 'ali@colaberry.com');
+    // Only ever called once (the ticket's own transition) -- syncInitiative must not
+    // trigger a second updateTicketStatus call on the same ticket.
+    expect(updateStatus).toHaveBeenCalledTimes(1);
+    expect(initiativeUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'completed' }),
+      { where: { id: 'initiative-9' } },
+    );
+    // This ticket isn't a proposed_agent_action -- the sibling sync must stay a no-op.
+    expect(proposalUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reject: ticket -> cancelled, and the linked StrategicInitiative is synced to cancelled', async () => {
+    ticketFindByPk.mockResolvedValue(initiativeLinkedTicket());
+
+    const result = await handleTicketReplyEmail(reply({ fromEmail: 'ram@colaberry.com', rawBody: 'Reject this one.' }));
+
+    expect(result).toEqual({ handled: true, reason: 'reject', newStatus: 'cancelled' });
+    expect(updateStatus).toHaveBeenCalledWith('ticket-1', 'cancelled', 'human', 'ram@colaberry.com');
+    expect(updateStatus).toHaveBeenCalledTimes(1);
+    expect(initiativeUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'cancelled' }),
+      { where: { id: 'initiative-9' } },
+    );
+  });
+
+  it('a proposed_agent_action ticket (the pre-existing case) never touches StrategicInitiative.update — the two syncs stay independent', async () => {
+    ticketFindByPk.mockResolvedValue(inReviewTicket()); // entity_type: 'proposed_agent_action'
+
+    await handleTicketReplyEmail(reply());
+
+    expect(proposalUpdate).toHaveBeenCalled();
+    expect(initiativeUpdate).not.toHaveBeenCalled();
+  });
+
+  it('an initiative-sync failure does not undo the already-applied ticket status change or the outcome reported to the sender', async () => {
+    ticketFindByPk.mockResolvedValue(initiativeLinkedTicket());
+    initiativeUpdate.mockRejectedValue(new Error('db unavailable'));
+
+    const result = await handleTicketReplyEmail(reply());
+
+    expect(result).toEqual({ handled: true, reason: 'approve', newStatus: 'done' });
+    expect(updateStatus).toHaveBeenCalled();
+    expect(confirmEmail).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'done' }));
+  });
+
+  it('a ticket with no entity_id (malformed/legacy) skips the initiative sync without error', async () => {
+    ticketFindByPk.mockResolvedValue(initiativeLinkedTicket({ entity_id: null }));
+
+    const result = await handleTicketReplyEmail(reply());
+
+    expect(result.reason).toBe('approve');
+    expect(initiativeUpdate).not.toHaveBeenCalled();
   });
 });
