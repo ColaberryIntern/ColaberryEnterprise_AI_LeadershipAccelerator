@@ -1,20 +1,35 @@
 import { GitHubConnection, Enrollment } from '../models';
 import Project from '../models/Project';
+import { connectViewFrom, ConnectStateView } from './sbp/repoConnect/repoConnectService';
 
-// studentWorkspaceService — platform-provisioned per-student workspace repos.
+// studentWorkspaceService — provisioning half of the workspace repo story.
 //
-// Locked model (see feature spec):
-//   - Repos are PLATFORM-provisioned: one private repo per student under the
-//     ColaberryIntern org, created with the platform GITHUB_TOKEN. The student
-//     is added as a PUSH collaborator. There is no student OAuth.
+// SUPERSEDED AS THE PRIMARY PATH (Ali Muwwakkil, 2026-08-14): student build
+// repos are STUDENT-OWNED. The platform stores pointers and evidence, never the
+// code. Connecting a repo the student already has is now the primary door and
+// lives in services/sbp/repoConnect/repoConnectService.ts; this file is the
+// FALLBACK for a student with no repo yet, and it is deliberately left as thin
+// as it can be. See docs/REPO_CONNECT_CONTRACT.md for the reasoning.
+//
+// Model:
+//   - Provisioned repos are created under the platform org with the platform
+//     GITHUB_TOKEN and the student is added as a PUSH collaborator. There is no
+//     student OAuth, so a repo inside the student's OWN account cannot be
+//     created from here — `POST /user/repos` creates under the token's owner.
+//     That is a known constraint, not a design choice; a GitHub App is what
+//     changes it.
+//   - Provisioned repos are created EMPTY by default (`seedInitialCommit`
+//     false). The premise of this step is that the student already has a folder
+//     with history in it, and an auto-initialised repo turns their first push
+//     into a rejected non-fast-forward.
 //   - Commit model: the student commits + pushes locally. The portal only
 //     SYNCS (pulls) their repo — it never commits for them.
 //   - The platform token is NEVER persisted to the DB. GitHubConnection stores
 //     repo_owner/repo_name/repo_url + a status_json marker; the token is read
-//     from env at call time (the org owner can read the private repo).
+//     from env at call time.
 //
 // Mirrors githubService.ts: raw fetch, Bearer auth, one GitHubConnection row
-// per enrollment_id. Failure-first: explicit timeouts, capped retries on reads,
+// per project_id. Failure-first: explicit timeouts, capped retries on reads,
 // clear error messages, no silent catches.
 
 const DEFAULT_ORG = 'ColaberryIntern';
@@ -147,6 +162,12 @@ export interface WorkspaceRepoView {
   file_count: number | null;
   last_sync: string | null;
   recent_commits: Array<{ sha: string; message: string; author: string; date: string }>;
+  /**
+   * Where this project is in the connect flow. Carried on the same view the
+   * panel already reads so the UI never has to hold two sources of truth about
+   * one repo. See repoConnectService for the state machine.
+   */
+  connect: ConnectStateView | null;
 }
 
 /**
@@ -181,6 +202,16 @@ export async function provisionWorkspaceRepo(
   enrollmentId: string,
   projectId: string,
   githubLogin: string,
+  opts: {
+    /**
+     * Put a README commit on the new repo. Defaults to FALSE, which is the
+     * behaviour the adopt flow needs: an empty repo accepts the student's
+     * existing history as a plain fast-forward `git push -u origin main`. With
+     * a commit already on it, that push is rejected as non-fast-forward and the
+     * fix a student reaches for is `--force`, on the very first thing they do.
+     */
+    seedInitialCommit?: boolean;
+  } = {},
 ): Promise<WorkspaceRepoView> {
   // Ownership and input validation FIRST — nothing reaches GitHub until the
   // caller is proven to own this project and the login is well-formed.
@@ -212,7 +243,7 @@ export async function provisionWorkspaceRepo(
     body: JSON.stringify({
       name: repo,
       private: true,
-      auto_init: true,
+      auto_init: opts.seedInitialCommit === true,
       description: `Colaberry Accelerator workspace for ${enrollment.full_name || login}`,
     }),
   });
@@ -288,7 +319,14 @@ export async function syncWorkspaceRepo(enrollmentId: string, projectId: string)
 
   // 1) Default branch.
   const repoRes = await getWithRetry(`${apiBase()}/repos/${owner}/${repo}`, token);
-  if (!repoRes.ok) throw new Error(`GitHub repo read failed (${repoRes.status})`);
+  if (!repoRes.ok) {
+    // The repo is student-owned, so losing access to it is a NORMAL outcome —
+    // they deleted it, renamed it, made it private, or removed the platform as
+    // a collaborator. Record it and ask them to reconnect. Everything already
+    // verified stays verified: that record lives in our tables, not in the repo.
+    await recordAccess(connection, false, accessClassFor(repoRes.status));
+    throw accessError(repoRes.status, owner, repo);
+  }
   const repoData: any = await repoRes.json();
   const branch: string = repoData.default_branch || 'main';
 
@@ -297,7 +335,21 @@ export async function syncWorkspaceRepo(enrollmentId: string, projectId: string)
     `${apiBase()}/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
     token,
   );
-  if (!treeRes.ok) throw new Error(`GitHub tree read failed (${treeRes.status})`);
+  if (!treeRes.ok) {
+    if (treeRes.status === 404) {
+      // The repo is there and readable but has no branch yet — it is empty.
+      // Told as a next step, not a failure: this is exactly the state a
+      // just-provisioned repo sits in until the student pushes their folder.
+      const err: any = new Error(
+        `github.com/${owner}/${repo} is still empty — push your project folder to it, then sync again.`,
+      );
+      err.status = 409;
+      err.error_class = 'RepoEmpty';
+      throw err;
+    }
+    await recordAccess(connection, false, accessClassFor(treeRes.status));
+    throw accessError(treeRes.status, owner, repo);
+  }
   const treeData: any = await treeRes.json();
   const files = (treeData.tree || []).filter((item: any) => item.type === 'blob');
   const fileCount: number = files.length;
@@ -321,9 +373,68 @@ export async function syncWorkspaceRepo(enrollmentId: string, projectId: string)
   connection.repo_language = language || '';
   connection.commit_summary_json = summary;
   connection.last_sync_at = new Date();
+  connection.status_json = {
+    ...(connection.status_json || {}),
+    access: { ok: true, error_class: null, checked_at: new Date().toISOString() },
+  };
   await connection.save();
 
-  return viewFromConnection(connection);
+  // A provisioned repo becomes usable the moment the student's push lands, and
+  // this read is the first place the platform can observe that. Narrow by
+  // design: it only ever moves awaiting_push → connected.
+  if (summary.length > 0) {
+    const { markPushObserved } = await import('./sbp/repoConnect/repoConnectService');
+    await markPushObserved(projectId);
+  }
+
+  return viewFromConnection(await GitHubConnection.findOne({ where: { project_id: projectId } }) ?? connection);
+}
+
+// ── access classification ─────────────────────────────────────────────────────
+
+/**
+ * Losing read access to a student-owned repo is expected, not exceptional. The
+ * class says WHICH normal thing happened so the panel can say the right sentence.
+ */
+function accessClassFor(status: number): string {
+  if (status === 404) return 'RepoNotFound';
+  if (status === 401) return 'Unauthorized';
+  if (status === 403) return 'NoPushAccess';
+  if (status === 429) return 'RateLimited';
+  return 'UpstreamError';
+}
+
+function accessError(status: number, owner: string, repo: string): Error {
+  const error_class = accessClassFor(status);
+  const message = error_class === 'RepoNotFound'
+    ? `The platform can no longer see github.com/${owner}/${repo}. If you renamed, deleted or made it private, reconnect your repo — everything you have already had verified stays exactly as it is.`
+    : error_class === 'RateLimited'
+      ? 'GitHub is rate-limiting the platform right now. Your repo is fine — try syncing again shortly.'
+      : `The platform could not read github.com/${owner}/${repo} (${status}). Nothing was changed.`;
+  const err: any = new Error(message);
+  err.status = error_class === 'RepoNotFound' ? 409 : error_class === 'RateLimited' ? 429 : 502;
+  err.error_class = error_class;
+  return err;
+}
+
+/** Persist the access marker without letting a bookkeeping failure mask the real error. */
+async function recordAccess(connection: GitHubConnection, ok: boolean, error_class: string | null): Promise<void> {
+  try {
+    connection.status_json = {
+      ...(connection.status_json || {}),
+      access: { ok, error_class, checked_at: new Date().toISOString() },
+    };
+    await connection.save();
+  } catch (err: any) {
+    // Deliberately not rethrown: the caller is already about to throw the error
+    // that matters, and swallowing THAT to report a failed status write would be
+    // strictly worse. Logged rather than silent.
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'workspace_access_marker_write_failed', outcome: 'failure',
+      error_class: 'PersistenceError', context: { message: err?.message },
+    }));
+  }
 }
 
 // ── read ──────────────────────────────────────────────────────────────────────
@@ -343,6 +454,7 @@ export async function getWorkspaceRepo(enrollmentId: string, projectId: string):
       file_count: null,
       last_sync: null,
       recent_commits: [],
+      connect: null,
     };
   }
   return viewFromConnection(connection);
@@ -355,8 +467,12 @@ function viewFromConnection(connection: GitHubConnection): WorkspaceRepoView {
   const commits = Array.isArray(connection.commit_summary_json)
     ? (connection.commit_summary_json as WorkspaceRepoView['recent_commits'])
     : [];
+  const connect = connectViewFrom(connection);
   return {
-    connected: true,
+    // A row can now exist with NO repo on it — a connect waiting on the student's
+    // proof push. That is not "connected", and reporting it as such would show a
+    // sync button for a repo the platform has not bound yet.
+    connected: Boolean(connection.repo_owner && connection.repo_name),
     provisioned: Boolean(status.provisioned && connection.repo_owner && connection.repo_name),
     repo_url: connection.repo_url || null,
     repo_owner: connection.repo_owner || null,
@@ -365,6 +481,7 @@ function viewFromConnection(connection: GitHubConnection): WorkspaceRepoView {
     file_count: typeof connection.file_count === 'number' ? connection.file_count : null,
     last_sync: connection.last_sync_at ? new Date(connection.last_sync_at).toISOString() : null,
     recent_commits: commits,
+    connect,
   };
 }
 

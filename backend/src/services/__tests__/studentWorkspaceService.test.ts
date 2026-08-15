@@ -127,7 +127,11 @@ describe('provisionWorkspaceRepo', () => {
     expect(createInit.method).toBe('POST');
     const body = JSON.parse(createInit.body);
     expect(body.private).toBe(true);
-    expect(body.auto_init).toBe(true);
+    // EMPTY by default (2026-08-14). The premise of provisioning is that the
+    // student already has a folder with history in it, and an auto-initialised
+    // repo turns their first `git push -u origin main` into a rejected
+    // non-fast-forward — which a student fixes with `--force`, on day one.
+    expect(body.auto_init).toBe(false);
     // Authorization uses the platform token
     expect(createInit.headers.Authorization).toBe('Bearer platform-token');
 
@@ -231,6 +235,63 @@ describe('syncWorkspaceRepo', () => {
 
   it('throws when no repo is provisioned', async () => {
     await expect(svc.syncWorkspaceRepo(ENR, PRJ)).rejects.toThrow(/No workspace repo provisioned/);
+  });
+
+  // Losing access to a STUDENT-OWNED repo is a normal outcome, not a crash: they
+  // renamed it, deleted it, made it private, or removed the platform. The
+  // message has to say "reconnect" and promise that verified work survives —
+  // because it does, in our tables rather than in the repo.
+  it('reports a repo it can no longer see as a reconnect prompt, and records why', async () => {
+    MockConn._seed(PRJ, {
+      repo_owner: 'a-student', repo_name: 'nightshift',
+      status_json: { connect: { state: 'connected', method: 'byo' } },
+    });
+    mockFetch.mockResolvedValue(res({ ok: false, status: 404 }));
+
+    await expect(svc.syncWorkspaceRepo(ENR, PRJ)).rejects.toMatchObject({
+      error_class: 'RepoNotFound',
+      status: 409,
+    });
+    await expect(svc.syncWorkspaceRepo(ENR, PRJ)).rejects.toThrow(/stays exactly as it is/);
+
+    const row = MockConn._rows[PRJ];
+    expect(row.status_json.access).toMatchObject({ ok: false, error_class: 'RepoNotFound' });
+    // The pointer is NOT cleared — reconnecting is a repair, not a re-setup.
+    expect(row.repo_owner).toBe('a-student');
+  });
+
+  it('tells a student with a just-created empty repo to push, rather than reporting a failure', async () => {
+    MockConn._seed(PRJ, {
+      repo_owner: 'ColaberryIntern', repo_name: 'nightshift-abc12345',
+      status_json: { connect: { state: 'awaiting_push', method: 'provisioned' } },
+    });
+    mockFetch
+      .mockResolvedValueOnce(res({ json: { default_branch: 'main' } }))
+      .mockResolvedValue(res({ ok: false, status: 404 }));     // no branch yet
+
+    await expect(svc.syncWorkspaceRepo(ENR, PRJ)).rejects.toMatchObject({
+      error_class: 'RepoEmpty',
+      status: 409,
+      message: expect.stringMatching(/push your project folder/),
+    });
+  });
+
+  it('marks a provisioned repo connected once the student\'s push shows up', async () => {
+    MockConn._seed(PRJ, {
+      repo_owner: 'ColaberryIntern', repo_name: 'nightshift-abc12345',
+      status_json: { connect: { state: 'awaiting_push', method: 'provisioned' } },
+    });
+    mockFetch
+      .mockResolvedValueOnce(res({ json: { default_branch: 'main' } }))
+      .mockResolvedValueOnce(res({ json: { tree: [{ type: 'blob', path: 'src/main.py' }] } }))
+      .mockResolvedValueOnce(res({ json: [
+        { sha: 'abc1234', commit: { message: 'Initial commit', author: { name: 'Stu', date: '2026-08-14T00:00:00Z' } } },
+      ] }));
+
+    const view = await svc.syncWorkspaceRepo(ENR, PRJ);
+    expect(MockConn._rows[PRJ].status_json.connect.state).toBe('connected');
+    expect(view.connect?.state).toBe('connected');
+    expect(MockConn._rows[PRJ].status_json.access).toMatchObject({ ok: true });
   });
 
   it('throws a clear error when GITHUB_TOKEN is missing', async () => {

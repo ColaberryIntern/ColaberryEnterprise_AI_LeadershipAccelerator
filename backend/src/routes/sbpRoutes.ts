@@ -20,8 +20,43 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { env } from '../config/env';
+// planGate is pure (no I/O, no model client), so it is safe to import eagerly.
+// The orchestrator is NOT — it pulls in the model client and the database — so
+// it stays behind the dynamic imports the handlers already use, and only its
+// TYPES are named here.
+import { GateViolation, blockingViolations, advisoryViolations } from '../services/sbp/planGate';
+import type { BuildStatus } from '../services/sbp/sbpOrchestrator';
 
 const router = Router();
+
+/**
+ * The poll response, declared rather than implied (CLAUDE.md contract layer).
+ * The client mirrors this in frontend/src/services/sbpApi.ts; changing either
+ * side without the other is a breaking contract change.
+ */
+interface BuildStateResponse {
+  project_id: string;
+  status: BuildStatus;
+  correlation_id: string | null;
+  gate: {
+    ok: boolean;
+    violations: GateViolation[];
+    /** Why the plan cannot be published. Non-empty ⇒ the student must act. */
+    blocking: GateViolation[];
+    /** Quality warnings that ride along with a plan that shipped anyway. */
+    advisory: GateViolation[];
+  } | null;
+  /** True once the plan is materialized into the portal's tasks. */
+  delivered: boolean;
+  plan: {
+    version: number;
+    sha256: string;
+    status: string;
+    requirements: number;
+    releases: Array<{ key: string; name: string; week_start: number; week_end: number; stories: number }>;
+    stories: Array<{ id: string; title: string; release: string; fulfills: string[] }>;
+  } | null;
+}
 const eid = (req: Request) => req.participant!.sub;
 
 function gate(res: Response): boolean {
@@ -59,12 +94,19 @@ async function requireOwnedProject(req: Request, projectId: string): Promise<any
   return project;
 }
 
-/** The student's workspace repo for this project, or null when unprovisioned. */
+/**
+ * The student's workspace repo for this project, or null when there is not one
+ * the platform can write to yet.
+ *
+ * Shared with the orchestrator's auto-publish so the two publish paths cannot
+ * disagree about whether a project has a repo — see services/sbp/workspaceRepo,
+ * which is also where "writable" is decided. Both mid-connect states resolve to
+ * null there, so publish takes the already-built `awaiting_repo` path instead of
+ * failing at the GitHub boundary on a missing ref.
+ */
 async function repoFor(projectId: string): Promise<{ owner: string; repo: string; url: string } | null> {
-  const { GitHubConnection } = await import('../models');
-  const conn: any = await GitHubConnection.findOne({ where: { project_id: projectId } });
-  if (!conn?.repo_owner || !conn?.repo_name) return null;
-  return { owner: conn.repo_owner, repo: conn.repo_name, url: conn.repo_url || `https://github.com/${conn.repo_owner}/${conn.repo_name}` };
+  const { repoForProject } = await import('../services/sbp/workspaceRepo');
+  return repoForProject(projectId);
 }
 
 // ── interview ───────────────────────────────────────────────────────────────
@@ -146,19 +188,34 @@ router.get('/api/portal/sbp/builds/:projectId', requireParticipant, async (req: 
     const projectId = z.string().uuid().parse(req.params.projectId);
     await requireOwnedProject(req, projectId);
 
-    const { getBuildState } = await import('../services/sbp/sbpOrchestrator');
+    const { getBuildState, DELIVERED_STATUSES } = await import('../services/sbp/sbpOrchestrator');
     const state = await getBuildState(projectId);
     if (!state) return res.status(404).json({ error: 'No build for this project' });
 
     // The plan can be large; the poller wants status and a summary, not 200KB
     // on every tick. The full plan comes from the documents once published.
     const plan = state.plan;
-    res.json({
+    const violations = state.gate?.violations ?? [];
+    const body: BuildStateResponse = {
       project_id: state.projectId,
       status: state.status,
       correlation_id: state.correlationId,
-      gate: state.gate,
-      plan: plan && {
+      // Split at the boundary rather than in the browser. The client used to
+      // take the first three of `violations` and present them as the reason a
+      // build was refused — but that array is mostly ADVISORY warnings, so a
+      // student blocked on an uncovered must-have was told about a stylistically
+      // redundant story instead. Only `blocking` is a reason; `advisory` rides
+      // along with a plan that shipped.
+      gate: state.gate ? {
+        ok: state.gate.ok,
+        violations,
+        blocking: blockingViolations(violations),
+        advisory: advisoryViolations(violations),
+      } : null,
+      // Whether the plan actually reached the portal. `drafted` looks like
+      // success on the wire and is not: it means generated-but-not-promoted.
+      delivered: DELIVERED_STATUSES.has(state.status),
+      plan: plan ? {
         version: plan.version,
         sha256: plan.plan_sha256,
         status: plan.status,
@@ -170,8 +227,9 @@ router.get('/api/portal/sbp/builds/:projectId', requireParticipant, async (req: 
         stories: plan.plan.stories.map((s) => ({
           id: s.id, title: s.title, release: s.release, fulfills: s.fulfills,
         })),
-      },
-    });
+      } : null,
+    };
+    res.json(body);
   } catch (e) { fail(res, e, next); }
 });
 

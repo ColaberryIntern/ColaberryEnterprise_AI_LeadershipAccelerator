@@ -51,6 +51,7 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // first use with 'relation does not exist'. Both are idempotent and assert
 // their own post-conditions.
 import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
@@ -2427,6 +2428,10 @@ async function start(): Promise<void> {
   // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
   await ensureSponsorPortalAuditSchema();
   await ensureSbpSchema();
+  // Durable store for provider-rotated OAuth refresh tokens (MS Graph/Hotmail).
+  // Without it every rotation is discarded and the deployment drifts toward a
+  // dead credential that only an interactive re-consent can recover.
+  await ensureOauthTokenVaultSchema();
   await ensureWorkspaceRepoSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();

@@ -299,23 +299,31 @@ async function sendReplyViaMsGraph(
   draft: InboxReplyDraft,
   replyBody: string
 ): Promise<void> {
-  // Lazy import to avoid circular dependency issues
-  const { isConfigured, getGraphClient } = await import('./msGraphService');
-
-  if (!isConfigured()) {
-    throw new Error('MS Graph not configured — cannot send Hotmail reply');
-  }
-
-  const client = getGraphClient();
   const messageId = email.provider_message_id;
 
-  console.log(`${LOG_PREFIX} Sending reply via MS Graph for message ${messageId}`);
+  // Two Graph clients exist and production is provisioned for only one of them.
+  // msGraphService is the confidential client (needs CLIENT_SECRET + TENANT_ID,
+  // neither of which prod has), so hard-wiring to it made every Hotmail reply
+  // fail with a flat "MS Graph not configured" — the same wiring mismatch that
+  // silently disabled Hotmail auto-archive. Prefer whichever is configured.
+  const confidential = await import('./msGraphService');
+  if (confidential.isConfigured()) {
+    console.log(`${LOG_PREFIX} Sending reply via MS Graph (confidential client) for message ${messageId}`);
+    await confidential.getGraphClient().api(`/me/messages/${messageId}/reply`).post({ comment: replyBody });
+    return;
+  }
 
-  await client
-    .api(`/me/messages/${messageId}/reply`)
-    .post({
-      comment: replyBody,
-    });
+  const publicClient = await import('./graphMailService');
+  if (publicClient.isConfigured()) {
+    console.log(`${LOG_PREFIX} Sending reply via MS Graph (public client) for message ${messageId}`);
+    await publicClient.replyToMessage(messageId, replyBody);
+    return;
+  }
+
+  const present = ['MS_GRAPH_CLIENT_ID', 'MS_GRAPH_CLIENT_SECRET', 'MS_GRAPH_TENANT_ID', 'MS_GRAPH_REFRESH_TOKEN']
+    .map((v) => `${v}=${process.env[v] ? 'set' : 'MISSING'}`)
+    .join(' ');
+  throw new Error(`No configured MS Graph client — cannot send Hotmail reply. ${present}`);
 }
 
 /**

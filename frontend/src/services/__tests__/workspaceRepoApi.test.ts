@@ -30,7 +30,10 @@ jest.mock('axios', () => ({
 }));
 jest.mock('../../utils/participantToken', () => ({ getParticipantToken: () => 'tok' }));
 
-import { getWorkspaceRepo, provisionWorkspaceRepo, syncWorkspaceRepo } from '../workspaceRepoApi';
+import {
+  getWorkspaceRepo, provisionWorkspaceRepo, syncWorkspaceRepo,
+  startRepoConnect, confirmRepoConnect, downloadDocsBundle, connectErrorOf,
+} from '../workspaceRepoApi';
 
 const PROJECT = '11111111-1111-1111-1111-111111111111';
 
@@ -77,5 +80,76 @@ describe('every workspace repo call names the project', () => {
     mockGet.mockRejectedValue(Object.assign(new Error('400'), { response: { status: 400 } }));
 
     await expect(getWorkspaceRepo(PROJECT)).rejects.toThrow('400');
+  });
+});
+
+describe('the connect calls', () => {
+  it('sends the repo reference verbatim — parsing is the backend\'s job', async () => {
+    await startRepoConnect(PROJECT, '  https://github.com/me/thing/tree/main  '.trim());
+
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/portal/workspace/repo/connect',
+      { project_id: PROJECT, repo: 'https://github.com/me/thing/tree/main' },
+    );
+  });
+
+  it('omits confirm_replace unless the student explicitly said so', async () => {
+    await startRepoConnect(PROJECT, 'me/thing');
+    expect(mockPost.mock.calls[0][1]).not.toHaveProperty('confirm_replace');
+
+    await startRepoConnect(PROJECT, 'me/thing', true);
+    expect(mockPost.mock.calls[1][1]).toMatchObject({ confirm_replace: true });
+  });
+
+  it('confirms by project alone — the candidate repo is server-side state', async () => {
+    await confirmRepoConnect(PROJECT);
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/portal/workspace/repo/connect/confirm', { project_id: PROJECT },
+    );
+  });
+});
+
+describe('downloadDocsBundle', () => {
+  it('requests a blob, because the endpoint is authed and returns binary', async () => {
+    mockGet.mockResolvedValue({
+      data: new Blob(['zip']),
+      headers: { 'content-disposition': 'attachment; filename="nightshift-build-docs-v3.zip"' },
+    });
+
+    const result = await downloadDocsBundle(PROJECT);
+
+    expect(mockGet).toHaveBeenCalledWith('/api/portal/workspace/docs/bundle', {
+      params: { project_id: PROJECT }, responseType: 'blob',
+    });
+    expect(result.filename).toBe('nightshift-build-docs-v3.zip');
+  });
+
+  it('falls back to a sane filename when the header is absent', async () => {
+    mockGet.mockResolvedValue({ data: new Blob(['zip']), headers: {} });
+    await expect(downloadDocsBundle(PROJECT)).resolves.toMatchObject({ filename: 'build-docs.zip' });
+  });
+});
+
+describe('connectErrorOf', () => {
+  it('surfaces the backend\'s classified message rather than a generic one', () => {
+    const err = {
+      response: {
+        data: {
+          error: 'github.com/me/thing is already the workspace repo for another build.',
+          error_class: 'RepoAlreadyClaimed',
+          details: { owner: 'me' },
+        },
+      },
+    };
+    expect(connectErrorOf(err, 'fallback')).toEqual({
+      error: 'github.com/me/thing is already the workspace repo for another build.',
+      error_class: 'RepoAlreadyClaimed',
+      details: { owner: 'me' },
+    });
+  });
+
+  it('falls back when the failure carries no body — a network drop, say', () => {
+    expect(connectErrorOf(new Error('Network Error'), 'Could not connect that repo.'))
+      .toEqual({ error: 'Could not connect that repo.', error_class: null });
   });
 });

@@ -36,6 +36,7 @@ import GitHubConnection from '../../../models/GitHubConnection';
 import { getPublishedPlan } from '../planStore';
 import { markTaskVerifiedComplete } from '../../projects/projectWriteService';
 import { recordEvidence } from '../../progression/evidenceEngine';
+import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
 import { parseProgressFile, ProgressParseErrorClass } from './progressContract';
 import {
   decideBuild,
@@ -56,12 +57,11 @@ import { applyVerificationLatch, VerificationRecord } from './verificationLatch'
  * A key of its own, deliberately not reusing the `project_task` card type: the
  * curriculum economy and the build economy should be tunable apart.
  *
- * THE NUMBER IS NOT SET. Ali has not decided whether a story is worth a fixed
- * amount or a share of a fixed per-build budget, so the seeded row carries a
- * NULL `builder_xp`, which `getTypeXp` resolves to 0. Evidence is still
- * recorded — the audit trail is complete and the awards are replayable — but
- * zero XP moves until somebody sets the value in `points_config`. Inventing a
- * placeholder here would ship a number nobody chose as though somebody had.
+ * THE AWARD MODEL IS A BUDGET, NOT A RATE. The row carries a whole-capstone
+ * Builder XP budget which is divided across the stories in that project's
+ * published plan, so decomposing the same work into more stories pays no more
+ * than decomposing it into fewer. The budget is editable in `points_config`;
+ * nothing here hardcodes it. See pointsConfigService.getBudgetPerUnitXp.
  */
 export const STORY_XP_KEY = 'project_story_verified';
 
@@ -108,7 +108,7 @@ export interface BuildVerificationSummary {
   plan_version: number | null;
   checked_at: string;
   rollup: BuildRollup & {
-    /** Builder XP this run actually awarded. Zero until points_config carries a value. */
+    /** Builder XP this run actually awarded: per-story rate x stories newly verified. */
     xp_awarded: number;
     /** Stories that crossed into verified on THIS run. */
     newly_verified: string[];
@@ -234,6 +234,30 @@ export async function verifyBuildFromRepo(
   const decision = decideBuild(specs, parsed.ok ? parsed.file : null, inputs.commits);
   const checkedAt = new Date().toISOString();
 
+  // The per-story rate for THIS build: the capstone budget split across the
+  // stories in the published plan. Resolved once per run, before any award, so
+  // every story verified on this run is paid at the same rate even if the plan
+  // is republished mid-run.
+  //
+  // Deliberately the PLAN's story count (`specs.length`) and not the count of
+  // stories the student has finished — otherwise the rate would climb as the
+  // build progressed and the first story would be worth less than the last.
+  //
+  // Awards already written are never repriced. Evidence records are immutable
+  // and idempotency-keyed, so a plan republished at a different story count
+  // changes the rate for stories verified from then on and leaves earned XP
+  // exactly where it is. That is the intended behaviour: you keep what you
+  // earned under the plan you earned it under.
+  const storyAward = await getBudgetPerUnitXp(STORY_XP_KEY, specs.length);
+  if (storyAward.reason) {
+    log('sbp_verification_award_unset', opts.correlationId, 'partial', {
+      projectId,
+      reason: storyAward.reason,
+      stories_in_plan: specs.length,
+      note: 'evidence will be recorded but no Builder XP will move',
+    });
+  }
+
   const stories: BuildVerificationSummary['stories'] = [];
   const newlyVerified: string[] = [];
   let xpAwarded = 0;
@@ -310,6 +334,7 @@ export async function verifyBuildFromRepo(
       sourceRef: `${verdict.story_id}@${verdict.commit_sha}`,
       typeSlug: STORY_XP_KEY,
       competencyWeights: STORY_COMPETENCIES,
+      builderXpOverride: storyAward.per_unit,
     });
     if (awarded.created) {
       newlyVerified.push(verdict.story_id);

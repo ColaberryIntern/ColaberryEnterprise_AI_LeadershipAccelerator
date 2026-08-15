@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import cron, { type ScheduledTask } from 'node-cron';
 import { wrapWithDeadLetter } from './deadLetterService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import { seedDepartments } from './departmentSeed';
@@ -9,7 +9,6 @@ import {
   runContentOptimization,
   runConversationOptimization,
   runOrchestrationHealth,
-  runStudentProgress,
   runPromptMonitor,
   runOrchestrationRepair,
   runCampaignQA,
@@ -49,7 +48,7 @@ import {
   runSkoolNotificationResponseAgent,
   runWeeklyReportAgent,
   runWorkforceIntelligenceAgent,
-  runCompanyStrategicCycleAgent,
+  runWorkforceTicketAutoResolverAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
   runStrategyFuturesArchitect,
@@ -113,6 +112,33 @@ const UNINSTRUMENTED_AGENTS = new Set([
   'ProposalCleanupService',
 ]);
 
+// ─── Live Task Registry ─────────────────────────────────────────────────────
+// Every cron task this module creates, keyed by agent_name, so a governance
+// toggle can start/stop it WITHOUT a process restart.
+//
+// Why this exists: schedules were read from cron_schedule_configs exactly once,
+// at boot. Flipping `enabled` in the admin UI updated the row and returned 200,
+// but the running scheduler never re-read it — so the job kept doing whatever it
+// was doing until the next deploy. StudentProgressMonitor sat disabled that way
+// for five months (seeded `enabled=false` the day the governance feature
+// shipped) while the UI reported the change as applied. A control that silently
+// does nothing is worse than no control.
+// NOTE: agent_name is not guaranteed unique across the registry, so tasks are
+// stored as a LIST per agent. `CompanyStrategicCycle` was registered twice
+// (two runners, two schedules) until it was retired on 2026-08-15; a Map holding
+// a single task per agent kept only the LAST one and silently orphaned the
+// first, leaving a live cron job that reload could never stop. The list keeps
+// every task tracked and stoppable, and is retained deliberately — nothing
+// prevents a duplicate agent_name from being reintroduced.
+const activeTasks = new Map<string, { task: ScheduledTask; schedule: string }[]>();
+
+export interface ScheduleReloadResult {
+  started: string[];
+  stopped: string[];
+  rescheduled: string[];
+  unchanged: number;
+}
+
 // ─── Schedule Registry ──────────────────────────────────────────────────────
 // Maps agent_name (matching cron_schedule_configs rows) to runner + hardcoded default.
 
@@ -134,7 +160,16 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Platform agents
   { agentName: 'OrchestrationHealthAgent', hardcodedSchedule: '*/5 * * * *', runner: runOrchestrationHealth, label: 'Orchestration health' },
-  { agentName: 'StudentProgressMonitor', hardcodedSchedule: '*/2 * * * *', runner: runStudentProgress, label: 'Student progress monitor' },
+  // RETIRED 2026-08-15 (Ali's decision, session CC-20260814-k4m9): StudentProgressMonitor.
+  // It detected genuinely useful things — students stalled >48h on a lesson, missing
+  // artifacts, gating checkpoints — but an exhaustive search of the build showed NOTHING
+  // read its output: `stuck_student_detected`, `missing_artifacts_detected` and
+  // `gating_checkpoint_detected` appeared only in the agent that wrote them. It had
+  // already been silently disabled in the governance DB for five months with no
+  // student-facing impact, because the agent has no side effects at all (no writes, no
+  // sends). Retired rather than left enabled-and-alarming. The manual trigger in
+  // aiOpsController.ts ('student_monitor') is left in place and safely no-ops via
+  // runAgent()'s enabled check.
   { agentName: 'PromptMonitorAgent', hardcodedSchedule: '*/1 * * * *', runner: runPromptMonitor, label: 'Prompt monitor' },
   { agentName: 'OrchestrationAutoRepairAgent', hardcodedSchedule: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *', runner: runOrchestrationRepair, label: 'Orchestration auto-repair' },
 
@@ -148,15 +183,14 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // file calls AiAgent.update for its own row.
   { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: () => trackAgentRun('AutonomousEngine', runAutonomousCycle), label: 'Autonomous engine' },
   { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: () => trackAgentRun('AICOOStrategicCycle', runCoryStrategicCycle), label: 'Cory Brain strategic cycle' },
-  { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '15,45 * * * *', runner: async () => {
-    const { isCompanyLayerEnabled } = await import('./company/companyToCoryAdapter');
-    if (!(await isCompanyLayerEnabled())) return;
-    const { getActiveCompany } = await import('./company/companyService');
-    const company = await getActiveCompany();
-    if (!company) return;
-    const { runCompanyStrategicCycle } = await import('./company/companyStrategyAgent');
-    return runCompanyStrategicCycle((company as any).id);
-  }, label: 'Company CEO strategic cycle' },
+  // RETIRED 2026-08-15 (Ali's decision, session CC-20260814-k4m9): both
+  // CompanyStrategicCycle registrations removed. It was registered TWICE under
+  // one agent_name with two different runners and two different schedules
+  // ('15,45 * * * *' here and '0 */4 * * *' below), so it ran on both — and one
+  // governance row covered both, making any schedule override ambiguous.
+  // Retired entirely rather than de-duplicated. The manual admin trigger in
+  // routes/admin/companyRoutes.ts calls runCompanyStrategicCycle() directly and
+  // is deliberately left working, so the cycle can still be run on demand.
   { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: () => trackAgentRun('MetaAgentLoop', runMetaAgentLoop), label: 'Meta-agent loop' },
   { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
   { agentName: 'ApolloWeeklyEnrollmentAgent', hardcodedSchedule: '0 14 * * 1-5', runner: runWeeklyLeadEnrollment, label: 'Daily cold lead enrollment (Mon-Fri 9 AM CT, 20/day)' },
@@ -203,7 +237,12 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Company layer agents
   { agentName: 'WorkforceIntelligence', hardcodedSchedule: '0 */6 * * *', runner: runWorkforceIntelligenceAgent, label: 'Workforce intelligence analysis' },
-  { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '0 */4 * * *', runner: runCompanyStrategicCycleAgent, label: 'Company strategic cycle (CEO Agent)' },
+  // Runs 15 minutes after each analysis pass (offset only — the two are independent:
+  // analysis creates tickets from current stats, this closes existing tickets from
+  // current stats; the offset just avoids simultaneous DB load, not a real ordering
+  // dependency). See workforceTicketAutoResolver.ts for the re-check/close logic.
+  { agentName: 'WorkforceTicketAutoResolver', hardcodedSchedule: '15 */6 * * *', runner: runWorkforceTicketAutoResolverAgent, label: 'Workforce ticket auto-resolve (re-check + close on recovery)' },
+  // RETIRED 2026-08-15 — second of the two CompanyStrategicCycle registrations. See note above.
 
   // Department Strategy Architects (every 6 hours, staggered)
   { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },
@@ -381,6 +420,147 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
   },
 ];
 
+/** Create + register the cron task for a standard registry entry. */
+function startStandardTask(entry: ScheduleEntry, schedule: string): void {
+  const task = cron.schedule(schedule, () => {
+    const execute = UNINSTRUMENTED_AGENTS.has(entry.agentName)
+      ? () => instrumentCronJob(entry.agentName, async () => { await entry.runner(); })
+      : () => entry.runner();
+    wrapWithDeadLetter(entry.agentName, entry.label, execute).catch((err) => {
+      // wrapWithDeadLetter itself never throws (it swallows both the job's error and
+      // its own DLQ-write error) — this catch exists only as a last-resort guard.
+      console.error(`[AI Ops] ${entry.label} cron error (dead-letter wrapper itself threw):`, err);
+    });
+  }, { timezone: 'America/Chicago' });
+
+  trackTask(entry.agentName, task, schedule);
+}
+
+/** Create + register the cron task for a dynamic-import registry entry. */
+function startDynamicTask(entry: DynamicScheduleEntry, schedule: string): void {
+  const task = cron.schedule(schedule, () => {
+    instrumentCronJob(entry.agentName, entry.dynamicImport).catch((err) => {
+      console.error(`[AI Ops] ${entry.label} cron error:`, err);
+    });
+  }, { timezone: 'America/Chicago' });
+
+  trackTask(entry.agentName, task, schedule);
+}
+
+/** Append a task to an agent's task list (never replace — see activeTasks note). */
+function trackTask(agentName: string, task: ScheduledTask, schedule: string): void {
+  const existing = activeTasks.get(agentName);
+  if (existing) existing.push({ task, schedule });
+  else activeTasks.set(agentName, [{ task, schedule }]);
+}
+
+/** Stop and forget EVERY task for an agent. Safe to call for an agent that isn't running. */
+async function stopTasks(agentName: string): Promise<boolean> {
+  const running = activeTasks.get(agentName);
+  if (!running || running.length === 0) return false;
+  for (const { task } of running) {
+    try {
+      await task.stop();
+      await task.destroy();
+    } catch (err: any) {
+      // A task that fails to stop cleanly must not wedge the reload for every
+      // other agent — drop our reference either way and keep going.
+      console.error(`[AI Ops] Failed to stop task ${agentName}: ${err.message}`);
+    }
+  }
+  activeTasks.delete(agentName);
+  return true;
+}
+
+/**
+ * Re-read cron_schedule_configs and reconcile the running tasks against it.
+ *
+ * This is what makes the Governance Command Center's enable/disable and
+ * schedule edits take effect immediately instead of at the next deploy.
+ * Idempotent: reloading with no config change is a no-op that reports
+ * everything as unchanged.
+ */
+export async function reloadAIOpsSchedules(): Promise<ScheduleReloadResult> {
+  const result: ScheduleReloadResult = { started: [], stopped: [], rescheduled: [], unchanged: 0 };
+
+  // If the DB read fails, change NOTHING. Reconciling against an empty map
+  // would fall back to hardcoded defaults and silently re-enable jobs an
+  // operator had deliberately switched off.
+  const dbSchedules = await resolveAllCronSchedules();
+
+  // Group by agent_name FIRST. A duplicated agent_name (see the activeTasks
+  // note) must be reconciled as one unit — reconciling each entry separately
+  // made the two CompanyStrategicCycle registrations stop and restart each
+  // other on every reload, flapping its schedule back and forth forever.
+  interface Reconcilable {
+    label: string;
+    hardcodedSchedule: string;
+    start: (schedule: string) => void;
+  }
+  const byAgent = new Map<string, Reconcilable[]>();
+  const add = (agentName: string, item: Reconcilable) => {
+    const list = byAgent.get(agentName);
+    if (list) list.push(item);
+    else byAgent.set(agentName, [item]);
+  };
+
+  for (const entry of SCHEDULE_REGISTRY) {
+    add(entry.agentName, {
+      label: entry.label,
+      hardcodedSchedule: entry.hardcodedSchedule,
+      start: (s) => startStandardTask(entry, s),
+    });
+  }
+  for (const entry of DYNAMIC_SCHEDULE_REGISTRY) {
+    add(entry.agentName, {
+      label: entry.label,
+      hardcodedSchedule: entry.hardcodedSchedule,
+      start: (s) => startDynamicTask(entry, s),
+    });
+  }
+
+  for (const [agentName, entries] of byAgent) {
+    const dbEntry = dbSchedules.get(agentName);
+    const enabled = dbEntry?.enabled ?? true;
+    // One governance row can cover several registrations; the DB schedule
+    // overrides all of them, otherwise each keeps its own hardcoded default.
+    const desired = entries.map((e) => dbEntry?.schedule || e.hardcodedSchedule);
+    const running = activeTasks.get(agentName) || [];
+    const label = entries.map((e) => e.label).join(' + ');
+
+    if (!enabled) {
+      if (running.length > 0) {
+        await stopTasks(agentName);
+        result.stopped.push(agentName);
+        console.log(`[AI Ops] Reload: STOPPED ${label} (disabled in governance DB)`);
+      } else {
+        result.unchanged++;
+      }
+      continue;
+    }
+
+    if (running.length === 0) {
+      entries.forEach((e, i) => e.start(desired[i]));
+      result.started.push(agentName);
+      console.log(`[AI Ops] Reload: STARTED ${label}: ${desired.join(', ')}`);
+      continue;
+    }
+
+    const runningSchedules = running.map((r) => r.schedule).join('|');
+    if (runningSchedules !== desired.join('|')) {
+      await stopTasks(agentName);
+      entries.forEach((e, i) => e.start(desired[i]));
+      result.rescheduled.push(agentName);
+      console.log(`[AI Ops] Reload: RESCHEDULED ${label}: ${runningSchedules} -> ${desired.join('|')}`);
+      continue;
+    }
+
+    result.unchanged++;
+  }
+
+  return result;
+}
+
 /**
  * Start all AI Operations cron jobs.
  * Reads schedules from governance DB (cron_schedule_configs table).
@@ -451,16 +631,7 @@ export async function startAIOpsScheduler(): Promise<void> {
       continue;
     }
 
-    cron.schedule(schedule, () => {
-      const execute = UNINSTRUMENTED_AGENTS.has(entry.agentName)
-        ? () => instrumentCronJob(entry.agentName, async () => { await entry.runner(); })
-        : () => entry.runner();
-      wrapWithDeadLetter(entry.agentName, entry.label, execute).catch((err) => {
-        // wrapWithDeadLetter itself never throws (it swallows both the job's error and
-        // its own DLQ-write error) — this catch exists only as a last-resort guard.
-        console.error(`[AI Ops] ${entry.label} cron error (dead-letter wrapper itself threw):`, err);
-      });
-    }, { timezone: 'America/Chicago' });
+    startStandardTask(entry, schedule);
 
     console.log(`[AI Ops]   ${entry.label}: ${schedule} [${source}]`);
     scheduledCount++;
@@ -479,11 +650,7 @@ export async function startAIOpsScheduler(): Promise<void> {
       continue;
     }
 
-    cron.schedule(schedule, () => {
-      instrumentCronJob(entry.agentName, entry.dynamicImport).catch((err) => {
-        console.error(`[AI Ops] ${entry.label} cron error:`, err);
-      });
-    }, { timezone: 'America/Chicago' });
+    startDynamicTask(entry, schedule);
 
     console.log(`[AI Ops]   ${entry.label}: ${schedule} [${source}]`);
     scheduledCount++;

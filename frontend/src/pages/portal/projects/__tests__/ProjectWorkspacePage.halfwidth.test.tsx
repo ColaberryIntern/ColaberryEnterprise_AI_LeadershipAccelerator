@@ -45,6 +45,12 @@ jest.mock('../../../../services/workspaceRepoApi', () => ({
   getWorkspaceRepo: () => Promise.resolve(null),
   provisionWorkspaceRepo: () => Promise.resolve(null),
   syncWorkspaceRepo: () => Promise.resolve(null),
+  // The connect step (WorkspaceRepoPanel) is rendered by this page, so its
+  // module surface has to be here too or the panel imports undefined.
+  startRepoConnect: () => Promise.resolve(null),
+  confirmRepoConnect: () => Promise.resolve(null),
+  downloadDocsBundle: () => Promise.resolve({ blob: new Blob(), filename: 'x.zip' }),
+  connectErrorOf: (_e: unknown, fallback: string) => ({ error: fallback, error_class: null }),
 }));
 jest.mock('../projectsStore', () => ({
   ...jest.requireActual('../projectsStore'),

@@ -49,11 +49,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Jest (pure unit tests)
-        working-directory: backend
+      # Root deps first, for the same reason the typecheck job does it: some
+      # backend suites import deps hoisted to the ROOT package.json (axios,
+      # playwright). The old 3-suite pattern never touched them, so installing
+      # backend alone was enough; running the real suite is not.
+      - name: Install deps (root + backend)
         run: |
           npm install --no-audit --no-fund
-          npx jest --ci --testPathPattern "trustRubric|aiCost|piiRedaction"
+          cd backend && npm install --no-audit --no-fund
+      # Runs EVERY backend suite except a documented list of ones that need a
+      # live database — see backend/jest.ci.config.ts for the list and the
+      # reason each is on it. This replaced an allow-list of three suites that
+      # checked 28 tests; it now checks 8,229 across 588 suites.
+      - name: Jest (backend suites)
+        working-directory: backend
+        run: npx jest -c jest.ci.config.ts --ci
 
   guards:
     name: Secret scan + route-auth lint
@@ -67,3 +77,24 @@ jobs:
         run: node scripts/secret-scan.js
       - name: Admin route-auth lint
         run: node scripts/lint-route-auth.js
+
+  security-scan:
+    name: Static security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps (backend)
+        run: cd backend && npm install --no-audit --no-fund
+      # Runs the same scan CodeSecurityAuditAgent runs in production — except
+      # production ships only compiled `dist`, so there is no TypeScript source
+      # for it to scan there and it has never actually audited anything. CI is
+      # where the source exists. Report-only for now: these are regex heuristics
+      # and the real false-positive rate is unknown, so it reports the baseline
+      # rather than blocking PRs. Add --fail-on=critical once that baseline is
+      # triaged and clean.
+      - name: Static security scan (report-only)
+        working-directory: backend
+        run: npx ts-node src/scripts/runSecurityScan.ts

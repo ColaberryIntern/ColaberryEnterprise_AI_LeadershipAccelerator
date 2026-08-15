@@ -2428,6 +2428,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "created_by_type='cory', created_by_id='cory-engine'; this row exists so " +
       'those tickets resolve to a real display name instead of the raw string. ' +
       "Colaberry's single highest-volume ticket creator.",
+    // Agent Quality Cleanup, Item 5 — re-verified against autonomousEngine.ts's
+    // real runAutonomousCycle() 8-step pipeline: discoverProblems() (via
+    // ProblemDiscoveryAgent), IntelligenceDecision.create(), createTicket(),
+    // and executeAction() (ExecutionAgent, transactional mutation of
+    // ai_agents.config/status/error_count for low-risk safe actions only).
+    tools_granted: [
+      'detect_problems',
+      'create_intelligence_decisions',
+      'create_tickets',
+      'auto_execute_safe_actions',
+    ],
   },
   {
     agent_name: 'CoryBrain',
@@ -2445,6 +2456,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "subtask ticket is stamped created_by_type='cory', " +
       "created_by_id='CoryBrain'; this row exists so those tickets resolve to " +
       "a real display name instead of the raw string.",
+    // Agent Quality Cleanup, Item 5 — re-verified against coryBrain.ts's
+    // generateStrategicActions() (creates AgentTask rows),
+    // coryInitiatives.ts's createStrategicInitiative() (creates
+    // StrategicInitiative rows + tickets), and proposeNewAgent() (creates
+    // AgentCreationProposal rows for admin approval — never auto-creates an
+    // agent itself).
+    tools_granted: [
+      'create_agent_tasks',
+      'create_strategic_initiatives',
+      'propose_new_agents',
+    ],
   },
   {
     agent_name: 'InboxCaseEngine',
@@ -2462,6 +2484,16 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "Every case ticket is stamped created_by_type='agent', " +
       "created_by_id='InboxCaseEngine'; this row exists so those tickets " +
       'resolve to a real display name instead of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // caseTicketService.ts's real exports: ensureCaseTicket() (creates,
+    // deduped via createTicket()'s entity dedup), syncTicketForCase() (walks
+    // the ticket through the board's real state machine as the case
+    // progresses), postCaseProgressNote() (narrative comments on the ticket).
+    tools_granted: [
+      'create_case_tickets',
+      'sync_case_ticket_status',
+      'post_case_progress_notes',
+    ],
   },
   {
     agent_name: 'workforce_intelligence_engine',
@@ -2480,6 +2512,39 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "created_by_type='agent', created_by_id='workforce_intelligence_engine'; " +
       'this row exists so those tickets resolve to a real display name instead ' +
       'of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // workforceIntelligenceEngine.ts's real runWorkforceAnalysis(): queries
+    // ai_agents fleet stats (run_count/error_count) directly via SQL, and
+    // creates workforce-decision tickets through createWorkforceTicket()
+    // (now dedup'd — Item 2 of this same cleanup — while a finding for the
+    // same agent/condition stays open).
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'create_workforce_tickets',
+    ],
+  },
+  {
+    agent_name: 'WorkforceTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'company',
+    source_file: 'backend/src/services/company/workforceTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '15 */6 * * *',
+    category: 'operations',
+    description:
+      'Re-checks every OPEN workforce_decision ticket workforce_intelligence_engine ' +
+      "created against live ai_agents data and closes it (status 'done') with a real, " +
+      'numbers-grounded evidence comment once the error-rate condition it was opened ' +
+      'under has genuinely cleared. Deterministic re-derivation of the exact same ' +
+      "threshold (>20% error rate, >=10 errors) the ticket was created under -- no LLM, " +
+      'no human-approval step (matches the alert type: a mechanically re-checkable ' +
+      'metric, not a judgment call). Explicit in every close comment that this reflects ' +
+      'the CURRENTLY OBSERVED metric, not a verified root-cause fix. Runs 15 minutes ' +
+      "after each WorkforceIntelligence analysis pass (see that row's schedule).",
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'close_workforce_tickets_on_recovery',
+    ],
   },
   {
     agent_name: 'bpos_orchestrator',
@@ -2497,6 +2562,18 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       "stamped created_by_type='cory', created_by_id='bpos_orchestrator'; " +
       'this row exists so those tickets resolve to a real display name instead ' +
       'of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // ticketOrchestrator.ts's real exports: createBPOSTicket() (creates/
+    // transitions [BPOS] tickets tracking build stages),
+    // updateTicketStatus() (the same status-transition primitive every
+    // ticket-creator shares), and addTicketOutput() (attaches real build
+    // outputs to a ticket's activity feed — a capability unique to this
+    // agent among the 5).
+    tools_granted: [
+      'create_bpos_tickets',
+      'transition_bpos_ticket_status',
+      'attach_build_outputs',
+    ],
   },
 ];
 
@@ -2504,6 +2581,50 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
  * Seed the full agent registry (129 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
+/**
+ * Agents deliberately taken out of service, with the reason. The cron
+ * registration in aiOpsScheduler.ts is removed separately; this keeps the
+ * AiAgent row disabled so health alerting does not fire on a job nobody
+ * intends to run. Value is the reason, surfaced in the boot log.
+ */
+const RETIRED_AGENTS: Record<string, string> = {
+  // Detected stalled students, missing artifacts and gating checkpoints, but an
+  // exhaustive search of the build found NOTHING reading its output. Had been
+  // silently disabled for five months with no student-facing impact, because
+  // the agent has no side effects (no writes, no sends).
+  StudentProgressMonitor: 'retired 2026-08-15 — nothing consumed its output',
+  // Was registered twice under one agent_name with two different runners and
+  // two different schedules, so it ran on both while a single governance row
+  // covered them ambiguously. The manual admin trigger in companyRoutes.ts is
+  // left working, so the cycle can still be run on demand.
+  CompanyStrategicCycle: 'retired 2026-08-15 — duplicate registration; run manually via companyRoutes',
+};
+
+/**
+ * Hold every retired agent disabled, whether or not it appears in
+ * AGENT_REGISTRY — CompanyStrategicCycle, for one, was never seeded there, so a
+ * check inside the seed loop would silently skip it.
+ *
+ * Removing the cron registration alone is NOT enough: the AiAgent row would stay
+ * `enabled` with `trigger_type: 'cron'`, and cronHealthAlertService selects on
+ * exactly that pair — it would raise a severity-5 "missed runs" alert forever
+ * about a job we retired on purpose. Runs every boot so it cannot drift back on.
+ */
+async function enforceRetiredAgents(): Promise<void> {
+  for (const [agentName, reason] of Object.entries(RETIRED_AGENTS)) {
+    try {
+      const agent = await AiAgent.findOne({ where: { agent_name: agentName } });
+      if (!agent) continue; // never registered here — nothing to hold down
+      if (!agent.enabled) continue; // already retired; stay quiet on every boot
+      await agent.update({ enabled: false, status: 'paused' });
+      console.warn(`[AI Ops] RETIRED: Disabled ${agentName} — ${reason}`);
+    } catch (err: any) {
+      // One bad row must not abort seeding for everything else.
+      console.error(`[AI Ops] Failed to enforce retirement for ${agentName}: ${err.message}`);
+    }
+  }
+}
+
 export async function seedAgentRegistry(): Promise<void> {
   for (const entry of AGENT_REGISTRY) {
     const [agent, created] = await AiAgent.findOrCreate({
@@ -2540,7 +2661,10 @@ export async function seedAgentRegistry(): Promise<void> {
       await agent.update({ enabled: false, status: 'paused' });
       console.warn(`[AI Ops] SAFETY: Disabled ${entry.agent_name} — must use suggestion-only mode`);
     }
+
   }
+
+  await enforceRetiredAgents();
 
   // Assign agent_group to existing agents for super-agent aggregation
   await assignAgentGroups();

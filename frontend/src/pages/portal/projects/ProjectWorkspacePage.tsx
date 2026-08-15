@@ -7,8 +7,9 @@ import {
   StudentProject, ProjectTask,
 } from './projectsStore';
 import {
-  WorkspaceRepoView, getWorkspaceRepo, provisionWorkspaceRepo, syncWorkspaceRepo,
+  WorkspaceRepoView, ConnectStateView, getWorkspaceRepo,
 } from '../../../services/workspaceRepoApi';
+import WorkspaceRepoPanel from './WorkspaceRepoPanel';
 
 /**
  * ProjectWorkspacePage — the build-side twin of the classroom's RuntimeWorkspace.
@@ -57,8 +58,6 @@ const ProjectWorkspacePage: React.FC = () => {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [mentorInput, setMentorInput] = useState('');
   const [repo, setRepo] = useState<WorkspaceRepoView | null>(null);
-  const [ghLogin, setGhLogin] = useState('');
-  const [repoError, setRepoError] = useState<string | null>(null);
   const mentorEnd = useRef<HTMLDivElement | null>(null);
 
   // The prompt opens CLOSED. At half screen — the posture this page is actually
@@ -143,19 +142,26 @@ const ProjectWorkspacePage: React.FC = () => {
     }
   }, [msgs, projectId, task]);
 
-  const doProvision = useCallback(async () => {
-    setRepoError(null); setBusy('repo');
-    try { setRepo(await provisionWorkspaceRepo(projectId, ghLogin.trim())); }
-    catch (err: any) { setRepoError(err?.response?.data?.error || 'Could not create your repo. Check the username and try again.'); }
-    finally { setBusy(''); }
-  }, [projectId, ghLogin]);
-
-  const doSync = useCallback(async () => {
-    setRepoError(null); setBusy('repo');
-    try { setRepo(await syncWorkspaceRepo(projectId)); }
-    catch (err: any) { setRepoError(err?.response?.data?.error || 'Sync failed. Make sure you have pushed your work.'); }
-    finally { setBusy(''); }
-  }, [projectId]);
+  /**
+   * The connect endpoints answer with the CONNECT state, not the whole workspace
+   * view. Folding it onto the view the page already holds keeps one source of
+   * truth for "where is this repo up to" — the panel reads `repo.connect` and
+   * nothing has to reconcile two objects that describe one repo.
+   */
+  const applyConnect = useCallback((next: ConnectStateView) => {
+    setRepo((prev) => ({
+      connected: Boolean(next.owner && next.repo && next.state === 'connected'),
+      provisioned: Boolean(next.owner && next.repo && next.state === 'connected'),
+      repo_url: next.url ?? prev?.repo_url ?? null,
+      repo_owner: next.state === 'connected' ? next.owner : prev?.repo_owner ?? null,
+      repo_name: next.state === 'connected' ? next.repo : prev?.repo_name ?? null,
+      student_github_login: prev?.student_github_login ?? null,
+      file_count: prev?.file_count ?? null,
+      last_sync: prev?.last_sync ?? null,
+      recent_commits: prev?.recent_commits ?? [],
+      connect: next,
+    }));
+  }, []);
 
   if (!project || !task) {
     return (
@@ -307,38 +313,15 @@ const ProjectWorkspacePage: React.FC = () => {
               )}
             </div>
 
-            <div className="rt-card">
-              <div className="rt-lab" style={{ marginTop: 0 }}>Your workspace repo</div>
-              {repo?.provisioned ? (
-                <>
-                  <p style={{ margin: '8px 0' }}>
-                    <a href={repo.repo_url || '#'} target="_blank" rel="noreferrer">{repo.repo_owner}/{repo.repo_name}</a>
-                    {typeof repo.file_count === 'number' && <span className="rt-muted"> · {repo.file_count} files</span>}
-                  </p>
-                  <button className="rt-btn" disabled={busy === 'repo'} onClick={doSync}>{busy === 'repo' ? 'Syncing…' : 'Sync from GitHub'}</button>
-                  {repo.recent_commits?.length > 0 && (
-                    <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
-                      {repo.recent_commits.slice(0, 3).map((c) => (
-                        <li key={c.sha} className="rt-muted" style={{ marginBottom: 4 }}>{c.message}</li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              ) : (
-                <>
-                  <p className="rt-muted" style={{ margin: '8px 0' }}>
-                    No repo yet. Give me your GitHub username and I'll create a private one and add you to it.
-                  </p>
-                  <div className="rt-row">
-                    <input className="rt-in" value={ghLogin} onChange={(e) => setGhLogin(e.target.value)} placeholder="your-github-username" />
-                    <button className="rt-btn pri" disabled={busy === 'repo' || !ghLogin.trim()} onClick={doProvision}>
-                      {busy === 'repo' ? 'Creating…' : 'Create my repo'}
-                    </button>
-                  </div>
-                </>
-              )}
-              {repoError && <p style={{ color: 'var(--cherry, #E5121D)', margin: '8px 0 0' }}>{repoError}</p>}
-            </div>
+            {/* The connect step. Owns its own busy/error state because it is a
+                small state machine (validate → prove → bind) and threading that
+                through the page's single `busy` string made both harder to read. */}
+            <WorkspaceRepoPanel
+              projectId={projectId}
+              repo={repo}
+              onRepoChange={setRepo}
+              onConnectChange={applyConnect}
+            />
           </section>
 
           {!done && !blocked.blocked && (

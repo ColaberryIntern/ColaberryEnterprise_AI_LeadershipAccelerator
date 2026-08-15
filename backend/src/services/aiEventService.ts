@@ -6,6 +6,7 @@ import type { AiEventOutcome } from '../models/AiEvent';
 import { emitAlert } from './alertService';
 import { getTraceId } from '../utils/requestContext';
 import { redactSensitive } from '../utils/piiRedaction';
+import { truncateWithMarker } from '../utils/truncateWithMarker';
 
 /**
  * Log an AI system event (campaign scans, agent triggers, repairs, failures, etc.)
@@ -39,8 +40,7 @@ export async function logAiEvent(
 const ACTION_MAX_LENGTH = 100;
 
 function fitAction(action: string): string {
-  if (action.length <= ACTION_MAX_LENGTH) return action;
-  return `${action.slice(0, ACTION_MAX_LENGTH - 1)}…`;
+  return truncateWithMarker(action, ACTION_MAX_LENGTH);
 }
 
 /**

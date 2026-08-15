@@ -70,19 +70,37 @@ const totalTaskCount = (tree: BackendProjectTree): number =>
   tree.lists.reduce((n, l) => n + (Array.isArray(l.tasks) ? l.tasks.length : 0), 0);
 
 /**
- * True when every task in the backend tree is already present in this local
- * project — i.e. the local project is (at least) the source of those rows.
+ * True when this local project's task keys are EXACTLY the backend tree's story
+ * ids — the fingerprint of a client-built project that was mirrored up, whose
+ * backend rows were created one-per-local-task by projectSync.toImportPayload.
  *
- * Deliberately NOT "shares any key". Story ids are per-plan sequential, so
- * every plan has a STORY-001 and any-key matching makes all projects look like
- * each other. Containment asks the stronger question that actually identifies
- * the project the backend rows came from.
+ * EQUALITY, not containment. MEASURED 2026-08-15, ali@colaberry.com.
+ *
+ * This check was containment ("every backend key is present locally"), on the
+ * reasoning that a genuinely new plan brings keys the old one never had. That
+ * reasoning holds only while the new plan is the LONGER of the two. Story ids
+ * are per-plan sequential — planContract numbers them STORY-001 upward and
+ * commandCenterStory prepends STORY-000 — so a newly published 19-task plan
+ * (STORY-000…STORY-018) is a strict SUBSET of any older local plan with 19 or
+ * more stories. Containment then matched the stale project, the new tree was
+ * overlaid onto it, and the real published build never appeared at all. The
+ * server was correct the whole time; only the browser was wrong.
+ *
+ * Equality is the honest form of the question "did the backend rows come from
+ * THIS project's tasks?": if they did, the two key sets are the same set, not
+ * merely one inside the other. A subset is evidence of collision, not identity.
+ *
+ * This path is a legacy bridge only. Since 2026-08-15 projectSync records the
+ * backend id returned by the import (`claimBackendProject`), so a mirrored
+ * project is matched by id on every subsequent load and never reaches here.
  */
-function contains(p: StudentProject, tree: BackendProjectTree): boolean {
+function sameTaskKeySet(p: StudentProject, tree: BackendProjectTree): boolean {
   const localKeys = new Set(p.lists.flatMap((l) => l.tasks.map((t) => taskKey(t))));
-  const backendKeys: string[] = [];
-  for (const l of tree.lists) for (const t of l.tasks) if (t.story_id) backendKeys.push(t.story_id);
-  return backendKeys.length > 0 && backendKeys.every((k) => localKeys.has(k));
+  const backendKeys = new Set<string>();
+  for (const l of tree.lists) for (const t of l.tasks) if (t.story_id) backendKeys.add(t.story_id);
+  if (backendKeys.size === 0 || backendKeys.size !== localKeys.size) return false;
+  for (const k of Array.from(backendKeys)) if (!localKeys.has(k)) return false;
+  return true;
 }
 
 /**
@@ -214,6 +232,12 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
     cover: preset.cover,
     icon: preset.icon,
     status: 'ready',
+    // This one came off the server pipeline: a gated plan materialized into
+    // student_tasks, with dates and real prompts. Recorded so the UI can say so
+    // — the local fallback and this looked identical, which is how a degraded
+    // build went unnoticed for a whole evening.
+    origin: 'pipeline',
+    pipelineProjectId: tree.id,
     createdAt: 1,               // stable, non-zero (0 is reserved for the demo)
     stage: lists[0] ? `${lists[0].name}` : 'Build',
     curStep: 2,
@@ -237,47 +261,259 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
   };
 }
 
-// ── the merge ─────────────────────────────────────────────────────────────────
-export interface ReconcileResult { next: StudentProject[]; changed: boolean; mode: 'overlay' | 'hydrate' | 'noop'; }
+// ── who owns a local project's identity ───────────────────────────────────────
+/**
+ * The server's answer to "which projects does this enrollment actually have?"
+ *
+ * `known` is the safety interlock. It is true ONLY when GET /api/portal/projects
+ * genuinely answered. A 404 (API flag off), a network error, a timeout or a
+ * malformed body all leave it false, and nothing may be removed on a false.
+ * Absence of evidence is not evidence of absence — and the cost of getting that
+ * backwards is deleting a student's work.
+ */
+export interface ServerInventory {
+  known: boolean;
+  /** Every project id the server says this enrollment owns. */
+  ids: string[];
+  /** The project the server considers active, if any. */
+  activeId: string | null;
+}
+
+export const UNKNOWN_INVENTORY: ServerInventory = { known: false, ids: [], activeId: null };
 
 /**
- * Merge the backend `tree` into the local project list. If a local project shares
- * any task key with the tree, overlay its completions; otherwise the tree is a
- * build from another device — reconstruct it and prepend it (ahead of the demo).
- * An empty or absent tree is a no-op. Never mutates its input.
+ * Backend ids are UUIDs; the browser mints its own as `p<epoch>` and the seeded
+ * demo is the literal `sample-salon`. That difference is what lets us tell a
+ * project the SERVER produced from one the BROWSER produced, on a device whose
+ * localStorage predates the `origin` field.
  */
-export function reconcileProjects(local: StudentProject[], tree: BackendProjectTree | null): ReconcileResult {
-  if (!tree || !Array.isArray(tree.lists) || totalTaskCount(tree) === 0) {
-    return { next: local, changed: false, mode: 'noop' };
-  }
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  // MEASURED, 2026-08-13. This used to ask "does a local project share ANY task
-  // key with the backend tree?" — and task keys are story ids, which every plan
-  // numbers STORY-001 upward. A student whose browser held an OLDER build
-  // therefore matched every new one, so the new build was overlaid onto the old
-  // project and never appeared. A freshly published project was invisible on
-  // the student's own machine while being perfectly correct on the server.
+/**
+ * The backend project id this local project is bound to, or null if it is not
+ * bound to one at all.
+ *
+ *  - an explicit claim (`pipelineProjectId`) — written by the wizard when it
+ *    starts a server build, and by projectSync after a successful mirror;
+ *  - failing that, its own id when that id is a UUID, which means it came out
+ *    of `backendTreeToProject` and IS a server project.
+ *
+ * The demo never has one: it is deliberately local and is not the server's to
+ * account for.
+ */
+export function backendIdOf(p: StudentProject): string | null {
+  if (p.sample) return null;
+  if (p.pipelineProjectId) return String(p.pipelineProjectId);
+  if (UUID_RE.test(String(p.id))) return String(p.id);
+  return null;
+}
+
+/**
+ * Remove local projects the server says no longer exist. THE SERVER IS
+ * AUTHORITATIVE FOR WHAT EXISTS — but only for the projects it ever knew about.
+ *
+ * The enumerated cases, in the order they are decided:
+ *
+ *  1. inventory not known (fetch failed / API off)  → remove NOTHING.
+ *  2. inventory known but empty AND no active tree  → remove NOTHING. "You have
+ *     no projects at all" is indistinguishable from a half-broken response or a
+ *     token that resolved to the wrong enrollment, and it is the one shape that
+ *     would wipe every build at once. We decline to act on it.
+ *  3. the seeded demo/training example (`sample`)   → KEPT, always. It is
+ *     deliberately local and the server was never meant to hold it.
+ *  4. a purely-local project with no backend id     → KEPT. The browser fallback
+ *     (`origin: 'local'`, `p<epoch>` id) never reached the server, so the server
+ *     cannot testify about it. A student may have real notes on it.
+ *  5. a project bound to a backend id that IS in the inventory → KEPT (live).
+ *  6. a project bound to a backend id that is NOT in the inventory → REMOVED.
+ *     It was pushed to the server and the server row is gone: deleted, or moved
+ *     to another enrollment. This is the only branch that deletes anything.
+ */
+export function pruneDeadProjects(
+  local: StudentProject[],
+  inventory: ServerInventory,
+  hasActiveTree: boolean,
+): { next: StudentProject[]; removed: StudentProject[] } {
+  if (!inventory.known) return { next: local, removed: [] };                    // case 1
+  if (inventory.ids.length === 0 && !hasActiveTree) return { next: local, removed: [] }; // case 2
+
+  const live = new Set(inventory.ids.map(String));
+  const next: StudentProject[] = [];
+  const removed: StudentProject[] = [];
+  for (const p of local) {
+    const backendId = backendIdOf(p);                                            // cases 3 + 4 → null
+    if (backendId === null || live.has(backendId)) next.push(p);                 // cases 3, 4, 5
+    else removed.push(p);                                                        // case 6
+  }
+  // Same reference when nothing died, so callers keep their no-write fast path
+  // and a quiet sync stays genuinely quiet.
+  if (removed.length === 0) return { next: local, removed };
+  return { next, removed };
+}
+
+/**
+ * Order the list so the page leads with the truth.
+ *
+ * ProjectsPage renders `projects[0]` as the primary build, so this ordering is
+ * the difference between a student seeing their real published plan and seeing
+ * a browser template. Ranked, stable within each rank:
+ *
+ *   0 — the enrollment's ACTIVE server project (rule: it always leads)
+ *   1 — other server-born projects (real builds that exist on the server)
+ *   2 — purely-local projects (the browser fallback: kept, but never outranking
+ *       a real published build)
+ *   3 — the seeded demo/training example (kept, always last)
+ *
+ * Stability matters: within a rank the student's existing order is preserved, so
+ * nothing shuffles under them on a reload.
+ */
+export function orderProjects(local: StudentProject[], activeId: string | null): StudentProject[] {
+  const rank = (p: StudentProject): number => {
+    if (p.sample) return 3;
+    const backendId = backendIdOf(p);
+    if (backendId === null) return 2;
+    return activeId !== null && backendId === String(activeId) ? 0 : 1;
+  };
+  return local
+    .map((p, i) => ({ p, i, r: rank(p) }))
+    .sort((a, b) => (a.r - b.r) || (a.i - b.i))
+    .map((x) => x.p);
+}
+
+const sameOrder = (a: StudentProject[], b: StudentProject[]): boolean =>
+  a.length === b.length && a.every((p, i) => p === b[i]);
+
+// ── the merge ─────────────────────────────────────────────────────────────────
+export interface ReconcileResult {
+  next: StudentProject[];
+  changed: boolean;
+  /** `prune` = nothing merged, but dead projects were dropped and/or the list was re-ordered. */
+  mode: 'overlay' | 'hydrate' | 'supersede' | 'noop' | 'prune';
+  /** Projects dropped because the server no longer has them (for logging). */
+  removed?: StudentProject[];
+}
+
+/** Has the student actually done work on this build? */
+const hasCompletedWork = (p: StudentProject): boolean =>
+  p.lists.some((l) => l.tasks.some((t) => t.state === 'done'));
+
+/**
+ * Merge the backend `tree` into the local project list, then make the list agree
+ * with the server about what exists and what leads.
+ *
+ * THE SERVER IS AUTHORITATIVE FOR WHAT EXISTS. Three things follow, in order:
+ *
+ *   1. MERGE — match the tree to a local project by BACKEND ID (never by story
+ *      id), and overlay, supersede, or hydrate accordingly.
+ *   2. PRUNE — drop local projects whose server project is gone. Only projects
+ *      that demonstrably reached the server are eligible; see pruneDeadProjects
+ *      for the enumerated cases and the two interlocks that stop it deleting a
+ *      student's work on a bad response.
+ *   3. ORDER — rank the active server project first, the demo last; see
+ *      orderProjects.
+ *
+ * `inventory` is optional and defaults to UNKNOWN, which disables pruning
+ * entirely — a caller that cannot fetch the server's project list still gets a
+ * correct merge and a correct order, just no removals.
+ *
+ * Never mutates its input. Idempotent: a second pass with the same tree and
+ * inventory returns the same list and reports `changed: false`.
+ */
+export function reconcileProjects(
+  local: StudentProject[],
+  tree: BackendProjectTree | null,
+  inventory: ServerInventory = UNKNOWN_INVENTORY,
+): ReconcileResult {
+  const usableTree = !!tree && Array.isArray(tree.lists) && totalTaskCount(tree) > 0;
+
+  // The active project is whichever one the server just handed us as active; the
+  // inventory is only a fallback for it. Deriving it from the tree means rule
+  // (a) — the active build always leads — holds even when the inventory fetch
+  // failed, which is exactly when we most need the page to still be right.
+  const activeId = (usableTree ? String(tree!.id) : null) ?? inventory.activeId;
+
+  // Prune and re-order run whether or not there is a tree: a student whose
+  // server projects were all deleted still needs the dead cards to go, and a
+  // student with no active build still needs the demo to sit last.
+  const settle = (list: StudentProject[], merged: boolean, mode: ReconcileResult['mode']): ReconcileResult => {
+    const { next: pruned, removed } = pruneDeadProjects(list, inventory, usableTree);
+    const ordered = orderProjects(pruned, activeId);
+    const changed = merged || removed.length > 0 || !sameOrder(ordered, local);
+    return {
+      next: changed ? ordered : local,
+      changed,
+      mode: changed && mode === 'noop' ? 'prune' : mode,
+      removed,
+    };
+  };
+
+  if (!usableTree) return settle(local, false, 'noop');
+
+  // IDENTITY IS THE BACKEND PROJECT ID. Nothing else is reliable.
   //
   // Two things can legitimately be "the same project":
   //   1. one this device hydrated before — it carries the backend id
   //      (backendTreeToProject sets `id: tree.id`), so compare ids;
   //   2. a client-built project that was mirrored TO the backend — its local id
-  //      differs from the backend's, but the backend rows came from its tasks,
-  //      so every backend key is present locally.
+  //      differs from the backend's, so it is matched by the claim written after
+  //      the import (`pipelineProjectId`), and only failing that by an exact
+  //      task-key-set match as a legacy bridge (see sameTaskKeySet).
   //
-  // Containment is what separates (2) from a genuinely new build. An older
-  // project shares SOME story ids with everything, but a new plan brings keys
-  // the old one never had — STORY-000, the prep tasks — so it is not contained
-  // and is correctly treated as new.
-  const matchIdx = local.findIndex((p) => !p.sample && p.id === tree.id);
-  const containsIdx = matchIdx >= 0 ? matchIdx : local.findIndex((p) => !p.sample && contains(p, tree));
-  if (containsIdx >= 0) {
-    const overlaid = overlayCompletions(local[containsIdx], tree);
-    if (overlaid === local[containsIdx]) return { next: local, changed: false, mode: 'noop' };
-    const next = local.slice();
-    next[containsIdx] = overlaid;
-    return { next, changed: true, mode: 'overlay' };
+  // Story ids cannot stand in for identity: they are per-plan sequential, so
+  // every plan on the platform has a STORY-000 and a STORY-001. Matching on
+  // them — by any-key OR by containment — makes distinct projects look like
+  // each other, which is what hid a published build behind a stale one.
+  const matchIdx = local.findIndex((p) => !p.sample && p.id === tree!.id);
+
+  // A local placeholder that CLAIMED this backend project is superseded by it.
+  //
+  // The wizard creates an optimistic local build the instant the student
+  // submits, so the page has something to show while the server takes minutes.
+  // When the server's plan arrives, that placeholder has done its job. Without
+  // this branch the student ends up with two builds — a ten-task template and
+  // their real plan, sitting side by side looking equally legitimate.
+  //
+  // Guarded on completed work: if the student ticked something off the
+  // placeholder while waiting, both are kept (and both are labelled by
+  // `origin`) rather than silently discarding what they did. Losing a real plan
+  // is the bug being fixed here; losing a student's clicks would just be a
+  // different one.
+  // The local project the backend rows came FROM: same task keys exactly, and
+  // not already bound to some OTHER server project. This is an overlay, not a
+  // supersede — the tree is this project, read back, not a different plan
+  // replacing it. Resolved BEFORE the supersede branch for exactly that reason:
+  // a claim plus matching keys means "mine, round-tripped", and superseding it
+  // would relabel a client-built project as a pipeline-generated one.
+  const mirrorIdx = matchIdx >= 0 ? -1 : local.findIndex((p) => {
+    if (p.sample) return false;
+    const bound = backendIdOf(p);
+    if (bound !== null && bound !== tree!.id) return false;
+    return sameTaskKeySet(p, tree!);
+  });
+
+  // A local placeholder that CLAIMED this backend project — and whose tasks are
+  // NOT the tree's — is a stand-in for a different, server-authored plan, so the
+  // real plan supersedes it.
+  if (matchIdx < 0 && mirrorIdx < 0) {
+    const claimIdx = local.findIndex((p) => !p.sample && p.pipelineProjectId === tree!.id);
+    if (claimIdx >= 0 && !hasCompletedWork(local[claimIdx])) {
+      const next = local.slice();
+      next[claimIdx] = backendTreeToProject(tree!);   // in place: keeps its rank position
+      return settle(next, true, 'supersede');
+    }
   }
-  const hydrated = backendTreeToProject(tree);
-  return { next: [hydrated, ...local], changed: true, mode: 'hydrate' };
+
+  const targetIdx = matchIdx >= 0 ? matchIdx : mirrorIdx;
+
+  if (targetIdx >= 0) {
+    const overlaid = overlayCompletions(local[targetIdx], tree!);
+    if (overlaid === local[targetIdx]) return settle(local, false, 'noop');
+    const next = local.slice();
+    next[targetIdx] = overlaid;
+    return settle(next, true, 'overlay');
+  }
+
+  // Nothing local is this project: the server has a build this device has never
+  // seen. Reconstruct it. `settle` then ranks it first, because it is active.
+  return settle([backendTreeToProject(tree!), ...local], true, 'hydrate');
 }

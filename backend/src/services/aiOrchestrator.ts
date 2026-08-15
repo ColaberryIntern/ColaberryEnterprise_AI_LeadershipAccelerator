@@ -639,6 +639,21 @@ export async function runWorkforceIntelligenceAgent(): Promise<AgentExecutionRes
   }));
 }
 
+// Workforce Ticket Auto-Resolver — re-checks every OPEN workforce_decision ticket
+// against live ai_agents data and closes it (with a real evidence comment) once the
+// condition it was opened under has genuinely cleared. Unlike
+// runWorkforceIntelligenceAgent above, this does NOT gate on getActiveCompany(): a
+// ticket already carries its own company_id from creation time, and closing it doesn't
+// depend on whether a company is presently "active" (see workforceTicketAutoResolver.ts
+// header for the full design rationale). Deterministic, no LLM — matches
+// workforce_intelligence_engine's own nature.
+export async function runWorkforceTicketAutoResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('WorkforceTicketAutoResolver', wrapSkoolAgent(async () => {
+    const { reCheckAndAutoResolveWorkforceTickets } = await import('./company/workforceTicketAutoResolver');
+    return reCheckAndAutoResolveWorkforceTickets();
+  }));
+}
+
 export async function runCompanyStrategicCycleAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('CompanyStrategicCycle', wrapSkoolAgent(async () => {
     const { getActiveCompany } = require('./company/companyService');

@@ -46,6 +46,31 @@ describe('ensureCaseTicket', () => {
     );
   });
 
+  // Agent Quality Cleanup, Item 4 — real per-ticket description.
+  it('description leads with the real case title, not a byte-identical boilerplate string', async () => {
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-1', 'AI Flotation LLC ownership', 'TOPIC', 'ali@colaberry.com');
+
+    const callArgs = mockCreateTicket.mock.calls[0][0];
+    expect(callArgs.description).toContain('AI Flotation LLC ownership');
+    // The process-narrative sentence is still present — added to, not lost.
+    expect(callArgs.description).toContain('Tracks Discover -> Assess -> Plan -> Approve -> Execute -> Verify -> Close.');
+  });
+
+  it('two different cases produce two different descriptions, each carrying its own real title verbatim — no two cases collide on boilerplate', async () => {
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-1', 'AI Flotation LLC ownership', 'TOPIC', 'ali@colaberry.com');
+    const firstDescription = mockCreateTicket.mock.calls[0][0].description;
+
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-2', 'Career Pathways Network EIN filing', 'PERSON', 'ali@colaberry.com');
+    const secondDescription = mockCreateTicket.mock.calls[1][0].description;
+
+    expect(firstDescription).not.toBe(secondDescription);
+    expect(firstDescription).toContain('AI Flotation LLC ownership');
+    expect(secondDescription).toContain('Career Pathways Network EIN filing');
+  });
+
   it('never throws when ticket creation fails (best-effort)', async () => {
     mockCreateTicket.mockRejectedValueOnce(new Error('DB unavailable'));
     await expect(ensureCaseTicket('case-1', 'Title', 'PERSON', 'ali@colaberry.com')).resolves.toBeUndefined();
