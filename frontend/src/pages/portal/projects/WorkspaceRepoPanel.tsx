@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   WorkspaceRepoView, ConnectStateView, ConnectApiError, connectErrorOf,
   startRepoConnect, confirmRepoConnect, provisionWorkspaceRepo,
@@ -80,6 +80,24 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
   const state = connect?.state ?? (repo?.connected ? 'connected' : 'not_connected');
 
   const [refInput, setRefInput] = useState('');
+  const refTouched = useRef(false);
+
+  /**
+   * Seed the box with the repo already on the row. This is what makes an expired
+   * challenge a one-click recovery: the backend degrades `awaiting_proof` to
+   * `not_connected` once the token dies but KEEPS the repo, so the student lands
+   * here with their own address already filled in rather than retyping it.
+   *
+   * Seeded from an effect rather than `useState(url)` because the parent loads
+   * the repo asynchronously — on first render there is no url to seed from. It
+   * runs once and never fights the student for the field afterwards.
+   */
+  useEffect(() => {
+    if (refTouched.current || !connect?.url || state === 'connected') return;
+    setRefInput(connect.url);
+  }, [connect?.url, state]);
+
+  const editRef = useCallback((value: string) => { refTouched.current = true; setRefInput(value); }, []);
   const [ghLogin, setGhLogin] = useState('');
   const [showFallback, setShowFallback] = useState(false);
   const [busy, setBusy] = useState('');
@@ -158,7 +176,7 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
           <button className="rt-btn" disabled={busy === 'sync'} onClick={doSync}>
             {busy === 'sync' ? 'Syncing…' : 'Sync from GitHub'}
           </button>
-          <button className="rt-btn" onClick={() => { setRefInput(''); onConnectChange({ ...(connect as ConnectStateView), state: 'not_connected' }); }}>
+          <button className="rt-btn" onClick={() => { editRef(''); onConnectChange({ ...(connect as ConnectStateView), state: 'not_connected' }); }}>
             {lostAccess ? 'Reconnect' : 'Use a different repo'}
           </button>
         </div>
@@ -179,18 +197,23 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
   if (state === 'awaiting_proof' && connect?.challenge) {
     return (
       <div className="rt-card">
-        <div className="rt-lab" style={{ marginTop: 0 }}>One command to finish connecting</div>
+        <div className="rt-lab" style={{ marginTop: 0 }}>Finish connecting</div>
         <p className="rt-muted" style={{ margin: '8px 0' }}>
-          The platform can see <strong>{connect.owner}/{connect.repo}</strong>. Run this in the folder you are
-          already working in — it proves the repo is yours to push to, and it is the only thing that does.
-          Nothing else in your folder is touched.
+          The platform can see <strong>{connect.owner}/{connect.repo}</strong>. Run these in the folder you are
+          already working in. They turn it into a git repo if it is not one yet, then push it — which is what
+          proves the repo is yours, and the only thing that does.
+        </p>
+        <p className="rt-muted" style={{ margin: '8px 0' }}>
+          <strong>This first push uploads everything in the folder</strong>, not just the connection file — so
+          check the <code>git status</code> list before you commit, and keep anything private (a{' '}
+          <code>.env</code>, scratch files in <code>tmp/</code>) out of it.
         </p>
         <CommandBlock label={`Run in your project folder`} commands={connect.challenge.commands} />
         <div className="rt-row" style={{ marginTop: 12 }}>
           <button className="rt-btn pri" disabled={busy === 'confirm'} onClick={doConfirm}>
             {busy === 'confirm' ? 'Checking…' : "I've pushed — connect it"}
           </button>
-          <button className="rt-btn" onClick={() => onConnectChange({ ...connect, state: 'not_connected', challenge: null })}>
+          <button className="rt-btn" onClick={() => { editRef(''); onConnectChange({ ...connect, state: 'not_connected', challenge: null }); }}>
             Use a different repo
           </button>
         </div>
@@ -207,7 +230,8 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
         <p className="rt-muted" style={{ margin: '8px 0' }}>
           <strong>{connect.owner}/{connect.repo}</strong> is created and empty, and you have push access.
           Run these in the folder you already have — your files and your whole history go up exactly as they
-          are. Nothing is overwritten and nothing is forced.
+          are. Nothing is overwritten and nothing is forced. <strong>Everything in the folder goes up</strong>,
+          so check the <code>git status</code> list before you commit.
         </p>
         <CommandBlock label="Run in your project folder" commands={connect.adopt_commands} />
         <div className="rt-row" style={{ marginTop: 12 }}>
@@ -236,7 +260,7 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
         <input
           className="rt-in"
           value={refInput}
-          onChange={(e) => setRefInput(e.target.value)}
+          onChange={(e) => editRef(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && refInput.trim()) doStart(); }}
           placeholder="https://github.com/you/your-project"
           aria-label="Your GitHub repository address"

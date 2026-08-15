@@ -55,7 +55,7 @@ jest.mock('../../../models', () => {
 
 import * as connect from '../repoConnect/repoConnectService';
 import { RepoConnectError } from '../repoConnect/connectErrors';
-import { CONNECT_FILE_PATH, renderChallengeFile } from '../repoConnect/connectChallenge';
+import { CONNECT_FILE_PATH, renderChallengeFile, CHALLENGE_TTL_MS } from '../repoConnect/connectChallenge';
 import { GitHubConnection } from '../../../models';
 
 const Conn = GitHubConnection as any;
@@ -123,7 +123,16 @@ describe('startConnect', () => {
     expect(view.owner).toBe('a-student');
     expect(view.challenge?.path).toBe(CONNECT_FILE_PATH);
     expect(view.challenge?.token).toMatch(/^[a-f0-9]{32}$/);
-    expect(view.challenge?.commands.join('\n')).toContain('git push');
+    expect(view.challenge?.commands.join('\n')).toContain('git push -u origin main');
+
+    // The commands must name the repo the student just pasted. An agent asked to
+    // run a block with no remote in it will refuse rather than guess the URL,
+    // which is exactly how this step failed in the field (2026-08-15). The repo
+    // is not bound yet, so this URL can only have come from the pending connect.
+    const commands = view.challenge!.commands.join('\n');
+    expect(commands).toContain('git remote add origin https://github.com/a-student/nightshift');
+    // And the block must work from a folder that is not a git repo at all.
+    expect(commands).toContain('git init');
 
     // The crucial half: nothing is BOUND yet. A candidate must not look like a
     // live repo to the rest of the platform.
@@ -466,5 +475,59 @@ describe('getConnectState', () => {
     // Still connected. Losing read access is a reconnect prompt, not an unbind.
     expect(view.state).toBe('connected');
     expect(view.access).toEqual({ ok: false, error_class: 'RepoNotFound', checked_at: '2026-08-14T00:00:00Z' });
+  });
+
+  /**
+   * A student mid-connect who comes back later is the normal case, not the edge
+   * case: they paste a repo, get distracted, and reopen the workspace days on.
+   * The row still says `awaiting_proof` forever, so the view — not the row — is
+   * what has to notice the token died.
+   */
+  describe('a challenge that has aged out', () => {
+    const seedAwaitingProof = (issuedAt: string) => Conn._seed(PRJ, {
+      status_json: {
+        connect: {
+          state: 'awaiting_proof', method: 'byo',
+          owner: 'a-student', repo: 'nightshift',
+          url: 'https://github.com/a-student/nightshift',
+          challenge_token: 'a'.repeat(32),
+          challenge_issued_at: issuedAt,
+        },
+      },
+    });
+
+    it('still shows a LIVE token, with the commands, inside the window', async () => {
+      seedAwaitingProof(new Date(Date.now() - 60_000).toISOString());
+      const view = await connect.getConnectState(ENR, PRJ);
+      expect(view.state).toBe('awaiting_proof');
+      expect(view.challenge?.token).toBe('a'.repeat(32));
+      expect(view.challenge?.commands.join('\n')).toContain('git remote add origin https://github.com/a-student/nightshift');
+    });
+
+    it('never renders a DEAD token as if it were live', async () => {
+      seedAwaitingProof(new Date(Date.now() - CHALLENGE_TTL_MS - 60_000).toISOString());
+      const view = await connect.getConnectState(ENR, PRJ);
+      // Degraded to the paste-your-repo step, where startConnect mints a fresh
+      // one. Showing the dead code would send them to run commands that cannot
+      // succeed and only fail at the very end, on confirm.
+      expect(view.state).toBe('not_connected');
+      expect(view.challenge).toBeNull();
+    });
+
+    it('keeps the repo on the degraded view so the recovery is one click', async () => {
+      seedAwaitingProof(new Date(Date.now() - CHALLENGE_TTL_MS - 60_000).toISOString());
+      const view = await connect.getConnectState(ENR, PRJ);
+      expect(view.url).toBe('https://github.com/a-student/nightshift');
+      expect(view.owner).toBe('a-student');
+    });
+
+    it('does not write anything — reading a stale row is a read', async () => {
+      const issued = new Date(Date.now() - CHALLENGE_TTL_MS - 60_000).toISOString();
+      seedAwaitingProof(issued);
+      await connect.getConnectState(ENR, PRJ);
+      // The token stays on the row. Only startConnect mints, and only confirm spends.
+      expect(Conn._rows[PRJ].status_json.connect.challenge_token).toBe('a'.repeat(32));
+      expect(Conn._rows[PRJ].status_json.connect.state).toBe('awaiting_proof');
+    });
   });
 });

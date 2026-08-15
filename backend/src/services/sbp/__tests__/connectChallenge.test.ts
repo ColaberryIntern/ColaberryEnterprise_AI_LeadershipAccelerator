@@ -83,26 +83,133 @@ describe('isChallengeExpired', () => {
   });
 });
 
+/**
+ * These read as pedantic string assertions, and they are, deliberately.
+ *
+ * On 2026-08-15 an agent ran the connect block in a real student-shaped folder
+ * and stopped: not a git repo, no remote, and it would not guess the URL. Every
+ * assertion below pins one line whose ABSENCE caused that. A future edit that
+ * "tidies" the block by dropping `git init`, the remote, or the everything-goes-up
+ * warning has to delete a test that says why it is there.
+ */
+const REPO_URL = 'https://github.com/ColaberryIntern/night-shift-abc12345';
+
 describe('the commands a student runs', () => {
-  it('connect commands write the token to the allowlisted path and push', () => {
-    const cmds = connectCommands('c'.repeat(32));
-    expect(cmds.join('\n')).toContain(CONNECT_FILE_PATH);
-    expect(cmds.join('\n')).toContain('c'.repeat(32));
-    expect(cmds[cmds.length - 1]).toBe('git push');
-    // Nothing here rewrites history or touches their source.
-    expect(cmds.join('\n')).not.toMatch(/--force|reset --hard|clean -/);
+  const token = 'c'.repeat(32);
+  const connect = () => connectCommands(token, REPO_URL).join('\n');
+
+  it('writes the token to the allowlisted path', () => {
+    expect(connect()).toContain(CONNECT_FILE_PATH);
+    expect(connect()).toContain(token);
   });
 
-  it('adopt commands point an EXISTING folder at the new remote without forcing', () => {
-    const cmds = adoptCommands('https://github.com/ColaberryIntern/night-shift-abc12345').join('\n');
-    expect(cmds).toContain('git remote add origin https://github.com/ColaberryIntern/night-shift-abc12345');
+  // ── requirement 1: a plain folder is the DEFAULT, not an error ────────────
+  it('takes a folder that is not a git repo yet all the way to a pushed repo', () => {
+    const cmds = connect();
+    expect(cmds).toContain('git init');
+    expect(cmds).toContain('git branch -M main');
+    expect(cmds).toContain(`git remote add origin ${REPO_URL}`);
     expect(cmds).toContain('git push -u origin main');
+  });
+
+  it('never emits a bare `git push` with no upstream', () => {
+    // The original block ended in `git push`, which fails on a fresh repo with
+    // "no upstream branch". Every push here names its remote and branch.
+    for (const line of connectCommands(token, REPO_URL)) {
+      const command = line.split('#')[0].trim();
+      if (command.startsWith('git push')) expect(command).toBe('git push -u origin main');
+    }
+  });
+
+  it('says plainly that this is the normal starting point', () => {
+    // The agent stalled partly because the block gave it no signal that a
+    // missing .git was expected rather than a broken setup.
+    expect(connect()).toMatch(/not a git repo yet/i);
+  });
+
+  // ── requirement 2: the URL is in the commands, never guessed ──────────────
+  it('names the remote URL so nobody has to guess it', () => {
+    expect(connect()).toContain(REPO_URL);
+    // And again in the recovery line, so a student whose origin already exists
+    // does not have to reconstruct it.
+    expect(connect()).toContain(`git remote set-url origin ${REPO_URL}`);
+  });
+
+  it('carries whatever URL the platform holds, not a hardcoded one', () => {
+    const other = 'https://github.com/someone-else/their-repo';
+    expect(connectCommands(token, other).join('\n')).toContain(`git remote add origin ${other}`);
+    expect(connectCommands(token, other).join('\n')).not.toContain(REPO_URL);
+  });
+
+  // ── requirement 3: the first push carries the whole folder ────────────────
+  it('warns that the whole folder goes up, not just the connection file', () => {
+    expect(connect()).toMatch(/uploads EVERYTHING in this folder/);
+  });
+
+  it('offers a .gitignore that covers the things that actually hurt', () => {
+    const cmds = connect();
+    for (const pattern of ['.env', 'tmp/', 'node_modules/']) expect(cmds).toContain(`'${pattern}'`);
+    // Guarded, so it can never clobber a .gitignore the student wrote.
+    expect(cmds).toContain('[ -f .gitignore ] ||');
+  });
+
+  it('shows the student what is staged BEFORE the commit, not after', () => {
+    const cmds = connectCommands(token, REPO_URL).map((l) => l.split('#')[0].trim());
+    const review = cmds.findIndex((l) => l.startsWith('git status'));
+    const commit = cmds.findIndex((l) => l.startsWith('git commit'));
+    expect(review).toBeGreaterThan(cmds.findIndex((l) => l.startsWith('git add')));
+    expect(review).toBeLessThan(commit);
+  });
+
+  // ── requirement 4: the token cannot read as a credential ──────────────────
+  it('states inline what the token is, so an agent does not stall on "no secrets"', () => {
+    const cmds = connect();
+    expect(cmds).toMatch(/grants no access/i);
+    expect(cmds).toMatch(/not a credential/i);
+    expect(cmds).toMatch(/meant to be committed/i);
+  });
+
+  // ── the panel is student-facing: the OneDrive note is NOT here ────────────
+  it('leaves sync-folder advice out of the panel entirely', () => {
+    expect(connect()).not.toMatch(/OneDrive|Dropbox|iCloud/i);
+    expect(adoptCommands(REPO_URL).join('\n')).not.toMatch(/OneDrive|Dropbox|iCloud/i);
+  });
+
+  // ── nothing destructive, in either door ───────────────────────────────────
+  it.each([
+    ['connect', () => connectCommands(token, REPO_URL)],
+    ['adopt', () => adoptCommands(REPO_URL)],
+  ])('%s commands never rewrite history or force', (_name, build) => {
+    // Comment lines are stripped FIRST. The block deliberately contains the
+    // string "--force" inside a "never do this" warning, and a naive scan of the
+    // whole block flags that warning as if it were a command — which would make
+    // the safest line in the file the one that fails the safety test.
+    const executable = build().filter((line) => line.trim() && !line.trim().startsWith('#'));
+    for (const line of executable) {
+      expect(line).not.toMatch(/--force|reset --hard|clean -[a-z]*f\b/);
+    }
+    // Never `git clone` — the whole point is that their folder already exists.
+    expect(executable.join('\n')).not.toContain('git clone');
+  });
+
+  it('tells a student whose push is rejected what to do instead of --force', () => {
+    // The repo they pasted may already have a README. Without this line the
+    // move a student reaches for is --force, which destroys the remote.
+    const cmds = connect();
+    expect(cmds).toContain('git pull --rebase origin main --allow-unrelated-histories');
+    expect(cmds).toMatch(/[Nn]ever --force/);
+  });
+
+  it('adopt commands point an EXISTING folder at the new remote', () => {
+    const cmds = adoptCommands(REPO_URL).join('\n');
+    expect(cmds).toContain(`git remote add origin ${REPO_URL}`);
+    expect(cmds).toContain('git push -u origin main');
+    expect(cmds).toContain('git init');
     // `git branch -M main` matters: a folder that still defaults to master would
     // otherwise push a branch the platform does not read.
     expect(cmds).toContain('git branch -M main');
-    expect(cmds).not.toMatch(/--force|-f\b|reset --hard/);
-    // Never `git clone` — the whole point is that their folder already exists.
-    expect(cmds).not.toContain('git clone');
+    // Door B pushes the whole folder too, so it carries the same warning.
+    expect(cmds).toMatch(/uploads EVERYTHING in this folder/);
   });
 });
 
