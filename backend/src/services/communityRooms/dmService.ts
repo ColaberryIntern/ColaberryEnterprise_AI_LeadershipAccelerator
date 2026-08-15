@@ -190,7 +190,34 @@ export async function sendDmMessage(
 /** List a DM's messages (room-service auth enforces membership). */
 export async function listDmMessages(ctx: RoomAccessContext, roomId: string, since?: string) {
   await assertDmRoom(roomId);
-  return listMessages(ctx, roomId, { since });
+  const result = await listMessages(ctx, roomId, { since });
+
+  // Decorate each message with ready-to-render image URLs for anything attached
+  // to it, so a reloaded conversation still shows the picture and not just the
+  // sentence about it.
+  //
+  // The URLs are minted HERE, for THIS viewer, and only after listMessages has
+  // already enforced room membership — so "may this person see this file" is
+  // decided by the room rule at mint time. That is the reason a DM recipient can
+  // see an image they do not own: they were sent it. Owner-only would have been
+  // the wrong rule for a conversation.
+  const { signedAttachmentUrl } = await import('../agents/tools/attachmentUrlToken');
+  const messages = (result.messages || []).map((m: any) => {
+    const raw = m?.metadata && typeof m.metadata === 'object' ? (m.metadata as any).attachments : null;
+    if (!Array.isArray(raw) || !raw.length) return m;
+    const attachments = raw
+      .filter((a: any) => a && typeof a.id === 'string')
+      .map((a: any) => ({
+        id: a.id,
+        name: typeof a.name === 'string' ? a.name : 'attachment',
+        url: signedAttachmentUrl(a.id, ctx.enrollmentId),
+      }));
+    // Spread through toJSON so the Sequelize instance becomes a plain object
+    // the extra field can actually survive on.
+    return { ...(typeof m.toJSON === 'function' ? m.toJSON() : m), attachments };
+  });
+
+  return { ...result, messages };
 }
 
 export interface DmConversation {

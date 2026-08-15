@@ -94,7 +94,10 @@ const RuntimeWorkspace: React.FC = () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
         setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null); setNudge(null);
-        setMsgs([{ role: 'assistant', content: `I'm Cory, your mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        // The screenshot line is in the opening turn rather than a tooltip: a
+        // paperclip nobody notices is the same as no paperclip, and this is the
+        // one place every student actually reads.
+        setMsgs([{ role: 'assistant', content: `I'm Cory, your mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers. Stuck on an error? Paste or drag a screenshot straight in and I'll read it.`, kind: 'intro' }]);
         // Every card type has a cohort comment thread in its workspace.
         runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
         // Proactive nudge — if the student looks stuck on this card, the mentor offers help first.
@@ -543,7 +546,7 @@ const RuntimeWorkspace: React.FC = () => {
           <AttachmentTray items={attach.items} notice={attach.notice} onRemove={attach.remove} />
           <div className="rt-ask">
             <AttachButton onFiles={attach.addFiles} disabled={busy === 'mentor'} />
-            <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canSend && ask('ask', mentorInput || 'Take a look at this.')} placeholder="Ask your mentor…" {...attach.pasteProps} />
+            <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canSend && ask('ask', mentorInput || 'Take a look at this.')} placeholder="Ask your mentor, or paste a screenshot…" {...attach.pasteProps} />
             <button className="rt-btn pri" disabled={busy === 'mentor' || !canSend} onClick={() => ask('ask', mentorInput || 'Take a look at this.')}>Send</button>
           </div>
           {/* Cohort comments live in the rail for every card type, so the center is a

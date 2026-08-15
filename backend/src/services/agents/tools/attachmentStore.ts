@@ -105,6 +105,16 @@ export async function storeAttachment(enrollmentId: string, file: UploadedFile):
   }
 }
 
+interface ResolvedFile { path: string; mime: string; filename: string }
+
+async function resolve(row: AgentAttachment | null): Promise<ResolvedFile | null> {
+  if (!row) return null;
+  // basename() guards against a stored_name that somehow contains a path.
+  const p = path.join(AGENT_ATTACHMENT_DIR, path.basename(row.stored_name));
+  try { await fs.access(p); } catch { return null; }
+  return { path: p, mime: row.mime, filename: row.filename };
+}
+
 /**
  * Resolve an attachment to a file on disk, scoped to its owner. Null covers
  * "no such id", "not yours", and "file missing" alike — the caller answers 404
@@ -112,10 +122,19 @@ export async function storeAttachment(enrollmentId: string, file: UploadedFile):
  */
 export async function loadAttachmentFile(
   enrollmentId: string, id: string,
-): Promise<{ path: string; mime: string; filename: string } | null> {
-  const row = await AgentAttachment.findOne({ where: { id, enrollment_id: enrollmentId } });
-  if (!row) return null;
-  const p = path.join(AGENT_ATTACHMENT_DIR, path.basename(row.stored_name));
-  try { await fs.access(p); } catch { return null; }
-  return { path: p, mime: row.mime, filename: row.filename };
+): Promise<ResolvedFile | null> {
+  return resolve(await AgentAttachment.findOne({ where: { id, enrollment_id: enrollmentId } }));
+}
+
+/**
+ * Resolve an attachment WITHOUT an ownership check.
+ *
+ * Only for callers that have already established the viewer's right to see it —
+ * today that is exclusively the signed-URL serve route, where the token was
+ * minted after a room-membership check. A DM recipient is not the owner but was
+ * genuinely sent the file, so owner-only would have been the wrong rule there;
+ * the authorization simply happens at mint time instead of here.
+ */
+export async function loadAttachmentFileById(id: string): Promise<ResolvedFile | null> {
+  return resolve(await AgentAttachment.findByPk(id));
 }

@@ -133,14 +133,13 @@ export default function useCountUp(text: string, durationMs = 1100): CountUp {
       window.clearTimeout(timer);
       if (frame) cancelAnimationFrame(frame);
     };
-    // Deps are `text` and `durationMs` only. `parsed` is derived from `text` on
-    // every render, so depending on it as well would re-run this effect (and
-    // restart the count) on every parent render for no reason.
+    // `text` is the claim wording; re-running on change is correct.
     //
-    // NOTE: no eslint-disable comment here. This file originally carried
-    // `// eslint-disable-line react-hooks/exhaustive-deps`, and that rule is not
-    // configured in this project — so the DIRECTIVE itself became the lint error
-    // ("Definition for rule ... was not found") and failed the production build.
+    // No eslint-disable here: this is a .ts file, where CRA does not register
+    // the react-hooks rules, so a disable comment naming
+    // `react-hooks/exhaustive-deps` is itself the error — "Definition for rule
+    // ... was not found" — and `CI=true` promotes it to a failed build. The
+    // rule cannot fire on this file, so there is nothing to suppress.
   }, [text, durationMs]);
 
   return { ref, display, settled };

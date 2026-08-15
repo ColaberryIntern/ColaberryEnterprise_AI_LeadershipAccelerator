@@ -779,16 +779,31 @@ router.post('/api/portal/agent-attachments', requireParticipant, (req, res) => {
   });
 });
 
-// Owner-scoped serve, for the thumbnail the student sees on their own message.
-// "No such id", "not yours", and "file missing" all answer 404, so probing for
+// Serve an attachment image.
+//
+// Deliberately NOT behind requireParticipant: an <img> tag cannot send an
+// Authorization header, so a header-authenticated route can never render a
+// thumbnail in page HTML. Authorization travels in a short-lived, viewer-bound
+// `?t=` token instead (see attachmentUrlToken.ts) — the server mints one only
+// for a viewer it has ALREADY authorized, e.g. after the room-membership check
+// in listDmMessages, so the room rule is enforced at mint time rather than
+// re-derived here.
+//
+// "No such id", "bad token", and "file missing" all answer 404, so probing for
 // another student's attachments tells you nothing.
-router.get('/api/portal/agent-attachments/:id', requireParticipant, async (req, res) => {
+router.get('/api/portal/agent-attachments/:id', async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[a-f0-9-]{36}$/i.test(id)) { res.status(400).end(); return; }
   try {
-    const { loadAttachmentFile } = await import('../services/agents/tools/attachmentStore');
-    const file = await loadAttachmentFile(req.participant!.sub, id);
+    const { verifyAttachmentToken } = await import('../services/agents/tools/attachmentUrlToken');
+    const viewer = verifyAttachmentToken(String(req.query.t || ''), id);
+    if (!viewer) { res.status(404).end(); return; }
+    const { loadAttachmentFileById } = await import('../services/agents/tools/attachmentStore');
+    const file = await loadAttachmentFileById(id);
     if (!file) { res.status(404).end(); return; }
+    // A student's screenshot is not a public asset — never let a CDN or a
+    // shared proxy hold a copy that outlives the token.
+    res.setHeader('Cache-Control', 'private, max-age=300, no-transform');
     res.setHeader('Content-Type', file.mime);
     // inline: this is the student's own screenshot rendered in their own chat,
     // never a download prompt.
