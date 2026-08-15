@@ -1968,6 +1968,27 @@ export function startScheduler(): void {
     console.log('[Scheduler] PaySimpleWebhookHealth scheduled (*/15 * * * *)');
   }
 
+  // Renewal reminders, daily at 9am Central. Nothing on this platform charges a
+  // subscriber when their period ends, so this mails them a checkout link before
+  // it does (docs/RECURRING_BILLING_EXPOSURE.md). 9am CT because it is a message
+  // about somebody's money and it should land in their working day, not overnight.
+  //
+  // Ships dark. RENEWAL_REMINDERS_ENABLED=true is the switch, and turning it on
+  // starts mailing real paying customers, so it is deliberately not a default.
+  // The job is idempotent on (subscription_id, period_end, reminder_kind), so a
+  // container restart or a double-fire sends nothing a second time.
+  if (env.renewalRemindersEnabled) {
+    cron.schedule('0 9 * * *', () => {
+      instrumentCronJob('RenewalReminders', async () => {
+        const { runRenewalReminders } = await import('./renewal/renewalReminderService');
+        await runRenewalReminders({ send: true });
+      }).catch((err) => {
+        console.error('[Scheduler] Renewal reminder error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] RenewalReminders scheduled (0 9 * * * America/Chicago)');
+  }
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('PreviewStackReaper', async () => {

@@ -1,0 +1,186 @@
+/**
+ * The note a student gets before their membership period runs out.
+ *
+ * Pure rendering, no transport and no database, so the words that actually
+ * reach a paying customer can be asserted in a unit test instead of reviewed by
+ * eye in a dry run. Mirrors renderStudentBuildReadyEmail.js, which is the house
+ * pattern for an outbound student email.
+ *
+ * Tone, per the program's standing email rules: plain and human, no em-dashes,
+ * no marketing voice, one instruction. The student is being told four things
+ * and nothing else - what ends, when it ends, what the next term costs, and the
+ * link that pays it.
+ *
+ * Two things this copy deliberately does NOT say:
+ *
+ *  - It never says the membership "renews" or "will be charged". Nothing
+ *    charges automatically on this platform. Implying otherwise would set up a
+ *    student to do nothing and then be surprised, which is the exact failure
+ *    the reminder exists to prevent.
+ *  - It never promises a coverage end date. activateByRef anchors the new
+ *    period on PAYMENT time, not on the old period end, so a student who pays
+ *    three days early gets a period that starts three days early. Printing
+ *    "covers you through September 18" would be wrong for everyone who acts on
+ *    the email before the last day.
+ */
+
+import type { ReminderKind } from './renewalReminderSelection';
+
+export const SUPPORT_REPLY_TO = 'ali@colaberry.com';
+
+const SIG_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-left: 3px solid #1a365d; padding-left: 14px; margin-top: 24px;">
+  <tr><td>
+    <div style="font-weight: 700; font-size: 16px; color: #1a365d;">Ali Muwwakkil</div>
+    <div style="color: #2b6cb0; font-weight: 600;">Managing Director / AI Systems Architect</div>
+    <div style="color: #718096;">Colaberry Inc.</div>
+    <div style="margin-top: 10px; color: #2d3748;">200 Chisholm Place, Suite 200 &middot; Plano, TX 75075</div>
+    <div style="color: #2d3748;"><a href="mailto:ali@colaberry.com" style="color: #2b6cb0; text-decoration: none;">ali@colaberry.com</a> &nbsp; <a href="https://enterprise.colaberry.ai" style="color: #2b6cb0; text-decoration: none;">enterprise.colaberry.ai</a></div>
+  </td></tr>
+</table>`;
+
+const SIG_TEXT = `Ali Muwwakkil
+Managing Director / AI Systems Architect
+Colaberry Inc.
+
+200 Chisholm Place, Suite 200, Plano, TX 75075
+ali@colaberry.com  |  enterprise.colaberry.ai`;
+
+export interface RenewalReminderEmailInput {
+  full_name?: string | null;
+  email?: string | null;
+  /** 'monthly' | 'annual'. Anything else is treated as a generic term. */
+  plan: string;
+  kind: ReminderKind;
+  /** ISO timestamp of current_period_end. */
+  period_end: string;
+  /** Full list price of the next term, in cents. */
+  amount_cents: number;
+  /** Account credit being applied to this checkout, in cents. 0 when none. */
+  applied_credit_cents?: number;
+  /** The hosted checkout URL the student clicks. */
+  payment_link: string;
+  /** Whole Central calendar days to the renewal date: 0 is today, 1 tomorrow.
+   *  The urgency line is derived from this rather than from the reminder kind,
+   *  because the daily job fires at a fixed hour and the period ends are spread
+   *  across the clock. Saying "tomorrow" on the day itself is the exact error
+   *  this parameter exists to prevent. Omitted means say nothing. */
+  day_delta?: number;
+}
+
+function esc(s: unknown): string {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * A first name we are willing to put at the top of an email, or the local part
+ * of the address when the stored name is unusable. Anything with digits or
+ * punctuation in it is not a first name.
+ */
+export function firstName(fullName?: string | null, email?: string | null): string {
+  const n = String(fullName || '').trim().split(/\s+/)[0];
+  if (n && /^[A-Za-z][A-Za-z'-]*$/.test(n)) return n;
+  return String(email || '').split('@')[0] || 'there';
+}
+
+export function formatMoney(cents: number): string {
+  const n = Number.isFinite(cents) ? cents : 0;
+  return `$${(Math.round(n) / 100).toFixed(2)}`;
+}
+
+/**
+ * The renewal date as the student thinks of it. Rendered in US Central, which
+ * is the program's operating timezone: current_period_end is a UTC instant, and
+ * several of the live anchors sit in the evening UTC, so formatting in UTC would
+ * print tomorrow's date to a student in Texas.
+ */
+export function formatPeriodEnd(iso: string): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return '';
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    timeZone: 'America/Chicago',
+  }).format(new Date(ms));
+}
+
+function termNoun(plan: string): string {
+  if (plan === 'annual') return 'year';
+  if (plan === 'monthly') return 'month';
+  return 'term';
+}
+
+/** "today" / "tomorrow" / null, from the Central calendar delta. Never guessed
+ *  from the reminder kind. */
+export function urgencyWord(dayDelta: number | undefined): 'today' | 'tomorrow' | null {
+  if (dayDelta === 0) return 'today';
+  if (dayDelta === 1) return 'tomorrow';
+  return null;
+}
+
+export function renewalSubject(
+  input: Pick<RenewalReminderEmailInput, 'plan' | 'period_end' | 'day_delta'>,
+): string {
+  const ms = Date.parse(input.period_end);
+  const short = Number.isFinite(ms)
+    ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', timeZone: 'America/Chicago' }).format(new Date(ms))
+    : '';
+  // States the fact, not the ask. "Payment is due" is accurate and it is what a
+  // student scanning an inbox needs to see without opening anything.
+  const word = urgencyWord(input.day_delta);
+  if (!short) return 'Your Colaberry membership payment is due';
+  return word
+    ? `Your Colaberry membership payment is due ${word}, ${short}`
+    : `Your Colaberry membership payment is due ${short}`;
+}
+
+/**
+ * @returns the subject and both bodies, ready for a transport.
+ */
+export function renderRenewalReminderEmail(
+  input: RenewalReminderEmailInput,
+): { subject: string; text: string; html: string } {
+  const name = firstName(input.full_name, input.email);
+  const when = formatPeriodEnd(input.period_end);
+  const term = termNoun(input.plan);
+  const full = Math.max(0, Number(input.amount_cents) || 0);
+  const credit = Math.max(0, Number(input.applied_credit_cents) || 0);
+  const charge = Math.max(0, full - credit);
+  const link = String(input.payment_link || '');
+
+  const endsLine = when
+    ? `Your Colaberry membership is paid through ${when}.`
+    : 'Your Colaberry membership term is ending.';
+
+  // The real charge is the only number that matters to the person paying it, so
+  // the credit case leads with what leaves their account and shows the maths.
+  const priceText = credit > 0
+    ? `The next ${term} is ${formatMoney(full)}. You have ${formatMoney(credit)} of account credit on file, so this payment is ${formatMoney(charge)}.`
+    : `The next ${term} is ${formatMoney(full)}.`;
+
+  const word = urgencyWord(input.day_delta);
+  const urgency = word ? `That is ${word}.` : '';
+
+  const text = `${name},
+
+${endsLine}${urgency ? ` ${urgency}` : ''} ${priceText}
+
+Nothing bills automatically, so this payment has to come from you. This link opens a checkout page for it:
+
+${link}
+
+If you would rather stop here, do nothing and no payment will be taken. If any of the above looks wrong, reply to this and I will sort it out.
+
+${SIG_TEXT}
+`;
+
+  const html = `<div style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; line-height: 1.6; max-width: 640px;">
+<p>${esc(name)},</p>
+<p>${esc(endsLine)}${urgency ? ` <strong>${esc(urgency)}</strong>` : ''} ${esc(priceText)}</p>
+<p>Nothing bills automatically, so this payment has to come from you.</p>
+<p style="margin: 22px 0;"><a href="${esc(link)}" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 11px 22px; border-radius: 4px; text-decoration: none; font-weight: 600;">Pay ${esc(formatMoney(charge))} for the next ${esc(term)}</a></p>
+<p>If you would rather stop here, do nothing and no payment will be taken. If any of the above looks wrong, reply to this and I will sort it out.</p>
+${SIG_HTML}
+</div>`;
+
+  return { subject: renewalSubject(input), text, html };
+}
