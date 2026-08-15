@@ -170,8 +170,16 @@ export async function syncStudentActivity(enrollmentId: string): Promise<void> {
 
 // ─── Webhook Validation ───────────────────────────────────────────────────────
 
-export function validateWebhookSignature(rawBody: Buffer, signature: string): boolean {
-  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+/**
+ * Verify GitHub's HMAC over the RAW request bytes.
+ *
+ * `secretOverride` carries the PER-REPO secret when the caller has resolved one
+ * (see webhookSecretService). Omitting it falls back to the shared
+ * GITHUB_WEBHOOK_SECRET, which is what hooks the platform registered itself
+ * through the old OAuth flow are still signing with.
+ */
+export function validateWebhookSignature(rawBody: Buffer, signature: string, secretOverride?: string): boolean {
+  const secret = secretOverride || process.env.GITHUB_WEBHOOK_SECRET;
   if (!secret || !signature) return false;
   const expected = `sha256=${crypto.createHmac('sha256', secret).update(rawBody).digest('hex')}`;
   try {

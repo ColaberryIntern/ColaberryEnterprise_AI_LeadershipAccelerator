@@ -25,6 +25,10 @@ jest.mock('../../../../services/workspaceRepoApi', () => ({
   provisionWorkspaceRepo: (...a: unknown[]) => mockProvision(...a),
   syncWorkspaceRepo: (...a: unknown[]) => mockSync(...a),
   downloadDocsBundle: (...a: unknown[]) => mockDownload(...a),
+  // The webhook block fetches its own setup. Rejecting is the honest default
+  // for these tests: an unconfigured platform is exactly the case where the
+  // block must render nothing and leave the student with the Sync button.
+  getWebhookSetup: () => Promise.reject(new Error('not configured')),
   connectErrorOf: (err: any, fallback: string) => {
     const data = err?.response?.data;
     return data?.error

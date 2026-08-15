@@ -143,6 +143,19 @@ export async function ensureSbpSchema(): Promise<void> {
     // Housekeeping reads only. The table is append-only and small (one row per
     // push per student), but a date index keeps any future prune cheap.
     `CREATE INDEX IF NOT EXISTS idx_github_webhook_deliveries_received ON github_webhook_deliveries (received_at)`,
+
+    // PER-REPO webhook secret.
+    //
+    // Until now one `GITHUB_WEBHOOK_SECRET` covered every student repo. That was
+    // survivable while the platform installed every hook itself; it stops being
+    // survivable the moment students register their own, because the secret has
+    // to be SHOWN to whoever registers it. One shared secret shown to thirty
+    // students is a secret that lets any one of them forge pushes for all the
+    // others — and student repos are public by default, so a single careless
+    // commit would expose the whole cohort.
+    //
+    // One secret per connection instead. Its blast radius is exactly one repo.
+    `ALTER TABLE github_connections ADD COLUMN IF NOT EXISTS webhook_secret VARCHAR(120)`,
   ];
 
   for (const sql of statements) {
@@ -171,6 +184,9 @@ const REQUIRED_COLUMNS = [
   // falls back to matching the current repo state — which is the defect the
   // column exists to close.
   'student_tasks.verified_ref',
+  // Missing => every student repo falls back to the one shared secret, which is
+  // the exact exposure per-repo secrets exist to close.
+  'github_connections.webhook_secret',
   // Missing ⇒ the verification loop writes a verdict Sequelize silently drops,
   // and every story renders "not started" while the run logs success.
   'student_tasks.verification_json',

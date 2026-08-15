@@ -153,6 +153,34 @@ router.get('/api/portal/workspace/story-verification', requireParticipant, async
   }
 });
 
+/**
+ * GET what the student needs to register their own push webhook.
+ *
+ * CARRIES A SECRET, so: participant-authed, project-scoped, ownership proven
+ * before anything is assembled, and deliberately a route of its own rather than
+ * folded into `/repo`. The general repo view is fetched on every workspace load
+ * and passed around the page; the signing secret should be requested explicitly,
+ * by the one panel that has a reason to show it, and nowhere else.
+ *
+ * Never logged. `logError` below records the event name and the error class, and
+ * the view itself never reaches a log line.
+ */
+router.get('/api/portal/workspace/webhook-setup', requireParticipant, async (req, res) => {
+  try {
+    const projectId = projectIdSchema.parse(req.query.project_id);
+    const { getWebhookSetup } = await import('../services/sbp/repoConnect/webhookSetupService');
+    // Ownership is proven inside, before a secret is read or minted. 404 covers
+    // "not yours" and "no such project" alike.
+    const view = await getWebhookSetup(req.participant!.sub, projectId);
+    if (!view) { res.status(404).json({ error: 'Project not found' }); return; }
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
+    logError('workspace_webhook_setup_failed', req, err);
+    res.status(statusFor(err)).json(errorBody(err, 'Failed to load webhook setup'));
+  }
+});
+
 // ── door A: bring your own repo ──────────────────────────────────────────────
 
 // POST connect — { repo } → validates the repo and issues the push proof.

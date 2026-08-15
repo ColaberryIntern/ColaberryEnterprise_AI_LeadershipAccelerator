@@ -333,6 +333,39 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push('## How I want you to work');
   lines.push(bullet('Build it so the data comes from one place. You will point it at your real system as you build, and you should not be rewriting tabs to do it.'));
   lines.push(bullet('Show me the Overview tab first and stop. Get that right before building the other eight.'));
+  lines.push('');
+
+  // ── One-time plumbing, kept SHORT ──────────────────────────────────────────
+  //
+  // Framed as what it BUYS the student, because a student who understands why
+  // will fix it when it breaks, and a student who pasted a magic command will
+  // file a ticket instead.
+  //
+  // THE SECRET IS NOT HERE AND MUST NEVER BE. This prompt is rendered into the
+  // student's repo as part of their docs, and student repos are public by
+  // default — a secret in this string is a secret on the internet. The command
+  // lives in the authenticated workspace panel, which is the only surface that
+  // has it.
+  lines.push('## One-time setup: let the platform see your pushes');
+  lines.push(
+    'Right now the portal only learns what you have done when you press "Sync from GitHub". '
+    + 'Registering a push webhook means it finds out the moment you push instead — your '
+    + 'acceptance criteria tick themselves and stories verify while you are still in the terminal.',
+  );
+  lines.push(
+    'Open your project workspace in the portal, find **Let the platform see your pushes**, and run '
+    + 'the command it shows you. It is safe to run twice — it updates an existing hook rather than '
+    + 'adding a second one.',
+  );
+  lines.push(
+    '**That command contains a signing secret. Do not write it into any file, commit it, or put it '
+    + 'in .env — pass it as the argument, exactly as shown.** If you cannot run it, the same panel '
+    + 'has a link and two values to paste into GitHub by hand.',
+  );
+  lines.push(
+    'Skipping this costs you nothing except the convenience: everything still works, you just press '
+    + 'Sync yourself.',
+  );
 
   return lines.join('\n');
 }

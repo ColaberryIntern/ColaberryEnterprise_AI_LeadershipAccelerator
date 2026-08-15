@@ -49,9 +49,10 @@ const StoryCompletionPanel: React.FC<StoryCompletionPanelProps> = ({
                 : <>Every criterion confirmed, and a commit names this story.</>}
             </div>
           </div>
-          {/* Points appear only when there are points. `builder_xp` is NULL in
-              points_config until somebody sets it, and celebrating "+0 XP" would
-              be announcing a number nobody has chosen. */}
+          {/* Points appear only when there are points. The award is a share of
+              the capstone's 800 XP budget and fails closed at 0 if the config
+              row is missing, so "+0 XP" would announce an award that did not
+              happen. */}
           {verif.xpAwarded > 0 && <span className="rt-verified-xp">+{verif.xpAwarded} XP</span>}
         </div>
       )}

@@ -61,11 +61,12 @@ export interface StoryVerificationView {
    * rather than recomputed — what a student was awarded is what they keep, even
    * if the economy is retuned later.
    *
-   * ZERO IS THE HONEST ANSWER TODAY. `points_config.project_story_verified`
-   * carries a NULL `builder_xp` pending Ali's fixed-per-story vs
-   * budget-per-build decision, and NULL resolves to 0. The UI must therefore
-   * render the points beat only when this is greater than zero: animating a
-   * "+0" would be celebrating a number nobody has chosen yet.
+   * `project_story_verified` is a `budget_per_build` row: an 800 XP budget for
+   * the whole capstone, split across its stories, so a 20-story build pays 40 a
+   * story. The UI still renders the points beat only when this is above zero,
+   * because the split FAILS CLOSED at 0 in every degenerate case (config row
+   * missing, budget unset, zero stories) and celebrating a "+0" would announce
+   * an award that did not happen.
    */
   xp_awarded: number;
 }

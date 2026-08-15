@@ -104,9 +104,9 @@ There are three independent guards against paying twice, which is deliberate for
 2. Evidence is recorded only on the *transition* (the task had no `verified_at` when we read it), so a second sync over the same commit records nothing.
 3. The evidence record has a unique idempotency key in the database, so even two syncs racing each other — both seeing "not verified yet" at the same instant — produce exactly one award.
 
-**One honest note:** the XP value for a verified story is currently **NULL** in `points_config`, which resolves to zero. Evidence is recorded properly and the audit trail is complete and replayable, so the moment you set a number it is meaningful — but until you decide whether a story is worth a fixed amount or a share of a per-build budget, a verified story moves zero points. I am not inventing a placeholder, because a number nobody chose looks exactly like a number somebody chose.
+**The number:** a verified story pays a share of the capstone's **800 Builder XP** budget, split across its stories — a 20-story build pays 40 a story, a 30-story build pays 27. The split rounds per story rather than distributing a remainder, so the arithmetic a student can do in their head from the two numbers they can see matches what they were actually paid.
 
-That is a decision for you, and it is the one thing in this system that is waiting on a human.
+It **fails closed at zero** in every degenerate case: config row missing, budget unset, zero stories. Awarding nothing is recoverable — the evidence trail is still written and a re-run after a fix pays correctly — whereas awarding a guessed number is not. The UI shows the points chip only above zero, so a fail-closed zero never renders as a celebration of nothing.
 
 ---
 
@@ -125,23 +125,35 @@ The endpoint exists. These are the properties being added, and why each one is n
 
 **Secrets:** `GITHUB_WEBHOOK_SECRET` is an environment variable on the production backend. It is never logged, never returned in a response, never in the repo.
 
-### The one open item: getting the webhook ONTO a repo
+### Getting the webhook ONTO a repo — decided
 
-The handler is done. Installing the hook on a student's repo is a separate question, and it is not fully solved.
+The handler was the easy half. Installing the hook on thirty student repos was the open question, and the answer avoids asking anybody for access.
 
-The platform can install a webhook automatically **only for repos connected through the old GitHub OAuth flow**, because installing one requires admin rights and the code uses the student's OAuth token to get them.
+**The student's own Claude Code registers it, as part of Story 000.** It is already running in their folder, already authenticated as them. It has exactly the access needed and we never acquire any. That is the student-owned-repo decision applied one level further out: we hold a pointer and the evidence, never a token and never a scope.
 
-**Repos bound through the newer "connect your own repo" flow — which is how `AcceleratorTesting` is bound — have no OAuth token.** That flow deliberately has none: student repos are student-owned, the platform holds a pointer and the evidence, and push access is proven with a commit challenge rather than by taking an access grant. So there is nothing for the platform to install a hook with.
+The command is idempotent by construction — it looks for a hook already pointing at our URL and updates it, creating one only when there is none. Story 000 gets re-run; a bare create would stack duplicates, and a student with three hooks gets three deliveries per push.
 
-Three ways forward, and this is a decision rather than an implementation detail:
+`repo` scope is enough for a repo the student owns. If GitHub refuses, `gh auth refresh -h github.com -s admin:repo_hook` is the fix, and the panel says so.
 
-1. **The student adds it themselves**, once, from their repo's Settings → Webhooks — payload URL and secret shown in the connect panel. No new permissions, no token to store. Costs the student one minute of setup.
-2. **Ask for the OAuth scope at connect time.** Automatic, but it means taking an access grant on a student-owned repo, which is exactly the posture the connect flow was designed to avoid.
-3. **A GitHub App** the student installs on the one repo. The cleanest long-term answer and the largest piece of work; it also replaces the platform PAT.
+**And a real fallback, because `gh` missing or signed-out is Thursday, not an edge case.** The panel carries a direct link to the exact GitHub webhook page with the payload URL and secret laid out to copy — about a minute by hand, deliberately not styled as a consolation prize.
 
-Until one of those lands, every repo connected the new way runs on the Sync button, and everything else in this document behaves identically — the student presses Sync instead of GitHub telling us, and the same sequence plays. **That is not a broken state; it is the documented fallback working.** I have not picked between the three because the choice is about how much access we ask students for, which is yours to make.
+### The secret: one per repo, and it never touches a file
 
----
+This needed a design change rather than a detail.
+
+**Before: one shared `GITHUB_WEBHOOK_SECRET` for every student repo.** Survivable while the platform installed every hook itself and the secret was shown to nobody. It stops being survivable the moment students register their own, because the secret must be *shown* to whoever registers it — and one shared secret shown to thirty students lets any one of them forge push events for everybody else's repo.
+
+**Now: one secret per connection.** A leak costs exactly one repo, and it belongs to the student who leaked it.
+
+Three rules hold it:
+
+1. **It never touches a file.** Student repos are public by default, and Story 000's prompt is *rendered into the repo* as part of their docs — so the secret can never appear in the prompt, in `CLAUDE.md`, or in a `.env` an agent creates out of helpfulness. It is surfaced only in the authenticated workspace panel and passed as a command argument. The copy says so in the imperative, twice, because Claude Code stops and asks about anything resembling a credential, and here that is exactly what we want.
+2. **It is stable.** Re-opening the panel returns the same secret. Rotating silently would leave a correctly-registered hook signing with something we no longer accept, and the symptom would be "my pushes stopped working" with nothing on screen to explain it.
+3. **Legacy hooks still work.** Every hook registered through the old OAuth flow signs with the shared secret, so verification falls back to it when a connection carries none of its own. Dropping that would look clean in a diff and take a cohort offline.
+
+One consequence worth stating plainly: verification now has to know *which repo* a delivery is for before it can pick a key, so the body is parsed before the signature is checked. That is safe under a condition the code holds strictly — the parsed body selects **a key and nothing else**, and no read, write, or side effect happens until the HMAC is verified over the raw bytes. An attacker choosing which key we check against still has to produce a valid signature under it.
+
+**What a leaked secret actually buys is small, by design.** Forging a push gets a verification pass on one repo. It does not get a verified story, because nothing that decides credit is read from the payload — the progress file and the commits are re-read from GitHub by us. The worst case is making us re-read a repo we would have read anyway.
 
 ## What happens when the webhook is not there
 
@@ -152,7 +164,9 @@ The webhook is an *accelerator*, not a dependency. Every path still works withou
 - **GitHub rate-limits us** — verification returns a classified reason ("try again in about 40 seconds — nothing was lost") rather than an error. Nothing is written and nothing already earned is lost. This loop never revokes.
 - **The progress file is malformed** — rejected, with the parse problem named. Explicitly *not* read as "nothing is done", and existing verifications are untouched.
 
-The rule I am holding to: nothing in this system may become unreachable because a webhook did not fire.
+- **The student never registers it at all** — and this is the one to be most explicit about, because Story 000 now asks them to. **Nothing is lost and nothing is gated.** Their criteria still tick, their stories still verify, their points still land, in exactly the same sequence with the same animation. The only difference is that they press **Sync from GitHub** first instead of GitHub telling us. Story 000 says this out loud rather than implying the step is mandatory, because a student who believes a skipped setup step has broken their build will stop and ask instead of building.
+
+The rule I am holding to: **the hook is an upgrade, never a requirement.** Nothing in this system may become unreachable because a webhook did not fire, was never installed, or was installed wrong. A student who ignores the whole thing gets the identical outcome one button press later.
 
 ---
 
@@ -213,7 +227,7 @@ Each of these was independently shippable and useful on its own. All five landed
 
 **(c) The live channel.** ✅ A five-second poll while the story is open and the tab is visible; stops on hide, fetches immediately on return, and stops permanently once the story verifies.
 
-**(d) The webhook.** ✅ Story verification wired into the existing signature-checked endpoint, with the bot-commit filter and a `github_webhook_deliveries` ledger keyed on GitHub's delivery id.
+**(d) The webhook.** ✅ Story verification wired into the existing signature-checked endpoint, with the bot-commit filter and a `github_webhook_deliveries` ledger keyed on GitHub's delivery id. Plus per-repo signing secrets, a student-run idempotent registration command in Story 000, and a manual fallback in the workspace panel.
 
 **(e) The moment.** ✅ Sequenced ticks at 90ms, then the verified card, then the points chip — and only for changes the page actually witnessed.
 
@@ -221,15 +235,15 @@ Even if (d) had not landed, (a) through (c) would still be worth shipping: with 
 
 ### What you will see on `AcceleratorTesting` today
 
-Open a story in the workspace, then in Claude Code tick its criteria in `.colaberry/progress.json`, commit with the story id in the message, and push.
+Open the story workspace. Under **Your repo** there is now a block called **Let the platform see your pushes** — that repo has never sent us a delivery, so its dot is grey. Open it, copy the command, and run it in the repo folder. It registers the hook with your own `gh` credentials; the platform never sees a token.
 
-Because that repo is bound through the connect flow, **no webhook is installed on it yet** (see the open item above), so press **Sync from GitHub** once. Within about five seconds the poll picks the new verdict up and the page moves on its own: the criteria tick in sequence, the story flips to verified, and the button changes from "Mark done — waiting on GitHub" to "Mark done".
+Then in Claude Code: tick the story's criteria in `.colaberry/progress.json`, commit with the story id in the message (`STORY-001: ...` or a `Story: STORY-001` trailer), and push.
 
-Add a webhook to the repo by hand — payload URL `GITHUB_WEBHOOK_URL`, content type JSON, secret `GITHUB_WEBHOOK_SECRET`, push events only — and the Sync press disappears from that sequence. Nothing else changes.
+Within roughly five to twelve seconds, with no clicking: the confirmed criteria tick in sequence about 90ms apart, the story flips to a green **Verified from your repo** card naming the evidence commit, the points chip appears, and the button changes from "Mark done — waiting on GitHub" to "Mark done". Re-open the block afterwards and the dot is green with "your last push reached us just now".
 
-### One thing that is waiting on you
+If you skip the registration entirely, everything above still happens — you press **Sync from GitHub** first. That is the fallback, and it is meant to stay usable forever.
 
-`points_config.project_story_verified` carries a **NULL** `builder_xp`. Evidence rows are written correctly and the audit trail is complete and replayable, so the moment you set a number it is meaningful and everything already banked stays banked. Until then a verified story awards zero, and the UI deliberately shows no points chip rather than celebrating "+0". That is the only decision in this system still sitting with a human.
+**One caveat, stated because it is the kind of thing that bites on a Thursday:** this needs `GITHUB_WEBHOOK_URL` set on the production backend. If it is unset the block renders nothing at all rather than showing a broken setup, and every student is on the Sync button. Worth confirming before the cohort runs Story 000.
 
 ---
 

@@ -201,9 +201,10 @@ export interface StoryVerificationView {
   /** The criteria as the PLAN has them, in plan order. The authority for pairing. */
   acceptance: string[];
   /**
-   * Builder XP banked for this story. Zero until `points_config` carries a
-   * value, so the UI shows the points beat only when this is above zero — a
-   * "+0" celebration would be announcing a number nobody has set.
+   * Builder XP banked for this story — an 800 budget for the capstone split
+   * across its stories. Shown only when above zero: the split fails closed at 0
+   * if the config row is missing, and a "+0" celebration would announce an
+   * award that did not happen.
    */
   xp_awarded: number;
 }
@@ -221,6 +222,37 @@ export async function getStoryVerification(
   const { data } = await workspaceApi.get<StoryVerificationView>(
     '/api/portal/workspace/story-verification',
     { params: { project_id: projectId, story_id: storyId } },
+  );
+  return data;
+}
+
+// ── webhook setup ────────────────────────────────────────────────────────────
+
+/**
+ * What a student needs to register their own push webhook.
+ *
+ * CARRIES A SIGNING SECRET. Fetched only by the panel that shows it, never
+ * folded into the general repo view, and never persisted client-side.
+ */
+export interface WebhookSetupView {
+  supported: boolean;
+  owner: string | null;
+  repo: string | null;
+  payload_url: string | null;
+  secret: string | null;
+  content_type: 'json';
+  events: string[];
+  /** One paste. Updates an existing hook on our URL rather than adding a second. */
+  gh_command: string | null;
+  settings_url: string | null;
+  /** Last delivery we received from this repo — the only proof we can stand behind. */
+  last_delivery_at: string | null;
+}
+
+export async function getWebhookSetup(projectId: string): Promise<WebhookSetupView> {
+  const { data } = await workspaceApi.get<WebhookSetupView>(
+    '/api/portal/workspace/webhook-setup',
+    { params: { project_id: projectId } },
   );
   return data;
 }

@@ -157,6 +157,32 @@ a.rt-btn{text-decoration:none}
   color:var(--leaf-deep);background:var(--paper);border:1px solid var(--leaf);border-radius:999px;
   padding:5px 12px;animation:rt-pop .4s cubic-bezier(.2,1.5,.4,1) .16s both}
 
+/* ── WEBHOOK SETUP ───────────────────────────────────────────────────────────
+   A one-time step, so it must read as an OFFER rather than an outstanding task.
+   Quiet by default, collapsed, and it says out loud that skipping it costs
+   nothing — an optional step styled like a warning would read as broken. */
+.rt-hook{margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--mist)}
+.rt-hook-h{display:flex;align-items:center;gap:9px}
+.rt-hook-t{font-weight:700;font-size:13.5px}
+.rt-hook-h .rt-btn{margin-left:auto;font-size:12.5px;padding:6px 11px}
+.rt-hook-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted2)}
+.rt-hook-dot.on{background:var(--leaf);box-shadow:0 0 0 3px var(--leaf-soft)}
+.rt-hook-s{margin:8px 0 0;font-size:12.5px;line-height:1.6;color:var(--muted)}
+.rt-hook-s code,.rt-hook-l code{font-family:var(--mono);font-size:11.5px;background:var(--sunken);padding:1px 5px;border-radius:4px}
+.rt-hook-cmd{white-space:pre;overflow-x:auto;font-size:12px;line-height:1.55;margin:0 0 8px;max-height:none}
+/* The one sentence that has to survive being skim-read, so it gets the only
+   loud treatment in the block. */
+.rt-hook-warn{margin:12px 0 0;padding:10px 12px;border:1px solid var(--cherry);background:var(--cherry-soft);
+  border-radius:10px;font-size:12.5px;line-height:1.6;color:#5d1116}
+.rt-hook-l{margin:6px 0 0;padding-left:20px;font-size:12.5px;line-height:1.7;color:var(--muted)}
+.rt-hook-l li{margin:5px 0}
+.rt-hook-kv{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
+.rt-hook-kv code{font-family:var(--mono);font-size:11.5px;background:var(--sunken);padding:3px 7px;border-radius:5px;
+  overflow-wrap:anywhere;max-width:100%}
+.rt-hook-kv .rt-btn{font-size:11.5px;padding:4px 9px}
+/* Long enough to wrap and not so prominent it invites a screenshot. */
+.rt-hook-secret{color:var(--muted)}
+
 /* Reduced motion: the same information, in the same order, without the
    movement. The app-wide override in responsive.css already flattens duration;
    this states the intent locally so a future edit to this file cannot
