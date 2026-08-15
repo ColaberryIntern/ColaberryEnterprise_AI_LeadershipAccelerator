@@ -14,6 +14,19 @@ export function isConfigured(): boolean {
 }
 
 /**
+ * Scope used for READ + ARCHIVE. Deliberately excludes Mail.Send.
+ *
+ * The stored refresh token was consented for Mail.Read/Mail.ReadWrite only.
+ * Asking the token endpoint for a scope the user never granted does not degrade
+ * gracefully — AAD rejects the WHOLE request with AADSTS70000 and returns no
+ * token at all. Adding Mail.Send here would therefore break inbox sync and
+ * auto-archive, which work today, in exchange for a send path that still would
+ * not work. Send requests its own token separately (see getSendAccessToken).
+ */
+const READ_SCOPE = 'Mail.Read Mail.ReadWrite offline_access';
+const SEND_SCOPE = 'Mail.Read Mail.ReadWrite Mail.Send offline_access';
+
+/**
  * Extracts a safe, human-readable detail from an MS Graph / AAD token-endpoint axios
  * error. Only ever reads specific allowlisted fields (`error`, `error_description`,
  * `error.code`, `error.message`) off `error.response.data` — never blanket
@@ -75,7 +88,7 @@ async function getAccessToken(): Promise<string> {
         client_id: clientId,
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        scope: 'Mail.Read Mail.ReadWrite offline_access',
+        scope: READ_SCOPE,
       }).toString(),
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
@@ -147,6 +160,71 @@ export async function fetchFolderMessages(folder: string, top: number = 100): Pr
 // Older deployments used "Archive". The folder name is configurable via env so it
 // can be migrated without code change in the future.
 const AUTOMATION_FOLDER = process.env.INBOX_COS_ARCHIVE_FOLDER || '_Automation';
+
+/** Raised when the stored refresh token has not been consented for Mail.Send. */
+export class MailSendConsentError extends Error {
+  readonly error_class = 'MailSendConsentRequired';
+  constructor(detail: string) {
+    super(
+      'Hotmail sending is not authorized: the stored refresh token was never consented for Mail.Send. '
+      + 'Re-authorize the app with the Mail.Send scope and replace MS_GRAPH_REFRESH_TOKEN. '
+      + `AAD said: ${detail}`,
+    );
+  }
+}
+
+/**
+ * Access token for SENDING. Requested separately from the read token because the
+ * send scope may not be consented — and an unconsented scope fails the entire
+ * token request (AADSTS70000) rather than returning a reduced token. Keeping
+ * this isolated means a missing Mail.Send consent cannot break inbox sync or
+ * auto-archive, which share the read token.
+ *
+ * Not cached: it is requested only on an actual send, and caching a token whose
+ * consent state we expect to change would just delay picking up the fix.
+ */
+async function getSendAccessToken(): Promise<string> {
+  try {
+    const res = await axios.post(
+      'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
+      new URLSearchParams({
+        client_id: process.env.MS_GRAPH_CLIENT_ID!,
+        grant_type: 'refresh_token',
+        refresh_token: process.env.MS_GRAPH_REFRESH_TOKEN!,
+        scope: SEND_SCOPE,
+      }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 20000 },
+    );
+    return res.data.access_token;
+  } catch (error: any) {
+    const { message } = extractGraphErrorDetail(error);
+    // AADSTS70000 is the specific "scope was never granted" case. Naming it
+    // beats a generic auth failure, because the fix is a one-time human
+    // re-consent, not a code change or a token refresh.
+    if (/AADSTS70000|unauthorized or expired/i.test(message)) {
+      throw new MailSendConsentError(message);
+    }
+    throw wrapGraphError(error, 'Send token refresh');
+  }
+}
+
+/**
+ * Reply to a message in place, preserving the Graph thread.
+ * Mirrors msGraphService's `/me/messages/{id}/reply` call so behaviour is
+ * identical whichever client is configured.
+ */
+export async function replyToMessage(messageId: string, comment: string): Promise<void> {
+  const token = await getSendAccessToken();
+  try {
+    await axios.post(
+      `https://graph.microsoft.com/v1.0/me/messages/${messageId}/reply`,
+      { comment },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, timeout: 30000 },
+    );
+  } catch (error: any) {
+    throw wrapGraphError(error, `Reply to message ${messageId}`);
+  }
+}
 
 export async function archiveMessage(messageId: string): Promise<void> {
   const token = await getAccessToken();
