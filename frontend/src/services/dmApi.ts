@@ -5,6 +5,13 @@ import type { AttachmentRef } from './agentAttachmentApi';
 // 1:1 direct messages. Talks to /api/portal/dm/* (a DM is a 2-person private
 // room server-side; this client only ever sees a roomId + messages).
 
+/** An image attached to a DM, with a short-lived URL minted for this viewer. */
+export interface DmAttachment {
+  id: string;
+  name: string;
+  url: string;
+}
+
 export interface DmMessage {
   id: string;
   room_id: string;
@@ -13,6 +20,8 @@ export interface DmMessage {
   content: string;
   kind: string;
   created_at: string;
+  /** Present only on messages that carry files. Survives a page reload. */
+  attachments?: DmAttachment[];
 }
 
 /** Find-or-create the DM room with `otherId`; returns the room id to poll/post. */

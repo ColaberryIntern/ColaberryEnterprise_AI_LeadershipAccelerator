@@ -116,7 +116,14 @@ const ChatDock: React.FC<{ target: DmTarget; onClose: () => void }> = ({ target,
             {messages.map((m) => (
               <div key={m.id} className={`te-dm-msg${m.enrollment_id === meRef.current ? ' mine' : ''}`}>
                 {m.content}
-                <SentAttachments items={localAttachments[m.id]} />
+                {/* Server URLs win: they survive a reload and work for the
+                    recipient too. The local previews are only the optimistic
+                    bridge between hitting Send and the poll catching up. */}
+                <SentAttachments items={
+                  m.attachments?.length
+                    ? m.attachments.map((a) => ({ name: a.name, preview: a.url, isPdf: /\.pdf$/i.test(a.name) }))
+                    : localAttachments[m.id]
+                } />
               </div>
             ))}
             <div ref={endRef} />
@@ -128,7 +135,7 @@ const ChatDock: React.FC<{ target: DmTarget; onClose: () => void }> = ({ target,
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="Message…"
+              placeholder="Message, or paste a screenshot…"
               maxLength={4000}
               aria-label={`Message ${target.name}`}
               {...attach.pasteProps}
