@@ -1,7 +1,8 @@
 import React from 'react';
-import { Claim, canShow } from './Claim';
+import { canShow } from './Claim';
 import Icon, { IconName } from './Icon';
 import { getClaim } from '../../config/claimsRegistry';
+import useCountUp from './useCountUp';
 import './accolades.css';
 
 /**
@@ -62,7 +63,10 @@ export const ACCOLADE_TILES: readonly AccoladeTile[] = [
   {
     claimKey: 'trackrecord.hired',
     icon: 'trend',
-    label: 'a floor, not a total: only the ones who told us',
+    // 691 are traceable in CCPP; the published figure includes ~300 further
+    // hires Ali knows of that were never reported back. The label says which
+    // kind of number this is rather than implying a query produced it.
+    label: 'tracked hires plus those we know of, reported and unreported',
   },
   {
     claimKey: 'program.duration',
@@ -90,27 +94,49 @@ export function withheldAccolades(): { key: string; why: string }[] {
     });
 }
 
+/**
+ * One tile. Split out because each needs its own count-up hook, and hooks
+ * cannot be called inside a .map callback in the parent.
+ *
+ * THE ACCESSIBILITY RULE HERE IS A GOVERNANCE RULE. The animated digits are
+ * aria-hidden and the true registry wording is exposed to assistive tech in a
+ * visually-hidden span. A screen reader announcing "437 hires" on its way to
+ * 1,000 would be reading a claim we never made out loud. Once the count
+ * settles the two are identical, so nothing is lost.
+ */
+function AccoladeTileView({ tile, wording }: { tile: AccoladeTile; wording: string }): React.ReactElement {
+  const { ref, display, settled } = useCountUp(wording);
+
+  return (
+    <article className="cbv2-accolade">
+      <span className="cbv2-accolade__icon" aria-hidden="true">
+        <Icon name={tile.icon} size={20} />
+      </span>
+      <p className="cbv2-accolade__figure" ref={ref as React.RefObject<HTMLParagraphElement>}>
+        {/* Real value, always correct, always available to assistive tech. */}
+        <span className="cbv2-sr-only">{wording}</span>
+        <span aria-hidden={!settled} data-settled={settled}>
+          {display}
+        </span>
+      </p>
+      <p className="cbv2-accolade__label">{tile.label}</p>
+    </article>
+  );
+}
+
 function Accolades(): React.ReactElement | null {
-  const visible = ACCOLADE_TILES.filter((t) => {
-    if (!canShow(t.claimKey)) return false;
-    const c = getClaim(t.claimKey);
-    // Skip rather than deform the row. See FIGURE_MAX.
-    return Boolean(c && c.publicWording.length <= FIGURE_MAX);
-  });
+  const visible = ACCOLADE_TILES.map((t) => ({ tile: t, claim: getClaim(t.claimKey) }))
+    .filter(({ tile, claim }) => {
+      if (!canShow(tile.claimKey)) return false;
+      // Skip rather than deform the row. See FIGURE_MAX.
+      return Boolean(claim && claim.publicWording.length <= FIGURE_MAX);
+    });
   if (!visible.length) return null;
 
   return (
     <div className="cbv2-accolades">
-      {visible.map((t) => (
-        <article className="cbv2-accolade" key={t.claimKey}>
-          <span className="cbv2-accolade__icon" aria-hidden="true">
-            <Icon name={t.icon} size={20} />
-          </span>
-          <p className="cbv2-accolade__figure">
-            <Claim claimKey={t.claimKey} />
-          </p>
-          <p className="cbv2-accolade__label">{t.label}</p>
-        </article>
+      {visible.map(({ tile, claim }) => (
+        <AccoladeTileView key={tile.claimKey} tile={tile} wording={claim!.publicWording} />
       ))}
     </div>
   );

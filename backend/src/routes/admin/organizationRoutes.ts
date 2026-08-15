@@ -21,16 +21,28 @@ import {
  * deliberately scoped to the leads section, and these endpoints expose a
  * company's full member roster and can suspend an account.
  *
+ * PATH PREFIX: these declare the FULL path including `/api/admin`, because
+ * `adminRoutes` mounts its children with `router.use(child)` and no prefix --
+ * every sibling file (leadRoutes, cohortRoutes, ...) does the same. Declaring a
+ * bare `/organizations` here mounted the API at the wrong URL entirely, and the
+ * mistake was invisible to a smoke test: an UNauthenticated request to
+ * `/api/admin/organizations` still returns 401, because anything under `/api/`
+ * reaches adminRoutes and is rejected by the first requireAdmin guard it meets
+ * (see the comment above the adminRoutes mount in server.ts). A 401 therefore
+ * proves nothing about whether the route exists -- only an authenticated request
+ * distinguishes "mounted" from "404". `organizationRoutes.paths.test.ts` now
+ * asserts the prefix directly.
+ *
  * Ordering note: `/organizations/stats` is declared BEFORE `/organizations/:id`,
  * or Express matches "stats" as an id and the stats call 404s.
  */
 const router = Router();
 
-router.get('/organizations', requireAdmin, handleAdminListOrganizations);
-router.get('/organizations/stats', requireAdmin, handleAdminGetOrganizationStats);
-router.get('/organizations/:id', requireAdmin, handleAdminGetOrganization);
-router.patch('/organizations/:id/status', requireAdmin, handleAdminSetOrganizationStatus);
-router.post('/organizations/:id/cohorts', requireAdmin, handleAdminAddCohort);
-router.delete('/organizations/:id/cohorts/:cohortId', requireAdmin, handleAdminRemoveCohort);
+router.get('/api/admin/organizations', requireAdmin, handleAdminListOrganizations);
+router.get('/api/admin/organizations/stats', requireAdmin, handleAdminGetOrganizationStats);
+router.get('/api/admin/organizations/:id', requireAdmin, handleAdminGetOrganization);
+router.patch('/api/admin/organizations/:id/status', requireAdmin, handleAdminSetOrganizationStatus);
+router.post('/api/admin/organizations/:id/cohorts', requireAdmin, handleAdminAddCohort);
+router.delete('/api/admin/organizations/:id/cohorts/:cohortId', requireAdmin, handleAdminRemoveCohort);
 
 export default router;
