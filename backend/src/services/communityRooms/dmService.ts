@@ -148,10 +148,21 @@ async function notifyDmRecipient(roomId: string, senderId: string, messageId: st
   }
 }
 
-/** Send a message in a DM room (room-service auth enforces membership). */
-export async function sendDmMessage(ctx: RoomAccessContext, roomId: string, content: string): Promise<RoomMessage> {
+/**
+ * Send a message in a DM room (room-service auth enforces membership).
+ * `attachments` are ids of files the sender uploaded — postMessage re-verifies
+ * ownership before persisting them, and Reese reads them off the stored
+ * message rather than off this call, so a reply built from a replayed message
+ * sees exactly what the student sent.
+ */
+export async function sendDmMessage(
+  ctx: RoomAccessContext,
+  roomId: string,
+  content: string,
+  attachments: Array<{ id: string; name?: string | null }> = [],
+): Promise<RoomMessage> {
   await assertDmRoom(roomId);
-  const message = await postMessage(ctx, roomId, { content });
+  const message = await postMessage(ctx, roomId, { content, attachments });
   await notifyDmRecipient(roomId, ctx.enrollmentId, message.id);
   // Reese Phase 1 — reactive-only reply trigger. maybeTriggerReeseReply() is a
   // strict no-op for any room Reese isn't a member of, and for any message

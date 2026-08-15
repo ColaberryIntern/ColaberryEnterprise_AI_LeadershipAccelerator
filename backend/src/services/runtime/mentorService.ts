@@ -5,13 +5,16 @@
  * Also generates AI-guided reflection prompts and video augmentations. Mentor
  * turns are persisted so the coach remembers the student's history.
  */
-import { chatText, chatJson } from './runtimeAi';
+import { chatText, chatJson, ChatMessage } from './runtimeAi';
 import MentorTurn from '../../models/MentorTurn';
 import { buildMentorContext, MentorContext } from './mentorContext';
 import { getLearnerContext } from '../learnerContextService';
 import { renderLearnerContext } from '../learnerContextFormat';
 import { loadConversation } from './mentorMemory';
 import { adaptiveInstruction } from './mentorAdaptive';
+import { agentHasTool } from '../agents/tools/agentToolRegistry';
+import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
+import type { AttachmentRef, ContentPart } from '../agents/tools/types';
 
 export type MentorMode = 'ask' | 'hint' | 'explain' | 'review';
 
@@ -35,7 +38,25 @@ function modeInstruction(mode: MentorMode): string {
   }
 }
 
-export async function coach(enrollmentId: string, card: CardCtx, mode: MentorMode, message: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = []) {
+export async function coach(
+  enrollmentId: string,
+  card: CardCtx,
+  mode: MentorMode,
+  message: string,
+  history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+  attachments: AttachmentRef[] = [],
+) {
+  // read_attachments — Cory looks at what the student dragged in. Gated on the
+  // grant, so turning the tool off anywhere turns it off here. Kicked off in
+  // parallel with the context work below since it is pure I/O (disk + sharp).
+  // Never throws: a failure here degrades the turn to text, it does not lose it.
+  const attachP: Promise<Awaited<ReturnType<typeof readAttachments>>> =
+    attachments.length && agentHasTool('cory', 'read_attachments')
+      ? readAttachments(enrollmentId, attachments).catch((e: any) => {
+          console.warn(JSON.stringify({ level: 'warn', service: 'runtime_mentor', event: 'read_attachments_failed', enrollment_id: enrollmentId, error_class: e?.name || 'Error', message: String(e?.message || e) }));
+          return { parts: [] as ContentPart[], skipped: [], attached: 0 };
+        })
+      : Promise.resolve({ parts: [] as ContentPart[], skipped: [], attached: 0 });
   // Assignment-aware context: the student's actual work on this card (answers,
   // score, saved work, section growth). Degrade gracefully — a context-assembly
   // failure must NOT 500 the chat; the mentor just falls back to card-only coaching.
@@ -82,14 +103,26 @@ export async function coach(enrollmentId: string, card: CardCtx, mode: MentorMod
   // Personalization: greet + address the student by their first name.
   const firstName = (ctx?.identity?.full_name || '').trim().split(/\s+/)[0] || '';
   const personal = firstName ? `\nThe student's first name is ${firstName} — address them by it, warmly and personally.` : '';
-  const system = `${SYSTEM}${personal}${profileBlock}${memoryBlock}\n\nActivity: "${card.title}" (${card.student_label || card.type}). ${card.description ? `Context: ${card.description}` : ''}${work}${lock}${adaptiveBlock}\n${modeInstruction(mode)}`;
+  const attach = await attachP;
+  const attachBlock = attachmentInstruction(attach) ? `\n${attachmentInstruction(attach)}` : '';
+  const system = `${SYSTEM}${personal}${profileBlock}${memoryBlock}\n\nActivity: "${card.title}" (${card.student_label || card.type}). ${card.description ? `Context: ${card.description}` : ''}${work}${lock}${adaptiveBlock}${attachBlock}\n${modeInstruction(mode)}`;
   // Prefer the DB-durable conversation (survives reloads); fall back to the
   // client-sent history only when there are no stored turns yet.
   const priorMsgs = convo.recent.length ? convo.recent : history.slice(-6);
-  const msgs = [...priorMsgs, { role: 'user' as const, content: message || 'Help me get started.' }];
+  const text = message || (attach.attached ? 'Take a look at what I attached.' : 'Help me get started.');
+  // Images ride on THIS turn only. Prior turns replay as text (that is all
+  // MentorTurn stores), so a conversation with a screenshot in it does not
+  // re-send that screenshot on every subsequent turn — which would multiply
+  // vision cost by the length of the conversation for no added context.
+  const content = attach.parts.length ? [{ type: 'text' as const, text }, ...attach.parts] : text;
+  const msgs: ChatMessage[] = [...priorMsgs, { role: 'user', content }];
   const r = await chatText('runtime_mentor', system, msgs, undefined, 500);
-  await MentorTurn.create({ enrollment_id: enrollmentId, card_id: card.id, mode, question: message, reply: r.text }).catch(() => {});
-  return { reply: r.text, kind: mode, cost_usd: r.cost_usd, runtime_ms: r.runtime_ms };
+  // The stored question records what was attached, so a later turn's memory
+  // reads "here is my error [attached: setup.png]" rather than a bare sentence
+  // that lost its subject.
+  const recorded = attach.attached ? `${text} [attached ${attach.attached} file(s)]` : message;
+  await MentorTurn.create({ enrollment_id: enrollmentId, card_id: card.id, mode, question: recorded, reply: r.text }).catch(() => {});
+  return { reply: r.text, kind: mode, cost_usd: r.cost_usd, runtime_ms: r.runtime_ms, attachments_read: attach.attached, attachments_skipped: attach.skipped };
 }
 
 /** AI-guided reflection prompts — deeper than "what did you learn?". */
