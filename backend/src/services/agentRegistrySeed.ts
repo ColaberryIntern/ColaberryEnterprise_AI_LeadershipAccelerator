@@ -2524,6 +2524,29 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   {
+    agent_name: 'WorkforceTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'company',
+    source_file: 'backend/src/services/company/workforceTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '15 */6 * * *',
+    category: 'operations',
+    description:
+      'Re-checks every OPEN workforce_decision ticket workforce_intelligence_engine ' +
+      "created against live ai_agents data and closes it (status 'done') with a real, " +
+      'numbers-grounded evidence comment once the error-rate condition it was opened ' +
+      'under has genuinely cleared. Deterministic re-derivation of the exact same ' +
+      "threshold (>20% error rate, >=10 errors) the ticket was created under -- no LLM, " +
+      'no human-approval step (matches the alert type: a mechanically re-checkable ' +
+      'metric, not a judgment call). Explicit in every close comment that this reflects ' +
+      'the CURRENTLY OBSERVED metric, not a verified root-cause fix. Runs 15 minutes ' +
+      "after each WorkforceIntelligence analysis pass (see that row's schedule).",
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'close_workforce_tickets_on_recovery',
+    ],
+  },
+  {
     agent_name: 'bpos_orchestrator',
     agent_type: 'ticket_creator_identity',
     module: 'company',
