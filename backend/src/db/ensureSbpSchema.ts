@@ -225,7 +225,11 @@ export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[
     const [colRows]: any = await sequelize.query(
       `SELECT table_name, column_name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = ANY($tables)`,
-      { bind: { tables: ['build_intake', 'student_tasks'] } },
+      // Derived from REQUIRED_COLUMNS rather than hardcoded: a hardcoded list
+      // silently stops covering any column added on a NEW table, and the entry
+      // then reports missing on every boot forever while the column exists.
+      // That happened with github_connections.webhook_secret.
+      { bind: { tables: [...new Set(REQUIRED_COLUMNS.map((c) => c.split('.')[0]))] } },
     );
     const found = new Set((colRows ?? []).map((r: any) => `${r.table_name}.${r.column_name}`));
     for (const c of REQUIRED_COLUMNS) if (!found.has(c)) missing.push(`column:${c}`);
