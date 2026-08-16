@@ -17,6 +17,7 @@ import {
 } from '../commandCenterStory';
 import { BuildPlan, PlanRequirement, PlanStory } from '../planContract';
 import type { Schedule } from '../buildSchedule';
+import { claimInstructions, expectEveryClaimIsConditional } from './honestyGuard';
 
 function req(id: string, over: Partial<PlanRequirement> = {}): PlanRequirement {
   return { id, statement: `The system must do ${id}.`, kind: 'FUNC', priority: 'must', cluster: 'core', ...over };
@@ -270,12 +271,34 @@ describe('the checkpoint leads into the finish, not into a dead stop', () => {
     expect(out).toMatch(/Only tick a line when it is actually true/i);
   });
 
-  it('never tells the agent to tick every criterion', () => {
-    // Regression guard: passes today and must keep passing. A "just finish it"
-    // rewrite that reached for "tick them all" would fail here.
-    const out = commandCenterPrompt(fullPlan(), schedule());
+  /**
+   * THE GUARD, INVERTED.
+   *
+   * This used to be two banned phrases: `/tick (them |the |all )*all\b/` and
+   * `/mark (them |all )*all (as )?pass/`. It was weaker than it looked. A
+   * repair-flavoured rewrite saying "bring all five criteria to true" or
+   * "complete each Done means line" passes both untouched — and those are
+   * exactly the sentences a prompt about raising an older build to the current
+   * standard reaches for. A blacklist forbids only what somebody already
+   * imagined.
+   *
+   * So the rule now runs the other way: find every instruction that tells the
+   * agent to claim a criterion, and require each of them to carry a truth
+   * condition. The banned phrases stay as a second net, widened with the two
+   * above. Both live in `honestyGuard.ts` so the repo doc is held to the same
+   * rule from the same definition.
+   */
+  it('never instructs a claim without a truth condition, in any wording', () => {
+    expectEveryClaimIsConditional(commandCenterPrompt(fullPlan(), schedule()));
+  });
 
-    expect(out).not.toMatch(/tick (them |the |all )*all\b/i);
-    expect(out).not.toMatch(/mark (them |all )*all (as )?pass/i);
+  it('finds those instructions at all — the floor that stops the guard passing vacuously', () => {
+    // A "for each match, assert X" loop over an empty list is green and proves
+    // nothing. If a rewrite changes the vocabulary enough that the matcher stops
+    // matching, this fails before the loop above can wave it through.
+    const claims = claimInstructions(commandCenterPrompt(fullPlan(), schedule()));
+
+    expect(claims.length).toBeGreaterThanOrEqual(4);
+    expect(claims.some((c) => /Only tick a line when it is actually true/i.test(c))).toBe(true);
   });
 });
