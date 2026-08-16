@@ -422,6 +422,16 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   );
   COMMAND_CENTER_ACCEPTANCE.forEach((a) => lines.push(bullet(a)));
   lines.push('');
+  // Closes the gap between the Overview checkpoint and criterion 1. A build
+  // sitting at the checkpoint cannot satisfy "every tab is reachable", so
+  // "Mark done" stays dark — and without this sentence the student has no way
+  // to connect the dark button to the pause they were asked to make.
+  lines.push(
+    '**While the build is paused at the Overview checkpoint, this story cannot verify yet** — '
+    + 'the first criterion needs all nine tabs to exist. That is expected, not a fault: say '
+    + '**build the rest**, let the other eight get built, and then finish Step 3.',
+  );
+  lines.push('');
 
   lines.push('## What good looks like');
   lines.push(bullet('Every tab above exists and is reachable from the Command Center.'));
@@ -439,7 +449,31 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
 
   lines.push('## How I want you to work');
   lines.push(bullet('Build it so the data comes from one place. You will point it at your real system as you build, and you should not be rewriting tabs to do it.'));
+  // THE CHECKPOINT, AND WHY IT HAS TO SPEAK.
+  //
+  // "Build Overview first and stop" is a good instruction — nine tabs built in
+  // the wrong direction is a bad afternoon — and builds obey it. What they did
+  // NOT do is say so on screen: the eight unbuilt tabs rendered as though they
+  // were locked, which reads as the platform gating the student rather than the
+  // build waiting on them. Ali hit exactly this and asked why his tabs were
+  // locked. They were not; nothing had told him it was his move.
   lines.push(bullet('Show me the Overview tab first and stop. Get that right before building the other eight.'));
+  lines.push(
+    bullet(
+      'While you are paused there, the other eight tabs must still be REACHABLE and must not '
+      + 'look locked, greyed out, or gated. Each one renders a plain "Not built yet — say '
+      + '**build the rest** when Overview looks right" state. Nothing that implies the student '
+      + 'lacks permission or has to unlock anything: the build is waiting on them, not the '
+      + 'other way round.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'Put a short banner on Overview itself while you are paused, saying the build is stopped '
+      + 'for their review and how to continue. When they say **build the rest**, build the '
+      + 'remaining eight and remove the banner.',
+    ),
+  );
   lines.push('');
 
   // THE LAST MILE — without this the loop cannot close.
