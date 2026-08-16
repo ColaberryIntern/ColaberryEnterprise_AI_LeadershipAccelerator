@@ -50,10 +50,11 @@ import { BOT_COMMIT_PREFIX } from '../repoWriter';
 
 export type PushVerificationOutcome =
   | 'verified'          // a verification pass ran
+  | 'ping'              // GitHub proving the new hook works. Recorded, not verified.
   | 'duplicate'         // this delivery id was already handled
   | 'bot_only'          // every commit in the push was ours
   | 'no_project'        // repo is not bound to a project we know
-  | 'no_commits'        // nothing to act on (branch delete, tag, ping)
+  | 'no_commits'        // nothing to act on (branch delete, tag)
   | 'failed';           // the pass threw; logged, never surfaced to GitHub
 
 export interface PushCommit {
@@ -179,15 +180,6 @@ export async function handlePushForVerification(input: HandlePushInput): Promise
     return { outcome: 'no_commits', project_id: null };
   }
 
-  if (!Array.isArray(input.commits) || input.commits.length === 0) {
-    return { outcome: 'no_commits', project_id: null };
-  }
-
-  if (isBotOnlyPush(input.commits)) {
-    log('github_push_bot_only_ignored', 'success', { ...base, commits: input.commits.length });
-    return { outcome: 'bot_only', project_id: null };
-  }
-
   // Repo → project, read from OUR table rather than from the payload.
   const connection = await GitHubConnection.findOne({
     where: { repo_owner: input.owner, repo_name: input.repo },
@@ -199,10 +191,45 @@ export async function handlePushForVerification(input: HandlePushInput): Promise
     return { outcome: 'no_project', project_id: null };
   }
 
+  /**
+   * RECORD THE DELIVERY FIRST — before deciding whether there is any work in it.
+   *
+   * This used to sit below the "no commits" and "bot only" returns, which meant
+   * the ledger only ever saw deliveries we acted on. The consequence was the
+   * single worst thing about the setup UI: GitHub fires a `ping` the instant a
+   * webhook is created, that ping carries no commits, so it returned here
+   * without writing anything — and the panel, which reads this ledger to decide
+   * whether the hook is live, had no way to go green until the student happened
+   * to push. The scariest step of the setup gave zero feedback that it worked.
+   *
+   * Every delivery from a repo we know is now recorded, whatever it carries,
+   * because the receipt itself is the evidence that GitHub can reach us. What
+   * the delivery CONTAINED decides what we do next, further down.
+   */
   const claimed = await claimDelivery(input, projectId);
   if (!claimed) {
     log('github_push_duplicate_delivery', 'success', { ...base, project_id: projectId });
     return { outcome: 'duplicate', project_id: projectId };
+  }
+
+  // `ping` is GitHub proving the hook works, seconds after the student created
+  // it. There is nothing to verify and that is the whole point — the receipt is
+  // the payload. Recorded above, acknowledged here, done.
+  if (input.event === 'ping') {
+    log('github_webhook_ping', 'success', { ...base, project_id: projectId });
+    await closeDelivery(input.deliveryId, 'ping');
+    return { outcome: 'ping', project_id: projectId };
+  }
+
+  if (!Array.isArray(input.commits) || input.commits.length === 0) {
+    await closeDelivery(input.deliveryId, 'no_commits');
+    return { outcome: 'no_commits', project_id: projectId };
+  }
+
+  if (isBotOnlyPush(input.commits)) {
+    log('github_push_bot_only_ignored', 'success', { ...base, commits: input.commits.length });
+    await closeDelivery(input.deliveryId, 'bot_only');
+    return { outcome: 'bot_only', project_id: projectId };
   }
 
   // Hosting check — DETACHED, and deliberately started before the verification

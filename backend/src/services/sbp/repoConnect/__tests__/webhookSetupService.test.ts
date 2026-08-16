@@ -129,21 +129,40 @@ describe('degradation', () => {
 });
 
 describe('proof the hook works', () => {
-  it('reports the last delivery we actually received', async () => {
-    mockQuery.mockResolvedValue([{ received_at: new Date('2026-08-15T12:00:00.000Z') }]);
+  it('reports the last delivery of ANY kind — a ping counts', async () => {
+    // This is what turns "webhook registered" green seconds after the student
+    // runs the command, instead of leaving them waiting on their next push.
+    mockQuery.mockResolvedValue([{
+      last_delivery_at: new Date('2026-08-15T12:00:00.000Z'),
+      last_push_at: null,
+    }]);
     const view = await getWebhookSetup(ENROLLMENT, PROJECT);
     expect(view!.last_delivery_at).toBe('2026-08-15T12:00:00.000Z');
+    // A ping is NOT the student's work arriving, and must not be reported as it.
+    expect(view!.last_push_at).toBeNull();
+  });
+
+  it('reports a verified push separately from a mere delivery', async () => {
+    mockQuery.mockResolvedValue([{
+      last_delivery_at: new Date('2026-08-15T12:05:00.000Z'),
+      last_push_at: new Date('2026-08-15T12:05:00.000Z'),
+    }]);
+    const view = await getWebhookSetup(ENROLLMENT, PROJECT);
+    expect(view!.last_push_at).toBe('2026-08-15T12:05:00.000Z');
   });
 
   it('reports null — never a guess — when we have never heard from the repo', async () => {
-    mockQuery.mockResolvedValue([]);
-    expect((await getWebhookSetup(ENROLLMENT, PROJECT))!.last_delivery_at).toBeNull();
+    mockQuery.mockResolvedValue([{ last_delivery_at: null, last_push_at: null }]);
+    const view = await getWebhookSetup(ENROLLMENT, PROJECT);
+    expect(view!.last_delivery_at).toBeNull();
+    expect(view!.last_push_at).toBeNull();
   });
 
-  it('survives a missing delivery ledger', async () => {
+  it('survives a missing delivery ledger without losing the command', async () => {
     mockQuery.mockRejectedValue(new Error('relation does not exist'));
     const view = await getWebhookSetup(ENROLLMENT, PROJECT);
     expect(view!.last_delivery_at).toBeNull();
+    expect(view!.last_push_at).toBeNull();
     expect(view!.gh_command).toBeTruthy();
   });
 });
