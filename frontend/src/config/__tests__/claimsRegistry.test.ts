@@ -76,13 +76,58 @@ describe('publicClaim — the publish gate (failure paths)', () => {
     expect(publicClaim('trackrecord.wageimpact')).toBeNull();
   });
 
-  it('publishes track-record figures once measured, with the method in the wording', () => {
-    // Verified 2026-08-13 by read-only query against CCPP dbo.ADF_ClassSignups.
-    expect(publicClaim('trackrecord.students')).toContain('8,588');
+  it('publishes track-record figures once measured', () => {
     expect(publicClaim('trackrecord.students')).toContain('students');
-    expect(publicClaim('trackrecord.certified')).toContain('2,844');
+    expect(publicClaim('trackrecord.certified')).toMatch(/certified/i);
     // Earliest class StartDate 2012-04-07, enrolments in every year since.
     expect(publicClaim('trackrecord.since2012')).toContain('2012');
+  });
+
+  /**
+   * The invariant behind the rounded wording, asserted rather than assumed.
+   *
+   * The published figures were rounded on 2026-08-15 ("8k+ data students",
+   * "2,500+ certified"). Rounding is only safe in one direction: DOWN. A claim
+   * that rounds up stops being verified the moment it is printed, because the
+   * evidence no longer covers it. These numbers are checked against the CCPP
+   * query results they came from, so someone who later "tidies" 2,500+ up to
+   * 3,000+ fails here instead of shipping it.
+   */
+  it('never rounds a verified figure UP past the evidence', () => {
+    const CCPP = { students: 8588, certified: 2844 }; // read-only query 2026-08-13
+
+    const leadingNumber = (s: string | null): number => {
+      const m = (s ?? '').match(/([\d][\d,]*)\s*k?/i);
+      if (!m) return NaN;
+      const n = Number(m[1].replace(/,/g, ''));
+      return /\dk/i.test(s ?? '') ? n * 1000 : n;
+    };
+
+    expect(leadingNumber(publicClaim('trackrecord.students'))).toBeLessThanOrEqual(CCPP.students);
+    expect(leadingNumber(publicClaim('trackrecord.certified'))).toBeLessThanOrEqual(CCPP.certified);
+  });
+
+  /**
+   * The hires figure is the ONE claim on this site that exceeds its database
+   * number, and it must stay flagged as such. 691 is traceable in CCPP; Ali
+   * attests to ~300 further unreported hires and approved 1,000+ on 2026-08-15.
+   * That is a real basis, but it is not a query anyone can re-run, so it carries
+   * OWNER_ATTESTED rather than VERIFIED. If someone later relabels it VERIFIED,
+   * this fails — which is the whole point.
+   */
+  it('marks the hires figure as owner-attested, not query-verified', () => {
+    const hired = getClaim('trackrecord.hired');
+    expect(hired?.verification).toBe('OWNER_ATTESTED');
+    expect(publicClaim('trackrecord.hired')).toContain('1,000+');
+    // The evidence note must still name the traceable floor, so the gap is legible.
+    expect(hired?.evidenceSource).toContain('691');
+  });
+
+  it('publishes owner-attested claims, but keeps the status distinguishable', () => {
+    // Publishable, because the owner is an accountable source...
+    expect(publicClaim('trackrecord.hired')).not.toBeNull();
+    // ...but never silently reclassified as VERIFIED.
+    expect(getClaim('trackrecord.hired')?.verification).not.toBe('VERIFIED');
   });
 
   it('states a counting method rather than an unqualified total', () => {

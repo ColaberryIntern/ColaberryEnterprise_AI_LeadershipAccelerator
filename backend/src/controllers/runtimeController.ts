@@ -11,6 +11,7 @@ import { recordReadBeat, collectBlog } from '../services/runtime/blogReadGateSer
 import { getBlogReader } from '../services/blog/blogReaderService';
 import { recordDwellBeat } from '../services/runtime/cardDwellService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
+import { attachmentsSchema } from '../services/agents/tools/attachmentSchema';
 import { getNudge } from '../services/runtime/mentorNudgeService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
@@ -42,12 +43,15 @@ export async function handleOpenCard(req: Request, res: Response, next: NextFunc
   try { res.json(await openCard(eid(req), String(req.params.cardId), { readOnly: !!req.participant?.read_only })); } catch (e) { fail(res, e, next); }
 }
 
-const mentorSchema = z.object({ mode: z.enum(['ask', 'hint', 'explain', 'review']).default('ask'), message: z.string().default(''), history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).optional() });
+// `attachments` = ids of files the student handed the mentor on this turn
+// (read_attachments tool). Same contract as the project workspace's mentor
+// route, so both surfaces post identical bodies.
+const mentorSchema = z.object({ mode: z.enum(['ask', 'hint', 'explain', 'review']).default('ask'), message: z.string().default(''), history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).optional(), attachments: attachmentsSchema });
 export async function handleMentor(req: Request, res: Response, next: NextFunction) {
   try {
     const b = mentorSchema.parse(req.body || {});
     const ctx = await cardContext(String(req.params.cardId));
-    res.json(await coach(eid(req), ctx, b.mode as MentorMode, b.message, b.history || []));
+    res.json(await coach(eid(req), ctx, b.mode as MentorMode, b.message, b.history || [], b.attachments || []));
   } catch (e) { fail(res, e, next); }
 }
 

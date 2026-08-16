@@ -13,6 +13,10 @@ import WorkspaceRepoPanel from './WorkspaceRepoPanel';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
 import StoryCompletionPanel from './StoryCompletionPanel';
+import {
+  useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
+  type SentAttachment,
+} from '../../../components/portal/AgentAttachments';
 
 /**
  * ProjectWorkspacePage — the build-side twin of the classroom's RuntimeWorkspace.
@@ -35,7 +39,7 @@ import StoryCompletionPanel from './StoryCompletionPanel';
  * <=760px block in runtimeCss for the matching density pass.
  */
 
-type Msg = { role: 'user' | 'assistant'; content: string };
+type Msg = { role: 'user' | 'assistant'; content: string; attachments?: SentAttachment[] };
 type Mode = 'ask' | 'hint' | 'explain' | 'review';
 
 const ProjectWorkspacePage: React.FC = () => {
@@ -62,6 +66,13 @@ const ProjectWorkspacePage: React.FC = () => {
   const [mentorInput, setMentorInput] = useState('');
   const [repo, setRepo] = useState<WorkspaceRepoView | null>(null);
   const mentorEnd = useRef<HTMLDivElement | null>(null);
+  // Screenshots the student hands Cory — drag, paste, or click. Same hook the
+  // classroom mentor and Reese's DMs use, so the gesture is identical everywhere.
+  const attach = useAgentAttachments();
+  // A screenshot with no caption is a perfectly good message, so Send unlocks
+  // on text OR a finished upload — but never while one is still in flight,
+  // which would send a turn missing the very thing it is about.
+  const canSend = (mentorInput.trim().length > 0 || attach.refs().length > 0) && !attach.busy;
 
   // The prompt opens CLOSED. At half screen — the posture this page is actually
   // used in, editor in the other half — a 340px <pre> IS the column, so the page
@@ -122,7 +133,10 @@ const ProjectWorkspacePage: React.FC = () => {
     if (!task || msgs.length) return;
     setMsgs([{
       role: 'assistant',
-      content: `I'm Cory, your mentor for "${task.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`,
+      // The screenshot line is here rather than in a tooltip because a
+      // paperclip nobody notices is the same as no paperclip. Cory saying it
+      // in the opening turn is the one place every student actually reads.
+      content: `I'm Cory, your mentor for "${task.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers. Stuck on an error? Paste or drag a screenshot straight in and I'll read it.`,
     }]);
   }, [task, msgs.length]);
 
@@ -142,13 +156,18 @@ const ProjectWorkspacePage: React.FC = () => {
   const ask = useCallback(async (mode: Mode, message: string) => {
     if (!task) return;
     const history = msgs.slice(-12).map((m) => ({ role: m.role, content: m.content }));
-    setMsgs((m) => [...m, { role: 'user', content: message }]);
+    // Snapshot the tray BEFORE clearing it, so the sent message keeps its
+    // thumbnails and the composer is empty again immediately.
+    const attachments = attach.refs();
+    const shown = attach.sentPreviews();
+    setMsgs((m) => [...m, { role: 'user', content: message, attachments: shown }]);
     setMentorInput('');
+    attach.clear(false);
     setBusy('mentor');
     try {
       const { data } = await portalApi.post(
         `/api/portal/projects/${projectId}/tasks/${encodeURIComponent(task.storyId || task.id)}/mentor`,
-        { mode, message, history },
+        { mode, message, history, attachments },
       );
       setMsgs((m) => [...m, { role: 'assistant', content: data?.reply || data?.message || 'I could not answer that one.' }]);
     } catch {
@@ -158,7 +177,7 @@ const ProjectWorkspacePage: React.FC = () => {
     } finally {
       setBusy('');
     }
-  }, [msgs, projectId, task]);
+  }, [msgs, projectId, task, attach]);
 
   /**
    * The connect endpoints answer with the CONNECT state, not the whole workspace
@@ -373,10 +392,19 @@ const ProjectWorkspacePage: React.FC = () => {
         </main>
 
         {/* RIGHT — the mentor, same coach the classroom uses */}
-        <aside className="rt-mentor">
+        {/* The drop target is the whole mentor rail, not just the input: a
+            student dragging a screenshot aims at the conversation, which is
+            the big obvious target, not at a 34px text box. */}
+        <aside className="rt-mentor" style={{ position: 'relative' }} {...attach.dropProps}>
+          <DropOverlay active={attach.dragging} label="Drop to show Cory" />
           <div className="rt-mentor-h"><span className="rt-dot" /> Cory</div>
           <div className="rt-thread">
-            {msgs.map((m, i) => <div key={i} className={`rt-msg ${m.role}`}>{m.content}</div>)}
+            {msgs.map((m, i) => (
+              <div key={i} className={`rt-msg ${m.role}`}>
+                {m.content}
+                <SentAttachments items={m.attachments} />
+              </div>
+            ))}
             <div ref={mentorEnd} />
           </div>
           <div className="rt-modes">
@@ -393,15 +421,18 @@ const ProjectWorkspacePage: React.FC = () => {
               </button>
             ))}
           </div>
+          <AttachmentTray items={attach.items} notice={attach.notice} onRemove={attach.remove} />
           <div className="rt-ask">
+            <AttachButton onFiles={attach.addFiles} disabled={busy === 'mentor'} />
             <input
               className="rt-in"
               value={mentorInput}
               onChange={(e) => setMentorInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && mentorInput.trim() && ask('ask', mentorInput)}
-              placeholder="Ask your mentor…"
+              onKeyDown={(e) => e.key === 'Enter' && canSend && ask('ask', mentorInput || 'Take a look at this.')}
+              placeholder="Ask your mentor, or paste a screenshot…"
+              {...attach.pasteProps}
             />
-            <button className="rt-btn pri" disabled={busy === 'mentor' || !mentorInput.trim()} onClick={() => ask('ask', mentorInput)}>Send</button>
+            <button className="rt-btn pri" disabled={busy === 'mentor' || !canSend} onClick={() => ask('ask', mentorInput || 'Take a look at this.')}>Send</button>
           </div>
         </aside>
       </div>

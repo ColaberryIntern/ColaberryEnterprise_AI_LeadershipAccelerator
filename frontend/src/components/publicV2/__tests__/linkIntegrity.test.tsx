@@ -18,7 +18,7 @@
  */
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import HomeV2 from '../../../pages/publicV2/HomeV2';
 import { ServicesV2, ServiceDetailV2 } from '../../../pages/publicV2/ServicesV2';
 import PlatformV2 from '../../../pages/publicV2/PlatformV2';
@@ -58,7 +58,8 @@ const ALL_ROUTES = [...V2_ROUTES, ...LIVE_ROUTES];
 const PAGES: [string, React.ReactElement, string][] = [
   ['HomeV2', <HomeV2 />, '/'],
   ['ServicesV2', <ServicesV2 />, '/services'],
-  ['ServiceDetailV2', <ServiceDetailV2 />, `/services/${SERVICE_DETAILS[0].slug}`],
+  // ServiceDetailV2 is NOT listed here — it reads its slug from useParams, so it
+  // needs a real <Route> to resolve. It gets its own describe block below.
   ['PlatformV2', <PlatformV2 />, '/platform'],
   ['ProofV2', <ProofV2 />, '/proof'],
   ['OpportunityLabV2', <OpportunityLabV2 />, '/lab'],
@@ -89,6 +90,48 @@ describe('link integrity — every internal link resolves to a declared route', 
       );
       const dead = internalHrefs(html).filter((h) => !ALL_ROUTES.includes(h));
       expect(dead).toEqual([]);
+    });
+  });
+});
+
+/**
+ * All five drill-throughs, each rendered through a real <Route>.
+ *
+ * WHY THIS EXISTS. The suite used to render ServiceDetailV2 inside a bare
+ * MemoryRouter with `initialEntries={['/services/<slug>']}` and no <Route>
+ * matching it. useParams() returns {} in that arrangement, so `slug` was
+ * undefined, getServiceBySlug missed, and the component rendered its
+ * "Service not found" branch. Every assertion was passing against the
+ * not-found page — no service detail page had ever actually been tested.
+ *
+ * What it let through: service 01's next-step CTA pointed at `/opportunity-lab`,
+ * which has never been a declared route. It shipped, and it was a live 404 on
+ * production until this test was fixed. Rendering only SERVICE_DETAILS[0] would
+ * not have been enough either, so all five are covered.
+ */
+describe('link integrity — every service drill-through', () => {
+  SERVICE_DETAILS.forEach((s) => {
+    it(`/services/${s.slug} links only to routes that exist`, () => {
+      const html = renderToStaticMarkup(
+        <MemoryRouter initialEntries={[`/services/${s.slug}`]}>
+          <Routes>
+            <Route path="/services/:slug" element={<ServiceDetailV2 />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      // Guard the guard: if the route ever stops resolving we are back to
+      // asserting against the not-found page, which passes trivially.
+      expect(html).toContain(s.name);
+      expect(html).not.toContain('Service not found');
+
+      const dead = internalHrefs(html).filter((h) => !ALL_ROUTES.includes(h));
+      expect(dead).toEqual([]);
+    });
+  });
+
+  it('every nextRoute is a declared route', () => {
+    SERVICE_DETAILS.forEach((s) => {
+      expect(ALL_ROUTES).toContain(s.nextRoute);
     });
   });
 });

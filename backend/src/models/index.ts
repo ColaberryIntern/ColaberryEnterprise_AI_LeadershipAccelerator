@@ -365,6 +365,7 @@ import SponsorSeat from './SponsorSeat';
 // Free-trial Organization / Manager layer (dual account + team roster).
 import Organization from './Organization';
 import OrgMember from './OrgMember';
+import OrgCohort from './OrgCohort';
 import Challenge from './Challenge';
 import ChallengeParticipant from './ChallengeParticipant';
 import LeaderboardScore from './LeaderboardScore';
@@ -1147,6 +1148,16 @@ Enrollment.hasMany(Organization, { foreignKey: 'owner_enrollment_id', as: 'owned
 OrgMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment', onDelete: 'SET NULL' });
 Enrollment.hasMany(OrgMember, { foreignKey: 'enrollment_id', as: 'orgMemberships' });
 
+// An Organization is linked to Cohorts many-to-many through org_cohorts. Before
+// this there was NO org<->cohort relationship in the schema at all -- see the
+// header of models/OrgCohort.ts for why this is a join table and not a column.
+// Note this records the COMPANY-level relationship only; per-person placement
+// stays on enrollments.cohort_id.
+Organization.hasMany(OrgCohort, { foreignKey: 'org_id', as: 'cohortLinks', onDelete: 'CASCADE' });
+OrgCohort.belongsTo(Organization, { foreignKey: 'org_id', as: 'organization' });
+Cohort.hasMany(OrgCohort, { foreignKey: 'cohort_id', as: 'orgLinks', onDelete: 'CASCADE' });
+OrgCohort.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
 export {
   Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -1383,6 +1394,7 @@ export {
   // Free-trial Organization / Manager layer
   Organization,
   OrgMember,
+  OrgCohort,
   // Curriculum + enrollment + Skilljar sync (from main)
   CurriculumCourseLink,
   EnrollmentLead,

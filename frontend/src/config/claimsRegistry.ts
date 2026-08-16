@@ -26,6 +26,18 @@
 export type VerificationStatus =
   /** Evidenced, and the evidence is named in `evidenceSource`. */
   | 'VERIFIED'
+  /**
+   * Rests on the business owner's direct, first-hand knowledge rather than on a
+   * query anyone can re-run. Publishable, because the owner is a real and
+   * accountable source — but deliberately NOT labelled VERIFIED, so that an
+   * audit can tell the two apart at a glance.
+   *
+   * Use this only where the owner's knowledge genuinely exceeds the records, and
+   * say so in `evidenceSource`: name the traceable figure, the gap, and who
+   * attested to it. It is not a way to launder an unevidenced number — a claim
+   * nobody can stand behind is still NEEDS_VERIFICATION.
+   */
+  | 'OWNER_ATTESTED'
   /** Plausible but unevidenced. Never renders publicly until someone verifies it. */
   | 'NEEDS_VERIFICATION'
   /** Legitimately hypothetical. Renders ONLY with a visible illustrative label. */
@@ -216,7 +228,9 @@ export const CLAIMS: readonly Claim[] = [
      * magnitude (see that claim's note).
      */
     key: 'trackrecord.students',
-    publicWording: '8,588 students since 2012',
+    // Rounded DOWN from the verified 8,588 at Ali's direction 2026-08-15. Rounding
+    // down keeps a verified claim verified: the true figure exceeds what we print.
+    publicWording: '8k+ data students',
     verification: 'VERIFIED',
     capability: 'n/a',
     evidenceSource:
@@ -231,7 +245,8 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     key: 'trackrecord.certified',
-    publicWording: '2,844 certified',
+    // Rounded DOWN from the verified 2,844 at Ali's direction 2026-08-15.
+    publicWording: '2,500+ certified',
     verification: 'VERIFIED',
     capability: 'n/a',
     evidenceSource:
@@ -244,25 +259,37 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     /*
-     * Published as a FLOOR, not a total, and the wording has to carry that.
-     * HiredDate is only set when someone told us, and Ali confirms many students
-     * were hired, promoted or given raises without reporting back. So the true
-     * number is higher than this and unknowable from our records -- which makes
-     * "at least" honest and "691 careers launched" not.
+     * THE ONE CLAIM ON THIS SITE THAT EXCEEDS ITS DATABASE FIGURE, and it is
+     * recorded that way on purpose rather than dressed up as a query result.
+     *
+     * CCPP can verify 691. `HiredDate` is populated only when a student reported
+     * back, so it is structurally an undercount -- it measures who told us, not
+     * who got hired. Ali, who built app.colaberry.com and taught these classes
+     * from 2012, attests to at least 300 further hires known to him and never
+     * recorded, which puts the real figure at ~1,000 and rising.
+     *
+     * So the evidence class is OWNER_ATTESTED, not VERIFIED: it rests on the
+     * owner's direct knowledge of the business, which is a real basis, but not
+     * the same basis as a query anyone can re-run. Anyone auditing this later
+     * should know which of the two they are looking at. I raised the gap before
+     * publishing; Ali approved it explicitly on 2026-08-15 with that reasoning.
      */
     key: 'trackrecord.hired',
-    publicWording: 'at least 691 hires we can verify',
-    verification: 'VERIFIED',
+    publicWording: '1,000+ hires',
+    verification: 'OWNER_ATTESTED',
     capability: 'n/a',
     evidenceSource:
       'CCPP dbo.ADF_ClassSignups, read-only query 2026-08-13: COUNT(DISTINCT StudentID) ' +
-      'where HiredDate IS NOT NULL = 691. Confirmed by Ali 2026-08-13 as an undercount -- ' +
-      'HiredDate is populated only when a student reported back, and many did not.',
+      'where HiredDate IS NOT NULL = 691 -- a floor, since HiredDate is set only when a ' +
+      'student reported back. Ali attests 2026-08-15 to at least 300 additional hires known ' +
+      'to him and never recorded, and approved publishing 1,000+ on that basis.',
     owner: 'Ali',
-    lastVerifiedAt: '2026-08-13',
+    lastVerifiedAt: '2026-08-15',
     approvedRoutes: ['*'],
     requiresSampleLabel: false,
-    note: 'Must stay worded as a floor. Dropping "at least" turns a verified minimum into an unverified total.',
+    note:
+      'Owner-attested, not query-verified. The 691 in CCPP is the traceable floor; the ' +
+      'published figure includes ~300 unreported hires Ali knows of directly.',
   },
   {
     key: 'trackrecord.wageimpact',
@@ -533,9 +560,23 @@ export function getClaim(key: string): Claim | undefined {
   return BY_KEY.get(key);
 }
 
+/**
+ * Statuses that may appear on the public site.
+ *
+ * OWNER_ATTESTED is publishable because the owner is a real, accountable source
+ * — but it is tracked as its own status rather than folded into VERIFIED, so
+ * "what can we prove with a query?" and "what does Ali stand behind?" stay
+ * separable. The Proof Room counts on that distinction.
+ */
+const PUBLISHABLE_VERIFICATION: readonly VerificationStatus[] = [
+  'VERIFIED',
+  'OWNER_ATTESTED',
+  'ILLUSTRATIVE',
+];
+
 /** A claim may ship publicly only if BOTH gates pass. */
 export function isPublishable(claim: Claim): boolean {
-  const verificationOk = claim.verification === 'VERIFIED' || claim.verification === 'ILLUSTRATIVE';
+  const verificationOk = PUBLISHABLE_VERIFICATION.includes(claim.verification);
   const capabilityOk = claim.capability !== 'unbuilt';
   return verificationOk && capabilityOk && claim.approvedRoutes.length > 0;
 }

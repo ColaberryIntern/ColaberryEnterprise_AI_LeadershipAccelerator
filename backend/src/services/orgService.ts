@@ -13,7 +13,7 @@
 import crypto from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
-import { Organization, OrgMember, Enrollment } from '../models';
+import { Organization, OrgMember, Enrollment, Lead } from '../models';
 import { createFreeAccount } from './freeSignupService';
 import { sendOrgInviteEmail } from './emailService';
 import { assertMemberInOrg } from '../middlewares/orgAuth';
@@ -148,6 +148,39 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
       joined_at: new Date(),
     } as any,
   });
+
+  // 4) Link the lead, if one exists for this email.
+  //
+  // Registration and lead capture are two independent calls from the signup
+  // page, and the second one is SKIPPABLE -- the "skip" button goes straight to
+  // the workspace, so an account could exist with no lead attached and nothing
+  // joining the two but a matching email string. Resolving it here means the
+  // link is recorded whenever a lead is findable, including the common case
+  // where the person already had a lead row from an earlier contact form.
+  //
+  // Deliberately best-effort: a failure to link must never fail registration,
+  // because the account and its roster are the load-bearing side effects and the
+  // lead reference is metadata. Idempotent -- it only writes when the column is
+  // still empty, so re-registering never overwrites an existing link.
+  if (!organization.lead_id) {
+    try {
+      const lead = await Lead.findOne({ where: { email }, attributes: ['id'] });
+      if (lead) {
+        await organization.update({ lead_id: (lead as unknown as { id: number }).id });
+      }
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'warn',
+          service: 'backend',
+          event: 'org_lead_link_failed',
+          outcome: 'partial',
+          error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+          context: { org_id: organization.id },
+        }),
+      );
+    }
+  }
 
   return {
     jwt: free.jwt,

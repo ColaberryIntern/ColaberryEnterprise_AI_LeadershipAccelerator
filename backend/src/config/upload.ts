@@ -139,6 +139,42 @@ export const communityMediaUpload = multer({
 });
 export { COMMUNITY_MEDIA_DIR, MAX_COMMUNITY_MEDIA_SIZE };
 
+// ── Agent attachments (the read_attachments tool) — what a student hands to
+// Cory or Reese so the agent can look at it ─────────────────────────────────
+// Deliberately its own instance and directory rather than reusing
+// communityMediaUpload: these files are shipped to a third-party vision model,
+// so what is accepted here must be decided by that fact alone. Sharing the
+// community uploader would mean a future moderation or format change over
+// there silently changes what an agent can see.
+//
+// MEMORY storage, not disk: the service hashes the bytes to dedupe before it
+// decides on a filename, so it needs the buffer in hand. It writes the file
+// itself, only for genuinely new content.
+const AGENT_ATTACHMENT_DIR = process.env.AGENT_ATTACHMENT_DIR || path.resolve('/app/uploads/agent-attachments');
+try { fs.mkdirSync(AGENT_ATTACHMENT_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const AGENT_ATTACHMENT_MIMES: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'application/pdf': '.pdf',
+};
+// 10MB: comfortably above a 4K screenshot, well below what would make a
+// vision call slow or expensive.
+const MAX_AGENT_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+function agentAttachmentFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  if (AGENT_ATTACHMENT_MIMES[file.mimetype]) cb(null, true);
+  else cb(new Error('Attach an image (PNG, JPG, WEBP, GIF) or a PDF.'));
+}
+export const agentAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: agentAttachmentFilter,
+  limits: { fileSize: MAX_AGENT_ATTACHMENT_SIZE },
+});
+export { AGENT_ATTACHMENT_DIR, AGENT_ATTACHMENT_MIMES, MAX_AGENT_ATTACHMENT_SIZE };
+
 // ── Room Resource uploads (Docs & Files) — documents attached to a Community
 // Room, one of its bookings, or the Global Library ──────────────────────────
 // Disk storage on the persistent `uploads` volume (survives deploys), same as
