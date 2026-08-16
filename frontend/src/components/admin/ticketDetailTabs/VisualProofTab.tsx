@@ -8,6 +8,19 @@ import React, { useState, useEffect } from 'react';
 // an <img> only for a reference that looks like a servable web path/URL, falls back to
 // a plain reference line on load failure (onError), and never fabricates a preview for
 // a reference it can't render.
+//
+// Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz). Split into this
+// fetch shell (default export) + a new named, pure `VisualProofContent` presentational
+// component so the 3-state empty-state logic (real evidence / "not applicable for this
+// ticket type" / "no evidence captured yet") is directly testable with
+// `renderToStaticMarkup`, mirroring `WorkGraphTab.tsx`'s already-established
+// content/shell split (no `@testing-library/react` installed in this repo). The old
+// always-identical "No visual evidence captured yet for this ticket." text — shown
+// regardless of whether that was even expected for the ticket's type — is now
+// conditional on the backend's `expectation` field
+// (`services/workLedger/evidenceExpectationService.ts`).
+
+export type EvidenceExpectation = 'expected' | 'not_applicable';
 
 interface EvidenceArtifact {
   id: string;
@@ -59,8 +72,38 @@ function EvidenceCard({ item }: { item: EvidenceArtifact }) {
   );
 }
 
+interface ContentProps {
+  evidence: EvidenceArtifact[];
+  expectation: EvidenceExpectation;
+}
+
+/** Pure presentational rendering — no fetch, no state. 3-state empty-state logic:
+ * real evidence always wins the branch; otherwise "not applicable" (this ticket's
+ * category never produces visual proof, e.g. a workforce-decision ticket) is
+ * distinguished from "no evidence captured yet" (this category genuinely expects
+ * one, e.g. a human-filed bug report or a Reese outreach ticket, and doesn't have
+ * one — a real gap worth investigating, not a broken tab). */
+export function VisualProofContent({ evidence, expectation }: ContentProps) {
+  if (evidence.length > 0) {
+    return (
+      <div>
+        {evidence.map((item) => (
+          <EvidenceCard key={item.id} item={item} />
+        ))}
+      </div>
+    );
+  }
+
+  if (expectation === 'not_applicable') {
+    return <div className="text-muted small py-4">Not applicable for this ticket type.</div>;
+  }
+
+  return <div className="text-muted small py-4">No visual evidence captured yet for this ticket.</div>;
+}
+
 export default function VisualProofTab({ ticketId, token }: Props) {
   const [evidence, setEvidence] = useState<EvidenceArtifact[] | null>(null);
+  const [expectation, setExpectation] = useState<EvidenceExpectation>('not_applicable');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -74,7 +117,10 @@ export default function VisualProofTab({ ticketId, token }: Props) {
         return res.json();
       })
       .then((data) => {
-        if (!cancelled) setEvidence(data.evidence || []);
+        if (!cancelled) {
+          setEvidence(data.evidence || []);
+          setExpectation(data.expectation === 'expected' ? 'expected' : 'not_applicable');
+        }
       })
       .catch(() => {
         if (!cancelled) setError(true);
@@ -95,15 +141,5 @@ export default function VisualProofTab({ ticketId, token }: Props) {
     return <div className="text-muted small py-4">Evidence unavailable right now — try reopening this ticket.</div>;
   }
 
-  if (!evidence || evidence.length === 0) {
-    return <div className="text-muted small py-4">No visual evidence captured yet for this ticket.</div>;
-  }
-
-  return (
-    <div>
-      {evidence.map((item) => (
-        <EvidenceCard key={item.id} item={item} />
-      ))}
-    </div>
-  );
+  return <VisualProofContent evidence={evidence || []} expectation={expectation} />;
 }

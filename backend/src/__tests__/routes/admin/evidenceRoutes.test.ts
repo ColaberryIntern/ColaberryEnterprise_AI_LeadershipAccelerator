@@ -6,12 +6,20 @@ import ticketRoutes from '../../../routes/admin/ticketRoutes';
 import { getEvidenceForTicket } from '../../../services/evidence/evidenceService';
 import { getDecisionsForTicket, recordDecision, DecisionRecordValidationError } from '../../../services/evidence/decisionRecordService';
 import { generateTicketSummary } from '../../../services/workLedger/summaryGeneratorService';
+import { getTicketEvidenceExpectations } from '../../../services/workLedger/evidenceExpectationService';
 
 // ProofDesk Milestone 2 (T006) — evidence/summary/decisions routes, added to the
 // existing ticketRoutes.ts router. Follows the same express+supertest+jwt harness
 // pattern already established by workLedgerHealthController.test.ts (Milestone 1).
+//
+// Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz) — the evidence and
+// decisions GET routes now also call getTicketEvidenceExpectations(); mocked here so
+// this suite keeps testing only what it originally tested (the pre-existing
+// evidence/summary/decisions wiring), not the classifier itself (covered by its own
+// evidenceExpectationService.test.ts and by ticketRoutes.evidenceExpectation.test.ts).
 
 jest.mock('../../../services/evidence/evidenceService', () => ({ getEvidenceForTicket: jest.fn() }));
+jest.mock('../../../services/workLedger/evidenceExpectationService', () => ({ getTicketEvidenceExpectations: jest.fn() }));
 jest.mock('../../../services/evidence/decisionRecordService', () => {
   const actual = jest.requireActual('../../../services/evidence/decisionRecordService');
   return {
@@ -39,6 +47,7 @@ const mockGetEvidence = getEvidenceForTicket as unknown as jest.Mock;
 const mockGetDecisions = getDecisionsForTicket as unknown as jest.Mock;
 const mockRecordDecision = recordDecision as unknown as jest.Mock;
 const mockGenerateSummary = generateTicketSummary as unknown as jest.Mock;
+const mockGetExpectations = getTicketEvidenceExpectations as unknown as jest.Mock;
 
 function buildApp() {
   const app = express();
@@ -60,6 +69,7 @@ const TICKET_ID = '11111111-1111-4111-8111-111111111111';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGetExpectations.mockResolvedValue({ visualProof: 'expected', workGraph: 'not_applicable', decisions: 'expected' });
 });
 
 describe('GET /api/admin/tickets/:id/evidence', () => {

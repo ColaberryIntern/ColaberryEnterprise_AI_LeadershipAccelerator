@@ -15,6 +15,7 @@ import type { TicketStatus, TicketPriority, TicketType } from '../../models/Tick
 import { getEvidenceForTicket } from '../../services/evidence/evidenceService';
 import { getDecisionsForTicket, recordDecision, DecisionRecordValidationError } from '../../services/evidence/decisionRecordService';
 import { generateTicketSummary } from '../../services/workLedger/summaryGeneratorService';
+import { getTicketEvidenceExpectations } from '../../services/workLedger/evidenceExpectationService';
 import {
   createWorkUnit,
   listWorkUnitsForTicket,
@@ -202,10 +203,17 @@ router.post('/api/admin/tickets/:id/dispatch', async (req: Request, res: Respons
 // All 4 routes below sit behind this router's existing `requireAdmin` (line ~22).
 
 // ── Evidence (Visual Proof tab) ──────────────────────────────────────────
+// Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz) — `expectation`
+// is a new, additive field so the tab can render "Not applicable for this ticket
+// type" instead of the old always-identical dead text. See
+// services/workLedger/evidenceExpectationService.ts for the classification.
 router.get('/api/admin/tickets/:id/evidence', async (req: Request, res: Response) => {
   try {
-    const evidence = await getEvidenceForTicket(String(req.params.id));
-    res.json({ evidence });
+    const [evidence, expectations] = await Promise.all([
+      getEvidenceForTicket(String(req.params.id)),
+      getTicketEvidenceExpectations(String(req.params.id)),
+    ]);
+    res.json({ evidence, expectation: expectations.visualProof });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -225,8 +233,11 @@ router.get('/api/admin/tickets/:id/summary', async (req: Request, res: Response)
 // ── Decisions (Decisions tab) ────────────────────────────────────────────
 router.get('/api/admin/tickets/:id/decisions', async (req: Request, res: Response) => {
   try {
-    const decisions = await getDecisionsForTicket(String(req.params.id));
-    res.json({ decisions });
+    const [decisions, expectations] = await Promise.all([
+      getDecisionsForTicket(String(req.params.id)),
+      getTicketEvidenceExpectations(String(req.params.id)),
+    ]);
+    res.json({ decisions, expectation: expectations.decisions });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -297,8 +308,11 @@ router.post(
 // ── Unified Work Graph read (Work Graph tab) ────────────────────────────
 router.get('/api/admin/tickets/:id/work-graph', async (req: Request, res: Response) => {
   try {
-    const graph = await getWorkGraphForTicket(String(req.params.id));
-    res.json(graph);
+    const [graph, expectations] = await Promise.all([
+      getWorkGraphForTicket(String(req.params.id)),
+      getTicketEvidenceExpectations(String(req.params.id)),
+    ]);
+    res.json({ ...graph, expectation: expectations.workGraph });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

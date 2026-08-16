@@ -3,6 +3,7 @@ import { Ticket, TicketActionLink, WorkLedgerEvent } from '../../models';
 import { getEvidenceForTicket } from '../evidence/evidenceService';
 import { formatCentralDateTime } from '../centralDate';
 import { resolveActorDisplayName } from '../actorIdentity/resolveActorDisplayName';
+import { TICKET_LEDGER_HOOK_LIVE_SINCE } from './ticketCreationLedgerHook';
 
 // ProofDesk Milestone 2 (Proof & Ticket Experience), spec section 10.2/10.3. Generates
 // the ticket detail Story tab's 3-line summary: Outcome / Proof / Human action.
@@ -115,6 +116,28 @@ export async function generateTicketSummary(ticketId: string): Promise<TicketSum
       outcome: `Outcome: ${describeIntent(latest.intent)} failed at ${formatDate(latest.occurred_at)} (${latest.reason_code || 'no reason code recorded'}).`,
       proof: proofLine,
       humanAction: 'Human action: investigate the failure and re-dispatch or resolve manually.',
+      hasEvidence,
+    };
+  }
+
+  // Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz). Zero linked
+  // events reaches this branch for two structurally different reasons, and
+  // conflating them is exactly the dishonesty the fix exists to remove: (1) the
+  // ticket predates TICKET_LEDGER_HOOK_LIVE_SINCE — the day the Ticket model's
+  // afterCreate hook shipped — and its creation path may simply never have had a
+  // chance to be instrumented; that is not a gap worth investigating, it's an honest
+  // fact about when tracking became reliable. (2) the ticket was created AFTER the
+  // hook went live and still has zero events — with the hook covering every known
+  // Sequelize-model creation path (see ticketCreationLedgerHook.ts's own disclosed
+  // raw-SQL-bypass residual gap), this should be structurally unreachable going
+  // forward, so if it does happen it's a real gap worth flagging, not smoothing over.
+  if (ticket.created_at && new Date(ticket.created_at) < TICKET_LEDGER_HOOK_LIVE_SINCE) {
+    return {
+      outcome:
+        'Outcome: This ticket was created before activity tracking was reliable for this ticket — no ledger record exists from that period.',
+      proof: proofLine,
+      humanAction:
+        'Human action: no automated activity on record — this predates reliable ledger tracking, not necessarily a real gap.',
       hasEvidence,
     };
   }
