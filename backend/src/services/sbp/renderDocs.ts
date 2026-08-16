@@ -16,7 +16,12 @@
  */
 import { createHash } from 'crypto';
 import { BuildPlan, PlanRelease, PlanRequirement, PlanStory, isConstraint } from './planContract';
-import { PROGRESS_FILE_PATH, renderProgressFile, serialiseProgressFile } from './verification/progressContract';
+import { PROGRESS_FILE_PATH, PlanStorySeed, renderProgressFile, serialiseProgressFile } from './verification/progressContract';
+import {
+  COMMAND_CENTER_STORY_ID,
+  commandCenterStoryDoc,
+  commandCenterStorySeed,
+} from './commandCenterStory';
 
 export interface RenderedFile {
   /** Repo-relative, forward slashes, inside the allowlist. */
@@ -153,6 +158,24 @@ function renderStories(plan: BuildPlan): string {
     'spine, and later releases stack features on top of something already working.',
     '',
   ];
+
+  // STORY-000 leads the index rather than sitting in a release, because it comes
+  // before all of them. Listing it here matters as much as rendering its doc: an
+  // agent that scans STORIES.md to find the work would otherwise never learn the
+  // first story exists.
+  if (!plan.stories.some((s) => s.id === COMMAND_CENTER_STORY_ID)) {
+    lines.push(
+      '## Before the releases — start here',
+      '',
+      `- **[${COMMAND_CENTER_STORY_ID}](stories/${COMMAND_CENTER_STORY_ID}.md)** — Build your Command Center`,
+      '',
+      'The first thing you build, on day one, before any part of the system itself. It is',
+      'the page you keep open for the rest of the programme and demo from. It belongs to no',
+      'release and fulfils none of your requirements, because it is the window onto your',
+      'system rather than a part of it.',
+      '',
+    );
+  }
   for (const rel of releases) {
     const inRel = byKey(plan.stories.filter((s) => s.release === rel.key), (s) => s.id);
     lines.push(
@@ -274,6 +297,20 @@ function renderClaudeMd(plan: BuildPlan, ctx: RenderContext): string {
 export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFile[] {
   if (!plan?.stories?.length) throw new RenderError('cannot render documents for a plan with no stories');
 
+  // The plan in canonical order — arrays sorted by their natural key. Two
+  // structurally identical plans whose arrays arrived in a different order must
+  // render byte-identically, or repoWriter sees a changed hash and commits a
+  // change that is not one (FR-026). `.colaberry/plan.json` has always been
+  // serialised from this; STORY-000's doc needs it too, because
+  // `commandCenterPrompt` walks `requirements` and `stories` in the order it is
+  // handed them and would otherwise leak the caller's array order into the file.
+  const orderedPlan: BuildPlan = {
+    ...plan,
+    requirements: byKey(plan.requirements, (r) => r.id),
+    releases: byKey(plan.releases, (r) => r.key),
+    stories: byKey(plan.stories, (s) => s.id),
+  };
+
   const releaseByKey = new Map(plan.releases.map((r) => [r.key, r]));
   const files: RenderedFile[] = [
     { path: 'docs/REQUIREMENTS.md', content: renderRequirements(plan) },
@@ -289,22 +326,45 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
     });
   }
 
+  // STORY-000 — appended at the RENDER layer, never inserted into plan.stories.
+  //
+  // The Command Center is scaffolding the platform authors, so it is kept out of
+  // the plan on purpose: the traceability gate, the XP divisor and materialize
+  // ordering all read `plan.stories`, and moving it there would change all three.
+  // But the loop above iterates `plan.stories`, so the consequence was that
+  // STORY-000 — the one story EVERY student builds first — was the only story
+  // with no doc in the repo and no entry in progress.json. Its prompt existed
+  // solely on `student_tasks.build`, so a fresh Claude Code session had nothing
+  // local to read and had to author its claims from memory of a prompt it had
+  // never seen. It made none, and verification reported 0 of 3 with an empty
+  // `rejected_claims`. Confirmed in production on 2026-08-15, one build before a
+  // cohort of ~30 would have hit the same wall.
+  //
+  // Appending here is the same move `buildVerificationService` already makes
+  // when it appends STORY-000's spec, with the same defensive dedup: if a plan
+  // ever carries its own STORY-000, the PLAN wins, because the plan is the
+  // authority on every story it actually contains.
+  const planHasCommandCenter = plan.stories.some((s) => s.id === COMMAND_CENTER_STORY_ID);
+  if (!planHasCommandCenter) {
+    files.push({
+      path: `docs/stories/${COMMAND_CENTER_STORY_ID}.md`,
+      // Ordered plan, so array order cannot reach the bytes. No schedule:
+      // renderDocs is pure and has no access to one, and the due dates it would
+      // add live on the portal task row anyway. The build brief is the same.
+      content: commandCenterStoryDoc(orderedPlan, null),
+    });
+  }
+
   // Machine-readable bookkeeping. The manifest is what conflict detection and
   // prompt-path assertion both read, so it is built from the files above rather
   // than restated — it cannot describe a file that was not rendered.
-  // Serialize a canonically ORDERED plan, not the plan as handed to us. Two
-  // structurally identical plans whose arrays arrived in a different order must
-  // produce byte-identical output, or repoWriter sees a changed hash and makes a
-  // commit that changes nothing — breaking the "unchanged ⇒ no commit" guarantee
-  // (FR-026) and churning the student's history.
+  // Serialize the canonically ORDERED plan built at the top, not the plan as
+  // handed to us — see the note there for why array order must not reach the
+  // bytes. STORY-000 is deliberately NOT in it: this file mirrors the plan, and
+  // the plan does not contain the Command Center.
   files.push({
     path: '.colaberry/plan.json',
-    content: `${JSON.stringify({
-      ...plan,
-      requirements: byKey(plan.requirements, (r) => r.id),
-      releases: byKey(plan.releases, (r) => r.key),
-      stories: byKey(plan.stories, (s) => s.id),
-    }, null, 2)}\n`,
+    content: `${JSON.stringify(orderedPlan, null, 2)}\n`,
   });
   // The two-way contract. The platform writes the plan side — every story, every
   // acceptance criterion, all `passed: false`; Claude Code writes the completion
@@ -313,10 +373,23 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
   // sentence, so honest claims match the plan exactly and only invented ones get
   // rejected. repoWriter merges this over whatever is already in the repo so a
   // republish does not wipe the student's ticks.
+  //
+  // STORY-000 is seeded here too, for the same reason its doc is rendered above:
+  // without an entry, the agent had to AUTHOR the story block and its three
+  // criterion sentences from scratch, which is precisely the retyping this file
+  // exists to remove. Seeded, it flips three booleans like every other story.
+  // `renderProgressFile` sorts by id, so STORY-000 lands first and the output
+  // stays byte-identical across renders — repoWriter's content-hash idempotency
+  // depends on that. repoWriter then MERGES this over the file already in the
+  // repo, so adding the skeleton cannot reset a flag the student has set.
+  const progressSeeds: PlanStorySeed[] = [
+    ...byKey(plan.stories, (s) => s.id),
+    ...(planHasCommandCenter ? [] : [commandCenterStorySeed()]),
+  ];
   files.push({
     path: PROGRESS_FILE_PATH,
     content: serialiseProgressFile(
-      renderProgressFile(byKey(plan.stories, (s) => s.id), plan.project_name),
+      renderProgressFile(progressSeeds, plan.project_name),
     ),
   });
   files.push({

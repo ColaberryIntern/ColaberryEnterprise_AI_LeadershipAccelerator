@@ -26,6 +26,15 @@ import type { Schedule } from './buildSchedule';
 export const COMMAND_CENTER_STORY_ID = 'STORY-000';
 export const COMMAND_CENTER_TITLE = 'STORY-000 · Build your Command Center';
 
+/**
+ * The user story, in the same voice as the plan's own narratives. Lives here
+ * rather than inline at the task row so the repo doc and the portal task cannot
+ * describe this story differently.
+ */
+export const COMMAND_CENTER_NARRATIVE =
+  'As a builder, I want one page that shows what I am building and how far along it is, '
+  + 'so that I can see my own project and demo from it.';
+
 const bullet = (s: string) => `- ${s}`;
 
 /** How an autonomy level reads on a card, in the student's language. */
@@ -150,10 +159,12 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   // appeared here it would be duplicated into every regeneration and every
   // backfill.
   //
-  // (Story 000 is deliberately NOT rendered into repo docs today — renderDocs
-  // iterates plan.stories and STORY-000 is kept out of the plan. If that ever
-  // changes, this constraint becomes load-bearing rather than merely correct,
-  // because student repos are public by default.)
+  // THIS CONSTRAINT IS NOW LOAD-BEARING, not merely correct. Story 000 used to
+  // be absent from repo docs (renderDocs iterated plan.stories and STORY-000 is
+  // kept out of the plan), so this text never left the portal. It does now:
+  // `commandCenterStoryDoc` renders it into `docs/stories/STORY-000.md` in a
+  // repo that is PUBLIC BY DEFAULT. A secret introduced into this function
+  // would be committed to every student's public repo on the next publish.
   //
   // The command, with the secret in it, lives in the authenticated workspace
   // panel. The prompt only ever points at that panel.
@@ -608,3 +619,93 @@ export const COMMAND_CENTER_ACCEPTANCE: readonly string[] = [
   'Given sample mode, when any tab is shown, then the sample data is visibly labelled as sample.',
   'Trust — no tab shows a number, a connection or a result the project has not actually produced.',
 ] as const;
+
+/**
+ * STORY-000's seed for `.colaberry/progress.json`.
+ *
+ * Shaped exactly like a plan story so `renderProgressFile` can take it without
+ * a special case — and so the criterion text is GENERATED from the constant
+ * rather than retyped anywhere. `release` is null because this story sits ahead
+ * of the plan's releases rather than inside one.
+ *
+ * PURE. Returns a fresh array each call so no caller can mutate the constant.
+ */
+export function commandCenterStorySeed(): { id: string; release: null; acceptance: string[] } {
+  return {
+    id: COMMAND_CENTER_STORY_ID,
+    release: null,
+    acceptance: [...COMMAND_CENTER_ACCEPTANCE],
+  };
+}
+
+/**
+ * `docs/stories/STORY-000.md` — the story doc that was missing from every
+ * student repo.
+ *
+ * WHY THIS EXISTS. STORY-000 is kept out of `plan.stories` on purpose (gate, XP
+ * divisor, materialize ordering), and `renderDocs` iterates `plan.stories` — so
+ * this one story was never rendered into any repo. Its prompt lived only on
+ * `student_tasks.build`, i.e. the portal. A student's Claude Code session with
+ * no chat history therefore had NO local reference for the one story every
+ * student builds first: asked to "follow Step 3", it correctly answered that
+ * `.colaberry/` held only `connect.txt` and nothing in the repo mentioned
+ * progress.json. It then made no claims at all, and verification returned zero
+ * of three with an empty `rejected_claims` — the claims were never made.
+ *
+ * Every other story is a boolean to flip. This makes STORY-000 one too.
+ *
+ * Deliberately the FULL prompt, not a summary: this is the one story a student
+ * runs before they have any of their own code, so the file has to carry the
+ * whole picture on its own. It is the same text the portal shows, from the same
+ * function, so the two cannot drift.
+ *
+ * PURE — same plan and schedule in, byte-identical markdown out, which is what
+ * lets repoWriter's content-hash idempotency hold.
+ */
+export function commandCenterStoryDoc(plan: BuildPlan, schedule?: Schedule | null): string {
+  return [
+    `# ${COMMAND_CENTER_STORY_ID} — Build your Command Center`,
+    '',
+    COMMAND_CENTER_NARRATIVE,
+    '',
+    '**Release:** ahead of the plan — this is day one, before your own stories',
+    '**Owner:** you, with Claude Code',
+    '**Blocked by:** nothing — this is the first thing you build',
+    '',
+    '## The requirement this satisfies',
+    '',
+    'None of yours, and that is deliberate. The Command Center is the window onto your',
+    'system rather than a part of it, so it fulfils no requirement in',
+    '`docs/REQUIREMENTS.md` and has no row in `docs/TRACEABILITY.md`. Everything it',
+    'displays is read out of your own plan.',
+    '',
+    '## If you are Claude Code opening this file cold',
+    '',
+    'Everything you need is here. The full build brief is below, and your three',
+    'acceptance criteria are **already seeded** in `.colaberry/progress.json` under',
+    `\`${COMMAND_CENTER_STORY_ID}\` with \`"passed": false\`.`,
+    '',
+    '**Do not retype the criteria.** Find the story by its `id`, flip `passed` to `true`',
+    'on each line that is genuinely true, and leave the rest `false`. Retyping is how the',
+    'text drifts — a rewritten dash or a changed full stop makes a claim the platform',
+    'cannot match, and the story stays unverified with your work already done. Step 3',
+    'below has the exact procedure.',
+    '',
+    '---',
+    '',
+    commandCenterPrompt(plan, schedule),
+    '',
+    '## Acceptance — your stop condition',
+    '',
+    'These are the three lines the platform checks. They are already in',
+    '`.colaberry/progress.json` word for word. Tick a box here as it genuinely passes,',
+    'and set the matching `passed` flag in that file — the JSON is what the platform',
+    'reads, this list is for you.',
+    '',
+    ...COMMAND_CENTER_ACCEPTANCE.map((a) => `- [ ] ${a}`),
+    '',
+    'When every box above is ticked **and** a commit names the story, the platform',
+    'confirms it on its own — within about ten seconds if you did Step 1.',
+    '',
+  ].join('\n');
+}

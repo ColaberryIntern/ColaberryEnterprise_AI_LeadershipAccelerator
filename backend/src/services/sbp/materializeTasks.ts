@@ -24,7 +24,8 @@ import { BuildPlan, PlanStory } from './planContract';
 import { buildStoryPrompt } from './buildStoryPrompt';
 import { Schedule } from './buildSchedule';
 import {
-  COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_ACCEPTANCE, commandCenterPrompt,
+  COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_ACCEPTANCE,
+  COMMAND_CENTER_NARRATIVE, commandCenterPrompt,
 } from './commandCenterStory';
 
 export interface MaterializeResult {
@@ -115,7 +116,7 @@ export async function materializePlanAsTasks(
         const ccAttrs = {
           project_id: projectId, task_list_id: list.id, story_id: COMMAND_CENTER_STORY_ID,
           title: COMMAND_CENTER_TITLE, description: COMMAND_CENTER_TITLE,
-          narrative: 'As a builder, I want one page that shows what I am building and how far along it is, so that I can see my own project and demo from it.',
+          narrative: COMMAND_CENTER_NARRATIVE,
           status: 'not_started', position: taskPos, release_key: rel.key,
           acceptance: [...COMMAND_CENTER_ACCEPTANCE], fulfills: [],
           build: commandCenterPrompt(plan, ctx.schedule ?? null),
