@@ -654,6 +654,22 @@ export async function runWorkforceTicketAutoResolverAgent(): Promise<AgentExecut
   }));
 }
 
+// cory-engine ticket auto-resolve — re-checks every open cory-engine ticket against the
+// SAME detection logic autonomousEngine.ts used to create it and closes it only when
+// that specific condition no longer holds (see
+// backend/src/intelligence/autonomy/coryEngineTicketAutoResolver.ts for the full
+// design). Deterministic, no LLM — mirrors runWorkforceTicketAutoResolverAgent's
+// pattern above for the identical class of problem. Registered `enabled: false` in
+// agentRegistrySeed.ts on purpose — this cron must not fire until the human-reviewed
+// historical bulk-clear has run and been verified (see this run's execution-contract.md
+// §3b); it is flipped to enabled:true manually, once, after that.
+export async function runCoryEngineTicketAutoResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('CoryEngineTicketAutoResolver', wrapSkoolAgent(async () => {
+    const { reCheckAndAutoResolveCoryEngineTickets } = await import('../intelligence/autonomy/coryEngineTicketAutoResolver');
+    return reCheckAndAutoResolveCoryEngineTickets();
+  }));
+}
+
 export async function runCompanyStrategicCycleAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('CompanyStrategicCycle', wrapSkoolAgent(async () => {
     const { getActiveCompany } = require('./company/companyService');

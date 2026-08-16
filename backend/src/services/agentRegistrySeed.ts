@@ -2547,6 +2547,40 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   {
+    agent_name: 'CoryEngineTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/coryEngineTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '25 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md §3b requires: the 6,843-ticket historical
+    // backlog must be cleared through the reviewed --plan/--apply CLI sequence first,
+    // and ONLY THEN is this flipped to enabled:true (a single documented production
+    // UPDATE, no redeploy needed — same admin-toggle mechanism already used elsewhere
+    // in this file) so the cron carries the recurring re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN cory-engine ticket (autonomousEngine.ts / ' +
+      'runAutonomousCycle()) against the SAME detection logic that created it -- ' +
+      'detectAgentFailures()/detectConversionDrops() from ProblemDiscoveryAgent.ts -- ' +
+      "and closes it (status 'done') with a real, numbers-grounded evidence comment " +
+      'only when that specific condition no longer holds. error_spike tickets are ' +
+      "classified but never auto-closed (detectErrorSpikes()'s SQL references a column " +
+      'that does not exist in production, so a live re-check can never be trusted for ' +
+      'that condition-type -- left untouched by design, not force-closed). ' +
+      'Deterministic re-derivation, no LLM, no time-based fallback of any kind. ' +
+      'Explicit in every close comment that this reflects the CURRENTLY OBSERVED ' +
+      'condition, not a verified root-cause fix.',
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'query_lead_conversion_metrics',
+      'close_cory_engine_tickets_on_recovery',
+    ],
+  },
+  {
     agent_name: 'bpos_orchestrator',
     agent_type: 'ticket_creator_identity',
     module: 'company',
