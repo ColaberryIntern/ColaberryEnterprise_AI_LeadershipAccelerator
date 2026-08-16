@@ -30,9 +30,28 @@
  * GitHub's Pages API reports the real `html_url` for both. So we ASK, and only
  * fall back to deriving when the API cannot be reached — and even then the
  * derived URL has to answer before it is recorded.
+ *
+ * ── WHY IT PROBES MORE THAN THE ROOT, AND SAYS WHICH ─────────────────────────
+ *
+ * Both of the above resolve the SITE, not the page. This module used to probe
+ * the site root and nothing else, then log `sbp_pages_not_live` — which is a
+ * false statement about a student whose Command Center is one directory down.
+ * That happened in production: a genuinely published site returning 200 at
+ * `<site>/command-center/index.html` was reported as not live, and the portal
+ * link never appeared.
+ *
+ * The authoritative fix is the CONVENTION, not this file: the STORY-000 prompt
+ * now states where the entry point goes (`commandCenterLocation.ts`, which is
+ * where the list below comes from). This half only has to stop lying — probe
+ * the documented location and the shape already in the wild, and name every URL
+ * tried in the log so "not live" can be checked rather than believed.
+ *
+ * The list stays SHORT on purpose. A prober wide enough to find any layout is a
+ * prober that lets the convention rot.
  */
 import { setTimeout as delay } from 'timers/promises';
 import Project from '../../../models/Project';
+import { commandCenterProbeUrls } from '../commandCenterLocation';
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -53,6 +72,14 @@ export interface PagesResult {
   url: string | null;
   /** True when GitHub told us the URL, false when we had to derive it. */
   from_api: boolean;
+  /**
+   * Every URL actually requested, in the order they were tried.
+   *
+   * Present so a "not live" answer can be checked instead of taken on trust —
+   * the previous version reported a live site as dead and gave no way to see
+   * that it had only ever looked in one place.
+   */
+  probed: string[];
 }
 
 function log(event: string, outcome: string, ctx: Record<string, unknown>): void {
@@ -136,6 +163,24 @@ export async function pagesResponds(url: string, fetchImpl: typeof fetch = fetch
 }
 
 /**
+ * The first of these URLs that answers, or null when none of them does.
+ *
+ * SEQUENTIAL, not parallel, and the order is the point rather than an
+ * implementation detail: the documented location is first, so a repo that
+ * follows the convention costs exactly one request and is recorded at the clean
+ * address the portal would have linked to anyway. A repo that does not gets its
+ * real, longer address instead of a false "not live".
+ */
+export async function firstLiveUrl(
+  urls: readonly string[], fetchImpl: typeof fetch = fetch,
+): Promise<string | null> {
+  for (const url of urls) {
+    if (await pagesResponds(url, fetchImpl)) return url;
+  }
+  return null;
+}
+
+/**
  * Resolve and record the Command Center URL for one project, if it is live.
  *
  * NEVER THROWS. It is called fire-and-forget from a webhook and from the Sync
@@ -158,44 +203,55 @@ export async function recordPagesUrlIfLive(
 
   try {
     const project: any = await Project.findByPk(projectId);
-    if (!project) return { outcome: 'no_project', url: null, from_api: false };
+    if (!project) return { outcome: 'no_project', url: null, from_api: false, probed: [] };
 
     // NEVER OVERWRITE. Somebody may have set this by hand, or pointed it at a
     // host that is not Pages at all. A later automatic guess must not win an
     // argument against a human.
     const existing = (project.project_variables || {}).command_center_url;
     if (typeof existing === 'string' && existing.trim()) {
-      return { outcome: 'already_set', url: existing, from_api: false };
+      return { outcome: 'already_set', url: existing, from_api: false, probed: [] };
     }
 
     const reported = await fetchPagesUrl(owner, repo, fetchImpl);
-    const url = reported ?? derivePagesUrl(owner, repo);
+    const site = reported ?? derivePagesUrl(owner, repo);
     const fromApi = reported !== null;
 
-    // When GitHub says Pages is off AND the derived guess does not answer, this
-    // is simply a project without hosting. Not an error, and not worth a retry
-    // schedule — the next push asks again for free.
-    if (!await pagesResponds(url, fetchImpl)) {
-      log('sbp_pages_not_live', 'partial', { ...base, url, from_api: fromApi, reported: reported !== null });
-      return { outcome: reported ? 'not_live_yet' : 'not_enabled', url, from_api: fromApi };
+    // Both `reported` and `derived` resolve the SITE. Where the Command Center
+    // sits WITHIN that site is a separate question, and probing only the root
+    // is what reported a live site as dead. Worst case is one extra request on
+    // a site that is genuinely not up; both callers are detached from a
+    // response that has already been sent, so there is no budget to protect.
+    const probed = commandCenterProbeUrls(site);
+    const live = await firstLiveUrl(probed, fetchImpl);
+
+    // When GitHub says Pages is off AND nothing answers anywhere we looked,
+    // this is simply a project without hosting. Not an error, and not worth a
+    // retry schedule — the next push asks again for free. The log carries the
+    // full probe list so this claim can be checked rather than believed.
+    if (!live) {
+      log('sbp_pages_not_live', 'partial', {
+        ...base, url: site, probed, from_api: fromApi, reported: reported !== null,
+      });
+      return { outcome: reported ? 'not_live_yet' : 'not_enabled', url: site, from_api: fromApi, probed };
     }
 
     // Narrow write: merge one key into project_variables. Deliberately not
     // `setCommandCenterUrl`, which re-reads the whole owned project tree to
     // return it — a webhook has no use for that tree and should not pay for it.
-    project.project_variables = { ...(project.project_variables || {}), command_center_url: url };
+    project.project_variables = { ...(project.project_variables || {}), command_center_url: live };
     project.changed('project_variables', true);
     await project.save();
 
-    log('sbp_pages_recorded', 'success', { ...base, url, from_api: fromApi });
-    return { outcome: 'recorded', url, from_api: fromApi };
+    log('sbp_pages_recorded', 'success', { ...base, url: live, probed, from_api: fromApi });
+    return { outcome: 'recorded', url: live, from_api: fromApi, probed };
   } catch (err: unknown) {
     log('sbp_pages_check_failed', 'failure', {
       ...base,
       error_class: (err as { name?: string })?.name ?? 'Error',
       message: (err as { message?: string })?.message,
     });
-    return { outcome: 'error', url: null, from_api: false };
+    return { outcome: 'error', url: null, from_api: false, probed: [] };
   }
 }
 
