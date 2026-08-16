@@ -26,12 +26,28 @@ import { sequelize } from '../config/database';
  * Nothing in this file should ever be reachable from a participant token.
  */
 
+/**
+ * Read a Sequelize model's automatic timestamp.
+ *
+ * `underscored: true` maps the COLUMN to `created_at`, but the model ATTRIBUTE
+ * stays camelCase (`createdAt`) -- only explicitly-declared fields like
+ * `status_changed_at` keep snake_case. Reading `row.created_at` therefore returns
+ * undefined, which reached the admin table as a literal "Invalid Date" for every
+ * business account. Centralised here so the next model does not repeat it.
+ */
+function timestampOf(row: unknown, snake: 'created_at' | 'updated_at'): Date | null {
+  const camel = snake === 'created_at' ? 'createdAt' : 'updatedAt';
+  const rec = row as Record<string, unknown>;
+  const value = rec[camel] ?? rec[snake];
+  return value instanceof Date ? value : value ? new Date(value as string) : null;
+}
+
 export interface OrgListRow {
   id: string;
   name: string;
   status: OrganizationStatus;
   auto_staff_sync: boolean;
-  created_at: Date;
+  created_at: Date | null;
   owner_email: string | null;
   owner_name: string | null;
   member_count: number;
@@ -105,7 +121,7 @@ export async function listOrganizations(params: ListOrgParams = {}): Promise<Org
       name: org.name,
       status: org.status ?? 'active',
       auto_staff_sync: org.auto_staff_sync,
-      created_at: org.created_at,
+      created_at: timestampOf(org, 'created_at'),
       owner_email: owner?.email ?? null,
       owner_name: owner?.full_name ?? null,
       member_count: counts.total,
@@ -167,7 +183,7 @@ export interface OrgDetail {
     name: string;
     status: OrganizationStatus;
     auto_staff_sync: boolean;
-    created_at: Date;
+    created_at: Date | null;
     status_changed_at: Date | null;
     status_changed_by: string | null;
   };
@@ -181,8 +197,16 @@ export interface OrgDetail {
     team: string | null;
     invite_status: string;
     joined_at: Date | null;
+    /** Null when the teammate was invited but never activated an account. */
     enrollment_id: string | null;
     cohort_id: string | null;
+    /* The employee's own account, so staff can open it from here rather than
+       going hunting in the students list. `enrollment_id` alone is not enough
+       to render a useful row. */
+    full_name: string | null;
+    tier: string | null;
+    enrollment_status: string | null;
+    portal_enabled: boolean | null;
   }[];
   cohorts: {
     link_id: string;
@@ -229,7 +253,7 @@ export async function getOrganizationDetail(orgId: string): Promise<OrgDetail | 
       {
         model: Enrollment,
         as: 'enrollment',
-        attributes: ['id', 'cohort_id'],
+        attributes: ['id', 'cohort_id', 'full_name', 'tier', 'status', 'portal_enabled'],
         required: false,
       },
     ],
@@ -253,8 +277,16 @@ export async function getOrganizationDetail(orgId: string): Promise<OrgDetail | 
   });
 
   const memberRows = members.map((m) => {
-    const enr = (m as unknown as { enrollment?: { id?: string; cohort_id?: string | null } })
-      .enrollment;
+    const enr = (m as unknown as {
+      enrollment?: {
+        id?: string;
+        cohort_id?: string | null;
+        full_name?: string | null;
+        tier?: string | null;
+        status?: string | null;
+        portal_enabled?: boolean | null;
+      };
+    }).enrollment;
     return {
       id: m.id,
       email: m.email,
@@ -264,6 +296,10 @@ export async function getOrganizationDetail(orgId: string): Promise<OrgDetail | 
       joined_at: m.joined_at ?? null,
       enrollment_id: enr?.id ?? null,
       cohort_id: enr?.cohort_id ?? null,
+      full_name: enr?.full_name ?? null,
+      tier: enr?.tier ?? null,
+      enrollment_status: enr?.status ?? null,
+      portal_enabled: enr?.portal_enabled ?? null,
     };
   });
 
@@ -293,7 +329,7 @@ export async function getOrganizationDetail(orgId: string): Promise<OrgDetail | 
       name: org.name,
       status: org.status ?? 'active',
       auto_staff_sync: org.auto_staff_sync,
-      created_at: org.created_at,
+      created_at: timestampOf(org, 'created_at'),
       status_changed_at: org.status_changed_at ?? null,
       status_changed_by: org.status_changed_by ?? null,
     },

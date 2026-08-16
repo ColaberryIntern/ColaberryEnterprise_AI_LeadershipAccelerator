@@ -118,6 +118,49 @@ describe('AdminBusinessAccountsPage — broken is not the same as empty', () => 
   });
 });
 
+describe('AdminBusinessAccountsPage — dates', () => {
+  /**
+   * The Created column showed a literal "Invalid Date" for every business
+   * account on production. Two causes stacked:
+   *   1. the service read `org.created_at`, but Sequelize's `underscored: true`
+   *      maps the COLUMN to created_at while the ATTRIBUTE stays `createdAt`, so
+   *      the value was always undefined;
+   *   2. the page called `new Date(value).toLocaleDateString()` with no guard,
+   *      which renders undefined as "Invalid Date" rather than as nothing.
+   * The backend fix is covered separately; this pins the render side.
+   */
+  const rowWith = (created: string | null) => ({
+    id: 'org-1', name: 'Acme', status: 'active' as const, auto_staff_sync: false,
+    created_at: created, owner_email: 'a@b.c', owner_name: 'A B',
+    member_count: 1, active_member_count: 1, cohort_count: 0, lead_id: null,
+  });
+
+  it('never prints "Invalid Date" when the timestamp is missing', async () => {
+    api.listOrganizations.mockResolvedValue({
+      organizations: [rowWith(null)], total: 1, page: 1, totalPages: 1,
+    });
+    api.getOrganizationStats.mockResolvedValue(emptyStats);
+
+    mount(<AdminBusinessAccountsPage />);
+    await settle();
+
+    expect(text()).not.toContain('Invalid Date');
+  });
+
+  it('renders a real timestamp when one is present', async () => {
+    api.listOrganizations.mockResolvedValue({
+      organizations: [rowWith('2026-07-21T00:00:00Z')], total: 1, page: 1, totalPages: 1,
+    });
+    api.getOrganizationStats.mockResolvedValue(emptyStats);
+
+    mount(<AdminBusinessAccountsPage />);
+    await settle();
+
+    expect(text()).not.toContain('Invalid Date');
+    expect(text()).toMatch(/202[0-9]/);
+  });
+});
+
 describe('AdminBusinessAccountDetailPage — seats sponsored vs members placed', () => {
   const detail = (over: Partial<orgApi.OrgDetailResponse> = {}): orgApi.OrgDetailResponse => ({
     organization: {
@@ -187,6 +230,58 @@ describe('AdminBusinessAccountDetailPage — seats sponsored vs members placed',
     await settle();
 
     expect(text()).toContain('Could not load this business account');
+  });
+
+  it('offers a live view of each employee account that exists', async () => {
+    const d = detail({
+      members: [
+        {
+          id: 'm1', email: 'owner@acme.test', role: 'manager', team: null,
+          invite_status: 'active', joined_at: null, enrollment_id: 'enr-1',
+          cohort_id: null, full_name: 'Dana Reyes', tier: 'guest',
+          enrollment_status: 'active', portal_enabled: true,
+        },
+        {
+          // Invited but never activated: no enrollment, so nothing to open.
+          id: 'm2', email: 'never@acme.test', role: 'member', team: 'Ops',
+          invite_status: 'invited', joined_at: null, enrollment_id: null,
+          cohort_id: null, full_name: null, tier: null,
+          enrollment_status: null, portal_enabled: null,
+        },
+      ],
+    });
+    await mountDetail(d);
+
+    // The person's name leads, with the address beneath it.
+    expect(text()).toContain('Dana Reyes');
+    expect(text()).toContain('owner@acme.test');
+    // One "View account" button per member that actually has an account, and the
+    // invited-only teammate is explicitly labelled rather than given a dead button.
+    const buttons = Array.from(container.querySelectorAll('button')).filter(
+      (b) => b.textContent === 'View account',
+    );
+    expect(buttons.length).toBe(1);
+    expect(text()).toContain('no account yet');
+  });
+
+  it('offers a live view of the owner account from the header', async () => {
+    await mountDetail(detail());
+    const header = Array.from(container.querySelectorAll('button')).filter(
+      (b) => b.textContent === 'View account live',
+    );
+    expect(header.length).toBe(1);
+  });
+
+  it('never prints "Invalid Date" on the detail page either', async () => {
+    await mountDetail(
+      detail({
+        organization: {
+          id: 'org-1', name: 'Acme', status: 'active', auto_staff_sync: false,
+          created_at: null, status_changed_at: null, status_changed_by: null,
+        },
+      }),
+    );
+    expect(text()).not.toContain('Invalid Date');
   });
 
   it('says plainly when an account has no lead, and why that happens', async () => {

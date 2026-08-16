@@ -8,6 +8,7 @@ import {
   removeCohortFromOrganization,
   describeApiError,
   listCohortsForLinking,
+  getViewAsUrl,
   OrgDetailResponse,
 } from '../../services/adminOrgApi';
 
@@ -22,6 +23,19 @@ import {
  * sees), so the two numbers legitimately differ and the gap is the unfilled
  * seats. Showing one number would hide that.
  */
+
+/**
+ * Dates arrive as ISO strings or null. `new Date(null|undefined)` yields
+ * "Invalid Date", which is exactly what the Created column showed for every
+ * business account until the backend's created_at mapping was fixed. Never
+ * print a date this function cannot parse.
+ */
+function formatDate(value: string | null | undefined, withTime = false): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return withTime ? d.toLocaleString() : d.toLocaleDateString();
+}
 
 interface CohortOption {
   id: string;
@@ -71,6 +85,35 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
       )
       .catch(() => setCohortOptions([]));
   }, []);
+
+  /**
+   * Open someone's portal exactly as they see it, read-only.
+   *
+   * Reuses the audited accelerator "view as" endpoint that the Accelerator and
+   * Community Roles pages already use, rather than adding a second
+   * impersonation path — one attributable way in is the point. The minted token
+   * is read-only and carries `impersonated_by`.
+   *
+   * New tab on purpose: the participant session lives under a separate
+   * `participant_token`, so this never logs the admin out of the tab they are in.
+   *
+   * A member with no `enrollment_id` was invited but never activated an account,
+   * so there is nothing to open — the button is not rendered for them.
+   */
+  const openAccount = async (enrollmentId: string | null, who: string) => {
+    if (!enrollmentId) return;
+    setActionError(null);
+    try {
+      const url = await getViewAsUrl(enrollmentId);
+      if (!url) {
+        setActionError(`No portal link is available for ${who}.`);
+        return;
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setActionError(describeApiError(err, `the portal for ${who}`));
+    }
+  };
 
   const toggleStatus = async () => {
     if (!data) return;
@@ -173,6 +216,16 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
               label={suspended ? 'Suspended' : 'Active'}
               tone={suspended ? 'danger' : 'success'}
             />
+            {owner && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary ms-2"
+                onClick={() => openAccount(owner.id, owner.full_name || owner.email)}
+                title="Open the owner's portal read-only, in a new tab"
+              >
+                View account live
+              </button>
+            )}
             <button
               type="button"
               className={`btn btn-sm ms-2 ${suspended ? 'btn-success' : 'btn-outline-danger'}`}
@@ -190,9 +243,7 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
       {suspended && (
         <div className="alert alert-warning">
           This account is suspended{org.status_changed_by ? ` by ${org.status_changed_by}` : ''}
-          {org.status_changed_at
-            ? ` on ${new Date(org.status_changed_at).toLocaleDateString()}`
-            : ''}
+          {org.status_changed_at ? ` on ${formatDate(org.status_changed_at)}` : ''}
           .
         </div>
       )}
@@ -235,36 +286,55 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
               <table className="table table-hover align-middle mb-0">
                 <thead>
                   <tr>
-                    <th>Email</th>
+                    <th>Employee</th>
                     <th>Role</th>
                     <th>Team</th>
-                    <th>Invite</th>
+                    <th>Account</th>
                     <th>Cohort</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
                   {members.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center text-muted py-4">
+                      <td colSpan={6} className="text-center text-muted py-4">
                         No members on this account yet.
                       </td>
                     </tr>
                   ) : (
                     members.map((m) => (
                       <tr key={m.id}>
-                        <td>{m.email}</td>
+                        <td>
+                          <div className="fw-bold">{m.full_name || m.email}</div>
+                          {m.full_name && <div className="small text-muted">{m.email}</div>}
+                        </td>
                         <td>
                           <StatusBadge
                             label={m.role === 'manager' ? 'Manager' : 'Member'}
                             tone={m.role === 'manager' ? 'info' : 'neutral'}
                           />
                         </td>
-                        <td className="small text-muted">{m.team || '-'}</td>
-                        <td>
+                        <td className="small text-muted">{m.team || '—'}</td>
+                        <td className="small">
+                          {/* Two different facts that disagree often enough to
+                              matter: `invite_status` is whether they accepted the
+                              invite; `enrollment_id` is whether an account exists
+                              to open at all. Someone invited but never activated
+                              has the first and not the second. */}
                           <StatusBadge
                             label={m.invite_status === 'active' ? 'Active' : 'Invited'}
                             tone={m.invite_status === 'active' ? 'success' : 'warning'}
                           />
+                          {m.enrollment_id ? (
+                            <div className="text-muted mt-1">
+                              {m.tier || 'account'}
+                              {m.portal_enabled === false && (
+                                <span className="text-danger"> &middot; portal off</span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-muted mt-1">no account yet</div>
+                          )}
                         </td>
                         <td className="small">
                           {m.cohort_id ? (
@@ -273,6 +343,18 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
                             <span className="text-muted" title="This person is in no cohort">
                               Not placed
                             </span>
+                          )}
+                        </td>
+                        <td className="text-end">
+                          {m.enrollment_id && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={() => openAccount(m.enrollment_id, m.full_name || m.email)}
+                              title="Open this employee's portal read-only, in a new tab"
+                            >
+                              View account
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -313,9 +395,7 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
                     cohorts.map((c) => (
                       <tr key={c.link_id}>
                         <td className="fw-bold">{c.name}</td>
-                        <td className="small text-muted">
-                          {c.start_date ? new Date(c.start_date).toLocaleDateString() : '-'}
-                        </td>
+                        <td className="small text-muted">{formatDate(c.start_date)}</td>
                         <td className="small">{c.status || '-'}</td>
                         <td className="text-end">{c.seats_sponsored ?? '-'}</td>
                         <td className="text-end">
@@ -400,7 +480,7 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
           <SectionCard title="Account" icon="information-line">
             <dl className="mb-0 small">
               <dt className="text-muted">Created</dt>
-              <dd>{new Date(org.created_at).toLocaleString()}</dd>
+              <dd>{formatDate(org.created_at, true)}</dd>
               <dt className="text-muted">Auto staff sync</dt>
               <dd>{org.auto_staff_sync ? 'On' : 'Off'}</dd>
               <dt className="text-muted">Owner</dt>
@@ -409,7 +489,7 @@ function AdminBusinessAccountDetailPage(): React.ReactElement {
                 <>
                   <dt className="text-muted">Status last changed</dt>
                   <dd>
-                    {new Date(org.status_changed_at).toLocaleString()}
+                    {formatDate(org.status_changed_at, true)}
                     {org.status_changed_by ? ` by ${org.status_changed_by}` : ''}
                   </dd>
                 </>
