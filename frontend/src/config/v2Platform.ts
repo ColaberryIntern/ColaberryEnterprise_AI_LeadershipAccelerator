@@ -92,6 +92,77 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
     ],
   },
   {
+    /*
+     * The screen a team member actually opens every day. Added because the
+     * showroom described the MANAGER's views three times over and never showed
+     * the one the workforce lives in -- "the platform your team logs into" had
+     * no picture of the platform your team logs into.
+     *
+     * Captured from a real account well into the July cohort, because the
+     * skills radar is a flat dot on a new account and says nothing. Identity
+     * masked before capture; the numbers are real.
+     */
+    key: 'today',
+    label: 'The daily learner view',
+    claimKey: 'surface.readiness.rollup',
+    blurb:
+      'What each person on your team opens: the next step waiting for them, the skills they ' +
+      'have actually verified, their streak, and the next live class.',
+    livesAt: 'Portal, Today',
+    shot: {
+      src: '/site-v2/shot-today.png',
+      alt:
+        'The daily view: a command centre with points and readiness dials, an AI architecture ' +
+        'skills radar at 52 percent verified across ten competencies, a seventeen-day streak, ' +
+        'the live community schedule and the next class.',
+    },
+    stats: [
+      { value: '10', label: 'Architecture competencies tracked' },
+      { value: '52%', label: 'Verified on this example account' },
+      { value: '17', label: 'Day streak' },
+      { value: '1', label: 'Next step, always named' },
+    ],
+    rows: [
+      { label: 'Prompting', pct: 60 },
+      { label: 'RAG', pct: 60 },
+      { label: 'Agents and MCP', pct: 60 },
+      { label: 'LLM core', pct: 36 },
+    ],
+  },
+  {
+    /*
+     * The drill-through Ali asked for: what a manager sees after clicking a
+     * person in Team Accomplishments or "Where your team sits". It was reachable
+     * in the product and invisible on the marketing site, which made the roster
+     * look like a leaderboard rather than something you can interrogate.
+     */
+    key: 'individual',
+    label: 'Team, individual view',
+    claimKey: 'surface.readiness.rollup',
+    blurb:
+      'Click any person and the evidence opens: what they scored, what is left before they ' +
+      'promote, the competencies they have built, and everything they have shipped.',
+    livesAt: 'Portal, company roster, member drilldown',
+    shot: {
+      src: '/site-v2/shot-individual.png',
+      alt:
+        'One person’s detail: knowledge growth with an entry check score, architect ' +
+        'readiness with the exact promotion gaps listed, competency confidence across five ' +
+        'streams, counts of projects, deliverables and instructor reviews, and skill XP by stream.',
+    },
+    stats: [
+      { value: '5', label: 'Competency streams scored' },
+      { value: '0/8', label: 'Ladder rank, shown honestly' },
+      { value: '3', label: 'Deliverables on this example' },
+      { value: '1', label: 'Instructor review' },
+    ],
+    rows: [
+      { label: 'Learning XP', pct: 39 },
+      { label: 'Builder XP', pct: 61 },
+      { label: 'Entry knowledge check', pct: 80 },
+    ],
+  },
+  {
     key: 'workspace',
     label: 'Free company workspace',
     claimKey: 'surface.free.workspace',
@@ -99,11 +170,17 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
       'One free account gives a manager both perspectives at once: the learner experience and ' +
       'their own organization view, with sample data until their team fills it.',
     livesAt: 'The free workspace at /try',
+    // Was shot-nav.png -- a crop of the side navigation, which showed a menu
+    // and told you nothing about what a workspace IS. Replaced with the actual
+    // company view: readiness trajectory, live member count, and the metric
+    // tiles a manager opens this for.
     shot: {
-      src: '/site-v2/shot-nav.png',
+      src: '/site-v2/shot-workspace.png',
       alt:
-        'The workspace side navigation: Your company, Today, Path, Schedule, Projects, ' +
-        'Classroom, Cert Prep and Community.',
+        'The company workspace on sample data: 63 percent average architect readiness across ' +
+        '19 members with a projected trend line, tiles for 1,640 builder XP per week, 12 ' +
+        'evidence records, 86 percent attendance, 9 evaluations passed and 7 level-ups, and ' +
+        'the nine-rank ladder showing the team spread from Builder toward Architect.',
     },
     stats: [
       { value: '2', label: 'Perspectives in one account' },
