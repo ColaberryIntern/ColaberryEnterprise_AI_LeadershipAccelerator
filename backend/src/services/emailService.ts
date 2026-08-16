@@ -1750,6 +1750,114 @@ function buildOrgInviteHtml(data: OrgInviteData, magicLink: string): string {
   `.trim();
 }
 
+// --- Business-account welcome ---
+
+interface OrgWelcomeData {
+  to: string;
+  fullName: string;
+  orgName: string;
+  /** True when the person typed a company name; false when we fell back to their own name. */
+  hasRealCompanyName: boolean;
+}
+
+/**
+ * Welcome the person who just created a business account.
+ *
+ * Registration previously sent NOTHING — someone created a company account on
+ * the public site and heard back only silence. This is the counterpart to
+ * `sendOrgInviteEmail`, which their teammates already receive.
+ *
+ * It is NOT idempotent by itself, deliberately: this function sends whenever it
+ * is called, and `registerManager` owns the "only on first creation" decision
+ * via the `created` flag from `findOrCreate`. Putting the guard at the call site
+ * keeps the rule next to the state that decides it, rather than making this
+ * function query the database to find out whether it should run.
+ *
+ * No magic-link token here, unlike the invite: the person is already signed in
+ * (registration mints their JWT and redirects them into the workspace), so a
+ * second activation link would be confusing. The CTA is a plain portal link.
+ */
+export async function sendOrgWelcomeEmail(data: OrgWelcomeData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping org welcome to:', redactForLogs(data.to));
+    return;
+  }
+
+  const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const companyLink = `${portalBaseUrl}/portal/company`;
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    data.hasRealCompanyName
+      ? `${data.orgName} is set up on Colaberry`
+      : 'Your Colaberry business account is ready',
+  );
+  const html = buildOrgWelcomeHtml(data, companyLink);
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-org-welcome'),
+  });
+
+  console.log(`[Email] Org welcome sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+}
+
+function buildOrgWelcomeHtml(data: OrgWelcomeData, companyLink: string): string {
+  const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
+  const name = escapeHtml(firstName);
+  const org = escapeHtml(data.orgName);
+
+  // When no company name was supplied the org is named after the person, so
+  // "Welcome to Dana Reyes" would read as nonsense. Address the account instead.
+  const heading = data.hasRealCompanyName
+    ? `${org} is set up`
+    : 'Your business account is ready';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    .notice { font-size: 13px; color: #718096; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(heading)}</h1>
+
+  <p>Hi ${name},</p>
+
+  <p>Your business account on the Colaberry Enterprise AI platform is ready. You can invite your team, see what each person is building, and track readiness across the company from one place.</p>
+
+  <p><a href="${companyLink}" class="cta">Open Your Company Workspace</a></p>
+
+  <div class="highlight">
+    <strong>What you can do now:</strong><br>
+    &bull; Invite teammates &mdash; each gets their own free builder account<br>
+    &bull; Watch skills, evidence and readiness roll up across your team<br>
+    &bull; Keep your own builder track alongside the manager view
+  </div>
+
+  <p class="notice">You are signed in already &mdash; this link opens your workspace directly. If you did not create this account, reply to this email and we will remove it.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
 // --- Admissions Document Delivery ---
 
 interface AdmissionsDocumentParams {
