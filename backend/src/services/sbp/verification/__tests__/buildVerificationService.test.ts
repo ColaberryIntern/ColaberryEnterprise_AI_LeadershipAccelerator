@@ -363,9 +363,11 @@ describe('STORY-000 is verifiable even though the plan does not list it', () => 
 
     const cc = summary.stories.find((s) => s.story_id === 'STORY-000')!;
     expect(cc.state).toBe('submitted');
-    // The exact remaining lines, so the workspace can name them.
-    expect(cc.outstanding).toContain(CC_CRIT[1]);
-    expect(cc.outstanding).toContain(CC_CRIT[2]);
+    // The exact remaining lines, so the workspace can name them. Asserted as an
+    // equality against the constant rather than by index: only the first
+    // criterion was ticked, so every other one — however many the plan grows to
+    // carry — must come back outstanding, in plan order.
+    expect(cc.outstanding).toEqual(CC_CRIT.slice(1));
   });
 
   it('does not double-count when a plan already carries its own STORY-000', async () => {

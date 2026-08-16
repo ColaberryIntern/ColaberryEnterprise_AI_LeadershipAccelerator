@@ -27,11 +27,28 @@
 import { z } from 'zod';
 
 /**
- * Bumped only for a BREAKING shape change. A reader that meets a version it was
- * not written for must refuse rather than guess, because guessing at a shape
- * means awarding or withholding credit on a misread file.
+ * Bumped only for a BREAKING shape change. Additive fields do NOT bump it — see
+ * MIN_READABLE_PROGRESS_VERSION for why that distinction is load-bearing.
+ *
+ * v1 → v2 added the platform-owned `verification` block and `totals`. Both are
+ * optional in the schema, so v1 and v2 files are mutually parseable.
  */
-export const PROGRESS_SCHEMA_VERSION = 1;
+export const PROGRESS_SCHEMA_VERSION = 2;
+
+/**
+ * The oldest version this reader still understands.
+ *
+ * WHY A RANGE RATHER THAN AN EQUALITY. The original check was
+ * `declared !== PROGRESS_SCHEMA_VERSION`, which looked conservative and was
+ * actually destructive: the moment we bumped to 2, every student's existing v1
+ * file failed to parse, `mergeProgressFile` fell back to the freshly rendered
+ * file, and every tick their agent had written was silently wiped on the next
+ * publish. The safe direction is asymmetric — refuse a file from the FUTURE
+ * (we cannot know what a field means), accept one from the PAST (every version
+ * so far only added optional fields, so an old file is a valid new file with
+ * absences).
+ */
+export const MIN_READABLE_PROGRESS_VERSION = 1;
 
 export const PROGRESS_FILE_PATH = '.colaberry/progress.json';
 
@@ -48,6 +65,37 @@ const criterionSchema = z.object({
   evidence: z.string().max(2000).optional(),
 });
 
+/**
+ * The PLATFORM's conclusion about a story, mirrored into the repo so a static
+ * page can render build progress with no API and no login. Written on publish
+ * and on every sync; never merged up from the repo, because this side is not
+ * the student's to assert — a page that trusted it would be reading a number
+ * the reader could have typed themselves.
+ *
+ * NOTHING VOLATILE MAY LIVE HERE. Every field must be stable while the build is
+ * stable, or the file's bytes change on every sync, `changedFiles` sees a diff,
+ * and we commit to the student's repo for nothing. That is why `checked_at`
+ * (which moves every run) is deliberately absent while `verified_at` (first
+ * write wins, never moves) is present. Freshness belongs in the manifest — see
+ * docs/COMMAND_CENTER_DATA_CONTRACT.md.
+ */
+const storyVerificationSchema = z.object({
+  state: z.enum(['not_started', 'in_progress', 'submitted', 'verified']),
+  criteria_passed: z.number().int().min(0),
+  criteria_total: z.number().int().min(0),
+  /** ISO-8601. Set once, by the platform, and never moved afterwards. */
+  verified_at: z.string().max(64).nullish(),
+  /** The commit the platform accepted as evidence. */
+  commit_sha: z.string().max(64).nullish(),
+  /** Absolute, clickable, and checkable by a stranger with no account. */
+  commit_url: z.string().max(500).nullish(),
+  commit_at: z.string().max(64).nullish(),
+  /** Builder XP this story has been awarded, or null when nothing was awarded. */
+  points_awarded: z.number().nullish(),
+  /** Criterion text still outstanding — what the student has left to do. */
+  outstanding: z.array(z.string()).max(200).default([]),
+});
+
 const storyProgressSchema = z.object({
   id: z.string().min(1),
   /** Written by the platform; informational. */
@@ -60,16 +108,34 @@ const storyProgressSchema = z.object({
   notes: z.string().max(4000).nullish(),
   /** ISO-8601, written by the agent. Advisory only — never trusted as proof. */
   updated_at: z.string().max(64).nullish(),
+  /** Platform-owned (v2+). Absent on a file written before verification ran. */
+  verification: storyVerificationSchema.nullish(),
+});
+
+/** Whole-build counts, so a page can show a headline without summing 40 stories. */
+const progressTotalsSchema = z.object({
+  stories_total: z.number().int().min(0),
+  stories_verified: z.number().int().min(0),
+  stories_submitted: z.number().int().min(0),
+  stories_in_progress: z.number().int().min(0),
+  stories_not_started: z.number().int().min(0),
+  criteria_total: z.number().int().min(0),
+  criteria_passed: z.number().int().min(0),
+  points_awarded: z.number().min(0),
 });
 
 export const progressFileSchema = z.object({
   schema_version: z.number().int(),
   /** Informational; the platform writes it so a human opening the file knows whose it is. */
   project: z.string().nullish(),
+  /** Platform-owned rollup (v2+). */
+  totals: progressTotalsSchema.nullish(),
   stories: z.array(storyProgressSchema).max(500),
 });
 
 export type ProgressCriterion = z.infer<typeof criterionSchema>;
+export type StoryVerificationSummary = z.infer<typeof storyVerificationSchema>;
+export type ProgressTotals = z.infer<typeof progressTotalsSchema>;
 export type StoryProgress = z.infer<typeof storyProgressSchema>;
 export type ProgressFile = z.infer<typeof progressFileSchema>;
 
@@ -133,16 +199,25 @@ export function parseProgressFile(raw: string | null | undefined): ProgressParse
     };
   }
 
-  // Version is checked BEFORE the shape. A v2 file failing v1's shape check
+  // Version is checked BEFORE the shape. A v3 file failing v2's shape check
   // should say "written for a newer platform", not "your file is malformed".
+  //
+  // The check is a RANGE, not an equality, and the asymmetry is deliberate:
+  // a file from the future is unreadable (we cannot know what its fields mean),
+  // a file from the past is readable (every bump so far has only ADDED optional
+  // fields). Getting this wrong is not a cosmetic bug — an over-strict check
+  // makes `mergeProgressFile` discard the existing file and republish wipes
+  // every criterion the student's agent had ticked.
   const declared = (parsed as { schema_version?: unknown })?.schema_version;
-  if (typeof declared === 'number' && declared !== PROGRESS_SCHEMA_VERSION) {
+  if (typeof declared === 'number'
+    && (declared > PROGRESS_SCHEMA_VERSION || declared < MIN_READABLE_PROGRESS_VERSION)) {
     return {
       ok: false,
       error_class: 'ProgressFileUnsupportedVersion',
       reason:
-        `${PROGRESS_FILE_PATH} declares schema_version ${declared}, but this platform reads version `
-        + `${PROGRESS_SCHEMA_VERSION}. Sync your build plan from the portal to get a fresh file.`,
+        `${PROGRESS_FILE_PATH} declares schema_version ${declared}, but this platform reads versions `
+        + `${MIN_READABLE_PROGRESS_VERSION} to ${PROGRESS_SCHEMA_VERSION}. Sync your build plan from `
+        + 'the portal to get a fresh file.',
     };
   }
 
@@ -169,6 +244,67 @@ export interface PlanStorySeed {
 }
 
 /**
+ * One story's build progress as the PLATFORM holds it server-side, ready to be
+ * mirrored into the repo. Assembled from `student_tasks` (verified_at,
+ * verified_ref, verification_json) and `evidence_records` (builder_xp).
+ */
+export interface StoryProgressInput {
+  story_id: string;
+  state: StoryVerificationSummary['state'];
+  criteria_passed: number;
+  criteria_total: number;
+  verified_at?: string | null;
+  commit_sha?: string | null;
+  commit_at?: string | null;
+  points_awarded?: number | null;
+  outstanding?: string[] | null;
+}
+
+export interface ProgressRenderInput {
+  /** Server-side progress, by story. Omitted ⇒ the plan side only, all false. */
+  progress?: StoryProgressInput[] | null;
+  /**
+   * Repo web URL (`https://github.com/owner/repo`), used to build clickable
+   * commit links. A portfolio reader has no login, so a bare sha is not a
+   * citation — the URL is what makes a claim checkable by a stranger.
+   */
+  repoUrl?: string | null;
+}
+
+/** `https://github.com/owner/repo` + sha ⇒ the commit page. Null when either is absent. */
+export function commitUrl(repoUrl: string | null | undefined, sha: string | null | undefined): string | null {
+  if (!repoUrl?.trim() || !sha?.trim()) return null;
+  return `${repoUrl.trim().replace(/\.git$/, '').replace(/\/+$/, '')}/commit/${sha.trim()}`;
+}
+
+/** Sum the per-story verification blocks into the headline a page shows first. */
+export function summariseTotals(stories: StoryProgress[]): ProgressTotals {
+  const t: ProgressTotals = {
+    stories_total: stories.length,
+    stories_verified: 0,
+    stories_submitted: 0,
+    stories_in_progress: 0,
+    stories_not_started: 0,
+    criteria_total: 0,
+    criteria_passed: 0,
+    points_awarded: 0,
+  };
+  for (const s of stories) {
+    const v = s.verification;
+    t.criteria_total += v?.criteria_total ?? s.acceptance_total ?? s.criteria.length;
+    t.criteria_passed += v?.criteria_passed ?? 0;
+    t.points_awarded += v?.points_awarded ?? 0;
+    switch (v?.state ?? 'not_started') {
+      case 'verified': t.stories_verified += 1; break;
+      case 'submitted': t.stories_submitted += 1; break;
+      case 'in_progress': t.stories_in_progress += 1; break;
+      default: t.stories_not_started += 1;
+    }
+  }
+  return t;
+}
+
+/**
  * The file the platform writes from a plan: every story, every criterion, all
  * `passed: false`. Seeding the criteria TEXT from the plan is deliberate — the
  * agent flips a boolean rather than retyping a sentence, so the common case
@@ -181,22 +317,48 @@ export interface PlanStorySeed {
 export function renderProgressFile(
   stories: PlanStorySeed[],
   projectName?: string | null,
+  input: ProgressRenderInput = {},
 ): ProgressFile {
-  return {
-    schema_version: PROGRESS_SCHEMA_VERSION,
-    project: projectName ?? null,
-    stories: [...stories]
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map((s) => ({
+  const byStory = new Map((input.progress ?? []).map((p) => [p.story_id, p]));
+
+  const rendered: StoryProgress[] = [...stories]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((s) => {
+      const p = byStory.get(s.id);
+      const acceptance = s.acceptance ?? [];
+      return {
         id: s.id,
         release: s.release ?? null,
-        acceptance_total: (s.acceptance ?? []).length,
-        criteria: (s.acceptance ?? []).map((text) => ({ text, passed: false })),
+        acceptance_total: acceptance.length,
+        criteria: acceptance.map((text) => ({ text, passed: false })),
         files_touched: [],
         tests_added: [],
         notes: null,
         updated_at: null,
-      })),
+        // The platform's side. Always present once we have a verification run,
+        // even for an untouched story: "not_started" stated explicitly beats a
+        // missing key, because a page cannot tell an absent field from a zero.
+        verification: p
+          ? {
+            state: p.state,
+            criteria_passed: p.criteria_passed,
+            criteria_total: p.criteria_total,
+            verified_at: p.verified_at ?? null,
+            commit_sha: p.commit_sha ?? null,
+            commit_url: commitUrl(input.repoUrl, p.commit_sha),
+            commit_at: p.commit_at ?? null,
+            points_awarded: p.points_awarded ?? null,
+            outstanding: p.outstanding ?? [],
+          }
+          : null,
+      };
+    });
+
+  return {
+    schema_version: PROGRESS_SCHEMA_VERSION,
+    project: projectName ?? null,
+    totals: summariseTotals(rendered),
+    stories: rendered,
   };
 }
 
@@ -216,6 +378,16 @@ export function renderProgressFile(
  * Matching is by story id, then by normalised criterion text. A criterion whose
  * wording the plan changed is intentionally NOT carried over: the sentence the
  * student ticked is not the sentence that is now being asked for.
+ *
+ * THE OWNERSHIP LINE, field by field:
+ *   platform, replaced outright — `schema_version`, `project`, `totals`, story
+ *     `id`/`release`/`acceptance_total`, criterion `text`, and the whole
+ *     `verification` block
+ *   agent, carried across  — criterion `passed` and `evidence`,
+ *     `files_touched`, `tests_added`, `notes`, `updated_at`
+ * `verification` is explicitly on the platform side: it is our conclusion about
+ * their evidence, so reading it back out of the repo would let the file assert
+ * its own verification.
  */
 export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | null | undefined): ProgressFile {
   const parsed = parseProgressFile(existingRaw);
@@ -240,19 +412,106 @@ export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | 
         tests_added: prior.tests_added,
         notes: prior.notes ?? null,
         updated_at: prior.updated_at ?? null,
+        // Restated rather than left to the spread above, so that a later refactor
+        // reordering these keys cannot quietly start honouring the repo's copy.
+        verification: story.verification ?? null,
       };
     }),
   };
 }
 
+// ── criterion identity ──────────────────────────────────────────────────────
+
 /**
- * Criterion identity. Whitespace and case are noise — an agent that rewraps a
- * long line has not changed which criterion it means. Punctuation is NOT
- * stripped: "the API returns 200" and "the API returns 200?" are different
- * claims and should not silently collapse onto each other.
+ * Dash-like codepoints, unified to ASCII `-`. Em, en, figure, horizontal bar,
+ * non-breaking hyphen, the true hyphen, the minus SIGN (which is not the same
+ * character as the hyphen a keyboard produces), and the small/fullwidth forms
+ * an IME emits. `--` and `---` are runs of the ASCII form and collapse too.
+ */
+const DASH_RUN = /\s*[-‐‑‒–—―−﹘﹣－]+\s*/g;
+
+/**
+ * Apostrophe-like codepoints, unified to ASCII `'`. This is the set an editor
+ * or keyboard substitutes FOR the straight apostrophe: Word's curly pair, the
+ * prime, the modifier letter, and the acute-accent dead key people hit by
+ * mistake. The BACKTICK is deliberately absent — see the note below.
+ */
+const APOSTROPHE = /[‘’‛′ʼ´]/g;
+
+/** Double-quote-like codepoints, unified to ASCII `"`. Same rule as above. */
+const DOUBLE_QUOTE = /[“”„‟″]/g;
+
+/**
+ * Characters with no glyph at all: BOM, zero-width space, soft hyphen, word
+ * joiner, and the bidi marks. They ride along on copy-paste out of a browser
+ * or a PDF and are invisible in every diff, which is exactly what makes them
+ * worth removing — nobody can SEE why the match failed.
+ *
+ * ZWNJ/ZWJ (U+200C/U+200D) are NOT here: inside an emoji sequence the joiner
+ * is load-bearing, and stripping it would fuse distinct sequences.
+ */
+const INVISIBLE = /[­​‎‏⁠﻿]/g;
+
+/**
+ * Criterion identity — forgiving about how a sentence was TYPED, never about
+ * what it SAYS.
+ *
+ * WHY THIS EXISTS AT ALL. STORY-000's third acceptance line is `Trust — no tab
+ * shows a number...` with a real U+2014 em dash, and STORY-000 is the story
+ * every student in the cohort builds. Before this, a student whose editor,
+ * agent or copy-paste turned that dash into `-`, `--` or an en dash had their
+ * claim land in `rejected_claims`: story stuck at `submitted`, no points, and
+ * the message "does not match any acceptance criterion" — accurate and
+ * useless. Confirmed live in production on 2026-08-15.
+ *
+ * THE LINE THIS HOLDS. Every step below is a transformation an EDITOR or a
+ * KEYBOARD performs on text that means the same thing. None of them changes
+ * meaning, and none can fuse two criteria a plan genuinely distinguishes:
+ *
+ *   - NFC only, never NFKC. NFC is canonical equivalence — `é` typed as one
+ *     codepoint and `é` typed as `e` + combining acute ARE the same character
+ *     by Unicode's own definition. NFKC is COMPATIBILITY equivalence and would
+ *     fold `x²` onto `x2`, `½` onto `1/2`, `Ⅻ` onto `XII`. Those are different
+ *     claims about a system, so NFKC is refused.
+ *   - Dashes are UNIFIED, never deleted. `read-only` normalises to
+ *     `read-only`, not to `readonly` and not to `read only` — so it stays
+ *     distinct from the criterion that says `read only`.
+ *   - Quotes are UNIFIED, never deleted. `the label is "sample"` stays
+ *     distinct from `the label is sample`.
+ *   - ONE trailing period is dropped, because a list rendered with terminal
+ *     punctuation and one without are the same sentence. `?` and `!` are NOT
+ *     dropped: "the API returns 200" and "the API returns 200?" are a claim
+ *     and a question, and the difference is the point. A run of periods is
+ *     left alone so an ellipsis survives.
+ *
+ * DELIBERATELY NOT NORMALISED, each because it would forgive CONTENT:
+ *   - Backticks. No keyboard or editor substitutes `` ` `` for `'`; a markdown
+ *     code span is an authoring choice, not a typo.
+ *   - Guillemets « ». A different quoting convention, not a keyboard variant.
+ *   - Commas, colons, semicolons, slashes, parentheses. Each separates clauses
+ *     whose arrangement carries meaning (`10:00` vs `1000`).
+ *   - Stop words, plurals, stemming, or any similarity score. A REWORDED
+ *     criterion must keep failing — that is the whole gating model.
+ *   - A leading `- ` list bullet. Out of scope, and refusing it is the safe
+ *     direction: it can only withhold a match, never invent one.
+ *
+ * Callers MUST run both sides of any comparison through this function.
+ * Normalising only the claim would leave the mirror-image bug in place.
+ * Idempotent: normalise(normalise(x)) === normalise(x).
  */
 export function normaliseCriterion(text: string): string {
-  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+  return text
+    .normalize('NFC')
+    .replace(INVISIBLE, '')
+    .replace(APOSTROPHE, "'")
+    .replace(DOUBLE_QUOTE, '"')
+    .replace(/…/g, '...')
+    .replace(/\s+/g, ' ')       // NBSP and friends are already \s in JS
+    .replace(DASH_RUN, '-')     // after the space collapse, so ` — ` folds too
+    .trim()
+    .toLowerCase()
+    .replace(/(?<!\.)\.$/, '')  // one terminal period, never an ellipsis
+    .trim();
 }
 
 /** Serialise for the repo: stable key order via the schema, trailing newline. */

@@ -21,10 +21,30 @@
  */
 import { BuildPlan, PlanRequirement } from './planContract';
 import type { Schedule } from './buildSchedule';
+import {
+  PLAN_FILE_PATH,
+  guardrails as guardrailsOf,
+  measures as measuresOf,
+  rolesFrom as rolesOf,
+  systemsOfRecord as systemsOf,
+} from './planDocument';
+import { PROGRESS_FILE_PATH } from './verification/progressContract';
+import { PROFILE_FILE_PATH } from './profileContract';
+
+const MANIFEST_FILE_PATH = '.colaberry/manifest.json';
 
 /** The id and title students see. Stable — republishing must not duplicate it. */
 export const COMMAND_CENTER_STORY_ID = 'STORY-000';
 export const COMMAND_CENTER_TITLE = 'STORY-000 · Build your Command Center';
+
+/**
+ * The user story, in the same voice as the plan's own narratives. Lives here
+ * rather than inline at the task row so the repo doc and the portal task cannot
+ * describe this story differently.
+ */
+export const COMMAND_CENTER_NARRATIVE =
+  'As a builder, I want one page that shows what I am building and how far along it is, '
+  + 'so that I can see my own project and demo from it.';
 
 const bullet = (s: string) => `- ${s}`;
 
@@ -37,14 +57,26 @@ const AUTONOMY_LABEL: Record<string, string> = {
 const fmt = (d: Date | null | undefined) =>
   d ? d.toISOString().slice(0, 10) : null;
 
+/*
+ * measures / guardrails / systemsOfRecord used to be implemented here AND in
+ * the plan-document builder. They are now defined once, in planDocument, and
+ * re-exported here for the callers and tests that already name them.
+ *
+ * The duplication was not academic. planDocument writes `derived.measures`,
+ * `derived.guardrails` and `derived.systems` into `.colaberry/plan.json`, and
+ * this prompt tells the student to render those exact keys. Two copies of the
+ * extraction meant the prompt could describe one set of guardrails while the
+ * file the page reads carried another.
+ */
+
 /** A number-bearing NFR is what the student said they would move. */
 export function measures(plan: BuildPlan): PlanRequirement[] {
-  return plan.requirements.filter((r) => r.kind === 'NFR' && /\d/.test(r.statement));
+  return measuresOf(plan.requirements);
 }
 
 /** SAFE requirements are the promises the system must not break. */
 export function guardrails(plan: BuildPlan): PlanRequirement[] {
-  return plan.requirements.filter((r) => r.kind === 'SAFE');
+  return guardrailsOf(plan.requirements);
 }
 
 /**
@@ -53,32 +85,8 @@ export function guardrails(plan: BuildPlan): PlanRequirement[] {
  * integrations panel has rows for — and what its live indicators report on.
  */
 export function systemsOfRecord(plan: BuildPlan): string[] {
-  // Verb-anchored matching ("read the X", "write to X") misses the phrasing
-  // students actually use — "read the signed agreement FROM HelloSign" puts the
-  // system at the end of the clause, and the words in between are lowercase.
-  // Proper nouns are the reliable signal instead: a CONSTRAINT statement names
-  // the systems, and systems are capitalised. CamelCase (HelloSign) and
-  // two-word names (Google Calendar) both have to survive.
-  const names: string[] = [];
-  for (const r of plan.requirements.filter((x) => x.kind === 'CONSTRAINT')) {
-    for (const m of r.statement.matchAll(/\b([A-Z][A-Za-z0-9.]*(?:\s+[A-Z][A-Za-z0-9.]*)?)\b/g)) {
-      const name = m[1].trim();
-      if (!NOT_A_SYSTEM.has(name) && name.length > 2) names.push(name);
-    }
-  }
-  return [...new Set(names)];
+  return systemsOf(plan.requirements);
 }
-
-/**
- * Capitalised words that start sentences or name the actor rather than a
- * system. Kept deliberately short: a name wrongly listed shows up as an
- * integration row the student can delete, while a name wrongly dropped is a
- * system that silently never appears on the page.
- */
-const NOT_A_SYSTEM = new Set([
-  'The', 'This', 'That', 'It', 'A', 'An', 'System', 'Nothing', 'No', 'Every', 'Each',
-  'All', 'Any', 'When', 'If', 'Only', 'Never', 'Always', 'Must', 'Should',
-]);
 
 /**
  * The agent roster, taken from who the plan says owns each story. Today the
@@ -150,10 +158,12 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   // appeared here it would be duplicated into every regeneration and every
   // backfill.
   //
-  // (Story 000 is deliberately NOT rendered into repo docs today — renderDocs
-  // iterates plan.stories and STORY-000 is kept out of the plan. If that ever
-  // changes, this constraint becomes load-bearing rather than merely correct,
-  // because student repos are public by default.)
+  // THIS CONSTRAINT IS NOW LOAD-BEARING, not merely correct. Story 000 used to
+  // be absent from repo docs (renderDocs iterated plan.stories and STORY-000 is
+  // kept out of the plan), so this text never left the portal. It does now:
+  // `commandCenterStoryDoc` renders it into `docs/stories/STORY-000.md` in a
+  // repo that is PUBLIC BY DEFAULT. A secret introduced into this function
+  // would be committed to every student's public repo on the next publish.
   //
   // The command, with the secret in it, lives in the authenticated workspace
   // panel. The prompt only ever points at that panel.
@@ -229,6 +239,35 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push(`**${plan.project_name}** — ${plan.descriptor}`);
   lines.push('');
 
+  lines.push('## Where the data comes from');
+  lines.push(
+    'Read it from your own repo. There is no API to call and no key to hold: this page is '
+    + 'static, and a static page cannot keep a secret, so the data ships beside it as files '
+    + 'the platform commits. Fetch them at runtime, do not paste their contents into your '
+    + 'components — they are rewritten every time you sync, and a copy you typed out will '
+    + 'silently go stale.',
+  );
+  lines.push('');
+  lines.push(`- \`${PLAN_FILE_PATH}\` — the plan. Requirements, stories, releases, agents, dates.`);
+  lines.push(`- \`${PROGRESS_FILE_PATH}\` — what is actually done. Story state, verified commits, points.`);
+  lines.push(`- \`${MANIFEST_FILE_PATH}\` — \`generated_at\`, the timestamp everything on the page is "as of".`);
+  lines.push(`- \`${PROFILE_FILE_PATH}\` — yours to edit. Portfolio text and what you are willing to publish.`);
+  lines.push('');
+  lines.push(
+    `Both data files carry \`schema_version\`. Read fields you know and ignore fields you do `
+    + 'not — we add fields over time and only ever add them, so a page written today keeps '
+    + 'working. If `schema_version` is higher than the one you built against, still render: '
+    + 'the fields you use are still there.',
+  );
+  lines.push('');
+  lines.push(
+    `Join the two files on story id: \`${PLAN_FILE_PATH}\` → \`stories[].id\` matches `
+    + `\`${PROGRESS_FILE_PATH}\` → \`stories[].id\`. The plan carries the title, release, `
+    + 'acceptance criteria, `due_on` and `due_baseline_on`; progress carries `verification` '
+    + 'with the state, the commit and the points. Neither file repeats the other.',
+  );
+  lines.push('');
+
   lines.push('## Tabs, and what goes in each');
   lines.push(
     'Build it as a website, not a dashboard widget. Every tab is a real page, and every '
@@ -243,9 +282,17 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
     'The single screen you would show someone in thirty seconds: what the system does, '
     + 'which release you are in, what is live and what is not.',
   );
+  lines.push(
+    `Source: \`plan.project\` for the name and descriptor, \`plan.schedule\` for where you are `
+    + 'in the term, and `progress.totals` for the headline counts — `stories_verified` of '
+    + '`stories_total`, `criteria_passed` of `criteria_total`, `points_awarded`. Those totals '
+    + 'are already summed; do not recompute them by looping the stories, or the page and the '
+    + 'file will eventually disagree.',
+  );
   lines.push('');
 
   lines.push('### 2. Outcomes — the numbers this has to move');
+  lines.push(`Source: \`plan.derived.measures\` — each entry has \`id\` and \`statement\`.`);
   if (kpis.length) {
     lines.push('These are the measures you committed to. Each one is a card, each drills into how it is calculated:');
     kpis.forEach((r) => lines.push(bullet(`**${r.id}** — ${r.statement}`)));
@@ -254,6 +301,12 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
       'On sample data, show a plausible trend toward the target. On real data, show the '
       + 'real figure — and where there is no measurement yet, show "not measured yet" '
       + 'rather than a zero, because a zero reads as a real result.',
+    );
+    lines.push(
+      'Note what is NOT in your files: the actual value of any of these. Your files know '
+      + 'what you promised to move, never how far it has moved — that number comes from the '
+      + 'system you are building, once it is running and measuring. Until then every one of '
+      + 'these cards reads "not measured yet", and that is correct rather than unfinished.',
     );
   } else {
     lines.push('Your plan carries no numeric target yet. Build the tab with an empty state that says so, and leave room for one card per measure.');
@@ -266,9 +319,20 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
     + 'stories — they are written "As a <role>, I want …". Roles in your plan: '
     + `${rolesFrom(plan).join(', ') || 'not yet named in your stories — say so on screen'}.`,
   );
+  lines.push(
+    'Source: `plan.derived.roles`, already extracted. `plan.stories[].narrative` has the '
+    + 'full sentence each role came from, for the drill-down.',
+  );
   lines.push('');
 
   lines.push('### 4. Guardrails — what must never happen');
+  lines.push(
+    'Source: `plan.derived.guardrails` — `id` and `statement` each. To show whether anything '
+    + 'enforces one, follow `plan.requirements[].fulfilled_by` to the story ids, then read '
+    + 'those stories\' `verification.state` in the progress file. A guardrail whose stories '
+    + 'are not verified is a promise you have made and not yet kept, and the page should say '
+    + 'so in those words.',
+  );
   if (safes.length) {
     lines.push('These are the promises your system makes. Show each one, and whether anything in the build currently enforces it:');
     safes.forEach((r) => lines.push(bullet(`**${r.id}** — ${r.statement}`)));
@@ -282,6 +346,14 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push('');
 
   lines.push('### 5. Systems — what this connects to');
+  lines.push(
+    'Source: `plan.derived.systems` — a list of names. That is ALL your files know about '
+    + 'them. Whether any one of them is actually connected right now is a fact about your '
+    + 'running system, and nothing in this repo can tell you it. Render every indicator grey '
+    + 'and labelled "not checked from here" until your own system reports otherwise. An '
+    + 'indicator that goes green because a name appeared in a JSON file is a lie with a '
+    + 'colour on it.',
+  );
   if (systems.length) {
     lines.push('One row per system, each with a live indicator (connected / not connected / error) and the time it was last checked:');
     systems.forEach((s) => lines.push(bullet(s)));
@@ -293,6 +365,15 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push('');
 
   lines.push('### 6. Project management');
+  lines.push(
+    'Source: `plan.releases[]` for the bars — each carries `starts_on`, `ends_on`, '
+    + '`story_ids` and `is_demo_target`. `plan.schedule` has `build_start`, `build_end`, '
+    + '`demo_day` and `demo_release_key`. Per story, `plan.stories[].due_on` is the current '
+    + 'date and `due_baseline_on` is the date it was FIRST given: show both, because the gap '
+    + 'between them is slippage and a chart that quietly moves the target hides it. Status '
+    + 'per story comes from the progress file, `stories[].verification.state`, which is one '
+    + 'of `not_started`, `in_progress`, `submitted`, `verified`.',
+  );
   lines.push('A Gantt view of your releases, and under it every task with its due date. Tasks are clickable and open their own detail. Your releases:');
   releases.forEach((r) => {
     const inRel = plan.stories.filter((s) => s.release === r.key);
@@ -312,6 +393,19 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push('');
 
   lines.push('### 7. AI agents');
+  lines.push(
+    'Source: `plan.agents[]` — one card each, with `name`, `purpose`, `trigger_type`, '
+    + '`trigger`, `inputs`, `outputs`, `autonomy_level`, `approval_gates`, '
+    + '`escalation_rules`, `skills` and `owns` (the story ids it owns, which you join back '
+    + 'to the plan and the progress file). `plan.derived.counts.agents_by_autonomy` gives '
+    + 'you the roster breakdown without counting them yourself.',
+  );
+  lines.push(
+    'What is NOT there: whether any agent has ever run. There is no run history, no last-run '
+    + 'time and no success rate in these files, because none of that exists until you build '
+    + 'the agent and it starts running. Show the design, and show "no runs recorded" — never '
+    + 'a zero success rate, which reads as an agent that ran and failed.',
+  );
   if (plan.agents?.length) {
     lines.push('One card per agent. Each shows what fires it, what it reads and produces, how much it decides on its own, and when it must stop and ask:');
     for (const a of plan.agents) {
@@ -346,6 +440,13 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
 
   lines.push('### 8. Knowledge base');
   lines.push(
+    'Source: `plan.requirements[]` (each with `id`, `statement`, `kind`, `priority`, '
+    + '`cluster` and `fulfilled_by`) and `plan.stories[]`. The traceability view a reviewer '
+    + 'will ask for is `fulfilled_by` rendered as a table: every requirement, the stories '
+    + 'that cover it, and whether those stories are verified. A `must` requirement with an '
+    + 'empty `fulfilled_by` is a real gap — show it rather than hiding the row.',
+  );
+  lines.push(
     'Everything the project knows about itself: your requirements, your stories, your '
     + 'decisions, and notes you add as you go. It grows for the whole programme, so build '
     + 'it to be added to rather than regenerated.',
@@ -379,6 +480,31 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
     'Anything that can be connected or disconnected, running or stopped, gets a status dot '
     + 'with a last-checked time. Grey for unknown, not green. A dashboard that looks healthy '
     + 'before anything is built teaches you to distrust it.',
+  );
+  lines.push('');
+
+  lines.push('## "Live" means "as of your last sync" — say so');
+  lines.push(
+    'Nothing on this page is live in the sense a monitoring tool is live. The files are '
+    + 'written when you sync from the portal, and between syncs they do not change. A page '
+    + 'that implies otherwise is the most dangerous thing you could build here, because it '
+    + 'looks most trustworthy exactly when it is most wrong.',
+  );
+  lines.push('');
+  lines.push(
+    `Read \`generated_at\` from \`${MANIFEST_FILE_PATH}\` and put it in the header of every `
+    + 'tab, as an absolute date and a relative age: "Data as of 12 August 2026 (3 days ago)". '
+    + 'Not a bare relative time — "3 days ago" alone is unreadable in a screenshot.',
+  );
+  lines.push(bullet('Under about a day old: show it plainly.'));
+  lines.push(bullet('Over about a week old: show it as a warning, and say "sync from the portal to refresh".'));
+  lines.push('');
+  lines.push(
+    'Word it "Data as of", not "Last synced". Those are different facts and only the first '
+    + 'one is true: the stamp moves when the DATA CHANGES, so a sync that found nothing new '
+    + 'leaves it alone. An old stamp therefore means either "nothing has happened" or "you '
+    + 'have not synced" — the page cannot tell which, must not guess, and should prompt a '
+    + 'sync either way. Being honest that you do not know beats picking the flattering reading.',
   );
   lines.push('');
 
@@ -439,6 +565,18 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push(bullet('The sample/real switch works on every tab, and sample data is labelled as sample everywhere it shows.'));
   lines.push(bullet('The project management tab shows your real releases and your real due dates, not placeholders.'));
   lines.push(bullet('Nothing on the page claims a number, a connection or a result that your project has not actually produced.'));
+  lines.push(bullet(
+    `Every tab is rendered from \`${PLAN_FILE_PATH}\` and \`${PROGRESS_FILE_PATH}\` read at `
+    + 'runtime. No plan content is hard-coded into a component.',
+  ));
+  lines.push(bullet(
+    'Every tab shows the "Data as of" stamp, and it visibly changes to a warning once the '
+    + 'data is over a week old.',
+  ));
+  lines.push(bullet(
+    'Deleting a story from the plan file and reloading removes it from the page. If it '
+    + 'survives, you hard-coded something.',
+  ));
   lines.push('');
 
   lines.push('## Stop and ask me if');
@@ -494,8 +632,8 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   );
   lines.push(
     bullet(
-      'Create or update `.colaberry/progress.json` so it carries this story with the three '
-      + '**Done means** lines copied word for word, each marked as passing. Only tick a line when '
+      'Create or update `.colaberry/progress.json` so it carries this story with every '
+      + '**Done means** line copied word for word, each marked as passing. Only tick a line when '
       + 'it is actually true — the file is the claim, the commit is the evidence:',
     ),
   );
@@ -595,16 +733,104 @@ function progressFileExample(): string {
 
 /** Roles the student's own stories are written for. */
 function rolesFrom(plan: BuildPlan): string[] {
-  const roles = plan.stories
-    .map((s) => s.narrative.match(/^\s*As an?\s+([^,]{2,40}),/i)?.[1]?.trim())
-    .filter((x): x is string => Boolean(x))
-    .filter((r) => !/^system$/i.test(r));
-  return [...new Set(roles)].slice(0, 6);
+  return rolesOf(plan.stories).slice(0, 6);
 }
 
 /** Acceptance lines stored on the task row, mirroring the prompt's stop condition. */
 export const COMMAND_CENTER_ACCEPTANCE: readonly string[] = [
   'Given the Command Center, when it is opened, then every tab is reachable and every card drills down one level.',
   'Given sample mode, when any tab is shown, then the sample data is visibly labelled as sample.',
+  `Given the data files, when any tab renders, then its content comes from ${PLAN_FILE_PATH} and ${PROGRESS_FILE_PATH} read at runtime rather than from hard-coded values.`,
+  `Given ${MANIFEST_FILE_PATH}, when any tab is shown, then it displays how old the data is and warns when that age exceeds a week.`,
   'Trust — no tab shows a number, a connection or a result the project has not actually produced.',
 ] as const;
+
+/**
+ * STORY-000's seed for `.colaberry/progress.json`.
+ *
+ * Shaped exactly like a plan story so `renderProgressFile` can take it without
+ * a special case — and so the criterion text is GENERATED from the constant
+ * rather than retyped anywhere. `release` is null because this story sits ahead
+ * of the plan's releases rather than inside one.
+ *
+ * PURE. Returns a fresh array each call so no caller can mutate the constant.
+ */
+export function commandCenterStorySeed(): { id: string; release: null; acceptance: string[] } {
+  return {
+    id: COMMAND_CENTER_STORY_ID,
+    release: null,
+    acceptance: [...COMMAND_CENTER_ACCEPTANCE],
+  };
+}
+
+/**
+ * `docs/stories/STORY-000.md` — the story doc that was missing from every
+ * student repo.
+ *
+ * WHY THIS EXISTS. STORY-000 is kept out of `plan.stories` on purpose (gate, XP
+ * divisor, materialize ordering), and `renderDocs` iterates `plan.stories` — so
+ * this one story was never rendered into any repo. Its prompt lived only on
+ * `student_tasks.build`, i.e. the portal. A student's Claude Code session with
+ * no chat history therefore had NO local reference for the one story every
+ * student builds first: asked to "follow Step 3", it correctly answered that
+ * `.colaberry/` held only `connect.txt` and nothing in the repo mentioned
+ * progress.json. It then made no claims at all, and verification returned zero
+ * of three with an empty `rejected_claims` — the claims were never made.
+ *
+ * Every other story is a boolean to flip. This makes STORY-000 one too.
+ *
+ * Deliberately the FULL prompt, not a summary: this is the one story a student
+ * runs before they have any of their own code, so the file has to carry the
+ * whole picture on its own. It is the same text the portal shows, from the same
+ * function, so the two cannot drift.
+ *
+ * PURE — same plan and schedule in, byte-identical markdown out, which is what
+ * lets repoWriter's content-hash idempotency hold.
+ */
+export function commandCenterStoryDoc(plan: BuildPlan, schedule?: Schedule | null): string {
+  return [
+    `# ${COMMAND_CENTER_STORY_ID} — Build your Command Center`,
+    '',
+    COMMAND_CENTER_NARRATIVE,
+    '',
+    '**Release:** ahead of the plan — this is day one, before your own stories',
+    '**Owner:** you, with Claude Code',
+    '**Blocked by:** nothing — this is the first thing you build',
+    '',
+    '## The requirement this satisfies',
+    '',
+    'None of yours, and that is deliberate. The Command Center is the window onto your',
+    'system rather than a part of it, so it fulfils no requirement in',
+    '`docs/REQUIREMENTS.md` and has no row in `docs/TRACEABILITY.md`. Everything it',
+    'displays is read out of your own plan.',
+    '',
+    '## If you are Claude Code opening this file cold',
+    '',
+    'Everything you need is here. The full build brief is below, and your',
+    'acceptance criteria are **already seeded** in `.colaberry/progress.json` under',
+    `\`${COMMAND_CENTER_STORY_ID}\` with \`"passed": false\`.`,
+    '',
+    '**Do not retype the criteria.** Find the story by its `id`, flip `passed` to `true`',
+    'on each line that is genuinely true, and leave the rest `false`. Retyping is how the',
+    'text drifts — a rewritten dash or a changed full stop makes a claim the platform',
+    'cannot match, and the story stays unverified with your work already done. Step 3',
+    'below has the exact procedure.',
+    '',
+    '---',
+    '',
+    commandCenterPrompt(plan, schedule),
+    '',
+    '## Acceptance — your stop condition',
+    '',
+    'These are the exact lines the platform checks. They are already in',
+    '`.colaberry/progress.json` word for word. Tick a box here as it genuinely passes,',
+    'and set the matching `passed` flag in that file — the JSON is what the platform',
+    'reads, this list is for you.',
+    '',
+    ...COMMAND_CENTER_ACCEPTANCE.map((a) => `- [ ] ${a}`),
+    '',
+    'When every box above is ticked **and** a commit names the story, the platform',
+    'confirms it on its own — within about ten seconds if you did Step 1.',
+    '',
+  ].join('\n');
+}
