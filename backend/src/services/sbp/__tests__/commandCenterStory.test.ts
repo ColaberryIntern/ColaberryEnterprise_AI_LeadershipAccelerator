@@ -224,3 +224,58 @@ describe('shape', () => {
     expect(guardrails(plan).map((r) => r.id)).toEqual(['REQ-004']);
   });
 });
+
+// ── the checkpoint has to land on the finish ────────────────────────────────
+
+/**
+ * THE PRODUCTION FAILURE THIS PINS. The checkpoint told the agent to build
+ * Overview, pause, and — on "build the rest" — build the remaining eight and
+ * remove the banner. It stopped there. Step 3 ("finish it, so the platform can
+ * confirm it") sits further down the document, so an agent resuming correctly
+ * built the eight tabs and then halted one step short: nine tabs live and
+ * reachable, story unverified, "Mark done" still dark, and no instruction
+ * telling it to carry on. Ali's own agent stood in exactly that spot.
+ *
+ * The resume instruction must therefore read as ONE continuous flow into the
+ * finish. And it must not buy that continuity by nudging the agent to tick
+ * criteria that are not true: Ali's agent refused to invent numbers for an
+ * empty Outcomes tab, correctly, and that instinct has to survive the edit.
+ */
+describe('the checkpoint leads into the finish, not into a dead stop', () => {
+  /** The one bullet that tells the agent what to do when the pause is released. */
+  const resumeLine = (out: string): string => {
+    const lines = out.split('\n').filter((l) => /remove the banner/i.test(l));
+    expect(lines).toHaveLength(1);
+    return lines[0];
+  };
+
+  it('carries the resume instruction on into Step 3 in the same breath', () => {
+    const line = resumeLine(commandCenterPrompt(fullPlan(), schedule()));
+
+    expect(line).toMatch(/build the rest/i);
+    // Without all three of these the agent stops with nine tabs built and no
+    // claim made — precisely the state this test exists to prevent.
+    expect(line).toMatch(/Step 3/);
+    expect(line).toMatch(/commit/i);
+    expect(line).toMatch(/push/i);
+  });
+
+  it('keeps the honesty rule on the resume line itself', () => {
+    const out = commandCenterPrompt(fullPlan(), schedule());
+
+    // On the resume line specifically, because "now go and finish it" is
+    // exactly the sentence that would otherwise read as "tick them all".
+    expect(resumeLine(out)).toMatch(/genuinely true/i);
+    // And the rule Step 3 already carried is left intact.
+    expect(out).toMatch(/Only tick a line when it is actually true/i);
+  });
+
+  it('never tells the agent to tick every criterion', () => {
+    // Regression guard: passes today and must keep passing. A "just finish it"
+    // rewrite that reached for "tick them all" would fail here.
+    const out = commandCenterPrompt(fullPlan(), schedule());
+
+    expect(out).not.toMatch(/tick (them |the |all )*all\b/i);
+    expect(out).not.toMatch(/mark (them |all )*all (as )?pass/i);
+  });
+});

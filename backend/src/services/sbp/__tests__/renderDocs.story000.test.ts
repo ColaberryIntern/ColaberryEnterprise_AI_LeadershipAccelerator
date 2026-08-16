@@ -131,6 +131,26 @@ describe('a fresh session with no chat history can act on the doc alone', () => 
     expect(doc()).toMatch(/already/i);
   });
 
+  it('lands the checkpoint on the finish, so a cold reader does not stop at nine tabs', () => {
+    // The doc renders `commandCenterPrompt` verbatim, so the fix carries here on
+    // its own — which is exactly the assumption worth pinning rather than
+    // trusting. A student reading the file cold must hit the same continuous
+    // flow the portal shows: build the rest, then Step 3, commit, push.
+    const lines = doc().split('\n').filter((l) => /remove the banner/i.test(l));
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/Step 3/);
+    expect(lines[0]).toMatch(/commit/i);
+    expect(lines[0]).toMatch(/push/i);
+  });
+
+  it('still says to tick only what is genuinely true', () => {
+    // Preservation, not new behaviour: telling the agent to finish must never
+    // become permission to claim a criterion the build has not met.
+    expect(doc()).toMatch(/Only tick a line when it is actually true/i);
+    expect(doc()).toMatch(/genuinely true/i);
+  });
+
   it('carries no secret — this repo is public by default', () => {
     // commandCenterPrompt is pure and plan-driven and must stay that way; the
     // webhook secret lives only in the authenticated workspace panel. Rendering

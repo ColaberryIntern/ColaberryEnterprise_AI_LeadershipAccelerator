@@ -478,11 +478,29 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
       + 'other way round.',
     ),
   );
+  // THE RESUME HAS TO REACH THE FINISH.
+  //
+  // This bullet used to end at "remove the banner". Step 3 — tick the criteria,
+  // commit naming the story, push — is a hundred lines further down, so an agent
+  // that obeyed the checkpoint perfectly built the remaining eight tabs and then
+  // stopped one step short: nine tabs live and reachable, story unverified,
+  // "Mark done" still dark, and nothing in the instruction telling it to carry
+  // on. Ali hit exactly that, and every student would have.
+  //
+  // The last sentence is not padding. "Now go and finish it" is precisely the
+  // instruction that turns into "tick them all", and the honesty rule is the
+  // whole point of this story: Ali's agent refused to invent numbers for an
+  // empty Outcomes tab, correctly. Finishing is a duty to claim what is true,
+  // never permission to claim what is not.
   lines.push(
     bullet(
       'Put a short banner on Overview itself while you are paused, saying the build is stopped '
       + 'for their review and how to continue. When they say **build the rest**, build the '
-      + 'remaining eight and remove the banner.',
+      + 'remaining eight, remove the banner, and then go straight on to Step 3 and finish the '
+      + 'job: tick the criteria that are genuinely true in `.colaberry/progress.json`, commit '
+      + 'naming the story, and push. Removing the banner is not the finish — and finishing is '
+      + 'not permission to tick a line that is not true yet, so leave any such line unticked '
+      + 'and tell them which one and why.',
     ),
   );
   lines.push('');
