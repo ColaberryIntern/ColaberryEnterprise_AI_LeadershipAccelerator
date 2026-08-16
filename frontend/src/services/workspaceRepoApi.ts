@@ -245,8 +245,14 @@ export interface WebhookSetupView {
   /** One paste. Updates an existing hook on our URL rather than adding a second. */
   gh_command: string | null;
   settings_url: string | null;
-  /** Last delivery we received from this repo — the only proof we can stand behind. */
+  /**
+   * Last delivery of ANY kind from this repo. A `ping` counts — GitHub fires one
+   * the instant a hook is created, which is what lets "registered" confirm itself
+   * seconds after the student runs the command instead of waiting on a push.
+   */
   last_delivery_at: string | null;
+  /** Last delivery that carried the student's own work through verification. */
+  last_push_at: string | null;
 }
 
 export async function getWebhookSetup(projectId: string): Promise<WebhookSetupView> {
