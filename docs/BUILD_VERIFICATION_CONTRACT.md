@@ -105,13 +105,27 @@ call that is already being made. No part of the loop's shape has to change.
 
 ## 4. The schema
 
-`.colaberry/progress.json`, `schema_version: 1`. Validated with Zod at the read
+`.colaberry/progress.json`, `schema_version: 2`. Validated with Zod at the read
 boundary (`backend/src/services/sbp/verification/progressContract.ts`).
+
+v2 added the platform-owned `verification` block per story and the `totals`
+rollup, so a static page can render build progress with no API. Both are
+optional, and v1 files still read — see the version rule in §4.1 below.
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "project": "Sponsor Dashboard",
+  "totals": {
+    "stories_total": 1,
+    "stories_verified": 0,
+    "stories_submitted": 1,
+    "stories_in_progress": 0,
+    "stories_not_started": 0,
+    "criteria_total": 2,
+    "criteria_passed": 1,
+    "points_awarded": 0
+  },
   "stories": [
     {
       "id": "STORY-001",
@@ -131,16 +145,41 @@ boundary (`backend/src/services/sbp/verification/progressContract.ts`).
       "files_touched": ["src/routes/roster.ts", "src/services/rosterService.ts"],
       "tests_added": ["src/services/__tests__/rosterService.test.ts"],
       "notes": "401 path blocked on the auth middleware landing in STORY-002",
-      "updated_at": "2026-08-14T09:12:00Z"
+      "updated_at": "2026-08-14T09:12:00Z",
+      "verification": {
+        "state": "submitted",
+        "criteria_passed": 1,
+        "criteria_total": 2,
+        "verified_at": null,
+        "commit_sha": null,
+        "commit_url": null,
+        "commit_at": null,
+        "points_awarded": null,
+        "outstanding": ["An unauthenticated caller gets 401"]
+      }
     }
   ]
 }
 ```
 
 **Who owns what.** The platform owns `schema_version`, `project`, the story
-list, `release`, `acceptance_total`, and the `text` of every criterion. Claude
+list, `release`, `acceptance_total`, the `text` of every criterion, and — new in
+v2 — the whole `verification` block and the top-level `totals` rollup. Claude
 Code owns `passed`, `evidence`, `files_touched`, `tests_added`, `notes`,
 `updated_at`.
+
+**Do not write `verification` or `totals` from the repo side.** They are the
+platform's own conclusion, mirrored down so a static page can render it without
+an API. Anything an agent writes there is overwritten on the next sync, and a
+page that trusted it would be showing a number its reader could have typed
+themselves. `mergeProgressFile` merges the agent's side up and re-derives these
+two from the platform's side.
+
+**Nothing volatile lives in this file.** `verified_at` is first-write-wins and
+never moves; there is deliberately no `checked_at`. A field that moved on every
+run would change the file's bytes every sync, and the writer commits on a
+content hash — so the student's git history would fill with commits that say
+nothing. Freshness lives in `.colaberry/manifest.json` alone.
 
 **Seeding the criterion text is load-bearing.** The agent flips a boolean rather
 than retyping a sentence, so honest claims match the plan exactly and the
@@ -165,10 +204,24 @@ second sends them off to redo work they already did.
 | `ProgressFileMissing` | file absent or empty | "Sync your build plan from the portal to get it." — a normal state, not an error |
 | `ProgressFileNotJson` | `JSON.parse` threw | "not valid JSON … a trailing comma or an unclosed brace is the usual cause" |
 | `ProgressFileSchemaMismatch` | Zod rejected the shape | "does not match the expected shape … sync to restore the file" |
-| `ProgressFileUnsupportedVersion` | `schema_version` is not 1 | "declares schema_version N, but this platform reads version 1" |
+| `ProgressFileUnsupportedVersion` | `schema_version` is outside 1…2 | "declares schema_version N, but this platform reads versions 1 to 2" |
 
 A rejected read **writes nothing** and **revokes nothing**. Revocation is not
 something this loop does at all.
+
+### 4.1 The version rule is a RANGE, not an equality
+
+The check accepts `MIN_READABLE_PROGRESS_VERSION`…`PROGRESS_SCHEMA_VERSION`
+(currently 1…2) and refuses only the future. The asymmetry is deliberate: a file
+from the future is unreadable because we cannot know what its fields mean, while
+a file from the past is readable because every bump so far has only ADDED
+optional fields.
+
+This is load-bearing, not cosmetic. `mergeProgressFile` falls back to the freshly
+rendered file whenever it cannot parse the existing one — so an equality check
+would make the v1→v2 bump **silently wipe every criterion every student's agent
+had ticked**. Version is also checked BEFORE the shape, so a v3 file reports
+"written for a newer platform" rather than "your file is malformed".
 
 ---
 

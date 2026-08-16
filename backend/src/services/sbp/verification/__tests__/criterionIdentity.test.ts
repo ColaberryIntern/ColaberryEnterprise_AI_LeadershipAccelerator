@@ -1,7 +1,7 @@
 /**
  * Criterion identity, pinned — the punctuation contract.
  *
- * PRODUCTION EVIDENCE (2026-08-15). STORY-000's third acceptance line is:
+ * PRODUCTION EVIDENCE (2026-08-15). STORY-000's trust acceptance line is:
  *
  *   Trust — no tab shows a number, a connection or a result the project has
  *   not actually produced.
@@ -29,12 +29,29 @@ import { normaliseCriterion, ProgressFile, PROGRESS_SCHEMA_VERSION } from '../pr
 import { decideStory, PlanStorySpec, CommitFact } from '../verifyDecision';
 import { COMMAND_CENTER_ACCEPTANCE, COMMAND_CENTER_STORY_ID } from '../../commandCenterStory';
 
-/** The real production sentence, read from the shipping constant, not retyped. */
-const TRUST = COMMAND_CENTER_ACCEPTANCE[2];
+/**
+ * The real production sentence, read from the shipping constant, not retyped.
+ *
+ * Found by CONTENT, not by index. This list grows — the Command Center data
+ * contract added two criteria ahead of this one — and a positional pin silently
+ * re-points every punctuation test at a criterion with no dash in it at all,
+ * leaving the suite green while testing nothing. The guard below asserts the
+ * exact sentence, so a wrong pick fails loudly instead.
+ */
+const TRUST = COMMAND_CENTER_ACCEPTANCE.find((c) => c.includes('—'))!;
 
 /** Swap the em dash in the real criterion for whatever a given keyboard produced. */
 const withDash = (dash: string, spaced = true): string =>
   TRUST.replace(' — ', spaced ? ` ${dash} ` : dash);
+
+/**
+ * Claim EVERY criterion the plan asks for, with the trust criterion replaced by
+ * `variant`. Written against the whole constant rather than a hand-listed three,
+ * so adding a criterion to the plan cannot quietly turn a "verified" assertion
+ * into a partial one.
+ */
+const claimAllWithTrustAs = (variant: string, passed = true): Array<[string, boolean]> =>
+  COMMAND_CENTER_ACCEPTANCE.map((c) => (c === TRUST ? [variant, passed] : [c, true]) as [string, boolean]);
 
 function progressWith(criteria: Array<[string, boolean]>): ProgressFile {
   return {
@@ -74,6 +91,21 @@ describe('the production criterion this bug was found on', () => {
     expect(TRUST).toBe(
       'Trust — no tab shows a number, a connection or a result the project has not actually produced.',
     );
+  });
+
+  /**
+   * ANTI-VACUITY GUARD. `withDash` is a string replace: if TRUST ever stops
+   * containing ' — ', every variant below silently becomes TRUST itself and the
+   * whole punctuation suite passes while asserting nothing. That is not
+   * hypothetical — pinning TRUST by array index did exactly this when the
+   * Command Center data contract inserted two criteria ahead of it. Assert the
+   * substitution actually substitutes.
+   */
+  it('produces a genuinely different string for each dash variant', () => {
+    for (const dash of ['-', '--', '–', '−']) {
+      expect(withDash(dash)).not.toBe(TRUST);
+      expect(withDash(dash, false)).not.toBe(TRUST);
+    }
   });
 });
 
@@ -167,7 +199,7 @@ describe('normaliseCriterion keeps distinct criteria distinct', () => {
     expect(normaliseCriterion(a)).not.toBe(normaliseCriterion(b));
   });
 
-  it('maps the three real STORY-000 criteria to three distinct keys', () => {
+  it('maps every real STORY-000 criterion to its own distinct key', () => {
     const keys = new Set(COMMAND_CENTER_ACCEPTANCE.map(normaliseCriterion));
     expect(keys.size).toBe(COMMAND_CENTER_ACCEPTANCE.length);
   });
@@ -190,14 +222,10 @@ describe('normaliseCriterion keeps distinct criteria distinct', () => {
 
 describe('decideStory applies the same normalisation to plan and claim', () => {
   it('verifies STORY-000 when the student typed hyphens instead of the em dash', () => {
-    const progress = progressWith([
-      [COMMAND_CENTER_ACCEPTANCE[0], true],
-      [COMMAND_CENTER_ACCEPTANCE[1], true],
-      [withDash('--'), true],
-    ]);
+    const progress = progressWith(claimAllWithTrustAs(withDash('--')));
     const v = decideStory(spec, progress, [goodCommit]);
     expect(v.rejected_claims).toEqual([]);
-    expect(v.criteria_passed).toBe(3);
+    expect(v.criteria_passed).toBe(COMMAND_CENTER_ACCEPTANCE.length);
     expect(v.state).toBe('verified');
   });
 
@@ -220,14 +248,10 @@ describe('decideStory applies the same normalisation to plan and claim', () => {
    */
   it('still rejects a REWORDED criterion, and still refuses to verify', () => {
     const reworded = 'Trust — no tab shows fake data.';
-    const progress = progressWith([
-      [COMMAND_CENTER_ACCEPTANCE[0], true],
-      [COMMAND_CENTER_ACCEPTANCE[1], true],
-      [reworded, true],
-    ]);
+    const progress = progressWith(claimAllWithTrustAs(reworded));
     const v = decideStory(spec, progress, [goodCommit]);
     expect(v.rejected_claims).toEqual([reworded]);
-    expect(v.criteria_passed).toBe(2);
+    expect(v.criteria_passed).toBe(COMMAND_CENTER_ACCEPTANCE.length - 1);
     expect(v.state).toBe('submitted');
     expect(v.outstanding).toEqual([TRUST]);
   });
@@ -248,13 +272,9 @@ describe('decideStory applies the same normalisation to plan and claim', () => {
   });
 
   it('does not let punctuation tolerance flip a criterion the student marked false', () => {
-    const progress = progressWith([
-      [COMMAND_CENTER_ACCEPTANCE[0], true],
-      [COMMAND_CENTER_ACCEPTANCE[1], true],
-      [withDash('-'), false],
-    ]);
+    const progress = progressWith(claimAllWithTrustAs(withDash('-'), false));
     const v = decideStory(spec, progress, [goodCommit]);
-    expect(v.criteria_passed).toBe(2);
+    expect(v.criteria_passed).toBe(COMMAND_CENTER_ACCEPTANCE.length - 1);
     expect(v.state).toBe('submitted');
     expect(v.outstanding).toEqual([TRUST]);
   });
