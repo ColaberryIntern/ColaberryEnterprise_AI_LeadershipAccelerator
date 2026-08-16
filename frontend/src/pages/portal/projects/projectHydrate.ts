@@ -161,6 +161,33 @@ function hash(s: string): number {
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'restored-build';
 }
+/**
+ * Shown only when the server has no name for this build. Every project is meant
+ * to have a real, student-chosen name (carried from intake by the backend's
+ * sbp/projectNaming), so reaching this is a defect worth noticing rather than
+ * the normal case it used to be — as of 2026-08-16 all 20 live builds hit it.
+ */
+export const FALLBACK_NAME = 'Your build';
+/** Shown only when nothing describes the build. Never equal to FALLBACK_NAME. */
+export const FALLBACK_DESCRIPTOR = 'Capstone build';
+
+/**
+ * First argument that still says something once trimmed, else null.
+ *
+ * `' '` IS TRUTHY IN JAVASCRIPT, which is the whole reason this exists. The
+ * previous form was `(tree.name || 'Your build').trim()`: a whitespace-only
+ * name sailed through the `||`, trimmed to `''`, and rendered a card with no
+ * heading at all — strictly worse than the fallback it had just defeated.
+ * Trimming BEFORE the test, rather than after it, is the fix.
+ */
+function firstMeaningful(...values: (string | null | undefined)[]): string | null {
+  for (const v of values) {
+    const t = (v ?? '').trim();
+    if (t) return t;
+  }
+  return null;
+}
+
 const stateFromStatus = (status: string): TaskState => (status === 'complete' ? 'done' : 'todo');
 const asAcceptance = (v: unknown): string[] | undefined =>
   Array.isArray(v) ? v.map(String) : undefined;
@@ -171,7 +198,7 @@ const asAcceptance = (v: unknown): string[] | undefined =>
  * deterministically from the name. The first still-open task is flagged `today`.
  */
 export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
-  const name = (tree.name || 'Your build').trim();
+  const name = firstMeaningful(tree.name) ?? FALLBACK_NAME;
   const preset = PALETTE[Math.abs(hash(name)) % PALETTE.length];
 
   let firstOpen = true;
@@ -221,7 +248,14 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
   const owners = Array.from(new Set(
     lists.flatMap((l) => l.tasks.map((t) => t.owner).filter((o): o is string => !!o)),
   ));
-  const descriptor = (tree.organization_name || lists[0]?.tasks[0]?.what || name).slice(0, 140);
+  // The descriptor is the card's SUBTITLE, rendered directly beneath `name`.
+  // It used to fall back to `name` itself, so an unnamed build rendered
+  // "Your build" as both heading and subtitle — the generic fallback stated
+  // twice, which reads like a rendering bug rather than a missing title.
+  // A subtitle that merely repeats the heading carries no information at any
+  // time, so the guard is on equality, not just on the fallback case.
+  const candidate = firstMeaningful(tree.organization_name, lists[0]?.tasks[0]?.what);
+  const descriptor = (candidate && candidate !== name ? candidate : FALLBACK_DESCRIPTOR).slice(0, 140);
 
   return {
     id: tree.id,
