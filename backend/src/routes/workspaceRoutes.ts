@@ -24,6 +24,10 @@ const router = Router();
 // verified JWT and never from the request — a student can only reach their own
 // project, and the service re-checks ownership before any GitHub call.
 const projectIdSchema = z.string().uuid('A valid projectId is required');
+// Story ids are plan-authored (`STORY-001`), not UUIDs, and the column is
+// VARCHAR(60). Bounded here so an oversized query string is rejected at the
+// boundary rather than becoming a wide LIKE-free equality scan downstream.
+const storyIdSchema = z.string().min(1, 'A story id is required').max(60);
 const provisionSchema = z.object({
   project_id: z.string().uuid(),
   github_login: z.string().min(1),
@@ -117,6 +121,63 @@ router.get('/api/portal/workspace/repo', requireParticipant, async (req, res) =>
     if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
     logError('workspace_repo_get_failed', req, err);
     res.status(statusFor(err)).json(errorBody(err, 'Failed to load workspace repo'));
+  }
+});
+
+/**
+ * GET the verification state of ONE story. The workspace page polls this while
+ * a student has the story open, so the boxes and the completion gate can follow
+ * what the repo actually says without a manual refresh.
+ *
+ * READ-ONLY BY DESIGN. It reports the verdict the last sync wrote; it does not
+ * run one. A student holding the page open therefore cannot drive GitHub calls
+ * or move their own state no matter how long they leave it there — which is the
+ * property that makes a poll safe to ship. The write path stays exactly where it
+ * was: `/repo/sync` and the push webhook, both rate-limited by GitHub itself.
+ *
+ * 404 covers "not yours", "no such project" and "no such story" alike, so this
+ * cannot be used to probe for somebody else's build.
+ */
+router.get('/api/portal/workspace/story-verification', requireParticipant, async (req, res) => {
+  try {
+    const projectId = projectIdSchema.parse(req.query.project_id);
+    const storyId = storyIdSchema.parse(req.query.story_id);
+    const { readStoryVerification } = await import('../services/sbp/verification/storyVerificationRead');
+    const view = await readStoryVerification(req.participant!.sub, projectId, storyId);
+    if (!view) { res.status(404).json({ error: 'Story not found' }); return; }
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
+    logError('workspace_story_verification_get_failed', req, err);
+    res.status(statusFor(err)).json(errorBody(err, 'Failed to load story verification'));
+  }
+});
+
+/**
+ * GET what the student needs to register their own push webhook.
+ *
+ * CARRIES A SECRET, so: participant-authed, project-scoped, ownership proven
+ * before anything is assembled, and deliberately a route of its own rather than
+ * folded into `/repo`. The general repo view is fetched on every workspace load
+ * and passed around the page; the signing secret should be requested explicitly,
+ * by the one panel that has a reason to show it, and nowhere else.
+ *
+ * Never logged. `logError` below records the event name and the error class, and
+ * the view itself never reaches a log line.
+ */
+router.get('/api/portal/workspace/webhook-setup', requireParticipant, async (req, res) => {
+  try {
+    const projectId = projectIdSchema.parse(req.query.project_id);
+    const { getWebhookSetup } = await import('../services/sbp/repoConnect/webhookSetupService');
+    // Ownership is proven inside, before a secret is read or minted. 404 covers
+    // "not yours" and "no such project" alike.
+    const view = await getWebhookSetup(req.participant!.sub, projectId);
+    if (!view) { res.status(404).json({ error: 'Project not found' }); return; }
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
+    logError('workspace_webhook_setup_failed', req, err);
+    res.status(statusFor(err)).json(errorBody(err, 'Failed to load webhook setup'));
   }
 });
 
@@ -236,6 +297,22 @@ router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, r
         error_class: 'VerificationUnavailable',
         reason: 'Your repo synced, but the platform could not re-check your stories just now. Try Sync again shortly.',
       };
+    }
+
+    // Hosting check, detached. Sync is the other natural "something changed, go
+    // and look again" moment, and covering it matters: a student who enables
+    // Pages and never pushes again would otherwise never get their link. It runs
+    // AFTER the response is composed and is never awaited — the sync the student
+    // asked for must not wait on a Pages probe, and must not fail with one.
+    if (view?.repo_owner && view?.repo_name) {
+      const owner = view.repo_owner;
+      const repo = view.repo_name;
+      void (async () => {
+        try {
+          const { recordPagesUrlIfLive } = await import('../services/sbp/repoConnect/pagesUrlService');
+          await recordPagesUrlIfLive(projectId, owner, repo, { correlationId });
+        } catch { /* classified and logged inside; this guards the detached promise */ }
+      })();
     }
 
     res.json({ ...view, verification });

@@ -22,6 +22,54 @@ import {
  *   click          — everything else
  */
 
+/**
+ * Icons are inline SVG, NOT an icon font.
+ *
+ * This component originally used `bi bi-*` (Bootstrap Icons) classes, copying
+ * the convention of ~87 other files in this codebase. Those classes render
+ * NOTHING: `bootstrap-icons` is not installed and never loaded — index.html
+ * pulls Remix Icon and only Remix Icon. The attach button therefore shipped to
+ * production as an empty square, which is exactly how Ali found it.
+ *
+ * Inline SVG rather than switching to `ri-*`: the paperclip is the entire
+ * affordance for this feature, and Remix arrives from a third-party CDN, so a
+ * font that fails to load would silently erase it again. CoryMark.tsx in this
+ * same folder already draws Cory's mark this way.
+ */
+const IconPaperclip = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  </svg>
+);
+
+const IconX = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+    <path d="M18 6L6 18M6 6l12 12" />
+  </svg>
+);
+
+const IconFile = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <path d="M14 2v6h6" />
+  </svg>
+);
+
+const IconWarning = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <path d="M12 9v4M12 17h.01" />
+  </svg>
+);
+
+const IconImage = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <path d="M21 15l-5-5L5 21" />
+  </svg>
+);
+
 export interface PendingAttachment {
   /** Stable key while the upload is in flight (the server id once it lands). */
   key: string;
@@ -224,7 +272,7 @@ export function SentAttachments({ items }: { items?: SentAttachment[] }) {
               padding: '3px 7px', borderRadius: 6, background: 'rgba(255,255,255,0.18)',
             }}
           >
-            <i className="bi bi-file-earmark-pdf" />{it.name}
+            <IconFile size={13} />{it.name}
           </span>
         )
       ))}
@@ -274,7 +322,7 @@ export function AttachButton({ onFiles, disabled, title = 'Attach a screenshot o
           flexShrink: 0,
         }}
       >
-        <i className="bi bi-paperclip" style={{ fontSize: 15 }} />
+        <IconPaperclip size={16} />
       </button>
     </>
   );
@@ -312,7 +360,7 @@ export function AttachmentTray({ items, notice, onRemove }: {
               {it.preview ? (
                 <img src={it.preview} alt={it.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <i className="bi bi-file-earmark-pdf" style={{ fontSize: 20, color: '#8a929e' }} />
+                <span style={{ color: '#8a929e' }}><IconFile size={20} /></span>
               )}
 
               {(it.uploading || it.error) && (
@@ -328,7 +376,7 @@ export function AttachmentTray({ items, notice, onRemove }: {
                 >
                   {it.uploading
                     ? <span className="spinner-border spinner-border-sm" style={{ width: 14, height: 14, color: '#5b6472' }} role="status" />
-                    : <i className="bi bi-exclamation-triangle-fill" style={{ fontSize: 14, color: '#c0392b' }} />}
+                    : <span style={{ color: '#c0392b' }}><IconWarning size={14} /></span>}
                 </div>
               )}
 
@@ -355,7 +403,7 @@ export function AttachmentTray({ items, notice, onRemove }: {
                   padding: 0,
                 }}
               >
-                <i className="bi bi-x" />
+                <IconX size={11} />
               </button>
             </div>
           ))}
@@ -390,7 +438,7 @@ export function DropOverlay({ active, label = 'Drop to attach' }: { active: bool
         pointerEvents: 'none',
       }}
     >
-      <i className="bi bi-images me-2" />{label}
+      <span style={{ marginRight: 6, display: 'inline-flex' }}><IconImage size={16} /></span>{label}
     </div>
   );
 }

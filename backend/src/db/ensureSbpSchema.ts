@@ -120,6 +120,42 @@ export async function ensureSbpSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS build_plans_unique_project_version ON build_plans (project_id, version)`,
     `CREATE INDEX IF NOT EXISTS idx_build_plans_project ON build_plans (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_plans_status ON build_plans (status)`,
+
+    // Webhook delivery ledger. GitHub retries a delivery it believes failed —
+    // including one we handled perfectly but answered slowly — and every retry
+    // would otherwise re-run a verification pass that reads GitHub several
+    // times. The award itself is already safe (evidence_records has its own
+    // unique idempotency key), so this table is not the last line of defence;
+    // it is the one that stops us spending a student's rate limit re-deciding a
+    // question we already answered.
+    //
+    // `delivery_id` is GitHub's X-GitHub-Delivery UUID, unique per delivery and
+    // stable across its retries — which is exactly the property that makes it
+    // the right key.
+    `CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
+       delivery_id VARCHAR(120) PRIMARY KEY,
+       event VARCHAR(60),
+       repo_full_name VARCHAR(255),
+       project_id UUID,
+       outcome VARCHAR(30),
+       received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    // Housekeeping reads only. The table is append-only and small (one row per
+    // push per student), but a date index keeps any future prune cheap.
+    `CREATE INDEX IF NOT EXISTS idx_github_webhook_deliveries_received ON github_webhook_deliveries (received_at)`,
+
+    // PER-REPO webhook secret.
+    //
+    // Until now one `GITHUB_WEBHOOK_SECRET` covered every student repo. That was
+    // survivable while the platform installed every hook itself; it stops being
+    // survivable the moment students register their own, because the secret has
+    // to be SHOWN to whoever registers it. One shared secret shown to thirty
+    // students is a secret that lets any one of them forge pushes for all the
+    // others — and student repos are public by default, so a single careless
+    // commit would expose the whole cohort.
+    //
+    // One secret per connection instead. Its blast radius is exactly one repo.
+    `ALTER TABLE github_connections ADD COLUMN IF NOT EXISTS webhook_secret VARCHAR(120)`,
   ];
 
   for (const sql of statements) {
@@ -134,9 +170,9 @@ export async function ensureSbpSchema(): Promise<void> {
 }
 
 /** What ensureSbpSchema must have produced. Checked, not assumed. */
-const REQUIRED_TABLES = ['build_intake', 'build_plans'] as const;
+export const REQUIRED_TABLES = ['build_intake', 'build_plans', 'github_webhook_deliveries'] as const;
 /** Columns added after their table's first release. Checked, not assumed. */
-const REQUIRED_COLUMNS = [
+export const REQUIRED_COLUMNS = [
   'build_intake.answers',
   'student_tasks.due_on',
   'student_tasks.due_baseline_on',
@@ -148,6 +184,9 @@ const REQUIRED_COLUMNS = [
   // falls back to matching the current repo state — which is the defect the
   // column exists to close.
   'student_tasks.verified_ref',
+  // Missing => every student repo falls back to the one shared secret, which is
+  // the exact exposure per-repo secrets exist to close.
+  'github_connections.webhook_secret',
   // Missing ⇒ the verification loop writes a verdict Sequelize silently drops,
   // and every story renders "not started" while the run logs success.
   'student_tasks.verification_json',

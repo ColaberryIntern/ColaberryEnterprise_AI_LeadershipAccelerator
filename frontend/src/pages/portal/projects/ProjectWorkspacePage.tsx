@@ -3,13 +3,16 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import portalApi from '../../../utils/portalApi';
 import { runtimeCss } from '../runtime/runtimeKit';
 import {
-  getProject, markTaskDone, skipTask, isTaskBlocked, projectProgress,
+  getProject, mirrorVerifiedCompletion, skipTask, isTaskBlocked, projectProgress,
   StudentProject, ProjectTask,
 } from './projectsStore';
 import {
   WorkspaceRepoView, ConnectStateView, getWorkspaceRepo,
 } from '../../../services/workspaceRepoApi';
 import WorkspaceRepoPanel from './WorkspaceRepoPanel';
+import { useStoryVerification } from './useStoryVerification';
+import AcceptanceChecklist from './AcceptanceChecklist';
+import StoryCompletionPanel from './StoryCompletionPanel';
 import {
   useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
   type SentAttachment,
@@ -82,7 +85,13 @@ const ProjectWorkspacePage: React.FC = () => {
   // Acceptance ticks are the student's own working memory ("have I got that one
   // yet?"), so they survive a reload. Deliberately localStorage and NOT the
   // project store: the server knows nothing about them, and putting them in the
-  // store would dress them up as reportable progress. Only "Mark done" reports.
+  // store would dress them up as reportable progress.
+  //
+  // THEY ARE NO LONGER THE STATE THE BOX RENDERS. A criterion is CONFIRMED only
+  // when the platform read it as passing out of the repo (see useStoryVerification);
+  // a local tick is a note-to-self and is drawn as a visibly different thing. The
+  // two must never be confusable, because one of them is evidence and the other
+  // is an intention.
   const accKey = `te_ws_acc_${projectId}_${taskId}`;
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
   useEffect(() => {
@@ -109,6 +118,15 @@ const ProjectWorkspacePage: React.FC = () => {
     if (!project || !task) return null;
     return project.lists.find((l) => l.tasks.some((t) => t.id === task.id))?.name ?? null;
   }, [project, task]);
+
+  /**
+   * SERVER TRUTH for this story — polled while the page is open, so a push in
+   * the student's editor lands here without a refresh. Called before the
+   * not-found guard below because hooks cannot be conditional; it no-ops on an
+   * empty story id.
+   */
+  const storyKey = task?.storyId || taskId;
+  const verif = useStoryVerification(projectId, storyKey);
 
   // Greet once the task is known, so the opening line can name it.
   useEffect(() => {
@@ -194,11 +212,36 @@ const ProjectWorkspacePage: React.FC = () => {
   }
 
   const blocked = isTaskBlocked(project, task);
-  const done = task.state === 'done';
   const prog = projectProgress(project);
   const prompt = task.prompt || '';
-  const acceptance = task.acceptance ?? [];
-  const tickedCount = acceptance.reduce((n, _a, i) => (ticked[i] ? n + 1 : n), 0);
+
+  /**
+   * The criteria list comes from the SERVER when it has answered, because the
+   * published plan is the authority on what this story asks for. The store's
+   * copy is the fallback for a deep-link that arrives before the first poll.
+   * Pairing a fresh `outstanding` set against a stale criteria list would
+   * mis-mark boxes, and mis-marking them in the confident direction is the one
+   * failure this feature must not have.
+   */
+  const acceptance = verif.acceptance.length ? verif.acceptance : (task.acceptance ?? []);
+
+  /**
+   * THE GATE and the DISPLAY are two different questions, and conflating them
+   * is how a stale local flag would quietly become a completion.
+   *
+   * `verified` is the gate: `verified_at` is a one-way latch the platform sets
+   * after reading the repo, and nothing the client can do produces it. It is the
+   * ONLY thing that unlocks the button.
+   *
+   * `locallyDone` is the student's own board state, which for a task completed
+   * before this gate existed can say `done` with no server verification behind
+   * it. It is allowed to affect what the page SHOWS — a finished task should not
+   * nag — and is deliberately not allowed anywhere near the unlock.
+   */
+  const locallyDone = task.state === 'done';
+  // Display only — see the header pill. The GATE lives in StoryCompletionPanel
+  // and reads `verified_at` alone.
+  const done = Boolean(verif.verifiedAt) || locallyDone;
   // "How to build it" is step 1 when there is no acceptance list to be step 1 —
   // a lone step numbered 2 reads like something failed to load.
   const buildStepNo = acceptance.length ? 2 : 1;
@@ -268,27 +311,14 @@ const ProjectWorkspacePage: React.FC = () => {
           {/* WHAT DONE MEANS — checkable, because acceptance criteria are a
               pre-flight the student walks, not a paragraph they re-read. The
               count in the header answers "how close am I?" without scrolling. */}
-          {acceptance.length > 0 && (
-            <section className="rt-step">
-              <div className="rt-step-h">
-                <span className="rt-step-n">1</span>
-                <span className="rt-step-t">Done means</span>
-                <span className="rt-step-c">{tickedCount} of {acceptance.length}</span>
-              </div>
-              <div className="rt-card">
-                <ul className="rt-acc">
-                  {acceptance.map((a, i) => (
-                    <li key={i}>
-                      <label>
-                        <input type="checkbox" checked={!!ticked[i]} onChange={() => toggleAcc(i)} />
-                        <span>{a}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-          )}
+          <AcceptanceChecklist
+            acceptance={acceptance}
+            stepNo={1}
+            isConfirmed={verif.isConfirmed}
+            isJustConfirmed={verif.isJustConfirmed}
+            ticked={ticked}
+            onToggle={toggleAcc}
+          />
 
           {/* HOW TO BUILD IT — the prompt and the repo are the same job (get to
               work), so they sit under one heading instead of reading as two
@@ -343,21 +373,21 @@ const ProjectWorkspacePage: React.FC = () => {
             />
           </section>
 
-          {!done && !blocked.blocked && (
-            <div className="rt-row" style={{ marginTop: 16 }}>
-              <button
-                className="rt-btn cta"
-                onClick={() => { markTaskDone(project.id, task.id); setTick((n) => n + 1); }}
-              >
-                Mark done
-              </button>
-              <button
-                className="rt-btn"
-                onClick={() => { skipTask(project.id, task.id); setTick((n) => n + 1); goBack(); }}
-              >
-                Skip
-              </button>
-            </div>
+          {!blocked.blocked && (
+            <StoryCompletionPanel
+              verif={verif}
+              storyKey={storyKey}
+              locallyDone={locallyDone}
+              onMarkDone={() => {
+                // Mirrors the completion the platform already granted into the
+                // local board. Deliberately NOT a status push: the server is
+                // where this came from, and pushing it back earns a 409.
+                mirrorVerifiedCompletion(project.id, task.id);
+                setTick((n) => n + 1);
+                goBack();
+              }}
+              onSkip={() => { skipTask(project.id, task.id); setTick((n) => n + 1); goBack(); }}
+            />
           )}
         </main>
 
