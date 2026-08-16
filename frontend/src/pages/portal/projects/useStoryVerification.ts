@@ -81,7 +81,20 @@ export interface StoryVerificationState {
   refresh: () => void;
 }
 
-/** Mirrors the backend's `normaliseCriterion`: collapse whitespace, trim, lowercase. */
+/**
+ * Whitespace/case-insensitive key for the DISPLAY diff below: which criteria
+ * render as ticked, and which just flipped so they can be celebrated.
+ *
+ * NOT the backend's `normaliseCriterion`, and deliberately not a copy of it.
+ * That function decides whether a student's CLAIM matches the plan, so it has
+ * to absorb every way a dash or a quote can be typed. Both inputs here come
+ * from the same task row in the same response — `verification.outstanding` is
+ * built by the backend out of the very `acceptance` array sitting beside it —
+ * so the two sides cannot disagree on punctuation, and duplicating those rules
+ * in the frontend would only create a second copy to drift.
+ *
+ * The completion gate is `verified_at` from the server. Nothing here grants it.
+ */
 function normalise(text: string): string {
   return text.replace(/\s+/g, ' ').trim().toLowerCase();
 }
