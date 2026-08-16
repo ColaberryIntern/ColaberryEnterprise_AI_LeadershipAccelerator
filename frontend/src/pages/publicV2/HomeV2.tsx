@@ -4,7 +4,11 @@ import SeoV2 from '../../components/publicV2/SeoV2';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
 import Accolades from '../../components/publicV2/Accolades';
-import { GOALS, ENGINE, SERVICES } from '../../config/v2Content';
+import { GOALS, ENGINE } from '../../config/v2Content';
+// SERVICE_DETAILS rather than v2Content's SERVICES: the cards now carry the
+// photograph, which only the detail records hold. The two lists are the same
+// five engagements in the same order, and HomeV2.test asserts they stay in sync.
+import { SERVICE_DETAILS } from '../../config/v2Services';
 import './homeV2.css';
 
 /**
@@ -174,6 +178,51 @@ function HomeV2(): React.ReactElement {
           </article>
         </div>
       </section>
+
+      {/* 2a ─────────────────────────────────────────────────────────── book ── */}
+      {/*
+        MOVED here from below the engine section (was 6b) at Ali's direction
+        2026-08-15. The book is the thesis the whole platform rests on, so it
+        reads as the premise for "what we can put our name to" immediately
+        below it -- rather than as a footnote after the reader has already
+        been asked to act.
+      */}
+      {/*
+        The strongest owned asset on the old site and V2 had no equivalent. The
+        statistic is rendered as an ATTRIBUTED CITATION -- what the book argues --
+        which is the only form the registry permits. `research.book95`, the same
+        number stated as a bare fact in our own voice, stays blocked.
+      */}
+      {canShow('book.trust.attributed', ROUTE) ? (
+        <section className="cbv2-rv cbv2-section cbv2-book" aria-labelledby="cbv2-book-title">
+          <div className="cbv2-wrap cbv2-book__grid">
+            <figure className="cbv2-book__cover">
+              <img
+                src="/site-v2/photos/book-cover.jpg"
+                alt="Cover of Trust Before Intelligence, a book by Ram Katamaraja, CEO of Colaberry Inc., subtitled: why 95% of AI pilots fail, how 5% succeed."
+                width={334}
+                height={500}
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
+            <div>
+              <p className="cbv2-eyebrow">The thesis behind the work</p>
+              <h2 id="cbv2-book-title">Trust before intelligence</h2>
+              <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
+                <Claim claimKey="book.trust.attributed" route={ROUTE} />
+              </p>
+              <p className="cbv2-book__body">
+                The argument the platform is built on: capability that cannot be evidenced is
+                not capability, and an organization earns trust in its AI the same way it
+                earns trust in its people, by seeing what they have actually shipped. That is
+                why readiness here is computed from evidence rather than from attendance.
+              </p>
+              <p className="cbv2-book__by">Ram Katamaraja, CEO, Colaberry</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* 2b ──────────────────────────────────────────────────── accolades ── */}
       {/*
@@ -355,12 +404,42 @@ function HomeV2(): React.ReactElement {
             <p className="cbv2-eyebrow">Services</p>
             <h2 id="cbv2-services-title">Five ways an engagement starts</h2>
           </div>
-          <div className="cbv2-ribbon">
-            {SERVICES.map((s) => (
-              <Link className="cbv2-ribbon__item" to={`/services/${s.slug}`} key={s.slug}>
-                <span className="cbv2-ribbon__n">{s.number}</span>
-                <span className="cbv2-ribbon__title">{s.name}</span>
-                <span className="cbv2-ribbon__body">{s.fit}</span>
+          {/*
+            Five picture cards on a six-column grid: the first three span two
+            columns, the last two span three. Five items in an even grid always
+            leaves a hole in the final row; spanning the last pair wider fills it
+            by construction, so the layout reads as composed rather than as a row
+            that ran out.
+
+            The photographs depict the mode of work each engagement involves.
+            They are not captioned as customers, engagements or results, because
+            they are not -- see the sourcing note on ServicePhoto in
+            config/v2Services.ts.
+          */}
+          <div className="cbv2-svcgrid">
+            {SERVICE_DETAILS.map((s) => (
+              <Link className="cbv2-svccard" to={`/services/${s.slug}`} key={s.slug}>
+                <span className="cbv2-svccard__media">
+                  <img
+                    src={s.photo.src}
+                    alt={s.photo.alt}
+                    width={1280}
+                    height={960}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span className="cbv2-svccard__n" aria-hidden="true">
+                    {s.number}
+                  </span>
+                </span>
+                <span className="cbv2-svccard__text">
+                  <span className="cbv2-svccard__title">{s.name}</span>
+                  <span className="cbv2-svccard__body">{s.fit}</span>
+                  <span className="cbv2-svccard__go">
+                    <span>See what it includes</span>
+                    <Icon name="arrowRight" size={15} />
+                  </span>
+                </span>
               </Link>
             ))}
           </div>
@@ -414,44 +493,6 @@ function HomeV2(): React.ReactElement {
                 <span>Sample team, real event types.</span>
               </figcaption>
             </figure>
-          </div>
-        </section>
-      ) : null}
-
-      {/* 6b ─────────────────────────────────────────────────────────── book ── */}
-      {/*
-        The strongest owned asset on the old site and V2 had no equivalent. The
-        statistic is rendered as an ATTRIBUTED CITATION -- what the book argues --
-        which is the only form the registry permits. `research.book95`, the same
-        number stated as a bare fact in our own voice, stays blocked.
-      */}
-      {canShow('book.trust.attributed', ROUTE) ? (
-        <section className="cbv2-rv cbv2-section cbv2-book" aria-labelledby="cbv2-book-title">
-          <div className="cbv2-wrap cbv2-book__grid">
-            <figure className="cbv2-book__cover">
-              <img
-                src="/site-v2/photos/book-cover.jpg"
-                alt="Cover of Trust Before Intelligence, a book by Ram Katamaraja, CEO of Colaberry Inc., subtitled: why 95% of AI pilots fail, how 5% succeed."
-                width={334}
-                height={500}
-                loading="lazy"
-                decoding="async"
-              />
-            </figure>
-            <div>
-              <p className="cbv2-eyebrow">The thesis behind the work</p>
-              <h2 id="cbv2-book-title">Trust before intelligence</h2>
-              <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
-                <Claim claimKey="book.trust.attributed" route={ROUTE} />
-              </p>
-              <p className="cbv2-book__body">
-                The argument the platform is built on: capability that cannot be evidenced is
-                not capability, and an organization earns trust in its AI the same way it
-                earns trust in its people, by seeing what they have actually shipped. That is
-                why readiness here is computed from evidence rather than from attendance.
-              </p>
-              <p className="cbv2-book__by">Ram Katamaraja, CEO, Colaberry</p>
-            </div>
           </div>
         </section>
       ) : null}

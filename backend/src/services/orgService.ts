@@ -13,9 +13,9 @@
 import crypto from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
-import { Organization, OrgMember, Enrollment } from '../models';
+import { Organization, OrgMember, Enrollment, Lead } from '../models';
 import { createFreeAccount } from './freeSignupService';
-import { sendOrgInviteEmail } from './emailService';
+import { sendOrgInviteEmail, sendOrgWelcomeEmail } from './emailService';
 import { assertMemberInOrg } from '../middlewares/orgAuth';
 
 const INVITE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -131,7 +131,12 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
   const orgName = (input.company || '').trim() || name;
 
   // 2) Find-or-create the management org (idempotent on owner_enrollment_id).
-  const [organization] = await Organization.findOrCreate({
+  //
+  // `orgCreated` is captured, not discarded: it is the ONLY honest signal that
+  // this registration actually created a business account rather than replaying
+  // an existing one, and it gates the welcome email below. Re-registering with
+  // the same email must not re-send.
+  const [organization, orgCreated] = await Organization.findOrCreate({
     where: { owner_enrollment_id: ownerEnrollmentId },
     defaults: { owner_enrollment_id: ownerEnrollmentId, name: orgName } as any,
   });
@@ -148,6 +153,88 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
       joined_at: new Date(),
     } as any,
   });
+
+  // 4) Link the lead, if one exists for this email.
+  //
+  // Registration and lead capture are two independent calls from the signup
+  // page, and the second one is SKIPPABLE -- the "skip" button goes straight to
+  // the workspace, so an account could exist with no lead attached and nothing
+  // joining the two but a matching email string. Resolving it here means the
+  // link is recorded whenever a lead is findable, including the common case
+  // where the person already had a lead row from an earlier contact form.
+  //
+  // Deliberately best-effort: a failure to link must never fail registration,
+  // because the account and its roster are the load-bearing side effects and the
+  // lead reference is metadata. Idempotent -- it only writes when the column is
+  // still empty, so re-registering never overwrites an existing link.
+  if (!organization.lead_id) {
+    try {
+      const lead = await Lead.findOne({ where: { email }, attributes: ['id'] });
+      if (lead) {
+        await organization.update({ lead_id: (lead as unknown as { id: number }).id });
+      }
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'warn',
+          service: 'backend',
+          event: 'org_lead_link_failed',
+          outcome: 'partial',
+          error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+          context: { org_id: organization.id },
+        }),
+      );
+    }
+  }
+
+  // 5) Welcome the person who just created the account.
+  //
+  // Registration used to send NOTHING -- a company signed up on the public site
+  // and heard only silence, while their invited teammates did get an email.
+  //
+  // IDEMPOTENT via `orgCreated`: registerManager is find-or-create and is called
+  // again on every repeat submit, so gating on "did this call actually create the
+  // organization" is what stops a duplicate welcome. This is the CLAUDE.md
+  // idempotency rule applied to a side effect that leaves the system: same input,
+  // same end state, no second email.
+  //
+  // BEST-EFFORT: a failed send must never fail registration. The account, its
+  // roster and the session are the load-bearing outcomes; the email is a
+  // courtesy. Failure is logged as a structured event rather than swallowed, so
+  // a silently broken mailer is visible in the logs instead of invisible.
+  if (orgCreated) {
+    try {
+      await sendOrgWelcomeEmail({
+        to: email,
+        fullName: name,
+        orgName: organization.name,
+        // registerManager falls back to the PERSON'S name when no company was
+        // typed, so "did they supply a company" is a question about the input,
+        // not about whether the stored name is non-empty.
+        hasRealCompanyName: Boolean((input.company || '').trim()),
+      });
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          service: 'backend',
+          event: 'org_welcome_email_sent',
+          outcome: 'success',
+          context: { org_id: organization.id },
+        }),
+      );
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          service: 'backend',
+          event: 'org_welcome_email_failed',
+          outcome: 'partial',
+          error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+          context: { org_id: organization.id, message: err instanceof Error ? err.message : String(err) },
+        }),
+      );
+    }
+  }
 
   return {
     jwt: free.jwt,
@@ -220,6 +307,29 @@ export async function inviteMembers(
       } catch (err: any) {
         console.warn('[Org] invite email skipped (non-fatal):', err?.message);
       }
+    } else {
+      /*
+       * The member row already existed, so no invite email is sent.
+       *
+       * That is the correct idempotent behaviour -- re-submitting the invite
+       * form must not spam someone who was already invited -- but it was
+       * completely SILENT, which made it indistinguishable from a broken mailer
+       * to anyone asking "why didn't my teammate get an email?". Now it says so.
+       *
+       * Deliberately NOT changed to re-send: making a repeat invite fire another
+       * email would trade a confusing silence for a worse defect, since the
+       * invite form can be submitted repeatedly. If a genuine "resend invite"
+       * action is wanted, it should be its own explicit endpoint.
+       */
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          service: 'backend',
+          event: 'org_invite_email_skipped_existing_member',
+          outcome: 'success',
+          context: { org_id: orgId, reason: 'member already on roster; no duplicate invite sent' },
+        }),
+      );
     }
 
     results.push(member);

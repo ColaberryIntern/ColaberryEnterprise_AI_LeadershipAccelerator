@@ -23,6 +23,7 @@ import { Op } from 'sequelize';
 import Ticket from '../../models/Ticket';
 import TicketActivity from '../../models/TicketActivity';
 import ProposedAgentAction from '../../models/ProposedAgentAction';
+import StrategicInitiative from '../../models/StrategicInitiative';
 import { updateTicketStatus, addTicketComment } from '../ticketService';
 import { getSetting } from '../settingsService';
 import { sendTicketReplyConfirmation } from '../emailService';
@@ -88,6 +89,35 @@ async function syncProposal(ticket: Ticket, status: 'approved' | 'rejected', rev
     );
   } catch (err: any) {
     console.warn(`[ticketReplyService] Failed to sync ProposedAgentAction ${ticket.entity_id}:`, err.message);
+  }
+}
+
+/**
+ * Sync the linked StrategicInitiative (CoryBrain's self-evolution findings, see
+ * coryInitiatives.ts) so a ticket reaching a terminal state also gives its initiative
+ * a real terminal state — this is the fix: before it, nothing in the codebase ever
+ * moved a strategic_initiatives row to completed/cancelled, so the dedup check in
+ * createStrategicInitiative() blocked the same finding from ever being re-raised.
+ * Best-effort, matching syncProposal()'s own contract exactly — the ticket status
+ * change above is the record of truth regardless of this outcome.
+ *
+ * Deliberately does NOT call completeInitiative()/rejectInitiative(): both of those
+ * also call updateTicketStatus() on the same ticket, which by this point in
+ * handleTicketReplyEmail has already transitioned to a terminal status ('done' or
+ * 'cancelled') — VALID_TRANSITIONS['done'] and ['cancelled'] are both [], so a second
+ * updateTicketStatus call on the same ticket would throw "Invalid transition: done ->
+ * done" (or cancelled -> cancelled). A direct model update is the correct, safe shape
+ * here, same as syncProposal's own direct ProposedAgentAction.update() below.
+ */
+async function syncInitiative(ticket: Ticket, status: 'completed' | 'cancelled'): Promise<void> {
+  if (ticket.entity_type !== 'strategic_initiative' || !ticket.entity_id) return;
+  try {
+    await StrategicInitiative.update(
+      { status, updated_at: new Date() },
+      { where: { id: ticket.entity_id } },
+    );
+  } catch (err: any) {
+    console.warn(`[ticketReplyService] Failed to sync StrategicInitiative ${ticket.entity_id}:`, err.message);
   }
 }
 
@@ -160,7 +190,11 @@ export async function handleTicketReplyEmail(params: {
   const newStatus = intent === 'approve' ? 'done' : 'cancelled';
   await updateTicketStatus(ticket.id, newStatus, 'human', params.fromEmail);
   await addTicketComment(ticket.id, replyText, 'human', params.fromEmail);
+  // Each sync targets a different entity_type and no-ops immediately if the ticket
+  // isn't theirs (see each function's own guard clause) — safe to call both
+  // unconditionally rather than branching on entity_type here.
   await syncProposal(ticket, intent === 'approve' ? 'approved' : 'rejected', params.fromEmail, replyText);
+  await syncInitiative(ticket, intent === 'approve' ? 'completed' : 'cancelled');
   await confirmByEmail(params.fromEmail, ticket, newStatus);
 
   return { handled: true, reason: intent, newStatus };

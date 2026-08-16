@@ -56,7 +56,14 @@ export interface SettingsView {
     cohort_name: string | null;
     member_since: Date | null;
     is_org_manager: boolean;
-    org: { id: string; name: string } | null;
+    /**
+     * `has_real_name` is false when the org name is only the fallback to the
+     * owner's own name, because no company was supplied at signup. This lets the
+     * portal show the real company where there is one and a generic label where
+     * there is not -- see resolveManagedOrg for why the stored name cannot
+     * answer this by itself.
+     */
+    org: { id: string; name: string; has_real_name: boolean } | null;
   };
   profile: {
     title: string | null;
@@ -186,8 +193,25 @@ function readIntakeViews(intakeRaw: unknown): Pick<SettingsView, 'personalizatio
 
 /** The organization this enrollment manages (owner OR role='manager'), or null.
  *  Mirrors requireOrgManager's resolution so the Settings account block and the
- *  org routes agree on who is a manager. */
-async function resolveManagedOrg(enrollmentId: string): Promise<{ id: string; name: string } | null> {
+ *  org routes agree on who is a manager.
+ *
+ *  `has_real_name` answers a question the stored name CANNOT answer on its own.
+ *  `registerManager` sets `organizations.name = company || the person's own name`
+ *  (orgService.ts), so an org always has a non-empty name and "is the name set?"
+ *  is always true. Displaying it unconditionally would label a solo signup's
+ *  workspace "Dana Reyes" where a company name belongs.
+ *
+ *  The test is therefore whether the org name is EXACTLY the owner's full name,
+ *  which is the only way the fallback can produce it. It is a heuristic, and the
+ *  one case it gets wrong is a company named precisely after its owner with no
+ *  other word ("Dana Reyes", not "Dana Reyes Consulting") — that falls back to
+ *  the generic label, which is a harmless miss. The alternative, a schema column
+ *  recording whether the field was filled in, is not worth a migration for a
+ *  label. */
+async function resolveManagedOrg(
+  enrollmentId: string,
+  ownerFullName?: string | null,
+): Promise<{ id: string; name: string; has_real_name: boolean } | null> {
   let org: any = await Organization.findOne({
     where: { owner_enrollment_id: enrollmentId },
     order: [['created_at', 'ASC']],
@@ -196,7 +220,13 @@ async function resolveManagedOrg(enrollmentId: string): Promise<{ id: string; na
     const membership: any = await OrgMember.findOne({ where: { enrollment_id: enrollmentId, role: 'manager' } });
     if (membership) org = await Organization.findByPk(membership.org_id);
   }
-  return org ? { id: org.id, name: org.name } : null;
+  if (!org) return null;
+
+  const name = String(org.name ?? '').trim();
+  const owner = String(ownerFullName ?? '').trim();
+  const isFallbackToPersonName = owner.length > 0 && name.toLowerCase() === owner.toLowerCase();
+
+  return { id: org.id, name: org.name, has_real_name: name.length > 0 && !isFallbackToPersonName };
 }
 
 export async function getSettings(enrollmentId: string): Promise<SettingsView | null> {
@@ -208,7 +238,7 @@ export async function getSettings(enrollmentId: string): Promise<SettingsView | 
   });
   if (!e) return null;
   const op = e.onboardingProfile || null;
-  const managedOrg = await resolveManagedOrg(enrollmentId);
+  const managedOrg = await resolveManagedOrg(enrollmentId, e.full_name);
   return {
     account: {
       id: e.id,

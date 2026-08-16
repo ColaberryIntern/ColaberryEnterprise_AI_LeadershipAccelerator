@@ -25,6 +25,8 @@ import type { StudentProject, ProjectTask } from '../projectsStore';
 // Swapped per test. `mock`-prefixed so babel-plugin-jest-hoist allows the
 // factory below to close over it.
 let mockProject: StudentProject | null = null;
+/** The story-verification response, or null to make the endpoint 404. */
+let mockVerification: Record<string, unknown> | null = null;
 
 jest.mock('react-router-dom', () => ({
   __esModule: true,
@@ -51,6 +53,12 @@ jest.mock('../../../../services/workspaceRepoApi', () => ({
   confirmRepoConnect: () => Promise.resolve(null),
   downloadDocsBundle: () => Promise.resolve({ blob: new Blob(), filename: 'x.zip' }),
   connectErrorOf: (_e: unknown, fallback: string) => ({ error: fallback, error_class: null }),
+  // Server truth for the open story. Swapped per test via `mockVerification`;
+  // a rejection is the honest default because a story the platform has never
+  // looked at answers 404.
+  getStoryVerification: () => (
+    mockVerification ? Promise.resolve(mockVerification) : Promise.reject(new Error('404'))
+  ),
 }));
 jest.mock('../projectsStore', () => ({
   ...jest.requireActual('../projectsStore'),
@@ -171,15 +179,132 @@ describe('the page reads story first, then done means, then how to build it', ()
     expect(lead!.compareDocumentPosition(build!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('renders acceptance as a checkable list with a live count', async () => {
+  it('renders acceptance as a checkable list whose count is CONFIRMED work, not self-ticks', async () => {
     await mount();
 
     const boxes = container.querySelectorAll<HTMLInputElement>('.rt-acc input[type="checkbox"]');
     expect(boxes).toHaveLength(2);
-    expect(container.querySelector('.rt-step-c')!.textContent).toBe('0 of 2');
+    expect(container.querySelector('.rt-step-c')!.textContent).toBe('0 of 2 confirmed');
 
+    // A student ticking a box is a note to self. It must NOT move the confirmed
+    // count — that number answers "what has GitHub confirmed", and letting a
+    // self-tick raise it would let a student read "2 of 2 confirmed" off a page
+    // where the platform has confirmed nothing.
     await act(async () => { boxes[0].click(); });
-    expect(container.querySelector('.rt-step-c')!.textContent).toBe('1 of 2');
+    expect(container.querySelector('.rt-step-c')!.textContent).toBe('0 of 2 confirmed');
+    expect(container.querySelector('.rt-acc-self')).toBeTruthy();
+    expect(container.querySelector('.rt-acc-tag.self')!.textContent).toContain('not confirmed');
+    // And it is still visibly NOT a confirmation.
+    expect(container.querySelector('.rt-acc-ok')).toBeNull();
+  });
+});
+
+// ── server truth is what ticks the boxes and unlocks the button ───────────────
+describe('completion is granted, not claimed', () => {
+  const verification = (over: Record<string, unknown> = {}) => ({
+    project_id: 'p1',
+    story_id: 'STORY-004',
+    status: 'in_progress',
+    verified_at: null,
+    verified_by: null,
+    acceptance: ['clients can book a slot', 'a no-show is recorded against the client'],
+    xp_awarded: 0,
+    verification: {
+      state: 'submitted',
+      criteria_total: 2,
+      criteria_passed: 1,
+      outstanding: ['a no-show is recorded against the client'],
+      commit_sha: null,
+      commit_at: null,
+      reasons: [],
+      rejected_claims: [],
+      checked_at: '2026-08-15T10:00:00.000Z',
+      latched: false,
+      live_state: null,
+    },
+    ...over,
+  });
+
+  beforeEach(() => { mockProject = project(); });
+  afterEach(() => { mockVerification = null; });
+
+  it('ticks only the criteria the platform confirmed out of the repo', async () => {
+    mockVerification = verification();
+    await mount();
+
+    expect(container.querySelector('.rt-step-c')!.textContent).toBe('1 of 2 confirmed');
+    const confirmed = container.querySelectorAll('.rt-acc-ok');
+    expect(confirmed).toHaveLength(1);
+    // The confirmed box is server truth, so it cannot be un-ticked by hand.
+    expect(confirmed[0].querySelector<HTMLInputElement>('input')!.disabled).toBe(true);
+  });
+
+  it('locks "Mark done" and names what is missing, rather than showing a dead grey button', async () => {
+    mockVerification = verification();
+    await mount();
+
+    const cta = container.querySelector<HTMLButtonElement>('.rt-btn.cta')!;
+    expect(cta.disabled).toBe(true);
+
+    // The reason has to be the real outstanding item, from the published plan.
+    const waiting = container.querySelector('.rt-waiting')!;
+    expect(waiting.textContent).toContain('a no-show is recorded against the client');
+    // ...and the missing commit, which is the other half of the rule.
+    expect(waiting.textContent).toContain('a commit naming STORY-004');
+  });
+
+  it('unlocks "Mark done" once the platform stamps verified_at', async () => {
+    mockVerification = verification({
+      status: 'complete',
+      verified_at: '2026-08-15T11:00:00.000Z',
+      verified_by: 'build_pipeline:repo_verification',
+      verification: {
+        ...verification().verification,
+        state: 'verified', criteria_passed: 2, outstanding: [], commit_sha: 'a1b2c3d',
+      },
+    });
+    await mount();
+
+    expect(container.querySelector<HTMLButtonElement>('.rt-btn.cta')!.disabled).toBe(false);
+    expect(container.querySelector('.rt-waiting')).toBeNull();
+    expect(container.querySelectorAll('.rt-acc-ok')).toHaveLength(2);
+  });
+
+  it('a stale local "done" flag does NOT unlock the gate', async () => {
+    // A task completed on the client before this gate existed carries
+    // `state: 'done'` in localStorage with no server verification behind it.
+    // That flag may change what the page SHOWS; it must never reach the unlock,
+    // or the whole gate is bypassable by anyone who ever pressed the old button.
+    mockProject = project({
+      lists: [{
+        id: 'l1',
+        name: 'Build',
+        tasks: [{ ...TASK, state: 'done' }],
+      }],
+    } as unknown as Partial<StudentProject>);
+    mockVerification = verification();     // server says: still submitted
+    await mount();
+
+    // The action block is gone entirely (the student already filed it away), so
+    // there is no enabled completion control anywhere on the page.
+    const cta = container.querySelector<HTMLButtonElement>('.rt-btn.cta');
+    expect(cta === null || cta.disabled).toBe(true);
+  });
+
+  it('does NOT replay the celebration for a story that was already verified on arrival', async () => {
+    // The first read seeds a baseline and animates nothing. A student opening a
+    // story they finished last week must not watch a re-enactment of it.
+    mockVerification = verification({
+      verified_at: '2026-08-15T11:00:00.000Z',
+      verification: {
+        ...verification().verification,
+        state: 'verified', criteria_passed: 2, outstanding: [], commit_sha: 'a1b2c3d',
+      },
+    });
+    await mount();
+
+    expect(container.querySelector('.rt-verified')).toBeNull();
+    expect(container.querySelector('.rt-acc-land')).toBeNull();
   });
 });
 

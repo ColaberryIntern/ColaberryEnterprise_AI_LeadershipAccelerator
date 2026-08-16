@@ -420,14 +420,98 @@ export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | 
   };
 }
 
+// ── criterion identity ──────────────────────────────────────────────────────
+
 /**
- * Criterion identity. Whitespace and case are noise — an agent that rewraps a
- * long line has not changed which criterion it means. Punctuation is NOT
- * stripped: "the API returns 200" and "the API returns 200?" are different
- * claims and should not silently collapse onto each other.
+ * Dash-like codepoints, unified to ASCII `-`. Em, en, figure, horizontal bar,
+ * non-breaking hyphen, the true hyphen, the minus SIGN (which is not the same
+ * character as the hyphen a keyboard produces), and the small/fullwidth forms
+ * an IME emits. `--` and `---` are runs of the ASCII form and collapse too.
+ */
+const DASH_RUN = /\s*[-‐‑‒–—―−﹘﹣－]+\s*/g;
+
+/**
+ * Apostrophe-like codepoints, unified to ASCII `'`. This is the set an editor
+ * or keyboard substitutes FOR the straight apostrophe: Word's curly pair, the
+ * prime, the modifier letter, and the acute-accent dead key people hit by
+ * mistake. The BACKTICK is deliberately absent — see the note below.
+ */
+const APOSTROPHE = /[‘’‛′ʼ´]/g;
+
+/** Double-quote-like codepoints, unified to ASCII `"`. Same rule as above. */
+const DOUBLE_QUOTE = /[“”„‟″]/g;
+
+/**
+ * Characters with no glyph at all: BOM, zero-width space, soft hyphen, word
+ * joiner, and the bidi marks. They ride along on copy-paste out of a browser
+ * or a PDF and are invisible in every diff, which is exactly what makes them
+ * worth removing — nobody can SEE why the match failed.
+ *
+ * ZWNJ/ZWJ (U+200C/U+200D) are NOT here: inside an emoji sequence the joiner
+ * is load-bearing, and stripping it would fuse distinct sequences.
+ */
+const INVISIBLE = /[­​‎‏⁠﻿]/g;
+
+/**
+ * Criterion identity — forgiving about how a sentence was TYPED, never about
+ * what it SAYS.
+ *
+ * WHY THIS EXISTS AT ALL. STORY-000's third acceptance line is `Trust — no tab
+ * shows a number...` with a real U+2014 em dash, and STORY-000 is the story
+ * every student in the cohort builds. Before this, a student whose editor,
+ * agent or copy-paste turned that dash into `-`, `--` or an en dash had their
+ * claim land in `rejected_claims`: story stuck at `submitted`, no points, and
+ * the message "does not match any acceptance criterion" — accurate and
+ * useless. Confirmed live in production on 2026-08-15.
+ *
+ * THE LINE THIS HOLDS. Every step below is a transformation an EDITOR or a
+ * KEYBOARD performs on text that means the same thing. None of them changes
+ * meaning, and none can fuse two criteria a plan genuinely distinguishes:
+ *
+ *   - NFC only, never NFKC. NFC is canonical equivalence — `é` typed as one
+ *     codepoint and `é` typed as `e` + combining acute ARE the same character
+ *     by Unicode's own definition. NFKC is COMPATIBILITY equivalence and would
+ *     fold `x²` onto `x2`, `½` onto `1/2`, `Ⅻ` onto `XII`. Those are different
+ *     claims about a system, so NFKC is refused.
+ *   - Dashes are UNIFIED, never deleted. `read-only` normalises to
+ *     `read-only`, not to `readonly` and not to `read only` — so it stays
+ *     distinct from the criterion that says `read only`.
+ *   - Quotes are UNIFIED, never deleted. `the label is "sample"` stays
+ *     distinct from `the label is sample`.
+ *   - ONE trailing period is dropped, because a list rendered with terminal
+ *     punctuation and one without are the same sentence. `?` and `!` are NOT
+ *     dropped: "the API returns 200" and "the API returns 200?" are a claim
+ *     and a question, and the difference is the point. A run of periods is
+ *     left alone so an ellipsis survives.
+ *
+ * DELIBERATELY NOT NORMALISED, each because it would forgive CONTENT:
+ *   - Backticks. No keyboard or editor substitutes `` ` `` for `'`; a markdown
+ *     code span is an authoring choice, not a typo.
+ *   - Guillemets « ». A different quoting convention, not a keyboard variant.
+ *   - Commas, colons, semicolons, slashes, parentheses. Each separates clauses
+ *     whose arrangement carries meaning (`10:00` vs `1000`).
+ *   - Stop words, plurals, stemming, or any similarity score. A REWORDED
+ *     criterion must keep failing — that is the whole gating model.
+ *   - A leading `- ` list bullet. Out of scope, and refusing it is the safe
+ *     direction: it can only withhold a match, never invent one.
+ *
+ * Callers MUST run both sides of any comparison through this function.
+ * Normalising only the claim would leave the mirror-image bug in place.
+ * Idempotent: normalise(normalise(x)) === normalise(x).
  */
 export function normaliseCriterion(text: string): string {
-  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+  return text
+    .normalize('NFC')
+    .replace(INVISIBLE, '')
+    .replace(APOSTROPHE, "'")
+    .replace(DOUBLE_QUOTE, '"')
+    .replace(/…/g, '...')
+    .replace(/\s+/g, ' ')       // NBSP and friends are already \s in JS
+    .replace(DASH_RUN, '-')     // after the space collapse, so ` — ` folds too
+    .trim()
+    .toLowerCase()
+    .replace(/(?<!\.)\.$/, '')  // one terminal period, never an ellipsis
+    .trim();
 }
 
 /** Serialise for the repo: stable key order via the schema, trailing newline. */

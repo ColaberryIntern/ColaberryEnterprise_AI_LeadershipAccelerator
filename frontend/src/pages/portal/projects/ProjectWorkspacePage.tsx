@@ -3,13 +3,20 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import portalApi from '../../../utils/portalApi';
 import { runtimeCss } from '../runtime/runtimeKit';
 import {
-  getProject, markTaskDone, skipTask, isTaskBlocked, projectProgress,
+  getProject, mirrorVerifiedCompletion, skipTask, isTaskBlocked, projectProgress,
   StudentProject, ProjectTask,
 } from './projectsStore';
 import {
   WorkspaceRepoView, ConnectStateView, getWorkspaceRepo,
 } from '../../../services/workspaceRepoApi';
 import WorkspaceRepoPanel from './WorkspaceRepoPanel';
+import { useStoryVerification } from './useStoryVerification';
+import AcceptanceChecklist from './AcceptanceChecklist';
+import StoryCompletionPanel from './StoryCompletionPanel';
+import {
+  useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
+  type SentAttachment,
+} from '../../../components/portal/AgentAttachments';
 
 /**
  * ProjectWorkspacePage — the build-side twin of the classroom's RuntimeWorkspace.
@@ -32,7 +39,7 @@ import WorkspaceRepoPanel from './WorkspaceRepoPanel';
  * <=760px block in runtimeCss for the matching density pass.
  */
 
-type Msg = { role: 'user' | 'assistant'; content: string };
+type Msg = { role: 'user' | 'assistant'; content: string; attachments?: SentAttachment[] };
 type Mode = 'ask' | 'hint' | 'explain' | 'review';
 
 const ProjectWorkspacePage: React.FC = () => {
@@ -59,6 +66,13 @@ const ProjectWorkspacePage: React.FC = () => {
   const [mentorInput, setMentorInput] = useState('');
   const [repo, setRepo] = useState<WorkspaceRepoView | null>(null);
   const mentorEnd = useRef<HTMLDivElement | null>(null);
+  // Screenshots the student hands Cory — drag, paste, or click. Same hook the
+  // classroom mentor and Reese's DMs use, so the gesture is identical everywhere.
+  const attach = useAgentAttachments();
+  // A screenshot with no caption is a perfectly good message, so Send unlocks
+  // on text OR a finished upload — but never while one is still in flight,
+  // which would send a turn missing the very thing it is about.
+  const canSend = (mentorInput.trim().length > 0 || attach.refs().length > 0) && !attach.busy;
 
   // The prompt opens CLOSED. At half screen — the posture this page is actually
   // used in, editor in the other half — a 340px <pre> IS the column, so the page
@@ -71,7 +85,13 @@ const ProjectWorkspacePage: React.FC = () => {
   // Acceptance ticks are the student's own working memory ("have I got that one
   // yet?"), so they survive a reload. Deliberately localStorage and NOT the
   // project store: the server knows nothing about them, and putting them in the
-  // store would dress them up as reportable progress. Only "Mark done" reports.
+  // store would dress them up as reportable progress.
+  //
+  // THEY ARE NO LONGER THE STATE THE BOX RENDERS. A criterion is CONFIRMED only
+  // when the platform read it as passing out of the repo (see useStoryVerification);
+  // a local tick is a note-to-self and is drawn as a visibly different thing. The
+  // two must never be confusable, because one of them is evidence and the other
+  // is an intention.
   const accKey = `te_ws_acc_${projectId}_${taskId}`;
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
   useEffect(() => {
@@ -99,12 +119,24 @@ const ProjectWorkspacePage: React.FC = () => {
     return project.lists.find((l) => l.tasks.some((t) => t.id === task.id))?.name ?? null;
   }, [project, task]);
 
+  /**
+   * SERVER TRUTH for this story — polled while the page is open, so a push in
+   * the student's editor lands here without a refresh. Called before the
+   * not-found guard below because hooks cannot be conditional; it no-ops on an
+   * empty story id.
+   */
+  const storyKey = task?.storyId || taskId;
+  const verif = useStoryVerification(projectId, storyKey);
+
   // Greet once the task is known, so the opening line can name it.
   useEffect(() => {
     if (!task || msgs.length) return;
     setMsgs([{
       role: 'assistant',
-      content: `I'm Cory, your mentor for "${task.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`,
+      // The screenshot line is here rather than in a tooltip because a
+      // paperclip nobody notices is the same as no paperclip. Cory saying it
+      // in the opening turn is the one place every student actually reads.
+      content: `I'm Cory, your mentor for "${task.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers. Stuck on an error? Paste or drag a screenshot straight in and I'll read it.`,
     }]);
   }, [task, msgs.length]);
 
@@ -124,13 +156,18 @@ const ProjectWorkspacePage: React.FC = () => {
   const ask = useCallback(async (mode: Mode, message: string) => {
     if (!task) return;
     const history = msgs.slice(-12).map((m) => ({ role: m.role, content: m.content }));
-    setMsgs((m) => [...m, { role: 'user', content: message }]);
+    // Snapshot the tray BEFORE clearing it, so the sent message keeps its
+    // thumbnails and the composer is empty again immediately.
+    const attachments = attach.refs();
+    const shown = attach.sentPreviews();
+    setMsgs((m) => [...m, { role: 'user', content: message, attachments: shown }]);
     setMentorInput('');
+    attach.clear(false);
     setBusy('mentor');
     try {
       const { data } = await portalApi.post(
         `/api/portal/projects/${projectId}/tasks/${encodeURIComponent(task.storyId || task.id)}/mentor`,
-        { mode, message, history },
+        { mode, message, history, attachments },
       );
       setMsgs((m) => [...m, { role: 'assistant', content: data?.reply || data?.message || 'I could not answer that one.' }]);
     } catch {
@@ -140,7 +177,7 @@ const ProjectWorkspacePage: React.FC = () => {
     } finally {
       setBusy('');
     }
-  }, [msgs, projectId, task]);
+  }, [msgs, projectId, task, attach]);
 
   /**
    * The connect endpoints answer with the CONNECT state, not the whole workspace
@@ -175,11 +212,36 @@ const ProjectWorkspacePage: React.FC = () => {
   }
 
   const blocked = isTaskBlocked(project, task);
-  const done = task.state === 'done';
   const prog = projectProgress(project);
   const prompt = task.prompt || '';
-  const acceptance = task.acceptance ?? [];
-  const tickedCount = acceptance.reduce((n, _a, i) => (ticked[i] ? n + 1 : n), 0);
+
+  /**
+   * The criteria list comes from the SERVER when it has answered, because the
+   * published plan is the authority on what this story asks for. The store's
+   * copy is the fallback for a deep-link that arrives before the first poll.
+   * Pairing a fresh `outstanding` set against a stale criteria list would
+   * mis-mark boxes, and mis-marking them in the confident direction is the one
+   * failure this feature must not have.
+   */
+  const acceptance = verif.acceptance.length ? verif.acceptance : (task.acceptance ?? []);
+
+  /**
+   * THE GATE and the DISPLAY are two different questions, and conflating them
+   * is how a stale local flag would quietly become a completion.
+   *
+   * `verified` is the gate: `verified_at` is a one-way latch the platform sets
+   * after reading the repo, and nothing the client can do produces it. It is the
+   * ONLY thing that unlocks the button.
+   *
+   * `locallyDone` is the student's own board state, which for a task completed
+   * before this gate existed can say `done` with no server verification behind
+   * it. It is allowed to affect what the page SHOWS — a finished task should not
+   * nag — and is deliberately not allowed anywhere near the unlock.
+   */
+  const locallyDone = task.state === 'done';
+  // Display only — see the header pill. The GATE lives in StoryCompletionPanel
+  // and reads `verified_at` alone.
+  const done = Boolean(verif.verifiedAt) || locallyDone;
   // "How to build it" is step 1 when there is no acceptance list to be step 1 —
   // a lone step numbered 2 reads like something failed to load.
   const buildStepNo = acceptance.length ? 2 : 1;
@@ -249,27 +311,14 @@ const ProjectWorkspacePage: React.FC = () => {
           {/* WHAT DONE MEANS — checkable, because acceptance criteria are a
               pre-flight the student walks, not a paragraph they re-read. The
               count in the header answers "how close am I?" without scrolling. */}
-          {acceptance.length > 0 && (
-            <section className="rt-step">
-              <div className="rt-step-h">
-                <span className="rt-step-n">1</span>
-                <span className="rt-step-t">Done means</span>
-                <span className="rt-step-c">{tickedCount} of {acceptance.length}</span>
-              </div>
-              <div className="rt-card">
-                <ul className="rt-acc">
-                  {acceptance.map((a, i) => (
-                    <li key={i}>
-                      <label>
-                        <input type="checkbox" checked={!!ticked[i]} onChange={() => toggleAcc(i)} />
-                        <span>{a}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-          )}
+          <AcceptanceChecklist
+            acceptance={acceptance}
+            stepNo={1}
+            isConfirmed={verif.isConfirmed}
+            isJustConfirmed={verif.isJustConfirmed}
+            ticked={ticked}
+            onToggle={toggleAcc}
+          />
 
           {/* HOW TO BUILD IT — the prompt and the repo are the same job (get to
               work), so they sit under one heading instead of reading as two
@@ -324,29 +373,38 @@ const ProjectWorkspacePage: React.FC = () => {
             />
           </section>
 
-          {!done && !blocked.blocked && (
-            <div className="rt-row" style={{ marginTop: 16 }}>
-              <button
-                className="rt-btn cta"
-                onClick={() => { markTaskDone(project.id, task.id); setTick((n) => n + 1); }}
-              >
-                Mark done
-              </button>
-              <button
-                className="rt-btn"
-                onClick={() => { skipTask(project.id, task.id); setTick((n) => n + 1); goBack(); }}
-              >
-                Skip
-              </button>
-            </div>
+          {!blocked.blocked && (
+            <StoryCompletionPanel
+              verif={verif}
+              storyKey={storyKey}
+              locallyDone={locallyDone}
+              onMarkDone={() => {
+                // Mirrors the completion the platform already granted into the
+                // local board. Deliberately NOT a status push: the server is
+                // where this came from, and pushing it back earns a 409.
+                mirrorVerifiedCompletion(project.id, task.id);
+                setTick((n) => n + 1);
+                goBack();
+              }}
+              onSkip={() => { skipTask(project.id, task.id); setTick((n) => n + 1); goBack(); }}
+            />
           )}
         </main>
 
         {/* RIGHT — the mentor, same coach the classroom uses */}
-        <aside className="rt-mentor">
+        {/* The drop target is the whole mentor rail, not just the input: a
+            student dragging a screenshot aims at the conversation, which is
+            the big obvious target, not at a 34px text box. */}
+        <aside className="rt-mentor" style={{ position: 'relative' }} {...attach.dropProps}>
+          <DropOverlay active={attach.dragging} label="Drop to show Cory" />
           <div className="rt-mentor-h"><span className="rt-dot" /> Cory</div>
           <div className="rt-thread">
-            {msgs.map((m, i) => <div key={i} className={`rt-msg ${m.role}`}>{m.content}</div>)}
+            {msgs.map((m, i) => (
+              <div key={i} className={`rt-msg ${m.role}`}>
+                {m.content}
+                <SentAttachments items={m.attachments} />
+              </div>
+            ))}
             <div ref={mentorEnd} />
           </div>
           <div className="rt-modes">
@@ -363,15 +421,18 @@ const ProjectWorkspacePage: React.FC = () => {
               </button>
             ))}
           </div>
+          <AttachmentTray items={attach.items} notice={attach.notice} onRemove={attach.remove} />
           <div className="rt-ask">
+            <AttachButton onFiles={attach.addFiles} disabled={busy === 'mentor'} />
             <input
               className="rt-in"
               value={mentorInput}
               onChange={(e) => setMentorInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && mentorInput.trim() && ask('ask', mentorInput)}
-              placeholder="Ask your mentor…"
+              onKeyDown={(e) => e.key === 'Enter' && canSend && ask('ask', mentorInput || 'Take a look at this.')}
+              placeholder="Ask your mentor, or paste a screenshot…"
+              {...attach.pasteProps}
             />
-            <button className="rt-btn pri" disabled={busy === 'mentor' || !mentorInput.trim()} onClick={() => ask('ask', mentorInput)}>Send</button>
+            <button className="rt-btn pri" disabled={busy === 'mentor' || !canSend} onClick={() => ask('ask', mentorInput || 'Take a look at this.')}>Send</button>
           </div>
         </aside>
       </div>

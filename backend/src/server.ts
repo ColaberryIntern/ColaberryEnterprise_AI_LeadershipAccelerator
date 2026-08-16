@@ -53,12 +53,14 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 import { ensureSbpSchema } from './db/ensureSbpSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
+import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
+import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -2369,6 +2371,12 @@ async function start(): Promise<void> {
   // Nothing that reads this table gates a real action yet — see
   // agentActionAuthorizationBridge.ts's header.
   await ensureApprovalRequestsSchema();
+  // Business accounts: organizations.status / status_changed_at / status_changed_by /
+  // lead_id, plus the org_cohorts join table (idempotent DDL, additive only).
+  // Before this, `organizations` had no lifecycle column, so an account could not be
+  // suspended without deleting the row and cascading its members away; and there was
+  // no org<->cohort relationship anywhere in the schema.
+  await ensureOrgAccountSchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.
@@ -2426,6 +2434,8 @@ async function start(): Promise<void> {
   // dead credential that only an interactive re-consent can recover.
   await ensureOauthTokenVaultSchema();
   await ensureWorkspaceRepoSchema();
+  // Files a student hands to an agent (Cory, Reese) for the read_attachments tool.
+  await ensureAgentAttachmentSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).

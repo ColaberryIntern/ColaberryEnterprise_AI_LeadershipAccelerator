@@ -18,6 +18,7 @@ import {
   listEnrollmentProjectsSummary,
 } from '../services/projects/projectReadService';
 import { setTaskStatus, setTaskStatusByStory, importProject, type ImportProjectInput } from '../services/projects/projectWriteService';
+import { attachmentsSchema } from '../services/agents/tools/attachmentSchema';
 import { z } from 'zod';
 
 const router = Router();
@@ -76,6 +77,9 @@ const mentorSchema = z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().max(8000),
   })).max(40).optional(),
+  // Files the student attached to this turn (read_attachments tool). Ids only —
+  // the bytes were uploaded separately and are owner-checked on read.
+  attachments: attachmentsSchema,
 });
 
 router.get('/api/portal/projects', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
@@ -156,7 +160,7 @@ router.post(
       const { loadOwnedTask, coachOnTask } = await import('../services/projects/projectMentorService');
       const task = await loadOwnedTask(eid(req), String(req.params.projectId), String(req.params.taskId));
       if (!task) return res.status(404).json({ error: 'Task not found' });
-      res.json(await coachOnTask(eid(req), task, body.mode, body.message, body.history || []));
+      res.json(await coachOnTask(eid(req), task, body.mode, body.message, body.history || [], body.attachments || []));
     } catch (e) { fail(res, e, next); }
   },
 );

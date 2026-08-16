@@ -310,6 +310,44 @@ export function markTaskDone(projectId: string, taskId: string): void {
   if (changed) emitTaskStatus(p, changed);
 }
 
+/**
+ * Mirror a completion the PLATFORM already granted into the local board.
+ *
+ * Identical bookkeeping to `markTaskDone` with one deliberate omission: it does
+ * NOT emit a status push. The completion originated on the server — the
+ * verification loop set `status = 'complete'` and stamped `verified_at` after
+ * reading the repo — so pushing `complete` back would be telling the server
+ * something it just told us, and `CLIENT_SETTABLE_STATUSES` answers that with a
+ * 409 by design. Before this existed the workspace's only "done" path fired
+ * exactly that rejected request and logged a sync failure on every verified
+ * story.
+ *
+ * Safe to call twice: a task already `done` is left alone.
+ */
+export function mirrorVerifiedCompletion(projectId: string, taskId: string): void {
+  const list = read();
+  const p = list.find((x) => x.id === projectId);
+  if (!p) return;
+  for (const l of p.lists) {
+    const t = l.tasks.find((x) => x.id === taskId);
+    if (t && t.state !== 'done') {
+      t.state = 'done'; t.due = 'done';
+      if (t.req) {
+        const req = p.reqs.find((r) => r.id === t.req);
+        if (req) {
+          const order: ReqState[] = ['unmapped', 'planned', 'built', 'verified'];
+          const i = order.indexOf(req.state);
+          if (i > -1 && i < 3) req.state = order[i + 1];
+        }
+      }
+      p.activity.unshift({ id: 'a' + Date.now(), kind: 'done', who: 'You', time: 'just now',
+        title: `Verified: ${t.title}`, body: 'Confirmed from your repo by the build pipeline.' });
+      break;
+    }
+  }
+  write(list); notify();
+}
+
 export function skipTask(projectId: string, taskId: string): void {
   const list = read();
   const p = list.find((x) => x.id === projectId);

@@ -164,3 +164,101 @@ export async function syncWorkspaceRepo(projectId: string): Promise<WorkspaceRep
   );
   return data;
 }
+
+// ── story verification ───────────────────────────────────────────────────────
+
+/** What the platform concluded about one story, last time it looked at the repo. */
+export interface StoryVerificationDto {
+  state: 'not_started' | 'in_progress' | 'submitted' | 'verified';
+  criteria_total: number;
+  criteria_passed: number;
+  /** The exact text of every criterion still outstanding. Drives the checkboxes. */
+  outstanding: string[];
+  commit_sha: string | null;
+  commit_at: string | null;
+  /** Plain-language "why this is not verified yet". Drives the disabled-button copy. */
+  reasons: string[];
+  rejected_claims: string[];
+  checked_at: string | null;
+  /**
+   * Held at `verified` by the immutable latch rather than by the current repo
+   * read — history rewritten, progress file deleted, evidence commit aged out.
+   * Still verified; we just cannot re-check it.
+   */
+  latched: boolean;
+  /** What the CURRENT read concluded, when it disagrees with the latch. Diagnostic only. */
+  live_state: StoryVerificationDto['state'] | null;
+}
+
+export interface StoryVerificationView {
+  project_id: string;
+  story_id: string;
+  status: string;
+  /** The completion gate. Non-null means the platform confirmed it. Never moves. */
+  verified_at: string | null;
+  verified_by: string | null;
+  verification: StoryVerificationDto | null;
+  /** The criteria as the PLAN has them, in plan order. The authority for pairing. */
+  acceptance: string[];
+  /**
+   * Builder XP banked for this story — an 800 budget for the capstone split
+   * across its stories. Shown only when above zero: the split fails closed at 0
+   * if the config row is missing, and a "+0" celebration would announce an
+   * award that did not happen.
+   */
+  xp_awarded: number;
+}
+
+/**
+ * GET one story's verification state.
+ *
+ * Read-only and cheap — this is the endpoint the workspace page polls while a
+ * story is open. It reports the last verdict; it never triggers a GitHub read,
+ * so polling it cannot cost the student their rate limit.
+ */
+export async function getStoryVerification(
+  projectId: string, storyId: string,
+): Promise<StoryVerificationView> {
+  const { data } = await workspaceApi.get<StoryVerificationView>(
+    '/api/portal/workspace/story-verification',
+    { params: { project_id: projectId, story_id: storyId } },
+  );
+  return data;
+}
+
+// ── webhook setup ────────────────────────────────────────────────────────────
+
+/**
+ * What a student needs to register their own push webhook.
+ *
+ * CARRIES A SIGNING SECRET. Fetched only by the panel that shows it, never
+ * folded into the general repo view, and never persisted client-side.
+ */
+export interface WebhookSetupView {
+  supported: boolean;
+  owner: string | null;
+  repo: string | null;
+  payload_url: string | null;
+  secret: string | null;
+  content_type: 'json';
+  events: string[];
+  /** One paste. Updates an existing hook on our URL rather than adding a second. */
+  gh_command: string | null;
+  settings_url: string | null;
+  /**
+   * Last delivery of ANY kind from this repo. A `ping` counts — GitHub fires one
+   * the instant a hook is created, which is what lets "registered" confirm itself
+   * seconds after the student runs the command instead of waiting on a push.
+   */
+  last_delivery_at: string | null;
+  /** Last delivery that carried the student's own work through verification. */
+  last_push_at: string | null;
+}
+
+export async function getWebhookSetup(projectId: string): Promise<WebhookSetupView> {
+  const { data } = await workspaceApi.get<WebhookSetupView>(
+    '/api/portal/workspace/webhook-setup',
+    { params: { project_id: projectId } },
+  );
+  return data;
+}

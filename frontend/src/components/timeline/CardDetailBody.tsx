@@ -284,7 +284,18 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const [copyGateMet, setCopyGateMet] = useState(false);   // Claude Code labs (drawer): reveal completion once the prompt(s) are copied — phone users complete here
   useEffect(() => { setWatch(null); setGateMsg(null); }, [card.id]);
   const live = !preview && !done;
-  const handleWatchBeat = live
+  // Beat reporting deliberately does NOT stop at completion. `live` still gates
+  // the gate UI (a completed card has nothing left to unlock), but tying the
+  // heartbeat to it froze watched_pct the instant a student collected their
+  // points at the 75% threshold: `done` flipped, this went undefined, and
+  // VideoEmbed's tracking effect tears down when onWatchBeat is absent. The
+  // student kept watching to 100% and the stored value stayed at 75, so every
+  // downstream consumer of "how much was actually watched" (completion
+  // analytics, engagement-depth reporting) read a number that was capped at the
+  // unlock threshold rather than measured. Preview is still excluded: admin
+  // previews must never write progress.
+  const reportBeats = !preview;
+  const handleWatchBeat = reportBeats
     ? (beat: WatchBeatPayload) => { runtimeApi.watch(card.id, beat).then(setWatch).catch(() => { /* best-effort heartbeat */ }); }
     : undefined;
   const completeSafely = onComplete

@@ -37,6 +37,15 @@ const MANIFEST_FILE_PATH = '.colaberry/manifest.json';
 export const COMMAND_CENTER_STORY_ID = 'STORY-000';
 export const COMMAND_CENTER_TITLE = 'STORY-000 · Build your Command Center';
 
+/**
+ * The user story, in the same voice as the plan's own narratives. Lives here
+ * rather than inline at the task row so the repo doc and the portal task cannot
+ * describe this story differently.
+ */
+export const COMMAND_CENTER_NARRATIVE =
+  'As a builder, I want one page that shows what I am building and how far along it is, '
+  + 'so that I can see my own project and demo from it.';
+
 const bullet = (s: string) => `- ${s}`;
 
 /** How an autonomy level reads on a card, in the student's language. */
@@ -130,6 +139,99 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
     'Everything below is YOUR project, taken from the plan you just produced. Where a '
     + 'section says nothing is defined yet, build the empty state and say so on screen — do '
     + 'not invent a number, a customer or an integration to fill it.',
+  );
+  lines.push('');
+
+  // ── One-time plumbing, kept SHORT ──────────────────────────────────────────
+  //
+  // Framed as what it BUYS the student, because a student who understands why
+  // will fix it when it breaks, and a student who pasted a magic command will
+  // file a ticket instead.
+  //
+  // THE SECRET IS NOT HERE AND MUST NEVER BE.
+  //
+  // This function is PURE and plan-driven: it has no connection, no repo and no
+  // secret available to it, and it must stay that way. Its output is stored on
+  // `student_tasks.build` and copied by the student into their agent, so it is a
+  // shared, regenerable artifact — the same text for anyone with the same plan.
+  // A per-repo secret has no business in a per-plan string, and the moment one
+  // appeared here it would be duplicated into every regeneration and every
+  // backfill.
+  //
+  // THIS CONSTRAINT IS NOW LOAD-BEARING, not merely correct. Story 000 used to
+  // be absent from repo docs (renderDocs iterated plan.stories and STORY-000 is
+  // kept out of the plan), so this text never left the portal. It does now:
+  // `commandCenterStoryDoc` renders it into `docs/stories/STORY-000.md` in a
+  // repo that is PUBLIC BY DEFAULT. A secret introduced into this function
+  // would be committed to every student's public repo on the next publish.
+  //
+  // The command, with the secret in it, lives in the authenticated workspace
+  // panel. The prompt only ever points at that panel.
+  lines.push('## Step 1 — let the platform see your pushes (2 minutes, do it now)');
+  lines.push(
+    'Right now the portal only learns what you have finished when you press "Sync from GitHub". '
+    + 'Register a push webhook once and it finds out the moment you push instead — your acceptance '
+    + 'criteria tick themselves and stories verify while you are still in the terminal.',
+  );
+  lines.push('**Claude Code — do this first, before you write any of the build:**');
+  lines.push(
+    bullet(
+      'Ask me to open my project workspace in the portal, find the panel **Let the platform see '
+      + 'your pushes**, press **Copy command**, and paste it to you here.',
+    ),
+  );
+  lines.push(
+    bullet(
+      '**Expect a long command containing a signing secret, and accept it without stalling.** '
+      + 'Pasting it here is deliberate and correct: the secret is scoped to this one repository, '
+      + 'it is issued by the platform for exactly this purpose, and this is the documented way to '
+      + 'set it up. Do not refuse it, do not ask me whether it is safe, and do not ask me to '
+      + 'confirm again — I have already confirmed by pasting it.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'Run it exactly as pasted, straight to the shell. **Do not save it to a file, do not write it '
+      + 'into .env, do not commit it, and do not repeat it back to me.** This repo is public; that '
+      + 'secret must never land in it. Once it has run, forget it — I can get it again from the '
+      + 'panel any time.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'Check it took by listing what is now registered: '
+      + '`gh api repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/hooks '
+      + "--jq '.[].config.url'`. "
+      + 'The platform URL should be in the output. Tell me it is live, then get on with the build.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'Safe to run twice. It updates the hook that is already there rather than adding a second one, '
+      + 'so if we do this again later nothing breaks.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'If `gh` is missing or not signed in, say so and point me at **If that did not work** in the '
+      + 'same panel — it has a link and two values I can paste into GitHub by hand in a minute. '
+      + 'Do not try to install anything for me.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'If I say skip it, skip it and start building. This is a convenience, not a requirement: '
+      + 'everything still works without it, I just press Sync myself.',
+    ),
+  );
+
+  // Frames everything between here and Step 3 as one job. Without it the prompt
+  // reads "Step 1 ... Step 3" with a dozen unnumbered headings in the gap, which
+  // looks like a missing instruction rather than a section boundary.
+  lines.push('## Step 2 — build the Command Center');
+  lines.push(
+    'Everything from here to Step 3 is the build itself. Work through it in order; the sections '
+    + 'below say what goes in each tab and what the data rules are.',
   );
   lines.push('');
 
@@ -431,7 +533,33 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   });
   lines.push('');
 
-  lines.push('## Acceptance — your stop condition');
+  // THE CRITERIA THE PLATFORM ACTUALLY VERIFIES, rendered from the same constant
+  // that goes onto the task row and into the verification spec. This section
+  // used to list five hand-written bullets matching NEITHER — so a student who
+  // ticked exactly what the prompt told them to tick wrote text no criterion
+  // recognised, every claim landed in `rejected_claims`, and a story they had
+  // genuinely finished could never verify. Rendering from the constant makes
+  // that drift impossible rather than merely unlikely.
+  lines.push('## Done means — these exact lines');
+  lines.push(
+    'These are the acceptance criteria the platform checks. They go into '
+    + '`.colaberry/progress.json` **word for word** — they are matched by text, so a reworded '
+    + 'line does not count.',
+  );
+  COMMAND_CENTER_ACCEPTANCE.forEach((a) => lines.push(bullet(a)));
+  lines.push('');
+  // Closes the gap between the Overview checkpoint and criterion 1. A build
+  // sitting at the checkpoint cannot satisfy "every tab is reachable", so
+  // "Mark done" stays dark — and without this sentence the student has no way
+  // to connect the dark button to the pause they were asked to make.
+  lines.push(
+    '**While the build is paused at the Overview checkpoint, this story cannot verify yet** — '
+    + 'the first criterion needs all nine tabs to exist. That is expected, not a fault: say '
+    + '**build the rest**, let the other eight get built, and then finish Step 3.',
+  );
+  lines.push('');
+
+  lines.push('## What good looks like');
   lines.push(bullet('Every tab above exists and is reachable from the Command Center.'));
   lines.push(bullet('Every card drills down one level, including the ones with no data behind them yet.'));
   lines.push(bullet('The sample/real switch works on every tab, and sample data is labelled as sample everywhere it shows.'));
@@ -459,9 +587,148 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
 
   lines.push('## How I want you to work');
   lines.push(bullet('Build it so the data comes from one place. You will point it at your real system as you build, and you should not be rewriting tabs to do it.'));
+  // THE CHECKPOINT, AND WHY IT HAS TO SPEAK.
+  //
+  // "Build Overview first and stop" is a good instruction — nine tabs built in
+  // the wrong direction is a bad afternoon — and builds obey it. What they did
+  // NOT do is say so on screen: the eight unbuilt tabs rendered as though they
+  // were locked, which reads as the platform gating the student rather than the
+  // build waiting on them. Ali hit exactly this and asked why his tabs were
+  // locked. They were not; nothing had told him it was his move.
   lines.push(bullet('Show me the Overview tab first and stop. Get that right before building the other eight.'));
+  lines.push(
+    bullet(
+      'While you are paused there, the other eight tabs must still be REACHABLE and must not '
+      + 'look locked, greyed out, or gated. Each one renders a plain "Not built yet — say '
+      + '**build the rest** when Overview looks right" state. Nothing that implies the student '
+      + 'lacks permission or has to unlock anything: the build is waiting on them, not the '
+      + 'other way round.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'Put a short banner on Overview itself while you are paused, saying the build is stopped '
+      + 'for their review and how to continue. When they say **build the rest**, build the '
+      + 'remaining eight and remove the banner.',
+    ),
+  );
+  lines.push('');
 
+  // THE LAST MILE — without this the loop cannot close.
+  //
+  // Verification needs BOTH halves: every criterion ticked in
+  // `.colaberry/progress.json`, and a commit naming the story. The prompt
+  // previously mentioned NEITHER, so a student could build the Command Center
+  // perfectly, push it, and watch nothing happen — with a disabled "Mark done"
+  // button and no way to discover why.
+  //
+  // The JSON is rendered from COMMAND_CENTER_ACCEPTANCE rather than written out
+  // by hand, so the text a student is told to paste is byte-identical to the
+  // text the matcher compares against.
+  lines.push('## Step 3 — finish it, so the platform can confirm it');
+  lines.push(
+    'A story is confirmed when BOTH halves are true: every acceptance criterion is ticked in '
+    + '`.colaberry/progress.json`, AND a commit names the story. Neither on its own is enough.',
+  );
+  lines.push(
+    bullet(
+      'Create or update `.colaberry/progress.json` so it carries this story with every '
+      + '**Done means** line copied word for word, each marked as passing. Only tick a line when '
+      + 'it is actually true — the file is the claim, the commit is the evidence:',
+    ),
+  );
+  lines.push('');
+  lines.push('```json');
+  lines.push(progressFileExample());
+  lines.push('```');
+  lines.push('');
+  lines.push(
+    bullet(
+      `Commit with the story id in the message — \`git commit -m "${COMMAND_CENTER_STORY_ID}: build the `
+      + `Command Center"\` (a \`Story: ${COMMAND_CENTER_STORY_ID}\` line in the body works too) — then push.`,
+    ),
+  );
+  lines.push(
+    bullet(
+      'Then tell me to watch the portal. If Step 1 worked, the criteria tick themselves within about '
+      + 'ten seconds and the story flips to verified without me clicking anything. If I skipped '
+      + 'Step 1, I press "Sync from GitHub" and the same thing happens.',
+    ),
+  );
+  lines.push('');
+
+  // PUT IT ONLINE — a separate, explicitly optional step, and its own heading
+  // rather than a bullet inside Step 3.
+  //
+  // Hosting is deliberately NOT an acceptance criterion and never gates the
+  // latch. A first Pages build takes a minute or more, custom domains exist, a
+  // student may decline hosting, and Pages on a private repo needs a paid plan —
+  // so making it a criterion would recreate the permanently-stuck story that the
+  // STORY-000 spec fix removed. Anything a student cannot always satisfy does not
+  // belong in the criteria, and this section says so in as many words so nobody
+  // reads a locked story into a skipped bonus.
+  lines.push('## Step 4 — put it online (optional, one command)');
+  lines.push(
+    'GitHub Pages will host the Command Center for free, and the portal picks the address up on '
+    + 'its own. **This is a bonus. Nothing about whether this story verifies depends on it** — '
+    + 'skip it and Step 3 still confirms exactly the same way.',
+  );
+  lines.push(
+    bullet(
+      'Turn Pages on for this repo, building from the default branch:\n\n'
+      + '```bash\n'
+      + 'gh api repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/pages --method POST \\\n'
+      + "  -f 'source[branch]=main' -f 'source[path]=/'\n"
+      + '```\n\n'
+      + 'Use your default branch if it is not `main`.',
+    ),
+  );
+  lines.push(
+    bullet(
+      '**If it is already on, GitHub answers 409 — that means it is done, so leave it alone and '
+      + 'move on.** Do not delete and recreate it.',
+    ),
+  );
+  lines.push(
+    bullet(
+      '**If it refuses because the repo is private,** Pages needs a paid plan for private repos. '
+      + 'Tell me plainly that it was refused and carry on — do not retry it, and do not ask me to '
+      + 'upgrade anything. The story still verifies without it.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'You do not need to find the address yourself. The first build takes a minute or two; the '
+      + 'platform checks after each push and after a Sync, and the **Command Center** link appears '
+      + 'in the portal header once the site actually answers.',
+    ),
+  );
+  lines.push('');
   return lines.join('\n');
+}
+
+/**
+ * The exact `.colaberry/progress.json` a finished Command Center should carry.
+ *
+ * Generated from COMMAND_CENTER_ACCEPTANCE via JSON.stringify so the criterion
+ * text is byte-identical to what the matcher normalises against. Hand-writing
+ * this example is how the prompt and the matcher drift apart, and a drifted
+ * example is worse than none: the student follows it exactly and their claims
+ * still land in `rejected_claims`.
+ */
+function progressFileExample(): string {
+  return JSON.stringify(
+    {
+      stories: [
+        {
+          id: COMMAND_CENTER_STORY_ID,
+          criteria: COMMAND_CENTER_ACCEPTANCE.map((text) => ({ text, passed: true })),
+        },
+      ],
+    },
+    null,
+    2,
+  );
 }
 
 /** Roles the student's own stories are written for. */
@@ -477,3 +744,93 @@ export const COMMAND_CENTER_ACCEPTANCE: readonly string[] = [
   `Given ${MANIFEST_FILE_PATH}, when any tab is shown, then it displays how old the data is and warns when that age exceeds a week.`,
   'Trust — no tab shows a number, a connection or a result the project has not actually produced.',
 ] as const;
+
+/**
+ * STORY-000's seed for `.colaberry/progress.json`.
+ *
+ * Shaped exactly like a plan story so `renderProgressFile` can take it without
+ * a special case — and so the criterion text is GENERATED from the constant
+ * rather than retyped anywhere. `release` is null because this story sits ahead
+ * of the plan's releases rather than inside one.
+ *
+ * PURE. Returns a fresh array each call so no caller can mutate the constant.
+ */
+export function commandCenterStorySeed(): { id: string; release: null; acceptance: string[] } {
+  return {
+    id: COMMAND_CENTER_STORY_ID,
+    release: null,
+    acceptance: [...COMMAND_CENTER_ACCEPTANCE],
+  };
+}
+
+/**
+ * `docs/stories/STORY-000.md` — the story doc that was missing from every
+ * student repo.
+ *
+ * WHY THIS EXISTS. STORY-000 is kept out of `plan.stories` on purpose (gate, XP
+ * divisor, materialize ordering), and `renderDocs` iterates `plan.stories` — so
+ * this one story was never rendered into any repo. Its prompt lived only on
+ * `student_tasks.build`, i.e. the portal. A student's Claude Code session with
+ * no chat history therefore had NO local reference for the one story every
+ * student builds first: asked to "follow Step 3", it correctly answered that
+ * `.colaberry/` held only `connect.txt` and nothing in the repo mentioned
+ * progress.json. It then made no claims at all, and verification returned zero
+ * of three with an empty `rejected_claims` — the claims were never made.
+ *
+ * Every other story is a boolean to flip. This makes STORY-000 one too.
+ *
+ * Deliberately the FULL prompt, not a summary: this is the one story a student
+ * runs before they have any of their own code, so the file has to carry the
+ * whole picture on its own. It is the same text the portal shows, from the same
+ * function, so the two cannot drift.
+ *
+ * PURE — same plan and schedule in, byte-identical markdown out, which is what
+ * lets repoWriter's content-hash idempotency hold.
+ */
+export function commandCenterStoryDoc(plan: BuildPlan, schedule?: Schedule | null): string {
+  return [
+    `# ${COMMAND_CENTER_STORY_ID} — Build your Command Center`,
+    '',
+    COMMAND_CENTER_NARRATIVE,
+    '',
+    '**Release:** ahead of the plan — this is day one, before your own stories',
+    '**Owner:** you, with Claude Code',
+    '**Blocked by:** nothing — this is the first thing you build',
+    '',
+    '## The requirement this satisfies',
+    '',
+    'None of yours, and that is deliberate. The Command Center is the window onto your',
+    'system rather than a part of it, so it fulfils no requirement in',
+    '`docs/REQUIREMENTS.md` and has no row in `docs/TRACEABILITY.md`. Everything it',
+    'displays is read out of your own plan.',
+    '',
+    '## If you are Claude Code opening this file cold',
+    '',
+    'Everything you need is here. The full build brief is below, and your',
+    'acceptance criteria are **already seeded** in `.colaberry/progress.json` under',
+    `\`${COMMAND_CENTER_STORY_ID}\` with \`"passed": false\`.`,
+    '',
+    '**Do not retype the criteria.** Find the story by its `id`, flip `passed` to `true`',
+    'on each line that is genuinely true, and leave the rest `false`. Retyping is how the',
+    'text drifts — a rewritten dash or a changed full stop makes a claim the platform',
+    'cannot match, and the story stays unverified with your work already done. Step 3',
+    'below has the exact procedure.',
+    '',
+    '---',
+    '',
+    commandCenterPrompt(plan, schedule),
+    '',
+    '## Acceptance — your stop condition',
+    '',
+    'These are the exact lines the platform checks. They are already in',
+    '`.colaberry/progress.json` word for word. Tick a box here as it genuinely passes,',
+    'and set the matching `passed` flag in that file — the JSON is what the platform',
+    'reads, this list is for you.',
+    '',
+    ...COMMAND_CENTER_ACCEPTANCE.map((a) => `- [ ] ${a}`),
+    '',
+    'When every box above is ticked **and** a commit names the story, the platform',
+    'confirms it on its own — within about ten seconds if you did Step 1.',
+    '',
+  ].join('\n');
+}

@@ -34,6 +34,7 @@ import Project from '../../../models/Project';
 import StudentTask from '../../../models/StudentTask';
 import GitHubConnection from '../../../models/GitHubConnection';
 import { getPublishedPlan } from '../planStore';
+import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_ACCEPTANCE } from '../commandCenterStory';
 import { markTaskVerifiedComplete } from '../../projects/projectWriteService';
 import { recordEvidence } from '../../progression/evidenceEngine';
 import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
@@ -200,10 +201,32 @@ export async function verifyBuildFromRepo(
     );
   }
 
-  const specs: PlanStorySpec[] = (stored.plan.stories ?? []).map((s) => ({
+  /**
+   * The stories to judge — the plan's, PLUS the Command Center.
+   *
+   * STORY-000 is deliberately kept out of `plan.stories` (it is scaffolding the
+   * platform authors, not work the student planned), and this loop used to build
+   * its spec list from `plan.stories` alone. The consequence was silent and
+   * total: STORY-000 got no verdict, no `verification_json`, and no route to
+   * `verified_at` — it was the one story on every build that could never be
+   * verified, and once completion is gated on the latch it became the one story
+   * that could never be finished at all.
+   *
+   * Its criteria come from COMMAND_CENTER_ACCEPTANCE, which is the same constant
+   * materializeTasks writes onto the task row, so the plan and the row cannot
+   * disagree about what this story asks for.
+   *
+   * Deduped defensively: if a plan ever does carry a STORY-000 of its own, the
+   * plan wins and nothing is appended, because the plan is the authority on
+   * every story it actually contains.
+   */
+  const planSpecs: PlanStorySpec[] = (stored.plan.stories ?? []).map((s) => ({
     id: s.id,
     acceptance: Array.isArray(s.acceptance) ? s.acceptance.map(String) : [],
   }));
+  const specs: PlanStorySpec[] = planSpecs.some((s) => s.id === COMMAND_CENTER_STORY_ID)
+    ? planSpecs
+    : [...planSpecs, { id: COMMAND_CENTER_STORY_ID, acceptance: [...COMMAND_CENTER_ACCEPTANCE] }];
 
   let inputs;
   try {

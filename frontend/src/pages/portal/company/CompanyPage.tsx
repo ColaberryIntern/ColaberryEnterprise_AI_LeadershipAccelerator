@@ -8,6 +8,7 @@ import {
   OrgOverview, OrgRosterMember, OrgFeedItem, OrgMemberDetail,
 } from '../../../services/orgApi';
 import { fetchSettings } from '../../../services/portalSettingsApi';
+import { companyLabel } from '../useIsOrgManager';
 
 /**
  * CompanyPage (/portal/company) — the REAL, authed manager surface, rendered
@@ -35,7 +36,11 @@ function fmtWhen(iso: string): string {
 const CompanyPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState(false);
-  const [orgName, setOrgName] = useState<string>('Your company');
+  // The company's own name where one was supplied at signup, otherwise the
+  // generic label. Resolved through companyLabel() so the heading, the sidebar
+  // group and the nav item cannot drift apart -- all three used to hardcode
+  // their own copy of the string.
+  const [orgName, setOrgName] = useState<string>(companyLabel(null));
   const [overview, setOverview] = useState<OrgOverview | null>(null);
   const [roster, setRoster] = useState<OrgRosterMember[]>([]);
   const [feed, setFeed] = useState<OrgFeedItem[]>([]);
@@ -58,7 +63,7 @@ const CompanyPage: React.FC = () => {
     const [s, o, r, f] = await Promise.allSettled([
       fetchSettings(), getOrgOverview(), getOrgRoster(), getOrgFeed(),
     ]);
-    if (s.status === 'fulfilled') setOrgName(s.value.account.org?.name || 'Your company');
+    if (s.status === 'fulfilled') setOrgName(companyLabel(s.value.account.org ?? null));
     if (o.status === 'fulfilled') setOverview(o.value);
     if (r.status === 'fulfilled') setRoster(r.value);
     if (f.status === 'fulfilled') setFeed(f.value);
@@ -140,6 +145,9 @@ const CompanyPage: React.FC = () => {
     <PortalShell>
       <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
         <div>
+          {/* Eyebrow stays generic on purpose: with a real company name in the
+              H1 directly beneath it, repeating that name here would read as a
+              stutter ("Acme Co / Acme Co, on the rise in AI"). */}
           <div style={{ ...sub, color: 'var(--brand-accent)' }}>Your company</div>
           <h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>{orgName}, on the rise in AI</h1>
           <p style={muted}>

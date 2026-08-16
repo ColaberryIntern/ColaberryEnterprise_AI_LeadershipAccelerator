@@ -148,10 +148,25 @@ async function notifyDmRecipient(roomId: string, senderId: string, messageId: st
   }
 }
 
-/** Send a message in a DM room (room-service auth enforces membership). */
-export async function sendDmMessage(ctx: RoomAccessContext, roomId: string, content: string): Promise<RoomMessage> {
+/**
+ * Send a message in a DM room (room-service auth enforces membership).
+ * `attachments` are ids of files the sender uploaded — postMessage re-verifies
+ * ownership before persisting them, and Reese reads them off the stored
+ * message rather than off this call, so a reply built from a replayed message
+ * sees exactly what the student sent.
+ */
+export async function sendDmMessage(
+  ctx: RoomAccessContext,
+  roomId: string,
+  content: string,
+  attachments: Array<{ id: string; name?: string | null }> = [],
+): Promise<RoomMessage> {
   await assertDmRoom(roomId);
-  const message = await postMessage(ctx, roomId, { content });
+  // `attachments` is added to the payload only when there is something to add,
+  // so a plain text DM reaches postMessage with the exact input shape it always
+  // had. CI caught the alternative: passing `attachments: []` unconditionally
+  // changed the call signature for every existing caller to no purpose.
+  const message = await postMessage(ctx, roomId, attachments.length ? { content, attachments } : { content });
   await notifyDmRecipient(roomId, ctx.enrollmentId, message.id);
   // Reese Phase 1 — reactive-only reply trigger. maybeTriggerReeseReply() is a
   // strict no-op for any room Reese isn't a member of, and for any message
@@ -175,7 +190,34 @@ export async function sendDmMessage(ctx: RoomAccessContext, roomId: string, cont
 /** List a DM's messages (room-service auth enforces membership). */
 export async function listDmMessages(ctx: RoomAccessContext, roomId: string, since?: string) {
   await assertDmRoom(roomId);
-  return listMessages(ctx, roomId, { since });
+  const result = await listMessages(ctx, roomId, { since });
+
+  // Decorate each message with ready-to-render image URLs for anything attached
+  // to it, so a reloaded conversation still shows the picture and not just the
+  // sentence about it.
+  //
+  // The URLs are minted HERE, for THIS viewer, and only after listMessages has
+  // already enforced room membership — so "may this person see this file" is
+  // decided by the room rule at mint time. That is the reason a DM recipient can
+  // see an image they do not own: they were sent it. Owner-only would have been
+  // the wrong rule for a conversation.
+  const { signedAttachmentUrl } = await import('../agents/tools/attachmentUrlToken');
+  const messages = (result.messages || []).map((m: any) => {
+    const raw = m?.metadata && typeof m.metadata === 'object' ? (m.metadata as any).attachments : null;
+    if (!Array.isArray(raw) || !raw.length) return m;
+    const attachments = raw
+      .filter((a: any) => a && typeof a.id === 'string')
+      .map((a: any) => ({
+        id: a.id,
+        name: typeof a.name === 'string' ? a.name : 'attachment',
+        url: signedAttachmentUrl(a.id, ctx.enrollmentId),
+      }));
+    // Spread through toJSON so the Sequelize instance becomes a plain object
+    // the extra field can actually survive on.
+    return { ...(typeof m.toJSON === 'function' ? m.toJSON() : m), attachments };
+  });
+
+  return { ...result, messages };
 }
 
 export interface DmConversation {

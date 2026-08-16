@@ -46,8 +46,20 @@ const ghlContactUrl = (contactId: string) =>
 
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'enrolled', 'lost'];
 
+/**
+ * NOTE ON THE NAME: this filter is labelled "Source" but the API maps it onto
+ * `form_type`, not `leads.source` (leadService.listLeads assigns params.source to
+ * where.form_type). Every value below is therefore a form_type. Renaming the
+ * parameter would be the honest fix and is a breaking API change; adding the
+ * missing option is not, so that is what this does.
+ *
+ * `business_account` was absent, which meant leads created by the enterprise site's
+ * business-account signup could not be filtered for at all -- no selection in this
+ * dropdown would ever reveal one.
+ */
 const SOURCE_OPTIONS = [
   { value: '', label: 'All Sources' },
+  { value: 'business_account', label: 'Business Account Signup' },
   { value: 'open_house', label: 'Open House' },
   { value: 'executive_overview_download', label: 'Executive Briefing' },
   { value: 'contact', label: 'Contact Form' },
@@ -73,6 +85,8 @@ function AdminLeadsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  /** Non-null when the last load failed. Distinguishes "broken" from "empty". */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [tempFilter, setTempFilter] = useState(() => new URLSearchParams(window.location.search).get('temperature') || '');
@@ -100,8 +114,27 @@ function AdminLeadsPage() {
       setLeads(res.data.leads);
       setTotal(res.data.total);
       setTotalPages(res.data.totalPages);
+      setLoadError(null);
     } catch (err) {
+      /**
+       * This used to be `console.error` and nothing else. `leads` stayed at its
+       * initial [], so the table rendered its empty state -- "No leads yet. Click
+       * '+ Add Lead' to get started." -- and the header read "Leads (0)". That
+       * message asserts the database is empty. It was shown against 24,244 real
+       * lead rows, because the request had failed and nothing said so.
+       *
+       * A failed load and an empty result are different facts and must look
+       * different. The error is surfaced so the page can say which one happened.
+       */
       console.error('Failed to fetch leads:', err);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      setLoadError(
+        status === 401 || status === 403
+          ? 'Your session is not authorized to read leads. Sign in again.'
+          : `Could not load leads${status ? ` (HTTP ${status})` : ''}. This is a load failure, not an empty list.`,
+      );
+      setLeads([]);
+      setTotal(0);
     }
   }, [page, statusFilter, sourceFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
 
@@ -421,8 +454,19 @@ function AdminLeadsPage() {
               <tbody>
                 {leads.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="text-center text-muted py-4">
-                      {hasFilters ? 'No leads match the current filters.' : 'No leads yet. Click "+ Add Lead" to get started.'}
+                    {/* Three distinct states, because they call for three
+                        different actions. Saying "No leads yet" when the request
+                        failed sends someone to add a lead by hand against a
+                        database that already holds 24,000. */}
+                    <td
+                      colSpan={11}
+                      className={`text-center py-4 ${loadError ? 'text-danger' : 'text-muted'}`}
+                    >
+                      {loadError
+                        ? loadError
+                        : hasFilters
+                          ? 'No leads match the current filters.'
+                          : 'No leads yet. Click "+ Add Lead" to get started.'}
                     </td>
                   </tr>
                 ) : (

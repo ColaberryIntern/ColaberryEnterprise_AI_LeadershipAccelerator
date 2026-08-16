@@ -18,7 +18,7 @@ import { openDm } from '../../../services/dmApi';
 import ChatDock, { DmTarget } from './ChatDock';
 import MessagesButton from './MessagesButton';
 import { useEntitlement } from '../useEntitlement';
-import { useIsOrgManager } from '../useIsOrgManager';
+import { useOrgManager, companyLabel } from '../useIsOrgManager';
 import { useMgmtStatus } from '../useMgmtStatus';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 import type { GatedFeatureKey } from '../../../components/paywall/gatedFeatures';
@@ -89,14 +89,22 @@ export const NAV_GROUPS: NavGroup[] = [
 // "Your company" — prepended above "Your day" only for org managers. Single item
 // to the real, authed manager page. Kept out of NAV_GROUPS so normal students
 // never see it.
-const COMPANY_NAV_GROUP: NavGroup = {
-  grp: 'Your company',
-  items: [
-    { label: 'Your company', to: '/portal/company', icon: (
-      <svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M12 9h.01M15 9h.01M9 13h.01M12 13h.01M15 13h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-    ) },
-  ],
-};
+const COMPANY_ICON = (
+  <svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M12 9h.01M15 9h.01M9 13h.01M12 13h.01M15 13h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+
+/**
+ * The company nav group, named after the actual company.
+ *
+ * Was a module-level constant with the string "Your company" hardcoded twice,
+ * so every business account's sidebar read the same generic label even though
+ * the org's real name was already on the settings payload the shell fetches.
+ * Now built per-render from that name, falling back to the generic label only
+ * when no company was supplied at signup (see companyLabel / has_real_name).
+ */
+function buildCompanyNavGroup(label: string): NavGroup {
+  return { grp: label, items: [{ label, to: '/portal/company', icon: COMPANY_ICON }] };
+}
 
 // "Management Portal" — a single link that opens the admin portal for employees
 // (staff with a management role). Shown only when useMgmtStatus().is_mgmt. Routes
@@ -135,17 +143,19 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   // drift a frame apart. See useScrollCondense.ts for the hysteresis logic.
   const condensed = useScrollCondense();
   const { isStaff, hasFullAccess } = useEntitlement();   // drives the nav lock badge on gated items
-  const isOrgManager = useIsOrgManager(); // manager = also sees a "Your company" nav group
+  // The org itself, not just the boolean: the nav group is named after the company.
+  const { isManager: isOrgManager, org } = useOrgManager();
+  const companyNavLabel = companyLabel(org);
   const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
   // Effective nav: employees get "Management Portal", managers get "Your company",
   // both prepended above "Your day".
   const groups = useMemo<NavGroup[]>(
     () => [
       ...(mgmt.is_mgmt ? [MGMT_NAV_GROUP] : []),
-      ...(isOrgManager ? [COMPANY_NAV_GROUP] : []),
+      ...(isOrgManager ? [buildCompanyNavGroup(companyNavLabel)] : []),
       ...NAV_GROUPS,
     ],
-    [isOrgManager, mgmt.is_mgmt],
+    [isOrgManager, companyNavLabel, mgmt.is_mgmt],
   );
   // Mobile bottom tab bar mirrors the effective, navigable destinations.
   const tabItems = useMemo(

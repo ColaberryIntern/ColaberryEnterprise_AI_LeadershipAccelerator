@@ -1166,6 +1166,60 @@ export interface AdminMemberRow {
   // Management-portal role (owner/admin/curriculum/revenue/admissions/support)
   // for staff members, or null. Drives the Mgmt Role control on the roster.
   mgmt_role: string | null;
+  // The business account this person belongs to, or null for a regular
+  // individual account. Lets staff tell the two apart on the roster, which was
+  // previously impossible — nothing in this payload referenced an organization.
+  org: {
+    id: string;
+    name: string;
+    /** 'manager' owns or runs the account; 'member' was invited into it. */
+    membership: 'manager' | 'member';
+  } | null;
+}
+
+/**
+ * Map enrollment ids to the business account they belong to.
+ *
+ * One batched pair of queries, mirroring `activeCompEnrollmentIds` above rather
+ * than doing a lookup per row — the roster returns up to 200 members and a
+ * per-row query would make this page's cost scale with the roster.
+ *
+ * Resolution order mirrors `requireOrgManager` (orgAuth.ts) and
+ * `resolveManagedOrg` (portalSettingsService.ts): OWNER first, then an
+ * `org_members` row. Owner wins because `organizations.owner_enrollment_id` is
+ * unique, and because someone who owns an account is a manager of it regardless
+ * of what their roster row happens to say.
+ */
+async function orgsByEnrollmentId(
+  enrollmentIds: string[],
+): Promise<Map<string, { id: string; name: string; membership: 'manager' | 'member' }>> {
+  const out = new Map<string, { id: string; name: string; membership: 'manager' | 'member' }>();
+  if (!enrollmentIds.length) return out;
+
+  const owned: any[] = await Organization.findAll({
+    where: { owner_enrollment_id: { [Op.in]: enrollmentIds } },
+    attributes: ['id', 'name', 'owner_enrollment_id'],
+  });
+  owned.forEach((o) => {
+    out.set(o.owner_enrollment_id, { id: o.id, name: o.name, membership: 'manager' });
+  });
+
+  const memberships: any[] = await OrgMember.findAll({
+    where: { enrollment_id: { [Op.in]: enrollmentIds } },
+    attributes: ['enrollment_id', 'org_id', 'role'],
+    include: [{ model: Organization, as: 'organization', attributes: ['id', 'name'], required: false }],
+  });
+  memberships.forEach((m) => {
+    // Never overwrite an ownership record with a membership one.
+    if (!m.enrollment_id || out.has(m.enrollment_id) || !m.organization) return;
+    out.set(m.enrollment_id, {
+      id: m.organization.id,
+      name: m.organization.name,
+      membership: m.role === 'manager' ? 'manager' : 'member',
+    });
+  });
+
+  return out;
 }
 
 export async function listMembersForAdmin(search?: string): Promise<AdminMemberRow[]> {
@@ -1184,10 +1238,14 @@ export async function listMembersForAdmin(search?: string): Promise<AdminMemberR
     limit: 200,
   });
 
-  // Flag who currently holds a comped ('Free Access') seat — one batched query.
-  const compSet = await activeCompEnrollmentIds(
-    members.map((m: any) => m.enrollment_id).filter(Boolean),
-  );
+  const enrollmentIds = members.map((m: any) => m.enrollment_id).filter(Boolean);
+
+  // Two batched lookups, run together: who holds a comped ('Free Access') seat,
+  // and who belongs to a business account.
+  const [compSet, orgMap] = await Promise.all([
+    activeCompEnrollmentIds(enrollmentIds),
+    orgsByEnrollmentId(enrollmentIds),
+  ]);
 
   const rows: AdminMemberRow[] = members.map((m: any) => ({
     id: m.id,
@@ -1198,6 +1256,7 @@ export async function listMembersForAdmin(search?: string): Promise<AdminMemberR
     signed_up_at: m.enrollment?.created_at ? new Date(m.enrollment.created_at).toISOString() : null,
     free_access: m.enrollment_id ? compSet.has(m.enrollment_id) : false,
     mgmt_role: m.mgmt_role ?? null,
+    org: m.enrollment_id ? orgMap.get(m.enrollment_id) ?? null : null,
   }));
 
   rows.sort((a, b) => (b.signed_up_at ?? '').localeCompare(a.signed_up_at ?? ''));
