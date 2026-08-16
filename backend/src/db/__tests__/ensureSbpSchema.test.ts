@@ -21,13 +21,15 @@
 jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 
 import { sequelize } from '../../config/database';
-import { ensureSbpSchema, assertSbpSchema } from '../ensureSbpSchema';
+import {
+  ensureSbpSchema, assertSbpSchema, REQUIRED_TABLES, REQUIRED_COLUMNS,
+} from '../ensureSbpSchema';
 
 const mockQuery = sequelize.query as unknown as jest.Mock;
 
 /** Every table/index/column assertSbpSchema demands, as a fully-migrated DB. */
 const FULL_CATALOG = {
-  tables: ['build_intake', 'build_plans'],
+  tables: ['build_intake', 'build_plans', 'github_webhook_deliveries'],
   indexes: ['build_intake_unique_project', 'build_plans_unique_project_version'],
   columns: [
     { table_name: 'build_intake', column_name: 'answers' },
@@ -39,8 +41,33 @@ const FULL_CATALOG = {
     // nothing durable to key on and falls back to matching the live repo.
     { table_name: 'student_tasks', column_name: 'verified_ref' },
     { table_name: 'student_tasks', column_name: 'verification_json' },
+    // Per-repo webhook signing secret. Missing ⇒ every student repo falls back
+    // to the one shared secret, which is the exposure per-repo secrets close.
+    { table_name: 'github_connections', column_name: 'webhook_secret' },
   ],
 };
+
+/**
+ * This fixture has to stay a superset of REQUIRED_TABLES/COLUMNS in
+ * ensureSbpSchema.ts. Two branches each added a requirement here and git merged
+ * the source list cleanly while leaving this fixture with only one side's — a
+ * conflict no marker shows up for. The guard below fails loudly on the next one
+ * rather than leaving a green suite that proves nothing.
+ */
+describe('the fixture itself', () => {
+  it('covers every table and column assertSbpSchema demands', () => {
+    const inFixture = new Set([
+      ...FULL_CATALOG.tables.map((t) => `table:${t}`),
+      ...FULL_CATALOG.columns.map((c) => `column:${c.table_name}.${c.column_name}`),
+    ]);
+    const required = [
+      ...REQUIRED_TABLES.map((t) => `table:${t}`),
+      ...REQUIRED_COLUMNS.map((c) => `column:${c}`),
+    ];
+
+    expect(required.filter((r) => !inFixture.has(r))).toEqual([]);
+  });
+});
 
 /**
  * Answer the two catalog queries from a fake catalog; everything else (the DDL)

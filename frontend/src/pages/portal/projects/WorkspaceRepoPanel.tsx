@@ -4,6 +4,7 @@ import {
   startRepoConnect, confirmRepoConnect, provisionWorkspaceRepo,
   syncWorkspaceRepo, downloadDocsBundle,
 } from '../../../services/workspaceRepoApi';
+import WebhookSetupBlock from './WebhookSetupBlock';
 
 /**
  * WorkspaceRepoPanel — the step that connects a student's EXISTING folder to
@@ -180,6 +181,10 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
             {lostAccess ? 'Reconnect' : 'Use a different repo'}
           </button>
         </div>
+
+        {/* One-time plumbing, only offered once a repo is actually connected —
+            there is nothing to register a hook against before that. */}
+        <WebhookSetupBlock projectId={projectId} />
 
         {repo.recent_commits?.length > 0 && (
           <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
