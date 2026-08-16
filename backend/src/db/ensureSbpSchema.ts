@@ -170,9 +170,9 @@ export async function ensureSbpSchema(): Promise<void> {
 }
 
 /** What ensureSbpSchema must have produced. Checked, not assumed. */
-const REQUIRED_TABLES = ['build_intake', 'build_plans', 'github_webhook_deliveries'] as const;
+export const REQUIRED_TABLES = ['build_intake', 'build_plans', 'github_webhook_deliveries'] as const;
 /** Columns added after their table's first release. Checked, not assumed. */
-const REQUIRED_COLUMNS = [
+export const REQUIRED_COLUMNS = [
   'build_intake.answers',
   'student_tasks.due_on',
   'student_tasks.due_baseline_on',
