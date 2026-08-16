@@ -132,6 +132,30 @@ describe('setProjectNameIfEmpty', () => {
   });
 });
 
+describe('the source file itself is reviewable text', () => {
+  it('contains no raw control bytes', () => {
+    // This file shipped with the control-character class written as LITERAL
+    // bytes — an actual NUL, 0x1F and 0x7F sitting in the source. Functionally
+    // the regex was correct, and that is exactly the problem: git classified
+    // the file as binary, printed `Bin 0 -> 6890 bytes` instead of a diff, and
+    // the whole module went to review unreadable. A naming rule nobody can read
+    // is a naming rule nobody can check.
+    const bytes = readFileSync(join(__dirname, '..', 'projectNaming.ts'));
+    const offenders: number[] = [];
+    for (const b of bytes) {
+      if ((b < 0x20 && b !== 0x0a && b !== 0x0d && b !== 0x09) || b === 0x7f) offenders.push(b);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('still strips control characters at runtime, via escapes', () => {
+    expect(normalizeProjectName('Meeting\u0000Assistant')).toBe('Meeting Assistant');
+    expect(normalizeProjectName('Meeting\u001FAssistant')).toBe('Meeting Assistant');
+    expect(normalizeProjectName('Meeting\u007FAssistant')).toBe('Meeting Assistant');
+    expect(normalizeProjectName('\u0000\u001F\u007F')).toBeNull();
+  });
+});
+
 describe('PROJECT_NAME_COLUMNS', () => {
   it('names only columns the Project model actually declares', () => {
     // The sibling statement in this pipeline, `makeActiveProject`, shipped
