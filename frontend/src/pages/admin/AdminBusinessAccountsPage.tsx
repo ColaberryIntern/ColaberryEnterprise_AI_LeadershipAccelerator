@@ -26,6 +26,19 @@ import {
  * failed and nothing said so.
  */
 
+/**
+ * Dates arrive as ISO strings or null. `new Date(null|undefined)` yields
+ * "Invalid Date", which is exactly what the Created column showed for every
+ * business account until the backend's created_at mapping was fixed. Never
+ * print a date this function cannot parse.
+ */
+function formatDate(value: string | null | undefined, withTime = false): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return withTime ? d.toLocaleString() : d.toLocaleDateString();
+}
+
 const STATUS_OPTIONS: { value: OrganizationStatus | ''; label: string }[] = [
   { value: '', label: 'All Statuses' },
   { value: 'active', label: 'Active' },
@@ -222,9 +235,7 @@ function AdminBusinessAccountsPage(): React.ReactElement {
                         </span>
                       )}
                     </td>
-                    <td className="small text-muted">
-                      {new Date(org.created_at).toLocaleDateString()}
-                    </td>
+                    <td className="small text-muted">{formatDate(org.created_at)}</td>
                     <td className="text-end">
                       <Link
                         className="btn btn-sm btn-outline-danger"

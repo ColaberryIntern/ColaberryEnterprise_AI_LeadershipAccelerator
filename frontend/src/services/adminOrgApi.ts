@@ -20,7 +20,7 @@ export interface OrgListRow {
   name: string;
   status: OrganizationStatus;
   auto_staff_sync: boolean;
-  created_at: string;
+  created_at: string | null;
   owner_email: string | null;
   owner_name: string | null;
   member_count: number;
@@ -50,8 +50,13 @@ export interface OrgMemberRow {
   team: string | null;
   invite_status: string;
   joined_at: string | null;
+  /** Null when the teammate was invited but never activated an account. */
   enrollment_id: string | null;
   cohort_id: string | null;
+  full_name: string | null;
+  tier: string | null;
+  enrollment_status: string | null;
+  portal_enabled: boolean | null;
 }
 
 export interface OrgCohortRow {
@@ -71,7 +76,7 @@ export interface OrgDetailResponse {
     name: string;
     status: OrganizationStatus;
     auto_staff_sync: boolean;
-    created_at: string;
+    created_at: string | null;
     status_changed_at: string | null;
     status_changed_by: string | null;
   };
@@ -177,6 +182,23 @@ export async function listCohortsForLinking(): Promise<AdminCohortOption[]> {
     status: c.status ?? null,
     start_date: c.start_date ?? null,
   }));
+}
+
+/**
+ * Mint a READ-ONLY "view as" URL for someone's portal.
+ *
+ * Reuses the existing accelerator endpoint that the Accelerator and Community
+ * Roles pages already use, rather than adding a second impersonation path --
+ * one audited way in is the point. The token it returns is read-only and carries
+ * `impersonated_by`, so the admin observes the account without being able to
+ * change anything, and the action is attributable.
+ *
+ * Opens in a new tab by design: the participant session lives under a separate
+ * `participant_token`, so viewing an account does NOT log the admin out.
+ */
+export async function getViewAsUrl(enrollmentId: string): Promise<string | null> {
+  const res = await api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/view-as-token`);
+  return res.data?.url ?? null;
 }
 
 /**
