@@ -27,7 +27,20 @@ jest.mock('../planStore', () => ({
   getPlan: (...a: any[]) => mockGetPlan(...a),
   publishPlan: (...a: any[]) => mockPublishPlan(...a),
 }));
-jest.mock('../repoWriter', () => ({ writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a) }));
+// `readRepoManifest` is what feeds the content-hash idempotency check. Stubbed
+// to null here — "no manifest in the repo yet", i.e. a first publish — because
+// this suite is about the publish chain, not about change detection. The
+// idempotency behaviour has its own suite in repoWriter.test.ts.
+jest.mock('../repoWriter', () => ({
+  writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a),
+  readRepoManifest: async () => null,
+}));
+// publishBuild now mirrors server-side build progress into the documents, which
+// reads student_tasks and evidence_records. Stubbed empty: a first publish has
+// no progress to mirror, and the snapshot has its own suite.
+jest.mock('../buildProgressSnapshot', () => ({
+  loadBuildProgress: async () => ({ progress: [], baselineByStory: {} }),
+}));
 jest.mock('../materializeTasks', () => ({ materializePlanAsTasks: (...a: any[]) => mockMaterialize(...a) }));
 // Generation now ends by publishing itself, which looks up the workspace repo.
 // Mocked so this suite stays hermetic: unmocked it pulls the whole Sequelize

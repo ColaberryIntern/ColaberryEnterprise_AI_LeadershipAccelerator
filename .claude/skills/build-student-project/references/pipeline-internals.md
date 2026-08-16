@@ -232,25 +232,35 @@ Allowlist (`renderDocs.ts:41`), enforced twice — once at render, once by throw
 ```
 
 The set: `docs/REQUIREMENTS.md`, `docs/STORIES.md`, `docs/TRACEABILITY.md`, `CLAUDE.md`,
-one `docs/stories/STORY-nnn.md` per story, `.colaberry/plan.json`,
-`.colaberry/progress.json`, `.colaberry/manifest.json`.
+one `docs/stories/STORY-nnn.md` per story, `docs/stories/STORY-000.md`,
+`.colaberry/plan.json`, `.colaberry/progress.json`, `.colaberry/manifest.json`,
+`.colaberry/profile.json`.
+
+`docs/stories/STORY-000.md` is listed separately on purpose: STORY-000 is
+deliberately NOT in `plan.stories` (the traceability gate, the XP divisor and
+materialize ordering all read that array), so it is appended at the RENDER layer
+and the "one per story" clause above does not cover it.
 
 The commit is authored by `Colaberry Build Bot <build-bot@colaberry.ai>` with the
 message prefix `chore(colaberry):` so the push webhook can recognise its own writes and
 skip them — otherwise our write triggers a sync that triggers a write. The ref update is
 never forced: a concurrent human push must win, not be erased.
 
-**Two of these eight paths are co-owned and are merged, not replaced.** Everything else
-in the set is ours and is overwritten on every sync.
+**Three of these paths are NOT ours to overwrite.** Count them by the table below, never
+by position in the list above — the list grows. There are three distinct ownership rules,
+which is exactly why there are three separate files rather than one.
 
 | Path | Who owns what | Mechanism |
 |---|---|---|
 | `CLAUDE.md` | we own the delimited block, the student owns the rest of the file | `managedBlock.spliceManagedBlock` — see H-5 |
-| `.colaberry/progress.json` | we own the story list and the exact criterion text, the agent owns `passed`, `files_touched`, `tests_added`, notes | `progressContract.mergeProgressFile` — see H-5's #1463 update |
+| `.colaberry/progress.json` | CO-OWNED, merged field by field. We own the story list, the exact criterion text, and the platform-owned `verification` / `totals` blocks; the agent owns `passed`, `files_touched`, `tests_added`, notes | `progressContract.mergeProgressFile` — see H-5's #1463 update |
+| `.colaberry/profile.json` | SEED-ONCE. The STUDENT owns it outright. We write it exactly once, into a repo that does not have it, and never touch it again | `repoWriter` re-reads the repo and drops the file from the change set if it already exists |
 
-`.colaberry/plan.json` and `.colaberry/manifest.json` are platform bookkeeping and are
-still replaced wholesale. If you are about to describe `.colaberry/**` as "overwritten on
-every sync", that sentence was true before #1463 and is now wrong for one file in it.
+`.colaberry/plan.json` and `.colaberry/manifest.json` are the ONLY files in `.colaberry/**`
+that are platform bookkeeping and replaced wholesale. If you are about to describe
+`.colaberry/**` as "overwritten on every sync", that sentence was true before #1463 and is
+now wrong for three files in it — and overwriting `profile.json` destroys the student's
+portfolio layer, which is the one surface they control and can redact.
 
 ---
 

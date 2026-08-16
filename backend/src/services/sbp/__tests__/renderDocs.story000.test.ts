@@ -65,7 +65,7 @@ describe('a fresh repo gets STORY-000 in both places', () => {
     for (const s of pilot.stories) expect(paths).toContain(`docs/stories/${s.id}.md`);
   });
 
-  it('seeds the story into progress.json with all three criteria unpassed', () => {
+  it('seeds the story into progress.json with every criterion unpassed', () => {
     const entries = story000In(progressOf());
     expect(entries).toHaveLength(1);
     expect(entries[0].criteria).toHaveLength(COMMAND_CENTER_ACCEPTANCE.length);

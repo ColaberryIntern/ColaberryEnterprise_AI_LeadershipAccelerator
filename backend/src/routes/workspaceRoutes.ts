@@ -299,6 +299,24 @@ router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, r
       };
     }
 
+    // Mirror what we just concluded back into the repo, so the student's
+    // Command Center — a static page with no API and no login — can render it.
+    //
+    // Runs AFTER verification, deliberately: verification is what decides which
+    // stories are verified and against which commit, and writing before it
+    // would publish the previous answer. Like verification, it never fails the
+    // sync; the pull is what the student asked for.
+    let documents: unknown = null;
+    try {
+      const { refreshRepoDocuments } = await import('../services/sbp/refreshRepoDocuments');
+      documents = await refreshRepoDocuments(projectId, { correlationId });
+    } catch (docErr: any) {
+      // refreshRepoDocuments classifies every expected failure itself, so
+      // reaching here is a defect rather than a state.
+      logError('workspace_doc_refresh_failed', req, docErr);
+      documents = { outcome: 'write_failed', error_class: 'Unexpected', commit_sha: null, changed_paths: [] };
+    }
+
     // Hosting check, detached. Sync is the other natural "something changed, go
     // and look again" moment, and covering it matters: a student who enables
     // Pages and never pushes again would otherwise never get their link. It runs
@@ -315,7 +333,7 @@ router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, r
       })();
     }
 
-    res.json({ ...view, verification });
+    res.json({ ...view, verification, documents });
   } catch (err: any) {
     if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
     logError('workspace_repo_sync_failed', req, err);
