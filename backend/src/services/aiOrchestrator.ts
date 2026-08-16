@@ -670,6 +670,27 @@ export async function runCoryEngineTicketAutoResolverAgent(): Promise<AgentExecu
   }));
 }
 
+// CoryBrain initiative-ticket reconciliation — re-checks every open CoryBrain ticket
+// (both a strategic initiative's own parent ticket and its subtask tickets) against the
+// CURRENT live status of the `strategic_initiatives` row it is linked to, and syncs the
+// ticket to match once that initiative has genuinely reached a terminal state (see
+// backend/src/intelligence/autonomy/corybrainInitiativeTicketAutoResolver.ts for the
+// full design). This is a reconciliation/sync fix, not a new decision engine — it never
+// decides whether an initiative itself should be approved/rejected/completed; that
+// authority stays entirely with coryInitiatives.ts/ticketReplyService.ts's already-fixed
+// mechanism (PRs #1491/#1495/#1499/#1502/#1513), which this resolver never imports or
+// modifies. Deterministic, no LLM — mirrors runCoryEngineTicketAutoResolverAgent's
+// pattern above for a structurally different but related class of problem. Registered
+// `enabled: false` in agentRegistrySeed.ts on purpose — this cron must not fire until
+// the human-reviewed historical bulk-clear has run and been verified (see this run's
+// execution-contract.md); it is flipped to enabled:true manually, once, after that.
+export async function runCoryBrainInitiativeTicketAutoResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('CoryBrainInitiativeTicketAutoResolver', wrapSkoolAgent(async () => {
+    const { reCheckAndAutoResolveCoryBrainInitiativeTickets } = await import('../intelligence/autonomy/corybrainInitiativeTicketAutoResolver');
+    return reCheckAndAutoResolveCoryBrainInitiativeTickets();
+  }));
+}
+
 export async function runCompanyStrategicCycleAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('CompanyStrategicCycle', wrapSkoolAgent(async () => {
     const { getActiveCompany } = require('./company/companyService');

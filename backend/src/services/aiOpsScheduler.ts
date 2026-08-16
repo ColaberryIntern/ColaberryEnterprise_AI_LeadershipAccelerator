@@ -50,6 +50,7 @@ import {
   runWorkforceIntelligenceAgent,
   runWorkforceTicketAutoResolverAgent,
   runCoryEngineTicketAutoResolverAgent,
+  runCoryBrainInitiativeTicketAutoResolverAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
   runStrategyFuturesArchitect,
@@ -257,6 +258,7 @@ export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // fire on schedule per this entry, but runAgent()'s own `AiAgent.enabled` gate keeps
   // it a no-op until a human flips it on after the reviewed historical bulk-clear.
   { agentName: 'CoryEngineTicketAutoResolver', hardcodedSchedule: '25 */6 * * *', runner: runCoryEngineTicketAutoResolverAgent, label: 'cory-engine ticket auto-resolve (re-check + close on recovery)' },
+  { agentName: 'CoryBrainInitiativeTicketAutoResolver', hardcodedSchedule: '40 */6 * * *', runner: runCoryBrainInitiativeTicketAutoResolverAgent, label: 'CoryBrain initiative-linked ticket sync (re-check + close on initiative terminal state)' },
 
   // Department Strategy Architects (every 6 hours, staggered)
   { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },
