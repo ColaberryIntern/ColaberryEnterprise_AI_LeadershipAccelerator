@@ -27,12 +27,30 @@ import type { StudentProject, ProjectTask } from '../projectsStore';
 let mockProject: StudentProject | null = null;
 /** The story-verification response, or null to make the endpoint 404. */
 let mockVerification: Record<string, unknown> | null = null;
+/** Which story the student has open. NOT fixed: the link must not be STORY-000-only. */
+let mockTaskId = 'STORY-004';
+/** How many times the page pulled project state from the server. */
+let mockRefreshCalls = 0;
+/** Lets a test make the server pull actually change the store, as it does live. */
+let mockOnRefresh: (() => void) | null = null;
 
 jest.mock('react-router-dom', () => ({
   __esModule: true,
-  useParams: () => ({ projectId: 'p1', taskId: 'STORY-004' }),
+  useParams: () => ({ projectId: 'p1', taskId: mockTaskId }),
   useNavigate: () => () => { /* the page never navigates in these tests */ },
   useLocation: () => ({ state: null }),
+}));
+// The server pull. Plain functions for the same `resetMocks` reason as below.
+jest.mock('../projectSync', () => ({
+  __esModule: true,
+  refreshProjectsFromBackend: () => {
+    mockRefreshCalls += 1;
+    // The real one returns a promise and handles its own errors, so a failure
+    // reaches the caller as a rejection, never as a synchronous throw.
+    try { if (mockOnRefresh) mockOnRefresh(); } catch (err) { return Promise.reject(err); }
+    return Promise.resolve();
+  },
+  syncProjectsWithBackend: () => Promise.resolve(),
 }));
 // Plain functions, not jest.fn(): CRA sets `resetMocks: true`, which strips the
 // implementation off every jest.fn before each test and would leave these
@@ -76,6 +94,9 @@ let root: Root;
 
 beforeEach(() => {
   localStorage.clear();
+  mockTaskId = 'STORY-004';
+  mockRefreshCalls = 0;
+  mockOnRefresh = null;
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -115,9 +136,42 @@ const buttonSaying = (text: string): HTMLButtonElement | undefined =>
   Array.from(container.querySelectorAll('button'))
     .find((b) => (b.textContent || '').trim() === text);
 
-const commandCenterLink = (): HTMLAnchorElement | undefined =>
+/**
+ * EVERY Command Center anchor on the page, not the first one.
+ *
+ * `.find()` would hand back element [0] whether the page rendered one link or
+ * five, so an assertion built on it can pass while the header is quietly
+ * duplicated. Tests below assert on the LENGTH of this list first, so "the link
+ * renders" cannot be satisfied vacuously.
+ */
+const commandCenterLinks = (): HTMLAnchorElement[] =>
   Array.from(container.querySelectorAll('a'))
-    .find((a) => (a.textContent || '').includes('Command Center'));
+    .filter((a) => (a.textContent || '').includes('Command Center'));
+
+/** The one Command Center link, asserting that there is exactly one. */
+const commandCenterLink = (): HTMLAnchorElement | undefined => {
+  const all = commandCenterLinks();
+  if (all.length === 0) return undefined;
+  expect(all).toHaveLength(1);
+  return all[0];
+};
+
+/** A story other than the one baked into TASK, so nothing is STORY-000-shaped. */
+const storyTask = (storyId: string, over: Partial<ProjectTask> = {}): ProjectTask => ({
+  ...TASK, id: `p1-${storyId}`, storyId, title: `${storyId} · ${TASK.title.split('· ')[1]}`, ...over,
+});
+
+/** STORY-000 done, STORY-001 open — the state Ali was actually in. */
+const build = (over: Partial<StudentProject> = {}): StudentProject => project({
+  lists: [{
+    id: 'L1', step: 2, name: 'Release 1 · Payments', sub: '',
+    tasks: [
+      storyTask('STORY-000', { state: 'done', due: 'done' }),
+      storyTask('STORY-001'),
+    ],
+  }],
+  ...over,
+} as Partial<StudentProject>);
 
 // ── the prompt does not own the column ────────────────────────────────────────
 describe('the Claude Code prompt is collapsed until asked for', () => {
@@ -309,29 +363,165 @@ describe('completion is granted, not claimed', () => {
 });
 
 // ── the Command Center link ───────────────────────────────────────────────────
+const CC_URL = 'https://salon-cc.example.com/';
+
 describe('the Command Center link', () => {
   it('opens the student\'s Command Center in a new tab when the backend has a URL', async () => {
-    mockProject = project({ commandCenterUrl: 'https://salon-cc.example.com/' });
+    mockProject = project({ commandCenterUrl: CC_URL });
     await mount();
 
     const link = commandCenterLink();
     expect(link).toBeTruthy();
-    expect(link!.getAttribute('href')).toBe('https://salon-cc.example.com/');
+    expect(link!.getAttribute('href')).toBe(CC_URL);
     expect(link!.getAttribute('target')).toBe('_blank');
-    expect(link!.getAttribute('rel')).toBe('noreferrer');
+    // `noreferrer` alone implies `noopener` in current browsers, but the pair is
+    // what survives a reader asking "is this window.opener-safe?" without them
+    // having to know that. A new tab is the requirement: students build with this
+    // page in one half of the display and an editor in the other, and navigating
+    // away costs them their place.
+    expect(link!.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
   it('renders nothing at all before the student has deployed one', async () => {
     mockProject = project();          // field absent — the whole of week one
     await mount();
 
-    expect(commandCenterLink()).toBeUndefined();
+    expect(commandCenterLinks()).toHaveLength(0);
   });
 
   it('renders nothing when the backend explicitly reports null', async () => {
     mockProject = project({ commandCenterUrl: null });
     await mount();
 
-    expect(commandCenterLink()).toBeUndefined();
+    expect(commandCenterLinks()).toHaveLength(0);
+  });
+});
+
+/**
+ * THE BUG ALI HIT, 2026-08-16.
+ *
+ * He finished STORY-000, the backend recorded `command_center_url` on the
+ * project, and the link still did not appear when he opened STORY-001. Every
+ * layer tested clean in isolation — the DTO emitted the URL, projectHydrate
+ * carried it, and the header above rendered it from `project.commandCenterUrl`.
+ *
+ * What nothing covered was WHERE THE PAGE GETS THAT VALUE. It reads the
+ * localStorage store and nothing else, and the only server pull on the projects
+ * side is `syncProjectsWithBackend`, which is latched one-shot per page session
+ * and fires from ProjectsPage on mount. So the sequence that actually happens —
+ * load the app, complete STORY-000, walk into STORY-001 without a reload — reads
+ * a snapshot of the project taken BEFORE the URL existed. The header was
+ * correctly rendering nothing, from a store that was simply out of date, and
+ * only a hard refresh would have fixed it.
+ */
+describe('the Command Center link appears once the server has one, on whatever story is open', () => {
+  it('renders on STORY-001, not only on the story that created it', async () => {
+    mockTaskId = 'STORY-001';
+    mockProject = build({ commandCenterUrl: CC_URL });
+    await mount();
+
+    // The story really is the non-STORY-000 one, or this proves nothing.
+    expect(container.querySelector('.rt-kick')!.textContent).toContain('STORY-001');
+    const link = commandCenterLink();
+    expect(link).toBeTruthy();
+    expect(link!.getAttribute('href')).toBe(CC_URL);
+  });
+
+  it('pulls project state from the server on arrival', async () => {
+    mockTaskId = 'STORY-001';
+    mockProject = build();
+    await mount();
+
+    // Without this the page can only ever show what the store held at app load.
+    expect(mockRefreshCalls).toBe(1);
+  });
+
+  it('shows a URL the server recorded AFTER this page session began, with no reload', async () => {
+    mockTaskId = 'STORY-001';
+    // The store as it stands when he walks in: STORY-000 finished, but this
+    // browser's copy of the project predates the URL being written.
+    mockProject = build();
+    // ...and the pull lands the value the server has had since 17:32Z.
+    mockOnRefresh = () => { mockProject = build({ commandCenterUrl: CC_URL }); };
+
+    await mount();
+
+    const link = commandCenterLink();
+    expect(link).toBeTruthy();
+    expect(link!.getAttribute('href')).toBe(CC_URL);
+    expect(link!.getAttribute('target')).toBe('_blank');
+  });
+
+  it('still renders nothing when the pull confirms there is no Command Center', async () => {
+    // 19 of 20 students on day one. A dead or disabled link on the header of the
+    // page they live in is worse than no link at all.
+    mockTaskId = 'STORY-001';
+    mockProject = build();
+    mockOnRefresh = () => { mockProject = build({ commandCenterUrl: null }); };
+
+    await mount();
+
+    expect(mockRefreshCalls).toBe(1);
+    expect(commandCenterLinks()).toHaveLength(0);
+  });
+
+  it('keeps the header laid out when the pull fails, rather than blanking the page', async () => {
+    mockTaskId = 'STORY-001';
+    mockProject = build({ commandCenterUrl: CC_URL });
+    mockOnRefresh = () => { throw new Error('network down'); };
+
+    await mount();
+
+    // The store copy is still a perfectly good thing to render.
+    expect(commandCenterLink()).toBeTruthy();
+    expect(container.querySelector('.rt-pill')).toBeTruthy();
+  });
+});
+
+/**
+ * ~700px is the normal width for this page, not the degraded one. jsdom has no
+ * layout engine, so these assert the STRUCTURE the half-width CSS depends on —
+ * a wrapping flex row containing the link and then the status pill — rather
+ * than measured pixels, which jsdom would happily report as 0 either way.
+ */
+describe('the header still reads at half screen', () => {
+  beforeEach(() => {
+    mockTaskId = 'STORY-001';
+    mockProject = build({ commandCenterUrl: CC_URL });
+  });
+
+  it('puts the link between the story label and the status pill, inside one row', async () => {
+    await mount();
+
+    const right = container.querySelector('.rt-topright')!;
+    const link = commandCenterLink()!;
+    const pill = container.querySelector('.rt-pill')!;
+
+    // Both actions live in the same right-hand group...
+    expect(right.contains(link)).toBe(true);
+    expect(right.contains(pill)).toBe(true);
+    // ...the story label is to their left...
+    const kick = container.querySelector('.rt-kick')!;
+    expect(kick.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // ...and "In progress" stays to the right of the link, where Ali asked for it.
+    expect(link.compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('carries the CSS that lets the row wrap instead of shoving the pill off the edge', async () => {
+    await mount();
+
+    // The two rules the header depends on at 700px: the action row wraps, and
+    // the title column is allowed to shrink below its min-content width. Without
+    // the second, a long story title pushes the actions off the right edge.
+    const css = container.querySelector('style')!.textContent || '';
+    expect(css).toContain('.rt-topright{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap');
+    expect(css).toContain('.rt-top>div{min-width:0}');
+  });
+
+  it('labels the link "Command Center" — the name used everywhere else', async () => {
+    await mount();
+
+    // Not "Dashboard", not "Your site". One name for one thing.
+    expect(commandCenterLink()!.textContent).toContain('Command Center');
   });
 });
