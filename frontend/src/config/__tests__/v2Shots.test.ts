@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { SHOWROOM_SURFACES } from '../v2Platform';
+import { getClaim } from '../claimsRegistry';
 
 const PUBLIC_DIR = path.resolve(__dirname, '../../../public');
 
@@ -51,6 +52,33 @@ describe('showroom screenshots', () => {
     const keys = SHOWROOM_SURFACES.map((s) => s.key);
     expect(keys).toContain('today');
     expect(keys).toContain('individual');
+  });
+
+  /**
+   * THE LOAD-BEARING ASSERTION ON THIS PAGE.
+   *
+   * The workspace screenshot depicts a MATURE organization — 63% readiness,
+   * 1,640 builder XP, 7 level-ups — and no organization has reached that yet.
+   * That is legitimate illustrative product imagery, and only while it is
+   * unmistakably labelled as sample data.
+   *
+   * Two things carry the label: body copy on the page stating every figure is
+   * sample data, and `requiresSampleLabel: true` on the governing claim, which
+   * forces the SampleBadge to render. Remove either and an invented figure is
+   * being presented as a real result. That is the single change on this page
+   * that would turn honest marketing into a false claim, so it fails here.
+   */
+  it('forces a sample label on the surfaces whose screenshots are illustrative', () => {
+    const claim = getClaim('surface.readiness.rollup');
+    expect(claim).toBeDefined();
+    expect(claim!.requiresSampleLabel).toBe(true);
+  });
+
+  it('states in the alt text that the workspace figures are sample data', () => {
+    // A screen-reader user must get the same caveat a sighted visitor gets from
+    // the badge, not just the impressive numbers.
+    const workspace = SHOWROOM_SURFACES.find((s) => s.key === 'workspace');
+    expect(workspace?.shot?.alt.toLowerCase()).toContain('sample data');
   });
 
   it('keeps every shot within the safe width for an embedded page', () => {

@@ -177,9 +177,10 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
     shot: {
       src: '/site-v2/shot-workspace.png',
       alt:
-        'The company workspace: an architect readiness trajectory across 19 members with a ' +
-        'projected trend line, tiles for builder XP per week, evidence shipped, live-session ' +
-        'attendance and evaluations passed, and the ladder showing where the team sits.',
+        'The company workspace on sample data: 63 percent average architect readiness across ' +
+        '19 members with a projected trend line, tiles for 1,640 builder XP per week, 12 ' +
+        'evidence records, 86 percent attendance, 9 evaluations passed and 7 level-ups, and ' +
+        'the nine-rank ladder showing the team spread from Builder toward Architect.',
     },
     stats: [
       { value: '2', label: 'Perspectives in one account' },
