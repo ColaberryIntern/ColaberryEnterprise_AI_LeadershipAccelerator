@@ -51,6 +51,7 @@ import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
 } from './planStore';
 import { getProvisionQueue } from './boundedQueue';
+import { setProjectNameIfEmpty } from './projectNaming';
 
 /** Where a build is. Stored on `build_intake.status`. */
 export type BuildStatus =
@@ -142,6 +143,20 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
     status: 'generating',
   });
   log('sbp_build_started', correlationId, 'success', { projectId: input.projectId, idea_chars: input.idea.length });
+
+  // Name the project from what the student just typed. THIS IS THE FIRST MOMENT
+  // THE NAME IS KNOWABLE: the `projects` row is created by POST /api/portal/
+  // projects (projectService.buildAndActivateProject) before the wizard is ever
+  // submitted, so there is nothing to name it with at creation.
+  //
+  // Until now the name stopped here — it went into `build_intake.name` and no
+  // reader existed, so every student build carried `projects.name = NULL` and
+  // the portal rendered the literal "Your build" for all 20 of them.
+  //
+  // Non-fatal on purpose: a build is worth more than its title, and this runs
+  // before generation. It also cannot overwrite a name the student already set
+  // (see setProjectNameIfEmpty), so re-submitting the wizard is a no-op here.
+  await nameProject(input.projectId, input.name, 'intake', correlationId);
 
   // Bounded: a cohort starting together queues rather than fanning out. The
   // promise is deliberately not awaited — the caller gets its answer now — but
@@ -348,6 +363,32 @@ export function buildBriefText(input: StartBuildInput): string {
   return parts.join('\n\n');
 }
 
+/**
+ * Give the project a real name, from `source`, if it does not have one yet.
+ *
+ * Never throws. Naming is presentation: it must not be able to fail a build
+ * that is otherwise fine, and at publish time the plan is already durable. But
+ * it is logged with an error_class when it fails, because "every project has a
+ * name" is a product promise and a silent miss is how the current state
+ * (twenty unnamed builds) lasted as long as it did.
+ */
+async function nameProject(
+  projectId: string, candidate: string | null | undefined,
+  source: 'intake' | 'plan', correlationId: string | null,
+): Promise<void> {
+  try {
+    const named = await setProjectNameIfEmpty(projectId, candidate);
+    log(named ? 'sbp_project_named' : 'sbp_project_name_noop', correlationId, 'success', {
+      projectId, source, named,
+    });
+  } catch (err: any) {
+    log('sbp_project_name_failed', correlationId, 'failure', {
+      projectId, source, error_class: err?.name ?? 'Error', message: err?.message,
+      impact: 'the project renders the generic fallback title until it is named',
+    });
+  }
+}
+
 async function setStatus(projectId: string, status: BuildStatus): Promise<void> {
   const intake = await getIntake(projectId);
   if (!intake) return;
@@ -407,6 +448,16 @@ export async function publishBuild(
 
   const published = await publishPlan(projectId, draft.version, opts.expectedSha);
   const correlationId = published.correlation_id;
+
+  // Second and last chance to name the project. Five of the twenty live builds
+  // reached publish with no intake name — the wizard's name field is optional —
+  // and for those the plan's own `project_name` is the best thing anybody has.
+  // It is not invented here: it was generated from the student's idea and is a
+  // required field of the plan contract, so it is plumbing, not authorship.
+  //
+  // Placed before both return paths so the no-repo publish gets it too, and
+  // guarded on emptiness so an intake name set at startBuild always wins.
+  await nameProject(projectId, (published.plan as BuildPlan)?.project_name, 'plan', correlationId);
 
   if (!opts.repo) {
     // No repo yet, but the plan must still reach the portal — otherwise a
