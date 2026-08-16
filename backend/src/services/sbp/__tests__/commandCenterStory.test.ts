@@ -17,6 +17,7 @@ import {
 } from '../commandCenterStory';
 import { BuildPlan, PlanRequirement, PlanStory } from '../planContract';
 import type { Schedule } from '../buildSchedule';
+import { claimInstructions, expectEveryClaimIsConditional } from './honestyGuard';
 
 function req(id: string, over: Partial<PlanRequirement> = {}): PlanRequirement {
   return { id, statement: `The system must do ${id}.`, kind: 'FUNC', priority: 'must', cluster: 'core', ...over };
@@ -222,5 +223,82 @@ describe('shape', () => {
     const plan = fullPlan();
     expect(measures(plan).map((r) => r.id)).toEqual(['REQ-003']);
     expect(guardrails(plan).map((r) => r.id)).toEqual(['REQ-004']);
+  });
+});
+
+// ── the checkpoint has to land on the finish ────────────────────────────────
+
+/**
+ * THE PRODUCTION FAILURE THIS PINS. The checkpoint told the agent to build
+ * Overview, pause, and — on "build the rest" — build the remaining eight and
+ * remove the banner. It stopped there. Step 3 ("finish it, so the platform can
+ * confirm it") sits further down the document, so an agent resuming correctly
+ * built the eight tabs and then halted one step short: nine tabs live and
+ * reachable, story unverified, "Mark done" still dark, and no instruction
+ * telling it to carry on. Ali's own agent stood in exactly that spot.
+ *
+ * The resume instruction must therefore read as ONE continuous flow into the
+ * finish. And it must not buy that continuity by nudging the agent to tick
+ * criteria that are not true: Ali's agent refused to invent numbers for an
+ * empty Outcomes tab, correctly, and that instinct has to survive the edit.
+ */
+describe('the checkpoint leads into the finish, not into a dead stop', () => {
+  /** The one bullet that tells the agent what to do when the pause is released. */
+  const resumeLine = (out: string): string => {
+    const lines = out.split('\n').filter((l) => /remove the banner/i.test(l));
+    expect(lines).toHaveLength(1);
+    return lines[0];
+  };
+
+  it('carries the resume instruction on into Step 3 in the same breath', () => {
+    const line = resumeLine(commandCenterPrompt(fullPlan(), schedule()));
+
+    expect(line).toMatch(/build the rest/i);
+    // Without all three of these the agent stops with nine tabs built and no
+    // claim made — precisely the state this test exists to prevent.
+    expect(line).toMatch(/Step 3/);
+    expect(line).toMatch(/commit/i);
+    expect(line).toMatch(/push/i);
+  });
+
+  it('keeps the honesty rule on the resume line itself', () => {
+    const out = commandCenterPrompt(fullPlan(), schedule());
+
+    // On the resume line specifically, because "now go and finish it" is
+    // exactly the sentence that would otherwise read as "tick them all".
+    expect(resumeLine(out)).toMatch(/genuinely true/i);
+    // And the rule Step 3 already carried is left intact.
+    expect(out).toMatch(/Only tick a line when it is actually true/i);
+  });
+
+  /**
+   * THE GUARD, INVERTED.
+   *
+   * This used to be two banned phrases: `/tick (them |the |all )*all\b/` and
+   * `/mark (them |all )*all (as )?pass/`. It was weaker than it looked. A
+   * repair-flavoured rewrite saying "bring all five criteria to true" or
+   * "complete each Done means line" passes both untouched — and those are
+   * exactly the sentences a prompt about raising an older build to the current
+   * standard reaches for. A blacklist forbids only what somebody already
+   * imagined.
+   *
+   * So the rule now runs the other way: find every instruction that tells the
+   * agent to claim a criterion, and require each of them to carry a truth
+   * condition. The banned phrases stay as a second net, widened with the two
+   * above. Both live in `honestyGuard.ts` so the repo doc is held to the same
+   * rule from the same definition.
+   */
+  it('never instructs a claim without a truth condition, in any wording', () => {
+    expectEveryClaimIsConditional(commandCenterPrompt(fullPlan(), schedule()));
+  });
+
+  it('finds those instructions at all — the floor that stops the guard passing vacuously', () => {
+    // A "for each match, assert X" loop over an empty list is green and proves
+    // nothing. If a rewrite changes the vocabulary enough that the matcher stops
+    // matching, this fails before the loop above can wave it through.
+    const claims = claimInstructions(commandCenterPrompt(fullPlan(), schedule()));
+
+    expect(claims.length).toBeGreaterThanOrEqual(4);
+    expect(claims.some((c) => /Only tick a line when it is actually true/i.test(c))).toBe(true);
   });
 });

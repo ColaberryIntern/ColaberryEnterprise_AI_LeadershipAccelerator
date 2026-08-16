@@ -30,8 +30,28 @@ import {
 } from './planDocument';
 import { PROGRESS_FILE_PATH } from './verification/progressContract';
 import { PROFILE_FILE_PATH } from './profileContract';
+import { BLOCK_BEGIN, BLOCK_END } from './managedBlock';
+import {
+  COMMAND_CENTER_ENTRY_FILE,
+  COMMAND_CENTER_ENTRY_PATH,
+  COMMAND_CENTER_ENTRY_RULE,
+} from './commandCenterLocation';
 
 const MANIFEST_FILE_PATH = '.colaberry/manifest.json';
+
+/**
+ * The bare marker name out of a managed-block delimiter — `COLABERRY:BEGIN`
+ * from the full HTML comment.
+ *
+ * Derived rather than retyped. The repair step tells the student's agent which
+ * markers bound the block it may edit inside their CLAUDE.md, and a marker
+ * renamed in `managedBlock.ts` must not leave this prompt sending them looking
+ * for one that no longer exists. Takes the first whitespace-delimited token
+ * after the comment opener, so it survives any change to the human-readable
+ * text that follows it.
+ */
+const markerName = (marker: string): string =>
+  marker.replace(/^<!--\s*/, '').split(/\s/)[0];
 
 /** The id and title students see. Stable — republishing must not duplicate it. */
 export const COMMAND_CENTER_STORY_ID = 'STORY-000';
@@ -140,6 +160,16 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
     + 'section says nothing is defined yet, build the empty state and say so on screen — do '
     + 'not invent a number, a customer or an integration to fill it.',
   );
+  // THE GREENFIELD ASSUMPTION LIVED IN THIS PARAGRAPH. "The first thing you
+  // build, before any part of the system itself" is the frame every later
+  // section gets read through, so an agent opening a repo that already has four
+  // tabs in it read nine section headings as nine things to create. Naming the
+  // repair path here, at the top, is what stops that reading before it starts.
+  lines.push(
+    'If some of it is already built, this same brief repairs it rather than replacing it — '
+    + 'Step 2 starts by finding out how much is already there, and you only build the part '
+    + 'that is missing.',
+  );
   lines.push('');
 
   // ── One-time plumbing, kept SHORT ──────────────────────────────────────────
@@ -228,10 +258,125 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   // Frames everything between here and Step 3 as one job. Without it the prompt
   // reads "Step 1 ... Step 3" with a dozen unnumbered headings in the gap, which
   // looks like a missing instruction rather than a section boundary.
-  lines.push('## Step 2 — build the Command Center');
+  //
+  // ── WHY STEP 2 HAS TWO HALVES ─────────────────────────────────────────────
+  //
+  // This prompt used to say "build the Command Center" and go straight into
+  // nine section headings. It never gets a blank repo. It goes to students who
+  // have built nothing, students who stopped halfway, and students who finished
+  // weeks ago against a SHORTER list of criteria — #1490 took
+  // COMMAND_CENTER_ACCEPTANCE from three lines to five, so every build made
+  // before it is behind the standard through no fault of its own.
+  //
+  // The failure this guards against is not an agent that does nothing. It is
+  // the opposite: an agent handed a greenfield brief in a populated repo
+  // decides the tidiest route to nine tabs is to start over, and real student
+  // work goes in the bin. That is the unrecoverable one: a wrong tick can be
+  // corrected, a deleted afternoon cannot be undeleted. So reading comes first,
+  // it is a step of its own, and it is explicitly read-only.
+  //
+  // The step NUMBERING is deliberately unchanged. #1522 landed the resume line
+  // that carries the checkpoint on into "Step 3", and both the prompt test and
+  // the repo-doc test pin that string. Take stock is 2a and repair is 2b so
+  // Step 3 stays Step 3.
+  lines.push('## Step 2 — take stock, then build');
   lines.push(
-    'Everything from here to Step 3 is the build itself. Work through it in order; the sections '
-    + 'below say what goes in each tab and what the data rules are.',
+    'Everything from here to Step 3 is the build itself. This story is the same whether you '
+    + 'have built none of it, some of it, or all of it — what differs is how much is already '
+    + 'done, so establish that first and then do only what is left.',
+  );
+  lines.push('');
+
+  lines.push('### Step 2a — take stock before you change a single line');
+  lines.push(
+    'This step READS. It does not create, edit, move, rename or delete anything. Work through '
+    + 'it even if you are fairly sure the repo is empty; it takes a minute when it is.',
+  );
+  lines.push(
+    bullet(
+      'Find the Command Center if it is already here — its entry point (`'
+      + `${COMMAND_CENTER_ENTRY_PATH}\` at the repo root is where it belongs; a build started `
+      + 'before today often has it under `command-center/` instead), and which of the nine '
+      + 'tabs described below already exist and are actually reachable from it. Report three '
+      + 'buckets, not two: the tabs that are there and work, the ones that are missing entirely, '
+      + 'and the ones that exist but are empty or broken. Those last need repair, not creation.',
+    ),
+  );
+  lines.push(
+    bullet(
+      `Check which of these files exist: \`${PLAN_FILE_PATH}\`, \`${PROGRESS_FILE_PATH}\`, `
+      + `\`${MANIFEST_FILE_PATH}\` and \`docs/stories/${COMMAND_CENTER_STORY_ID}.md\`. Say which `
+      + 'are present and which are not. A missing data file is why a tab that looks finished can '
+      + 'still be rendering nothing.',
+    ),
+  );
+  lines.push(
+    bullet(
+      `If \`${PROGRESS_FILE_PATH}\` is there, open the \`${COMMAND_CENTER_STORY_ID}\` entry and `
+      + `compare its criteria line by line against the ${COMMAND_CENTER_ACCEPTANCE.length} lines `
+      + 'under **Done means** below. **A build started before today can carry fewer lines than the '
+      + 'list has now** — criteria get added over time and are never renamed in place. Every '
+      + 'Done-means line missing from that file is work still outstanding, not a mistake in the '
+      + 'file and not something to delete.',
+    ),
+  );
+  lines.push(
+    bullet(
+      `Judge each of the ${COMMAND_CENTER_ACCEPTANCE.length} criteria against the repo as it is `
+      + 'today — read the code and decide for yourself. A criterion already ticked in the file is '
+      + 'a claim, not proof; if the code no longer backs it, say so rather than trusting the tick.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'Then STOP and tell me what you found, in plain language, before you change anything: which '
+      + 'tabs exist and are reachable, which files are present, which criteria already hold and '
+      + 'which do not and why, and what you propose to do about it. A short list, not a report.',
+    ),
+  );
+  lines.push('');
+
+  lines.push('### Step 2b — build what is missing, repair what is already here');
+  lines.push(
+    'Work from what you just found rather than from a blank page. Everything after this section '
+    + 'describes the FINISHED state, not a build order for an empty repo: read each part as "this '
+    + 'is what has to be true when you are done", and act only where it is not true yet.',
+  );
+  lines.push(
+    bullet(
+      '**Keep what is already right.** A tab that exists and works stays exactly as it is. Do not '
+      + 'delete it, do not rewrite it into a tidier shape, do not rename things for consistency, '
+      + 'and do not regenerate the app from scratch because a clean build would be easier than a '
+      + 'repair. The work already in this repo is mine and it stays.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'Repair in place, with the smallest change that makes a criterion true. A tab that renders '
+      + 'but hard-codes its data needs its data source fixed, not a rewrite. A tab that is missing '
+      + 'gets built the way the sections below describe.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'If you genuinely believe something has to be removed or restructured, **stop and ask me '
+      + 'first** and tell me what would be lost. Never remove my work and report it afterwards.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'My own files stay mine. If this repo has a `CLAUDE.md`, the build pipeline owns only the '
+      + `block between \`${markerName(BLOCK_BEGIN)}\` and \`${markerName(BLOCK_END)}\`. Edit inside `
+      + 'that block if it is there, or append below my content if it is not. **Never replace the '
+      + 'file.** The same goes for a README, a config or anything else I wrote.',
+    ),
+  );
+  lines.push(
+    bullet(
+      '**Running this a second time on a finished build must change nothing.** If every tab is '
+      + 'already there and every criterion already holds, say exactly that and stop — no '
+      + 'reformatting, no "while I was in there", no empty commit.',
+    ),
   );
   lines.push('');
 
@@ -265,6 +410,39 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
     + `\`${PROGRESS_FILE_PATH}\` → \`stories[].id\`. The plan carries the title, release, `
     + 'acceptance criteria, `due_on` and `due_baseline_on`; progress carries `verification` '
     + 'with the state, the commit and the points. Neither file repeats the other.',
+  );
+  lines.push('');
+
+  // ── WHERE IT GOES ─────────────────────────────────────────────────────────
+  //
+  // This section is the authoritative half of the fix for the defect where a
+  // correctly-built, correctly-hosted Command Center produced no link in the
+  // portal. The prompt used to describe nine tabs, a data contract and a
+  // hosting step across 26,000 characters and never say where to put the
+  // result — so the agent picked, and `command-center/` is one directory below
+  // the only address GitHub Pages can serve a free public repo from.
+  //
+  // Rendered from `commandCenterLocation.ts`, which the Pages prober reads too.
+  // Two copies of this fact is exactly how the defect happened.
+  lines.push('## Where it lives in your repo');
+  lines.push(
+    `${COMMAND_CENTER_ENTRY_RULE}. Everything else — your CSS, your scripts, your images, `
+    + 'your per-tab pages — can be organised however you like underneath it. It is the entry '
+    + 'point that has to be at the top.',
+  );
+  lines.push(
+    'That is not a house style, it is the only thing that works. GitHub Pages on a free '
+    + 'public repo can publish from exactly two places: the repo root, or `docs/`. And '
+    + '`docs/` is not yours — it holds your requirements, your stories and your traceability '
+    + 'table, and the platform rewrites it every time you sync, so anything you built in '
+    + 'there would be overwritten. The root is what is left, it is what Step 4 turns on, and '
+    + 'it is the address the portal goes to when it looks for your Command Center so it can '
+    + 'put a link to it in your header.',
+  );
+  lines.push(
+    '**If you have already built it somewhere else** — under `command-center/` is the common '
+    + `one — do not move it and do not rebuild it. Add \`${COMMAND_CENTER_ENTRY_PATH}\` at the `
+    + 'root that opens what is already there. A one-line redirect is a perfectly good answer.',
   );
   lines.push('');
 
@@ -605,11 +783,29 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
       + 'other way round.',
     ),
   );
+  // THE RESUME HAS TO REACH THE FINISH.
+  //
+  // This bullet used to end at "remove the banner". Step 3 — tick the criteria,
+  // commit naming the story, push — is a hundred lines further down, so an agent
+  // that obeyed the checkpoint perfectly built the remaining eight tabs and then
+  // stopped one step short: nine tabs live and reachable, story unverified,
+  // "Mark done" still dark, and nothing in the instruction telling it to carry
+  // on. Ali hit exactly that, and every student would have.
+  //
+  // The last sentence is not padding. "Now go and finish it" is precisely the
+  // instruction that turns into "tick them all", and the honesty rule is the
+  // whole point of this story: Ali's agent refused to invent numbers for an
+  // empty Outcomes tab, correctly. Finishing is a duty to claim what is true,
+  // never permission to claim what is not.
   lines.push(
     bullet(
       'Put a short banner on Overview itself while you are paused, saying the build is stopped '
       + 'for their review and how to continue. When they say **build the rest**, build the '
-      + 'remaining eight and remove the banner.',
+      + 'remaining eight, remove the banner, and then go straight on to Step 3 and finish the '
+      + 'job: tick the criteria that are genuinely true in `.colaberry/progress.json`, commit '
+      + 'naming the story, and push. Removing the banner is not the finish — and finishing is '
+      + 'not permission to tick a line that is not true yet, so leave any such line unticked '
+      + 'and tell them which one and why.',
     ),
   );
   lines.push('');
@@ -628,13 +824,14 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push('## Step 3 — finish it, so the platform can confirm it');
   lines.push(
     'A story is confirmed when BOTH halves are true: every acceptance criterion is ticked in '
-    + '`.colaberry/progress.json`, AND a commit names the story. Neither on its own is enough.',
+    + '`.colaberry/progress.json` — each one because it is genuinely true — AND a commit names '
+    + 'the story. Neither on its own is enough.',
   );
   lines.push(
     bullet(
       'Create or update `.colaberry/progress.json` so it carries this story with every '
-      + '**Done means** line copied word for word, each marked as passing. Only tick a line when '
-      + 'it is actually true — the file is the claim, the commit is the evidence:',
+      + '**Done means** line present word for word. Only tick a line when it is actually true — '
+      + 'the file is the claim, the commit is the evidence:',
     ),
   );
   lines.push('');
@@ -642,6 +839,36 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push(progressFileExample());
   lines.push('```');
   lines.push('');
+  lines.push(
+    `That example is a build where all ${COMMAND_CENTER_ACCEPTANCE.length} lines are genuinely `
+    + 'true. Yours carries `"passed": false` on every line that is not yet, and a file like that '
+    + 'is correct rather than unfinished.',
+  );
+  lines.push('');
+  // ── REPAIRING A FILE THAT IS ALREADY THERE ───────────────────────────────
+  //
+  // Two ways this goes wrong on an existing build, and they pull in opposite
+  // directions. Rewrite the entry and the student's real ticks vanish. Notice
+  // the entry is shorter than the list and "fix" it by ticking the new lines to
+  // make the shapes match, and the platform is told a lie. Both are named.
+  lines.push(
+    bullet(
+      '**If the file already carries this story, reconcile it — do not rewrite it.** Add any '
+      + '**Done means** line that is missing with `"passed": false`, leave the ticks that are '
+      + 'already there alone, and change a `false` to `true` only for a line you have just made '
+      + 'true. A criterion added after this build started begins unticked like every other one; '
+      + 'it does not inherit a tick from the lines around it.',
+    ),
+  );
+  lines.push(
+    bullet(
+      '**Bringing an older build up to the current standard is not permission to tick the new '
+      + 'lines.** A line is ticked because it is true in the repo today — never because the rest '
+      + 'of the story is finished, never because the build looks done, and never to make the '
+      + 'count come out even. Leave every line you have not actually satisfied unticked, and tell '
+      + 'me which ones and why.',
+    ),
+  );
   lines.push(
     bullet(
       `Commit with the story id in the message — \`git commit -m "${COMMAND_CENTER_STORY_ID}: build the `
@@ -701,6 +928,15 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
       'You do not need to find the address yourself. The first build takes a minute or two; the '
       + 'platform checks after each push and after a Sync, and the **Command Center** link appears '
       + 'in the portal header once the site actually answers.',
+    ),
+  );
+  lines.push(
+    bullet(
+      `What it asks for is \`${COMMAND_CENTER_ENTRY_FILE}\` at the site root — `
+      + '`https://<your-github-name>.github.io/<your-repo>/`. That is the reason the entry point '
+      + 'goes at the root of the repo rather than in a subfolder, and it is the whole of the '
+      + 'reason. If yours is one directory down the platform still finds it, but the address in '
+      + 'your header is the longer one.',
     ),
   );
   lines.push('');
@@ -815,6 +1051,14 @@ export function commandCenterStoryDoc(plan: BuildPlan, schedule?: Schedule | nul
     'text drifts — a rewritten dash or a changed full stop makes a claim the platform',
     'cannot match, and the story stays unverified with your work already done. Step 3',
     'below has the exact procedure.',
+    '',
+    '**If this repo already has some of the Command Center in it, do not start over.**',
+    'Step 2a below takes stock before anything is written and Step 2b repairs in place;',
+    'work that is already right is kept, not replaced. And if the seeded story carries',
+    'fewer lines than the acceptance list at the foot of this file, this build predates a',
+    `criterion that has since been added — there are ${COMMAND_CENTER_ACCEPTANCE.length} now.`,
+    'Copy the missing line in with `"passed": false` and earn it; do not tick it to make',
+    'the two lists the same length.',
     '',
     '---',
     '',

@@ -23,10 +23,8 @@ import StudentTask from '../../models/StudentTask';
 import { BuildPlan, PlanStory } from './planContract';
 import { buildStoryPrompt } from './buildStoryPrompt';
 import { Schedule } from './buildSchedule';
-import {
-  COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_ACCEPTANCE,
-  COMMAND_CENTER_NARRATIVE, commandCenterPrompt,
-} from './commandCenterStory';
+import { COMMAND_CENTER_STORY_ID } from './commandCenterStory';
+import { commandCenterTaskColumns } from './commandCenterTaskColumns';
 
 export interface MaterializeResult {
   lists: number;
@@ -113,13 +111,20 @@ export async function materializePlanAsTasks(
       // fulfils no requirement of the student's system because it is not part
       // of that system — it is the window onto it.
       if (rel.key === ordered[0].key) {
+        // `build` and `acceptance` come from ONE call, not two expressions that
+        // happen to read the same constants. A backfill that rewrote the prompt
+        // and left the criteria three versions behind put 19 of 20 live builds
+        // into exactly that state — see commandCenterTaskColumns.ts. Keeping
+        // both writers constructing from this object is what makes the two
+        // columns physically inseparable.
+        const cc = commandCenterTaskColumns(plan, ctx.schedule ?? null);
         const ccAttrs = {
-          project_id: projectId, task_list_id: list.id, story_id: COMMAND_CENTER_STORY_ID,
-          title: COMMAND_CENTER_TITLE, description: COMMAND_CENTER_TITLE,
-          narrative: COMMAND_CENTER_NARRATIVE,
+          project_id: projectId, task_list_id: list.id, story_id: cc.story_id,
+          title: cc.title, description: cc.title,
+          narrative: cc.narrative,
           status: 'not_started', position: taskPos, release_key: rel.key,
-          acceptance: [...COMMAND_CENTER_ACCEPTANCE], fulfills: [],
-          build: commandCenterPrompt(plan, ctx.schedule ?? null),
+          acceptance: cc.acceptance, fulfills: [],
+          build: cc.build,
           blocked_by: null,
           // Day one. It is the thing they run at the start of the first class.
           due_on: ctx.schedule?.buildStart ?? null,
