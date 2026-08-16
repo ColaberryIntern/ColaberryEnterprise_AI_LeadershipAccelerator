@@ -320,6 +320,20 @@ export function AttachButton({ onFiles, disabled, title = 'Attach a screenshot o
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
           flexShrink: 0,
+          // The next four exist to survive whatever ambient CSS the host
+          // composer applies to `button`. They are not cosmetic defaults.
+          //
+          // `.te-dm-composer button` (TodayShell.css) sets `padding: 8px 15px`
+          // for the Send button. That rule also hit THIS button, and with
+          // border-box sizing a fixed 34px width minus 30px of horizontal
+          // padding left a ~4px content box — the paperclip rendered as a
+          // sliver in Reese's DM dock while looking correct in Cory's rail,
+          // which has no such rule. A shared component cannot assume the
+          // absence of host styles, so it pins its own box.
+          padding: 0,
+          boxSizing: 'border-box',
+          lineHeight: 0,
+          flex: 'none',
         }}
       >
         <IconPaperclip size={16} />
