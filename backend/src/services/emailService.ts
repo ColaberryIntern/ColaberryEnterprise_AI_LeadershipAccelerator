@@ -2114,7 +2114,18 @@ export async function sendRawEmail(input: {
   subject: string;
   html: string;
   text: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  /**
+   * Sender identity. Optional and defaulted to the historical
+   * "Cory - AI Operations" so every existing caller is unchanged. Supplied by
+   * campaigns that are NOT from Cory — a personal note from Ali arriving under
+   * an ops-agent byline is a content defect, not a cosmetic one.
+   */
+  fromName?: string;
+  fromEmail?: string;
+  replyTo?: string;
+  /** Mandrill X-MC-Tags value, for per-campaign reporting. */
+  tag?: string;
+}): Promise<{ ok: boolean; error?: string; messageId?: string }> {
   if (!transporter) {
     console.warn('[Email] SMTP not configured. Skipping send to:', input.to.join(', '));
     return { ok: false, error: 'SMTP not configured' };
@@ -2125,12 +2136,13 @@ export async function sendRawEmail(input: {
 
   try {
     const info = await guardedSendMail({
-      from: `"Cory - AI Operations" <${env.emailFrom}>`,
+      from: `"${input.fromName ?? 'Cory - AI Operations'}" <${input.fromEmail ?? env.emailFrom}>`,
+      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
       to: input.to.join(', '),
       subject: input.subject,
       html: input.html,
       text: input.text,
-      headers: emailHeaders('incident-notification'),
+      headers: emailHeaders(input.tag ?? 'incident-notification'),
     });
     // guardedSendMail resolves (doesn't throw) when the kill switch blocks the
     // send — callers of this adapter (e.g. the incident subscriber) treat
@@ -2139,8 +2151,14 @@ export async function sendRawEmail(input: {
     if (info.response === 'blocked_by_kill_switch') {
       return { ok: false, error: 'blocked by kill switch' };
     }
+    if (info.response === 'blocked_by_dev_email_guard') {
+      return { ok: false, error: 'blocked by dev email guard' };
+    }
     console.log(`[Email] Raw send to: ${input.to.join(', ')} | msgId: ${info.messageId}`);
-    return { ok: true };
+    // The provider's message id is RETURNED, not merely logged. An idempotent
+    // send ledger has to record which provider message a claim produced, and a
+    // value that exists only inside a log line cannot be written to a row.
+    return { ok: true, messageId: info.messageId };
   } catch (err: any) {
     console.error(`[Email] Raw send failed to ${input.to.join(', ')}: ${err.message}`);
     return { ok: false, error: err.message };
