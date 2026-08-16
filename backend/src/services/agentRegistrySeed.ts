@@ -2587,7 +2587,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
  * AiAgent row disabled so health alerting does not fire on a job nobody
  * intends to run. Value is the reason, surfaced in the boot log.
  */
-const RETIRED_AGENTS: Record<string, string> = {
+export const RETIRED_AGENTS: Record<string, string> = {
   // Detected stalled students, missing artifacts and gating checkpoints, but an
   // exhaustive search of the build found NOTHING reading its output. Had been
   // silently disabled for five months with no student-facing impact, because
