@@ -49,6 +49,7 @@ import {
   runWeeklyReportAgent,
   runWorkforceIntelligenceAgent,
   runWorkforceTicketAutoResolverAgent,
+  runCoryEngineTicketAutoResolverAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
   runStrategyFuturesArchitect,
@@ -149,7 +150,11 @@ interface ScheduleEntry {
   label: string;
 }
 
-const SCHEDULE_REGISTRY: ScheduleEntry[] = [
+// Exported for T004's registry-shape test (asserting this run's new cron entry exists
+// with a schedule matching its AGENT_REGISTRY row) — plan-audit cycle 2 finding: this
+// const was module-private and no test file for this module existed yet. Read-only
+// export, zero behavior change.
+export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // Campaign agents
   { agentName: 'CampaignHealthScanner', hardcodedSchedule: '*/15 * * * *', runner: runHealthScans, label: 'Campaign health scan' },
   { agentName: 'CampaignRepairAgent', hardcodedSchedule: '8,28,48 * * * *', runner: runRepairAgent, label: 'Campaign repair agent' },
@@ -243,6 +248,15 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // dependency). See workforceTicketAutoResolver.ts for the re-check/close logic.
   { agentName: 'WorkforceTicketAutoResolver', hardcodedSchedule: '15 */6 * * *', runner: runWorkforceTicketAutoResolverAgent, label: 'Workforce ticket auto-resolve (re-check + close on recovery)' },
   // RETIRED 2026-08-15 — second of the two CompanyStrategicCycle registrations. See note above.
+
+  // cory-engine ticket auto-resolve. Offset (`:25`) is deliberate spacing from
+  // AutonomousEngine's own 10-minute detection cycle and WorkforceTicketAutoResolver's
+  // `:15` slot, not a real ordering dependency — same spacing rationale as that entry's
+  // own comment. Registered `enabled: false` at seed time in agentRegistrySeed.ts (see
+  // that entry's comment and this run's execution-contract.md §3b) — the cron tick will
+  // fire on schedule per this entry, but runAgent()'s own `AiAgent.enabled` gate keeps
+  // it a no-op until a human flips it on after the reviewed historical bulk-clear.
+  { agentName: 'CoryEngineTicketAutoResolver', hardcodedSchedule: '25 */6 * * *', runner: runCoryEngineTicketAutoResolverAgent, label: 'cory-engine ticket auto-resolve (re-check + close on recovery)' },
 
   // Department Strategy Architects (every 6 hours, staggered)
   { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },
