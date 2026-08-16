@@ -22,10 +22,15 @@ describe('the file set', () => {
     }
   });
 
-  it('renders exactly one story file per story', () => {
+  it('renders exactly one story file per story, plus STORY-000', () => {
+    // STORY-000 is kept out of `plan.stories` (gate, XP divisor, materialize
+    // ordering all read it) but MUST still reach the repo: it is the one story
+    // every student builds first, and while it was missing here the student's
+    // agent had no local reference for it at all. See renderDocs.story000.test.ts.
     const storyFiles = pathsOf().filter((p) => p.startsWith('docs/stories/'));
-    expect(storyFiles).toHaveLength(pilot.stories.length);
+    expect(storyFiles).toHaveLength(pilot.stories.length + 1);
     for (const s of pilot.stories) expect(storyFiles).toContain(`docs/stories/${s.id}.md`);
+    expect(storyFiles).toContain('docs/stories/STORY-000.md');
   });
 
   it('renders the machine-readable bookkeeping', () => {
