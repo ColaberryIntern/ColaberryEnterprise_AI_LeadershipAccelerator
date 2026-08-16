@@ -42,11 +42,18 @@ export function ServicesV2(): React.ReactElement {
             industry calls it.
           </p>
         </div>
+          {/* Was shot-readiness.png, which is ALSO the Platform page's first
+              showroom surface -- the same picture doing two different jobs on
+              two pages. This is the twelve-week path instead: the spine an
+              engagement runs along, with the project, internship and
+              certification lanes beside it. It answers "what outcome do you
+              need next" far better than a readiness gauge does, and it is not
+              used anywhere else. */}
           <figure className="cbv2-shot-frame">
             <img
               className="cbv2-shot"
-              src="/site-v2/shot-readiness.png"
-              alt="The architect readiness trajectory an engagement is measured against: 63 percent average readiness rising over eight weeks, with tiles for builder XP, evidence shipped and attendance."
+              src="/site-v2/shot-services-hero.png"
+              alt="The twelve-week path to AI Systems Architect: four intensives along a spine, with the project, internship and certification lanes running in parallel and progress bars for each."
               loading="eager"
               decoding="async"
             />
