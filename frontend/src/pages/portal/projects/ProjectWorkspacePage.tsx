@@ -10,6 +10,7 @@ import {
   WorkspaceRepoView, ConnectStateView, getWorkspaceRepo,
 } from '../../../services/workspaceRepoApi';
 import WorkspaceRepoPanel from './WorkspaceRepoPanel';
+import { refreshProjectsFromBackend } from './projectSync';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
 import StoryCompletionPanel from './StoryCompletionPanel';
@@ -107,6 +108,38 @@ const ProjectWorkspacePage: React.FC = () => {
   }, [accKey]);
 
   useEffect(() => { setProject(getProject(projectId) ?? null); }, [projectId, tick]);
+
+  /**
+   * PULL THE PROJECT ITSELF FROM THE SERVER ON ARRIVAL.
+   *
+   * This page used to read localStorage and nothing else, which made it show a
+   * snapshot of the project taken whenever ProjectsPage last synced. That is
+   * fine for the plan (it does not move) and wrong for anything the server
+   * records mid-session — the Command Center URL above being the case that bit:
+   * it is written when STORY-000 ships, so the student who just earned it walks
+   * into the next story holding a copy of the project from before it existed,
+   * and the header correctly renders nothing. Only a hard refresh fixed it.
+   *
+   * `refreshProjectsFromBackend` and not `syncProjectsWithBackend`, for two
+   * reasons. It is deliberately NOT subject to the once-per-session latch, which
+   * ProjectsPage has already tripped by the time anyone reaches a story. And it
+   * is pull-only: the push half would mirror this device's snapshot back over
+   * rows the server just wrote, which is the wrong direction to run at the exact
+   * moment we came here to read the server's newer truth.
+   *
+   * Fails soft by design. The pull swallows its own errors, and the `.catch` is
+   * the second line: on any failure the page keeps rendering the store copy it
+   * already had, which is the same thing it showed before this effect existed.
+   * A student offline mid-build loses the refresh, not the workspace.
+   */
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    refreshProjectsFromBackend()
+      .then(() => { if (!cancelled) setTick((t) => t + 1); })
+      .catch(() => { /* keep the store copy — see above */ });
+    return () => { cancelled = true; };
+  }, [projectId]);
 
   const task: ProjectTask | null = useMemo(() => {
     if (!project) return null;
@@ -276,7 +309,7 @@ const ProjectWorkspacePage: React.FC = () => {
               className="rt-btn"
               href={project.commandCenterUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               title="Open your Command Center in a new tab"
             >
               Command Center ↗
