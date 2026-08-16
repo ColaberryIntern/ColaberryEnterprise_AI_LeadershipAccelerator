@@ -299,6 +299,22 @@ router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, r
       };
     }
 
+    // Hosting check, detached. Sync is the other natural "something changed, go
+    // and look again" moment, and covering it matters: a student who enables
+    // Pages and never pushes again would otherwise never get their link. It runs
+    // AFTER the response is composed and is never awaited — the sync the student
+    // asked for must not wait on a Pages probe, and must not fail with one.
+    if (view?.repo_owner && view?.repo_name) {
+      const owner = view.repo_owner;
+      const repo = view.repo_name;
+      void (async () => {
+        try {
+          const { recordPagesUrlIfLive } = await import('../services/sbp/repoConnect/pagesUrlService');
+          await recordPagesUrlIfLive(projectId, owner, repo, { correlationId });
+        } catch { /* classified and logged inside; this guards the detached promise */ }
+      })();
+    }
+
     res.json({ ...view, verification });
   } catch (err: any) {
     if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }

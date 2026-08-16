@@ -484,6 +484,54 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
     ),
   );
   lines.push('');
+
+  // PUT IT ONLINE — a separate, explicitly optional step, and its own heading
+  // rather than a bullet inside Step 3.
+  //
+  // Hosting is deliberately NOT an acceptance criterion and never gates the
+  // latch. A first Pages build takes a minute or more, custom domains exist, a
+  // student may decline hosting, and Pages on a private repo needs a paid plan —
+  // so making it a criterion would recreate the permanently-stuck story that the
+  // STORY-000 spec fix removed. Anything a student cannot always satisfy does not
+  // belong in the criteria, and this section says so in as many words so nobody
+  // reads a locked story into a skipped bonus.
+  lines.push('## Step 4 — put it online (optional, one command)');
+  lines.push(
+    'GitHub Pages will host the Command Center for free, and the portal picks the address up on '
+    + 'its own. **This is a bonus. Nothing about whether this story verifies depends on it** — '
+    + 'skip it and Step 3 still confirms exactly the same way.',
+  );
+  lines.push(
+    bullet(
+      'Turn Pages on for this repo, building from the default branch:\n\n'
+      + '```bash\n'
+      + 'gh api repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/pages --method POST \\\n'
+      + "  -f 'source[branch]=main' -f 'source[path]=/'\n"
+      + '```\n\n'
+      + 'Use your default branch if it is not `main`.',
+    ),
+  );
+  lines.push(
+    bullet(
+      '**If it is already on, GitHub answers 409 — that means it is done, so leave it alone and '
+      + 'move on.** Do not delete and recreate it.',
+    ),
+  );
+  lines.push(
+    bullet(
+      '**If it refuses because the repo is private,** Pages needs a paid plan for private repos. '
+      + 'Tell me plainly that it was refused and carry on — do not retry it, and do not ask me to '
+      + 'upgrade anything. The story still verifies without it.',
+    ),
+  );
+  lines.push(
+    bullet(
+      'You do not need to find the address yourself. The first build takes a minute or two; the '
+      + 'platform checks after each push and after a Sync, and the **Command Center** link appears '
+      + 'in the portal header once the site actually answers.',
+    ),
+  );
+  lines.push('');
   return lines.join('\n');
 }
 

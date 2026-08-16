@@ -15,6 +15,7 @@
 const mockConnectionFindOne = jest.fn();
 const mockQuery = jest.fn();
 const mockVerifyBuildFromRepo = jest.fn();
+const mockRecordPages = jest.fn();
 
 jest.mock('../../../../models/GitHubConnection', () => ({
   __esModule: true,
@@ -25,6 +26,9 @@ jest.mock('../../../../config/database', () => ({
 }));
 jest.mock('../buildVerificationService', () => ({
   verifyBuildFromRepo: (...a: any[]) => mockVerifyBuildFromRepo(...a),
+}));
+jest.mock('../../repoConnect/pagesUrlService', () => ({
+  recordPagesUrlWithGrace: (...a: any[]) => mockRecordPages(...a),
 }));
 
 import { handlePushForVerification, isBotOnlyPush } from '../githubPushVerification';
@@ -56,6 +60,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockConnectionFindOne.mockResolvedValue({ project_id: PROJECT_ID });
   mockVerifyBuildFromRepo.mockResolvedValue(okSummary);
+  mockRecordPages.mockResolvedValue({ outcome: 'not_live_yet', url: null, from_api: false });
   claimWins();
 });
 
@@ -174,5 +179,47 @@ describe('handlePushForVerification', () => {
     });
     const res = await handlePushForVerification(push());
     expect(res.outcome).toBe('verified');
+  });
+});
+
+/**
+ * THE RULE THIS WHOLE FEATURE LIVES UNDER.
+ *
+ * A first Pages build takes a minute or more, custom domains exist, students
+ * decline hosting, and Pages on a private repo needs a paid plan. If any of
+ * those could block the latch we would have rebuilt the permanently-stuck story
+ * that the STORY-000 spec fix removed — the same bug wearing a different hat.
+ */
+describe('hosting can never gate a story', () => {
+  it('verifies normally when the Pages check throws outright', async () => {
+    mockRecordPages.mockRejectedValue(new Error('pages api exploded'));
+    const res = await handlePushForVerification(push());
+    expect(res.outcome).toBe('verified');
+    expect(mockVerifyBuildFromRepo).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not wait for the Pages check before verifying', async () => {
+    // A probe that never settles must not hold the story hostage.
+    let settle: () => void = () => {};
+    mockRecordPages.mockReturnValue(new Promise<void>((r) => { settle = r; }));
+
+    const res = await handlePushForVerification(push());
+    expect(res.outcome).toBe('verified');
+    expect(mockVerifyBuildFromRepo).toHaveBeenCalledTimes(1);
+    settle();
+  });
+
+  it('still runs the hosting check for a normal push', async () => {
+    await handlePushForVerification(push());
+    expect(mockRecordPages).toHaveBeenCalledWith(
+      PROJECT_ID, 'ColaberryIntern', 'AcceleratorTesting', expect.any(Object),
+    );
+  });
+
+  it('does not check hosting for a push we are ignoring as our own', async () => {
+    await handlePushForVerification(push({
+      commits: [{ message: `${BOT_COMMIT_PREFIX} sync build plan` }],
+    }));
+    expect(mockRecordPages).not.toHaveBeenCalled();
   });
 });

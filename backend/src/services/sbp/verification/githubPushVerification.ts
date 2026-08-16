@@ -205,6 +205,21 @@ export async function handlePushForVerification(input: HandlePushInput): Promise
     return { outcome: 'duplicate', project_id: projectId };
   }
 
+  // Hosting check — DETACHED, and deliberately started before the verification
+  // rather than after it, so that a slow or failing Pages probe can never sit in
+  // front of a student's story being confirmed. Nothing below awaits it and
+  // nothing in the verification path reads its result: if Pages never comes up,
+  // the story still verifies. That independence is the whole point.
+  void (async () => {
+    try {
+      const { recordPagesUrlWithGrace } = await import('../repoConnect/pagesUrlService');
+      await recordPagesUrlWithGrace(projectId, input.owner, input.repo, { correlationId });
+    } catch {
+      // recordPagesUrlIfLive already classifies and logs its own failures; this
+      // catch exists only so a detached promise can never reject unhandled.
+    }
+  })();
+
   try {
     const { verifyBuildFromRepo } = await import('./buildVerificationService');
     const summary = await verifyBuildFromRepo(projectId, { correlationId });
