@@ -4,6 +4,17 @@ import { fmtCentralDateTime } from '../../../utils/centralTime';
 // ProofDesk Milestone 2 — Decisions tab (spec §10, §15.3). Lists decision_records for
 // this ticket and lets an admin post a new one (approve/reject/override/note) via
 // T006's POST /tickets/:id/decisions route (T003's recordDecision, Zod-validated).
+//
+// Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz). The record-a-decision
+// form stays visible regardless of `expectation` — a human can always manually record a
+// decision on any ticket by design (evidenceExpectationService.ts's own human-override
+// rationale: a human filing/reviewing a ticket could reasonably need to record one on
+// any type). Only the History section's empty state gets the 3-way split, mirroring
+// VisualProofTab.tsx/WorkGraphTab.tsx's identical pattern: real decisions / "not
+// applicable for this ticket type" / "no decisions recorded yet" (only when the
+// category genuinely expects one).
+
+export type EvidenceExpectation = 'expected' | 'not_applicable';
 
 type DecisionType = 'approve' | 'reject' | 'override' | 'note';
 
@@ -32,8 +43,47 @@ const DECISION_BADGES: Record<DecisionType, string> = {
   note: 'secondary',
 };
 
+interface HistoryProps {
+  decisions: DecisionRecord[];
+  expectation: EvidenceExpectation;
+}
+
+/** Pure presentational rendering of the History section's 3 possible states — no
+ * fetch, no state. Real decisions always win the branch; otherwise "not applicable"
+ * (this ticket's category never gets a recorded decision, e.g. a routine bpos_execution
+ * build step) is distinguished from "no decisions recorded yet" (this category
+ * genuinely expects one, e.g. a strategic initiative awaiting approval, and doesn't
+ * have one yet). */
+export function DecisionsHistory({ decisions, expectation }: HistoryProps) {
+  if (decisions.length > 0) {
+    return (
+      <div>
+        {decisions.map((d) => (
+          <div key={d.id} className="d-flex gap-2 mb-2 small">
+            <div className="text-muted" style={{ minWidth: 110, fontSize: '0.7rem' }}>{fmtCentralDateTime(d.created_at)}</div>
+            <div>
+              <span className={`badge bg-${DECISION_BADGES[d.decision_type]} me-1`} style={{ fontSize: '0.6rem' }}>
+                {d.decision_type}
+              </span>
+              <span className="text-muted me-1" style={{ fontSize: '0.7rem' }}>{d.actor_id}</span>
+              {d.rationale && <div className="bg-light p-2 rounded mt-1">{d.rationale}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (expectation === 'not_applicable') {
+    return <div className="text-muted small py-2">Not applicable for this ticket type.</div>;
+  }
+
+  return <div className="text-muted small py-2">No decisions recorded yet.</div>;
+}
+
 export default function DecisionsTab({ ticketId, token }: Props) {
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
+  const [expectation, setExpectation] = useState<EvidenceExpectation>('not_applicable');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [decisionType, setDecisionType] = useState<DecisionType>('note');
@@ -51,6 +101,7 @@ export default function DecisionsTab({ ticketId, token }: Props) {
       if (!res.ok) throw new Error(`Decisions request failed: ${res.status}`);
       const data = await res.json();
       setDecisions(data.decisions || []);
+      setExpectation(data.expectation === 'expected' ? 'expected' : 'not_applicable');
     } catch (err) {
       setError(true);
     } finally {
@@ -121,23 +172,7 @@ export default function DecisionsTab({ ticketId, token }: Props) {
       <h6 className="fw-semibold small mb-2">History</h6>
       {loading && <div className="text-muted small py-2">Loading decisions...</div>}
       {!loading && error && <div className="text-muted small py-2">Decisions unavailable right now — try reopening this ticket.</div>}
-      {!loading && !error && decisions.length === 0 && <div className="text-muted small py-2">No decisions recorded yet.</div>}
-      {!loading && !error && decisions.length > 0 && (
-        <div>
-          {decisions.map((d) => (
-            <div key={d.id} className="d-flex gap-2 mb-2 small">
-              <div className="text-muted" style={{ minWidth: 110, fontSize: '0.7rem' }}>{fmtCentralDateTime(d.created_at)}</div>
-              <div>
-                <span className={`badge bg-${DECISION_BADGES[d.decision_type]} me-1`} style={{ fontSize: '0.6rem' }}>
-                  {d.decision_type}
-                </span>
-                <span className="text-muted me-1" style={{ fontSize: '0.7rem' }}>{d.actor_id}</span>
-                {d.rationale && <div className="bg-light p-2 rounded mt-1">{d.rationale}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {!loading && !error && <DecisionsHistory decisions={decisions} expectation={expectation} />}
     </div>
   );
 }

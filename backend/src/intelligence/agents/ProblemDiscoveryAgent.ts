@@ -25,7 +25,7 @@ export interface DetectedProblem {
 /**
  * Scan for agent failures: agents with status='error' or high error rates.
  */
-async function detectAgentFailures(): Promise<DetectedProblem[]> {
+export async function detectAgentFailures(): Promise<DetectedProblem[]> {
   const problems: DetectedProblem[] = [];
 
   const failedAgents = await AiAgent.findAll({
@@ -55,7 +55,7 @@ async function detectAgentFailures(): Promise<DetectedProblem[]> {
 /**
  * Scan for conversion drops: 48h conversion rate vs 7-day average.
  */
-async function detectConversionDrops(): Promise<DetectedProblem[]> {
+export async function detectConversionDrops(): Promise<DetectedProblem[]> {
   const problems: DetectedProblem[] = [];
 
   try {
@@ -93,7 +93,7 @@ async function detectConversionDrops(): Promise<DetectedProblem[]> {
 /**
  * Scan for error spikes in system processes (last hour vs rolling average).
  */
-async function detectErrorSpikes(): Promise<DetectedProblem[]> {
+export async function detectErrorSpikes(): Promise<DetectedProblem[]> {
   const problems: DetectedProblem[] = [];
 
   try {

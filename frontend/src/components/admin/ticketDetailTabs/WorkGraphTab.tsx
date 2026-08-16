@@ -16,6 +16,15 @@ import { fmtCentralDateTime } from '../../../utils/centralTime';
 // established frontend-test convention — no @testing-library/react installed in
 // this environment, see kitConfig/__tests__/*.smoke.test.tsx) without needing to
 // await the fetch/useEffect cycle.
+//
+// Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz). `WorkGraphContent`
+// gains an `expectation` prop so its empty state (workUnits.length === 0) can
+// distinguish "not applicable for this ticket type" (e.g. a routine agent_action
+// ticket that was never going to have multi-agent coordination) from the existing
+// "no work units yet" copy (now conditional, only shown for a category that
+// genuinely expects one, e.g. a bpos_execution build step or a strategic initiative).
+
+export type EvidenceExpectation = 'expected' | 'not_applicable';
 
 export interface WorkUnit {
   id: string;
@@ -83,14 +92,21 @@ interface ContentProps {
   ticketId: string;
   workUnits: WorkUnit[];
   dependencies: WorkUnitDependencyEdge[];
+  expectation: EvidenceExpectation;
 }
 
 /** Pure presentational rendering — no fetch, no state. Handles the empty state
- * (most tickets: no work units, since they're opt-in) honestly, same
- * no-fabrication discipline M2's summary generator established, rather than
- * pretending there's a graph to show. */
-export function WorkGraphContent({ ticketId, workUnits, dependencies }: ContentProps) {
+ * honestly, same no-fabrication discipline M2's summary generator established,
+ * rather than pretending there's a graph to show. 3-state: real work units always
+ * win the branch; otherwise "not applicable" (this ticket's category never gets
+ * multi-agent coordination, e.g. a routine agent_action ticket) is distinguished
+ * from the existing "no work units yet" copy (this category genuinely expects one,
+ * e.g. a bpos_execution build step, and doesn't have one — a real gap). */
+export function WorkGraphContent({ ticketId, workUnits, dependencies, expectation }: ContentProps) {
   if (workUnits.length === 0) {
+    if (expectation === 'not_applicable') {
+      return <div className="text-muted small py-4">Not applicable for this ticket type.</div>;
+    }
     return (
       <div className="text-muted small py-4">
         No work units on this ticket yet. Work units are created explicitly for
@@ -150,6 +166,7 @@ interface Props {
 export default function WorkGraphTab({ ticketId, token }: Props) {
   const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
   const [dependencies, setDependencies] = useState<WorkUnitDependencyEdge[]>([]);
+  const [expectation, setExpectation] = useState<EvidenceExpectation>('not_applicable');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -164,6 +181,7 @@ export default function WorkGraphTab({ ticketId, token }: Props) {
       const data = await res.json();
       setWorkUnits(data.workUnits || []);
       setDependencies(data.dependencies || []);
+      setExpectation(data.expectation === 'expected' ? 'expected' : 'not_applicable');
     } catch (err) {
       setError(true);
     } finally {
@@ -185,5 +203,5 @@ export default function WorkGraphTab({ ticketId, token }: Props) {
     );
   }
 
-  return <WorkGraphContent ticketId={ticketId} workUnits={workUnits} dependencies={dependencies} />;
+  return <WorkGraphContent ticketId={ticketId} workUnits={workUnits} dependencies={dependencies} expectation={expectation} />;
 }

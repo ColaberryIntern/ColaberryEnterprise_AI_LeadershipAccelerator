@@ -82,7 +82,7 @@ describe('buildMermaidChart', () => {
 describe('WorkGraphContent — empty state (zero work units)', () => {
   it('renders the honest empty-state message, not a fabricated graph, and does not crash', () => {
     const html = renderToStaticMarkup(
-      <WorkGraphContent ticketId="tk-1" workUnits={[]} dependencies={[]} />
+      <WorkGraphContent ticketId="tk-1" workUnits={[]} dependencies={[]} expectation="expected" />
     );
     expect(html).toContain('No work units on this ticket yet');
     expect(html).not.toContain('flowchart');
@@ -94,7 +94,7 @@ describe('WorkGraphContent — 2-unit linear chain', () => {
     const workUnits = [unit('u1', 'Design the schema', 'done'), unit('u2', 'Build the migration', 'in_progress', { assigned_agent_name: 'PlatformFixAgent' })];
     const dependencies = [edge('d1', 'u2', 'u1')];
     const html = renderToStaticMarkup(
-      <WorkGraphContent ticketId="tk-2" workUnits={workUnits} dependencies={dependencies} />
+      <WorkGraphContent ticketId="tk-2" workUnits={workUnits} dependencies={dependencies} expectation="expected" />
     );
     expect(html).toContain('Design the schema');
     expect(html).toContain('Build the migration');
@@ -108,7 +108,7 @@ describe('WorkGraphContent — 2-unit linear chain', () => {
         activeLease: { id: 'lease-1', lease_owner: 'PlatformFixAgent', expires_at: '2026-08-03T12:00:00Z' },
       }),
     ];
-    const html = renderToStaticMarkup(<WorkGraphContent ticketId="tk-3" workUnits={workUnits} dependencies={[]} />);
+    const html = renderToStaticMarkup(<WorkGraphContent ticketId="tk-3" workUnits={workUnits} dependencies={[]} expectation="expected" />);
     expect(html).toContain('Active lease');
     expect(html).toContain('PlatformFixAgent');
     // Ali's live feedback: format all time to CST, labeled — never a silent shift.
@@ -128,12 +128,26 @@ describe('WorkGraphContent — 3-unit diamond dependency (fan-out/fan-in)', () =
     ];
     const dependencies = [edge('e1', 'A', 'B'), edge('e2', 'A', 'C'), edge('e3', 'B', 'D'), edge('e4', 'C', 'D')];
     const html = renderToStaticMarkup(
-      <WorkGraphContent ticketId="tk-4" workUnits={workUnits} dependencies={dependencies} />
+      <WorkGraphContent ticketId="tk-4" workUnits={workUnits} dependencies={dependencies} expectation="expected" />
     );
     expect(html).toContain('Ship the release');
     expect(html).toContain('QA pass');
     expect(html).toContain('Security review');
     expect(html).toContain('Merge the PR');
     expect(html).toContain('4 work units, 4 dependencies');
+  });
+});
+
+// Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz) — the empty state
+// now distinguishes "not applicable for this ticket type" from the pre-existing
+// "no work units yet" copy (exercised, unchanged, in the "empty state" describe block
+// above via expectation="expected").
+describe('WorkGraphContent — empty state, not_applicable', () => {
+  it('renders "Not applicable for this ticket type." instead of the "no work units yet" copy', () => {
+    const html = renderToStaticMarkup(
+      <WorkGraphContent ticketId="tk-5" workUnits={[]} dependencies={[]} expectation="not_applicable" />
+    );
+    expect(html).toContain('Not applicable for this ticket type.');
+    expect(html).not.toContain('No work units on this ticket yet');
   });
 });

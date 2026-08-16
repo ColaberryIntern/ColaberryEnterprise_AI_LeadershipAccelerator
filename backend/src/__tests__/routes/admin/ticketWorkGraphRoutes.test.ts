@@ -11,11 +11,18 @@ import {
   WorkGraphValidationError,
 } from '../../../services/workGraph/workGraphService';
 import { retryFailedRun } from '../../../services/workGraph/workCoordinatorService';
+import { getTicketEvidenceExpectations } from '../../../services/workLedger/evidenceExpectationService';
 
 // ProofDesk Milestone 3 (T010) — work-unit/dependency/work-graph/retry routes,
 // added to the existing ticketRoutes.ts router. Follows the same express+
 // supertest+jwt harness pattern already established by evidenceRoutes.test.ts
 // (Milestone 2) and workLedgerHealthController.test.ts (Milestone 1).
+//
+// Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz) — the work-graph
+// GET route now also calls getTicketEvidenceExpectations(); mocked here so this suite
+// keeps testing only the pre-existing work-graph wiring, not the classifier itself
+// (covered by its own evidenceExpectationService.test.ts and by
+// ticketRoutes.evidenceExpectation.test.ts).
 
 jest.mock('../../../services/workGraph/workGraphService', () => {
   const actual = jest.requireActual('../../../services/workGraph/workGraphService');
@@ -49,12 +56,14 @@ jest.mock('../../../services/evidence/decisionRecordService', () => ({
   DecisionRecordValidationError: class DecisionRecordValidationError extends Error {},
 }));
 jest.mock('../../../services/workLedger/summaryGeneratorService', () => ({ generateTicketSummary: jest.fn() }));
+jest.mock('../../../services/workLedger/evidenceExpectationService', () => ({ getTicketEvidenceExpectations: jest.fn() }));
 
 const mockCreateWorkUnit = createWorkUnit as unknown as jest.Mock;
 const mockListWorkUnits = listWorkUnitsForTicket as unknown as jest.Mock;
 const mockAddDependency = addWorkUnitDependency as unknown as jest.Mock;
 const mockGetWorkGraph = getWorkGraphForTicket as unknown as jest.Mock;
 const mockRetryFailedRun = retryFailedRun as unknown as jest.Mock;
+const mockGetExpectations = getTicketEvidenceExpectations as unknown as jest.Mock;
 
 function buildApp() {
   const app = express();
@@ -75,6 +84,7 @@ const WORK_UNIT_ID = '22222222-2222-4222-8222-222222222222';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGetExpectations.mockResolvedValue({ visualProof: 'not_applicable', workGraph: 'expected', decisions: 'not_applicable' });
 });
 
 describe('GET /api/admin/tickets/:id/work-units', () => {
@@ -189,12 +199,16 @@ describe('GET /api/admin/tickets/:id/work-graph', () => {
 
   it('returns 200 with an empty graph for a ticket with no work units (honest empty state, not fabricated)', async () => {
     mockGetWorkGraph.mockResolvedValue({ workUnits: [], dependencies: [] });
+    mockGetExpectations.mockResolvedValue({ visualProof: 'not_applicable', workGraph: 'not_applicable', decisions: 'not_applicable' });
     const app = buildApp();
     const res = await request(app)
       .get(`/api/admin/tickets/${TICKET_ID}/work-graph`)
       .set('Authorization', `Bearer ${adminToken()}`);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ workUnits: [], dependencies: [] });
+    // Ticket Board Honesty fix (2026-08-16, CC-20260816-q4mz) — `expectation` is now
+    // an additive field on this response; this ticket's category is not_applicable
+    // in this case, so an empty graph here is honest, not a fabricated gap.
+    expect(res.body).toEqual({ workUnits: [], dependencies: [], expectation: 'not_applicable' });
   });
 });
 
