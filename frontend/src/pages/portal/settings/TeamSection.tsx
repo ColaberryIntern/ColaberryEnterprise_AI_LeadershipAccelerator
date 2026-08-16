@@ -81,8 +81,8 @@ function TeamSection({ onToast }: Props): React.ReactElement {
   return (
     <>
       <section className="te-card set-section">
-        <h2 className="set-h2">Invite your team</h2>
-        <p className="set-hint">
+        <h3>Invite your team</h3>
+        <p className="set-sub">
           Each teammate gets their own free builder account. They receive an email with an
           activation link.
         </p>
@@ -98,7 +98,7 @@ function TeamSection({ onToast }: Props): React.ReactElement {
               onChange={(e) => setEmails(e.target.value)}
               disabled={busy}
             />
-            <span className="set-hint">Separate with commas, spaces or new lines.</span>
+            <span className="set-sub">Separate with commas, spaces or new lines.</span>
           </label>
 
           <label className="set-field">
@@ -112,8 +112,8 @@ function TeamSection({ onToast }: Props): React.ReactElement {
             />
           </label>
 
-          <div>
-            <button type="submit" className="set-btn primary" disabled={busy || !emails.trim()}>
+          <div className="set-actions">
+            <button type="submit" className="te-btn cherry" disabled={busy || !emails.trim()}>
               {busy ? 'Sending…' : 'Send invitations'}
             </button>
           </div>
@@ -121,16 +121,16 @@ function TeamSection({ onToast }: Props): React.ReactElement {
       </section>
 
       <section className="te-card set-section">
-        <h2 className="set-h2">Your team ({roster.length})</h2>
+        <h3>Your team ({roster.length})</h3>
 
         {loading ? (
-          <p className="set-hint">Loading…</p>
+          <p className="set-sub">Loading…</p>
         ) : loadError ? (
-          <p className="set-hint" style={{ color: 'var(--status-danger, #c0392b)' }}>
+          <p className="set-sub" style={{ color: 'var(--status-danger, #c0392b)' }}>
             {loadError}
           </p>
         ) : roster.length === 0 ? (
-          <p className="set-hint">
+          <p className="set-sub">
             Nobody has joined yet. Invite a teammate above and they will appear here.
           </p>
         ) : (
@@ -150,15 +150,15 @@ function TeamSection({ onToast }: Props): React.ReactElement {
               >
                 <span>
                   <strong>{m.name}</strong>
-                  {m.team ? <span className="set-hint"> · {m.team}</span> : null}
+                  {m.team ? <span className="set-sub"> · {m.team}</span> : null}
                 </span>
-                <span className="set-hint">{prettyLevel(m.level)}</span>
+                <span className="set-sub">{prettyLevel(m.level)}</span>
               </li>
             ))}
           </ul>
         )}
 
-        <p className="set-hint" style={{ marginTop: 16 }}>
+        <p className="set-sub" style={{ marginTop: 16 }}>
           <Link to="/portal/company">Open the full company view →</Link> for readiness, evidence
           and per-person progress.
         </p>
