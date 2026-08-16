@@ -1,42 +1,72 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getWebhookSetup, WebhookSetupView } from '../../../services/workspaceRepoApi';
 
 /**
- * WebhookSetupBlock — the one-time step that turns "press Sync" into "it just
- * knows".
+ * WebhookSetupBlock — the one-time plumbing, as a checklist that tells you where
+ * you are.
  *
- * ── WHY THE STUDENT DOES THIS AND NOT US ─────────────────────────────────────
+ * ── WHAT WAS WRONG ───────────────────────────────────────────────────────────
  *
- * Webhooks are per repository. Student build repos are student-owned and the
- * platform deliberately holds no OAuth token for them — only a pointer and a
- * push proof. Rather than ask a cohort for an `admin:repo_hook` grant to
- * automate a one-minute setup, the student's own Claude Code registers it with
- * their own credentials. Same student-owned decision, one level further out.
+ * Setup is genuinely three steps, and the old block presented it as one
+ * undifferentiated panel behind a single grey dot. A student could not tell
+ * which parts were done, what was left, or — worst of all — whether the command
+ * they had just run had worked. Ali's words: "it is a multi step setup and we
+ * need to understand when one is completed."
  *
- * ── THE SECRET IS THE PART TO GET RIGHT ──────────────────────────────────────
+ * ── THE VISUAL LANGUAGE IS BORROWED, DELIBERATELY ────────────────────────────
  *
- * Student repos are public by default. A leaked per-repo secret lets somebody
- * forge push events for that repo, so the copy below tells the student — and by
- * extension the agent reading over their shoulder — NOT to put it in a file, in
- * the imperative, twice. Claude Code stops and asks about anything that looks
- * like a credential, and here that is exactly the behaviour we want.
+ * Checkmarks, matching "Done means" on the same page, because that is what
+ * already reads as *done* here and setup should look like it belongs to the same
+ * product rather than inventing a third idiom.
  *
- * It is fetched from its own authenticated endpoint rather than riding along on
- * the repo view, so it is requested only when this block is actually shown.
+ * ── BUT IT IS ITS OWN BLOCK, AND MUST STAY THAT WAY ──────────────────────────
  *
- * ── THE FALLBACK IS A REAL DOOR ──────────────────────────────────────────────
+ * The obvious next thought is "just add these as extra checkmarks inside Done
+ * means". Do not:
  *
- * `gh` missing or unauthenticated is not an edge case, it is Thursday. So the
- * manual path is not a consolation prize: a direct link to the exact GitHub page
- * with the two values laid out to copy, which is genuinely about as fast.
+ *   - Those three criteria are what the PLATFORM VERIFIES from the repo to
+ *     complete the story. The webhook is deliberately optional — hosting was
+ *     kept out of the criteria for exactly this reason. Putting setup in that
+ *     list makes an optional step read as required and reintroduces the
+ *     stuck-story failure in a new costume.
+ *   - The "n of m confirmed" count would start mixing plumbing with the
+ *     deliverable. "3 of 5" tells a student nothing about which two are missing
+ *     or whether they even matter.
+ *   - "Done means" is per-story. Setup is once per project. Story 001 onward
+ *     would either repeat it forever or drop it inconsistently.
+ *
+ * One thing this block does that "Done means" must never do: once complete it
+ * COLLAPSES to a single quiet line. Setup is finished and nobody will look at it
+ * again; the criteria are the point of the page and always stay open.
+ *
+ * ── EVERY STATE IS SERVER TRUTH ──────────────────────────────────────────────
+ *
+ * Same rule as the acceptance checkboxes: a setup step that claims done when it
+ * is not is the same class of lie. "Registered" means we have actually received
+ * a delivery from this repo — not that the student pressed a button. GitHub
+ * fires a `ping` the moment a hook is created, so that evidence arrives within
+ * seconds of the command running, which is what makes the honest signal also the
+ * fast one.
  */
 export interface WebhookSetupBlockProps {
   projectId: string;
+  /** Owner/name for the first step, which is already done by the time we render. */
+  repoLabel?: string | null;
 }
 
-const WebhookSetupBlock: React.FC<WebhookSetupBlockProps> = ({ projectId }) => {
+type StepState = 'done' | 'waiting_you' | 'waiting_github';
+
+interface Step {
+  key: string;
+  label: string;
+  state: StepState;
+  /** Shown under the label. Always a fact, never a guess. */
+  detail: string;
+}
+
+const WebhookSetupBlock: React.FC<WebhookSetupBlockProps> = ({ projectId, repoLabel }) => {
   const [setup, setSetup] = useState<WebhookSetupView | null>(null);
-  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState('');
 
   useEffect(() => {
@@ -57,35 +87,95 @@ const WebhookSetupBlock: React.FC<WebhookSetupBlockProps> = ({ projectId }) => {
     window.setTimeout(() => setCopied(''), 1600);
   }, []);
 
+  const registered = Boolean(setup?.last_delivery_at);
+  const pushing = Boolean(setup?.last_push_at);
+
+  const steps = useMemo<Step[]>(() => [
+    {
+      key: 'repo',
+      label: 'Repo connected',
+      state: 'done',
+      detail: repoLabel || 'Your workspace repo is linked.',
+    },
+    {
+      key: 'hook',
+      label: 'Webhook registered',
+      state: registered ? 'done' : 'waiting_you',
+      detail: registered
+        ? 'GitHub has reached us from this repo.'
+        : 'Run the command below. GitHub confirms it here within seconds.',
+    },
+    {
+      key: 'push',
+      label: 'Pushes arriving',
+      state: pushing ? 'done' : registered ? 'waiting_github' : 'waiting_github',
+      detail: pushing
+        ? `Last push ${relative(setup?.last_push_at)}.`
+        : registered
+          ? 'Waiting for your first push. Nothing to do — it happens on its own.'
+          : 'Starts once the webhook is registered.',
+    },
+  ], [registered, pushing, repoLabel, setup?.last_push_at]);
+
   if (!setup?.supported || !setup.gh_command) return null;
 
-  const live = Boolean(setup.last_delivery_at);
+  const doneCount = steps.filter((s) => s.state === 'done').length;
+
+  /**
+   * COLLAPSED once the student's part is done — which is when the webhook is
+   * registered, not when pushes arrive. Pushing is a consequence, not a step
+   * they perform, so holding the panel open waiting for it would keep nagging
+   * about something already finished.
+   */
+  const settled = registered;
+  const open = expanded || !settled;
+
+  if (settled && !expanded) {
+    return (
+      <div className="rt-hook settled">
+        <span className="rt-hook-check on" aria-hidden="true">✓</span>
+        <div className="rt-hook-oneline">
+          <span className="rt-hook-repo">{repoLabel || 'Repo'}</span>
+          <span className="rt-hook-sep">·</span>
+          <span className="rt-hook-when">
+            {pushing ? `last push ${relative(setup.last_push_at)}` : 'waiting for your first push'}
+          </span>
+        </div>
+        {/* "Hide" was the wrong verb here — nothing is being hidden, and the one
+            thing a student might want is to point it somewhere else. */}
+        <button className="rt-btn" onClick={() => setExpanded(true)}>Change</button>
+      </div>
+    );
+  }
 
   return (
     <div className="rt-hook">
       <div className="rt-hook-h">
-        <span className={`rt-hook-dot${live ? ' on' : ''}`} aria-hidden="true" />
-        <div className="rt-hook-t">
-          {live ? 'The platform sees your pushes' : 'Let the platform see your pushes'}
-        </div>
-        <button
-          className="rt-btn"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          aria-controls="rt-hook-body"
-        >
-          {open ? 'Hide' : live ? 'Set up again' : 'Set it up'}
-        </button>
+        <div className="rt-hook-t">Let the platform see your pushes</div>
+        <span className="rt-hook-count">{doneCount} of {steps.length}</span>
+        {settled && (
+          <button className="rt-btn" onClick={() => setExpanded(false)}>Done</button>
+        )}
       </div>
 
-      <p className="rt-hook-s">
-        {live
-          ? <>Your last push reached us {relative(setup.last_delivery_at)}. Stories verify on push — you do not need to press Sync.</>
-          : <>One command, once. After it, your criteria tick and stories verify the moment you push, instead of when you press Sync. Skip it and everything still works — you just press Sync yourself.</>}
-      </p>
+      <ol className="rt-hook-steps">
+        {steps.map((s) => (
+          <li key={s.key} className={`rt-hook-step ${s.state}`}>
+            <span className="rt-hook-check" aria-hidden="true">{s.state === 'done' ? '✓' : ''}</span>
+            <div>
+              <div className="rt-hook-step-l">
+                {s.label}
+                {s.state === 'waiting_you' && <span className="rt-hook-tag you">Your turn</span>}
+                {s.state === 'waiting_github' && <span className="rt-hook-tag gh">Waiting on GitHub</span>}
+              </div>
+              <div className="rt-hook-step-d">{s.detail}</div>
+            </div>
+          </li>
+        ))}
+      </ol>
 
-      {open && (
-        <div id="rt-hook-body">
+      {!registered && (
+        <div className="rt-hook-do">
           <div className="rt-lab">Run this in your project folder</div>
           <pre className="rt-in mono rt-hook-cmd">{setup.gh_command}</pre>
           <div className="rt-row">
@@ -97,64 +187,75 @@ const WebhookSetupBlock: React.FC<WebhookSetupBlockProps> = ({ projectId }) => {
             </button>
           </div>
 
-          {/* Said in the imperative, and said before the fallback rather than
-              after it, because this is the sentence that has to survive being
-              skim-read. */}
+          {/* Stays loud for as long as the command is on screen. This one earns
+              its weight: the repo is public and the command carries a secret. */}
           <p className="rt-hook-warn">
             <strong>Do not save this command to a file, commit it, or paste it into .env.</strong> It
             carries a signing secret for your repo, and your repo is public. Run it, then let it go —
             you can always come back here for it.
           </p>
 
-          <div className="rt-lab">If that did not work</div>
-          <p className="rt-hook-s" style={{ marginTop: 0 }}>
-            No <code>gh</code>, or not signed in? Run <code>gh auth login</code> and try again. If GitHub
-            refuses with a permissions error, run <code>gh auth refresh -h github.com -s admin:repo_hook</code>.
-            Or add it by hand in about a minute:
-          </p>
-          <ol className="rt-hook-l">
-            <li>
-              Open <a href={setup.settings_url || '#'} target="_blank" rel="noreferrer">your repo's webhook page ↗</a>
-            </li>
-            <li>
-              <strong>Payload URL</strong>
-              <div className="rt-hook-kv">
-                <code>{setup.payload_url}</code>
-                <button className="rt-btn" onClick={() => copy('url', setup.payload_url || '')}>
-                  {copied === 'url' ? 'Copied' : 'Copy'}
-                </button>
-              </div>
-            </li>
-            <li>
-              <strong>Content type</strong> — <code>application/json</code>
-            </li>
-            <li>
-              <strong>Secret</strong>
-              <div className="rt-hook-kv">
-                <code className="rt-hook-secret">{setup.secret}</code>
-                <button className="rt-btn" onClick={() => copy('secret', setup.secret || '')}>
-                  {copied === 'secret' ? 'Copied' : 'Copy'}
-                </button>
-              </div>
-            </li>
-            <li>Leave it on <strong>Just the push event</strong>, and save.</li>
-          </ol>
+          <details className="rt-hook-alt">
+            <summary>If that did not work</summary>
+            <p className="rt-hook-step-d">
+              No <code>gh</code>, or not signed in? Run <code>gh auth login</code> and try again. If GitHub
+              refuses with a permissions error, run <code>gh auth refresh -h github.com -s admin:repo_hook</code>.
+              Or add it by hand in about a minute:
+            </p>
+            <ol className="rt-hook-l">
+              <li><a href={setup.settings_url || '#'} target="_blank" rel="noreferrer">Open your repo's webhook page ↗</a></li>
+              <li>
+                <strong>Payload URL</strong>
+                <div className="rt-hook-kv">
+                  <code>{setup.payload_url}</code>
+                  <button className="rt-btn" onClick={() => copy('url', setup.payload_url || '')}>
+                    {copied === 'url' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </li>
+              <li><strong>Content type</strong> — <code>application/json</code></li>
+              <li>
+                <strong>Secret</strong>
+                <div className="rt-hook-kv">
+                  <code className="rt-hook-secret">{setup.secret}</code>
+                  <button className="rt-btn" onClick={() => copy('secret', setup.secret || '')}>
+                    {copied === 'secret' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </li>
+              <li>Leave it on <strong>Just the push event</strong>, and save.</li>
+            </ol>
+          </details>
         </div>
+      )}
+
+      {registered && !pushing && (
+        <p className="rt-hook-step-d rt-hook-foot">
+          Nothing left to do here. Push a commit and this finishes itself.
+        </p>
       )}
     </div>
   );
 };
 
-/** Coarse and forgiving — this is reassurance, not a timestamp anybody acts on. */
-function relative(iso: string | null): string {
+/**
+ * Coarse and forgiving — reassurance, not a timestamp anybody acts on.
+ *
+ * Returns null-safe text only for a real instant. A missing or unparseable value
+ * yields "recently" ONLY when the caller has already established that something
+ * did arrive; it is never used to invent an event that did not happen.
+ */
+function relative(iso: string | null | undefined): string {
   if (!iso) return 'recently';
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return 'recently';
   const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 2) return 'just now';
+  if (mins < 1) return 'just now';
+  if (mins === 1) return 'a minute ago';
   if (mins < 60) return `${mins} minutes ago`;
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return hrs === 1 ? 'an hour ago' : `${hrs} hours ago`;
+  if (hrs === 1) return 'an hour ago';
+  if (hrs < 24) return `${hrs} hours ago`;
   const days = Math.round(hrs / 24);
   return days === 1 ? 'yesterday' : `${days} days ago`;
 }

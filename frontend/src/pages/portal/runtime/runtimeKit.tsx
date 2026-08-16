@@ -158,30 +158,71 @@ a.rt-btn{text-decoration:none}
   padding:5px 12px;animation:rt-pop .4s cubic-bezier(.2,1.5,.4,1) .16s both}
 
 /* ── WEBHOOK SETUP ───────────────────────────────────────────────────────────
-   A one-time step, so it must read as an OFFER rather than an outstanding task.
-   Quiet by default, collapsed, and it says out loud that skipping it costs
-   nothing — an optional step styled like a warning would read as broken. */
-.rt-hook{margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--mist)}
-.rt-hook-h{display:flex;align-items:center;gap:9px}
+   A three-step checklist that borrows the checkmark language of .rt-acc
+   ("Done means") on purpose, so setup looks like it belongs to the same product.
+   It stays its own block — see the comment in WebhookSetupBlock.tsx for why
+   folding it into the acceptance criteria would reintroduce the stuck story. */
+.rt-hook{margin-top:12px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--mist)}
+.rt-hook-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .rt-hook-t{font-weight:700;font-size:13.5px}
-.rt-hook-h .rt-btn{margin-left:auto;font-size:12.5px;padding:6px 11px}
-.rt-hook-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted2)}
-.rt-hook-dot.on{background:var(--leaf);box-shadow:0 0 0 3px var(--leaf-soft)}
-.rt-hook-s{margin:8px 0 0;font-size:12.5px;line-height:1.6;color:var(--muted)}
-.rt-hook-s code,.rt-hook-l code{font-family:var(--mono);font-size:11.5px;background:var(--sunken);padding:1px 5px;border-radius:4px}
-.rt-hook-cmd{white-space:pre;overflow-x:auto;font-size:12px;line-height:1.55;margin:0 0 8px;max-height:none}
-/* The one sentence that has to survive being skim-read, so it gets the only
-   loud treatment in the block. */
-.rt-hook-warn{margin:12px 0 0;padding:10px 12px;border:1px solid var(--cherry);background:var(--cherry-soft);
-  border-radius:10px;font-size:12.5px;line-height:1.6;color:#5d1116}
-.rt-hook-l{margin:6px 0 0;padding-left:20px;font-size:12.5px;line-height:1.7;color:var(--muted)}
+.rt-hook-count{font-family:var(--mono);font-size:10.5px;color:var(--muted2);margin-left:auto}
+.rt-hook-h .rt-btn{font-size:12.5px;padding:6px 11px}
+.rt-hook-count + .rt-btn{margin-left:10px}
+
+/* The steps. Same tick, same green, same reading rhythm as the criteria list. */
+.rt-hook-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.rt-hook-step{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line-soft)}
+.rt-hook-step:first-child{border-top:0}
+.rt-hook-check{
+  flex:none;width:16px;height:16px;margin-top:2px;border-radius:5px;
+  border:1.5px solid var(--line);background:var(--paper);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;line-height:1;color:transparent;
+}
+.rt-hook-step.done .rt-hook-check,.rt-hook-check.on{
+  background:var(--leaf);border-color:var(--leaf);color:#fff;
+}
+/* "Your turn" gets a live edge; "waiting on GitHub" stays deliberately quiet,
+   because it is a calm true state and not a task. */
+.rt-hook-step.waiting_you .rt-hook-check{border-color:var(--amber);border-style:solid;box-shadow:0 0 0 3px var(--amber-soft)}
+.rt-hook-step.waiting_github .rt-hook-check{border-style:dashed}
+.rt-hook-step-l{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rt-hook-step.done .rt-hook-step-l{color:var(--muted)}
+.rt-hook-step-d{font-size:12.5px;line-height:1.55;color:var(--muted);margin-top:1px}
+.rt-hook-tag{
+  font-family:var(--mono);font-size:9px;letter-spacing:.07em;text-transform:uppercase;
+  font-weight:700;padding:2px 7px;border-radius:999px;
+}
+.rt-hook-tag.you{background:var(--amber-soft);color:var(--amber)}
+.rt-hook-tag.gh{background:var(--sunken);color:var(--muted2)}
+.rt-hook-foot{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line-soft)}
+
+/* The command, only on screen while it is actually needed. */
+.rt-hook-do{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.rt-hook-cmd{white-space:pre-wrap;word-break:break-all;overflow-x:auto;font-size:12px;line-height:1.6;margin:0 0 8px}
+.rt-hook-warn{
+  margin:12px 0 0;padding:10px 12px;border:1px solid var(--cherry);background:var(--cherry-soft);
+  border-radius:10px;font-size:12.5px;line-height:1.6;color:#5d1116;
+}
+.rt-hook-alt{margin-top:12px}
+.rt-hook-alt summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--berry)}
+.rt-hook-alt summary::marker{color:var(--muted2)}
+.rt-hook-l{margin:8px 0 0;padding-left:20px;font-size:12.5px;line-height:1.7;color:var(--muted)}
 .rt-hook-l li{margin:5px 0}
 .rt-hook-kv{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
-.rt-hook-kv code{font-family:var(--mono);font-size:11.5px;background:var(--sunken);padding:3px 7px;border-radius:5px;
-  overflow-wrap:anywhere;max-width:100%}
+.rt-hook-kv code{font-family:var(--mono);font-size:11.5px;background:var(--sunken);padding:3px 7px;border-radius:5px;overflow-wrap:anywhere;max-width:100%}
 .rt-hook-kv .rt-btn{font-size:11.5px;padding:4px 9px}
-/* Long enough to wrap and not so prominent it invites a screenshot. */
 .rt-hook-secret{color:var(--muted)}
+.rt-hook-step-d code,.rt-hook-l code{font-family:var(--mono);font-size:11.5px;background:var(--sunken);padding:1px 5px;border-radius:4px}
+
+/* SETTLED — one quiet line. Setup is done and nobody will look at it again, so
+   it takes almost no room while staying editable rather than vanishing. */
+.rt-hook.settled{display:flex;align-items:center;gap:10px;padding:10px 14px}
+.rt-hook-oneline{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12.5px;min-width:0}
+.rt-hook-repo{font-family:var(--mono);font-size:12px;color:var(--ink);overflow-wrap:anywhere}
+.rt-hook-sep{color:var(--muted2)}
+.rt-hook-when{color:var(--muted)}
+.rt-hook.settled .rt-btn{margin-left:auto;font-size:12px;padding:5px 10px}
 
 /* Reduced motion: the same information, in the same order, without the
    movement. The app-wide override in responsive.css already flattens duration;

@@ -120,8 +120,11 @@ describe('handlePushForVerification', () => {
     }));
     expect(res.outcome).toBe('bot_only');
     expect(mockVerifyBuildFromRepo).not.toHaveBeenCalled();
-    // Never even claims a delivery id: there is nothing to be idempotent about.
-    expect(mockQuery).not.toHaveBeenCalled();
+    // It IS recorded in the ledger now, unlike before. The receipt proves GitHub
+    // can reach us — which is what the setup panel reads to show the webhook as
+    // registered — even though the contents were our own echo and earn no
+    // verification pass.
+    expect(mockQuery).toHaveBeenCalled();
   });
 
   it('still verifies when our bot commit rides along with the student pushing work', async () => {
@@ -221,5 +224,51 @@ describe('hosting can never gate a story', () => {
       commits: [{ message: `${BOT_COMMIT_PREFIX} sync build plan` }],
     }));
     expect(mockRecordPages).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * GitHub fires a `ping` the instant a webhook is created. Accepting it is the
+ * difference between a student knowing the scariest step of the setup worked and
+ * having to take it on faith until their next push.
+ *
+ * Before this, the handler returned on "no commits" BEFORE claiming the
+ * delivery, so a ping left no trace at all — and the panel, which reads the
+ * ledger to decide whether the hook is live, could not go green until a real
+ * push happened to arrive.
+ */
+describe('ping — the receipt IS the payload', () => {
+  const ping = () => push({ event: 'ping', commits: [] });
+
+  it('records the delivery so the panel can show the hook as registered', async () => {
+    const res = await handlePushForVerification(ping());
+    expect(res).toEqual({ outcome: 'ping', project_id: PROJECT_ID });
+    // Claimed (INSERT) and closed (UPDATE) — the row exists either way.
+    expect(mockQuery).toHaveBeenCalled();
+  });
+
+  it('does not run a verification pass — there is nothing in it to verify', async () => {
+    await handlePushForVerification(ping());
+    expect(mockVerifyBuildFromRepo).not.toHaveBeenCalled();
+  });
+
+  it('does not count as the student pushing work', async () => {
+    // The ledger closes it as `ping`, and the panel counts only `verified` rows
+    // as "your pushes are arriving". A ping must never claim their work landed.
+    await handlePushForVerification(ping());
+    const closed = mockQuery.mock.calls.map((c) => JSON.stringify(c)).join(' ');
+    expect(closed).toContain('ping');
+    expect(closed).not.toContain('"verified"');
+  });
+
+  it('is deduped like any other delivery', async () => {
+    claimLoses();
+    const res = await handlePushForVerification(ping());
+    expect(res.outcome).toBe('duplicate');
+  });
+
+  it('is ignored for a repo we do not know', async () => {
+    mockConnectionFindOne.mockResolvedValue(null);
+    expect((await handlePushForVerification(ping())).outcome).toBe('no_project');
   });
 });

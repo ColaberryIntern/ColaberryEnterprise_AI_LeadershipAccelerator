@@ -184,7 +184,7 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
 
         {/* One-time plumbing, only offered once a repo is actually connected —
             there is nothing to register a hook against before that. */}
-        <WebhookSetupBlock projectId={projectId} />
+        <WebhookSetupBlock projectId={projectId} repoLabel={`${repo.repo_owner}/${repo.repo_name}`} />
 
         {repo.recent_commits?.length > 0 && (
           <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>

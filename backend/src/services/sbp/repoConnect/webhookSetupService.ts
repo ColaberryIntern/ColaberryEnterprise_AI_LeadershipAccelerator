@@ -48,11 +48,18 @@ export interface WebhookSetupView {
   /** Door two: the page to paste the two values into by hand. */
   settings_url: string | null;
   /**
-   * When we last received a delivery from this repo — the only honest evidence
+   * When we last received ANY delivery from this repo — the only honest evidence
    * the hook works, since we cannot list their hooks without their credentials.
-   * Null means "we have never heard from it", which reads as not set up yet.
+   * A `ping` counts. Null means "we have never heard from it", which the panel
+   * reads as "not registered yet".
    */
   last_delivery_at: string | null;
+  /**
+   * When a delivery last carried the student's own work through verification.
+   * Strictly narrower than `last_delivery_at`: a ping is not a push, and a
+   * bot-only push is our own echo.
+   */
+  last_push_at: string | null;
 }
 
 const unavailable = (): WebhookSetupView => ({
@@ -66,6 +73,7 @@ const unavailable = (): WebhookSetupView => ({
   gh_command: null,
   settings_url: null,
   last_delivery_at: null,
+  last_push_at: null,
 });
 
 /**
@@ -142,7 +150,7 @@ export async function getWebhookSetup(
     events: ['push'],
     gh_command: buildGhCommand(owner, repo, url, secret),
     settings_url: `https://github.com/${owner}/${repo}/settings/hooks/new`,
-    last_delivery_at: await lastDeliveryAt(owner, repo),
+    ...(await deliveryTimes(owner, repo)),
   };
 }
 
@@ -157,18 +165,41 @@ export async function getWebhookSetup(
  *
  * Fail-soft: a missing ledger costs a timestamp on a panel.
  */
-async function lastDeliveryAt(owner: string, repo: string): Promise<string | null> {
+async function deliveryTimes(
+  owner: string, repo: string,
+): Promise<{ last_delivery_at: string | null; last_push_at: string | null }> {
+  const none = { last_delivery_at: null, last_push_at: null };
   try {
-    const rows = await sequelize.query<{ received_at: Date | string }>(
-      `SELECT received_at FROM github_webhook_deliveries
-       WHERE repo_full_name = $slug ORDER BY received_at DESC LIMIT 1`,
+    // TWO DISTINCT SIGNALS, and conflating them is what made the old UI unreadable.
+    //
+    //   ANY delivery  ⇒ the webhook is registered and GitHub can reach us. A
+    //     `ping` counts, and that is the point: it arrives seconds after the
+    //     student creates the hook, so the step they just performed can confirm
+    //     itself instead of waiting on a push that may be hours away.
+    //
+    //   A VERIFIED push ⇒ their own work is flowing through the loop. Only
+    //     `verified` counts here: a ping is not a push, and a bot-only push is
+    //     our own echo. Counting either would tell a student their work was
+    //     arriving before any of it had.
+    const rows = await sequelize.query<{ last_delivery_at: Date | string | null; last_push_at: Date | string | null }>(
+      `SELECT MAX(received_at)                                         AS last_delivery_at,
+              MAX(received_at) FILTER (WHERE outcome = 'verified')     AS last_push_at
+         FROM github_webhook_deliveries
+        WHERE repo_full_name = $slug`,
       { bind: { slug: `${owner}/${repo}` }, type: QueryTypes.SELECT },
     );
-    const at = rows[0]?.received_at;
-    if (!at) return null;
-    const d = at instanceof Date ? at : new Date(at);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    const row = rows[0];
+    if (!row) return none;
+    return { last_delivery_at: iso(row.last_delivery_at), last_push_at: iso(row.last_push_at) };
   } catch {
-    return null;
+    // A missing ledger costs two timestamps on a panel. It must never cost the
+    // student the command they came here for.
+    return none;
   }
+}
+
+function iso(v: Date | string | null | undefined): string | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
