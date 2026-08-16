@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import {
   fetchCommunityMembers, setCommunityMemberRole, setCommunityMemberFreeAccess, fetchViewAsUrl,
@@ -169,13 +170,42 @@ export default function AdminCommunityRolesPage() {
           <div className="table-responsive">
             <table className="table table-sm align-middle mb-0">
               <thead>
-                <tr><th>Name</th><th>Email</th><th style={{ width: 140 }}>Signed up</th><th style={{ width: 110 }}>Free Access</th><th style={{ width: 150 }}>Role</th><th style={{ width: 170 }}>Mgmt Role</th><th style={{ width: 100 }}>View as</th></tr>
+                <tr><th>Name</th><th>Email</th><th style={{ width: 170 }}>Account</th><th style={{ width: 140 }}>Signed up</th><th style={{ width: 110 }}>Free Access</th><th style={{ width: 150 }}>Role</th><th style={{ width: 170 }}>Mgmt Role</th><th style={{ width: 100 }}>View as</th></tr>
               </thead>
               <tbody>
                 {members.map((m) => (
                   <tr key={m.id}>
                     <td className="fw-semibold">{m.display_name}</td>
                     <td className="text-muted small">{m.email ?? '—'}</td>
+                    {/* Business account vs individual. Nothing in this roster
+                        distinguished the two before, so a company's manager and
+                        a solo signup looked identical. The company name is shown
+                        because "which company" is the actual question staff ask,
+                        and the badge separates who runs the account from who was
+                        invited into it. */}
+                    <td className="small">
+                      {m.org ? (
+                        <>
+                          <Link to={`/admin/business-accounts/${m.org.id}`}>{m.org.name}</Link>
+                          <div>
+                            <span
+                              className={`badge ${m.org.membership === 'manager' ? 'bg-info' : 'bg-secondary'}`}
+                              title={
+                                m.org.membership === 'manager'
+                                  ? 'Owns or manages this business account'
+                                  : 'Invited into this business account'
+                              }
+                            >
+                              {m.org.membership === 'manager' ? 'Business · manager' : 'Business · member'}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-muted" title="Not part of any business account">
+                          Individual
+                        </span>
+                      )}
+                    </td>
                     <td className="text-muted small" title={exactSignup(m.signed_up_at)}>{timeAgo(m.signed_up_at)}</td>
                     <td>
                       <div className="form-check form-switch mb-0">
