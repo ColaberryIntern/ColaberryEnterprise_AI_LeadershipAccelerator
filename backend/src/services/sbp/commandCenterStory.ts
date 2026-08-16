@@ -31,6 +31,11 @@ import {
 import { PROGRESS_FILE_PATH } from './verification/progressContract';
 import { PROFILE_FILE_PATH } from './profileContract';
 import { BLOCK_BEGIN, BLOCK_END } from './managedBlock';
+import {
+  COMMAND_CENTER_ENTRY_FILE,
+  COMMAND_CENTER_ENTRY_PATH,
+  COMMAND_CENTER_ENTRY_RULE,
+} from './commandCenterLocation';
 
 const MANIFEST_FILE_PATH = '.colaberry/manifest.json';
 
@@ -289,7 +294,9 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   );
   lines.push(
     bullet(
-      'Find the Command Center if it is already here — its entry point, and which of the nine '
+      'Find the Command Center if it is already here — its entry point (`'
+      + `${COMMAND_CENTER_ENTRY_PATH}\` at the repo root is where it belongs; a build started `
+      + 'before today often has it under `command-center/` instead), and which of the nine '
       + 'tabs described below already exist and are actually reachable from it. Report three '
       + 'buckets, not two: the tabs that are there and work, the ones that are missing entirely, '
       + 'and the ones that exist but are empty or broken. Those last need repair, not creation.',
@@ -403,6 +410,39 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
     + `\`${PROGRESS_FILE_PATH}\` → \`stories[].id\`. The plan carries the title, release, `
     + 'acceptance criteria, `due_on` and `due_baseline_on`; progress carries `verification` '
     + 'with the state, the commit and the points. Neither file repeats the other.',
+  );
+  lines.push('');
+
+  // ── WHERE IT GOES ─────────────────────────────────────────────────────────
+  //
+  // This section is the authoritative half of the fix for the defect where a
+  // correctly-built, correctly-hosted Command Center produced no link in the
+  // portal. The prompt used to describe nine tabs, a data contract and a
+  // hosting step across 26,000 characters and never say where to put the
+  // result — so the agent picked, and `command-center/` is one directory below
+  // the only address GitHub Pages can serve a free public repo from.
+  //
+  // Rendered from `commandCenterLocation.ts`, which the Pages prober reads too.
+  // Two copies of this fact is exactly how the defect happened.
+  lines.push('## Where it lives in your repo');
+  lines.push(
+    `${COMMAND_CENTER_ENTRY_RULE}. Everything else — your CSS, your scripts, your images, `
+    + 'your per-tab pages — can be organised however you like underneath it. It is the entry '
+    + 'point that has to be at the top.',
+  );
+  lines.push(
+    'That is not a house style, it is the only thing that works. GitHub Pages on a free '
+    + 'public repo can publish from exactly two places: the repo root, or `docs/`. And '
+    + '`docs/` is not yours — it holds your requirements, your stories and your traceability '
+    + 'table, and the platform rewrites it every time you sync, so anything you built in '
+    + 'there would be overwritten. The root is what is left, it is what Step 4 turns on, and '
+    + 'it is the address the portal goes to when it looks for your Command Center so it can '
+    + 'put a link to it in your header.',
+  );
+  lines.push(
+    '**If you have already built it somewhere else** — under `command-center/` is the common '
+    + `one — do not move it and do not rebuild it. Add \`${COMMAND_CENTER_ENTRY_PATH}\` at the `
+    + 'root that opens what is already there. A one-line redirect is a perfectly good answer.',
   );
   lines.push('');
 
@@ -888,6 +928,15 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
       'You do not need to find the address yourself. The first build takes a minute or two; the '
       + 'platform checks after each push and after a Sync, and the **Command Center** link appears '
       + 'in the portal header once the site actually answers.',
+    ),
+  );
+  lines.push(
+    bullet(
+      `What it asks for is \`${COMMAND_CENTER_ENTRY_FILE}\` at the site root — `
+      + '`https://<your-github-name>.github.io/<your-repo>/`. That is the reason the entry point '
+      + 'goes at the root of the repo rather than in a subfolder, and it is the whole of the '
+      + 'reason. If yours is one directory down the platform still finds it, but the address in '
+      + 'your header is the longer one.',
     ),
   );
   lines.push('');

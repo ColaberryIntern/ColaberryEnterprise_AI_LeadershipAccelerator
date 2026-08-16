@@ -209,3 +209,118 @@ describe('recordPagesUrlIfLive', () => {
       .toBe('no_project');
   });
 });
+
+// ── where IN the site it looks ──────────────────────────────────────────────
+
+/**
+ * THE PRODUCTION FAILURE THIS PINS.
+ *
+ * A Command Center was genuinely published and answered 200 at
+ * `https://colaberryintern.github.io/AcceleratorTesting/command-center/index.html`.
+ * This module asked GitHub for `html_url`, got the SITE root, probed only that,
+ * received the 404 a repo with no root `index.html` correctly serves, and
+ * logged `sbp_pages_not_live` — a false statement about a live site.
+ * `command_center_url` stayed NULL and the portal header link never rendered.
+ *
+ * The authoritative fix is the convention in the prompt (pinned in
+ * `__tests__/commandCenterLocation.test.ts`). These tests hold the other half:
+ * the probe must actually visit the documented location, must not call a live
+ * site dead because it looked in one place, and must say which places it looked.
+ */
+describe('probing the site — the D2 defect', () => {
+  const SITE = 'https://colaberryintern.github.io/AcceleratorTesting/';
+  const UNDER = `${SITE}command-center/`;
+
+  it('records the documented location when it is the one that answers', async () => {
+    const row = projectRow();
+    mockProjectFindByPk.mockResolvedValue(row);
+
+    const res = await recordPagesUrlIfLive(PROJECT, 'ColaberryIntern', 'AcceleratorTesting', {
+      fetchImpl: githubFetch({ pages: { html_url: SITE }, live: [SITE] }),
+    });
+
+    expect(res).toMatchObject({ outcome: 'recorded', url: SITE });
+    expect(row.project_variables.command_center_url).toBe(SITE);
+  });
+
+  it('finds a Command Center one directory down instead of calling a live site dead', async () => {
+    // Exactly the repo from the rehearsal: no root index.html, a working page
+    // under command-center/. Before this fix the outcome was `not_live_yet` and
+    // the student got no link, forever.
+    const row = projectRow();
+    mockProjectFindByPk.mockResolvedValue(row);
+
+    const res = await recordPagesUrlIfLive(PROJECT, 'ColaberryIntern', 'AcceleratorTesting', {
+      fetchImpl: githubFetch({ pages: { html_url: SITE }, live: [UNDER] }),
+    });
+
+    expect(res.outcome).toBe('recorded');
+    // The address recorded is the one that actually answers — a link to the
+    // root would put the student back in front of the 404.
+    expect(res.url).toBe(UNDER);
+    expect(row.project_variables.command_center_url).toBe(UNDER);
+  });
+
+  it('PREFERS the documented root when both answer, so the convention wins', async () => {
+    const row = projectRow();
+    mockProjectFindByPk.mockResolvedValue(row);
+
+    const res = await recordPagesUrlIfLive(PROJECT, 'ColaberryIntern', 'AcceleratorTesting', {
+      fetchImpl: githubFetch({ pages: { html_url: SITE }, live: [SITE, UNDER] }),
+    });
+
+    expect(res.url).toBe(SITE);
+  });
+
+  it('names every URL it tried when it reports a site as not live', async () => {
+    // "Not live" was the lie. It is only checkable if the log says what was
+    // asked — a claim about one URL dressed up as a claim about the site.
+    const row = projectRow();
+    mockProjectFindByPk.mockResolvedValue(row);
+    const logs = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    try {
+      const res = await recordPagesUrlIfLive(PROJECT, 'ColaberryIntern', 'AcceleratorTesting', {
+        fetchImpl: githubFetch({ pages: { html_url: SITE }, live: [] }),
+      });
+
+      const events = logs.mock.calls
+        .map(([line]) => { try { return JSON.parse(String(line)); } catch { return null; } })
+        .filter((e): e is any => e !== null);
+      const notLive = events.find((e) => e.event === 'sbp_pages_not_live');
+
+      // Anti-vacuity: without this the assertions below run against `undefined`
+      // and an optional-chained read would quietly prove nothing.
+      expect(notLive).toBeDefined();
+      expect(notLive.context.probed).toEqual([SITE, UNDER]);
+      expect(res.probed).toEqual([SITE, UNDER]);
+    } finally {
+      logs.mockRestore();
+    }
+  });
+
+  it('probes below a CUSTOM DOMAIN too, not just the derived github.io shape', async () => {
+    const row = projectRow();
+    mockProjectFindByPk.mockResolvedValue(row);
+    const custom = 'https://command.example.com/';
+
+    const res = await recordPagesUrlIfLive(PROJECT, 'alice', 'cc', {
+      fetchImpl: githubFetch({ pages: { html_url: custom }, live: [`${custom}command-center/`] }),
+    });
+
+    expect(res).toMatchObject({ outcome: 'recorded', url: `${custom}command-center/`, from_api: true });
+  });
+
+  it('still reports not_enabled when nothing answers anywhere it looked', async () => {
+    // The private-repo-on-a-free-plan case must stay a quiet no-op. Widening
+    // the probe list must not turn "no hosting" into an error anybody handles.
+    const row = projectRow();
+    mockProjectFindByPk.mockResolvedValue(row);
+
+    const res = await recordPagesUrlIfLive(PROJECT, 'a', 'cc', { fetchImpl: githubFetch() });
+
+    expect(res.outcome).toBe('not_enabled');
+    expect(res.probed.length).toBeGreaterThan(1);
+    expect(row.save).not.toHaveBeenCalled();
+  });
+});

@@ -270,7 +270,6 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
     if (!stored) return res.status(404).json({ error: 'No plan for this project' });
 
     const story = stored.plan.stories.find((s) => s.id.toUpperCase() === storyId.toUpperCase());
-    if (!story) return res.status(404).json({ error: `Story ${storyId} is not in this plan` });
 
     // The manifest is the list of paths actually committed. Passing it is what
     // lets prompt assembly REFUSE to cite a file that was never written — the
@@ -278,6 +277,46 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
     // prompt inlines its context and names no paths.
     const repo = await repoFor(projectId);
     const manifest = repo ? await readManifestPaths(repo) : [];
+
+    // ── STORY-000 IS NOT IN `plan.stories`, AND THAT IS ON PURPOSE ───────────
+    //
+    // The Command Center fulfils no requirement of the student's system, so it
+    // is kept out of the plan — otherwise it distorts the traceability gate and
+    // the release sizing. The cost is that EVERY path which iterates or looks
+    // up `plan.stories` silently omits it, and this route was one of them:
+    // the validator regex `^STORY-\d+$` happily accepts `STORY-000`, the lookup
+    // below then finds nothing, and the caller got
+    // `404 {"error":"Story STORY-000 is not in this plan"}` for the one story
+    // every student builds first.
+    //
+    // Not student-visible today only because the workspace UI copies
+    // `task.build` off the project tree rather than calling this — which makes
+    // it a trap for the next caller, not a fixed bug. The same omission has
+    // already cost this workstream a verification miss, a missing
+    // `docs/stories/STORY-000.md`, and a missing `progress.json` entry.
+    //
+    // Resolved the way the other paths resolve it (`buildVerificationService`,
+    // `renderDocs`): if the plan does not carry it, supply it. The prompt comes
+    // from `commandCenterPrompt` rather than `buildStoryPrompt`, because that
+    // is the same function `materializeTasks` stored on `student_tasks.build` —
+    // a second assembly path for STORY-000 would be a second thing to drift.
+    const { COMMAND_CENTER_STORY_ID, commandCenterPrompt } =
+      await import('../services/sbp/commandCenterStory');
+    if (!story && storyId.toUpperCase() === COMMAND_CENTER_STORY_ID) {
+      const { scheduleForEnrollment } = await import('../services/sbp/scheduleForEnrollment');
+      // Null is a normal answer here (cohort with no start date) and the prompt
+      // renders without dates rather than throwing, so a schedule lookup that
+      // comes back empty must not cost the student their prompt.
+      const schedule = await scheduleForEnrollment(eid(req), stored.plan, null);
+      return res.json({
+        story_id: COMMAND_CENTER_STORY_ID,
+        prompt: commandCenterPrompt(stored.plan, schedule),
+        has_repo: Boolean(repo),
+        paths_verified: manifest.length > 0,
+      });
+    }
+
+    if (!story) return res.status(404).json({ error: `Story ${storyId} is not in this plan` });
 
     const { buildStoryPrompt } = await import('../services/sbp/buildStoryPrompt');
     const prompt = buildStoryPrompt(stored.plan, story, {
