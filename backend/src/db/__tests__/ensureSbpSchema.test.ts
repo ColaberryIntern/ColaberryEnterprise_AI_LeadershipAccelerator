@@ -74,11 +74,17 @@ describe('the fixture itself', () => {
  * resolves empty, the way a successful CREATE/ALTER does.
  */
 function mockCatalog(catalog: typeof FULL_CATALOG) {
-  mockQuery.mockImplementation(async (sql: string) => {
+  mockQuery.mockImplementation(async (sql: string, opts?: any) => {
     if (/information_schema\.tables/.test(sql)) {
       return [[{ tables: catalog.tables, indexes: catalog.indexes }]];
     }
-    if (/information_schema\.columns/.test(sql)) return [catalog.columns];
+    // Postgres returns rows only for the tables actually bound. Handing back
+    // every column regardless would let a query that forgets a table still
+    // look complete — which is precisely the bug this fixture failed to catch.
+    if (/information_schema\.columns/.test(sql)) {
+      const asked: string[] = opts?.bind?.tables ?? [];
+      return [catalog.columns.filter((c) => asked.includes(c.table_name))];
+    }
     return [[]];
   });
 }
@@ -137,6 +143,34 @@ describe('ensureSbpSchema — verified_at / verified_by', () => {
       expect(s).toMatch(/^ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS/);
     }
     expect(ddlIssued().some((s) => /\bDROP\b/i.test(s))).toBe(false);
+  });
+});
+
+/**
+ * The column query has to ASK about every table REQUIRED_COLUMNS mentions.
+ * It used to bind a hardcoded ['build_intake','student_tasks'], so when a
+ * requirement landed on a third table the entry could never be found: prod
+ * logged SchemaInvariantViolation for github_connections.webhook_secret on
+ * every boot while the column existed. A checker that cries wolf nightly is
+ * worse than no checker, because people learn to scroll past it.
+ */
+describe('the column query covers every required table', () => {
+  it('binds each distinct table named in REQUIRED_COLUMNS', async () => {
+    await assertSbpSchema();
+
+    const call = mockQuery.mock.calls
+      .find((c) => /information_schema.columns/.test(String(c[0])));
+    const bound: string[] = (call?.[1] as any)?.bind?.tables ?? [];
+    const wanted = [...new Set(REQUIRED_COLUMNS.map((c) => c.split('.')[0]))];
+
+    expect(wanted.filter((t) => !bound.includes(t))).toEqual([]);
+  });
+
+  it('a fully-migrated catalog reports ok — no phantom missing column', async () => {
+    const result = await assertSbpSchema();
+
+    expect(result.missing).toEqual([]);
+    expect(result.ok).toBe(true);
   });
 });
 
