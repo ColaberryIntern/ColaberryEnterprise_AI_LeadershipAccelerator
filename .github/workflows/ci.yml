@@ -41,6 +41,31 @@ jobs:
           npm install --no-audit --no-fund
           npx tsc --noEmit
 
+  # A typecheck is NOT a build. On 2026-08-15 commit 2f0a72dd left main
+  # unbuildable for hours with every check green: an eslint-disable comment in a
+  # .ts file named `react-hooks/exhaustive-deps`, a rule CRA does not register
+  # for .ts, which is itself an ESLint error — and CI=true promotes it to a
+  # failed build. tsc had nothing to say about any of it. The break surfaced
+  # only when a production deploy failed, which is the worst place to find it.
+  #
+  # CI=true is set explicitly rather than relied on: it is what makes
+  # react-scripts treat warnings as errors, and therefore what makes this job
+  # reproduce the production image build instead of a laxer local one.
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm run build:frontend
+        env:
+          CI: 'true'
+        run: |
+          npm install --no-audit --no-fund
+          npm run build:frontend
+
   unit-tests:
     name: Backend unit tests
     runs-on: ubuntu-latest
