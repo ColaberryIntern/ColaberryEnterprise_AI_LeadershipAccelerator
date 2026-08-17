@@ -2398,6 +2398,33 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'reached.',
     enabled: true,
   },
+  // --- Reese ticket auto-resolve (2026-08-16): student_support supersession ---
+  // `student_support` tickets (one per DM room, created by reeseTicketLinkService.ts
+  // on every inbound student message) have NO ReeseOutreach-style closure mechanism
+  // at all — nothing has ever advanced or closed one once opened. The one real,
+  // non-time-based signal available: a room's OLDER student_support ticket is
+  // provably superseded once a STRICTLY NEWER ticket exists for the same room (see
+  // intelligence/autonomy/reeseStudentSupportSupersessionRules.ts and this run's
+  // execution-contract.md for the full DISCOVER trail). Seeded `enabled:false` —
+  // held until the reviewed historical bulk-clear (2 tickets, 2026-08-16) succeeds
+  // in production, matching today's established hold-until-reviewed gate for every
+  // other autoresolve cron shipped this session.
+  {
+    agent_name: 'ReeseStudentSupportSupersessionResolver',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/intelligence/autonomy/reeseStudentSupportSupersessionResolver.ts',
+    trigger_type: 'cron',
+    schedule: '0 17 * * *',
+    category: 'student_success',
+    description:
+      'Reese — daily sweep of open student_support (DM conversation) tickets. ' +
+      'Closes a ticket ONLY when a strictly newer student_support ticket now exists ' +
+      'for the same room (a real, structural, non-time-based fact — never "N hours ' +
+      'with no reply"); every other open ticket, including the newest ticket in any ' +
+      'multi-ticket room, is left untouched.',
+    enabled: false,
+  },
 
   // ─── Agent Registration Stage 1 — ticket-creator identities ────────────────
   // Identity-only registrations for real, high-volume ticket-creator processes

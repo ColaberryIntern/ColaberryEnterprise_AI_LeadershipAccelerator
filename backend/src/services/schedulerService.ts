@@ -1709,6 +1709,26 @@ export function startScheduler(): void {
     });
   });
 
+  // Reese ticket auto-resolve (2026-08-16) — daily sweep of open student_support
+  // (DM conversation) tickets. Registered in agentRegistrySeed.ts
+  // ('ReeseStudentSupportSupersessionResolver', seeded enabled:false until the
+  // reviewed historical clear succeeds) for the same instrumentCronJob() pause/
+  // kill-switch reason as the two crons above. Runs an hour after the follow-up
+  // sweep so all three of Reese's crons stay sequential and never collide.
+  cron.schedule('0 17 * * *', () => {
+    instrumentCronJob('ReeseStudentSupportSupersessionResolver', async () => {
+      const { resolveReeseStudentSupportSupersession } = await import(
+        '../intelligence/autonomy/reeseStudentSupportSupersessionResolver'
+      );
+      const result = await resolveReeseStudentSupportSupersession();
+      console.log('[Scheduler] Reese student_support supersession resolver:', {
+        checked: result.checked, closed: result.closed, breakdown: result.breakdown,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese student_support supersession resolver error:', err);
+    });
+  });
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(
