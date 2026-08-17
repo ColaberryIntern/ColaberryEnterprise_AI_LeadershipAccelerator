@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, August 16, 2026 at 12:45 PM</div>
-    <div><span class="sid">CC-20260815-m4x7</span><span class="count">4 changes</span></div>
+    <div class="meta">Generated Monday, August 17, 2026 at 1:27 PM</div>
+    <div><span class="sid">CC-20260815-m4x7</span><span class="count">5 changes</span></div>
   </header>
   <main>
     
@@ -117,6 +117,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Both merged with **all six checks green — including `Frontend build`**, the gate added in #1508 earlier in this session, which built each change at review time instead of at deploy time. Verified in production at three levels rather than stopping at a successful build: the image was inspected (`bootstrap-icons.92ea18a81d737146ff04.woff2` 134,044 bytes + the `.woff` fallback in `static/media/`, `bi-paperclip`/`bi-check-circle-fill` rules present in `static/css/main.413ae2e0.css`), and then **fetched over HTTPS** — font `200 font/woff2 134044 bytes`, css `200 650,027 bytes` with the `bi-` rules reachable, site `200`. That last step is the one that matters here: this repo has a documented history of nginx&#39;s static-asset location intercepting paths and serving the wrong thing, so &quot;present in the image&quot; is not &quot;reachable by a browser&quot;. For #1515 the box-pinning styles were confirmed verbatim in the served bundle (`padding:0,boxSizing:&quot;border-box&quot;,lineHeight:0,flex:&quot;none&quot;`).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**Expect icons to APPEAR across the app where things looked bare** — buttons, alerts, status badges, nav, in 88 files. That is intent restored, not a regression; the layouts were authored assuming those glyphs. It is nonetheless the widest visual change of this session and the one thing that cannot be verified by grepping a bundle, so a look at Today / Projects / Classroom / an admin page is worthwhile; anything crowded will be spacing tuned around an invisible icon. **Open, not started, deliberately:** the app now loads TWO icon systems — Bootstrap Icons (self-hosted via npm) and Remix Icon (third-party CDN, 58 files). Converging on one self-hosted set would drop a CDN dependency and some bundle weight, but it is churn without a forcing function, so it is Ali&#39;s call rather than a follow-up assumed here. Also still open from earlier in this session: the 18 ad-hoc scratch files already tracked under `tmp/` (someone else&#39;s mistaken commits, left alone rather than untracked as a side effect).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Screenshot invitation added to the proactive struggle nudge — on the screen-shaped reasons only, deliberately absent from the graded ones (#1550)**</h2>
+          <span class="badge">2026-08-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Everything built on 2026-08-15 was inert until someone told a student it existed. Ali chose the two highest-leverage channels: a class kickoff line (his to deliver, drafted and handed over) and this — the proactive struggle nudge. **An announcement reaches a student once, on a day they may not be stuck; the nudge reaches them at the moment they are.** `mentorNudgeService` already fires unprompted on struggle signals (repeated mentor turns, failed attempts, low score), so the invitation now rides that existing signal and keeps working for every future cohort without anyone remembering to announce it again. Added to the two SCREEN-SHAPED reasons only: `many_questions` (a long back-and-forth is usually someone describing something they can see) and the generic grind fallback. **Deliberately NOT added to the three assessment-shaped reasons** (`not_yet_passed`, `multiple_attempts`, `low_score`): suggesting a screenshot to a student stuck on a graded Evaluation invites them to photograph the questions and ask Cory to answer them, which is exactly what the graded-lock rule in `mentorContextFormat` exists to prevent. A proactive nudge is the worst place to get that wrong, because the student never asked for it. Reasons are ordered worst-first, so someone both stuck on a graded evaluation AND asking many questions gets the graded message with no invitation — that ordering is the safety property, not an implementation detail.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**18 tests passing, 8 new** in `mentorNudgeFormat.test.ts` — the invitation appears on both screen-shaped paths, is absent from all three graded paths, does not leak through the worst-first ordering (`[&#39;not_yet_passed&#39;,&#39;many_questions&#39;]` stays clean), survives `personalize()` so the first name and the invitation coexist, and reaches a genuinely struggling student through `buildNudge` rather than only through the formatter. Merged with **all six checks green**, including the `Frontend build` gate added earlier in this session. Deployed to production (backend only; nginx untouched) after the standard pre-flight — no tracked-file blockers, no concurrent deploy, `HEAD == origin/main` asserted before building.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Pure function, no I/O and no LLM call, so the nudge stays cheap enough to compute on every card open — the reason it was the right place to put this rather than a generated message. **Open and explicitly not started:** converging the two icon systems the app now loads (Bootstrap Icons self-hosted via npm, Remix Icon from a third-party CDN across 58 files). Real churn with no forcing function; left as Ali&#39;s call rather than assumed as a follow-up.</span></div>
           
         </div>
       </article>
