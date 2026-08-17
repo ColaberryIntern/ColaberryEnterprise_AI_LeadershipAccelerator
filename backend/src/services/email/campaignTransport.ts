@@ -45,6 +45,49 @@ export const CAMPAIGN_FROM_EMAIL = 'ali@colaberry.com';
 /** The header the inbox watcher must key on to skip our own copies. */
 export const OUTBOUND_COPY_HEADER = 'X-Colaberry-Outbound-Copy';
 export const IDEMPOTENCY_HEADER = 'X-Colaberry-Idempotency-Key';
+/** Mandrill's per-message tracking override. See TRACKING_SUPPRESSION below. */
+export const TRACK_HEADER = 'X-MC-Track';
+
+/**
+ * ── WHY THESE THREE HEADERS ARE NOT OPTIONAL ────────────────────────────────
+ *
+ * Without them Mandrill rewrites every URL in the message to
+ * `http://track.colaberry.com/track/click/<account>/<host>?p=<base64>`, roughly
+ * 200 characters of opaque payload in place of the link that was drafted. The
+ * canary went out that way. It redirected correctly, and it was still wrong:
+ * the message delivered was not the message the verification gate approved, and
+ * an opaque `http://` redirect is exactly what a phishing link looks like to
+ * somebody who has been locked out for weeks and is already suspicious.
+ *
+ * X-MC-Track      `none` is NOT a value Mandrill documents. It works because
+ *                 the documented rule is "if you provide any other values, open
+ *                 and click tracking will be disabled" — an unrecognised token
+ *                 parses to an empty flag set. Two consequences worth knowing:
+ *                 the value must stay NON-EMPTY (an empty header value can be
+ *                 dropped by a library or a relaying MTA, and a dropped header
+ *                 falls back to the account default, which is tracking ON), and
+ *                 this suppresses the open pixel as well as the click rewrite.
+ *
+ * X-MC-AutoText   Off, so Mandrill does not manufacture a text part. We supply
+ *                 both parts; a generated one would not be the gated copy.
+ *
+ * X-MC-AutoHtml   Off, and note the documented casing is AutoHtml. This is a
+ *                 tracking control in disguise: open tracking is only available
+ *                 on HTML mail, so auto-generating an HTML part is what would
+ *                 make an otherwise pixel-immune message eligible for a pixel.
+ *
+ * All three failure modes here fail OPEN — a typo'd, stripped, or never-emitted
+ * header leaves tracking on and looks identical to success from the sending
+ * side. That is why assertSendSafety checks the header on the built message,
+ * and why a unit test is necessary but NOT sufficient: the rewrite happens at
+ * the relay, after these bytes leave. Proving it requires fetching a DELIVERED
+ * message and grepping it for `/track/click/` and `/track/open.php`.
+ */
+export const TRACKING_SUPPRESSION: Readonly<Record<string, string>> = Object.freeze({
+  [TRACK_HEADER]: 'none',
+  'X-MC-AutoText': 'false',
+  'X-MC-AutoHtml': 'false',
+});
 
 export interface CampaignMessageInput {
   recipient: string;
@@ -82,6 +125,8 @@ export function buildCampaignMessage(input: CampaignMessageInput): CampaignMessa
       // Pinned rather than left to Mandrill's SMTP default, so the header the
       // student receives is the header the verification gate reviewed.
       'X-MC-PreserveRecipients': 'true',
+      // The links must arrive as they were drafted. See TRACKING_SUPPRESSION.
+      ...TRACKING_SUPPRESSION,
     },
     // The BCC. Envelope-only: delivered to, never printed in the message.
     envelope: { from: CAMPAIGN_FROM_EMAIL, to: [recipient, CAMPAIGN_BCC] },
@@ -136,6 +181,20 @@ export function assertSendSafety(msg: any, expectedRecipient: string): void {
       `Missing ${OUTBOUND_COPY_HEADER}. Without it the 30-hour inbox watcher cannot tell ` +
       "Ali's BCC copy from a genuine student reply, and may answer our own email.",
     );
+  }
+  // This one is checked here rather than trusted from buildCampaignMessage
+  // because it has already been lost once: the reviewed harness suppressed
+  // tracking, the header did not survive the move onto this module, and the
+  // canary was delivered with every link rewritten.
+  for (const [name, expected] of Object.entries(TRACKING_SUPPRESSION)) {
+    const actual = msg?.headers?.[name];
+    if (actual !== expected) {
+      throw new SendSafetyError(
+        `${name} is "${actual ?? 'absent'}", expected "${expected}". Without it Mandrill will ` +
+        'rewrite every link to an opaque http://track.colaberry.com redirect, so the message ' +
+        'delivered is not the message that was reviewed and approved. Refusing to send.',
+      );
+    }
   }
 }
 
