@@ -711,6 +711,25 @@ export async function runInboxCaseSourceCompletionResolverAgent(): Promise<Agent
   }));
 }
 
+// bpos_orchestrator capability ticket auto-resolve — re-checks every open
+// bpos_execution ticket against the CURRENT live Capability.user_status of the
+// capability it references, and closes it once a real signal exists (verified ->
+// done, deleted -> cancelled). See
+// backend/src/services/company/bposCapabilityTicketAutoResolver.ts for the full
+// design. Deterministic, no LLM — mirrors runWorkforceTicketAutoResolverAgent's
+// pattern above (same "company" module, same non-gated-on-active-company shape,
+// since a ticket already carries its own capability entity_id from creation time).
+// Registered `enabled: false` in agentRegistrySeed.ts on purpose — this cron must not
+// fire until the human-reviewed historical bulk-clear has run and been verified (see
+// this run's execution-contract.md); it is flipped to enabled:true manually, once,
+// after that.
+export async function runBposCapabilityTicketAutoResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('BposCapabilityTicketAutoResolver', wrapSkoolAgent(async () => {
+    const { resolveBposCapabilityTickets } = await import('./company/bposCapabilityTicketAutoResolver');
+    return resolveBposCapabilityTickets();
+  }));
+}
+
 export async function runCompanyStrategicCycleAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('CompanyStrategicCycle', wrapSkoolAgent(async () => {
     const { getActiveCompany } = require('./company/companyService');

@@ -2713,6 +2713,46 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'attach_build_outputs',
     ],
   },
+  {
+    agent_name: 'BposCapabilityTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'company',
+    source_file: 'backend/src/services/company/bposCapabilityTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '55 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the historical backlog (11
+    // bpos_execution tickets stuck in_progress since 2026-04-24..2026-04-30 at DISCOVER
+    // time) must be cleared through the reviewed --plan/--apply CLI sequence first, and
+    // ONLY THEN is this flipped to enabled:true (a single documented production UPDATE,
+    // no redeploy needed — same admin-toggle mechanism already used for
+    // CoryEngineTicketAutoResolver/CoryBrainInitiativeTicketAutoResolver/
+    // InboxCaseSourceCompletionResolver above) so the cron carries the recurring
+    // re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN bpos_execution ticket (created by the bpos_orchestrator ' +
+      'ticket-creator identity above) against the CURRENT live state of the Capability ' +
+      'row it references (entity_id), and closes it once a real, human-asserted signal ' +
+      'exists: user_status:\'verified\' (Capability.ts\'s own documented "user clicked ' +
+      'Mark Verified" contract) closes to \'done\'; the capability row no longer ' +
+      'existing at all (a real hard delete -- capabilities has no soft-delete column) ' +
+      'closes to \'cancelled\'. This exists because the only mechanism that used to ' +
+      'close these tickets -- projectRoutes.ts\'s POST /api/portal/project/' +
+      'execution-ticket route\'s action:\'complete\'/\'fail\' -- has had its sole ' +
+      'frontend caller (the AI Project Builder) deliberately deleted (2026-07-18, ' +
+      'commit 13f8f0e5, "backend untouched, per Ali"), so no ticket of this type can ' +
+      'ever be told it finished through that path again. Deterministic re-derivation, ' +
+      'no LLM, no time-based fallback of any kind -- a capability still ' +
+      'user_status:\'in_progress\' (no human has confirmed its build complete) is left ' +
+      'untouched and reported, never force-closed on elapsed time.',
+    tools_granted: [
+      'query_capability_verification_status',
+      'close_bpos_tickets_on_capability_verified_or_deleted',
+    ],
+  },
 ];
 
 /**
