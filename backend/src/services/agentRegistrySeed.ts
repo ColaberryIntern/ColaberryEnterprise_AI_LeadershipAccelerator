@@ -2617,6 +2617,47 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   {
+    agent_name: 'InboxCaseSourceCompletionResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/inboxCaseSourceCompletionResolver.ts',
+    trigger_type: 'cron',
+    schedule: '19 * * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the historical backlog (627
+    // InboxCaseEngine tickets stuck in_progress/in_review at DISCOVER time, none linked
+    // to an already-RESOLVED case -- confirmed NOT a sync gap) must be cleared through
+    // the reviewed --plan/--apply CLI sequence first, and ONLY THEN is this flipped to
+    // enabled:true (a single documented production UPDATE, no redeploy needed -- same
+    // admin-toggle mechanism already used for CoryEngineTicketAutoResolver/
+    // CoryBrainInitiativeTicketAutoResolver above) so the cron carries the recurring
+    // re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every InboxCaseEngine case not yet in a terminal state against two ' +
+      'things: (1) the live Basecamp completion status of any undispositioned ' +
+      "basecamp_todo case item (via ops_bc_todos, the existing AI Ops Command Center's " +
+      "read-mirror -- 'completed' dispositions the item RESOLVED, 'trashed' dispositions " +
+      "it NO_ACTION, 'active' or no live signal leaves it untouched), mirroring " +
+      "caseAutoSyncService.ts's existing disposeItemsDeletedAtSource() pattern for a " +
+      'structurally identical but distinct source category; and (2) the real, ' +
+      'unmodified evaluateClosureGuard()/closeCase() (caseClosureService.ts) across ' +
+      'every non-terminal case, so any case already closeable for ANY reason -- not ' +
+      'just this signal -- that nothing has ever autonomously invoked closeCase() on ' +
+      'also closes. Never decides a case is done beyond re-deriving a real, live, ' +
+      'already-established fact or re-checking the existing closure authority -- no new ' +
+      'judgment logic, no time-based fallback of any kind. A case with a genuinely ' +
+      'still-active basecamp_todo, an undispositioned email/sent_email item (no ' +
+      'reliable live re-check exists for those today), or any other real open blocker ' +
+      'is left untouched and reported, never force-closed.',
+    tools_granted: [
+      'query_basecamp_todo_completion_status',
+      'close_inboxcase_cases_on_source_completion_or_existing_guard_pass',
+    ],
+  },
+  {
     agent_name: 'bpos_orchestrator',
     agent_type: 'ticket_creator_identity',
     module: 'company',

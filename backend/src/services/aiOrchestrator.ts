@@ -691,6 +691,26 @@ export async function runCoryBrainInitiativeTicketAutoResolverAgent(): Promise<A
   }));
 }
 
+// InboxCaseEngine source-completion reconciliation — DISCOVER (execution-contract.md,
+// run 20260816-inboxcase-source-completion-resolver) proved the ticket-board sync is
+// already correct (zero stuck tickets link to an already-RESOLVED case); the real gap
+// is that nothing ever autonomously invokes the existing closure authority
+// (evaluateClosureGuard()/closeCase()), and that one item category — basecamp_todo —
+// has a real, live, re-derivable "is this done" signal (Basecamp's own completion
+// state) nothing had ever wired in. See
+// backend/src/intelligence/autonomy/inboxCaseSourceCompletionResolver.ts for the full
+// design. Deterministic, no LLM — mirrors runCoryBrainInitiativeTicketAutoResolverAgent's
+// pattern above for a structurally different but related class of problem. Registered
+// `enabled: false` in agentRegistrySeed.ts on purpose — this cron must not fire until
+// the human-reviewed historical bulk-clear has run and been verified (see this run's
+// execution-contract.md); it is flipped to enabled:true manually, once, after that.
+export async function runInboxCaseSourceCompletionResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('InboxCaseSourceCompletionResolver', wrapSkoolAgent(async () => {
+    const { reCheckAndCloseInboxCasesOnSourceCompletion } = await import('../intelligence/autonomy/inboxCaseSourceCompletionResolver');
+    return reCheckAndCloseInboxCasesOnSourceCompletion();
+  }));
+}
+
 export async function runCompanyStrategicCycleAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('CompanyStrategicCycle', wrapSkoolAgent(async () => {
     const { getActiveCompany } = require('./company/companyService');

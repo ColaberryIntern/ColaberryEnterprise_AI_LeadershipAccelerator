@@ -51,6 +51,7 @@ import {
   runWorkforceTicketAutoResolverAgent,
   runCoryEngineTicketAutoResolverAgent,
   runCoryBrainInitiativeTicketAutoResolverAgent,
+  runInboxCaseSourceCompletionResolverAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
   runStrategyFuturesArchitect,
@@ -259,6 +260,19 @@ export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // it a no-op until a human flips it on after the reviewed historical bulk-clear.
   { agentName: 'CoryEngineTicketAutoResolver', hardcodedSchedule: '25 */6 * * *', runner: runCoryEngineTicketAutoResolverAgent, label: 'cory-engine ticket auto-resolve (re-check + close on recovery)' },
   { agentName: 'CoryBrainInitiativeTicketAutoResolver', hardcodedSchedule: '40 */6 * * *', runner: runCoryBrainInitiativeTicketAutoResolverAgent, label: 'CoryBrain initiative-linked ticket sync (re-check + close on initiative terminal state)' },
+  // InboxCaseEngine source-completion reconciliation. Hourly (`:19`), not `*/6h` like
+  // the two entries above — matches the cadence of the existing hourly
+  // `InboxCaseAutoSync` cron (schedulerService.ts) it complements, since Basecamp/email
+  // state changes continuously, not every 6h. `:19` was chosen by computing actual
+  // per-minute collision density across every schedule in this file and
+  // schedulerService.ts (both already register a `*/1 * * * *` catch-all, so no minute
+  // is free of ALL overlap) rather than by exact-string matching alone — see this run's
+  // execution-contract.md for the full comparison. Registered `enabled: false` at seed
+  // time in agentRegistrySeed.ts (see that entry's comment and this run's
+  // execution-contract.md) — the cron tick will fire on schedule per this entry, but
+  // runAgent()'s own `AiAgent.enabled` gate keeps it a no-op until a human flips it on
+  // after the reviewed historical bulk-clear.
+  { agentName: 'InboxCaseSourceCompletionResolver', hardcodedSchedule: '19 * * * *', runner: runInboxCaseSourceCompletionResolverAgent, label: 'InboxCaseEngine source-completion reconciliation (Basecamp to-do completion signal + general closure-guard sweep)' },
 
   // Department Strategy Architects (every 6 hours, staggered)
   { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },
