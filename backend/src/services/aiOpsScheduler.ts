@@ -372,8 +372,14 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     label: 'Executive daily briefing',
   },
   {
+    // 7:45, deliberately an hour after DailyExecutiveBriefing's 6:45. Both used
+    // to sit on 45 6, so every Monday fired two briefings in the same minute and
+    // Ali received both at once. Keep these on distinct minutes: the dedup guard
+    // in executiveBriefingService keys per briefing slot, so it will NOT collapse
+    // a daily and a weekly that collide — it is the backstop for true duplicates,
+    // not a substitute for non-overlapping schedules.
     agentName: 'WeeklyStrategicBriefing',
-    hardcodedSchedule: '45 6 * * 1',
+    hardcodedSchedule: '45 7 * * 1',
     dynamicImport: async () => {
       const { generateWeeklyStrategicBriefing } = await import('./executiveBriefingService');
       await generateWeeklyStrategicBriefing();
