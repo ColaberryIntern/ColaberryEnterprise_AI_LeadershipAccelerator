@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import portalApi from '../../../utils/portalApi';
 import { runtimeCss } from '../runtime/runtimeKit';
 import {
-  getProject, mirrorVerifiedCompletion, skipTask, isTaskBlocked, projectProgress,
+  getProject, canonicalProjectId, mirrorVerifiedCompletion, skipTask, isTaskBlocked, projectProgress,
   StudentProject, ProjectTask,
 } from './projectsStore';
 import {
@@ -44,7 +44,13 @@ type Msg = { role: 'user' | 'assistant'; content: string; attachments?: SentAtta
 type Mode = 'ask' | 'hint' | 'explain' | 'review';
 
 const ProjectWorkspacePage: React.FC = () => {
-  const { projectId = '', taskId = '' } = useParams();
+  const { projectId: routeProjectId = '', taskId = '' } = useParams();
+  // The URL may still carry the browser's `p<epoch>` placeholder (a bookmark, a
+  // tab open since before the project adopted its server UUID). Resolve it to
+  // the canonical id ONCE, here, so every id-keyed thing below — the workspace
+  // API calls, the mentor endpoint, the store lookup, the acceptance-tick key —
+  // is fed a UUID rather than a value the backend will reject with a 400.
+  const projectId = canonicalProjectId(routeProjectId);
   const navigate = useNavigate();
   const location = useLocation();
   const backTo = ((location.state as { from?: string } | null)?.from) || '/portal/projects';
