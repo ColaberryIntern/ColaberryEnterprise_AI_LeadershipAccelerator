@@ -229,6 +229,30 @@ describe('closeEligibleCases', () => {
     expect(results[0].write_error).toBeUndefined();
   });
 
+  it('REGRESSION (found live in production during this run\'s own historical bulk-clear): calling closeEligibleCases twice on the same case makes zero additional writes — closeCase() does not itself no-op on an already-RESOLVED case, so this function must', async () => {
+    const c = await seedCase();
+    await fakeInboxCaseItem.create({ case_id: c.id, inclusion_status: 'INCLUDED', disposition: 'RESOLVED', title: 'item' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+    // Delta-based, not an absolute count — this mock's call count accumulates across
+    // every test in this file (no global jest.clearAllMocks() reset), so only the
+    // CHANGE this test itself causes is meaningful.
+    const { postCaseProgressNote } = require('../../../services/inboxCase/caseTicketService');
+    const callsBeforeAnything = postCaseProgressNote.mock.calls.length;
+
+    const first = await closeEligibleCases([c.id]);
+    expect(first[0].closed).toBe(true);
+    expect(c.state).toBe('RESOLVED');
+    const closedAtAfterFirst = c.closed_at;
+    const callsAfterFirst = postCaseProgressNote.mock.calls.length;
+    expect(callsAfterFirst - callsBeforeAnything).toBe(1);
+
+    const second = await closeEligibleCases([c.id]);
+
+    expect(second[0].closed).toBe(false); // nothing NEW closed — the case was already resolved
+    expect(c.closed_at).toEqual(closedAtAfterFirst); // NOT re-stamped
+    expect(postCaseProgressNote.mock.calls.length).toBe(callsAfterFirst); // NOT called a second time — no duplicate ticket comment
+  });
+
   it('a genuinely thrown error while closing one case (no InboxCase row exists, but its child records make the guard pass) is caught, logged, and recorded, without aborting the rest of the batch', async () => {
     const goodCase = await seedCase();
     await fakeInboxCaseItem.create({ case_id: goodCase.id, inclusion_status: 'INCLUDED', disposition: 'RESOLVED', title: 'item' });
