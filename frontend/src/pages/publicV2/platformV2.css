@@ -3,11 +3,52 @@
    Design-system tokens only; cbv2-* namespace only.
    ========================================================================== */
 
+/* ------------------------------------------------- surfaces, by audience -- */
+/*
+   The surfaces used to render as ONE flat row of pills. With five it already
+   wrapped awkwardly and, more importantly, it flattened two different questions
+   into one list: what management sees, and what the workforce works in.
+
+   Now two labelled groups, each its own tablist. The group heading carries the
+   audience and a line of context, so the strip reads as an answer rather than a
+   menu.
+*/
+
+.cbv2-surfacegroups {
+  display: grid;
+  gap: var(--space-7);
+  margin-bottom: var(--space-7);
+}
+
+.cbv2-surfacegroup__head {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 var(--space-3);
+}
+.cbv2-surfacegroup__label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  font-weight: 700;
+  /* --cherry-text, not --cherry: small text on a light ground needs the
+     AA-passing variant. */
+  color: var(--cherry-text);
+}
+.cbv2-surfacegroup__blurb {
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-normal);
+  max-width: 68ch;
+}
+
 .cbv2-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-bottom: var(--space-6);
+  /* Spacing now belongs to the group, not the strip -- two strips each adding
+     their own bottom margin double-spaced the second group. */
+  margin-bottom: 0;
 }
 .cbv2-tab {
   min-height: var(--target-min, 44px);
@@ -49,6 +90,14 @@
   font-family: var(--font-display);
   font-size: var(--fs-body-sm);
   color: var(--text-strong);
+}
+/* Which audience the open surface belongs to, restated in the panel bar so the
+   answer survives after the tab strip has scrolled out of view. */
+.cbv2-surface__aud {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--cherry-text);
+  white-space: nowrap;
 }
 .cbv2-surface__where {
   flex: 1;

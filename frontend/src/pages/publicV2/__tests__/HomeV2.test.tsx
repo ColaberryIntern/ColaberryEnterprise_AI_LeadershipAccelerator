@@ -103,10 +103,21 @@ describe('HomeV2 — structure', () => {
     expect((html().match(/<h1/g) || []).length).toBe(1);
   });
 
-  it('stays within the nine-section budget', () => {
+  /**
+   * The homepage section budget.
+   *
+   * Raised from 9 to 10 on 2026-08-17 for the "idea to shipped build" band, at
+   * Ali's explicit direction to feature the story-build system prominently. The
+   * budget is not a formality -- it is what has kept this page from sprawling
+   * the way the old marketing site did -- so it is RAISED deliberately and
+   * recorded here rather than quietly deleted.
+   *
+   * The next section to be added should replace one, not extend this again.
+   */
+  it('stays within the ten-section budget', () => {
     const count = (html().match(/<section/g) || []).length;
     expect(count).toBeGreaterThan(0);
-    expect(count).toBeLessThanOrEqual(9);
+    expect(count).toBeLessThanOrEqual(10);
   });
 
   it('renders both hero CTAs', () => {
