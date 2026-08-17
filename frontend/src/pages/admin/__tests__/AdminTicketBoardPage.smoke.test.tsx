@@ -19,7 +19,26 @@ import AdminTicketBoardPage from '../AdminTicketBoardPage';
 
 jest.mock('../../../contexts/AuthContext', () => ({ useAuth: () => ({ token: 'test-token' }) }));
 
-function makeTicket(overrides: Partial<{ id: string; status: string; updated_at: string; title: string }>) {
+function makeTicket(
+  overrides: Partial<{
+    id: string;
+    status: string;
+    updated_at: string;
+    title: string;
+    created_at: string;
+    created_by_type: string;
+    created_by_id: string;
+    created_by_display_name: string | null;
+    source: string;
+    auto_check: {
+      hasAutoCheck: boolean;
+      resolverAgentName: string | null;
+      nextCheckAt: string | null;
+      nextCheckLabel: string | null;
+      reason?: string;
+    } | null;
+  }>,
+) {
   return {
     id: 'ticket-1',
     ticket_number: 1,
@@ -110,5 +129,190 @@ describe('AdminTicketBoardPage — Stale chip on board cards', () => {
 
     const badges = Array.from(container.querySelectorAll('.admin-status-badge'));
     expect(badges.some((b) => b.textContent === 'Stale')).toBe(false);
+  });
+});
+
+// Ticket Board UX fixes (2026-08-17) — the exact reported bug: cory-engine,
+// CoryBrain, and bpos_orchestrator all share created_by_type 'cory' and used to
+// render as one indistinguishable "Cory" badge (or, for bpos_orchestrator, no
+// badge at all, since its source 'bpos_engine' never matched the old
+// source.startsWith('cory') check).
+describe('AdminTicketBoardPage — real, distinct creator names on cards', () => {
+  it('a cory-engine ticket, a CoryBrain ticket, and a bpos_orchestrator ticket each show a DIFFERENT, real creator name — not "Cory" x3, not blank', async () => {
+    mockFetch({
+      backlog: [
+        makeTicket({ id: 'ce-1', title: 'Cory Engine ticket', created_by_type: 'cory', created_by_id: 'cory-engine', source: 'cory_autonomous_cycle', created_by_display_name: 'Cory Engine — Autonomous Operations' }),
+        makeTicket({ id: 'cb-1', title: 'CoryBrain ticket', created_by_type: 'cory', created_by_id: 'CoryBrain', source: 'cory:evolution', created_by_display_name: 'Cory Brain — Strategic Initiatives' }),
+        makeTicket({ id: 'bpos-1', title: 'BPOS ticket', created_by_type: 'cory', created_by_id: 'bpos_orchestrator', source: 'bpos_engine', created_by_display_name: 'BPOS Orchestrator — Universal Ticket Layer' }),
+      ],
+    });
+    await renderBoard();
+
+    const badges = Array.from(container.querySelectorAll('.admin-status-badge')).map((b) => b.textContent);
+    expect(badges).toContain('Cory Engine — Autonomous Operations');
+    expect(badges).toContain('Cory Brain — Strategic Initiatives');
+    expect(badges).toContain('BPOS Orchestrator — Universal Ticket Layer');
+    expect(badges.filter((t) => t === 'Cory')).toHaveLength(0); // the old collapsed literal never appears
+  });
+
+  it('a manually-created ticket (source: manual) shows no creator badge, even if a display name were somehow present', async () => {
+    mockFetch({
+      backlog: [makeTicket({ id: 'manual-1', title: 'Manual ticket', created_by_type: 'human', created_by_id: 'admin-1', source: 'manual', created_by_display_name: 'Ali Muwwakkil' })],
+    });
+    await renderBoard();
+
+    const badges = Array.from(container.querySelectorAll('.admin-status-badge')).map((b) => b.textContent);
+    expect(badges).not.toContain('Ali Muwwakkil');
+  });
+});
+
+describe('AdminTicketBoardPage — ticket age on the card', () => {
+  it('an open ticket shows an "Open ..." age badge', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'aged-1', title: 'Aged ticket', status: 'backlog', created_at: FOUR_DAYS_AGO })] });
+    await renderBoard();
+
+    const badges = Array.from(container.querySelectorAll('.admin-status-badge')).map((b) => b.textContent);
+    expect(badges.some((t) => t?.startsWith('Open'))).toBe(true);
+  });
+
+  it('a done ticket shows no age badge', async () => {
+    mockFetch({ done: [makeTicket({ id: 'done-1', title: 'Done ticket', status: 'done', created_at: FOUR_DAYS_AGO })] });
+    await renderBoard();
+
+    const badges = Array.from(container.querySelectorAll('.admin-status-badge')).map((b) => b.textContent);
+    expect(badges.some((t) => t?.startsWith('Open'))).toBe(false);
+  });
+});
+
+describe('AdminTicketBoardPage — next-check indicator on the card (honest, never fabricated)', () => {
+  it('a ticket with a real auto_check.hasAutoCheck:true shows the real "Next check ~..." label', async () => {
+    mockFetch({
+      backlog: [
+        makeTicket({
+          id: 'owned-1',
+          title: 'Owned ticket',
+          auto_check: { hasAutoCheck: true, resolverAgentName: 'CoryEngineTicketAutoResolver', nextCheckAt: '2026-08-17T18:00:00.000Z', nextCheckLabel: '2h' },
+        }),
+      ],
+    });
+    await renderBoard();
+
+    const badges = Array.from(container.querySelectorAll('.admin-status-badge')).map((b) => b.textContent);
+    expect(badges.some((t) => t?.includes('Next check') && t.includes('2h'))).toBe(true);
+  });
+
+  it('a ticket with auto_check.hasAutoCheck:false shows NO next-check badge — never a fabricated timer', async () => {
+    mockFetch({
+      backlog: [
+        makeTicket({
+          id: 'unowned-1',
+          title: 'Unowned ticket',
+          auto_check: { hasAutoCheck: false, resolverAgentName: null, nextCheckAt: null, nextCheckLabel: null, reason: 'No automated resolver owns this ticket type' },
+        }),
+      ],
+    });
+    await renderBoard();
+
+    const badges = Array.from(container.querySelectorAll('.admin-status-badge')).map((b) => b.textContent);
+    expect(badges.some((t) => t?.includes('Next check'))).toBe(false);
+  });
+
+  it('a ticket with no auto_check field at all (older, not-yet-redeployed backend shape) renders without crashing and shows no next-check badge', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'no-field-1', title: 'No auto_check field' })] });
+    await renderBoard();
+
+    const badges = Array.from(container.querySelectorAll('.admin-status-badge')).map((b) => b.textContent);
+    expect(badges.some((t) => t?.includes('Next check'))).toBe(false);
+  });
+});
+
+// Ticket Board UX fixes (2026-08-17) — the 4 KPI stat cards become clickable
+// filters, composing with the existing dropdowns rather than a parallel system.
+describe('AdminTicketBoardPage — clickable stat cards', () => {
+  function statCardButton(label: string): HTMLButtonElement {
+    const buttons = Array.from(container.querySelectorAll('.admin-stat-card__button')) as HTMLButtonElement[];
+    const match = buttons.find((b) => b.textContent?.includes(label));
+    if (!match) throw new Error(`No StatCard button found for label "${label}"`);
+    return match;
+  }
+
+  async function click(el: Element) {
+    await act(async () => {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  }
+
+  it('clicking Critical sets the Priority dropdown to "critical" — same state, not a parallel filter', async () => {
+    mockFetch({
+      backlog: [
+        makeTicket({ id: 'crit-1', title: 'Critical one' }),
+      ],
+    });
+    await renderBoard();
+
+    const prioritySelect = container.querySelector('select') as HTMLSelectElement;
+    expect(prioritySelect.value).toBe(''); // "All Priorities" initially
+
+    await click(statCardButton('Critical'));
+
+    expect(prioritySelect.value).toBe('critical');
+    expect(statCardButton('Critical').classList.contains('admin-stat-card--active')).toBe(false); // active is on the inner .admin-stat-card, not the button itself
+    const criticalCard = statCardButton('Critical').querySelector('.admin-stat-card');
+    expect(criticalCard?.classList.contains('admin-stat-card--active')).toBe(true);
+  });
+
+  it('clicking Done renders ONLY the Done column; clicking Open hides Done and keeps the rest; clicking Total restores all 5 and clears filters', async () => {
+    mockFetch({
+      backlog: [makeTicket({ id: 'b-1', title: 'Backlog ticket', status: 'backlog' })],
+      done: [makeTicket({ id: 'd-1', title: 'Done ticket', status: 'done' })],
+    });
+    await renderBoard();
+
+    const columnHeaderLabels = () =>
+      Array.from(container.querySelectorAll('.rounded-top span'))
+        .filter((el) => !el.classList.contains('admin-status-badge')) // exclude the per-column ticket-count badge, keep only the label span
+        .map((el) => el.textContent);
+
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
+
+    await click(statCardButton('Done'));
+    expect(columnHeaderLabels()).toEqual(['Done']);
+
+    await click(statCardButton('Open'));
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review']);
+
+    await click(statCardButton('Total'));
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
+  });
+
+  it('Total is active by default (no filters applied); clicking Critical then Total clears the Priority dropdown back to "All"', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'x-1', title: 'X' })] });
+    await renderBoard();
+
+    expect(statCardButton('Total').querySelector('.admin-stat-card')?.classList.contains('admin-stat-card--active')).toBe(true);
+
+    await click(statCardButton('Critical'));
+    expect(statCardButton('Total').querySelector('.admin-stat-card')?.classList.contains('admin-stat-card--active')).toBe(false);
+
+    await click(statCardButton('Total'));
+    const prioritySelect = container.querySelector('select') as HTMLSelectElement;
+    expect(prioritySelect.value).toBe('');
+    expect(statCardButton('Total').querySelector('.admin-stat-card')?.classList.contains('admin-stat-card--active')).toBe(true);
+  });
+
+  it('clicking Done twice toggles it back off (restores all 5 columns)', async () => {
+    mockFetch({ done: [makeTicket({ id: 'd-2', title: 'Done again', status: 'done' })] });
+    await renderBoard();
+
+    const columnHeaderLabels = () =>
+      Array.from(container.querySelectorAll('.rounded-top span'))
+        .filter((el) => !el.classList.contains('admin-status-badge')) // exclude the per-column ticket-count badge, keep only the label span
+        .map((el) => el.textContent);
+
+    await click(statCardButton('Done'));
+    expect(columnHeaderLabels()).toEqual(['Done']);
+
+    await click(statCardButton('Done'));
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
   });
 });

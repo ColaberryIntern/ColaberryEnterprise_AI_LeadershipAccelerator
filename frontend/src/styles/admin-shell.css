@@ -66,6 +66,30 @@
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
+/* Ticket Board UX fixes (2026-08-17) — StatCard's onClick mode renders a real
+   <button>, not a <div>, for keyboard/focus semantics; reset native button
+   chrome so it reads identically to the existing route-linked <Link> mode. */
+.admin-stat-card__button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.admin-stat-card__button:focus-visible .admin-stat-card {
+  outline: 2px solid var(--stat-accent, var(--red-500));
+  outline-offset: 2px;
+}
+/* "Currently filtering by this" — a filled accent ring distinct from the
+   plain hover lift above, so an active stat card reads unambiguously even
+   without hovering it. */
+.admin-stat-card--active {
+  border-color: var(--stat-accent, var(--red-500));
+  box-shadow: 0 0 0 2px var(--stat-accent, var(--red-500)) inset, var(--shadow-sm);
+}
 .admin-stat-card__top { display: flex; align-items: center; justify-content: space-between; }
 .admin-stat-card__label {
   font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;

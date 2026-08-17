@@ -307,3 +307,115 @@ describe('TicketDetailModal — resolved actor names, not raw UUIDs (Technical t
     expect(container.textContent).toContain('reese-admin-1');
   });
 });
+
+// Ticket Board UX fixes (2026-08-17) — the full honest auto-check disclosure
+// (the board card only shows a next-check badge when real, per
+// execution-contract.md Assumption 2 — the modal is where the explicit
+// "no automated check" statement lives).
+describe('TicketDetailModal — auto-check disclosure', () => {
+  function mockTicketFetchWithAutoCheck(autoCheck: Record<string, any> | null) {
+    (global as any).fetch = jest.fn((url: string) => {
+      if (url === '/api/admin/tickets/ticket-1') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ticket: { ...TICKET, auto_check: autoCheck }, activities: ACTIVITY, subTasks: [] }),
+        });
+      }
+      if (url === '/api/admin/tickets/ticket-1/summary') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ outcome: 'Outcome: dispatch completed.', proof: 'Proof: none yet.', humanAction: 'Human action: none.', hasEvidence: false }),
+        });
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+  }
+
+  it('a ticket with a real auto_check.hasAutoCheck:true shows the real next-check time AND the owning resolver name', async () => {
+    mockTicketFetchWithAutoCheck({
+      hasAutoCheck: true,
+      resolverAgentName: 'CoryEngineTicketAutoResolver',
+      nextCheckAt: '2026-08-17T18:00:00.000Z',
+      nextCheckLabel: '2h',
+    });
+    await renderModal();
+
+    expect(container.textContent).toContain('Auto-check active');
+    expect(container.textContent).toContain('Next check ~2h');
+    expect(container.textContent).toContain('CoryEngineTicketAutoResolver');
+  });
+
+  it('a ticket with auto_check.hasAutoCheck:false shows the honest "No automated check" statement with its real reason — never a fabricated timer', async () => {
+    mockTicketFetchWithAutoCheck({
+      hasAutoCheck: false,
+      resolverAgentName: null,
+      nextCheckAt: null,
+      nextCheckLabel: null,
+      reason: 'No automated resolver owns this ticket type',
+    });
+    await renderModal();
+
+    expect(container.textContent).toContain('No automated check');
+    expect(container.textContent).toContain('No automated resolver owns this ticket type');
+    expect(container.textContent).not.toContain('Next check');
+  });
+
+  it('a ticket owned by a resolver but currently paused shows that specific honest reason, not a generic "no owner" message', async () => {
+    mockTicketFetchWithAutoCheck({
+      hasAutoCheck: false,
+      resolverAgentName: 'BposCapabilityTicketAutoResolver',
+      nextCheckAt: null,
+      nextCheckLabel: null,
+      reason: 'Auto-check is currently paused for this ticket type',
+    });
+    await renderModal();
+
+    expect(container.textContent).toContain('Auto-check is currently paused for this ticket type');
+  });
+
+  it('boundary: hasAutoCheck:true with a missing nextCheckLabel (malformed/future backend shape) falls back to a resolver-only line, never the literal string "null"', async () => {
+    mockTicketFetchWithAutoCheck({
+      hasAutoCheck: true,
+      resolverAgentName: 'CoryEngineTicketAutoResolver',
+      nextCheckAt: null,
+      nextCheckLabel: null,
+    });
+    await renderModal();
+
+    expect(container.textContent).toContain('Auto-checked by CoryEngineTicketAutoResolver');
+    expect(container.textContent).not.toContain('null');
+  });
+
+  it('backward compatibility: a response with no auto_check field at all renders without crashing and shows neither disclosure line', async () => {
+    mockFetch(); // original fixture, no auto_check field
+    await renderModal();
+
+    expect(container.textContent).not.toContain('Auto-check active');
+    expect(container.textContent).not.toContain('No automated check');
+  });
+
+  it('the Stale banner and the auto-check disclosure can both render together without colliding', async () => {
+    const FOUR_DAYS_AGO = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+    (global as any).fetch = jest.fn((url: string) => {
+      if (url === '/api/admin/tickets/ticket-1') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ticket: { ...TICKET, status: 'in_progress', updated_at: FOUR_DAYS_AGO, auto_check: { hasAutoCheck: false, resolverAgentName: null, nextCheckAt: null, nextCheckLabel: null, reason: 'No automated resolver owns this ticket type' } },
+            activities: ACTIVITY,
+            subTasks: [],
+          }),
+        });
+      }
+      if (url === '/api/admin/tickets/ticket-1/summary') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ outcome: 'x', proof: 'y', humanAction: 'z', hasEvidence: false }) });
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+
+    await renderModal();
+
+    expect(container.querySelector('.alert-warning')).toBeTruthy(); // Stale, unchanged trigger
+    expect(container.textContent).toContain('No automated check');
+  });
+});

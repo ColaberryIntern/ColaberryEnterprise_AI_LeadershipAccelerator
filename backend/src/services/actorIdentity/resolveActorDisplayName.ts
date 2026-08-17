@@ -187,6 +187,50 @@ async function resolveViaAiAgentName(agentName: string): Promise<string | null> 
  * honest label derived from actor_type. Display-layer only: never persists anything,
  * never mutates actor_id/actor_type at their source.
  */
+export interface ActorRef {
+  actorType: string;
+  actorId: string;
+}
+
+/** `${actorType}:${actorId}` — the same key shape a caller uses to look a resolved
+ * name back up in the Map this function returns. Exported so callers never have to
+ * re-derive the key format by hand (and risk drifting from it). */
+export function actorRefKey(actorType: string, actorId: string): string {
+  return `${actorType}:${actorId}`;
+}
+
+/**
+ * Batched counterpart to resolveActorDisplayName() — Ticket Board UX fixes
+ * (2026-08-17). A ticket-board load can carry thousands of tickets but, in
+ * production, only a couple dozen DISTINCT (actor_type, actor_id) creators
+ * (verified live: 32 distinct pairs across 16,119 tickets) — resolving one at a
+ * time per ticket would mean thousands of redundant DB round trips for the exact
+ * same handful of identities. This function dedupes by actorRefKey() and calls
+ * the existing resolveActorDisplayName() exactly once per UNIQUE pair (never
+ * re-implementing its dispatch/fail-closed logic), then returns a Map every
+ * caller can look up in O(1). A pair that fails to resolve still gets a value
+ * in the map (resolveActorDisplayName() itself never throws), so one bad
+ * identity can never take down the whole batch.
+ */
+export async function resolveActorDisplayNamesBatch(
+  refs: ActorRef[],
+): Promise<Map<string, string>> {
+  const uniqueByKey = new Map<string, ActorRef>();
+  for (const ref of refs) {
+    const key = actorRefKey(ref.actorType, ref.actorId);
+    if (!uniqueByKey.has(key)) uniqueByKey.set(key, ref);
+  }
+
+  const resolved = new Map<string, string>();
+  await Promise.all(
+    Array.from(uniqueByKey.entries()).map(async ([key, ref]) => {
+      resolved.set(key, await resolveActorDisplayName(ref.actorType, ref.actorId));
+    }),
+  );
+
+  return resolved;
+}
+
 export async function resolveActorDisplayName(actorType: string, actorId: string): Promise<string> {
   const type = (actorType || '').toLowerCase();
 

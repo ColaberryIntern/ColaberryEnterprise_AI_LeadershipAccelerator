@@ -5,7 +5,12 @@ import type { TicketStatus, TicketPriority, TicketType, TicketActorType } from '
 import type { AgentExecutionResult } from './agents/types';
 import { emitLedgerEventSafe } from './workLedger/emitLedgerEventSafe';
 import { tryReuseStudentSupportTicket } from './ticketStudentSupportReuse';
-import { resolveActorDisplayName } from './actorIdentity/resolveActorDisplayName';
+import {
+  resolveActorDisplayName,
+  resolveActorDisplayNamesBatch,
+  actorRefKey,
+} from './actorIdentity/resolveActorDisplayName';
+import { buildTicketAutoCheckResolver } from './ticketAutoCheckService';
 
 // ── State Machine ────────────────────────────────────────────────────────
 
@@ -319,6 +324,26 @@ export async function getTicketById(ticketId: string) {
       ? await resolveActorDisplayName(ticket.assigned_to_type, ticket.assigned_to_id)
       : null;
 
+  // Ticket Board UX fixes (2026-08-17) — the SAME two additive fields
+  // getTicketsForBoard() now returns, so the detail modal can show the same
+  // real creator name and honest auto-check disclosure the board card does,
+  // not a second, narrower picture. createdByDisplayName reuses this file's
+  // established resolveActorDisplayName() rather than a new lookup;
+  // buildTicketAutoCheckResolver() is cheap to build for a single ticket (its
+  // own internal batching is aimed at board-sized N, not a cost concern here).
+  const [createdByDisplayName, autoCheckResolver] = await Promise.all([
+    resolveActorDisplayName(ticket.created_by_type, ticket.created_by_id),
+    buildTicketAutoCheckResolver(),
+  ]);
+  const autoCheck = autoCheckResolver({
+    created_by_type: ticket.created_by_type,
+    created_by_id: ticket.created_by_id,
+    type: ticket.type,
+    source: ticket.source,
+    entity_type: ticket.entity_type,
+    status: ticket.status,
+  });
+
   // Resolved concurrently (Promise.all), not one-at-a-time, so a ticket with a long
   // activity history doesn't pay an N-query waterfall for what can run in parallel.
   const activitiesWithNames = await Promise.all(
@@ -329,7 +354,12 @@ export async function getTicketById(ticketId: string) {
   );
 
   return {
-    ticket: { ...ticket.toJSON(), assigned_to_display_name: assignedToDisplayName },
+    ticket: {
+      ...ticket.toJSON(),
+      assigned_to_display_name: assignedToDisplayName,
+      created_by_display_name: createdByDisplayName,
+      auto_check: autoCheck,
+    },
     activities: activitiesWithNames,
     subTasks,
   };
@@ -363,6 +393,42 @@ export async function getTicketsForBoard(filters?: TicketFilters) {
     ],
   });
 
+  // Ticket Board UX fixes (2026-08-17) — real creator names + honest auto-check
+  // timing, additive on every ticket the board/list endpoints return. The
+  // actor-name batch is deduped by (created_by_type, created_by_id) — verified
+  // live at 32 distinct pairs across 16,119 production tickets — so this never
+  // pays a per-ticket DB round trip regardless of table size. The auto-check
+  // resolver function is built ONCE for the whole request (fetches the 6
+  // resolvers' live enabled/schedule state a single time), then applied
+  // per-ticket as a cheap, synchronous, in-memory check.
+  const [displayNameByActor, autoCheckResolver] = await Promise.all([
+    resolveActorDisplayNamesBatch(
+      tickets.map((t) => ({ actorType: t.created_by_type, actorId: t.created_by_id })),
+    ),
+    buildTicketAutoCheckResolver(),
+  ]);
+
+  const enrichedTickets = tickets.map((t) => {
+    // Mutate-and-return, not an object spread: TypeScript drops a
+    // Record<string, any>'s index signature when it's spread into a fresh
+    // object literal alongside explicit properties (a known compiler
+    // quirk — the result narrows to JUST the explicit properties, silently
+    // losing every field from `plain`). Assigning onto `plain` directly
+    // keeps its type as Record<string, any> throughout, so downstream code
+    // (the status-bucket grouping below) can still read t.status.
+    const plain = t.toJSON() as Record<string, any>;
+    plain.created_by_display_name = displayNameByActor.get(actorRefKey(t.created_by_type, t.created_by_id)) ?? null;
+    plain.auto_check = autoCheckResolver({
+      created_by_type: t.created_by_type,
+      created_by_id: t.created_by_id,
+      type: t.type,
+      source: t.source,
+      entity_type: t.entity_type,
+      status: t.status,
+    });
+    return plain;
+  });
+
   // Group by status for Kanban
   const board: Record<TicketStatus, any[]> = {
     backlog: [],
@@ -373,8 +439,8 @@ export async function getTicketsForBoard(filters?: TicketFilters) {
     cancelled: [],
   };
 
-  for (const t of tickets) {
-    board[t.status]?.push(t);
+  for (const t of enrichedTickets) {
+    board[t.status as TicketStatus]?.push(t);
   }
 
   return board;
