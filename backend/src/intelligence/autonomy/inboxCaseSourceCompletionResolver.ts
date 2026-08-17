@@ -192,15 +192,38 @@ export async function applyItemDispositions(classifications: ItemClassificationR
 /**
  * Re-checks the real, unmodified `evaluateClosureGuard()` for every id in `caseIds`
  * and calls the real `closeCase(caseId, 'system')` wherever it passes. Per-case
- * try/catch. Idempotent: an already-`RESOLVED` case's guard call is harmless (its
- * items are already all dispositioned by definition) and `closeCase()` itself already
- * no-ops correctly on an already-resolved case (see `caseClosureService.ts`).
+ * try/catch.
+ *
+ * Idempotency note (found live in production during this run's own historical
+ * bulk-clear, not assumed): `closeCase()` does NOT no-op on an already-`RESOLVED`
+ * case — it re-stamps `closed_at` to a new timestamp and posts a fresh "Case closed"
+ * progress note on the ticket every time it's called, as long as the guard still
+ * passes (which it always will, since the case's items stay dispositioned). Calling
+ * it again on a case this function itself already closed would be a real, visible
+ * duplicate side effect (a second identical ticket comment), which CLAUDE.md's
+ * Idempotency & Replayability section forbids. So THIS function checks the case's
+ * live `state` FIRST and short-circuits before ever calling `evaluateClosureGuard()`/
+ * `closeCase()` on one already `RESOLVED` — the one and only guard against
+ * re-invoking `closeCase()`'s write path a second time for the same case. The
+ * recurring cron entrypoint (`reCheckAndCloseInboxCasesOnSourceCompletion()`) is
+ * additionally protected by `fetchNonTerminalCaseIds()`'s own `state != 'RESOLVED'`
+ * filter, so this function's own check is what makes the one-off `--apply` CLI path
+ * (which is scoped by the undo log's reviewed case ids, not by
+ * `fetchNonTerminalCaseIds()`) safe to re-run against the same undo log too.
  */
 export async function closeEligibleCases(caseIds: string[]): Promise<CaseCloseResult[]> {
   const results: CaseCloseResult[] = [];
 
   for (const caseId of caseIds) {
     try {
+      const caseRow = await (InboxCase as any).findByPk(caseId, { attributes: ['id', 'state'] });
+      if (caseRow?.state === 'RESOLVED') {
+        // Already closed by an earlier pass over this same case id — a safe,
+        // zero-write no-op, not a re-close.
+        results.push({ case_id: caseId, closable: true, closed: false, blockers_count: 0 });
+        continue;
+      }
+
       const guard = await evaluateClosureGuard(caseId);
       if (!guard.canClose) {
         results.push({ case_id: caseId, closable: false, closed: false, blockers_count: guard.blockers.length });
