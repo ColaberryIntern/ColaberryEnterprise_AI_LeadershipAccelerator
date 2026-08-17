@@ -15,9 +15,14 @@
 set -e
 cd /opt/colaberry-accelerator
 
-# Pull env from running container, filter to vars we need
+# Pull env from running container, filter to vars we need.
+# GMAIL_* was added for the student-unblock inbox watcher, which reads inbound
+# mail out of Postgres but sends its replies through the Gmail API as
+# ali@colaberry.com. Without these it starts, polls, classifies, and then fails
+# at the send — which is the silent-no-op shape this list should never cause.
+# Adding names here is additive: no existing job can be broken by it.
 ENV_VARS=$(docker compose -f docker-compose.production.yml exec -T backend env 2>/dev/null | \
-  grep -E "^(BASECAMP_ACCESS_TOKEN|MANDRILL_API_KEY|MANDRILL_USERNAME|OPENAI_API_KEY|TWILIO_ACCOUNT_SID|TWILIO_API_KEY_SID|TWILIO_API_KEY_SECRET|TWILIO_NUMBER|ALI_PHONE_NUMBER|MSSQL_HOST|MSSQL_DATABASE|MSSQL_USER|MSSQL_PASS|MSSQL_PORT|GOV_REPORT_RECIPIENT|DATABASE_URL|POSTGRES_URL|PG_HOST|PG_USER|PG_PASS|PG_DATABASE|PGHOST|PGUSER|PGPASSWORD|PGDATABASE|PGPORT|MS_GRAPH_CLIENT_ID|MS_GRAPH_REFRESH_TOKEN)=" | \
+  grep -E "^(BASECAMP_ACCESS_TOKEN|MANDRILL_API_KEY|MANDRILL_USERNAME|OPENAI_API_KEY|TWILIO_ACCOUNT_SID|TWILIO_API_KEY_SID|TWILIO_API_KEY_SECRET|TWILIO_NUMBER|ALI_PHONE_NUMBER|MSSQL_HOST|MSSQL_DATABASE|MSSQL_USER|MSSQL_PASS|MSSQL_PORT|GOV_REPORT_RECIPIENT|DATABASE_URL|POSTGRES_URL|PG_HOST|PG_USER|PG_PASS|PG_DATABASE|PGHOST|PGUSER|PGPASSWORD|PGDATABASE|PGPORT|MS_GRAPH_CLIENT_ID|MS_GRAPH_REFRESH_TOKEN|GMAIL_CLIENT_ID|GMAIL_CLIENT_SECRET|GMAIL_REFRESH_TOKEN|GMAIL_ACCESS_TOKEN|GMAIL_SENDER_EMAIL|GMAIL_COLABERRY_ADDRESS)=" | \
   sed "s/^/export /")
 
 eval "$ENV_VARS"

@@ -2581,6 +2581,42 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   {
+    agent_name: 'CoryBrainInitiativeTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/corybrainInitiativeTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '40 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the 1,323-ticket historical
+    // backlog (of 1,348 total CoryBrain tickets stuck in `backlog`) must be cleared
+    // through the reviewed --plan/--apply CLI sequence first, and ONLY THEN is this
+    // flipped to enabled:true (a single documented production UPDATE, no redeploy
+    // needed — same admin-toggle mechanism already used for
+    // CoryEngineTicketAutoResolver above) so the cron carries the recurring re-check
+    // going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN CoryBrain ticket (a strategic initiative\'s own parent ' +
+      'ticket, or one of its subtasks -- coryInitiatives.ts / createStrategicInitiative()) ' +
+      'against the CURRENT live status of the strategic_initiatives row it is linked to ' +
+      '(parent tickets via the initiative\'s own ticket_id, subtasks via ' +
+      'metadata.initiative_id), and syncs the ticket to match (\'done\' if the initiative ' +
+      'is completed, \'cancelled\' if cancelled) once that has genuinely happened. This is ' +
+      'a reconciliation/sync fix, not a new decision engine -- it never decides whether an ' +
+      'initiative itself should be approved/rejected/completed, only propagates an ' +
+      'already-established fact from that already-fixed mechanism onto the dependent ' +
+      'ticket. Deterministic re-derivation, no LLM, no time-based fallback of any kind. ' +
+      'A ticket whose linked initiative is still proposed/approved/in_progress, or has no ' +
+      'matching initiative row at all, is left untouched and reported, never force-closed.',
+    tools_granted: [
+      'query_strategic_initiative_status',
+      'close_corybrain_tickets_on_initiative_terminal_state',
+    ],
+  },
+  {
     agent_name: 'bpos_orchestrator',
     agent_type: 'ticket_creator_identity',
     module: 'company',

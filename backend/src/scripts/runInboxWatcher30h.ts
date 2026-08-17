@@ -1,0 +1,335 @@
+/**
+ * The 30-hour student-unblock inbox watcher.
+ *
+ *   DRY RUN (default, sends nothing, writes only the log):
+ *     npx ts-node --transpile-only backend/src/scripts/runInboxWatcher30h.ts \
+ *       --run-dir <loop-architect run dir> --once
+ *
+ *   LIVE (sending is opt-in and requires the literal string "false"):
+ *     WATCHER_DRY_RUN=false npx ts-node --transpile-only \
+ *       backend/src/scripts/runInboxWatcher30h.ts --run-dir <dir> --once
+ *
+ *   STOP IT, from anywhere, without reading any code:
+ *     touch <run-dir>/WATCHER-HALT
+ *
+ *   STATUS:
+ *     ... --run-dir <dir> --status
+ *
+ * ── WHY --once AND A CRONTAB, RATHER THAN A 30-HOUR PROCESS ─────────────────
+ *
+ * Both modes exist, and `--once` on a 5-minute crontab is the recommended one.
+ * A single process holding a 30-hour timer is one OOM kill, container bounce or
+ * dropped SSH session away from stopping silently, and nothing would notice
+ * until Monday. A cron tick that reads its deadline off disk each time survives
+ * all of those, and after the deadline every tick is a no-op that logs and
+ * exits 0 — so the leftover crontab line is harmless rather than a liability.
+ *
+ * ── WHERE IT HAS TO RUN ─────────────────────────────────────────────────────
+ *
+ * On the same machine and the same --run-dir as the send harness, because the
+ * send ledger it reads is a FILE in that directory. Nothing is mounted from the
+ * host into the backend container, so an in-container run cannot see the run
+ * directory at all and would drop straight to escalate-only.
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { Op } from 'sequelize';
+import { runCycle, InboundMessage, WatcherPorts, EscalationInput } from '../services/inbox/watcher/watcherRun';
+import { openWindow, checkWindow, WATCH_WINDOW_HOURS } from '../services/inbox/watcher/watchWindow';
+import { resolveWatcherDryRun, resolvePollIntervalMs, checkHalt, killCommand } from '../services/inbox/watcher/watcherConfig';
+import { resolveCaps } from '../services/inbox/watcher/replyCaps';
+import { loadOutboundLedger } from '../services/inbox/watcher/outboundIdentity';
+import { StudentFacts, FactGroup, WatcherDataAccess } from '../services/inbox/watcher/diagnose';
+
+const RUN_ID = '20260816-student-unblock-and-watch';
+const PROVIDER = 'gmail_colaberry';
+const ESCALATION_TO = process.env.WATCHER_ESCALATION_TO || 'ali@colaberry.com';
+
+const argOf = (flag: string): string | undefined => {
+  const i = process.argv.indexOf(flag);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+};
+const hasFlag = (flag: string) => process.argv.includes(flag);
+
+function headerOf(headers: any, name: string): string | null {
+  if (!headers) return null;
+  const hit = Object.entries(headers).find(([k]) => k.toLowerCase() === name);
+  return hit ? String(hit[1]) : null;
+}
+
+// ─── Live data access ──────────────────────────────────────────────────────
+
+/**
+ * `activeEnrollmentCount` uses the EXACT where-clause requestMagicLink uses, so
+ * "how many seats could a link land on" is answered by the deployed query
+ * rather than by a similar-looking one. This is the Million Meshesha lesson:
+ * the row shape looked fine, the candidate SET was what was wrong.
+ */
+async function loadStudentFacts(email: string): Promise<StudentFacts | null> {
+  const { default: Enrollment } = await import('../models/Enrollment');
+  const unverifiable: FactGroup[] = [];
+
+  const addr = email.toLowerCase().trim();
+  let candidates: any[];
+  try {
+    candidates = await Enrollment.findAll({
+      where: { email: addr, status: 'active', portal_enabled: true },
+    });
+  } catch (err: any) {
+    console.error(`[watcher] enrollment read failed for ${addr}: ${err?.message}`);
+    return null;
+  }
+  if (candidates.length === 0) return null;
+
+  const primary = candidates[0];
+  const facts: StudentFacts = {
+    email: addr,
+    name: primary.full_name ?? null,
+    activeEnrollmentCount: candidates.length,
+    enrollmentId: primary.id ?? null,
+    portalTokenExpiresAt: primary.portal_token_expires_at
+      ? new Date(primary.portal_token_expires_at).toISOString()
+      : null,
+    projectId: null,
+    githubRepo: null,
+    webhookRegistered: false,
+    webhookLastDeliveryAt: null,
+    story000Present: false,
+    acceptanceCriteriaCount: null,
+    unverifiable,
+  };
+
+  try {
+    const { default: GitHubConnection } = await import('../models/GitHubConnection');
+    const conn: any = await GitHubConnection.findOne({
+      where: { enrollment_id: primary.id },
+      order: [['created_at', 'DESC']],
+    });
+    if (conn) {
+      facts.githubRepo = `${conn.repo_owner}/${conn.repo_name}`;
+      facts.projectId = conn.project_id ?? null;
+      facts.webhookRegistered = Boolean(conn.webhook_secret);
+      facts.webhookLastDeliveryAt = conn.last_sync_at
+        ? new Date(conn.last_sync_at).toISOString()
+        : null;
+    }
+  } catch (err: any) {
+    console.error(`[watcher] github_connections read failed for ${addr}: ${err?.message}`);
+    unverifiable.push('github', 'webhook');
+  }
+
+  try {
+    const { default: StudentTask } = await import('../models/StudentTask');
+    if (!facts.projectId) {
+      unverifiable.push('plan');
+    } else {
+      const story: any = await StudentTask.findOne({
+        where: { project_id: facts.projectId, story_id: { [Op.iLike]: 'STORY-000%' } },
+      });
+      facts.story000Present = Boolean(story);
+      facts.acceptanceCriteriaCount = Array.isArray(story?.acceptance) ? story.acceptance.length : null;
+    }
+  } catch (err: any) {
+    console.error(`[watcher] student_tasks read failed for ${addr}: ${err?.message}`);
+    if (!unverifiable.includes('plan')) unverifiable.push('plan');
+  }
+
+  return facts;
+}
+
+const dataAccess: WatcherDataAccess = {
+  loadStudentFacts,
+  async requestFreshLoginLink(email: string): Promise<void> {
+    const { requestMagicLink } = await import('../services/participantService');
+    // The return value is deliberately generic to prevent email enumeration, so
+    // it proves nothing. Verification is the re-read in diagnose(), not this.
+    await requestMagicLink(email);
+  },
+};
+
+// ─── Live ports ────────────────────────────────────────────────────────────
+
+function toInbound(row: any): InboundMessage {
+  return {
+    providerMessageId: row.provider_message_id,
+    messageIdHeader: headerOf(row.headers, 'message-id'),
+    threadId: row.provider_thread_id ?? null,
+    fromAddress: row.from_address,
+    fromName: row.from_name ?? null,
+    subject: row.subject ?? '',
+    bodyText: row.body_text ?? null,
+    headers: row.headers ?? null,
+    receivedAt: new Date(row.received_at).toISOString(),
+  };
+}
+
+function buildPorts(stateDir: string, windowStart: Date): WatcherPorts {
+  return {
+    async fetchRecentInbound(): Promise<InboundMessage[]> {
+      const { default: InboxEmail } = await import('../models/InboxEmail');
+      const rows = await InboxEmail.findAll({
+        where: { provider: PROVIDER, received_at: { [Op.gte]: windowStart } },
+        order: [['received_at', 'ASC']],
+        limit: 500,
+      });
+      return rows.map(toInbound);
+    },
+
+    async fetchThreadMessages(threadId, fallback): Promise<InboundMessage[]> {
+      if (!threadId) return [fallback];
+      const { default: InboxEmail } = await import('../models/InboxEmail');
+      const rows = await InboxEmail.findAll({
+        where: { provider: PROVIDER, provider_thread_id: threadId },
+        order: [['received_at', 'ASC']],
+      });
+      return rows.length > 0 ? rows.map(toInbound) : [fallback];
+    },
+
+    async sendReply({ to, subject, body, threadId, inReplyTo }) {
+      const { sendGmail } = await import('../services/gmailService');
+      const sent = await sendGmail({
+        to, subject, body,
+        inReplyTo: inReplyTo ?? undefined,
+        threadId: threadId ?? undefined,
+      });
+      // Read the RFC822 Message-ID back, so a re-ingested copy of this very
+      // reply is recognised as ours. sendGmail returns Gmail's internal id,
+      // which is not what lands in the Message-ID header.
+      let messageIdHeader: string | null = null;
+      try {
+        const { getColaberryGmailClient } = await import('../services/inbox/inboxSyncService');
+        const gmail = getColaberryGmailClient();
+        if (gmail) {
+          const meta = await gmail.users.messages.get({
+            userId: 'me', id: sent.messageId, format: 'metadata', metadataHeaders: ['Message-ID'],
+          });
+          messageIdHeader =
+            meta.data.payload?.headers?.find((h) => (h.name || '').toLowerCase() === 'message-id')?.value ?? null;
+        }
+      } catch (err: any) {
+        console.warn(`[watcher] could not read back Message-ID for ${sent.messageId}: ${err?.message}`);
+      }
+      return { providerMessageId: sent.messageId, messageIdHeader };
+    },
+
+    async escalate(input: EscalationInput): Promise<void> {
+      const lines = [
+        'The student-unblock inbox watcher stopped rather than answering this one.',
+        '',
+        `Reason:  ${input.reason}`,
+        `Detail:  ${input.detail}`,
+        '',
+        `From:    ${input.fromAddress}`,
+        `Subject: ${input.subject}`,
+        `Thread:  ${input.threadKey}`,
+        '',
+        `Full log: ${path.join(stateDir, 'watcher-log.jsonl')}`,
+        `Stop the watcher: ${killCommand(stateDir)}`,
+      ].join('\n');
+
+      try {
+        const { sendRawEmail } = await import('../services/emailService');
+        await sendRawEmail({
+          to: [ESCALATION_TO],
+          subject: `[Watcher escalation] ${input.reason} from ${input.fromAddress}`,
+          text: lines,
+          html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${lines
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
+        });
+      } catch (err: any) {
+        // An escalation that cannot be delivered must be loud, not swallowed:
+        // silence here is indistinguishable from "nothing needed attention".
+        console.error(`[watcher] ESCALATION SEND FAILED (${input.reason}): ${err?.message}`);
+      }
+      try {
+        const { emitAlert } = await import('../services/alertService');
+        await emitAlert({
+          type: 'warning', severity: 4,
+          title: `Watcher escalation: ${input.reason}`,
+          description: input.detail,
+          sourceType: 'system', impactArea: 'student_support', urgency: 'immediate',
+          metadata: { from: input.fromAddress, thread: input.threadKey },
+        });
+      } catch { /* alerting is best-effort; the email above is the contract */ }
+    },
+
+    data: dataAccess,
+  };
+}
+
+// ─── Entry point ───────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  const runDir = argOf('--run-dir');
+  if (!runDir || !fs.existsSync(runDir)) {
+    console.error('--run-dir <loop-architect run directory> is required and must exist.');
+    console.error('It must be the SAME directory the send harness used: the send ledger lives there.');
+    process.exit(2);
+  }
+  const stateDir = path.resolve(runDir);
+  const dryRun = resolveWatcherDryRun();
+  const caps = resolveCaps();
+  const pollMs = resolvePollIntervalMs();
+
+  if (hasFlag('--status')) {
+    const w = checkWindow(stateDir, new Date());
+    const ledger = loadOutboundLedger(stateDir);
+    console.log(JSON.stringify({
+      run_id: RUN_ID, state_dir: stateDir, dry_run: dryRun, caps,
+      poll_interval_seconds: pollMs / 1000,
+      window: w.active ? { active: true, remaining_hours: +(w.remainingMs / 3_600_000).toFixed(2) } : w,
+      send_ledger: { available: ledger.available, reason: ledger.unavailableReason, sends: ledger.sentCount },
+      halt: checkHalt(stateDir),
+      kill_command: killCommand(stateDir),
+    }, null, 2));
+    return;
+  }
+
+  // Preflight. Every one of these fails LOUDLY rather than letting the watcher
+  // poll an empty result set forever and report "all clear".
+  const problems: string[] = [];
+  if (!process.env.DATABASE_URL && !process.env.PGHOST && !process.env.POSTGRES_URL) {
+    problems.push('No DATABASE_URL/PGHOST: the watcher reads inbound mail out of inbox_emails.');
+  }
+  if (!dryRun) {
+    for (const v of ['GMAIL_CLIENT_ID', 'GMAIL_CLIENT_SECRET', 'GMAIL_REFRESH_TOKEN']) {
+      if (!process.env[v]) problems.push(`${v} is not set: live mode cannot send a reply.`);
+    }
+  }
+  if (problems.length > 0) {
+    console.error('[watcher] PREFLIGHT FAILED. Refusing to start:');
+    for (const p of problems) console.error(`  - ${p}`);
+    console.error('Starting anyway would poll, classify nothing, and look healthy while doing nothing.');
+    process.exit(3);
+  }
+
+  const window = openWindow(stateDir, { now: new Date(), runId: RUN_ID });
+  console.log(
+    `[watcher] run=${RUN_ID} dry_run=${dryRun} started=${window.started_at} expires=${window.expires_at} ` +
+    `(${WATCH_WINDOW_HOURS}h) poll=${pollMs / 1000}s caps=${JSON.stringify(caps)}`,
+  );
+  console.log(`[watcher] STOP IT WITH:  ${killCommand(stateDir)}`);
+  if (!dryRun) console.warn('[watcher] LIVE SEND ENABLED (WATCHER_DRY_RUN="false") — real replies will go out.');
+
+  const once = hasFlag('--once');
+  for (;;) {
+    const outcome = await runCycle(buildPorts(stateDir, new Date(window.started_at)), {
+      stateDir, runId: RUN_ID, dryRun, caps,
+    });
+    console.log(`[watcher] ${JSON.stringify(outcome)}`);
+    if (outcome.status !== 'ran') {
+      console.log(`[watcher] stopping: ${outcome.status} (${outcome.reason ?? 'no reason given'})`);
+      return;
+    }
+    if (once) return;
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(`[watcher] fatal: ${err?.stack || err}`);
+    process.exit(1);
+  });
