@@ -706,3 +706,91 @@
   .cbv2-answer { animation: none; }
   .cbv2-goalcard, .cbv2-goalcard:hover { transition: none; transform: none; }
 }
+
+/* ------------------------------------------------------ idea to shipped -- */
+/*
+   Three beats, then the repo. The steps are a 3-up that collapses to one column;
+   the repo block is a split with the story-workspace capture beside the copy.
+
+   The capture is TALL (820x1000, a story workspace) so it is height-capped and
+   top-anchored: the story, its requirement trace and the "0 of 3 confirmed"
+   criteria all sit in the top two-thirds, which is the part that carries the
+   argument. Letting it run full height would push the copy off the screen.
+*/
+
+.cbv2-buildflow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+@media (max-width: 900px) { .cbv2-buildflow { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-buildstep {
+  position: relative;
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.cbv2-buildstep__n {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-xs);
+  background: var(--cherry);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+}
+.cbv2-buildstep h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h6, 17px);
+  color: var(--text-strong);
+  margin: 0 0 var(--space-2);
+}
+.cbv2-buildstep p {
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-normal);
+  margin: 0;
+}
+
+.cbv2-buildrepo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  gap: var(--space-9, 48px);
+  align-items: center;
+  margin-top: var(--space-9, 48px);
+}
+@media (max-width: 900px) { .cbv2-buildrepo { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-buildrepo__body {
+  font-size: var(--fs-body-lg);
+  color: var(--text-body);
+  line-height: var(--lh-relaxed);
+  margin: var(--space-3) 0 0;
+  max-width: 56ch;
+}
+
+.cbv2-buildrepo__shot {
+  margin: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: var(--border-1) solid var(--border-default);
+  box-shadow: var(--shadow-lg);
+  background: var(--surface-card);
+  max-height: 520px;
+}
+.cbv2-buildrepo__shot img {
+  width: 100%;
+  height: auto;
+  display: block;
+  /* Top-anchored: the story, its REQ trace and the unconfirmed criteria are the
+     argument, and they live at the top of the capture. */
+  object-fit: cover;
+  object-position: top center;
+  max-height: 520px;
+}

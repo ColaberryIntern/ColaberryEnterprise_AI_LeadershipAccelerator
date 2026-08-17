@@ -21,17 +21,27 @@ interface Props {
   hint?: string;          // small caption under the value (e.g. data freshness)
   to?: string;            // optional click-through route
   delta?: { value: string; direction: 'up' | 'down' | 'flat' };
+  // Ticket Board UX fixes (2026-08-17) — lets a StatCard drive in-page filter
+  // state (e.g. the ticket board's Total/Open/Critical/Done cards) instead of
+  // only ever navigating to a new route. Mutually exclusive with `to` in
+  // practice (a card is either a route link or an in-page toggle, never
+  // both) — `to` still takes precedence if both are somehow passed, so every
+  // existing route-linked StatCard elsewhere in the codebase is unaffected by
+  // this addition.
+  onClick?: () => void;
+  active?: boolean;        // visual "currently filtering by this" state — no-op without onClick
 }
 
 /**
  * StatCard — the one KPI card. Replaces the hand-rolled `.admin-kpi-card`
  * blocks (hardcoded hex borderLeft) repeated across the dashboards.
  */
-export default function StatCard({ label, value, unit, icon, tone = 'primary', hint, to, delta }: Props) {
+export default function StatCard({ label, value, unit, icon, tone = 'primary', hint, to, delta, onClick, active }: Props) {
   const accent = TONE_COLOR[tone];
   const cardStyle = { '--stat-accent': accent } as React.CSSProperties;
+  const cardClassName = `admin-stat-card${active ? ' admin-stat-card--active' : ''}`;
   const body = (
-    <div className="admin-stat-card" style={cardStyle}>
+    <div className={cardClassName} style={cardStyle}>
       <div className="admin-stat-card__top">
         <span className="admin-stat-card__label">{label}</span>
         {icon && <i className={`ri-${icon} admin-stat-card__icon`} aria-hidden="true" />}
@@ -50,5 +60,16 @@ export default function StatCard({ label, value, unit, icon, tone = 'primary', h
       </div>
     </div>
   );
-  return to ? <Link to={to} className="admin-stat-card__link">{body}</Link> : body;
+
+  if (to) return <Link to={to} className="admin-stat-card__link">{body}</Link>;
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="admin-stat-card__link admin-stat-card__button" aria-pressed={!!active}>
+        {body}
+      </button>
+    );
+  }
+
+  return body;
 }

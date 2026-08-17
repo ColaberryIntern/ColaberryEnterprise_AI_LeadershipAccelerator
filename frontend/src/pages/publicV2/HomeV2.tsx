@@ -14,8 +14,9 @@ import './homeV2.css';
 /**
  * HomeV2 — the V2 homepage.
  *
- * Nine sections maximum, per the approved design. All marketing copy resolves
- * through the claims registry.
+ * Ten sections maximum. The approved design said nine; the tenth was added on
+ * 2026-08-17 for the story-build band at Ali's direction. All marketing copy
+ * resolves through the claims registry.
  *
  * NOTE ON WHAT IS ABSENT: the prototype's "Four roles, one system" console is
  * deliberately NOT here. It is the most striking element of the approved design,
@@ -396,6 +397,87 @@ function HomeV2(): React.ReactElement {
           </p>
         </div>
       </section>
+
+      {/* 4b ───────────────────────────────────────────────── idea to build ── */}
+      {/*
+        The story-build system. Three beats -- plan, build, verified -- ending on
+        the repo, because the repo is the part a sceptical buyer can check.
+
+        THE COPY IS BOUNDED BY WHAT THE PIPELINE DOES. It plans, prompts and
+        verifies; the human writes the code. `renderDocs.ts` emits markdown and
+        JSON and `repoWriter.ts` is path-allowlisted to docs/**, CLAUDE.md and
+        .colaberry/**, so any wording implying the platform builds the project
+        would be false and disprovable by opening the repo. Gated on
+        `surface.storybuild`, so if that claim ever regresses the section
+        disappears rather than going stale.
+      */}
+      {canShow('surface.storybuild', ROUTE) ? (
+        <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-build-title">
+          <div className="cbv2-wrap">
+            <div className="cbv2-section__head">
+              <p className="cbv2-eyebrow">From idea to shipped</p>
+              <h2 id="cbv2-build-title">Your team does not just learn it. They ship it.</h2>
+              <p className="cbv2-lede">
+                Someone describes what they want to build. What comes back is a plan they can
+                actually work from &mdash; and, at the end, proof they did.
+              </p>
+            </div>
+
+            <div className="cbv2-buildflow">
+              <article className="cbv2-buildstep">
+                <span className="cbv2-buildstep__n" aria-hidden="true">1</span>
+                <h3>It gets planned</h3>
+                <p>
+                  An interview turns the idea into requirements, releases and stories, every
+                  story traceable to a requirement it fulfils, on a schedule that fits the
+                  weeks you have.
+                </p>
+              </article>
+              <article className="cbv2-buildstep">
+                <span className="cbv2-buildstep__n" aria-hidden="true">2</span>
+                <h3>They build it</h3>
+                <p>
+                  Each story arrives with a Claude Code prompt written from their own
+                  requirements. Your people write the code &mdash; that is the point, and it is
+                  why the skill is real at the end of it.
+                </p>
+              </article>
+              <article className="cbv2-buildstep">
+                <span className="cbv2-buildstep__n" aria-hidden="true">3</span>
+                <h3>It gets confirmed</h3>
+                <p>
+                  Done is not a checkbox they tick. The platform reads their repository and
+                  confirms every acceptance criterion against a real commit before the story
+                  counts.
+                </p>
+              </article>
+            </div>
+
+            <div className="cbv2-buildrepo">
+              <div>
+                <p className="cbv2-eyebrow cbv2-eyebrow--info">And it lands in your own repo</p>
+                <p className="cbv2-buildrepo__body">
+                  The plan is written into the repository <strong>you</strong> connect &mdash;
+                  requirements, stories and a traceability matrix, committed alongside your
+                  code. We keep a pointer to it and the record of what was finished. We never
+                  write your code, and the evidence lives in the platform, so deleting the repo
+                  never costs anyone their credit.
+                </p>
+              </div>
+              <figure className="cbv2-buildrepo__shot">
+                <img
+                  src="/site-v2/shot-story-build.png"
+                  alt="A story in the build workspace: the user story with the requirement it fulfils, three acceptance criteria showing nought of three confirmed, and the generated Claude Code prompt."
+                  width={820}
+                  height={1000}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* 5 ──────────────────────────────────────────────────────── services ── */}
       <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-services-title">

@@ -27,6 +27,8 @@
 //
 // Failure modes handled: outside a slot (exit 0, quiet); no Basecamp token
 // (AuthError, exit 1); Basecamp 429/5xx (bounded retry inside the harvester);
+// Basecamp 401 (token re-resolved from CCPP + bounded backoff in the harvester,
+// then up to 3 whole-harvest retries here — see buildFreshSnapshotWithRetry);
 // OpenAI unavailable (deterministic narrative fallback, briefing still sends);
 // duplicate fire of the same slot (refused via durable ledger); send failure
 // (3 attempts, then a distinct-subject alert email so it is not silent).
@@ -128,6 +130,14 @@ async function resolveToken() {
   return envToken;
 }
 
+// Force a re-read of the live token from CCPP, bypassing the env var. Handed to
+// the harvester so a token that rotates mid-run self-heals rather than 401-ing
+// the rest of the harvest.
+async function refreshTokenFromCcpp() {
+  const { getBasecampToken } = require(path.resolve(__dirname, './lib/basecampToken'));
+  return getBasecampToken();
+}
+
 async function buildFreshSnapshot() {
   const { harvestDelivery } = require(path.resolve(__dirname, './lib/internDeliveryData'));
   const { computeDelivery } = require(path.resolve(__dirname, './lib/internDeliveryMetrics'));
@@ -140,7 +150,13 @@ async function buildFreshSnapshot() {
     throw e;
   }
 
-  const raw = await harvestDelivery({ token, lookbackDays: LOOKBACK, historyDays: 28, onProgress: log });
+  const raw = await harvestDelivery({
+    token,
+    refreshToken: refreshTokenFromCcpp,
+    lookbackDays: LOOKBACK,
+    historyDays: 28,
+    onProgress: log,
+  });
   log(`harvest complete: ${raw.projects.length} projects, ${raw.commentCount} comments`);
 
   const data = computeDelivery(raw);
@@ -151,6 +167,36 @@ async function buildFreshSnapshot() {
   log(`narrative complete: mode=${data.meta.narrativeMode}, queue=${data.decisionQueue.length}`);
 
   return data;
+}
+
+// The harvest is the only step that touches Basecamp, and a scheduled briefing
+// gets exactly one shot at landing before the call. The per-request retry inside
+// internDeliveryData.js absorbs blips of about a minute; this outer retry covers
+// the multi-minute upstream auth outage seen on 2026-08-17, where a byte-identical
+// token 401'd at 08:45 CT and was healthy again nine minutes later.
+// Budget: cron fires 15 minutes before the meeting, so ~6 minutes of retry is
+// safe and still beats the 09:00 start.
+const HARVEST_MAX_ATTEMPTS = 3;
+const HARVEST_RETRY_WAIT_MS = 150000;   // 2.5 min between whole-harvest attempts
+const RETRYABLE_HARVEST_ERRORS = new Set([
+  'AuthError', 'UpstreamUnavailable', 'RateLimitError', 'TimeoutError',
+]);
+
+async function buildFreshSnapshotWithRetry() {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await buildFreshSnapshot();
+    } catch (e) {
+      const cls = e.error_class || 'Error';
+      if (attempt >= HARVEST_MAX_ATTEMPTS || !RETRYABLE_HARVEST_ERRORS.has(cls)) {
+        if (attempt > 1) e.message = `${e.message} (after ${attempt} harvest attempts)`;
+        throw e;
+      }
+      log(`harvest attempt ${attempt} failed with ${cls}: ${e.message}`);
+      log(`retrying the whole harvest in ${Math.round(HARVEST_RETRY_WAIT_MS / 1000)}s`);
+      await new Promise((r) => setTimeout(r, HARVEST_RETRY_WAIT_MS));
+    }
+  }
 }
 
 function renderDashboard(data) {
@@ -222,7 +268,7 @@ async function main() {
       data = JSON.parse(fs.readFileSync(SNAPSHOT_IN, 'utf8'));
       log(`using supplied snapshot ${SNAPSHOT_IN} (generated ${data.generatedAt})`);
     } else {
-      data = await buildFreshSnapshot();
+      data = await buildFreshSnapshotWithRetry();
     }
 
     const dashboardPath = renderDashboard(data);

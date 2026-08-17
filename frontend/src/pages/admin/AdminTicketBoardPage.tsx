@@ -3,8 +3,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import TicketDetailModal from '../../components/admin/TicketDetailModal';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
-import { getAgentDisplayName } from '../../utils/agentDisplayNames';
-import { buildTicketTypeFilterOptions, getTicketTypeTone, isTicketStale } from '../../utils/ticketTypeMeta';
+import {
+  buildTicketTypeFilterOptions,
+  getTicketTypeTone,
+  isTicketStale,
+  formatTicketAgeLabel,
+  formatNextCheckLabel,
+  TicketAutoCheck,
+} from '../../utils/ticketTypeMeta';
 
 interface Ticket {
   id: string;
@@ -17,8 +23,20 @@ interface Ticket {
   source: string;
   created_by_type: string;
   created_by_id: string;
+  // Ticket Board UX fixes (2026-08-17) — resolved server-side by
+  // getTicketsForBoard() (backend/src/services/ticketService.ts), reusing the
+  // SAME resolveActorDisplayName() the Story/Technical tabs already use — see
+  // that file's header comment. Optional/nullable so an older, not-yet-
+  // redeployed backend response still renders (falls back to no creator
+  // badge rather than crashing).
+  created_by_display_name?: string | null;
   assigned_to_type: string | null;
   assigned_to_id: string | null;
+  // Ticket Board UX fixes (2026-08-17) — honest "will this be auto-checked
+  // again, and when" signal, resolved server-side from the 6 real registered
+  // ticket-auto-resolver agents' live cron schedules. See
+  // backend/src/services/ticketAutoCheckService.ts.
+  auto_check?: TicketAutoCheck | null;
   parent_ticket_id: string | null;
   entity_type: string | null;
   entity_id: string | null;
@@ -92,6 +110,11 @@ export default function AdminTicketBoardPage() {
   const [filterPriority, setFilterPriority] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterSource, setFilterSource] = useState('');
+  // Ticket Board UX fixes (2026-08-17) — drives the Open/Done stat-card
+  // filters. Client-side only: the board fetch already returns every status
+  // bucket regardless of this value (see fetchBoard below, unchanged), so
+  // "filtering" here means which columns render, not a new backend query.
+  const [filterStatus, setFilterStatus] = useState<'' | 'open' | 'done'>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'medium', type: 'task' });
   const [creating, setCreating] = useState(false);
@@ -198,19 +221,73 @@ export default function AdminTicketBoardPage() {
     };
   }, [stats]);
 
+  // Ticket Board UX fixes (2026-08-17) — clickable stat cards, composing with the
+  // SAME filter state the Priority dropdown already drives (Critical) or a new,
+  // client-side-only filterStatus (Open/Done — see its declaration above). Total
+  // resets every filter, dropdowns included, rather than adding a 5th parallel
+  // "no filter" state.
+  const noFiltersActive = !filterPriority && !filterType && !filterSource && !filterStatus;
+  const clearAllFilters = () => {
+    setFilterPriority('');
+    setFilterType('');
+    setFilterSource('');
+    setFilterStatus('');
+  };
+  const toggleOpenFilter = () => setFilterStatus((prev) => (prev === 'open' ? '' : 'open'));
+  const toggleCriticalFilter = () => setFilterPriority((prev) => (prev === 'critical' ? '' : 'critical'));
+  const toggleDoneFilter = () => setFilterStatus((prev) => (prev === 'done' ? '' : 'done'));
+
+  // filterStatus never changes what fetchBoard() requests (every status bucket
+  // is always fetched) — it only changes which columns render, so Open/Done
+  // stay instant, no extra network round trip.
+  const visibleColumns =
+    filterStatus === 'done'
+      ? COLUMNS.filter((c) => c.key === 'done')
+      : filterStatus === 'open'
+        ? COLUMNS.filter((c) => c.key !== 'done')
+        : COLUMNS;
+
   const kpiRow = (
     <div className="row g-3">
       <div className="col-6 col-lg-3">
-        <StatCard label="Total" value={stats?.total ?? 0} icon="ticket-2-line" tone="info" />
+        <StatCard
+          label="Total"
+          value={stats?.total ?? 0}
+          icon="ticket-2-line"
+          tone="info"
+          onClick={clearAllFilters}
+          active={noFiltersActive}
+        />
       </div>
       <div className="col-6 col-lg-3">
-        <StatCard label="Open" value={stats?.open ?? 0} icon="record-circle-line" tone="primary" />
+        <StatCard
+          label="Open"
+          value={stats?.open ?? 0}
+          icon="record-circle-line"
+          tone="primary"
+          onClick={toggleOpenFilter}
+          active={filterStatus === 'open'}
+        />
       </div>
       <div className="col-6 col-lg-3">
-        <StatCard label="Critical" value={stats?.byPriority?.critical ?? 0} icon="alarm-warning-line" tone={stats?.byPriority?.critical ? 'danger' : 'neutral'} />
+        <StatCard
+          label="Critical"
+          value={stats?.byPriority?.critical ?? 0}
+          icon="alarm-warning-line"
+          tone={stats?.byPriority?.critical ? 'danger' : 'neutral'}
+          onClick={toggleCriticalFilter}
+          active={filterPriority === 'critical'}
+        />
       </div>
       <div className="col-6 col-lg-3">
-        <StatCard label="Done" value={stats?.byStatus?.done ?? 0} icon="checkbox-circle-line" tone="success" />
+        <StatCard
+          label="Done"
+          value={stats?.byStatus?.done ?? 0}
+          icon="checkbox-circle-line"
+          tone="success"
+          onClick={toggleDoneFilter}
+          active={filterStatus === 'done'}
+        />
       </div>
     </div>
   );
@@ -268,7 +345,7 @@ export default function AdminTicketBoardPage() {
           <option value="system">System</option>
           <option value="ai_workforce">AI Workforce</option>
         </select>
-        <button className="btn btn-sm btn-outline-secondary" onClick={() => { setFilterPriority(''); setFilterType(''); setFilterSource(''); }}>
+        <button className="btn btn-sm btn-outline-secondary" onClick={clearAllFilters}>
           Clear
         </button>
       </div>
@@ -276,7 +353,7 @@ export default function AdminTicketBoardPage() {
       {/* Kanban Board */}
       <SectionCard padded={false} className="admin-section-card--bare">
         <div className="d-flex gap-3 overflow-auto p-3" style={{ minHeight: 500 }}>
-          {COLUMNS.map(({ key, label }, index) => (
+          {visibleColumns.map(({ key, label }) => (
             <div
               key={key}
               className="flex-shrink-0"
@@ -286,7 +363,12 @@ export default function AdminTicketBoardPage() {
             >
               <div
                 className="rounded-top px-3 py-2 text-white fw-bold small d-flex justify-content-between align-items-center"
-                style={{ backgroundColor: columnColor(index) } as React.CSSProperties}
+                // Each column keeps its OWN stable accent color, keyed off its
+                // fixed position in the full COLUMNS list — not its position in
+                // the currently-visible subset (Ticket Board UX fixes,
+                // 2026-08-17: filtering to just "Done" must not repaint that
+                // column a different color than it always has).
+                style={{ backgroundColor: columnColor(COLUMNS.findIndex((c) => c.key === key)) } as React.CSSProperties}
               >
                 <span>{label}</span>
                 <StatusBadge label={String(board?.[key]?.length || 0)} tone="neutral" />
@@ -321,11 +403,21 @@ export default function AdminTicketBoardPage() {
                             tone="neutral"
                           />
                         )}
-                        {ticket.source.startsWith('cory') && (
-                          <StatusBadge label="Cory" tone="primary" icon={getSourceIcon(ticket.source)} />
+                        {/* Real, distinct creator identity (Ticket Board UX fixes,
+                            2026-08-17) — replaces the old hardcoded "Cory" badge that
+                            collapsed cory-engine/CoryBrain/bpos_orchestrator into one
+                            indistinguishable label. Gated on source !== 'manual' so a
+                            staff-created ticket doesn't grow a "Human"-labeled badge
+                            that adds no information (see execution-contract.md
+                            Assumption 1). */}
+                        {ticket.source !== 'manual' && ticket.created_by_display_name && (
+                          <StatusBadge label={ticket.created_by_display_name} tone="primary" icon={getSourceIcon(ticket.source)} />
                         )}
-                        {ticket.source === 'ai_workforce' && (
-                          <StatusBadge label={getAgentDisplayName(ticket.created_by_id)} tone="primary" icon={getSourceIcon(ticket.source)} />
+                        {formatTicketAgeLabel(ticket.created_at, ticket.status) && (
+                          <StatusBadge label={formatTicketAgeLabel(ticket.created_at, ticket.status) as string} tone="neutral" icon="calendar-line" />
+                        )}
+                        {formatNextCheckLabel(ticket.auto_check) && (
+                          <StatusBadge label={formatNextCheckLabel(ticket.auto_check) as string} tone="info" icon="refresh-line" />
                         )}
                       </div>
                     </div>

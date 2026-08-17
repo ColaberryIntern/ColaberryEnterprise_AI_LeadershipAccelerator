@@ -461,6 +461,44 @@ export const CLAIMS: readonly Claim[] = [
     requiresSampleLabel: true,
   },
   {
+    /*
+     * The story-build pipeline. VERIFIED because it is running in production and
+     * every element of the wording was checked against the code that implements
+     * it, not against a description of it.
+     *
+     * The wording is deliberately narrow. It says the platform PLANS, PROMPTS
+     * and VERIFIES. It does not say the platform builds, because it does not:
+     * `renderDocs.ts` emits markdown and JSON, and `repoWriter.ts` is
+     * path-allowlisted to docs/**, CLAUDE.md and .colaberry/** and throws on any
+     * other path. A claim that the platform writes the code would be false and
+     * trivially disprovable by any customer who opened their own repo.
+     */
+    key: 'surface.storybuild',
+    publicWording:
+      'A build plan generated from your idea, written into your own repository, and verified ' +
+      'against your commits.',
+    verification: 'VERIFIED',
+    capability: 'live',
+    evidenceSource:
+      'backend/src/services/sbp/ (34-file pipeline: intake -> decompose -> planGate -> ' +
+      'planRepair -> materializeTasks -> renderDocs -> repoWriter). Live in production behind ' +
+      'SBP_PIPELINE_ENABLED (on since 2026-08-10) and PROJECT_API_ENABLED. Verification rule ' +
+      'in docs/BUILD_VERIFICATION_CONTRACT.md: a story is verified when every acceptance ' +
+      'criterion is passed in .colaberry/progress.json AND a commit exists that changed at ' +
+      'least one file and names the story. 20 published builds in the July 2026 cohort as of ' +
+      '2026-08-17; screenshot captured from one of them.',
+    owner: 'Ali',
+    lastVerifiedAt: '2026-08-17',
+    approvedRoutes: ['*'],
+    requiresSampleLabel: false,
+    note:
+      'Must never be reworded to say the platform builds the project or writes code. Scope is ' +
+      'plan, prompt and verify. Also barred: OAuth/GitHub-App/one-click wording (it is a ' +
+      'proof-of-push challenge on a repo the builder brings), and any claim that tests verify ' +
+      'the work (CI passing is explicitly not the bar). The loop is days old in production, so ' +
+      'no "battle-tested" or scale claims.',
+  },
+  {
     key: 'surface.free.workspace',
     publicWording: 'A free company workspace: the learner view and the manager view in one account.',
     verification: 'VERIFIED',

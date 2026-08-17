@@ -69,9 +69,74 @@ function isExcludedPerson(person) {
 // ---------------------------------------------------------------------------
 // HTTP with bounded retry. Every outbound call has an explicit timeout and a
 // capped backoff (CLAUDE.md Failure-First Design). 429s honour Retry-After.
+//
+// 401 IS RETRYABLE, AND THAT IS DELIBERATE.
+// 2026-08-17: the 08:45 CT briefing died on a single 401 from
+// /todosets/.../todolists.json. The token was not expired — the byte-identical
+// token probed 200 at 08:00, failed at 08:45, and probed 200 again nine minutes
+// later. A transient upstream auth failure took out the whole morning report
+// because 401 fell through to the non-retryable branch.
+//
+// Two distinct causes hide behind a 401, so both are handled:
+//   1. The token really is stale (CCPP rotated under a long-running process).
+//      Re-resolving the token fixes it instantly -> auth.refresh().
+//   2. Basecamp transiently rejects a valid token. Nothing to re-resolve;
+//      only waiting helps -> a longer backoff than the 429 curve, because auth
+//      blips observed here clear in minutes, not milliseconds.
+// Refreshes are capped so a genuinely dead token fails fast instead of
+// hammering CCPP, and the failure still surfaces as AuthError.
 // ---------------------------------------------------------------------------
 const REQUEST_TIMEOUT_MS = 30000;
 const MAX_ATTEMPTS = 4;
+const AUTH_MAX_ATTEMPTS = 4;              // 401 retries per request
+const MAX_TOKEN_REFRESHES = 2;            // re-resolutions per harvest run
+const AUTH_BACKOFF_MS = [5000, 20000, 45000];
+
+/**
+ * Mutable token holder shared by every request in one harvest run. When one
+ * request refreshes the token, all subsequent requests use the new value —
+ * otherwise a mid-harvest rotation would fix one call and 401 the next 200.
+ *
+ * @param {string} initialToken
+ * @param {(() => Promise<string>)|null} refreshFn  re-resolves from CCPP
+ */
+function createTokenSource(initialToken, refreshFn) {
+  let current = initialToken;
+  let inFlight = null;   // concurrent 401s share one refresh, not N
+  let refreshes = 0;
+  return {
+    get: () => current,
+    refreshCount: () => refreshes,
+    canRefresh: () => typeof refreshFn === 'function' && refreshes < MAX_TOKEN_REFRESHES,
+    /**
+     * Re-resolve the token. Resolves true ONLY if the value actually changed —
+     * a resolver that hands back the same string has not fixed anything, and
+     * the caller must fall through to the backoff instead of instantly
+     * replaying the identical request.
+     * @returns {Promise<boolean>} whether the token rotated
+     */
+    async refresh() {
+      if (inFlight) return inFlight;
+      refreshes += 1;
+      inFlight = (async () => {
+        const previous = current;
+        let next = null;
+        try {
+          next = await refreshFn();
+        } catch (_e) {
+          return false;   // resolver down: treat as "no rotation", never fatal
+        }
+        if (next && next !== previous) { current = next; return true; }
+        return false;
+      })();
+      try {
+        return await inFlight;
+      } finally {
+        inFlight = null;
+      }
+    },
+  };
+}
 
 function authHeaders(token) {
   return {
@@ -81,11 +146,33 @@ function authHeaders(token) {
   };
 }
 
-async function bcFetch(url, token, { attempt = 1 } = {}) {
+async function bcFetch(url, auth, { attempt = 1, authAttempt = 1, onProgress = null } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { headers: authHeaders(token), signal: controller.signal });
+    const res = await fetch(url, { headers: authHeaders(auth.get()), signal: controller.signal });
+
+    if (res.status === 401) {
+      if (authAttempt >= AUTH_MAX_ATTEMPTS) {
+        const err = new Error(`GET ${url} -> 401 after ${authAttempt} auth attempts`);
+        err.error_class = 'AuthError';
+        throw err;
+      }
+      // Cause 1: try a fresh token first — free and instant when it works.
+      let rotated = false;
+      if (auth.canRefresh()) {
+        rotated = await auth.refresh();
+        if (rotated && onProgress) onProgress(`  401 from Basecamp; token re-resolved, retrying (attempt ${authAttempt})`);
+      }
+      // Cause 2: no rotation available, so the only thing that helps is waiting.
+      if (!rotated) {
+        const waitMs = AUTH_BACKOFF_MS[Math.min(authAttempt - 1, AUTH_BACKOFF_MS.length - 1)];
+        if (onProgress) onProgress(`  401 from Basecamp; waiting ${Math.round(waitMs / 1000)}s (attempt ${authAttempt})`);
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+      return bcFetch(url, auth, { attempt, authAttempt: authAttempt + 1, onProgress });
+    }
+
     if (res.status === 429 || res.status >= 500) {
       if (attempt >= MAX_ATTEMPTS) {
         const err = new Error(`GET ${url} -> ${res.status} after ${attempt} attempts`);
@@ -95,12 +182,12 @@ async function bcFetch(url, token, { attempt = 1 } = {}) {
       const retryAfter = parseInt(res.headers.get('retry-after') || '0', 10);
       const waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(8000, 500 * 2 ** (attempt - 1));
       await new Promise((r) => setTimeout(r, waitMs));
-      return bcFetch(url, token, { attempt: attempt + 1 });
+      return bcFetch(url, auth, { attempt: attempt + 1, authAttempt, onProgress });
     }
     return res;
   } catch (e) {
     if (e.name === 'AbortError' && attempt < MAX_ATTEMPTS) {
-      return bcFetch(url, token, { attempt: attempt + 1 });
+      return bcFetch(url, auth, { attempt: attempt + 1, authAttempt, onProgress });
     }
     if (e.name === 'AbortError') { e.error_class = 'TimeoutError'; }
     throw e;
@@ -111,9 +198,9 @@ async function bcFetch(url, token, { attempt = 1 } = {}) {
 
 // Single GET. Returns null on 404/403 rather than throwing: a missing todolist
 // must not take down the whole report.
-async function bcGet(pathOrUrl, token) {
+async function bcGet(pathOrUrl, auth, { onProgress = null } = {}) {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : API + pathOrUrl;
-  const res = await bcFetch(url, token);
+  const res = await bcFetch(url, auth, { onProgress });
   if (res.status === 404 || res.status === 403) return null;
   if (!res.ok) {
     const err = new Error(`GET ${url} -> ${res.status}`);
@@ -124,12 +211,12 @@ async function bcGet(pathOrUrl, token) {
 }
 
 // Paginated GET following Link rel="next".
-async function bcGetAll(pathOrUrl, token, { maxPages = 40 } = {}) {
+async function bcGetAll(pathOrUrl, auth, { maxPages = 40, onProgress = null } = {}) {
   let next = pathOrUrl.startsWith('http') ? pathOrUrl : API + pathOrUrl;
   const out = [];
   let pages = 0;
   while (next && pages < maxPages) {
-    const res = await bcFetch(next, token);
+    const res = await bcFetch(next, auth, { onProgress });
     if (res.status === 404 || res.status === 403) break;
     if (!res.ok) break;
     const page = await res.json();
@@ -209,8 +296,8 @@ function releaseIndex(name) {
 // ---------------------------------------------------------------------------
 
 // Pull every todo for a list, including todos nested inside its groups.
-async function collectListTodos(bucketId, list, token) {
-  const groups = (await bcGet(`/buckets/${bucketId}/todolists/${list.id}/groups.json`, token)) || [];
+async function collectListTodos(bucketId, list, auth) {
+  const groups = (await bcGet(`/buckets/${bucketId}/todolists/${list.id}/groups.json`, auth)) || [];
   const containers = [
     { id: list.id, name: null, kind: 'root', position: 0 },
     ...(Array.isArray(groups) ? groups : []).map((g) => ({
@@ -219,8 +306,8 @@ async function collectListTodos(bucketId, list, token) {
   ];
 
   const perContainer = await mapLimit(containers, 6, async (c) => {
-    const active = await bcGetAll(`/buckets/${bucketId}/todolists/${c.id}/todos.json`, token);
-    const done = await bcGetAll(`/buckets/${bucketId}/todolists/${c.id}/todos.json?completed=true`, token);
+    const active = await bcGetAll(`/buckets/${bucketId}/todolists/${c.id}/todos.json`, auth);
+    const done = await bcGetAll(`/buckets/${bucketId}/todolists/${c.id}/todos.json?completed=true`, auth);
     return [...active, ...done].map((t) => ({
       id: t.id,
       title: stripHtml(t.content || t.title || '').slice(0, 220),
@@ -256,10 +343,10 @@ async function collectListTodos(bucketId, list, token) {
 // Every comment in a bucket inside the lookback window, via the per-recording
 // comments endpoint. We only ask for todos that actually have comments, which
 // cuts the call count by roughly 70% on these projects.
-async function collectComments(bucketId, todos, token, cutoffMs) {
+async function collectComments(bucketId, todos, auth, cutoffMs) {
   const withComments = todos.filter((t) => t.commentsCount > 0);
   const results = await mapLimit(withComments, 8, async (t) => {
-    const raw = await bcGetAll(`/buckets/${bucketId}/recordings/${t.id}/comments.json`, token, { maxPages: 12 });
+    const raw = await bcGetAll(`/buckets/${bucketId}/recordings/${t.id}/comments.json`, auth, { maxPages: 12 });
     return raw
       .filter((c) => new Date(c.created_at).getTime() >= cutoffMs)
       .map((c) => ({
@@ -283,13 +370,17 @@ async function collectComments(bucketId, todos, token, cutoffMs) {
  *
  * @param {object}  opts
  * @param {string}  opts.token         Basecamp access token (required)
+ * @param {function} [opts.refreshToken] Optional async () => string that re-resolves
+ *   the token from CCPP. Supplied, a mid-harvest 401 self-heals instead of
+ *   killing the run; omitted, 401s still get a bounded wait-and-retry.
  * @param {number}  opts.lookbackDays  Activity window. Default 14 (Ali's rule).
  * @param {number}  opts.historyDays   Comment history for trend maths. Default 28.
  * @param {function} opts.onProgress   Optional progress callback(msg)
  * @returns {Promise<object>} raw snapshot consumed by internDeliveryMetrics
  */
-async function harvestDelivery({ token, lookbackDays = 14, historyDays = 28, onProgress = () => {} } = {}) {
+async function harvestDelivery({ token, refreshToken = null, lookbackDays = 14, historyDays = 28, onProgress = () => {} } = {}) {
   if (!token) throw Object.assign(new Error('Basecamp token required'), { error_class: 'AuthError' });
+  const auth = createTokenSource(token, refreshToken);
   const now = Date.now();
   const historyCutoff = now - historyDays * DAY_MS;
 
@@ -318,18 +409,18 @@ async function harvestDelivery({ token, lookbackDays = 14, historyDays = 28, onP
     // people.json IS PAGINATED. A single-page GET silently truncates the roster
     // at 15 and every assignee past that reads as "unassigned" downstream.
     // (Same landmine that broke @-mention resolution in the CB dispatcher.)
-    const people = await bcGetAll(`/projects/${scope.bucketId}/people.json`, token);
+    const people = await bcGetAll(`/projects/${scope.bucketId}/people.json`, auth, { onProgress });
     onProgress(`  ${people.length} people on the project roster`);
     for (const p of people) registerPerson(p, scope.stream);
 
-    const lists = (await bcGet(`/buckets/${scope.bucketId}/todosets/${scope.todosetId}/todolists.json`, token)) || [];
+    const lists = (await bcGet(`/buckets/${scope.bucketId}/todosets/${scope.todosetId}/todolists.json`, auth, { onProgress })) || [];
     const listArray = Array.isArray(lists) ? lists : [];
     onProgress(`  ${listArray.length} todolists`);
 
     for (const list of listArray) {
-      const { todos, groups } = await collectListTodos(scope.bucketId, list, token);
+      const { todos, groups } = await collectListTodos(scope.bucketId, list, auth);
       if (todos.length === 0) continue;
-      const comments = await collectComments(scope.bucketId, todos, token, historyCutoff);
+      const comments = await collectComments(scope.bucketId, todos, auth, historyCutoff);
       allComments.push(...comments);
 
       // Belt and braces: someone can hold tasks or post updates while being off
@@ -374,6 +465,10 @@ async function harvestDelivery({ token, lookbackDays = 14, historyDays = 28, onP
 module.exports = {
   harvestDelivery,
   // exported for tests
+  createTokenSource,
+  bcFetch,
+  AUTH_MAX_ATTEMPTS,
+  MAX_TOKEN_REFRESHES,
   stripHtml,
   classifyGroup,
   releaseIndex,

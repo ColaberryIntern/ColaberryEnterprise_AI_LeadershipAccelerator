@@ -26,7 +26,7 @@ jest.mock('../../../config/database', () => ({
 import AdminUser from '../../../models/AdminUser';
 import AiAgent from '../../../models/AiAgent';
 import { resolveStudentDisplayName } from '../../reese/resolveStudentDisplayName';
-import { resolveActorDisplayName } from '../resolveActorDisplayName';
+import { resolveActorDisplayName, resolveActorDisplayNamesBatch, actorRefKey } from '../resolveActorDisplayName';
 
 const mockAdminFindByPk = AdminUser.findByPk as unknown as jest.Mock;
 const mockAdminFindOne = AdminUser.findOne as unknown as jest.Mock;
@@ -240,5 +240,56 @@ describe('resolveActorDisplayName', () => {
     const name = await resolveActorDisplayName('', '');
 
     expect(name).toBe('System');
+  });
+});
+
+describe('resolveActorDisplayNamesBatch', () => {
+  it('resolves each UNIQUE (actorType, actorId) pair exactly once, even when the input list repeats pairs — Ticket Board UX fixes, the whole reason this function exists (16,119 tickets, 32 distinct creators in production)', async () => {
+    // 3 refs, 2 of which are the literal same pair (cory-engine) — expect only
+    // 2 underlying AiAgent.findOne calls, not 3.
+    mockAgentFindOne
+      .mockResolvedValueOnce({ id: 'agent-cory-engine', agent_name: 'cory-engine' })
+      .mockResolvedValueOnce({ id: 'agent-corybrain', agent_name: 'CoryBrain' });
+    mockAdminFindOne
+      .mockResolvedValueOnce({ display_name: 'Cory Engine — Autonomous Operations', email: 'x@y.com' })
+      .mockResolvedValueOnce({ display_name: 'Cory Brain — Strategic Initiatives', email: 'x@y.com' });
+
+    const refs = [
+      { actorType: 'cory', actorId: 'cory-engine' },
+      { actorType: 'cory', actorId: 'CoryBrain' },
+      { actorType: 'cory', actorId: 'cory-engine' }, // duplicate of ref 1
+    ];
+
+    const result = await resolveActorDisplayNamesBatch(refs);
+
+    expect(mockAgentFindOne).toHaveBeenCalledTimes(2); // NOT 3 — the duplicate never re-queries
+    expect(result.get(actorRefKey('cory', 'cory-engine'))).toBe('Cory Engine — Autonomous Operations');
+    expect(result.get(actorRefKey('cory', 'CoryBrain'))).toBe('Cory Brain — Strategic Initiatives');
+    expect(result.size).toBe(2); // 2 unique keys, not 3 entries
+  });
+
+  it('an empty input array returns an empty Map with zero DB calls', async () => {
+    const result = await resolveActorDisplayNamesBatch([]);
+
+    expect(result.size).toBe(0);
+    expect(mockAgentFindOne).not.toHaveBeenCalled();
+    expect(mockAdminFindByPk).not.toHaveBeenCalled();
+  });
+
+  it('one pair failing to resolve (DB error) still yields an honest fallback value for it AND does not abort the other pairs in the same batch', async () => {
+    mockAgentFindOne
+      .mockRejectedValueOnce(new Error('connection reset')) // first pair blows up
+      .mockResolvedValueOnce({ id: 'agent-bpos', agent_name: 'bpos_orchestrator' }); // second pair succeeds
+    mockAdminFindOne.mockResolvedValueOnce({ display_name: 'BPOS Orchestrator — Universal Ticket Layer', email: 'x@y.com' });
+
+    const refs = [
+      { actorType: 'cory', actorId: 'SomeBrokenLookup' },
+      { actorType: 'cory', actorId: 'bpos_orchestrator' },
+    ];
+
+    const result = await resolveActorDisplayNamesBatch(refs);
+
+    expect(result.get(actorRefKey('cory', 'SomeBrokenLookup'))).toBe('SomeBrokenLookup'); // fails closed, not thrown
+    expect(result.get(actorRefKey('cory', 'bpos_orchestrator'))).toBe('BPOS Orchestrator — Universal Ticket Layer');
   });
 });
