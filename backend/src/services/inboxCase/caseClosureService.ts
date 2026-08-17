@@ -22,13 +22,29 @@ export interface ClosureGuardResult {
   blockers: ClosureBlocker[];
 }
 
-export async function evaluateClosureGuard(caseId: string): Promise<ClosureGuardResult> {
+// Optional, additive pre-fetched-entity override, keyed by the same four entities the
+// guard already reads. Any field left undefined falls back to the real DB fetch below
+// — existing callers (closeCase(), dismissCase() indirectly) never pass this and see
+// byte-identical behavior to before this parameter existed. Exists so a read-only
+// preview (e.g. "would this case close if item X's disposition were set to Y?") can
+// ask the question through this SAME single authoritative rule implementation rather
+// than a hand-duplicated second copy of these 10 conditions that could silently drift
+// from the real one — see backend/src/intelligence/autonomy/
+// inboxCaseSourceCompletionResolver.ts's previewInboxCaseSourceCompletionResolution().
+export interface ClosureGuardOverrides {
+  items?: InboxCaseItem[];
+  questions?: InboxCaseQuestion[];
+  actions?: InboxCaseAction[];
+  events?: InboxCaseEvent[];
+}
+
+export async function evaluateClosureGuard(caseId: string, overrides?: ClosureGuardOverrides): Promise<ClosureGuardResult> {
   const blockers: ClosureBlocker[] = [];
   const [items, questions, actions, events] = await Promise.all([
-    InboxCaseItem.findAll({ where: { case_id: caseId } }),
-    InboxCaseQuestion.findAll({ where: { case_id: caseId } }),
-    InboxCaseAction.findAll({ where: { case_id: caseId } }),
-    InboxCaseEvent.findAll({ where: { case_id: caseId } }),
+    overrides?.items ?? InboxCaseItem.findAll({ where: { case_id: caseId } }),
+    overrides?.questions ?? InboxCaseQuestion.findAll({ where: { case_id: caseId } }),
+    overrides?.actions ?? InboxCaseAction.findAll({ where: { case_id: caseId } }),
+    overrides?.events ?? InboxCaseEvent.findAll({ where: { case_id: caseId } }),
   ]);
 
   // 1 & 8. Every non-excluded item has a disposition; no unresolved

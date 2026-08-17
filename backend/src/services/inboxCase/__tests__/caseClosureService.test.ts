@@ -152,6 +152,45 @@ describe('evaluateClosureGuard — blocks with a specific reason', () => {
   });
 });
 
+describe('evaluateClosureGuard — overrides parameter (additive, for read-only previews)', () => {
+  it('an override items array lets the guard pass even though the REAL DB rows for that case are not all dispositioned', async () => {
+    const c = await seedCase();
+    // Real DB state: genuinely undispositioned, would normally block.
+    await fakeInboxCaseItem.create({ case_id: c.id, inclusion_status: 'INCLUDED', disposition: null, title: 'still open in the DB' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    // A synthetic, hypothetical post-disposition item list — proves the override path
+    // is genuinely consulted, not silently ignored in favor of the real DB fetch.
+    const hypotheticalItems = [
+      { inclusion_status: 'INCLUDED', disposition: 'RESOLVED', disposition_reason: null, source_url: null } as any,
+    ];
+
+    const result = await evaluateClosureGuard(c.id, { items: hypotheticalItems });
+    expect(result.canClose).toBe(true);
+    expect(result.blockers).toEqual([]);
+  });
+
+  it('a partial override (only items) still fetches questions/actions/events for real from the DB', async () => {
+    const c = await seedCase();
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+    // Real DB state has a genuinely OPEN question — must still block even though
+    // `items` is overridden to a fully-clean synthetic list.
+    await fakeInboxCaseQuestion.create({ case_id: c.id, status: 'OPEN', question: 'Who owns this?' });
+
+    const result = await evaluateClosureGuard(c.id, { items: [] });
+    expect(result.canClose).toBe(false);
+    expect(result.blockers.some((b) => b.condition === 'all_questions_answered')).toBe(true);
+  });
+
+  it('calling with no overrides at all is byte-identical to the pre-existing DB-only behavior', async () => {
+    const c = await seedCleanCase();
+    const withoutOverride = await evaluateClosureGuard(c.id);
+    const withEmptyOverrideObject = await evaluateClosureGuard(c.id, {});
+    expect(withoutOverride).toEqual({ canClose: true, blockers: [] });
+    expect(withEmptyOverrideObject).toEqual(withoutOverride);
+  });
+});
+
 describe('closeCase', () => {
   it('refuses to close and returns the exact blockers when the guard fails', async () => {
     const c = await seedCase();
