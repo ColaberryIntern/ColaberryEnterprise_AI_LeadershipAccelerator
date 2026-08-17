@@ -62,3 +62,54 @@ describe('personalize', () => {
     expect(personalize(null, 'Sofia')).toBeNull();
   });
 });
+
+/**
+ * The screenshot invitation is targeted, not global. It belongs on the
+ * screen-shaped struggles and must stay OFF the assessment-shaped ones:
+ * suggesting a screenshot while a student is stuck on a graded Evaluation
+ * invites them to photograph the questions and ask Cory to answer them, which
+ * is exactly what the graded-lock rule exists to prevent.
+ */
+describe('nudgeMessage — the screenshot invitation is targeted', () => {
+  const invites = (reasons: string[]) => /screenshot/i.test(nudgeMessage(reasons) || '');
+
+  it('offers a screenshot on a long back-and-forth', () => {
+    expect(invites(['many_questions'])).toBe(true);
+  });
+
+  it('offers a screenshot on the generic grind fallback', () => {
+    expect(invites(['something_unrecognised'])).toBe(true);
+  });
+
+  it('NEVER offers a screenshot on an unpassed graded evaluation', () => {
+    expect(invites(['not_yet_passed'])).toBe(false);
+  });
+
+  it('never offers a screenshot on repeated attempts or a low score', () => {
+    expect(invites(['multiple_attempts'])).toBe(false);
+    expect(invites(['low_score'])).toBe(false);
+  });
+
+  it('stays silent when the graded reason outranks a screen-shaped one', () => {
+    // Worst-signal-first means not_yet_passed wins, and its message must not
+    // acquire the invitation just because many_questions is also present.
+    expect(invites(['not_yet_passed', 'many_questions'])).toBe(false);
+  });
+
+  it('reaches a real struggling student through buildNudge, not just the formatter', () => {
+    const n = buildNudge({ turnsOnCard: 5, attempts: 0, gradedLock: false, failedEval: false, lowScorePct: null });
+    expect(n.struggling).toBe(true);
+    expect(n.message).toMatch(/screenshot/i);
+  });
+
+  it('survives personalize() so the name and the invitation coexist', () => {
+    const n = buildNudge({ turnsOnCard: 5, attempts: 0, gradedLock: false, failedEval: false, lowScorePct: null });
+    const m = personalize(n.message, 'Ali') || '';
+    expect(m.startsWith('Ali — ')).toBe(true);
+    expect(m).toMatch(/screenshot/i);
+  });
+
+  it('still returns null when nothing is wrong', () => {
+    expect(nudgeMessage([])).toBeNull();
+  });
+});
