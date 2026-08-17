@@ -1,6 +1,6 @@
 import { checkHalt, killCommand } from './watcherConfig';
 import { checkWindow } from './watchWindow';
-import { loadOutboundLedger } from './outboundIdentity';
+import { loadOutboundLedger, isCampaignRecipient } from './outboundIdentity';
 import { replayWatcherLog, WatcherLog, WatcherLogUnreadableError } from './watcherLog';
 import { watcherSkipReason, threadKeyFor, ThreadMessage } from './watcherGuards';
 import { checkCaps, CapLimits } from './replyCaps';
@@ -171,6 +171,10 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
   try {
     // Can we tell our own mail apart from a student's? If not, answer nothing.
     const ledger = loadOutboundLedger(opts.stateDir);
+    // Threads escalated during THIS cycle. The replayed log covers previous
+    // cycles; this covers two messages on one thread inside a single pass,
+    // which the log cannot yet know about.
+    const escalatedThisCycle = new Set<string>();
     let escalateOnly = !ledger.available;
     let escalateOnlyReason = ledger.available ? '' : `send_ledger_${ledger.unavailableReason}`;
 
@@ -181,7 +185,14 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
       replay = replayWatcherLog(opts.stateDir);
     } catch (err) {
       if (!(err instanceof WatcherLogUnreadableError)) throw err;
-      replay = { sentReplies: [], ownReplyIds: new Set<string>(), answeredThreads: new Set<string>(), eventCount: 0 };
+      // escalatedThreads EMPTY here is safe only because escalateOnly is set
+      // below and the roster check already refuses everything when the ledger is
+      // unavailable. It must still be present: omitting it made the dedup guard
+      // read `undefined.has(...)` on the one path where the log is unreadable.
+      replay = {
+        sentReplies: [], ownReplyIds: new Set<string>(), answeredThreads: new Set<string>(),
+        escalatedThreads: new Set<string>(), eventCount: 0,
+      };
       escalateOnly = true;
       escalateOnlyReason = 'watcher_log_unreadable';
       log.append({
@@ -239,6 +250,29 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
         continue;
       }
 
+      // NOT ON THE CAMPAIGN ROSTER — ignore it entirely, do not escalate it.
+      //
+      // This is the difference between a watcher and a mail forwarder. On its
+      // first live run it considered every message in the mailbox, so what it
+      // escalated was Basecamp standup notifications: 24 of them before it was
+      // halted. Only the 25 people the send harness actually mailed are
+      // candidates, and the roster is read off the ledger so it cannot drift
+      // from who really received it.
+      // `null` means there is no roster to check against, which is NOT the same
+      // as "not on it" — see isCampaignRecipient. With no roster the message
+      // still reaches a human; the per-thread record is what stops that
+      // repeating on every tick.
+      if (isCampaignRecipient(ledger, msg.fromAddress) === false) {
+        out.skipped++;
+        log.append({
+          ts: new Date().toISOString(), type: 'skipped', ...common,
+          reason: 'not_campaign_recipient',
+          detail: `${msg.fromAddress} is not one of the ${ledger.recipients.size} addresses the ` +
+            'campaign was sent to. Ignored, not escalated.',
+        });
+        continue;
+      }
+
       const classification = classifyInbound({
         fromAddress: msg.fromAddress, subject: msg.subject, bodyText: msg.bodyText,
       });
@@ -249,6 +283,23 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
       });
 
       const escalateWith = async (reason: string, detail: string) => {
+        // ONE ESCALATION PER THREAD, EVER.
+        //
+        // Replayed from the log, so this holds across cycles AND across a
+        // restart. Without it the watcher re-escalated the same message on
+        // every tick: one thread went out 7 times, and a second cycle escalated
+        // 17 having already escalated 7.
+        if (replay.escalatedThreads.has(threadKey) || escalatedThisCycle.has(threadKey)) {
+          out.skipped++;
+          log.append({
+            ts: new Date().toISOString(), type: 'skipped', ...common,
+            reason: 'thread_already_escalated',
+            detail: `${threadKey} has already been escalated. Escalating it again would repeat ` +
+              'on every tick for the rest of the window.',
+          });
+          return;
+        }
+
         // A dry run tells nobody. It records what it would have told them.
         if (opts.dryRun) {
           out.suppressed++;
@@ -258,6 +309,12 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
           });
           return;
         }
+        // Recorded BEFORE the send, so a crash between the two under-escalates
+        // rather than repeating — the same rule the reply ceilings already use.
+        escalatedThisCycle.add(threadKey);
+        log.append({
+          ts: new Date().toISOString(), type: 'escalation_attempt', ...common, reason, detail,
+        });
         out.escalated++;
         try {
           await ports.escalate({
