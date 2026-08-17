@@ -51,6 +51,7 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // first use with 'relation does not exist'. Both are idempotent and assert
 // their own post-conditions.
 import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
@@ -2430,6 +2431,11 @@ async function start(): Promise<void> {
   // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
   await ensureSponsorPortalAuditSchema();
   await ensureSbpSchema();
+  // projects.archived_at — the soft-delete stamp behind "remove my own project".
+  // Must run before any request can hit the archive routes, because every
+  // student-project listing query now filters on this column and a missing
+  // column would 500 the whole Projects surface rather than degrade it.
+  await ensureProjectArchiveSchema();
   // Transactional email dedup ledger. CLAUDE.md mandates application-level
   // dedup on (recipient, subject, business_event_id) for Mandrill sends and
   // production had no such table, so every batch send was one retry away from

@@ -96,6 +96,29 @@ router.get('/api/portal/projects/active', requireParticipant, async (req: Reques
   } catch (e) { fail(res, e, next); }
 });
 
+/**
+ * The student's archived projects, so the portal can offer a restore.
+ *
+ * MUST be declared above `GET /api/portal/projects/:projectId` — Express matches
+ * in declaration order, so registered after it the literal `archived` would be
+ * captured as a project id and answer 404 forever. Same reason `/active` sits
+ * where it does.
+ */
+router.get('/api/portal/projects/archived', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const { listArchivedProjectsForEnrollment } = await import('../services/projectService');
+    const rows = await listArchivedProjectsForEnrollment(eid(req));
+    res.json({
+      projects: rows.map((p) => ({
+        id: String(p.id),
+        name: (p as any).name ?? null,
+        archived_at: (p as any).archived_at,
+      })),
+    });
+  } catch (e) { fail(res, e, next); }
+});
+
 router.get('/api/portal/projects/:projectId', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!gate(res)) return;
@@ -188,6 +211,82 @@ router.patch(
       const tree = await setCommandCenterUrl(eid(req), String(req.params.projectId), url);
       if (!tree) return res.status(404).json({ error: 'Project not found' });
       res.json(tree);
+    } catch (e) { fail(res, e, next); }
+  },
+);
+
+// ── archive / restore a project the student owns ──────────────────────────────
+/**
+ * A student removes their own project. Soft-delete: `projects.archived_at` is
+ * stamped, nothing is deleted, and `POST .../restore` puts it back.
+ *
+ * The platform's own project record is refused by the service on all three
+ * routes (see services/projects/protectedProjects.ts). That refusal is
+ * independent of the archivable-listing filter, so a request typed straight at
+ * this endpoint is rejected even though no client ever offered it.
+ *
+ * `confirm_name` is required on the archive call and must match the project's
+ * own name. The point is not security — the student is authorised — it is that
+ * removing a build should take a deliberate act rather than one mis-aimed click
+ * next to the normal controls.
+ */
+const archiveSchema = z.object({
+  confirm_name: z.string().max(300).optional(),
+});
+
+router.get(
+  '/api/portal/projects/:projectId/archive-preview',
+  requireParticipant,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!gate(res)) return;
+      const { getArchivePreview } = await import('../services/projects/projectArchiveService');
+      res.json(await getArchivePreview(eid(req), String(req.params.projectId)));
+    } catch (e) { fail(res, e, next); }
+  },
+);
+
+router.post(
+  '/api/portal/projects/:projectId/archive',
+  requireParticipant,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!gate(res)) return;
+      const { confirm_name } = archiveSchema.parse(req.body || {});
+      const { archiveProject, getArchivePreview, ArchiveError } =
+        await import('../services/projects/projectArchiveService');
+
+      // The typed name is verified against the project the SERVER holds, not
+      // against a name the client sent alongside it — otherwise the client is
+      // grading its own homework and the confirmation proves nothing.
+      const preview = await getArchivePreview(eid(req), String(req.params.projectId));
+      const expected = (preview.name ?? '').trim();
+      if (expected) {
+        if ((confirm_name ?? '').trim().toLowerCase() !== expected.toLowerCase()) {
+          throw new ArchiveError(
+            400,
+            'Type the project name exactly to confirm.',
+            'ConfirmNameMismatch',
+          );
+        }
+      }
+      // An unnamed project cannot be confirmed by name. Rather than block the
+      // student out of removing it, the deliberate act falls back to the UI's
+      // hold-to-confirm; the server still requires the POST to name the project
+      // in its path, which no stray click produces.
+      res.json(await archiveProject(eid(req), String(req.params.projectId)));
+    } catch (e) { fail(res, e, next); }
+  },
+);
+
+router.post(
+  '/api/portal/projects/:projectId/restore',
+  requireParticipant,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!gate(res)) return;
+      const { restoreProject } = await import('../services/projects/projectArchiveService');
+      res.json(await restoreProject(eid(req), String(req.params.projectId)));
     } catch (e) { fail(res, e, next); }
   },
 );

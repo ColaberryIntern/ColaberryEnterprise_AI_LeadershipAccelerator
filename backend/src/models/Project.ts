@@ -41,6 +41,13 @@ export interface ProjectAttributes {
   target_mode?: string;
   share_token?: string | null;
   share_enabled?: boolean;
+  /**
+   * Soft-delete stamp. NULL = live; a timestamp = the student archived it then.
+   * Archived projects are filtered out of every listing and of active-project
+   * resolution (see services/projectService.ts) but no row is ever deleted, so
+   * tasks, verified stories and awarded points stay intact and restorable.
+   */
+  archived_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -76,6 +83,7 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare requirements_document: string;
   declare share_token: string | null;
   declare share_enabled: boolean;
+  declare archived_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -218,6 +226,16 @@ Project.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    // MUST be declared here, not only in the interface: Sequelize silently
+    // strips any attribute absent from `init` out of both writes and reads, so
+    // an undeclared archived_at would make `project.archived_at = new Date()`
+    // a no-op that still resolves — the archive would appear to succeed and
+    // change nothing. Deliberately no defaultValue (see
+    // db/ensureProjectArchiveSchema.ts).
+    archived_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   },
   {
