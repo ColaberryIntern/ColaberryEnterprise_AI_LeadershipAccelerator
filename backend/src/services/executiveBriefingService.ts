@@ -10,7 +10,105 @@ import IntelligenceDecision from '../models/IntelligenceDecision';
 import DepartmentReport from '../models/DepartmentReport';
 import AgentTask from '../models/AgentTask';
 import StrategicInitiative from '../models/StrategicInitiative';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
+
+// ─── Idempotency Guard ──────────────────────────────────────────────────────
+// The daily briefing, the weekly strategic briefing, the executive digest and
+// the chat-triggered "send briefing" intent all funnel through this file.
+// Without a dedup guard, a chat-triggered resend, an overlapping cron schedule,
+// or a second container running the same scheduler each produce another full
+// copy of the same email in Ali's inbox.
+//
+// The slot is (briefing slot, DELIVERED mailbox, Central-time date):
+//
+//   - Keyed per SLOT, not globally per day, so the Monday weekly briefing is not
+//     swallowed by that morning's daily one. Duplicates of the same slot are
+//     impossible; genuinely different briefings still each send once.
+//   - Keyed on the DELIVERED mailbox, not the intended recipient. Test mode
+//     rewrites recipients rather than suppressing sends, so several intended
+//     recipients can collapse into one inbox — keying on the intended address
+//     would still put several copies there.
+//
+// Claimed with a single guarded UPDATE rather than read-then-write. A
+// read-then-write guard lets two briefings firing in the same second both
+// observe an unclaimed slot and both send; the WHERE clause here makes the
+// check and the claim atomic. system_settings.key carries a UNIQUE constraint
+// (system_settings_key_key), so the row-creation INSERT leans on ON CONFLICT.
+async function claimBriefingSlot(slot: string, deliveredTo: string): Promise<boolean> {
+  const { sequelize } = await import('../config/database');
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+  const path = `${slot}|${deliveredTo.trim().toLowerCase()}`;
+
+  await sequelize.query(
+    `INSERT INTO system_settings (id, key, value, created_at, updated_at)
+     VALUES (gen_random_uuid(), 'briefing_send_log', '{}'::jsonb, NOW(), NOW())
+     ON CONFLICT (key) DO NOTHING`
+  );
+
+  const claimed = await sequelize.query(
+    `UPDATE system_settings
+        SET value = jsonb_set(COALESCE(value, '{}'::jsonb), ARRAY[:path], to_jsonb(:today::text), true),
+            updated_at = NOW()
+      WHERE key = 'briefing_send_log'
+        AND COALESCE(value ->> :path, '') <> :today
+      RETURNING key`,
+    { replacements: { path, today }, type: QueryTypes.SELECT }
+  );
+
+  return Array.isArray(claimed) && claimed.length > 0;
+}
+
+/**
+ * Send one briefing to each recipient, at most once per slot per day.
+ * Replaces the identical recipient loop that previously sat in all three
+ * generators below.
+ */
+async function sendBriefingToRecipients(
+  recipients: string[],
+  data: ExecutiveBriefingData,
+  logLabel: string,
+  slot: string,
+): Promise<void> {
+  const { sendBriefingEmail, resolveDeliveryAddress } = await import('./emailService');
+  let sentCount = 0;
+  let skippedCount = 0;
+
+  for (const to of recipients) {
+    // Resolve the real destination before claiming, so a test-mode fan-in of
+    // several recipients into one mailbox claims a single slot.
+    const deliveredTo = await resolveDeliveryAddress(to).catch(() => to);
+
+    // Fail CLOSED on a dedup error. Sending anyway would reintroduce exactly the
+    // duplicate storm this guard exists to stop; a skipped briefing is visible
+    // in this log and recoverable on the next run.
+    let claimed: boolean;
+    try {
+      claimed = await claimBriefingSlot(slot, deliveredTo);
+    } catch (err: any) {
+      console.error(
+        `[Briefing] error_class=DedupUnavailable slot=${slot} — skipping ${logLabel} to avoid a duplicate send:`,
+        err.message
+      );
+      skippedCount++;
+      continue;
+    }
+
+    if (!claimed) {
+      console.log(`[Briefing] Skipping ${logLabel} — slot "${slot}" already sent today`);
+      skippedCount++;
+      continue;
+    }
+
+    await sendBriefingEmail(to, data).catch((err: any) => {
+      console.error(`[Briefing] ${logLabel} email failed:`, err.message);
+    });
+    sentCount++;
+  }
+
+  console.log(
+    `[Briefing] ${logLabel} sent to ${sentCount}/${recipients.length} recipients (${skippedCount} skipped as duplicates)`
+  );
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -248,7 +346,6 @@ export async function generateDailyBriefing(): Promise<void> {
     run: async () => {
       try {
         const data = await compileExecutiveBriefing('daily');
-        const { sendBriefingEmail } = await import('./emailService');
         const { SystemSetting } = await import('../models');
 
         const setting = await SystemSetting.findOne({ where: { key: 'admin_notification_emails' } });
@@ -261,13 +358,7 @@ export async function generateDailyBriefing(): Promise<void> {
           return;
         }
 
-        for (const to of recipients) {
-          await sendBriefingEmail(to, data).catch((err: any) => {
-            console.error(`[Briefing] Email to ${to} failed:`, err.message);
-          });
-        }
-
-        console.log(`[Briefing] Daily briefing sent to ${recipients.length} recipients`);
+        await sendBriefingToRecipients(recipients, data, 'Daily briefing', 'daily');
       } catch (err: any) {
         console.error('[Briefing] Failed to generate daily briefing:', err.message);
         throw err;
@@ -281,7 +372,6 @@ export async function generateDailyBriefing(): Promise<void> {
 export async function generateWeeklyStrategicBriefing(): Promise<void> {
   try {
     const data = await compileExecutiveBriefing('weekly');
-    const { sendBriefingEmail } = await import('./emailService');
     const { SystemSetting } = await import('../models');
 
     const setting = await SystemSetting.findOne({ where: { key: 'admin_notification_emails' } });
@@ -289,13 +379,7 @@ export async function generateWeeklyStrategicBriefing(): Promise<void> {
       ? String(setting.getDataValue('value')).split(',').map((e: string) => e.trim()).filter(Boolean)
       : [];
 
-    for (const to of recipients) {
-      await sendBriefingEmail(to, data).catch((err: any) => {
-        console.error(`[Briefing] Weekly email to ${to} failed:`, err.message);
-      });
-    }
-
-    console.log(`[Briefing] Weekly strategic briefing sent to ${recipients.length} recipients`);
+    await sendBriefingToRecipients(recipients, data, 'Weekly strategic briefing', 'weekly');
   } catch (err: any) {
     console.error('[Briefing] Failed to generate weekly briefing:', err.message);
   }
@@ -306,7 +390,6 @@ export async function generateWeeklyStrategicBriefing(): Promise<void> {
 export async function generateExecutiveDigest(period: 'morning' | 'evening'): Promise<void> {
   try {
     const { getExecutiveEvents, getUnreadBadge } = await import('./executiveAwarenessService');
-    const { sendBriefingEmail } = await import('./emailService');
     const { SystemSetting } = await import('../models');
 
     const badge = await getUnreadBadge();
@@ -357,13 +440,12 @@ export async function generateExecutiveDigest(period: 'morning' | 'evening'): Pr
       return;
     }
 
-    for (const to of recipients) {
-      await sendBriefingEmail(to, digestData).catch((err: any) => {
-        console.error(`[Briefing] Executive digest email to ${to} failed:`, err.message);
-      });
-    }
-
-    console.log(`[Briefing] Executive ${period} digest sent to ${recipients.length} recipients (${badge.count} events)`);
+    await sendBriefingToRecipients(
+      recipients,
+      digestData,
+      `Executive ${period} digest (${badge.count} events)`,
+      `digest-${period}`,
+    );
   } catch (err: any) {
     console.error(`[Briefing] Failed to generate executive ${period} digest:`, err.message);
   }

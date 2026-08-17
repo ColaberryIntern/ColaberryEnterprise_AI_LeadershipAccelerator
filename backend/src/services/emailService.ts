@@ -114,18 +114,37 @@ async function applyDevEmailGuard(
   return options;
 }
 
+async function resolveTestRedirect(): Promise<string | null> {
+  try {
+    const test = await getTestOverrides();
+    if (test.enabled && test.email) return test.email;
+  } catch {
+    // If settings DB fails, don't block email sending
+  }
+  return null;
+}
+
+/**
+ * The mailbox an email addressed to `intended` will actually be delivered to.
+ *
+ * Test mode does not suppress sends, it rewrites the recipient \u2014 so several
+ * distinct intended recipients can collapse into a single mailbox. Any caller
+ * that dedups "one email per recipient" must dedup on THIS address, not on the
+ * intended one, or it will still deliver one copy per intended recipient into
+ * the same inbox.
+ */
+export async function resolveDeliveryAddress(intended: string): Promise<string> {
+  return (await resolveTestRedirect()) ?? intended;
+}
+
 async function resolveEmailRecipient(
   intended: string,
   subject: string
 ): Promise<{ to: string; subject: string }> {
-  try {
-    const test = await getTestOverrides();
-    if (test.enabled && test.email) {
-      console.log(`[Email] TEST MODE: redirecting from ${redactForLogs(intended)} to ${redactForLogs(test.email)}`);
-      return { to: test.email, subject: `[TEST \u2192 ${intended}] ${subject}` };
-    }
-  } catch {
-    // If settings DB fails, don't block email sending
+  const redirect = await resolveTestRedirect();
+  if (redirect) {
+    console.log(`[Email] TEST MODE: redirecting from ${redactForLogs(intended)} to ${redactForLogs(redirect)}`);
+    return { to: redirect, subject: `[TEST \u2192 ${intended}] ${subject}` };
   }
   return { to: intended, subject };
 }
