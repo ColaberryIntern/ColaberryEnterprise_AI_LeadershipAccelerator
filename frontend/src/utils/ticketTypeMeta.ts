@@ -1,4 +1,5 @@
 import type { Tone } from '../components/admin/shell/StatusBadge';
+import { timeAgo } from '../components/admin/shell/trust';
 
 // ─── Ticket Type Meta ────────────────────────────────────────────────────────
 // Single source of truth for "how does a ticket type look/read" on the admin
@@ -125,4 +126,58 @@ export function isTicketStale(updatedAt: string | Date | null | undefined, statu
   const d = updatedAt instanceof Date ? updatedAt : new Date(updatedAt);
   if (Number.isNaN(d.getTime())) return false;
   return Date.now() - d.getTime() >= STALE_THRESHOLD_MS;
+}
+
+// ─── Ticket Age ────────────────────────────────────────────────────────────
+// Ticket Board UX fixes (2026-08-17) — "how long has this ticket been open",
+// visible directly on the Kanban card, not just inside the detail modal.
+// Reuses timeAgo() (shell/trust.ts) — the same relative-time formatter
+// TicketDetailModal already uses for "Last activity" — rather than a second
+// clock implementation living in this file.
+
+/**
+ * "Open 4d" / "Opened just now" — null for a closed ticket (done/cancelled),
+ * matching isTicketStale's own terminal-status exclusion above: how long
+ * something has been OPEN isn't a meaningful question once it's closed.
+ */
+export function formatTicketAgeLabel(
+  createdAt: string | Date | null | undefined,
+  status: string,
+): string | null {
+  if (TERMINAL_STATUSES.has(status)) return null;
+  if (!createdAt) return null;
+  const iso = createdAt instanceof Date ? createdAt.toISOString() : createdAt;
+  const relative = timeAgo(iso);
+  if (relative === 'unknown') return null;
+  if (relative === 'just now') return 'Opened just now';
+  return `Open ${relative.replace(/ ago$/, '')}`;
+}
+
+// ─── Auto-Check (next automated re-check) ───────────────────────────────────
+// Ticket Board UX fixes (2026-08-17) — mirrors the shape
+// backend/src/services/ticketAutoCheckService.ts returns on every ticket from
+// the board/detail endpoints. Kept as a plain interface (not re-deriving the
+// backend's logic) — this module only formats an already-computed, already-
+// honest server answer for display.
+
+export interface TicketAutoCheck {
+  hasAutoCheck: boolean;
+  resolverAgentName: string | null;
+  nextCheckAt: string | null;
+  nextCheckLabel: string | null;
+  reason?: string;
+}
+
+/**
+ * "Next check ~2h" when a real value exists; null otherwise. Deliberately
+ * never returns a placeholder string (e.g. "No automated check") for the
+ * false case — callers decide whether/where that honest disclosure belongs
+ * (the board card omits it to avoid stamping the majority of cards, which
+ * have no owning resolver, with repeated text; the detail modal shows it
+ * explicitly next to the Stale banner). See this run's execution-contract.md
+ * Assumption 2 for the full reasoning.
+ */
+export function formatNextCheckLabel(autoCheck: TicketAutoCheck | null | undefined): string | null {
+  if (!autoCheck || !autoCheck.hasAutoCheck || !autoCheck.nextCheckLabel) return null;
+  return `Next check ~${autoCheck.nextCheckLabel}`;
 }
