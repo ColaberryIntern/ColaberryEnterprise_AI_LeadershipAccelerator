@@ -212,6 +212,28 @@ export function hydrateProjects(list: StudentProject[]): void { write(list); not
  * the meantime must still get their real plan folded into the placeholder
  * rather than added alongside it. A claim is a promise that survives a refresh.
  */
+/**
+ * Drop one project from THIS BROWSER's list.
+ *
+ * Two callers, one behaviour:
+ *  - after a successful server archive, so the card goes at once instead of
+ *    waiting for the next pull's prune (and so it cannot linger as a ghost);
+ *  - for a browser-only build that never reached the server, where there is no
+ *    server row to archive and localStorage is the only place it exists.
+ *
+ * The seeded training example is REFUSED. `read()` re-seeds it whenever it is
+ * missing, so "removing" it would silently come back on the next load — a
+ * control that appears to work and does not is worse than no control.
+ */
+export function removeProjectLocally(id: string): boolean {
+  const list = read();
+  const target = list.find((p) => p.id === id);
+  if (!target || target.sample) return false;
+  write(list.filter((p) => p.id !== id));
+  notify();
+  return true;
+}
+
 export function claimBackendProject(localId: string, backendProjectId: string): void {
   const list = read();
   const p = list.find((x) => x.id === localId);

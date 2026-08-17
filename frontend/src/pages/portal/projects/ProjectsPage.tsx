@@ -14,9 +14,15 @@ import ProjectsNextStepHero from './ProjectsNextStepHero';
 import FeedCard, { FeedItem } from '../feed/FeedCard';
 import {
   useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, reqVerified, nextTask,
+  removeProjectLocally,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
-import { syncProjectsWithBackend, refreshProjectsFromBackend } from './projectSync';
+import { syncProjectsWithBackend, refreshProjectsFromBackend, hydrateProjectById } from './projectSync';
+import ArchiveProjectDialog from './ArchiveProjectDialog';
+import {
+  fetchArchivedProjects, restoreProject as callRestore,
+  type ArchivedProjectSummary,
+} from './projectArchiveApi';
 import { deriveLegacyScope } from './deriveLegacyScope';
 import './projects.css';
 import '../today/TodayShell.css';
@@ -71,26 +77,82 @@ const OriginChip: React.FC<{ p: StudentProject }> = ({ p }) => {
   return null;
 };
 
-function BuildCard({ p, onOpen }: { p: StudentProject; onOpen: () => void }) {
+/**
+ * One build in the list — in the SAME visual language as the project interior.
+ *
+ * Ali: "the cards on the pre project select screen look different from the post
+ * project select screen. they should look like the latter."
+ *
+ * They did, and for no good reason: the list card had a coloured gradient banner,
+ * a 48px rounded icon tile hanging off it, and grey pill badges, while the
+ * interior's `TaskCard` uses a calm row — a small coloured dot, an uppercase
+ * eyebrow of chips, the title, the description, and a footer of actions. Two
+ * implementations of one look is how they drifted apart, so this card now RENDERS
+ * THE INTERIOR'S OWN CLASSES (`.pjt-card`, `.pjt-head`, `.pjt-ic`, `.pjt-main`,
+ * `.pjt-src`, `.chip`/`.sw`, `.pj-st`, `.pj-due`, `.pjt-owner`, `.pjt-title`,
+ * `.pjt-sub`, `.pjt-foot`, `.pw-act`) rather than a parallel set of its own. The
+ * only genuinely new rules are the progress bar and the list-specific footer,
+ * because the interior carries no equivalent.
+ *
+ * What the list keeps that the interior does not carry: progress, the task and
+ * verified counts, and the project's own name (real names shipped 2026-08-16).
+ *
+ * The card is no longer one big click target. It used to be a `role="button"`
+ * div, which cannot hold a Remove button inside it — a nested control inside a
+ * clickable parent is an accident waiting to happen, and this particular accident
+ * removes a build. Opening is now an explicit action in the footer, matching how
+ * the interior's task cards already behave.
+ */
+export function BuildCard({ p, onOpen, onRemove }: {
+  p: StudentProject; onOpen: () => void; onRemove: (() => void) | null;
+}) {
   const prog = projectProgress(p);
   const rv = reqVerified(p);
   const creating = p.status === 'creating';
+  const stageLabel = creating ? 'Creating…' : (prog.pct === 100 ? 'Complete' : p.stage.split(' · ')[0]);
+  // Mirrors the interior's requirement-chip vocabulary so the same state reads
+  // the same way on both screens.
+  const progState = prog.pct === 100 ? 'verified' : (prog.done > 0 ? 'built' : 'planned');
+
   return (
-    <div className="pj-buildcard" role="button" tabIndex={0} onClick={onOpen}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
-      <div className="pj-bc-cover" style={{ background: p.cover }}>
-        <span className={`pj-bc-stage${creating ? ' creating' : ''}`}>{creating ? 'Creating…' : (prog.pct === 100 ? 'Complete' : p.stage.split(' · ')[0])}</span>
+    <div className={`pjt-card pjb-card${creating ? ' pjb-creating' : ''}`}>
+      <div className="pjt-head pjb-head">
+        <span className="pjt-ic" style={{ background: p.accent }}>
+          <svg viewBox="0 0 24 24" fill="none"><path d={p.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>
+        </span>
+        <div className="pjt-main">
+          <div className="pjt-src">
+            <span className="chip" style={{ padding: '2px 9px', background: 'rgba(54,120,149,.12)', color: '#2E6A86' }}>
+              <span className="sw" style={{ background: p.accent }} />{stageLabel}
+            </span>
+            <span className={`pj-st ${progState}`}>{prog.done}/{prog.total} tasks</span>
+            {rv.total > 0 && <span className={`pj-due ${rv.v === rv.total ? 'done' : 'up'}`}>{rv.v}/{rv.total} verified</span>}
+            <OriginChip p={p} />
+          </div>
+          <div className="pjt-title">{p.name}</div>
+          {p.descriptor && <div className="pjt-sub">{p.descriptor}</div>}
+          <div className="pjb-bar" aria-hidden="true">
+            <i style={{ width: `${prog.pct}%`, background: creating ? 'var(--berry)' : 'var(--leaf-action)' }} />
+          </div>
+        </div>
       </div>
-      <div className="pj-bc-mid">
-        <span className="pj-bc-ic" style={{ background: p.accent }}><svg viewBox="0 0 24 24" fill="none"><path d={p.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></span>
-        <div className="pj-bc-name"><h4>{p.name}</h4><div className="pj-bc-desc">{p.descriptor}</div></div>
-      </div>
-      <div className="pj-bc-pad">
-        <div className="pj-bc-bar"><i style={{ width: `${prog.pct}%`, background: creating ? '#367895' : '#5BA63C' }} /></div>
-        <div className="pj-bc-stats">
-          <span className="pj-bc-st"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>{prog.done}/{prog.total} tasks done</span>
-          <span className="pj-bc-st"><svg viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L20 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>{rv.v}/{rv.total} verified</span>
-          <OriginChip p={p} />
+
+      <div className="pjt-foot">
+        <div className="pw-acts">
+          <button type="button" className="pw-act open" onClick={onOpen}>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Open build
+          </button>
+          {/* Destructive, but not alarming — this is a normal thing to want to
+              do. A quiet outlined control that only reddens on hover, sitting
+              apart from the primary action, and it opens a confirmation rather
+              than doing anything itself. */}
+          {onRemove && (
+            <button type="button" className="pjb-remove" onClick={onRemove}
+              aria-label={`Remove ${p.name}`}>
+              Remove
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -207,6 +269,76 @@ const ProjectsPage: React.FC = () => {
   // Which path produced the student's plan, and why. Surfaced rather than
   // hidden: a student is entitled to know whether they got the real thing.
   const [pipeline, setPipeline] = useState<PipelineState>({ state: 'idle' });
+
+  // ── remove / restore a build ──────────────────────────────────────────────
+  const [removing, setRemoving] = useState<StudentProject | null>(null);
+  const [archived, setArchived] = useState<ArchivedProjectSummary[]>([]);
+
+  const loadArchived = useCallback(async () => {
+    const r = await fetchArchivedProjects();
+    // A failure here (API flag off, offline) just means no restore strip. It
+    // must never break the page a student came to work on.
+    setArchived(r.ok ? r.value : []);
+  }, []);
+  useEffect(() => { void loadArchived(); }, [loadArchived]);
+
+  /**
+   * The card goes NOW, not on the next pull.
+   *
+   * `pruneDeadProjects` would eventually drop it — the server stops listing an
+   * archived project, which is exactly its "reached the server and is now gone"
+   * case — but only on the next reconcile. Waiting for that would leave the
+   * student looking at a build they just removed, which is indistinguishable
+   * from the archive having failed. Removing locally on success keeps the two
+   * views in step; the prune remains the durable backstop on other devices.
+   */
+  const handleArchived = useCallback(async (local: StudentProject) => {
+    // Removed by its LOCAL id, which is not always the backend id — a
+    // browser-built project that was later mirrored up keeps its own `p<epoch>`
+    // id and carries the server's id in `pipelineProjectId`. Archiving talks to
+    // the server about one; localStorage is keyed on the other.
+    removeProjectLocally(local.id);
+    setRemoving(null);
+    await loadArchived();
+    // The server may have repointed the active project, so re-pull the tree.
+    await refreshProjectsFromBackend();
+  }, [loadArchived]);
+
+  /** A browser-only build has no server row: localStorage is the only copy. */
+  const handleRemoveLocalOnly = useCallback((p: StudentProject) => {
+    removeProjectLocally(p.id);
+    setRemoving(null);
+  }, []);
+
+  const handleRestore = useCallback(async (projectId: string) => {
+    const r = await callRestore(projectId);
+    if (!r.ok) return;
+    await loadArchived();
+    // Put the card back explicitly. `/active` only describes the ACTIVE project,
+    // so a restored non-active build has no other route onto this page — the row
+    // would leave "Removed builds" and nothing would appear, which reads as a
+    // broken button. Then the normal pull, in case the restore also adopted it
+    // as active (it does when the student had none).
+    await hydrateProjectById(projectId);
+    await refreshProjectsFromBackend();
+  }, [loadArchived]);
+
+  /**
+   * Which builds may be removed, and by which route.
+   *
+   * The seeded training example is never removable: `projectsStore.read()`
+   * re-seeds it whenever it is absent, so the control would appear to work and
+   * silently undo itself on the next load.
+   *
+   * A build with no backend id never reached the server, so there is nothing to
+   * archive — it is dropped from this browser directly, with no confirmation
+   * dialog fetch that would only 404.
+   */
+  const removalRouteFor = (p: StudentProject): 'server' | 'local' | null => {
+    if (p.sample || demo) return null;
+    const backendId = p.pipelineProjectId || (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id) ? p.id : null);
+    return backendId ? 'server' : 'local';
+  };
 
   const active = (view.kind === 'preview' || view.kind === 'interior') ? projects.find((p) => p.id === view.id) : null;
   const openInterior = (id: string, taskId?: string | null) => {
@@ -480,13 +612,41 @@ const ProjectsPage: React.FC = () => {
           {/* your builds */}
           <div className="te-sec-title">Your builds</div>
           <div className="pj-builds">
-            {projects.map((p) => <BuildCard key={p.id} p={p} onOpen={() => openInterior(p.id)} />)}
+            {projects.map((p) => {
+              const route = removalRouteFor(p);
+              return (
+                <BuildCard
+                  key={p.id} p={p} onOpen={() => openInterior(p.id)}
+                  onRemove={route === null ? null : () => {
+                    if (route === 'local') handleRemoveLocalOnly(p);
+                    else setRemoving(p);
+                  }}
+                />
+              );
+            })}
             <button className="pj-newbuild" onClick={() => setView({ kind: 'wizard' })}>
               <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
               Start a new build
               <span className="small" style={{ fontWeight: 400 }}>Idea → shaping → requirements → schedule</span>
             </button>
           </div>
+
+          {/* Removed builds — the other half of "nothing is deleted". A promise
+              of reversibility with no visible way to reverse it is not a
+              promise. Rendered only when there is something to restore. */}
+          {archived.length > 0 && (
+            <div className="pjb-archived">
+              <div className="pjb-archived-h">Removed builds</div>
+              {archived.map((a) => (
+                <div className="pjb-archived-row" key={a.id}>
+                  <span className="pjb-archived-nm">{a.name || 'Unnamed build'}</span>
+                  <button type="button" className="pw-act skip" onClick={() => void handleRestore(a.id)}>
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* timeline: up next across builds */}
           {feedTop.length > 0 && (
@@ -524,6 +684,15 @@ const ProjectsPage: React.FC = () => {
           </div>
         </aside>
       </div>
+
+      {removing && (
+        <ArchiveProjectDialog
+          projectId={removing.pipelineProjectId || removing.id}
+          fallbackName={removing.name}
+          onCancel={() => setRemoving(null)}
+          onArchived={() => { void handleArchived(removing); }}
+        />
+      )}
     </div>
       )}
     </PortalShell>

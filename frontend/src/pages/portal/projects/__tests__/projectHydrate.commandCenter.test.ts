@@ -66,7 +66,14 @@ describe('command_center_url reaches the device that built it', () => {
   it('does not report a change when neither side has a URL', () => {
     // The sync loop skips its write on `changed: false`; a spurious change here
     // would mean a localStorage write and a re-render on every poll.
-    const r = reconcileProjects(local(), bTree([bTask('STORY-000')]));
+    //
+    // `name: 'p1'` matches the local fixture's name deliberately. Since
+    // 2026-08-17 the overlay also adopts the server's NAME (see
+    // adoptServerIdentity — a rename could not otherwise reach a device that
+    // already held the build), so a tree named differently from the local
+    // project is a genuine change and would make this a test of naming rather
+    // than of the URL no-op it is here to check.
+    const r = reconcileProjects(local(), bTree([bTask('STORY-000')], { name: 'p1' }));
     expect(r.changed).toBe(false);
     expect(r.mode).toBe('noop');
   });

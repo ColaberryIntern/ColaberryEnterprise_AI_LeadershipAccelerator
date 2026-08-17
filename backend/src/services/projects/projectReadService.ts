@@ -70,8 +70,13 @@ async function buildTree(projectId: string): Promise<ProjectTreeDto | null> {
  * one project's XP counted on another. Fail-soft: an unreadable evidence table
  * costs a number on a dashboard, which is not worth failing the project read
  * over.
+ *
+ * EXPORTED so the archive confirmation quotes the same number the project tree
+ * shows. A confirmation dialog that computed "points already awarded" its own
+ * way would eventually disagree with the page behind it, and the student would
+ * be asked to consent to a figure that is not the one they have been looking at.
  */
-async function verifiedStoryXp(
+export async function verifiedStoryXp(
   enrollmentId: string,
   tasks: Array<{
     story_id?: string | null;

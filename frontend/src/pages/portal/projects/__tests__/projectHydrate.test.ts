@@ -52,7 +52,11 @@ test('overlay is idempotent — second pass reports no change', () => {
 
 test('overlay never regresses a locally-done task', () => {
   const local = [localProject('p1', [localTask('p1-t1', undefined, 'done')])];
-  const tree = bTree([bTask('p1-t1', 'not_started')]);
+  // Named 'p1' to match the local fixture. Since 2026-08-17 the overlay also
+  // adopts the server's NAME (see adoptServerIdentity), so a differently-named
+  // tree is a real change — which would turn this completion-regression test
+  // into a naming test. The property under test is that `done` is never undone.
+  const tree = bTree([bTask('p1-t1', 'not_started')], 'p1');
   const r = reconcileProjects(local, tree);
   expect(r.changed).toBe(false);
   expect(r.next[0].lists[0].tasks[0].state).toBe('done');

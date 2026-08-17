@@ -167,9 +167,105 @@
 .pjp-ready{display:flex;align-items:center;gap:10px;background:rgba(91,166,60,.1);border:1px solid rgba(91,166,60,.35);border-radius:var(--r-12);padding:13px 16px;margin:16px 0 4px;color:var(--leaf-text);font-weight:700}
 .pjp-ready svg{width:18px;height:18px;flex:none}
 
-/* ── builds grid ── */
-.pj-builds{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
-@media(max-width:900px){.pj-builds{grid-template-columns:1fr}}
+/* ── builds list ──────────────────────────────────────────────────────────────
+   Single column of rows, matching the project INTERIOR's stacked `.pjt-card`
+   list. It was a 2-up grid of banner cards; Ali asked for the list to look like
+   the interior, and a row treatment in a 2-up grid reads as neither. Stacking
+   also makes the ~700px case (portal beside an editor) the same layout as the
+   wide case rather than a separate breakpoint to maintain.
+
+   The card itself reuses `.pjt-card` / `.pjt-head` / `.pjt-ic` / `.pjt-main` /
+   `.pjt-src` / `.chip` / `.pj-st` / `.pj-due` / `.pjt-owner` / `.pjt-title` /
+   `.pjt-sub` / `.pjt-foot` / `.pw-act` from the interior — see BuildCard. Only
+   what the interior genuinely lacks is defined here. */
+.pj-builds{display:flex;flex-direction:column;gap:14px}
+/* `.pjt-card` already carries margin-bottom for the interior's flow; the flex
+   gap here would double it. */
+.pj-builds .pjt-card{margin-bottom:0}
+.pjb-card{transition:border-color .16s,box-shadow .16s}
+.pjb-card:hover{border-color:var(--berry);box-shadow:var(--shadow-lg)}
+/* The head is not itself clickable on a list card (opening is an explicit
+   footer action), so it must not claim the interior's pointer + hover affordance
+   or it promises a click it does not accept. */
+.pj-builds .pjt-head.pjb-head{cursor:default}
+.pj-builds .pjt-head.pjb-head:hover{background:none}
+.pjb-creating .pjt-title{color:var(--text-muted)}
+/* Progress — list-only; the interior has no equivalent. */
+.pjb-bar{height:6px;border-radius:var(--r-pill);background:var(--surface-sunken);border:1px solid var(--border-subtle);overflow:hidden;margin-top:10px;max-width:340px}
+.pjb-bar>i{display:block;height:100%;border-radius:var(--r-pill)}
+/* Remove — destructive, deliberately quiet. Outlined and muted at rest so it
+   never competes with "Open build"; it only reads as dangerous on intent
+   (hover/focus). `margin-left:auto` pushes it away from the primary action so
+   the two are not adjacent targets. */
+.pj-root .pjb-remove{display:inline-flex;align-items:center;gap:6px;margin-left:auto;
+  border:1px solid var(--border-default);background:transparent;color:var(--text-muted);
+  font-size:13px;font-weight:700;padding:9px 16px;border-radius:var(--r-pill);
+  font-family:inherit;cursor:pointer;transition:.14s;white-space:nowrap}
+.pj-root .pjb-remove:hover,.pj-root .pjb-remove:focus-visible{
+  border-color:var(--cherry);color:var(--cherry-text);background:rgba(251,40,50,.06)}
+.pj-root .pjb-remove:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:560px){
+  .pj-root .pjb-remove{margin-left:0}
+  .pjb-bar{max-width:none}
+}
+
+/* Removed builds — the restore surface. */
+.pjb-archived{margin-top:20px;padding:14px 16px;background:var(--surface-subtle);
+  border:1px solid var(--border-subtle);border-radius:var(--r-12)}
+.pjb-archived-h{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text-muted);margin-bottom:10px}
+.pjb-archived-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:6px 0}
+.pjb-archived-row+.pjb-archived-row{border-top:1px solid var(--border-subtle)}
+.pjb-archived-nm{flex:1;min-width:0;font-weight:700;color:var(--text-body);font-size:14px}
+
+/* ── the remove-a-build confirmation ──────────────────────────────────────────
+   Its own dialog rather than the Bootstrap `ConfirmModal`: that component takes
+   a single `message` string, and this confirmation's whole purpose is a
+   STRUCTURED, counted list plus a typed-name gate. It also lives in the admin
+   design language, which would look borrowed here. */
+.pja-backdrop{position:fixed;inset:0;z-index:1080;background:rgba(26,26,26,.45);
+  display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto}
+.pja-panel{width:100%;max-width:520px;background:var(--surface-page);
+  border:1px solid var(--border-default);border-radius:var(--r-16);box-shadow:var(--shadow-lg);
+  margin:auto}
+.pja-head{display:flex;align-items:center;gap:12px;padding:18px 20px 0}
+.pja-head h3{margin:0;font-size:18px;line-height:1.25;color:var(--text-strong);min-width:0;
+  overflow-wrap:anywhere}
+.pja-ic{width:34px;height:34px;border-radius:50%;flex:none;display:flex;align-items:center;
+  justify-content:center;background:rgba(251,40,50,.12);color:var(--cherry-text)}
+.pja-ic svg{width:18px;height:18px}
+.pja-body{padding:14px 20px 20px}
+.pja-lead{margin:0 0 14px;font-size:14px;line-height:1.5;color:var(--text-body)}
+.pja-loss{background:var(--surface-sunken);border:1px solid var(--border-subtle);
+  border-radius:var(--r-12);padding:12px 14px;margin-bottom:14px}
+.pja-loss-h{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text-muted);margin-bottom:7px}
+.pja-loss ul{margin:0;padding-left:18px}
+.pja-loss li{font-size:14px;line-height:1.55;color:var(--text-body)}
+.pja-note{margin:0 0 12px;font-size:14px;line-height:1.5;color:var(--text-body);
+  border-left:3px solid var(--berry);padding-left:11px}
+.pja-points{margin:0 0 14px;font-size:14px;line-height:1.5;color:var(--text-body);
+  border-left:3px solid var(--leaf-action);padding-left:11px}
+.pja-confirm{display:block;font-size:14px;color:var(--text-body);margin-bottom:7px}
+.pja-input{width:100%;padding:10px 12px;font-size:14px;font-family:inherit;
+  border:1px solid var(--border-default);border-radius:var(--r-8);background:var(--surface-page);
+  color:var(--text-strong)}
+.pja-input:focus{outline:2px solid var(--berry);outline-offset:1px;border-color:var(--berry)}
+.pja-hint{font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.45}
+.pja-err{margin:12px 0 0;font-size:14px;line-height:1.45;color:var(--cherry-deep);font-weight:600}
+.pja-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  margin-top:18px;flex-wrap:wrap}
+.pj-root .pja-danger,.pja-danger{display:inline-flex;align-items:center;gap:7px;
+  background:var(--cherry);color:#fff;border:1px solid var(--cherry-deep);
+  font-size:13px;font-weight:700;padding:9px 16px;border-radius:var(--r-pill);
+  font-family:inherit;cursor:pointer;transition:.14s;white-space:nowrap}
+.pja-danger:hover:not(:disabled){background:var(--cherry-deep)}
+.pja-danger:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:560px){
+  .pja-foot{flex-direction:column-reverse;align-items:stretch}
+  .pja-foot>*{justify-content:center}
+}
+
 .pj-buildcard{padding:0;overflow:hidden;cursor:pointer;transition:.16s;background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-16);box-shadow:var(--shadow-md)}
 .pj-buildcard:hover{border-color:var(--berry);box-shadow:var(--shadow-lg);transform:translateY(-1px)}
 .pj-bc-cover{height:70px;position:relative;display:flex;align-items:flex-end}
@@ -192,6 +288,11 @@
   cursor:pointer;color:var(--text-muted);font-weight:700;background:none;font-family:inherit;text-align:center;min-height:150px;transition:.16s}
 .pj-newbuild:hover{border-color:var(--cherry);color:var(--cherry-text)}
 .pj-newbuild svg{width:30px;height:30px}
+/* `min-height:150px` was sized to fill a grid cell beside a banner card. In the
+   stacked row list it would be a very tall dashed box, so the tile becomes a row
+   too — same language as the cards above it. */
+.pj-builds .pj-newbuild{min-height:0;padding:16px 18px;flex-direction:row;gap:12px;flex-wrap:wrap;justify-content:flex-start;text-align:left}
+.pj-builds .pj-newbuild svg{width:22px;height:22px}
 
 /* ── ONE consistent task-action button group (used EVERYWHERE) ──
    The same 4 buttons — Copy Prompt · Open Workspace · Mark Done · Skip — render
