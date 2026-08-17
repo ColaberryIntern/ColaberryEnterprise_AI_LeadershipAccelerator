@@ -52,6 +52,7 @@ import {
   runCoryEngineTicketAutoResolverAgent,
   runCoryBrainInitiativeTicketAutoResolverAgent,
   runInboxCaseSourceCompletionResolverAgent,
+  runBposCapabilityTicketAutoResolverAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
   runStrategyFuturesArchitect,
@@ -273,6 +274,15 @@ export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // runAgent()'s own `AiAgent.enabled` gate keeps it a no-op until a human flips it on
   // after the reviewed historical bulk-clear.
   { agentName: 'InboxCaseSourceCompletionResolver', hardcodedSchedule: '19 * * * *', runner: runInboxCaseSourceCompletionResolverAgent, label: 'InboxCaseEngine source-completion reconciliation (Basecamp to-do completion signal + general closure-guard sweep)' },
+  // bpos_orchestrator capability ticket auto-resolve. `:55` offset chosen after
+  // confirming no existing entry (in this file) shares that exact schedule string —
+  // note WorkforceCommunityDirector runs `'50 6 * * *'` (once daily), which is close
+  // but does not collide at `:55`. Registered `enabled: false` at seed time in
+  // agentRegistrySeed.ts (see that entry's comment and this run's
+  // execution-contract.md) — the cron tick will fire on schedule per this entry, but
+  // runAgent()'s own `AiAgent.enabled` gate keeps it a no-op until a human flips it on
+  // after the reviewed historical bulk-clear.
+  { agentName: 'BposCapabilityTicketAutoResolver', hardcodedSchedule: '55 */6 * * *', runner: runBposCapabilityTicketAutoResolverAgent, label: 'BPOS capability ticket auto-resolve (re-check + close on capability verified/deleted)' },
 
   // Department Strategy Architects (every 6 hours, staggered)
   { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },
