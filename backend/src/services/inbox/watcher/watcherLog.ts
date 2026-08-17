@@ -40,6 +40,10 @@ export type WatcherEventType =
   | 'inbound_classified'
   | 'skipped'
   | 'escalated'
+  /** An escalation that could NOT be delivered. The watcher stops on this. */
+  | 'escalation_failed'
+  /** A dry run recording the escalation it deliberately did not send. */
+  | 'escalation_suppressed'
   | 'reply_attempt'
   | 'reply_sent'
   | 'reply_failed'

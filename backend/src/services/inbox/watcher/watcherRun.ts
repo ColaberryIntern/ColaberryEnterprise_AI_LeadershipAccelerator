@@ -31,6 +31,15 @@ import { diagnose, WatcherDataAccess } from './diagnose';
  *   THE HALT IS RE-CHECKED IMMEDIATELY BEFORE EVERY SEND. A cycle can take
  *   minutes across 25 messages. Checking only at the top means a kill lands one
  *   cycle later, and "one cycle later" is however many replies were in flight.
+ *
+ *   A DRY RUN TOUCHES NOTHING. Not "sends no student reply" — touches nothing.
+ *   The dry-run check used to sit AFTER diagnose(), and the login_link
+ *   diagnosis applies its repair: it rotates the student's portal token and
+ *   mails them a real magic link, then re-reads the row to verify. So a
+ *   rehearsal mutated live accounts and sent real mail. The check now sits
+ *   immediately after classification, before anything can read a student's row
+ *   with intent to change it, and `inertPorts` below is the backstop that makes
+ *   a future regression fail loudly instead of quietly mailing somebody.
  */
 
 export interface InboundMessage {
@@ -91,8 +100,49 @@ function toThreadMessage(m: InboundMessage): ThreadMessage {
   return { messageIdHeader: m.messageIdHeader, headers: m.headers, fromAddress: m.fromAddress };
 }
 
-export async function runCycle(ports: WatcherPorts, opts: CycleOptions): Promise<CycleOutcome> {
+export class DryRunMutationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DryRunMutationError';
+  }
+}
+
+/**
+ * The backstop for dry-run inertness.
+ *
+ * The ordering fix below (classify, then stop) is what makes a dry run inert
+ * today. This makes it STAY inert: every port that leaves the process is
+ * replaced with one that throws, so if a future edit moves work above the
+ * dry-run check the rehearsal fails loudly instead of quietly rotating a real
+ * student's token and mailing them.
+ *
+ * Deliberately a hard throw and not a no-op. A silent no-op would let the
+ * regression live indefinitely, which is the class of bug this whole file is
+ * arguing against.
+ */
+export function inertPorts(ports: WatcherPorts): WatcherPorts {
+  const refuse = (what: string) => (): never => {
+    throw new DryRunMutationError(
+      `A dry run attempted to ${what}. A dry run must not mutate a student's account or put ` +
+      'anything on the wire. This is a defect in the cycle ordering, not in the caller.',
+    );
+  };
+  return {
+    fetchRecentInbound: ports.fetchRecentInbound.bind(ports),
+    fetchThreadMessages: ports.fetchThreadMessages.bind(ports),
+    sendReply: refuse('send a reply to a student'),
+    escalate: refuse('send an escalation email'),
+    data: {
+      loadStudentFacts: ports.data.loadStudentFacts.bind(ports.data),
+      requestFreshLoginLink: refuse("rotate a student's login token and mail them a magic link"),
+    },
+  };
+}
+
+export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Promise<CycleOutcome> {
   const now = opts.now ?? new Date();
+  // A dry run cannot reach the wire even if the ordering below is later broken.
+  const ports = opts.dryRun ? inertPorts(rawPorts) : rawPorts;
   const base: CycleOutcome = {
     status: 'ran', seen: 0, skipped: 0, escalated: 0, sent: 0, suppressed: 0, escalateOnly: false,
   };
@@ -199,11 +249,34 @@ export async function runCycle(ports: WatcherPorts, opts: CycleOptions): Promise
       });
 
       const escalateWith = async (reason: string, detail: string) => {
+        // A dry run tells nobody. It records what it would have told them.
+        if (opts.dryRun) {
+          out.suppressed++;
+          log.append({
+            ts: new Date().toISOString(), type: 'escalation_suppressed', ...common,
+            reason, detail, dry_run: true,
+          });
+          return;
+        }
         out.escalated++;
-        await ports.escalate({
-          reason, detail, fromAddress: msg.fromAddress, subject: msg.subject,
-          threadKey, messageIdHeader: msg.messageIdHeader,
-        });
+        try {
+          await ports.escalate({
+            reason, detail, fromAddress: msg.fromAddress, subject: msg.subject,
+            threadKey, messageIdHeader: msg.messageIdHeader,
+          });
+        } catch (err: any) {
+          // An escalation that did not arrive is the one failure that must never
+          // be absorbed: absorbing it produces a run that logs "escalated" for
+          // 30 hours while nobody is told anything. Recorded, then re-thrown so
+          // the process dies non-zero rather than continuing to look healthy.
+          log.append({
+            ts: new Date().toISOString(), type: 'escalation_failed', ...common,
+            reason, detail,
+            error_class: err?.name || 'EscalationError',
+            error: String(err?.message ?? err),
+          });
+          throw err;
+        }
         log.append({ ts: new Date().toISOString(), type: 'escalated', ...common, reason, detail });
       };
 
@@ -218,6 +291,26 @@ export async function runCycle(ports: WatcherPorts, opts: CycleOptions): Promise
           'The watcher cannot currently identify its own outbound mail or count its own replies, ' +
           'so it is not sending anything. This message needs a human.',
         );
+        continue;
+      }
+
+      // ── THE DRY-RUN STOP ────────────────────────────────────────────────
+      // Above this line: reads and classification. Below it: diagnose(), which
+      // for login_link ROTATES THE STUDENT'S TOKEN AND MAILS THEM before it
+      // verifies. That is why the check lives here and not after the claim
+      // gate, where it used to be. Nothing below this line may run in a
+      // rehearsal, and inertPorts() enforces that if this ordering is broken.
+      if (opts.dryRun) {
+        out.suppressed++;
+        log.append({
+          ts: new Date().toISOString(), type: 'reply_suppressed', ...common,
+          reason: 'dry_run', dry_run: true,
+          issue_class: classification.issueClass,
+          detail:
+            'Dry run. This message classified as a handleable issue and would have been ' +
+            'diagnosed and answered. Nothing was read with intent to change it, no token was ' +
+            'rotated, and no mail was sent.',
+        });
         continue;
       }
 
@@ -256,19 +349,6 @@ export async function runCycle(ports: WatcherPorts, opts: CycleOptions): Promise
           `unverified_claim_${verdict.rejection}`,
           `A reply was composed and refused before sending: ${verdict.detail}`,
         );
-        continue;
-      }
-
-      if (opts.dryRun) {
-        out.suppressed++;
-        log.append({
-          ts: new Date().toISOString(), type: 'reply_suppressed', ...common,
-          reason: 'dry_run', dry_run: true,
-          issue_class: classification.issueClass,
-          claims: result.bundle.claims.map((c) => c.text),
-          evidence: result.bundle.evidence,
-          detail: 'Dry run. This reply passed every gate and would have been sent.',
-        });
         continue;
       }
 

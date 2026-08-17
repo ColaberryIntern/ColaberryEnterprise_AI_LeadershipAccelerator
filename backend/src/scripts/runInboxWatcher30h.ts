@@ -30,6 +30,18 @@
  * send ledger it reads is a FILE in that directory. Nothing is mounted from the
  * host into the backend container, so an in-container run cannot see the run
  * directory at all and would drop straight to escalate-only.
+ *
+ * ── IF THE BATCH RAN WITH `--ledger db` ─────────────────────────────────────
+ *
+ * Then there is no send-ledger.jsonl, the watcher loses the second of its two
+ * ways of recognising its own outbound mail, and it degrades to escalate-only
+ * for the whole window. Project the file out of the DB once, before starting:
+ *
+ *     ... --run-dir <dir> --project-ledger
+ *
+ * It refuses to overwrite an existing ledger, refuses to write an empty one,
+ * and refuses to write a row whose provider_message_id is missing — so a
+ * projection either produces a complete ledger or fails and tells you why.
  */
 
 import fs from 'fs';
@@ -43,6 +55,8 @@ import { loadOutboundLedger } from '../services/inbox/watcher/outboundIdentity';
 import { StudentFacts, FactGroup, WatcherDataAccess } from '../services/inbox/watcher/diagnose';
 
 const RUN_ID = '20260816-student-unblock-and-watch';
+/** Must match sendStudentUnblockBatch.ts — it keys the DB ledger projection. */
+const BUSINESS_EVENT_ID = 'story000-unblock-2026-08-17';
 const PROVIDER = 'gmail_colaberry';
 const ESCALATION_TO = process.env.WATCHER_ESCALATION_TO || 'ali@colaberry.com';
 
@@ -228,20 +242,21 @@ function buildPorts(stateDir: string, windowStart: Date): WatcherPorts {
         `Stop the watcher: ${killCommand(stateDir)}`,
       ].join('\n');
 
-      try {
-        const { sendRawEmail } = await import('../services/emailService');
-        await sendRawEmail({
-          to: [ESCALATION_TO],
-          subject: `[Watcher escalation] ${input.reason} from ${input.fromAddress}`,
-          text: lines,
-          html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${lines
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
-        });
-      } catch (err: any) {
-        // An escalation that cannot be delivered must be loud, not swallowed:
-        // silence here is indistinguishable from "nothing needed attention".
-        console.error(`[watcher] ESCALATION SEND FAILED (${input.reason}): ${err?.message}`);
-      }
+      // `sendRawEmail` RETURNS { ok: false } when SMTP is missing, the kill
+      // switch is on, or the dev guard fires — it does not throw. This used to
+      // be awaited and discarded inside a try/catch, so all three produced a
+      // watcher that logged "escalated" and told nobody. deliverEscalation
+      // reads the result and throws, and the throw is deliberately NOT caught
+      // here: a watcher that cannot reach a human must stop, not keep polling.
+      const { sendRawEmail } = await import('../services/emailService');
+      const { deliverEscalation } = await import('../services/inbox/watcher/escalationSender');
+      await deliverEscalation(sendRawEmail, {
+        to: [ESCALATION_TO],
+        subject: `[Watcher escalation] ${input.reason} from ${input.fromAddress}`,
+        text: lines,
+        html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${lines
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
+      });
       try {
         const { emitAlert } = await import('../services/alertService');
         await emitAlert({
@@ -286,6 +301,33 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Project the send ledger out of the DB before anything else looks at it.
+  // Without this, a run of the batch with `--ledger db` leaves no JSONL, the
+  // watcher loses its second self-copy discriminator, and it spends the whole
+  // window in escalate-only.
+  if (hasFlag('--project-ledger')) {
+    const { projectSendLedger } = await import('../services/inbox/watcher/projectSendLedger');
+    const { sequelize } = await import('../config/database');
+    const eventId = argOf('--business-event') || BUSINESS_EVENT_ID;
+    try {
+      const result = await projectSendLedger(stateDir, eventId, async (id) => {
+        const [rows]: any = await sequelize.query(
+          `SELECT idempotency_key, recipient, subject, business_event_id,
+                  provider_message_id, sent_at
+             FROM email_send_ledger
+            WHERE business_event_id = $id AND status = 'sent'
+            ORDER BY sent_at ASC`,
+          { bind: { id } },
+        );
+        return rows ?? [];
+      });
+      console.log(`[watcher] projected ${result.written} sends from the DB ledger to ${result.path}`);
+    } catch (err: any) {
+      console.error(`[watcher] LEDGER PROJECTION FAILED: ${err?.message ?? err}`);
+      process.exit(4);
+    }
+  }
+
   // Preflight. Every one of these fails LOUDLY rather than letting the watcher
   // poll an empty result set forever and report "all clear".
   const problems: string[] = [];
@@ -295,6 +337,22 @@ async function main(): Promise<void> {
   if (!dryRun) {
     for (const v of ['GMAIL_CLIENT_ID', 'GMAIL_CLIENT_SECRET', 'GMAIL_REFRESH_TOKEN']) {
       if (!process.env[v]) problems.push(`${v} is not set: live mode cannot send a reply.`);
+    }
+    // Escalation is the watcher's fallback for everything it will not handle
+    // itself, so a live run with no way to send one has no safe mode to fall
+    // back to. Checked here, before the window opens, rather than discovered on
+    // the first message that needs a human.
+    // Mirrors emailService's own transporter condition exactly: Mandrill key,
+    // or SMTP user AND pass. A similar-looking check would pass here and still
+    // leave `transporter` null at the point it matters.
+    const canSendRaw = Boolean(
+      process.env.MANDRILL_API_KEY || (process.env.SMTP_USER && process.env.SMTP_PASS),
+    );
+    if (!canSendRaw) {
+      problems.push(
+        'No MANDRILL_API_KEY and no SMTP_USER/SMTP_PASS pair: emailService builds no transport, ' +
+        'so sendRawEmail returns ok:false and every escalation would reach nobody.',
+      );
     }
   }
   if (problems.length > 0) {

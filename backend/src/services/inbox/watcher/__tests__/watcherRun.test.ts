@@ -31,11 +31,14 @@ const RUN_ID = 'test-run';
 let dir: string;
 let sent: any[];
 let escalations: any[];
+/** Every address the cycle asked to have a fresh login link minted for. */
+let mutations: string[];
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'watcher-cycle-'));
   sent = [];
   escalations = [];
+  mutations = [];
   openWindow(dir, { now: new Date('2026-08-17T02:00:00.000Z'), runId: RUN_ID });
   fs.writeFileSync(
     sendLedgerPath(dir),
@@ -93,7 +96,7 @@ function makePorts(messages: any[], opts: { linkLands?: boolean } = {}) {
         facts(requested && opts.linkLands !== false
           ? { portalTokenExpiresAt: '2026-08-18T04:00:05.000Z' }
           : {}),
-      requestFreshLoginLink: async () => { requested = true; },
+      requestFreshLoginLink: async (email: string) => { mutations.push(email); requested = true; },
     },
   };
 }
@@ -118,8 +121,62 @@ describe("Ali's 25 BCC copies do not become 25 replies", () => {
   });
 });
 
+/**
+ * ── THE DEFECT THESE TESTS EXIST FOR ────────────────────────────────────────
+ *
+ * The dry run reached `diagnose()` before it checked `dryRun`, and the
+ * `login_link` diagnosis APPLIES ITS REPAIR — it calls requestFreshLoginLink,
+ * which rotates a real student's portal token and mails them a real magic link,
+ * and only then re-reads the row to verify. So "rehearsing" the watcher rotated
+ * live tokens and mailed students, on a run whose entire documented contract is
+ * "sends nothing, writes only the log".
+ *
+ * A rehearsal that mutates is not a rehearsal. The order is now: classify,
+ * then stop. Nothing downstream of the dry-run check may touch a student.
+ */
+describe('a dry run is genuinely inert', () => {
+  it('does NOT mint a fresh login link, so no live token is rotated by a rehearsal', async () => {
+    await runCycle(makePorts([bccCopy, studentReply()]), {
+      stateDir: dir, runId: RUN_ID, dryRun: true, caps: CAPS, now: NOW,
+    });
+
+    expect(mutations).toEqual([]);
+  });
+
+  it('mutates nothing even though the live run on the same input does', async () => {
+    await runCycle(makePorts([bccCopy, studentReply()]), {
+      stateDir: dir, runId: RUN_ID, dryRun: true, caps: CAPS, now: NOW,
+    });
+    expect(mutations).toEqual([]);
+
+    // The same message, live: proves the dry run was reaching a real repair and
+    // that the fix removed it rather than the fixture simply never getting there.
+    await runCycle(makePorts([bccCopy, studentReply()]), {
+      stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS, now: NOW,
+    });
+    expect(mutations).toEqual(['bfglz@yahoo.com']);
+  });
+
+  it('puts no escalation on the wire either, and records why in the log', async () => {
+    const refund = studentReply({
+      providerMessageId: 'g-9', messageIdHeader: '<student-9@yahoo.com>', threadId: 't9',
+      bodyText: 'I want a refund for the yearly subscription, please.',
+    });
+
+    const out = await runCycle(makePorts([refund]), {
+      stateDir: dir, runId: RUN_ID, dryRun: true, caps: CAPS, now: NOW,
+    });
+
+    expect(escalations).toEqual([]);
+    expect(out.sent).toBe(0);
+    const suppressedEscalations = readLog().filter((e) => e.type === 'escalation_suppressed');
+    expect(suppressedEscalations).toHaveLength(1);
+    expect(suppressedEscalations[0].dry_run).toBe(true);
+  });
+});
+
 describe('dry run is the default posture and reaches no wire', () => {
-  it('gates a reply all the way through and then does not send it', async () => {
+  it('classifies a reply, records what it would answer, and reaches nothing', async () => {
     const out = await runCycle(makePorts([bccCopy, studentReply()]), {
       stateDir: dir, runId: RUN_ID, dryRun: true, caps: CAPS, now: NOW,
     });
