@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import QuickAddLeadModal from '../../components/admin/QuickAddLeadModal';
+import ApolloImportModal from '../../components/admin/ApolloImportModal';
 import BatchActionBar from '../../components/admin/BatchActionBar';
 import TemperatureBadge from '../../components/TemperatureBadge';
 import TableSkeleton from '../../components/ui/TableSkeleton';
@@ -107,6 +108,7 @@ function AdminLeadsPage() {
   const search = useDebounce(searchInput, 300);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showApolloImport, setShowApolloImport] = useState(false);
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -131,13 +133,16 @@ function AdminLeadsPage() {
     }
   }, [page, statusFilter, sourceFilter, websiteFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
 
-  useEffect(() => {
-    let live = true;
-    api.get('/api/admin/leads/source-groups')
-      .then((res) => { if (live) setSourceGroups(res.data.groups || []); })
-      .catch((err) => console.error('Failed to fetch lead source groups:', err));
-    return () => { live = false; };
+  const fetchSourceGroups = useCallback(async () => {
+    try {
+      const res = await api.get('/api/admin/leads/source-groups');
+      setSourceGroups(res.data.groups || []);
+    } catch (err) {
+      console.error('Failed to fetch lead source groups:', err);
+    }
   }, []);
+
+  useEffect(() => { fetchSourceGroups(); }, [fetchSourceGroups]);
 
   // Keep ?website= in the address bar so a rep can bookmark "just my sites".
   useEffect(() => {
@@ -288,6 +293,9 @@ function AdminLeadsPage() {
           <>
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
               + Add Lead
+            </button>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => setShowApolloImport(true)}>
+              Pull in leads
             </button>
             <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/import')}>
               Import CSV
@@ -585,6 +593,12 @@ function AdminLeadsPage() {
           onLeadCreated={() => { fetchLeads(); fetchStats(); }}
         />
       )}
+
+      <ApolloImportModal
+        show={showApolloImport}
+        onClose={() => setShowApolloImport(false)}
+        onImported={() => { fetchLeads(); fetchStats(); fetchSourceGroups(); }}
+      />
     </>
   );
 }
