@@ -152,6 +152,43 @@ async function fetchInventory(): Promise<ServerInventory> {
   }
 }
 
+/**
+ * Pull ONE specific project's tree onto this device and add it to the list.
+ *
+ * Needed by restore, and it exists because of a real hole. `/active` returns only
+ * the ACTIVE project, and nothing else hydrates a card — so a project that is
+ * live on the server but not active has no path onto the page at all (the same
+ * fact that kept the platform record invisible in Ali's portal). After a restore
+ * the student would have seen the row vanish from "Removed builds" and no card
+ * appear anywhere: the action would look broken while having worked perfectly.
+ *
+ * Deliberately NOT routed through `reconcileProjects`: that function derives the
+ * active project from the tree it is handed, so passing a non-active tree through
+ * it would rank the restored project first and label it as the current build.
+ * This inserts it and leaves ordering alone.
+ *
+ * Returns true when a card was added. A project already present is left exactly
+ * as it is — restore must not overwrite local state the student still has.
+ */
+export async function hydrateProjectById(projectId: string): Promise<boolean> {
+  try {
+    const res = await portalApi.get(`/api/portal/projects/${encodeURIComponent(projectId)}`);
+    const tree = (res.data && Array.isArray(res.data.lists)) ? (res.data as BackendProjectTree) : null;
+    if (!tree) return false;
+
+    const local = loadProjects();
+    const already = local.some((p) => p.id === tree.id || p.pipelineProjectId === tree.id);
+    if (already) return false;
+
+    const { backendTreeToProject } = await import('./projectHydrate');
+    hydrateProjects([...local, backendTreeToProject(tree)]);
+    return true;
+  } catch (err) {
+    reportFailure('pull', err);
+    return false;
+  }
+}
+
 /** PULL: overlay backend completions onto local, or hydrate a build this device lacks. */
 async function reconcileFromBackend(): Promise<void> {
   try {

@@ -104,9 +104,58 @@ function sameTaskKeySet(p: StudentProject, tree: BackendProjectTree): boolean {
 }
 
 /**
+ * THE SERVER OWNS THE NAME. Adopt `tree.name` onto a project this device already
+ * holds, whenever the server has a name to give.
+ *
+ * MEASURED 2026-08-17, production, ali@colaberry.com. `cce94c20` is named
+ * `Student Early Warning` in the database, and his browser rendered it as
+ * "Your build". Both facts were correct for the code as written: the project was
+ * hydrated on 2026-08-16 while `projects.name` was still NULL, so the card cached
+ * `FALLBACK_NAME`; the name was set afterwards by the backfill; and
+ * `overlayCompletions` — the ONLY path a device that already holds a project ever
+ * takes — updated task state and the Command Center URL and nothing else. There
+ * was no code anywhere that could move a server-side rename onto an existing
+ * card. `backendTreeToProject` reads the name, but that path runs only on a
+ * device that has never seen the build, so the fix looked present and was not.
+ *
+ * ONLY when the server has something meaningful, and this is the load-bearing
+ * half. `importProject` deliberately never writes the client's `name` to the
+ * project row, so a browser-built project that was mirrored up has `name: NULL`
+ * on the server while carrying a perfectly good student-chosen name locally.
+ * Adopting unconditionally would overwrite that with the fallback and rename the
+ * student's build to "Your build" — turning one stale-name bug into a worse one
+ * that destroys information instead of merely failing to refresh it.
+ *
+ * The descriptor follows the same rule and keeps the guard from
+ * `backendTreeToProject`: a subtitle equal to the heading carries nothing.
+ */
+export function adoptServerIdentity(p: StudentProject, tree: BackendProjectTree): StudentProject {
+  const serverName = firstMeaningful(tree.name);
+  if (!serverName) return p;
+
+  const nameChanged = serverName !== p.name;
+
+  // Re-derive the descriptor only against the name we are actually landing on,
+  // so the "subtitle must not repeat the heading" rule holds after a rename too.
+  const candidate = firstMeaningful(tree.organization_name);
+  const nextDescriptor = candidate && candidate !== serverName
+    ? candidate.slice(0, 140)
+    : p.descriptor;
+  const descriptorChanged = nextDescriptor !== p.descriptor && nextDescriptor !== serverName;
+
+  if (!nameChanged && !descriptorChanged) return p;
+  return {
+    ...p,
+    ...(nameChanged ? { name: serverName, slug: slugify(serverName) } : {}),
+    ...(descriptorChanged ? { descriptor: nextDescriptor } : {}),
+  };
+}
+
+/**
  * Return a project with backend completions overlaid: any local task whose key
- * matches a backend task marked `complete` becomes `done`. Returns the SAME
- * reference when nothing changed, so callers can skip a write/re-render.
+ * matches a backend task marked `complete` becomes `done`, and the server's name
+ * adopted (see adoptServerIdentity). Returns the SAME reference when nothing
+ * changed, so callers can skip a write/re-render.
  */
 export function overlayCompletions(p: StudentProject, tree: BackendProjectTree): StudentProject {
   const done = new Set<string>();
@@ -135,12 +184,15 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const nextUrl = tree.command_center_url ?? null;
   const urlChanged = nextUrl !== (p.commandCenterUrl ?? null);
 
-  if (!changed && !urlChanged) return p;
-  return {
+  const base: StudentProject = (!changed && !urlChanged) ? p : {
     ...p,
     ...(changed ? { lists } : {}),
     ...(urlChanged ? { commandCenterUrl: nextUrl } : {}),
   };
+  // Applied last and on the merged object, so a rename and a completion arriving
+  // in the same pull both land, and the same-reference fast path survives when
+  // neither did.
+  return adoptServerIdentity(base, tree);
 }
 
 // ── reconstruction of a project not present on this device ────────────────────
