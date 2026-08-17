@@ -8,7 +8,7 @@ import ProjectInterior from './ProjectInterior';
 import NextSessionStrip from './NextSessionStrip';
 import {
   resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
-  isDelivered, blockingReasons,
+  isDelivered, blockingReasons, describeFailure, type SbpError,
 } from '../../../services/sbpApi';
 import ProjectsNextStepHero from './ProjectsNextStepHero';
 import FeedCard, { FeedItem } from '../feed/FeedCard';
@@ -171,7 +171,13 @@ type PipelineState =
    */
   | { state: 'stalled'; projectId: string }
   | { state: 'gate_failed'; projectId: string; reasons: string[] }
-  | { state: 'local'; reason: string };
+  /**
+   * Fell back to the browser template. `error` carries WHY, classified — a
+   * refused request and an unreachable server are different failures needing
+   * different actions, and this used to hold only a message string, so the
+   * banner narrated every one of them as an outage.
+   */
+  | { state: 'local'; error: SbpError };
 
 /**
  * Tells the student which path produced their plan, and why.
@@ -244,14 +250,18 @@ const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => 
     );
   }
 
+  // Fell back to the browser template. What we say depends on WHY, because the
+  // action differs: a refused payload is fixed by editing an answer, and an
+  // unreachable service is fixed by waiting. Telling a refused student to wait
+  // is how Taiwo Oludimimu spent three days believing he had done something
+  // wrong with his connection.
+  const copy = describeFailure(pipeline.error);
   return (
     <div className="card pjw-pane pj-pipe warn" role="alert" aria-live="assertive">
-      <strong>We built you a starter template, not your plan.</strong>
+      <strong>{copy.title}</strong>
       <p className="lead" style={{ marginBottom: 0 }}>
-        We could not reach the requirements service, so this is a general
-        ten-task template rather than a plan written from your answers — no
-        schedule, no Command Center, generic prompts. It is worth starting the
-        build again once you are back online. ({pipeline.reason})
+        {copy.body} You are looking at a general ten-task template — no schedule,
+        no Command Center, generic prompts. {copy.action}
       </p>
     </div>
   );
@@ -406,7 +416,7 @@ const ProjectsPage: React.FC = () => {
     window.scrollTo(0, 0);
 
     const resolved = await resolveBackendProjectId();
-    if (!resolved.ok) { setPipeline({ state: 'local', reason: resolved.error.message }); return; }
+    if (!resolved.ok) { setPipeline({ state: 'local', error: resolved.error }); return; }
 
     // Durable, so a reload mid-generation still folds the real plan into this
     // placeholder instead of leaving the student with two lookalike builds.
@@ -423,14 +433,14 @@ const ProjectsPage: React.FC = () => {
       answers: a.answers && a.answers.length ? a.answers : undefined,
       target_weeks: a.weeks,
     });
-    if (!started.ok) { setPipeline({ state: 'local', reason: started.error.message }); return; }
+    if (!started.ok) { setPipeline({ state: 'local', error: started.error }); return; }
 
     setPipeline({ state: 'generating', projectId: resolved.projectId });
     const result = await pollBuild(resolved.projectId, {
       onUpdate: (st) => setPipeline({ state: 'generating', projectId: resolved.projectId, status: st.status }),
     });
 
-    if (!result.ok) { setPipeline({ state: 'local', reason: result.error.message }); return; }
+    if (!result.ok) { setPipeline({ state: 'local', error: result.error }); return; }
 
     if (result.state.status === 'gate_failed') {
       // Say what is actually wrong, using the server's BLOCKING list rather

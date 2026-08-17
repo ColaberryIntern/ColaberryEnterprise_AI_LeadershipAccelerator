@@ -95,17 +95,14 @@ export interface StartBuildAnswers {
   target_weeks?: number;
 }
 
-/** A failure the UI must show rather than swallow. */
-export interface SbpError { status: number | null; message: string }
+// Failure classification lives in its own module so it can be tested without
+// dragging axios in. Re-exported here because every caller already imports the
+// API surface from this file.
+export type { SbpFailureKind, SbpError } from './sbpFailure';
+export { classifyError, describeFailure } from './sbpFailure';
+import { classifyError, type SbpError } from './sbpFailure';
 
-function toError(err: any): SbpError {
-  const status = err?.response?.status ?? null;
-  const message = err?.response?.data?.error
-    || (status === 404 ? 'The build pipeline is not enabled for your account yet.'
-      : status === 503 ? 'We are at capacity right now — try again in a few minutes.'
-        : err?.message || 'Something went wrong starting your build.');
-  return { status, message };
-}
+const toError = classifyError;
 
 /** One interview question, generated from the student's own idea. */
 export interface IntakeQuestion {
@@ -241,7 +238,7 @@ export async function pollBuild(
 
   while (Date.now() < deadline) {
     if (opts.signal?.aborted) {
-      return { ok: false, error: { status: null, message: 'Cancelled.' } };
+      return { ok: false, error: { status: null, kind: 'timeout', message: 'Cancelled.' } };
     }
     const result = await getBuildState(projectId);
     if (!result.ok) return { ok: false, error: result.error };
@@ -257,6 +254,7 @@ export async function pollBuild(
     timedOut: true,
     error: {
       status: null,
+      kind: 'timeout',
       message: 'Your build is taking longer than expected. It may still be running — reopen this page to check.',
     },
   };
@@ -291,7 +289,7 @@ export async function resolveBackendProjectId(): Promise<
     const created = await portalApi.post('/api/portal/projects', {});
     const id = created?.data?.id;
     if (typeof id !== 'string' || !id) {
-      return { ok: false, error: { status: null, message: 'Could not create a project for this build.' } };
+      return { ok: false, error: { status: null, kind: 'server_error', message: 'Could not create a project for this build.' } };
     }
     return { ok: true, projectId: id, created: true };
   } catch (err) {
