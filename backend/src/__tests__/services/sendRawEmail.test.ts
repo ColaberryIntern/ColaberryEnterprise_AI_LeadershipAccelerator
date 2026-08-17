@@ -44,11 +44,39 @@ describe('sendRawEmail', () => {
 
     const result = await sendRawEmail(baseInput);
 
-    expect(result).toEqual({ ok: true });
+    // messageId is part of the return now, not just a log line: the send ledger
+    // has to persist which provider message a claim produced.
+    expect(result).toEqual({ ok: true, messageId: 'm1' });
     expect(mockSendMail).toHaveBeenCalledTimes(1);
     expect(mockSendMail.mock.calls[0][0]).toEqual(
       expect.objectContaining({ to: 'ali@colaberry.com', subject: 'Test', html: '<p>hi</p>', text: 'hi' })
     );
+  });
+
+  it('defaults the sender to Cory when no from identity is supplied', async () => {
+    mockSendMail.mockResolvedValue({ messageId: 'm3', accepted: [], rejected: [] });
+
+    await sendRawEmail(baseInput);
+
+    expect(mockSendMail.mock.calls[0][0].from).toBe('"Cory - AI Operations" <ali@colaberry.com>');
+    expect(mockSendMail.mock.calls[0][0].replyTo).toBeUndefined();
+  });
+
+  it('an explicit from identity overrides the Cory default, so a personal note is not sent under an ops byline', async () => {
+    mockSendMail.mockResolvedValue({ messageId: 'm4', accepted: [], rejected: [] });
+
+    await sendRawEmail({
+      ...baseInput,
+      fromName: 'Ali Muwwakkil',
+      fromEmail: 'ali@colaberry.com',
+      replyTo: 'ali@colaberry.com',
+      tag: 'student-unblock',
+    });
+
+    const sent = mockSendMail.mock.calls[0][0];
+    expect(sent.from).toBe('"Ali Muwwakkil" <ali@colaberry.com>');
+    expect(sent.replyTo).toBe('ali@colaberry.com');
+    expect(sent.headers['X-MC-Tags']).toBe('student-unblock');
   });
 
   it('boundary: no recipients — returns ok:false without attempting a send', async () => {
