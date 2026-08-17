@@ -13,6 +13,16 @@
  * the REAL createTicket() (not mocked) actually reuses/opens fresh tickets
  * given the keys that function produces — the mechanism that stops the
  * "same finding refiled roughly hourly forever" bug, not just the key math.
+ *
+ * Follow-up (2026-08-17) — the original Item 2 fix above only covered
+ * problems with a stable entity_type/entity_id (agent_failure). Problems
+ * with NO stable entity (conversion_drop, error_spike) fell back to the
+ * always-fresh decisionId, which never let createTicket()'s dedup fire —
+ * this is what produced 1,731 real `[Review] update_campaign_config`
+ * tickets in production, 14 open at once, roughly one per 60-70 minutes.
+ * The fallback now keys on `problem.type` + the recommended action instead.
+ * Every call site below that exercises the fallback branch now passes a
+ * `type` field (the widened Pick<DetectedProblem, 'type' | ...> requires it).
  */
 import { resolveCoryEngineTicketAssignee, resolveCoryEngineTicketDedupKey } from '../autonomousEngine';
 
@@ -41,7 +51,7 @@ describe('resolveCoryEngineTicketDedupKey', () => {
   it('happy path: a stable problem identity (agent_failure) is keyed on entity + recommended action, not the decision id', () => {
     expect(
       resolveCoryEngineTicketDedupKey(
-        { entity_type: 'agent', entity_id: 'agent-uuid-1' },
+        { type: 'agent_failure', entity_type: 'agent', entity_id: 'agent-uuid-1' },
         'update_agent_config',
         'decision-uuid-1',
       ),
@@ -49,28 +59,41 @@ describe('resolveCoryEngineTicketDedupKey', () => {
   });
 
   it('the real distinction that matters: a DIFFERENT recommended action for the same agent produces a DIFFERENT key — a genuinely different finding must still open its own ticket', () => {
-    const first = resolveCoryEngineTicketDedupKey({ entity_type: 'agent', entity_id: 'agent-uuid-1' }, 'update_agent_config', 'd1');
-    const second = resolveCoryEngineTicketDedupKey({ entity_type: 'agent', entity_id: 'agent-uuid-1' }, 'modify_agent_schedule', 'd2');
+    const first = resolveCoryEngineTicketDedupKey({ type: 'agent_failure', entity_type: 'agent', entity_id: 'agent-uuid-1' }, 'update_agent_config', 'd1');
+    const second = resolveCoryEngineTicketDedupKey({ type: 'agent_failure', entity_type: 'agent', entity_id: 'agent-uuid-1' }, 'modify_agent_schedule', 'd2');
     expect(first.entity_id).not.toBe(second.entity_id);
   });
 
   it('is stable across two calls for the same problem (same decision id is irrelevant to the key) — this is what lets createTicket find the still-open ticket', () => {
-    const cycle1 = resolveCoryEngineTicketDedupKey({ entity_type: 'agent', entity_id: 'agent-uuid-1' }, 'update_agent_config', 'decision-cycle-1');
-    const cycle2 = resolveCoryEngineTicketDedupKey({ entity_type: 'agent', entity_id: 'agent-uuid-1' }, 'update_agent_config', 'decision-cycle-2');
+    const cycle1 = resolveCoryEngineTicketDedupKey({ type: 'agent_failure', entity_type: 'agent', entity_id: 'agent-uuid-1' }, 'update_agent_config', 'decision-cycle-1');
+    const cycle2 = resolveCoryEngineTicketDedupKey({ type: 'agent_failure', entity_type: 'agent', entity_id: 'agent-uuid-1' }, 'update_agent_config', 'decision-cycle-2');
     expect(cycle1).toEqual(cycle2);
   });
 
-  it('regression guard: a problem with no stable identity (conversion_drop, error_spike) falls back to the original decision-id key — zero behavior change for those types', () => {
-    expect(resolveCoryEngineTicketDedupKey({}, 'pause_campaign', 'decision-uuid-9')).toEqual({
-      entity_type: 'decision',
-      entity_id: 'decision-uuid-9',
+  it('the actual production bug this fix closes: a problem with no stable identity (conversion_drop) is now keyed on problem type + action, NOT the always-fresh decision id — two cycles of the SAME finding, different decision ids, produce the SAME key', () => {
+    const cycle1 = resolveCoryEngineTicketDedupKey({ type: 'conversion_drop' }, 'update_campaign_config', 'decision-uuid-A');
+    const cycle2 = resolveCoryEngineTicketDedupKey({ type: 'conversion_drop' }, 'update_campaign_config', 'decision-uuid-B');
+    expect(cycle1).toEqual({ entity_type: 'problem_type', entity_id: 'conversion_drop:update_campaign_config' });
+    expect(cycle1).toEqual(cycle2);
+  });
+
+  it('error_spike gets the same no-stable-entity treatment as conversion_drop', () => {
+    expect(resolveCoryEngineTicketDedupKey({ type: 'error_spike' }, 'pause_campaign', 'decision-uuid-9')).toEqual({
+      entity_type: 'problem_type',
+      entity_id: 'error_spike:pause_campaign',
     });
   });
 
-  it('boundary: entity_type present but entity_id missing -> still falls back (both must be present, matching createTicket()\'s own guard)', () => {
-    expect(resolveCoryEngineTicketDedupKey({ entity_type: 'agent' }, 'update_agent_config', 'decision-uuid-9')).toEqual({
-      entity_type: 'decision',
-      entity_id: 'decision-uuid-9',
+  it('two DIFFERENT problem types that happen to recommend the SAME action string still produce DIFFERENT keys — type is part of the key precisely to prevent this collision', () => {
+    const conversionDrop = resolveCoryEngineTicketDedupKey({ type: 'conversion_drop' }, 'launch_ab_test', 'd1');
+    const errorSpike = resolveCoryEngineTicketDedupKey({ type: 'error_spike' }, 'launch_ab_test', 'd2');
+    expect(conversionDrop.entity_id).not.toBe(errorSpike.entity_id);
+  });
+
+  it('boundary: entity_type present but entity_id missing -> still falls back to the type+action key (both must be present, matching createTicket()\'s own guard)', () => {
+    expect(resolveCoryEngineTicketDedupKey({ type: 'agent_failure', entity_type: 'agent' }, 'update_agent_config', 'decision-uuid-9')).toEqual({
+      entity_type: 'problem_type',
+      entity_id: 'agent_failure:update_agent_config',
     });
   });
 });
@@ -109,7 +132,7 @@ describe('cory-engine ticket dedup — real createTicket() integration', () => {
 
   function baseTicketInput(overrides: Partial<Record<string, any>> = {}) {
     const dedupKey = resolveCoryEngineTicketDedupKey(
-      { entity_type: 'agent', entity_id: 'agent-openclaw-learning-1' },
+      { type: 'agent_failure', entity_type: 'agent', entity_id: 'agent-openclaw-learning-1' },
       'update_agent_config',
       overrides.decisionId || 'decision-any',
     );
@@ -149,7 +172,7 @@ describe('cory-engine ticket dedup — real createTicket() integration', () => {
     expect(configTicket.id).toBe('ticket-config');
 
     const scheduleDedupKey = resolveCoryEngineTicketDedupKey(
-      { entity_type: 'agent', entity_id: 'agent-openclaw-learning-1' },
+      { type: 'agent_failure', entity_type: 'agent', entity_id: 'agent-openclaw-learning-1' },
       'modify_agent_schedule',
       'decision-other',
     );
@@ -172,5 +195,42 @@ describe('cory-engine ticket dedup — real createTicket() integration', () => {
     const recurrence = await createTicket(baseTicketInput({ decisionId: 'decision-recurrence' }));
     expect(recurrence.id).toBe('ticket-fresh-recurrence');
     expect(ticketCreate).toHaveBeenCalledTimes(1);
+  });
+
+  // ─── The actual production bug: a no-stable-entity finding (conversion_drop) ──
+  // Before the 2026-08-17 fix, every cycle passed a fresh decisionId here, so
+  // Ticket.findOne's entity_type+entity_id+type match could never fire and a new
+  // ticket was created every time — this reproduces that exact shape (real
+  // createTicket(), two "cycles" ~60-70 min apart with different decision ids)
+  // and proves the fix's key now lets it dedupe just like agent_failure does above.
+  it('conversion_drop (no entity_type/entity_id from ProblemDiscoveryAgent) still dedupes on problem type + action across cycles — this is the exact bug that produced 1,731 real "[Review] update_campaign_config" tickets in production', async () => {
+    function conversionDropTicketInput(decisionId: string) {
+      const dedupKey = resolveCoryEngineTicketDedupKey({ type: 'conversion_drop' }, 'update_campaign_config', decisionId);
+      return {
+        title: '[Review] update_campaign_config',
+        created_by_type: 'cory' as const,
+        created_by_id: 'cory-engine',
+        type: 'agent_action' as const,
+        entity_type: dedupKey.entity_type,
+        entity_id: dedupKey.entity_id,
+        status: 'todo' as const,
+      };
+    }
+
+    const existingOpenTicket = { id: 'ticket-campaign-1', status: 'todo', title: '[Review] update_campaign_config' };
+    // Cycle 1 (~T+0): no ticket exists yet for this finding.
+    ticketFindOne.mockResolvedValueOnce(null);
+    ticketCreate.mockResolvedValueOnce(existingOpenTicket);
+    const firstTicket = await createTicket(conversionDropTicketInput('decision-drop-cycle-1'));
+    expect(firstTicket.id).toBe('ticket-campaign-1');
+    expect(ticketCreate).toHaveBeenCalledTimes(1);
+
+    // Cycle 2 (~T+65min): the drop is still active, a NEW IntelligenceDecision was
+    // created (60-min merge window lapsed) with a NEW decision id — under the old
+    // decision-id fallback this would have produced ticket-campaign-2. It must not.
+    ticketFindOne.mockResolvedValueOnce(existingOpenTicket);
+    const secondTicket = await createTicket(conversionDropTicketInput('decision-drop-cycle-2'));
+    expect(secondTicket.id).toBe('ticket-campaign-1');
+    expect(ticketCreate).toHaveBeenCalledTimes(1); // still only the one real Ticket.create call
   });
 });

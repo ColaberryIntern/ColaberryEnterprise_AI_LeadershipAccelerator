@@ -47,18 +47,36 @@ export function resolveCoryEngineTicketAssignee(
 // AiAgent.id), key the ticket on that identity + the recommended action
 // instead — createTicket()'s dedup then naturally reuses the open ticket
 // while the condition persists, and opens a fresh one once it's resolved
-// (done/cancelled) and the same or a different finding recurs. Falls back to
-// the original decision-id key when the problem has no stable identity
-// (conversion_drop, error_spike) — zero behavior change for those.
+// (done/cancelled) and the same or a different finding recurs.
+//
+// Follow-up (2026-08-17) — the "falls back to the decision-id key for
+// conversion_drop/error_spike, zero behavior change" note above turned out to
+// describe a live bug, not a safe no-op: ProblemDiscoveryAgent.ts's
+// detectConversionDrops() NEVER sets entity_type/entity_id (it's one
+// system-wide "lead generation dropped" signal, not per-campaign — confirmed
+// by ActionPlannerAgent.ts's update_campaign_config rule having
+// default_params: {}, i.e. there is no campaign-specific data to key on even
+// if we wanted to). Every occurrence therefore fell through to the
+// always-fresh decisionId, so createTicket()'s entity dedup could never find
+// the still-open ticket — this is what refiled `[Review]
+// update_campaign_config` roughly every 60-70 minutes for a full day in
+// production (1,731 tickets total, 14 open at once, live-confirmed before
+// this fix). The fallback now keys on the problem's own `type` + the
+// recommended `action` instead of the decision id — still stable across
+// cycles (same finding -> same key -> createTicket() reuses the open
+// ticket), still opens a genuinely fresh ticket the moment a different
+// problem type or a different recommended action is produced. `type` is
+// included (not just the bare action) so two different problem types that
+// happen to recommend the same action string can never collide.
 export function resolveCoryEngineTicketDedupKey(
-  problem: Pick<DetectedProblem, 'entity_type' | 'entity_id'>,
+  problem: Pick<DetectedProblem, 'type' | 'entity_type' | 'entity_id'>,
   action: string,
   decisionId: string,
 ): { entity_type: string; entity_id: string } {
   if (problem.entity_type && problem.entity_id) {
     return { entity_type: problem.entity_type, entity_id: `${problem.entity_id}:${action}` };
   }
-  return { entity_type: 'decision', entity_id: decisionId };
+  return { entity_type: 'problem_type', entity_id: `${problem.type}:${action}` };
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
