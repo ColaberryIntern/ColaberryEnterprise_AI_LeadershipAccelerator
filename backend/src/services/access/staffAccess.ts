@@ -4,10 +4,20 @@ import CommunityMember from '../../models/CommunityMember';
  * Cross-cutting access helper: does this enrollment belong to a community member
  * with the admin-assigned `staff` role?
  *
- * Staff get UNRESTRICTED curriculum access — the timeline gating layer
- * (`assertCardUnlocked` + the `getFeed` lock overlay) short-circuits to
- * "unlocked" for them, so every week / section / card is open regardless of
- * prerequisites.
+ * What this DOES buy: entitlement. `hasFullCurriculumAccess` treats staff as
+ * fully paid, so the paywall never limits them to the free-preview week
+ * (`contentEntitlement.isFreePreviewTier` / `resolveContentPageAccess`), and the
+ * build entitlement middleware lets them through.
+ *
+ * What this does NOT buy — and the reason this paragraph exists: it does NOT
+ * unlock the timeline's PREREQUISITE gating. Neither `assertCardUnlocked` nor
+ * the `getFeed` lock overlay consults this helper at all; `timelineGatingService`
+ * imports only `isFreePreviewTier`. A staff member therefore sees exactly the
+ * same padlocks and the same `lock_reason` as a student, and must complete the
+ * same prerequisites. That is deliberate (staff walk the curriculum as students
+ * do) — so if you are debugging "why is a @colaberry.com address locked out of a
+ * card", this helper is NOT the answer: read the card's `unlock_rules` and
+ * `timeline_section_rules` instead.
  *
  * The role lives on `community_members.role` (VARCHAR CHECK: student|mentor|staff),
  * keyed uniquely by `enrollment_id`, so one lookup resolves it unambiguously.

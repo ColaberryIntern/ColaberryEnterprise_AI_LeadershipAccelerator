@@ -184,7 +184,11 @@
 .tl-de .fc-cta.cherry{background:var(--cherry);color:#fff} .tl-de .fc-cta.cherry:hover{background:var(--cherry-deep)}
 .tl-de .pip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
 .tl-de .pip svg{width:14px;height:14px}
-.tl-de .pip.done{color:var(--leaf-text)} .tl-de .pip.up{color:var(--text-muted)} .tl-de .pip.lock{color:var(--text-muted)}
+.tl-de .pip.done{color:var(--leaf-text)} .tl-de .pip.up{color:var(--text-muted)}
+/* The lock pip carries the full reason, which now NAMES the outstanding card(s)
+   and so can run long. Text-only (no icon), so inline-block + ellipsis keeps the
+   footer to one line; the untruncated text stays on the element's title tooltip. */
+.tl-de .pip.lock{color:var(--text-muted);display:inline-block;max-width:min(100%,320px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── Compact completed card: a regular, smaller feed post. Stays inline in the
    timeline but keeps only the text + social footer (the big 16:9 media tile is
