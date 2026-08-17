@@ -25,14 +25,36 @@
  *   node scripts/buildStudentFactBase.js --out people.json
  *   node scripts/buildStudentFactBase.js --out people.json --skip-mail
  *   node scripts/buildStudentFactBase.js --out people.json --accept-roster-change
+ *   node scripts/buildStudentFactBase.js --fingerprint-only            (the gate's probe)
  *
- * Requires: SSH access to the production VPS as root. No credentials are read,
- * written, or logged by this script; the Gmail refresh token stays inside the
- * backend container and is never transmitted to this host.
+ * WHERE IT RUNS
+ * -------------
+ * Two places, and it works out which one it is on its own:
+ *
+ *   - a developer machine, reaching production over `ssh root@<prod>`;
+ *   - the production host ITSELF, talking to the containers directly.
+ *
+ * The second path exists because the three things an actual send needs — the
+ * Mandrill credential, a durable Postgres ledger, and the ability to run
+ * `verify-drafts.js` — only coexist on the production host, and that host cannot
+ * ssh to itself (`Permission denied (publickey,password)`). Without a local path
+ * the freshness gate simply could not run where the send has to happen, and the
+ * only alternative would have been the gate's test-only `--expect-head` injection,
+ * which defeats the exact staleness protection this whole mechanism exists for.
+ *
+ * Both paths run the SAME command strings against the SAME containers; see
+ * `scripts/lib/productionTransport.js` for why that makes their output identical
+ * rather than merely similar. Override with `--force-ssh` / `--force-local`.
+ *
+ * Requires: either SSH access to the production VPS as root, or a shell on the
+ * production host with docker access. No credentials are read, written, or logged
+ * by this script in either mode; the Gmail refresh token stays inside the backend
+ * container and is never transmitted anywhere.
  *
  * FAILURE MODES HANDLED
  * ---------------------
  *  - SSH unreachable / non-zero exit  -> throws with the remote stderr, exit 1
+ *  - local shell command fails        -> throws with its stderr, exit 1
  *  - psql returns non-JSON            -> throws naming the query, exit 1
  *  - Gmail token exchange fails       -> per-person mail marked unavailable and
  *                                        `mail_fidelity` downgraded, never silently empty
@@ -48,6 +70,7 @@
 const { execFileSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
+const { detectTransportMode, createTransport } = require('./lib/productionTransport');
 
 // ─────────────────────────────────────────────────────────────── configuration
 
@@ -128,6 +151,13 @@ const has = (n) => args.includes(n);
 
 const SSH = argOf('--ssh', DEFAULTS.ssh);
 /**
+ * Transport overrides. Detection is the default and is expected to be right; these
+ * exist so a wrong detection is a flag away from being corrected rather than a
+ * code change, and so tests can pin one mode without staging a fake filesystem.
+ */
+const FORCE_SSH = has('--force-ssh');
+const FORCE_LOCAL = has('--force-local');
+/**
  * Freshness probe. Prints one JSON line, `{production_head_sha, db_fingerprint}`,
  * and writes nothing. This is what `verify-drafts.js` calls to decide whether the
  * fact base it was handed still describes production. Mail is skipped because no
@@ -138,9 +168,16 @@ const OUT = argOf('--out');
 const SKIP_MAIL = has('--skip-mail') || FINGERPRINT_ONLY;
 const ACCEPT_ROSTER_CHANGE = has('--accept-roster-change') || FINGERPRINT_ONLY;
 
-if (!OUT && !FINGERPRINT_ONLY) {
-  console.error('buildStudentFactBase: --out <path> is required (or --fingerprint-only)');
-  process.exit(2);
+/**
+ * Argument validation lives in main(), not at module scope: this file is also
+ * `require`d by its test, and a module-scope `process.exit(2)` would kill the
+ * jest worker on import rather than failing a test.
+ */
+function requireArgs() {
+  if (!OUT && !FINGERPRINT_ONLY) {
+    console.error('buildStudentFactBase: --out <path> is required (or --fingerprint-only)');
+    process.exit(2);
+  }
 }
 
 /**
@@ -163,21 +200,45 @@ function dbFingerprint(people) {
       p.login_candidate_count, p.login_outcome, p.login_resolves_to_id,
       p.repo_connected, p.legacy_ticked,
     ])
-    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    // Code-unit order, NOT localeCompare. This fingerprint is now computed on two
+    // different machines — a Windows dev box and the production host — and
+    // localeCompare's result depends on the process's ICU data and default locale.
+    // A fingerprint that can differ by the locale of whoever ran it makes the
+    // staleness gate report a false STALE in exactly the situation it exists to
+    // protect. Code-unit comparison has no such input.
+    //
+    // This is not a behaviour change: `people` is already built in code-unit email
+    // order (the roster is `.sort()`ed, which is code-unit by spec), so this sort
+    // is a no-op on that input, and the live fingerprint is unchanged. That was
+    // verified against production, not assumed — see the test beside this script.
+    .sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : String(a[0]) > String(b[0]) ? 1 : 0));
   return crypto.createHash('sha256').update(JSON.stringify(projection)).digest('hex');
 }
 
-function ssh(remoteCommand, { stdin, label } = {}) {
-  try {
-    return execFileSync(
-      'ssh',
-      ['-o', 'ConnectTimeout=25', '-o', 'BatchMode=yes', SSH, remoteCommand],
-      { input: stdin, encoding: 'utf8', maxBuffer: 128 * 1024 * 1024, timeout: 300000 },
-    );
-  } catch (err) {
-    const stderr = (err.stderr || '').toString().trim();
-    throw new Error(`ssh failed${label ? ` during ${label}` : ''} (exit ${err.status}): ${stderr || err.message}`);
+/**
+ * Pick the transport once, loudly.
+ *
+ * Reported on stderr on every run, never stdout: `verify-drafts.js` parses the
+ * last stdout line of `--fingerprint-only` as JSON, so anything chatty on stdout
+ * would break the gate.
+ */
+function resolveTransport() {
+  if (FORCE_SSH && FORCE_LOCAL) {
+    throw new Error('--force-ssh and --force-local are mutually exclusive');
   }
+  let decision;
+  if (FORCE_SSH) {
+    decision = { mode: 'ssh', markers: null, why: 'forced by --force-ssh' };
+  } else if (FORCE_LOCAL) {
+    decision = { mode: 'local', markers: null, why: 'forced by --force-local' };
+  } else {
+    decision = detectTransportMode({
+      repoPath: DEFAULTS.repoPath,
+      containers: [DEFAULTS.dbContainer, DEFAULTS.backendContainer],
+    });
+  }
+  const transport = createTransport({ mode: decision.mode, sshTarget: SSH });
+  return { transport, decision };
 }
 
 /**
@@ -187,12 +248,12 @@ function ssh(remoteCommand, { stdin, label } = {}) {
  * and nothing else. The query is passed as a single argv element, never
  * interpolated into a shell string with user data in it.
  */
-function psqlJson(sql, label) {
+function psqlJson(t, sql, label) {
   const wrapped = sql.replace(/\s+/g, ' ').trim();
   const remote =
     `docker exec ${DEFAULTS.dbContainer} psql -U ${DEFAULTS.dbUser} -d ${DEFAULTS.dbName} ` +
     `-Atc ${shellQuote(wrapped)}`;
-  const raw = ssh(remote, { label }).trim();
+  const raw = t.run(remote, { label }).trim();
   if (!raw) return [];
   try {
     return JSON.parse(raw);
@@ -210,7 +271,7 @@ const shellQuote = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
  * new .ts would only reach dist through a deploy. This path needs no deploy, and
  * a fact-base refresh must never require one.
  */
-function runInBackend(source, label) {
+function runInBackend(t, source, label) {
   // Capped retry, because the production box runs concurrent deploys and a
   // `docker compose up --build` next door has SIGKILLed this read before
   // (exit 137). Three attempts with a widening pause, then give up loudly:
@@ -224,7 +285,7 @@ function runInBackend(source, label) {
       `docker exec ${DEFAULTS.backendContainer} node ${remoteTmp}; rc=$?; ` +
       `docker exec ${DEFAULTS.backendContainer} rm -f ${remoteTmp} >/dev/null 2>&1; rm -f ${remoteTmp}; exit $rc`;
     try {
-      return ssh(remote, { stdin: source, label });
+      return t.run(remote, { stdin: source, label });
     } catch (err) {
       lastErr = err;
       if (i < attempts) {
@@ -241,21 +302,22 @@ const norm = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLow
 
 // ───────────────────────────────────────────────────────── production identity
 
-function productionHead() {
-  const sha = ssh(`git -C ${DEFAULTS.repoPath} rev-parse HEAD`, { label: 'reading production HEAD' }).trim();
-  const branch = ssh(`git -C ${DEFAULTS.repoPath} rev-parse --abbrev-ref HEAD`, { label: 'reading production branch' }).trim();
+function productionHead(t) {
+  const sha = t.run(`git -C ${DEFAULTS.repoPath} rev-parse HEAD`, { label: 'reading production HEAD' }).trim();
+  const branch = t.run(`git -C ${DEFAULTS.repoPath} rev-parse --abbrev-ref HEAD`, { label: 'reading production branch' }).trim();
   if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(`production HEAD is not a SHA: "${sha}"`);
   return { sha, branch };
 }
 
 // ────────────────────────────────────────────────────────────────── DB queries
 
-function fetchEnrollments(cohortName) {
+function fetchEnrollments(t, cohortName) {
   // Every active, portal-enabled enrollment in the cohort, plus the mgmt_role
   // that pickBestEnrollment ranks on. Withdrawn rows are pulled too, separately,
   // because "this address also has a withdrawn duplicate" is a fact the drafts
   // depend on.
   return psqlJson(
+    t,
     `select coalesce(json_agg(row_to_json(r)), '[]'::json) from (
        select e.id, lower(e.email) as email, e.full_name, e.status, e.portal_enabled,
               e.enrollment_type, e.payment_status, e.created_at, e.portal_token_expires_at,
@@ -270,8 +332,9 @@ function fetchEnrollments(cohortName) {
   );
 }
 
-function fetchProjects() {
+function fetchProjects(t) {
   return psqlJson(
+    t,
     `select coalesce(json_agg(row_to_json(r)), '[]'::json) from (
        select p.id, p.enrollment_id, p.name, p.organization_name, p.github_repo_url, p.created_at
          from projects p
@@ -280,8 +343,9 @@ function fetchProjects() {
   );
 }
 
-function fetchIntake() {
+function fetchIntake(t) {
   return psqlJson(
+    t,
     `select coalesce(json_agg(row_to_json(r)), '[]'::json) from (
        select bi.project_id, bi.idea, bi.name, bi.users, bi.target_weeks, bi.status,
               case when jsonb_typeof(bi.answers::jsonb) = 'array'
@@ -292,8 +356,9 @@ function fetchIntake() {
   );
 }
 
-function fetchPlans() {
+function fetchPlans(t) {
   return psqlJson(
+    t,
     `select coalesce(json_agg(row_to_json(r)), '[]'::json) from (
        select bp.project_id, bp.status, bp.version, bp.published_at
          from build_plans bp
@@ -302,8 +367,9 @@ function fetchPlans() {
   );
 }
 
-function fetchTasks() {
+function fetchTasks(t) {
   return psqlJson(
+    t,
     `select coalesce(json_agg(row_to_json(r)), '[]'::json) from (
        select st.project_id, st.story_id, st.status, st.due_on, st.verified_at,
               case when jsonb_typeof(st.acceptance::jsonb) = 'array'
@@ -314,8 +380,9 @@ function fetchTasks() {
   );
 }
 
-function fetchRepos() {
+function fetchRepos(t) {
   return psqlJson(
+    t,
     `select coalesce(json_agg(row_to_json(r)), '[]'::json) from (
        select gc.enrollment_id, gc.project_id, gc.repo_url, gc.repo_owner, gc.repo_name, gc.last_sync_at
          from github_connections gc
@@ -463,8 +530,8 @@ function ownWords(text) {
 `;
 }
 
-function fetchMail(emails, queryTemplate) {
-  const raw = runInBackend(mailPayload(emails, queryTemplate), 'reading Gmail');
+function fetchMail(t, emails, queryTemplate) {
+  const raw = runInBackend(t, mailPayload(emails, queryTemplate), 'reading Gmail');
   const line = raw.trim().split(/\r?\n/).filter(Boolean).pop();
   let parsed;
   try {
@@ -475,92 +542,105 @@ function fetchMail(emails, queryTemplate) {
   return parsed;
 }
 
-// ───────────────────────────────────────────────────────────────────── assemble
+// ────────────────────────────────────────────────────────────────────── collect
 
-function main() {
-  const startedAt = new Date();
+/**
+ * Every read this generator makes of production, in one place, behind one
+ * transport.
+ *
+ * Nothing in here branches on the transport mode, and that is the entire
+ * equivalence argument: there is exactly one set of command strings, so `--force-local`
+ * and `--force-ssh` change only which shell on the production host receives them.
+ * Two modes cannot drift apart on facts they never compute separately.
+ */
+function collectProduction(t, cohortName = DEFAULTS.cohortName) {
   console.error('reading production HEAD...');
-  const head = productionHead();
+  const head = productionHead(t);
   console.error(`  production HEAD = ${head.sha.slice(0, 8)} on ${head.branch}`);
 
   console.error('reading production database (read-only)...');
-  const enrollments = fetchEnrollments(DEFAULTS.cohortName);
-  const projects = fetchProjects();
-  const intake = fetchIntake();
-  const plans = fetchPlans();
-  const tasks = fetchTasks();
-  const repos = fetchRepos();
-  console.error(`  ${enrollments.length} cohort enrollments, ${projects.length} projects, ${intake.length} intake rows`);
+  const raw = {
+    head,
+    enrollments: fetchEnrollments(t, cohortName),
+    projects: fetchProjects(t),
+    intake: fetchIntake(t),
+    plans: fetchPlans(t),
+    tasks: fetchTasks(t),
+    repos: fetchRepos(t),
+  };
+  console.error(`  ${raw.enrollments.length} cohort enrollments, ${raw.projects.length} projects, ${raw.intake.length} intake rows`);
+  return raw;
+}
 
+// ───────────────────────────────────────────────────────────────────── assemble
+
+/** Index the raw rows by the keys the assembly below walks them on. */
+function indexProduction(raw) {
   const projectsByEnrollment = new Map();
-  for (const p of projects) {
+  for (const p of raw.projects) {
     if (!projectsByEnrollment.has(p.enrollment_id)) projectsByEnrollment.set(p.enrollment_id, []);
     projectsByEnrollment.get(p.enrollment_id).push(p);
   }
-  const intakeByProject = new Map(intake.map((r) => [r.project_id, r]));
+  const intakeByProject = new Map(raw.intake.map((r) => [r.project_id, r]));
   const plansByProject = new Map();
-  for (const b of plans) {
+  for (const b of raw.plans) {
     if (!plansByProject.has(b.project_id)) plansByProject.set(b.project_id, []);
     plansByProject.get(b.project_id).push(b);
   }
   const tasksByProject = new Map();
-  for (const t of tasks) {
+  for (const t of raw.tasks) {
     if (!tasksByProject.has(t.project_id)) tasksByProject.set(t.project_id, []);
     tasksByProject.get(t.project_id).push(t);
   }
-  const repoByProject = new Map(repos.filter((r) => r.project_id).map((r) => [r.project_id, r]));
+  const repoByProject = new Map(raw.repos.filter((r) => r.project_id).map((r) => [r.project_id, r]));
 
-  // ── roster ────────────────────────────────────────────────────────────────
   const byEmail = new Map();
-  for (const e of enrollments) {
+  for (const e of raw.enrollments) {
     if (!byEmail.has(e.email)) byEmail.set(e.email, []);
     byEmail.get(e.email).push(e);
   }
 
+  return { projectsByEnrollment, intakeByProject, plansByProject, tasksByProject, repoByProject, byEmail };
+}
+
+/**
+ * Who the fact base is about: cohort members who hold a project, plus the six
+ * project-less addresses carried forward from the T7 assessment, minus fixtures
+ * and the do-not-email list.
+ *
+ * `unrostered` is the drift alarm. A project-holding student who is not on the
+ * roster is a real person about to be silently left out of a cohort-wide send,
+ * which is exactly the class of miss this fact base exists to prevent.
+ */
+function buildRoster(index) {
   const blocked = new Set(DO_NOT_EMAIL.map((d) => d.email.toLowerCase()));
   const derived = [];
-  for (const [email, rows] of byEmail) {
+  for (const [email, rows] of index.byEmail) {
     if (isFixture(email) || blocked.has(email)) continue;
     const active = rows.filter((r) => r.status === 'active' && r.portal_enabled);
     if (!active.length) continue;
-    const holdsProject = active.some((r) => (projectsByEnrollment.get(r.id) || []).length > 0);
+    const holdsProject = active.some((r) => (index.projectsByEnrollment.get(r.id) || []).length > 0);
     if (holdsProject) derived.push(email);
   }
+  // `.sort()` with no comparator is code-unit order by spec, so this is stable
+  // across machines. `dbFingerprint` re-sorts the same way for the same reason.
   const roster = [...new Set([...derived, ...EXTRA_ROSTER.map((e) => e.toLowerCase())])]
     .filter((e) => !blocked.has(e))
     .sort();
 
-  // Drift alarm. A project-holding student who is not on the roster is a person
-  // about to be silently left out of a cohort-wide send, which is exactly the
-  // class of miss this fact base exists to prevent.
-  const missing = derived.filter((e) => !roster.includes(e));
-  if (missing.length && !ACCEPT_ROSTER_CHANGE) {
-    console.error(`ROSTER DRIFT: ${missing.join(', ')} hold projects but are not on the roster.`);
-    console.error('Re-run with --accept-roster-change once you have decided what to do about them.');
-    process.exit(3);
-  }
+  return { roster, derived, unrostered: derived.filter((e) => !roster.includes(e)) };
+}
 
-  // ── mail ──────────────────────────────────────────────────────────────────
-  let mail = { ok: false, mailbox: null, messages: {}, errors: {} };
-  let mailFidelity;
-  if (SKIP_MAIL) {
-    mailFidelity = { level: 'NONE', why: '--skip-mail was passed; no message bodies were read' };
-  } else {
-    console.error(`reading Gmail for ${roster.length} addresses (list + get only)...`);
-    mail = fetchMail(roster, DEFAULTS.mailQuery);
-    if (!mail.ok) {
-      mailFidelity = { level: 'NONE', why: `Gmail unavailable: ${mail.error}` };
-      console.error(`  Gmail unavailable: ${mail.error}`);
-    } else {
-      const failed = Object.keys(mail.errors || {});
-      mailFidelity = failed.length
-        ? { level: 'PARTIAL', why: `read failed for ${failed.join(', ')}`, failed }
-        : { level: 'FULL', why: `mailbox ${mail.mailbox}, query "${DEFAULTS.mailQuery}"` };
-      console.error(`  mailbox ${mail.mailbox}, ${Object.values(mail.messages).filter(Boolean).reduce((n, m) => n + m.length, 0)} messages`);
-    }
-  }
-
-  // ── people ────────────────────────────────────────────────────────────────
+/**
+ * Turn indexed production rows plus a mail corpus into the people array the drafts
+ * and the gate are checked against.
+ *
+ * Pure: no transport, no clock, no filesystem. Given the same rows it returns the
+ * same array, which is what lets a test prove the local and ssh paths agree by
+ * feeding both of their outputs through this one function.
+ */
+function assemblePeople({ index, roster, mail, skipMail }) {
+  const { projectsByEnrollment, intakeByProject, plansByProject, tasksByProject, repoByProject, byEmail } = index;
   const people = [];
   for (const email of roster) {
     const rows = byEmail.get(email) || [];
@@ -592,7 +672,7 @@ function main() {
     if (bi && Number(bi.target_weeks) === DEMO_VALUES.target_weeks) contaminated.push('target_weeks');
 
     const messages = mail.messages && mail.messages[email] ? mail.messages[email] : [];
-    const mailUnavailable = !mail.ok || SKIP_MAIL || mail.messages[email] === null;
+    const mailUnavailable = !mail.ok || skipMail || mail.messages[email] === null;
 
     people.push({
       email,
@@ -636,6 +716,52 @@ function main() {
       mail_unavailable: mailUnavailable,
     });
   }
+  return people;
+}
+
+function main() {
+  requireArgs();
+  const startedAt = new Date();
+
+  const { transport, decision } = resolveTransport();
+  console.error(
+    `transport: ${decision.mode === 'local' ? 'local shell (no ssh)' : `ssh ${SSH}`} — ${decision.why}`,
+  );
+
+  const raw = collectProduction(transport);
+  const head = raw.head;
+  const index = indexProduction(raw);
+
+  // ── roster ────────────────────────────────────────────────────────────────
+  const { roster, unrostered } = buildRoster(index);
+  if (unrostered.length && !ACCEPT_ROSTER_CHANGE) {
+    console.error(`ROSTER DRIFT: ${unrostered.join(', ')} hold projects but are not on the roster.`);
+    console.error('Re-run with --accept-roster-change once you have decided what to do about them.');
+    process.exit(3);
+  }
+
+  // ── mail ──────────────────────────────────────────────────────────────────
+  let mail = { ok: false, mailbox: null, messages: {}, errors: {} };
+  let mailFidelity;
+  if (SKIP_MAIL) {
+    mailFidelity = { level: 'NONE', why: '--skip-mail was passed; no message bodies were read' };
+  } else {
+    console.error(`reading Gmail for ${roster.length} addresses (list + get only)...`);
+    mail = fetchMail(transport, roster, DEFAULTS.mailQuery);
+    if (!mail.ok) {
+      mailFidelity = { level: 'NONE', why: `Gmail unavailable: ${mail.error}` };
+      console.error(`  Gmail unavailable: ${mail.error}`);
+    } else {
+      const failed = Object.keys(mail.errors || {});
+      mailFidelity = failed.length
+        ? { level: 'PARTIAL', why: `read failed for ${failed.join(', ')}`, failed }
+        : { level: 'FULL', why: `mailbox ${mail.mailbox}, query "${DEFAULTS.mailQuery}"` };
+      console.error(`  mailbox ${mail.mailbox}, ${Object.values(mail.messages).filter(Boolean).reduce((n, m) => n + m.length, 0)} messages`);
+    }
+  }
+
+  // ── people ────────────────────────────────────────────────────────────────
+  const people = assemblePeople({ index, roster, mail, skipMail: SKIP_MAIL });
 
   const fingerprint = dbFingerprint(people);
 
@@ -662,6 +788,11 @@ function main() {
       cohort: DEFAULTS.cohortName,
       roster_size: people.length,
       sources: {
+        // Provenance, not a fact. This is the one meta field that legitimately
+        // differs between the two transports, and it is recorded rather than
+        // hidden: a reader must be able to tell how production was reached. The
+        // `people` array and `db_fingerprint` above do NOT vary with it.
+        transport: { mode: decision.mode, why: decision.why },
         database: `${DEFAULTS.dbName} via docker exec ${DEFAULTS.dbContainer} psql (SELECT only)`,
         tables: ['enrollments', 'cohorts', 'community_members', 'projects', 'build_intake', 'build_plans', 'student_tasks', 'github_connections'],
         mail: SKIP_MAIL ? null : `Gmail API users.messages.list + get as ${mail.mailbox || 'unknown'}, query "${DEFAULTS.mailQuery}"`,
@@ -688,9 +819,27 @@ function main() {
   console.error(`  ${named} of ${people.filter((p) => p.project_id).length} projects carry a name`);
 }
 
-try {
-  main();
-} catch (err) {
-  console.error(`buildStudentFactBase FAILED: ${err.message}`);
-  process.exit(1);
+if (require.main === module) {
+  try {
+    main();
+  } catch (err) {
+    console.error(`buildStudentFactBase FAILED: ${err.message}`);
+    process.exit(1);
+  }
 }
+
+/**
+ * Exported for the test beside this script, which drives the whole read-and-assemble
+ * path through a fake transport in BOTH modes and asserts the fingerprints match.
+ * Nothing here is exported for reuse by other production code; this script is the
+ * only caller.
+ */
+module.exports = {
+  collectProduction,
+  indexProduction,
+  buildRoster,
+  assemblePeople,
+  dbFingerprint,
+  pickBestEnrollment,
+  DEFAULTS,
+};
