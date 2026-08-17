@@ -122,7 +122,9 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
     happens:
       'We design the workflow end to end, build it with Claude against your real data and ' +
       'systems, then define what "good" means and measure against it before recommending ' +
-      'anything.',
+      'anything. The same build discipline our own people use applies here: acceptance ' +
+      'criteria written up front, and work confirmed against commits in your repository ' +
+      'rather than reported as done.',
     deliverables: [
       'Workflow design',
       'Claude-powered prototype',
@@ -197,14 +199,17 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
       'workflows are on your payroll.',
     happens:
       'Baseline assessment, a personalized path, then real building with Claude Code on a ' +
-      'company project, producing evidence a manager can actually inspect rather than a ' +
-      'completion percentage.',
+      'company project. The idea becomes a traceable plan -- requirements, releases, stories ' +
+      'and acceptance criteria -- written into your own repository, and each story carries a ' +
+      'prompt built from those requirements. Completion is confirmed against a real commit, ' +
+      'so what a manager inspects is evidence rather than a completion percentage.',
     deliverables: [
       'Initial skills assessment',
       'Personalized learning path',
       'Claude Code build workflow',
       'Real company project',
-      'GitHub evidence',
+      'Traceable plan in your own repo: requirements, stories, acceptance criteria',
+      'GitHub evidence, confirmed against commits',
       'Evaluations',
       'Executive dashboard',
       'Demo Day',

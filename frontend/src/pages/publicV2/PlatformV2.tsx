@@ -4,7 +4,13 @@ import SeoV2 from '../../components/publicV2/SeoV2';
 import MaturityLadder from '../../components/publicV2/MaturityLadder';
 import Roadmap12 from '../../components/publicV2/Roadmap12';
 import { Claim, canShow, Metric, SampleBadge, CapabilityNotice } from '../../components/publicV2/Claim';
-import { SHOWROOM_SURFACES, STUDIO_DESCRIPTION, DATA_EARNED } from '../../config/v2Platform';
+import {
+  SHOWROOM_SURFACES, STUDIO_DESCRIPTION, DATA_EARNED,
+  AUDIENCE_LABEL, AUDIENCE_BLURB, SurfaceAudience,
+} from '../../config/v2Platform';
+
+/** Management first: it is the buying question, and the page is sold upward. */
+const AUDIENCES: SurfaceAudience[] = ['management', 'team'];
 import './platformV2.css';
 
 /**
@@ -67,24 +73,51 @@ function PlatformV2(): React.ReactElement {
               <h2 id="cbv2-surfaces-title">What is live today</h2>
             </div>
 
-            <div className="cbv2-tabs" role="tablist" aria-label="Platform surfaces">
-              {visible.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  role="tab"
-                  className="cbv2-tab"
-                  aria-selected={s.key === active.key}
-                  onClick={() => setActiveKey(s.key)}
-                >
-                  {s.label}
-                </button>
-              ))}
+            {/*
+              Grouped by AUDIENCE, not listed flat.
+              A visitor is asking two different questions -- "what will I see?"
+              and "what will my people do all day?" -- and a single undivided row
+              of tabs answered neither. Each group is its own tablist so arrow
+              keys stay within a group, which is what the grouping implies.
+            */}
+            <div className="cbv2-surfacegroups">
+              {AUDIENCES.map((aud) => {
+                const inGroup = visible.filter((s) => s.audience === aud);
+                if (!inGroup.length) return null;
+                return (
+                  <div className="cbv2-surfacegroup" key={aud}>
+                    <p className="cbv2-surfacegroup__head">
+                      <span className="cbv2-surfacegroup__label">{AUDIENCE_LABEL[aud]}</span>
+                      <span className="cbv2-surfacegroup__blurb">{AUDIENCE_BLURB[aud]}</span>
+                    </p>
+                    <div
+                      className="cbv2-tabs"
+                      role="tablist"
+                      aria-label={AUDIENCE_LABEL[aud]}
+                    >
+                      {inGroup.map((s) => (
+                        <button
+                          key={s.key}
+                          type="button"
+                          role="tab"
+                          className="cbv2-tab"
+                          aria-selected={s.key === active.key}
+                          tabIndex={s.key === active.key ? 0 : -1}
+                          onClick={() => setActiveKey(s.key)}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="cbv2-surface" role="tabpanel" aria-label={active.label}>
               <div className="cbv2-surface__bar">
                 <strong>{active.label}</strong>
+                <span className="cbv2-surface__aud">{AUDIENCE_LABEL[active.audience]}</span>
                 <span className="cbv2-surface__where">{active.livesAt}</span>
                 <SampleBadge />
               </div>

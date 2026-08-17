@@ -17,9 +17,33 @@
  * is 0..1 in the contract and is presented as a percentage here.
  */
 
+/**
+ * Who a surface is for.
+ *
+ * The showroom listed every surface in one undifferentiated row, so a visitor
+ * could not tell which screens their executives would live in and which their
+ * workforce would. Those are two different buying questions — "what will I see?"
+ * and "what will my people do all day?" — and answering them in one flat list
+ * answered neither.
+ */
+export type SurfaceAudience = 'management' | 'team';
+
+export const AUDIENCE_LABEL: Record<SurfaceAudience, string> = {
+  management: 'What management sees',
+  team: 'What your team works in',
+};
+
+export const AUDIENCE_BLURB: Record<SurfaceAudience, string> = {
+  management:
+    'The rollups, the roster and the evidence behind every number — for the people accountable ' +
+    'for whether this is working.',
+  team: 'The screens your people are actually in, where the evidence gets produced.',
+};
+
 export interface ShowroomSurface {
   readonly key: string;
   readonly label: string;
+  readonly audience: SurfaceAudience;
   /** Registry claim key gating whether this may be shown at all. */
   readonly claimKey: string;
   readonly blurb: string;
@@ -39,6 +63,7 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
   {
     key: 'readiness',
     label: 'Executive AI readiness',
+    audience: 'management',
     claimKey: 'surface.readiness.rollup',
     blurb:
       'What a CIO or Chief People Officer sees: where the organization stands, how fast it ' +
@@ -67,6 +92,7 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
   {
     key: 'roster',
     label: 'Team roster and ladder',
+    audience: 'management',
     claimKey: 'surface.readiness.rollup',
     blurb:
       'Every person on the roster, their level on the nine-rank ladder, readiness, weekly ' +
@@ -104,6 +130,7 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
      */
     key: 'today',
     label: 'The daily learner view',
+    audience: 'team',
     claimKey: 'surface.readiness.rollup',
     blurb:
       'What each person on your team opens: the next step waiting for them, the skills they ' +
@@ -138,6 +165,7 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
      */
     key: 'individual',
     label: 'Team, individual view',
+    audience: 'management',
     claimKey: 'surface.readiness.rollup',
     blurb:
       'Click any person and the evidence opens: what they scored, what is left before they ' +
@@ -163,8 +191,57 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
     ],
   },
   {
+    /*
+     * The story-build system: idea -> gated plan -> the student builds it with
+     * Claude Code -> the platform VERIFIES against their repo.
+     *
+     * EVERY WORD HERE IS BOUNDED BY WHAT THE PIPELINE ACTUALLY DOES. There is no
+     * code generation anywhere in it: renderDocs.ts emits markdown and JSON, and
+     * repoWriter.ts is path-allowlisted to docs/**, CLAUDE.md and .colaberry/**
+     * and throws on anything else. So this must never say the platform builds the
+     * project, writes the code, or that agents build it. It plans, prompts and
+     * verifies; the human builds.
+     *
+     * Also barred, for the same evidence reasons: "connect your GitHub account",
+     * "one-click" or any OAuth/GitHub-App wording (it is a proof-of-push
+     * challenge on a repo the student brings), and any claim that tests verify
+     * the work (CI passing is explicitly not the bar).
+     */
+    key: 'storybuild',
+    label: 'Idea to shipped build',
+    audience: 'team',
+    claimKey: 'surface.storybuild',
+    blurb:
+      'Your people describe what they want to build. The platform interviews them, turns it ' +
+      'into a traceable plan, and writes it into their own repo as requirements, stories and ' +
+      'acceptance criteria — each with a Claude Code prompt built from those requirements. ' +
+      'Then it reads the repo and confirms each criterion against a real commit before a story ' +
+      'counts as done.',
+    livesAt: 'Portal, Projects and the story workspace',
+    shot: {
+      src: '/site-v2/shot-story-build.png',
+      alt:
+        'A story workspace: the user story with the requirement it fulfils, three acceptance ' +
+        'criteria showing nought of three confirmed, the generated Claude Code prompt, and the ' +
+        'repo connection explaining that the repository stays under the builder’s own ' +
+        'account and the platform never writes their code.',
+    },
+    stats: [
+      { value: 'REQ → story', label: 'Every story traces to a requirement' },
+      { value: '1 prompt', label: 'Per story, from your own requirements' },
+      { value: 'Your repo', label: 'The plan is written into it, not ours' },
+      { value: 'Confirmed', label: 'Against a real commit, not self-reported' },
+    ],
+    rows: [
+      { label: 'Requirements and stories generated', pct: 100 },
+      { label: 'Acceptance criteria per story', pct: 100 },
+      { label: 'Code written by the platform', pct: 0 },
+    ],
+  },
+  {
     key: 'workspace',
     label: 'Free company workspace',
+    audience: 'management',
     claimKey: 'surface.free.workspace',
     blurb:
       'One free account gives a manager both perspectives at once: the learner experience and ' +
