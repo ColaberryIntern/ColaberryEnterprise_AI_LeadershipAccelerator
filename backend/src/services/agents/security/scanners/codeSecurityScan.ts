@@ -34,7 +34,23 @@ export interface CodeFinding {
 
 export const VULN_PATTERNS: VulnPattern[] = [
   // SQL Injection
-  { name: 'SQL String Interpolation', category: 'sql_injection', pattern: /`[^`]*\$\{[^}]+\}[^`]*(?:SELECT|INSERT|UPDATE|DELETE|WHERE|FROM)/i, severity: 'critical', description: 'Template literal used in SQL query — use parameterized queries' },
+  // Matches an interpolated template literal that is ACTUALLY SQL.
+  //
+  // The previous pattern was `...\$\{...\}...(SELECT|INSERT|UPDATE|DELETE|WHERE|FROM)/i` and
+  // produced 229 hits of which 213 were noise: case-insensitive single keywords
+  // mean any English prose containing "from", "deleted" or "updated" matched, so
+  // `console.log(\`Extracted \${n} chars from \${file}\`)` was reported as critical
+  // SQL injection. A scanner that cries wolf 93% of the time trains people to
+  // ignore it, which is worse than not running it.
+  //
+  // Two changes do the work:
+  //   1. NO /i flag. SQL keywords are written uppercase in this codebase; English
+  //      prose is not. This alone removes the "from"/"deleted" class of noise.
+  //   2. Require a full statement SHAPE (verb + its object), not a lone keyword —
+  //      SELECT..FROM, INSERT INTO, UPDATE..SET, DELETE FROM.
+  // The leading lookahead keeps the requirement that the literal is interpolated;
+  // a fully static SQL string is not an injection risk.
+  { name: 'SQL String Interpolation', category: 'sql_injection', pattern: /`(?=[^`]*\$\{)[^`]*(?:SELECT\b[^`]*\bFROM\b|INSERT\s+INTO\b|UPDATE\b[^`]*\bSET\b|DELETE\s+FROM\b)/, severity: 'critical', description: 'Interpolated template literal used as a SQL statement — use parameterized queries, or escape identifiers' },
   { name: 'SQL Concatenation', category: 'sql_injection', pattern: /(?:query|sql)\s*[+=]\s*['"][^'"]*\+/i, severity: 'high', description: 'String concatenation in SQL query context' },
   // XSS
   { name: 'innerHTML Assignment', category: 'xss', pattern: /\.innerHTML\s*=/, severity: 'high', description: 'Direct innerHTML assignment — use textContent or sanitize' },

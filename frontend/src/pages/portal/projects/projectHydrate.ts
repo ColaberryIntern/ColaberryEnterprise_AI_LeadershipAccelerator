@@ -293,10 +293,27 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const nextUrl = tree.command_center_url ?? null;
   const urlChanged = nextUrl !== (p.commandCenterUrl ?? null);
 
-  const base: StudentProject = (!changed && !urlChanged && !adopted) ? p : {
+  // A project the server is actively describing is not being CREATED, whatever
+  // this device last wrote down. `status` was the one field this path never
+  // normalised, so a card stranded at `creating` — by the id-adoption race in
+  // `createProjectFromAnswers`, or simply by a reload inside the 7s assemble
+  // window — stayed stranded through every later sync. `BuildCard` takes its
+  // label from `status` and its numbers from `lists`, so the card rendered
+  // "Creating…" beside a complete, verified task tree and read as lost work.
+  // MEASURED 2026-08-18, production, ali@colaberry.com, project cce94c20.
+  //
+  // Repairing it HERE and not only at the race means every device already
+  // holding a stranded card heals on its next sync, with no reinstall and no
+  // localStorage surgery. Only `creating` is touched: `archived` and every
+  // other state the student or the server chose are none of this path's
+  // business.
+  const statusStale = p.status === 'creating';
+
+  const base: StudentProject = (!changed && !urlChanged && !adopted && !statusStale) ? p : {
     ...withServerTasks,
     ...(changed ? { lists } : {}),
     ...(urlChanged ? { commandCenterUrl: nextUrl } : {}),
+    ...(statusStale ? { status: 'ready' as StudentProject['status'] } : {}),
   };
   // Applied last and on the merged object, so a rename and a completion arriving
   // in the same pull both land, and the same-reference fast path survives when
