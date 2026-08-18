@@ -26,6 +26,7 @@
 import type {
   StudentProject, ProjectList, ProjectTask, ProjectReq, TaskDue, TaskState,
 } from './projectsStore';
+import { UUID_RE } from './projectIdentity';
 
 // ── the slice of the backend ProjectTreeDto this module consumes ──────────────
 export interface BackendTaskNode {
@@ -501,8 +502,11 @@ export const UNKNOWN_INVENTORY: ServerInventory = { known: false, ids: [], activ
  * demo is the literal `sample-salon`. That difference is what lets us tell a
  * project the SERVER produced from one the BROWSER produced, on a device whose
  * localStorage predates the `origin` field.
+ *
+ * The pattern itself lives in projectIdentity — it is shared with the store's
+ * id-adoption pass, and two copies of this regex is exactly the kind of pair
+ * that drifts.
  */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The backend project id this local project is bound to, or null if it is not

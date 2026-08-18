@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import salonData from './salonData.json';
+import { adoptServerIds, isUuid } from './projectIdentity';
 
 // ============================================================================
 // Portal-native project store — the student's "builds" live HERE (not Basecamp),
@@ -117,6 +118,13 @@ export type StudentProject = {
    * to it as a second, near-identical build. See projectHydrate.reconcileProjects.
    */
   pipelineProjectId?: string | null;
+  /**
+   * Pseudo ids (`p<epoch>`) this project used to be keyed by, before it adopted
+   * its server UUID. Kept so a workspace URL a student bookmarked — or has open
+   * in another tab — still resolves to the project after the heal.
+   * See projectIdentity.adoptServerIds.
+   */
+  legacyIds?: string[];
   reqs: ProjectReq[];
   lists: ProjectList[];
   activity: ProjectActivity[];
@@ -151,6 +159,44 @@ export type NewBuildAnswers = {
 // ── persistence ────────────────────────────────────────────────────────────
 const KEY = 'te_projects_v1';
 
+/**
+ * Move any storage keyed on a project id that just changed.
+ *
+ * Only the per-story acceptance ticks are keyed this way
+ * (`te_ws_acc_<projectId>_<taskId>`, written by ProjectWorkspacePage). Without
+ * this, healing a stale id would silently un-tick every box a student had
+ * checked — the heal would read to them as data loss.
+ */
+function migrateIdKeyedStorage(remapped: Array<{ from: string; to: string }>): void {
+  for (const { from, to } of remapped) {
+    const prefix = `te_ws_acc_${from}_`;
+    let keys: string[];
+    try { keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix)); }
+    catch { return; /* private mode */ }
+    for (const key of keys) {
+      try {
+        const value = localStorage.getItem(key);
+        if (value !== null) localStorage.setItem(`te_ws_acc_${to}_${key.slice(prefix.length)}`, value);
+        localStorage.removeItem(key);
+      } catch { /* quota / private mode — the tick is a note-to-self, not evidence */ }
+    }
+  }
+}
+
+/**
+ * Adopt server ids on the way out of storage, so a pseudo id already sitting in
+ * a student's browser heals on their next load rather than persisting forever.
+ * Writes back only when something actually moved, so this stays a no-op on the
+ * overwhelming majority of reads.
+ */
+function healProjectIds(list: StudentProject[]): StudentProject[] {
+  const { list: healed, remapped } = adoptServerIds(list);
+  if (!remapped.length) return list;
+  migrateIdKeyedStorage(remapped);
+  write(healed);
+  return healed;
+}
+
 function read(): StudentProject[] {
   try {
     const raw = localStorage.getItem(KEY);
@@ -166,9 +212,9 @@ function read(): StudentProject[] {
       if (stale) {
         const migrated = [buildSalonProject(), ...list.filter((p) => !p.sample)];
         write(migrated);
-        return migrated;
+        return healProjectIds(migrated);
       }
-      return list;
+      return healProjectIds(list);
     }
   } catch (err) {
     // Falling back to a re-seed is right (an unreadable cache is not a reason to
@@ -237,8 +283,29 @@ export function subscribe(fn: Listener): () => void {
 
 // ── reads ────────────────────────────────────────────────────────────────────
 export function loadProjects(): StudentProject[] { return read(); }
+/**
+ * Look a project up by its current id, falling back to any pseudo id it used to
+ * carry. The fallback is what keeps a workspace URL a student bookmarked (or
+ * still has open) working after the project adopts its server UUID.
+ */
 export function getProject(id: string): StudentProject | undefined {
-  return read().find((p) => p.id === id);
+  const list = read();
+  return list.find((p) => p.id === id)
+    ?? list.find((p) => p.legacyIds?.includes(id));
+}
+
+/**
+ * The id this project is REALLY keyed by now — its server UUID once adopted.
+ *
+ * A route param can still carry a pseudo id long after the heal: a bookmark, a
+ * tab left open, a link shared before the adoption. Resolving a route param
+ * through here is what stops that id reaching `/api/portal/workspace/*`, where
+ * a Zod `.uuid()` rejects it with a 400 that surfaces under whatever field the
+ * student was touching. Unknown ids pass through unchanged.
+ */
+export function canonicalProjectId(routeId: string): string {
+  if (!routeId) return routeId;
+  return getProject(routeId)?.id ?? routeId;
 }
 
 /**
@@ -279,11 +346,20 @@ export function removeProjectLocally(id: string): boolean {
 }
 
 export function claimBackendProject(localId: string, backendProjectId: string): void {
+  // A claim that is not a UUID cannot be adopted and must not be recorded: it
+  // would only travel into a /workspace/:projectId route and 400 there.
+  if (!isUuid(backendProjectId)) return;
   const list = read();
-  const p = list.find((x) => x.id === localId);
-  if (!p || p.pipelineProjectId === backendProjectId) return;
+  const p = list.find((x) => x.id === localId) ?? list.find((x) => x.legacyIds?.includes(localId));
+  if (!p) return;
+  if (p.pipelineProjectId === backendProjectId && p.id === backendProjectId) return;
   p.pipelineProjectId = backendProjectId;
-  write(list);
+  // ADOPT THE SERVER ID, don't just remember it. Recording the claim in the
+  // side-car field alone was the whole defect: the placeholder id stayed the
+  // project's identity, went into the workspace route, and was rejected 400.
+  const { list: adopted, remapped } = adoptServerIds(list);
+  migrateIdKeyedStorage(remapped);
+  write(adopted);
   notify();
 }
 
