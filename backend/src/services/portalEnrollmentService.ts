@@ -124,6 +124,20 @@ export async function selectCohort(enrollmentId: string, cohortId: string, now: 
   if (String((cohort as any).start_date).slice(0, 10) < today) return { ok: false, reason: 'cohort_started' };
 
   await enrollment.update({ cohort_id: cohortId });
+
+  // They are a student now — Reese's student intro fires here rather than
+  // waiting for their next login, so the greeting arrives while joining the
+  // class is still the thing they just did. Fire-and-forget and idempotent:
+  // the login path evaluates the same state as a backstop, which is what
+  // covers students enrolled by an admin or a payment webhook instead of by
+  // this route.
+  void (async () => {
+    try {
+      const { maybeSendWelcomes } = await import('./reese/reeseWelcomeService');
+      await maybeSendWelcomes(enrollmentId);
+    } catch { /* never allowed to affect cohort selection */ }
+  })();
+
   const view = await getEnrollmentView(enrollmentId, now);
   return { ok: true, changed: true, view: view! };
 }

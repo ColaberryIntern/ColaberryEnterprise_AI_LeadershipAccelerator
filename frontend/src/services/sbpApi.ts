@@ -32,8 +32,49 @@ export interface BuildState {
   project_id: string;
   status: BuildStatus;
   correlation_id: string | null;
-  gate: { ok: boolean; violations: GateViolation[] } | null;
+  /**
+   * `blocking` and `advisory` are split server-side (see sbpRoutes'
+   * BuildStateResponse). Both are optional here so an older backend mid-deploy
+   * simply yields nothing rather than the client tripping on a missing key.
+   *
+   * Do NOT show `violations` to a student as "why your build was refused": it
+   * is mostly advisory quality warnings, and doing exactly that is how someone
+   * blocked on an uncovered must-have got told about a redundant story instead.
+   */
+  gate: {
+    ok: boolean;
+    violations: GateViolation[];
+    blocking?: GateViolation[];
+    advisory?: GateViolation[];
+  } | null;
+  /**
+   * True once the plan is materialized into the portal's own tasks — the only
+   * signal that means "the student can actually see this". Optional for the
+   * same mid-deploy reason; `isDelivered` below falls back to the status.
+   */
+  delivered?: boolean;
   plan: BuildPlanSummary | null;
+}
+
+/**
+ * Did the plan actually reach the portal?
+ *
+ * `drafted` is the trap this helper exists to close. It reads like a success —
+ * the plan generated, the gate passed, the row is in the database — and it is
+ * not: nothing has been written to `student_tasks`, so the student sees the
+ * browser's fallback build. Only `published` and `awaiting_repo` mean delivered.
+ */
+export function isDelivered(state: BuildState): boolean {
+  if (typeof state.delivered === 'boolean') return state.delivered;
+  return state.status === 'published' || state.status === 'awaiting_repo';
+}
+
+/** The violations a student must act on, never the advisory ones. */
+export function blockingReasons(state: BuildState): GateViolation[] {
+  const gate = state.gate;
+  if (!gate) return [];
+  if (Array.isArray(gate.blocking)) return gate.blocking;
+  return [];
 }
 
 export interface StartBuildAnswers {
@@ -54,17 +95,14 @@ export interface StartBuildAnswers {
   target_weeks?: number;
 }
 
-/** A failure the UI must show rather than swallow. */
-export interface SbpError { status: number | null; message: string }
+// Failure classification lives in its own module so it can be tested without
+// dragging axios in. Re-exported here because every caller already imports the
+// API surface from this file.
+export type { SbpFailureKind, SbpError } from './sbpFailure';
+export { classifyError, describeFailure } from './sbpFailure';
+import { classifyError, type SbpError } from './sbpFailure';
 
-function toError(err: any): SbpError {
-  const status = err?.response?.status ?? null;
-  const message = err?.response?.data?.error
-    || (status === 404 ? 'The build pipeline is not enabled for your account yet.'
-      : status === 503 ? 'We are at capacity right now — try again in a few minutes.'
-        : err?.message || 'Something went wrong starting your build.');
-  return { status, message };
-}
+const toError = classifyError;
 
 /** One interview question, generated from the student's own idea. */
 export interface IntakeQuestion {
@@ -73,6 +111,11 @@ export interface IntakeQuestion {
   /** Why we're asking — shown under the field so the question isn't a black box. */
   why: string;
   placeholder: string;
+  /**
+   * 2-4 pickable example answers in the student's own domain. Optional because
+   * an older cached response has none — the UI must not assume they exist.
+   */
+  suggestions?: string[];
 }
 
 export interface IntakeQuestionsResult {
@@ -195,7 +238,7 @@ export async function pollBuild(
 
   while (Date.now() < deadline) {
     if (opts.signal?.aborted) {
-      return { ok: false, error: { status: null, message: 'Cancelled.' } };
+      return { ok: false, error: { status: null, kind: 'timeout', message: 'Cancelled.' } };
     }
     const result = await getBuildState(projectId);
     if (!result.ok) return { ok: false, error: result.error };
@@ -211,6 +254,7 @@ export async function pollBuild(
     timedOut: true,
     error: {
       status: null,
+      kind: 'timeout',
       message: 'Your build is taking longer than expected. It may still be running — reopen this page to check.',
     },
   };
@@ -245,7 +289,7 @@ export async function resolveBackendProjectId(): Promise<
     const created = await portalApi.post('/api/portal/projects', {});
     const id = created?.data?.id;
     if (typeof id !== 'string' || !id) {
-      return { ok: false, error: { status: null, message: 'Could not create a project for this build.' } };
+      return { ok: false, error: { status: null, kind: 'server_error', message: 'Could not create a project for this build.' } };
     }
     return { ok: true, projectId: id, created: true };
   } catch (err) {

@@ -25,13 +25,19 @@
     <meta property="og:image" content="%PUBLIC_URL%/colaberry-logo.png" />
     <meta name="twitter:image" content="%PUBLIC_URL%/colaberry-logo.png" />
 
-    <link rel="canonical" href="https://www.colaberry.com/" />
+    <!-- Canonical for crawlers that do not execute JS. SeoV2 overrides this
+         per-route at runtime, but the static value is what a non-JS crawler
+         indexes -- and it used to read https://www.colaberry.com/, telling search
+         engines that every page of THIS site was a duplicate of another domain. -->
+    <link rel="canonical" href="https://enterprise.colaberry.ai/" />
     <title>Colaberry Enterprise AI Leadership Accelerator</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Roboto+Mono:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js" defer></script>
+    <!--
+      Fonts are self-hosted in src/fonts/. They used to load from
+      fonts.googleapis.com here, which fired on every page BEFORE the consent
+      banner was answered, handing the visitor's IP and user-agent to Google
+      whatever they then chose. Same files, served from our own origin.
+    -->
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

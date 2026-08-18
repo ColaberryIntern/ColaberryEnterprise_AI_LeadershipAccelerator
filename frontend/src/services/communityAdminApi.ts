@@ -28,6 +28,9 @@ export interface AdminCommunityMember {
   free_access: boolean;
   // Management-portal role for staff (null when none / not staff).
   mgmt_role: string | null;
+  // The business account this person belongs to, or null for a regular
+  // individual account. Lets the roster distinguish the two at a glance.
+  org: { id: string; name: string; membership: 'manager' | 'member' } | null;
 }
 
 export async function fetchCommunityMembers(search?: string): Promise<AdminCommunityMember[]> {

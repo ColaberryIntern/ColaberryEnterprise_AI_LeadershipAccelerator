@@ -2,12 +2,20 @@ import { Op } from 'sequelize';
 import { OpenclawResponse, OpenclawLearning, OpenclawSignal, EngagementEvent, OpenclawConversation } from '../../../models';
 import { sequelize } from '../../../config/database';
 import type { AgentExecutionResult, AgentAction } from '../types';
+import { truncateWithMarker } from '../../../utils/truncateWithMarker';
 
 /**
  * OpenClaw Learning Optimization Agent
  * Analyzes engagement metrics by tone, timing, and topic.
  * Creates learning entries and identifies optimization opportunities.
  */
+
+// OpenclawLearning.metric_key is varchar(200) — the topic-keyword branch
+// below can overflow it (a title-fallback URL has no whitespace, so the
+// per-word length filter never applies; see git history / truncateWithMarker.ts
+// for the full story). Guarded at each write via truncateWithMarker() below.
+const METRIC_KEY_MAX_LENGTH = 200;
+
 export async function runOpenclawLearningOptimizationAgent(
   _agentId: string,
   config: Record<string, any>,
@@ -201,10 +209,15 @@ export async function runOpenclawLearningOptimizationAgent(
         const titleText = (signal as any)?.title || '';
         const tags: string[] = (signal as any)?.topic_tags || [];
 
-        // Extract keywords: use topic_tags if available, else split title
+        // Extract keywords: use topic_tags if available, else split title.
+        // truncateWithMarker guards both branches — a topic_tag can itself be
+        // long, and the split branch can degrade to a single whitespace-free
+        // token (see METRIC_KEY_MAX_LENGTH's comment above) when title falls
+        // back to a URL.
         const keywords = tags.length > 0
-          ? tags.map((t: string) => t.toLowerCase().trim())
-          : titleText.toLowerCase().split(/\s+/).filter((w: string) => w.length > 4).slice(0, 5);
+          ? tags.map((t: string) => truncateWithMarker(t.toLowerCase().trim(), METRIC_KEY_MAX_LENGTH))
+          : titleText.toLowerCase().split(/\s+/).filter((w: string) => w.length > 4).slice(0, 5)
+              .map((w: string) => truncateWithMarker(w, METRIC_KEY_MAX_LENGTH));
 
         for (const kw of keywords) {
           if (!topicGroups[kw]) topicGroups[kw] = { total_engagement: 0, count: 0 };

@@ -2,10 +2,8 @@ import cron from 'node-cron';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import nodemailer from 'nodemailer';
-import { v4 as uuidv4 } from 'uuid';
-import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment, AiAgent, AiAgentActivityLog } from '../models';
+import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment } from '../models';
 import { env } from '../config/env';
-import { runWithRequestContext } from '../utils/requestContext';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
 import { generateMessage, buildConversationHistory } from './aiMessageService';
@@ -19,6 +17,7 @@ import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { partitionNotifiable, isNotificationSuppressed } from './notifications/enrollmentNotificationSuppression';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
@@ -41,87 +40,12 @@ import CommunityRoom from '../models/CommunityRoom';
 import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom } from './sessionRecordingService';
 import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
-
-/**
- * Instrumentation wrapper for cron jobs.
- * Checks the agent registry for enabled/paused status, generates a trace_id,
- * measures duration, logs to ai_agent_activity_logs, and updates agent metrics.
- */
-async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Promise<void> {
-  // Trace propagation (P1-4): seed a trace_id into AsyncLocalStorage so every downstream AI call this
-  // job makes (getInstrumentedOpenAI / emitAiEvent) correlates to THIS run instead of emitting null.
-  const traceId = uuidv4();
-  const traced = () => runWithRequestContext({ traceId }, fn);
-
-  let agent: InstanceType<typeof AiAgent> | null = null;
-  try {
-    agent = await AiAgent.findOne({ where: { agent_name: agentName } });
-  } catch {
-    // If registry lookup fails, run the job anyway (don't break existing behavior)
-    await traced();
-    return;
-  }
-
-  // If agent not in registry, run untracked
-  if (!agent) {
-    await traced();
-    return;
-  }
-
-  // Check enabled and paused status
-  if (!agent.enabled || agent.status === 'paused') return;
-
-  const start = Date.now();
-  let result: 'success' | 'failed' = 'success';
-  let errorMsg: string | null = null;
-  let stackTrace: string | null = null;
-
-  try {
-    await agent.update({ status: 'running' });
-    await traced();
-  } catch (err: any) {
-    result = 'failed';
-    errorMsg = err.message || String(err);
-    stackTrace = err.stack || null;
-  }
-
-  const duration = Date.now() - start;
-  const newRunCount = (agent.run_count || 0) + 1;
-  const newAvgDuration = agent.avg_duration_ms
-    ? Math.round((agent.avg_duration_ms * (newRunCount - 1) + duration) / newRunCount)
-    : duration;
-
-  const updateFields: Record<string, any> = {
-    status: 'idle',
-    run_count: newRunCount,
-    avg_duration_ms: newAvgDuration,
-    last_run_at: new Date(),
-  };
-  if (result === 'failed') {
-    updateFields.error_count = (agent.error_count || 0) + 1;
-    updateFields.last_error = errorMsg;
-    updateFields.last_error_at = new Date();
-  }
-
-  try {
-    await agent.update(updateFields);
-    await AiAgentActivityLog.create({
-      id: uuidv4(),
-      agent_id: agent.id,
-      action: agentName,
-      result,
-      confidence: null,
-      reason: result === 'failed' ? errorMsg : `Completed in ${duration}ms`,
-      details: null,
-      trace_id: traceId,
-      duration_ms: duration,
-      stack_trace: stackTrace,
-      created_at: new Date(),
-    } as any);
-  } catch (logErr: any) {
-    console.error(`[Scheduler] Failed to log instrumentation for ${agentName}:`, logErr.message);
-  }
-}
+import { instrumentCronJob } from './cronInstrumentation';
+import {
+  isWithinSendWindow,
+  isWithinCallSchedule,
+  getCampaignSettingsFromRecord,
+} from './campaignSendWindow';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -388,80 +312,8 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
   }
 }
 
-/** Check if a voice call is within the campaign's call schedule */
-/**
- * Check if current time is within a schedule window (timezone-aware).
- * Used for voice calls, email, and SMS send windows.
- */
-function isWithinScheduleWindow(
-  tz: string,
-  startTime: string,
-  endTime: string,
-  activeDays: number[],
-): boolean {
-  try {
-    const nowStr = new Date().toLocaleString('en-US', { timeZone: tz });
-    const nowInTz = new Date(nowStr);
-    const day = nowInTz.getDay(); // 0=Sun, 1=Mon...
-    const hours = nowInTz.getHours();
-    const minutes = nowInTz.getMinutes();
-
-    if (!activeDays.includes(day)) return false;
-
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    const currentMinutes = hours * 60 + minutes;
-    const startMinutes = startH * 60 + startM;
-    const endMinutes = endH * 60 + endM;
-
-    return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-  } catch {
-    return true; // On error, allow the send
-  }
-}
-
-function isWithinCallSchedule(settings: Record<string, any>): boolean {
-  return isWithinScheduleWindow(
-    settings.call_timezone || 'America/Chicago',
-    settings.call_time_start || '09:00',
-    settings.call_time_end || '17:00',
-    settings.call_active_days || [1, 2, 3, 4, 5],
-  );
-}
-
-/**
- * Check if current time is within the email/SMS send window.
- * Uses send_time_start/end if configured, otherwise defaults to 08:00-21:00 CT.
- * Active days default to Mon-Sat (1-6) for email/SMS.
- */
-function isWithinSendWindow(settings: Record<string, any>): boolean {
-  return isWithinScheduleWindow(
-    settings.send_timezone || settings.call_timezone || 'America/Chicago',
-    settings.send_time_start || '08:00',
-    settings.send_time_end || '17:00',
-    settings.send_active_days || settings.call_active_days || [1, 2, 3, 4, 5],
-  );
-}
-
-/** Get campaign settings (with defaults) from a campaign record */
-function getCampaignSettingsFromRecord(campaign: any): Record<string, any> {
-  const defaults = {
-    test_mode_enabled: false,
-    test_email: '',
-    test_phone: '',
-    delay_between_sends: 120,
-    max_leads_per_cycle: 10,
-    call_time_start: '09:00',
-    call_time_end: '17:00',
-    call_timezone: 'America/Chicago',
-    call_active_days: [1, 2, 3, 4, 5],
-    max_call_duration: 300,
-    max_daily_calls: 50,
-    voicemail_enabled: true,
-    pass_prior_conversations: true,
-  };
-  return { ...defaults, ...(campaign.settings || {}) };
-}
+// Send/call window predicates now live in campaignSendWindow.ts so the campaign
+// watchdog can share them without importing this module (which would be circular).
 
 // ── Auto-Pacing: spread emails evenly across the send window ──────────────
 
@@ -1858,6 +1710,26 @@ export function startScheduler(): void {
     });
   });
 
+  // Reese ticket auto-resolve (2026-08-16) — daily sweep of open student_support
+  // (DM conversation) tickets. Registered in agentRegistrySeed.ts
+  // ('ReeseStudentSupportSupersessionResolver', seeded enabled:false until the
+  // reviewed historical clear succeeds) for the same instrumentCronJob() pause/
+  // kill-switch reason as the two crons above. Runs an hour after the follow-up
+  // sweep so all three of Reese's crons stay sequential and never collide.
+  cron.schedule('0 17 * * *', () => {
+    instrumentCronJob('ReeseStudentSupportSupersessionResolver', async () => {
+      const { resolveReeseStudentSupportSupersession } = await import(
+        '../intelligence/autonomy/reeseStudentSupportSupersessionResolver'
+      );
+      const result = await resolveReeseStudentSupportSupersession();
+      console.log('[Scheduler] Reese student_support supersession resolver:', {
+        checked: result.checked, closed: result.closed, breakdown: result.breakdown,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese student_support supersession resolver error:', err);
+    });
+  });
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(
@@ -2050,22 +1922,43 @@ export function startScheduler(): void {
     console.log('[Scheduler] PaySimpleWebhookHealth scheduled (*/15 * * * *)');
   }
 
+  // Renewal reminders, daily at 9am Central. Nothing on this platform charges a
+  // subscriber when their period ends, so this mails them a checkout link before
+  // it does (docs/RECURRING_BILLING_EXPOSURE.md). 9am CT because it is a message
+  // about somebody's money and it should land in their working day, not overnight.
+  //
+  // Ships dark. RENEWAL_REMINDERS_ENABLED=true is the switch, and turning it on
+  // starts mailing real paying customers, so it is deliberately not a default.
+  // The job is idempotent on (subscription_id, period_end, reminder_kind), so a
+  // container restart or a double-fire sends nothing a second time.
+  if (env.renewalRemindersEnabled) {
+    cron.schedule('0 9 * * *', () => {
+      instrumentCronJob('RenewalReminders', async () => {
+        const { runRenewalReminders } = await import('./renewal/renewalReminderService');
+        await runRenewalReminders({ send: true });
+      }).catch((err) => {
+        console.error('[Scheduler] Renewal reminder error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] RenewalReminders scheduled (0 9 * * * America/Chicago)');
+  }
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
-  cron.schedule('*/5 * * * *', async () => {
-    try {
+  cron.schedule('*/5 * * * *', () => {
+    instrumentCronJob('PreviewStackReaper', async () => {
       const { reapIdlePreviewStacks } = await import('./previewStackReaper');
       const result = await reapIdlePreviewStacks();
       if (result.stopped.length > 0) {
         console.log(`[PreviewReaper] Stopped ${result.stopped.length} idle stacks:`, result.stopped.join(', '));
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[PreviewReaper] error:', err?.message);
-    }
+    });
   });
 
   // Recover stale processing actions every 15 minutes
   cron.schedule('*/15 * * * *', () => {
-    recoverStaleActions().catch((err) => {
+    instrumentCronJob('StaleActionRecovery', () => recoverStaleActions().then(() => {})).catch((err) => {
       console.error('[Scheduler] Stale recovery error:', err);
     });
   });
@@ -2374,8 +2267,10 @@ export function startScheduler(): void {
 
   // -- Accelerator Session Lifecycle --
 
-  // Session reminders: check every 30 minutes (with dedup to prevent spam)
-  const sentReminders = new Set<string>(); // Track "sessionId-type" to prevent re-sending
+  // Session reminders: check every 30 minutes. Arming is persisted on the session
+  // row (reminder_24h_sent_at / reminder_1h_sent_at), NOT in process memory: this
+  // used to be an in-process Set, so every deploy re-armed both sends and the next
+  // sweep re-mailed the whole cohort — see ensureSessionReminderSchema.ts.
   cron.schedule('*/30 * * * *', () => {
     instrumentCronJob('SessionReminders', async () => {
       // 24-hour reminders
@@ -2386,12 +2281,19 @@ export function startScheduler(): void {
         await ensureSessionMeetLink(session).catch((err: any) =>
           console.error(`[Scheduler] Meet link ensure failed for session ${session.id}:`, err.message)
         );
-        const dedupKey = `${session.id}-24h`;
-        if (sentReminders.has(dedupKey)) continue; // Already sent this reminder
+        if (session.reminder_24h_sent_at) continue; // Already sent, and it survives restarts
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
-        for (const e of enrollments) {
+        // Withhold from anyone whose notifications are paused. NOTE: arming
+        // below still keys off the FULL roster, not this filtered list — a
+        // cohort where everyone is paused must still arm, or this session is
+        // re-entered every tick forever.
+        const { notifiable, suppressed } = partitionNotifiable(enrollments);
+        if (suppressed.length > 0) {
+          console.log(`[Scheduler] Session ${session.session_number}: withheld 24h reminder from ${suppressed.length} paused enrollment(s)`);
+        }
+        for (const e of notifiable) {
           await sendSessionReminder({
             to: e.email,
             fullName: e.full_name,
@@ -2405,20 +2307,24 @@ export function startScheduler(): void {
           }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
-          sentReminders.add(dedupKey);
-          console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
+          await session.update({ reminder_24h_sent_at: new Date() });
+          console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${notifiable.length} participant(s)`);
         }
       }
 
       // 1-hour reminders
       const upcoming1h = await getUpcomingSessions(1);
       for (const session of upcoming1h) {
-        const dedupKey1h = `${session.id}-1h`;
-        if (sentReminders.has(dedupKey1h)) continue; // Already sent this reminder
+        if (session.reminder_1h_sent_at) continue; // Already sent, and it survives restarts
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
-        for (const e of enrollments) {
+        // Same withholding as the 24h sweep; arming still keys off the full roster.
+        const { notifiable, suppressed } = partitionNotifiable(enrollments);
+        if (suppressed.length > 0) {
+          console.log(`[Scheduler] Session ${session.session_number}: withheld 1h reminder from ${suppressed.length} paused enrollment(s)`);
+        }
+        for (const e of notifiable) {
           await sendSessionReminder({
             to: e.email,
             fullName: e.full_name,
@@ -2432,8 +2338,8 @@ export function startScheduler(): void {
           }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
-          sentReminders.add(dedupKey1h);
-          console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
+          await session.update({ reminder_1h_sent_at: new Date() });
+          console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${notifiable.length} participant(s)`);
         }
       }
     }).catch((err: any) => {
@@ -2478,6 +2384,13 @@ export function startScheduler(): void {
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);
         for (const { enrollment, consecutiveMisses, missedTitles } of absentees) {
+          // Attendance is still RECORDED for a paused student (detectAbsentParticipants
+          // above already wrote the record) — pausing notifications must not quietly
+          // edit somebody's academic history. Only the mail is withheld.
+          if (isNotificationSuppressed(enrollment)) {
+            console.log(`[Scheduler] Withheld missed-session mail for a paused enrollment on session ${session.session_number}`);
+            continue;
+          }
           // Send missed session recap
           await sendMissedSessionEmail({
             to: enrollment.email,
@@ -3037,6 +2950,45 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] System health monitor: every 15 min (weekdays 7AM-6PM CT, Cory voice + email alerts)');
 
+  // ── Cron Job Health Monitor (BC #10099862873 P0, every 15 min, 24/7) ───────
+  // Extends alerting beyond the single scheduler-heartbeat special case above
+  // to every cron-triggered AiAgent: error-rate spikes and missed-runs, using
+  // run/error data instrumentCronJob() already collects. Runs 24/7 (unlike the
+  // business-hours health monitor) since a silently-failing job doesn't wait
+  // for business hours to matter. Not itself business-critical enough to run
+  // through instrumentCronJob's AiAgent lookup — it's a monitor over the
+  // registry, not a registry entry.
+  cron.schedule('10,25,40,55 * * * *', () => {
+    const { checkAllCronJobHealth } = require('./cronHealthAlertService');
+    checkAllCronJobHealth().catch((err: any) => {
+      console.error('[CronHealthAlert] Cron job health check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Cron job health monitor: every 15 min (24/7, error-rate + missed-run alerts)');
+
+  // ── Dashboard Threshold Watcher (BC #10099862873 P1, every 15 min, 24/7) ───
+  // Converts the Trust Center + Ingest Logs dashboards from pull-only to
+  // push-alerts, reusing their existing computed data (no new dashboard logic).
+  cron.schedule('12,27,42,57 * * * *', () => {
+    const { checkDashboardThresholds } = require('./dashboardThresholdWatcherService');
+    checkDashboardThresholds().catch((err: any) => {
+      console.error('[DashboardThresholdWatcher] Dashboard threshold check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Dashboard threshold watcher: every 15 min (24/7, Trust Center + Ingest Logs)');
+
+  // ── Error-Class Spike Watcher (BC #10099862873 P1, every 15 min, 24/7) ─────
+  // Evaluates the classified ai_events rows now emitted by auth middleware +
+  // apollo/ghl/basecamp/synthflow wrappers for a failure-rate spike per event
+  // type, and alerts through the shared alert service.
+  cron.schedule('13,28,43,58 * * * *', () => {
+    const { checkErrorClassSpikes } = require('./errorSpikeAlertService');
+    checkErrorClassSpikes().catch((err: any) => {
+      console.error('[ErrorSpikeAlert] Error-class spike check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Error-class spike watcher: every 15 min (24/7, auth + external API failure spikes)');
+
   // ── Build-log -> social drafter (BC #9985689786, weekly, Mon 6AM CT = 11:00 UTC) ──
   // Scans completed Tier-A build weeks and AI-drafts a #Colaberry post per
   // project/week. Draft-only — never auto-posts (see buildLogDraftService.ts).
@@ -3074,14 +3026,12 @@ export function startScheduler(): void {
   // Autonomous ingest insights — regenerate suggestion cards every 6 hours.
   // Never auto-applies; an admin must click Apply unless AUTONOMOUS_AUTOAPPLY=true.
   cron.schedule('0 */6 * * *', () => {
-    (async () => {
-      try {
-        const { runInsightsJob } = require('../jobs/autonomousIngestInsights');
-        await runInsightsJob();
-      } catch (err: any) {
-        console.error('[Scheduler] Autonomous ingest insights error:', err?.message);
-      }
-    })();
+    instrumentCronJob('AutonomousIngestInsights', async () => {
+      const { runInsightsJob } = require('../jobs/autonomousIngestInsights');
+      await runInsightsJob();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Autonomous ingest insights error:', err?.message);
+    });
   });
 
   // Anthropic content watcher — nightly at 02:00 UTC.

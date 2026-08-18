@@ -109,7 +109,44 @@ describe('the fallback set', () => {
   it('grows with the tier and always covers the safety guardrail', () => {
     expect(fallbackQuestions('workflow').length).toBeLessThan(fallbackQuestions('autonomous').length);
     for (const size of ['workflow', 'project', 'autonomous'] as const) {
-      expect(fallbackQuestions(size).some((q) => /never|must get right/i.test(q.question))).toBe(true);
+      // Asserted on the ANGLE, not the wording. The guardrail question is now
+      // phrased as "what would you want to look at yourself before it went
+      // out?" — the same angle asked in a way someone new to AI can answer, so
+      // matching on "never" would pin prose the rewrite is meant to change.
+      expect(fallbackQuestions(size).some((q) => q.id === 'must_get_right')).toBe(true);
+    }
+  });
+
+  it('every fallback question carries pickable suggestions', () => {
+    // The interview is unanswerable for someone new to AI without them: a blank
+    // box under "what must never happen" gets a vague answer, and the plan is
+    // then built on that. Suggestions are also where a student finds out what
+    // they are allowed to ask for.
+    for (const size of ['workflow', 'project', 'autonomous'] as const) {
+      for (const q of fallbackQuestions(size)) {
+        expect(q.suggestions.length).toBeGreaterThanOrEqual(2);
+        expect(q.suggestions.length).toBeLessThanOrEqual(6);
+        for (const sug of q.suggestions) expect(sug.trim().length).toBeGreaterThan(3);
+      }
+    }
+  });
+
+  it('offers oversight options a student would not know to ask for', () => {
+    // Angle 5 is the teaching moment: most of these students do not know a
+    // system can hold an action for approval or explain its reasoning.
+    const trust = fallbackQuestions('project').find((q) => q.id === 'trust_it')!;
+    const text = trust.suggestions.join(' | ').toLowerCase();
+    expect(text).toMatch(/before it sends/);
+    expect(text).toMatch(/undo/);
+    expect(text).toMatch(/why it decided/);
+  });
+
+  it('asks about their working day, not about system design', () => {
+    // The words that made these unanswerable cold. If one comes back, the
+    // interview has drifted back to interrogating an architect.
+    const text = JSON.stringify(fallbackQuestions('autonomous')).toLowerCase();
+    for (const jargon of ['guardrail', 'system of record', 'confidence threshold', 'autonomy boundary', 'escalation path']) {
+      expect(text).not.toContain(jargon);
     }
   });
 
@@ -138,7 +175,7 @@ describe('the ten angles', () => {
   const prompt = INTAKE_SYSTEM_PROMPT;
   const ORDER = [
     'THE GUARDRAIL',
-    'SYSTEMS OF RECORD',
+    'THE TOOLS',
     'WHEN IT IS NOT SURE',
     'THE MEASURE',
     'EARNING AUTONOMY',
@@ -163,20 +200,22 @@ describe('the ten angles', () => {
     // Systems 0/14 and guardrail 0/6 without an interview. A workflow-tier
     // student only gets five questions — these must be two of them.
     expect(prompt.indexOf('THE GUARDRAIL')).toBeLessThan(prompt.indexOf('THE JUDGEMENT'));
-    expect(prompt.indexOf('SYSTEMS OF RECORD')).toBeLessThan(prompt.indexOf('THE OPERATOR'));
+    expect(prompt.indexOf('THE TOOLS')).toBeLessThan(prompt.indexOf('THE OPERATOR'));
   });
 
   it('protects the two feature-generating angles from being crowded out', () => {
     // Confidence handling and earning autonomy are where preview, undo,
     // escalation and explanations come from. Without them a student builds a
     // system that assumes it is always right.
-    expect(prompt).toMatch(/Angles 3 and 5 are where the interesting features come from/);
+    // 9 joined 3 and 5: the standout question is where a student discovers what
+    // is possible, which is the same job as confidence handling and oversight.
+    expect(prompt).toMatch(/Angles 3, 5 and 9 are where the interesting features come from/);
     expect(prompt.indexOf('WHEN IT IS NOT SURE')).toBeLessThan(prompt.indexOf('TRIGGER AND RHYTHM'));
     expect(prompt.indexOf('EARNING AUTONOMY')).toBeLessThan(prompt.indexOf('THE JOB'));
   });
 
   it('asks for the standout and its cut together, not as separate questions', () => {
-    expect(prompt).toMatch(/Ask both halves together/);
+    expect(prompt).toMatch(/Both halves together/);
   });
 
   it('still lets the model skip what the student already said', () => {

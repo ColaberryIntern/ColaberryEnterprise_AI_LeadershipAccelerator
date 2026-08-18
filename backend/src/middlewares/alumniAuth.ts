@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
+import { logAuthFailure } from './authFailureLog';
 
 export interface AlumniPayload {
   sub: string;
@@ -32,7 +33,8 @@ export function requireAlumni(req: Request, res: Response, next: NextFunction): 
     }
     req.alumni = payload;
     next();
-  } catch {
+  } catch (err) {
+    logAuthFailure('alumni_auth_failed', err, 'alumni', req.ip);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

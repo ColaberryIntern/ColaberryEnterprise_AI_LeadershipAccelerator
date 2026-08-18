@@ -5,8 +5,10 @@
  * Effective predicates = the card's SECTION (bucket) rules ++ the card's OWN
  * `unlock_rules` (AND semantics — all must pass). "Completed" means a
  * `timeline_card_progress` row with status='completed' — the single signal
- * written by `onCardCompleted`. (An Evaluation only reaches 'completed' at ≥75%,
- * so "completed" already means "passed".)
+ * written by `onCardCompleted`. (An Evaluation only reaches 'completed' at or
+ * above `EVAL_PASS_THRESHOLD` — 0.70, see services/runtime/assessmentService —
+ * so "completed" already means "passed". Read the threshold from that constant;
+ * never restate the number here, it drifted once already.)
  *
  * Design: lock is a COMPUTED, read-time overlay — evaluated in `getFeed` and at
  * the open/complete choke points — never a persisted state, so there is no
@@ -50,6 +52,10 @@ export interface GateCard {
   week: number | null;
   program_id?: string | null;
   unlock_rules?: any;
+  /** The card's student-facing title. Optional only for legacy call sites; supply
+   *  it wherever you can — it is what lets a lock reason NAME the outstanding
+   *  work instead of pointing vaguely at a whole section. */
+  title?: string | null;
 }
 export interface GateContext {
   allCards: GateCard[];
@@ -78,28 +84,85 @@ export function normalizeRules(raw: any): UnlockPredicate[] {
   return out;
 }
 
+// ── naming the outstanding work ──────────────────────────────────────────────
+// A lock that says only "Complete the Learn section" is unactionable once a
+// student has most of the section done: it costs them days of hunting for the
+// one card they missed. Every lock reason therefore NAMES the outstanding
+// item(s) whenever their titles are known.
+
+/** Beyond this many named items the list collapses to "and N more" — a padlock
+ *  caption must stay one readable line, not a checklist. */
+const MAX_NAMED_ITEMS = 3;
+/** Titles longer than this are elided; long card titles otherwise overflow the tile. */
+const MAX_TITLE_LEN = 48;
+
+const quoteTitle = (raw: string): string => {
+  const clean = raw.trim().replace(/\s+/g, ' ');
+  const shown = clean.length > MAX_TITLE_LEN ? `${clean.slice(0, MAX_TITLE_LEN - 1).trimEnd()}…` : clean;
+  return `“${shown}”`;
+};
+
+/**
+ * PURE — render titles as a readable, bounded English list:
+ *   1 → “A”            2 → “A” and “B”
+ *   3 → “A”, “B” and “C”
+ *   5 → “A”, “B”, “C” and 2 more
+ */
+export function namedItemList(titles: string[]): string {
+  const parts = titles.slice(0, MAX_NAMED_ITEMS).map(quoteTitle);
+  const rest = titles.length - parts.length;
+  if (rest > 0) parts.push(`${rest} more`);
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * PURE — the student-facing name for a set of outstanding cards, or null when we
+ * cannot name them ALL. Naming a partial set would be worse than naming none:
+ * the student would finish the one card we listed and still find the padlock
+ * shut. Callers fall back to the authored section label in that case.
+ */
+function nameOutstanding(outstanding: GateCard[]): string | null {
+  if (!outstanding.length) return null;
+  const titles = outstanding.map((c) => (c.title || '').trim());
+  if (titles.some((t) => !t)) return null;
+  return namedItemList(titles);
+}
+
 /** PURE — is `pred` satisfied for `card` given the completion snapshot? */
 function predicateMet(pred: UnlockPredicate, card: GateCard, ctx: GateContext): { met: boolean; reason: UnmetReason } {
   if (pred.kind === 'card_complete') {
     // A card can't gate on its own completion — ignore any self-reference.
     const met = pred.card_id === card.id || ctx.completedCardIds.has(pred.card_id);
-    return { met, reason: { kind: pred.kind, label: pred.label || 'Complete the required activity first' } };
+    // An authored label wins (it is a deliberate override); otherwise name the card.
+    const target = ctx.allCards.find((c) => c.id === pred.card_id);
+    const label = pred.label
+      || (target ? nameOutstanding([target]) : null)
+      || 'Complete the required activity first';
+    return { met, reason: { kind: pred.kind, label } };
   }
-  if (pred.kind === 'section_complete') {
-    const scope = pred.scope || 'week';
-    const targets = ctx.allCards.filter((c) =>
-      c.id !== card.id && c.bucket === pred.bucket && ctx.isCompletable(c)
-      && (scope === 'all' || c.week === card.week));
-    const met = targets.every((c) => ctx.completedCardIds.has(c.id));   // vacuously true if none
-    return { met, reason: { kind: pred.kind, label: pred.label || `Finish the ${bucketLabel(pred.bucket)} tasks first` } };
-  }
-  // type_complete
+
   const scope = pred.scope || 'week';
-  const targets = ctx.allCards.filter((c) =>
-    c.id !== card.id && c.type === pred.type && ctx.isCompletable(c)
-    && (scope === 'all' || c.week === card.week));
-  const met = targets.every((c) => ctx.completedCardIds.has(c.id));
-  return { met, reason: { kind: pred.kind, label: pred.label || 'Finish the required activities first' } };
+  const inScope = (c: GateCard) =>
+    c.id !== card.id && ctx.isCompletable(c) && (scope === 'all' || c.week === card.week);
+
+  if (pred.kind === 'section_complete') {
+    const targets = ctx.allCards.filter((c) => c.bucket === pred.bucket && inScope(c));
+    const outstanding = targets.filter((c) => !ctx.completedCardIds.has(c.id));
+    const met = outstanding.length === 0;   // vacuously true if the section is empty
+    const named = nameOutstanding(outstanding);
+    const label = named
+      ? `${named} in the ${bucketLabel(pred.bucket)} section`
+      : pred.label || `Finish the ${bucketLabel(pred.bucket)} tasks first`;
+    return { met, reason: { kind: pred.kind, label } };
+  }
+
+  // type_complete — the item names alone identify the work; no section suffix.
+  const targets = ctx.allCards.filter((c) => c.type === pred.type && inScope(c));
+  const outstanding = targets.filter((c) => !ctx.completedCardIds.has(c.id));
+  const met = outstanding.length === 0;
+  const label = nameOutstanding(outstanding) || pred.label || 'Finish the required activities first';
+  return { met, reason: { kind: pred.kind, label } };
 }
 
 /** PURE — the lock verdict for one card. locked = ANY predicate unmet (AND). */
@@ -118,6 +181,7 @@ export function evaluateCardLock(card: GateCard, ctx: GateContext): GateResult {
 const toGateCard = (c: TimelineCard): GateCard => ({
   id: c.id, type: c.type, bucket: c.bucket, week: c.week,
   program_id: (c as any).program_id ?? null, unlock_rules: c.unlock_rules,
+  title: c.title,   // carried so a lock reason can NAME the outstanding card
 });
 
 /**

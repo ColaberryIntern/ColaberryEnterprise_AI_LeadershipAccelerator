@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../../utils/api';
 import { workforceCss, readTheme, writeTheme } from './themeKit';
 import StatusBadge from '../../../components/admin/shell/StatusBadge';
 import { getTicketTypeTone, getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
 import { fmtCentralDateTime } from '../../../utils/centralTime';
+import { assignDistinctAvatarColors } from '../../../utils/agentAvatarColor';
 
 /**
  * WorkforceOSPage — the AI Workforce Operating System. An executive opens one
@@ -23,8 +24,13 @@ interface Meeting { meeting_date: string; agenda: any; contributions: Array<{ sl
 // Distinct shape from Employee above on purpose: a Live Agent is a real, ticketed,
 // ProofDesk-governed operating agent, not a conceptual department-strategy persona
 // like the static AI_ORG directors — see the "Live Agents" section below.
-interface LiveAgent { id: string; agent_name: string; agent_type: string; category: string | null; description: string | null; enabled: boolean; live_status: string; ticket_count: number }
-interface LiveAgentActivityEvent { agent_id: string; agent_name: string; ticket_id: string; ticket_number: number | null; title: string; type: string; status: string; priority: string; occurred_at: string | null }
+// open_ticket_count (not ticket_count) — Workforce OS perf fix (2026-08-18): the
+// backend used to return a LIFETIME TOTAL under the name `ticket_count`, which read
+// as if it meant "open" and caused real founder confusion (12,574 lifetime across 6
+// agents vs. 4,154 open board-wide). Now genuinely open-only, renamed so the two
+// can never be silently conflated again. See liveAgentsService.ts.
+interface LiveAgent { id: string; agent_name: string; display_name: string; agent_type: string; category: string | null; description: string | null; enabled: boolean; live_status: string; open_ticket_count: number }
+interface LiveAgentActivityEvent { agent_id: string; agent_name: string; agent_display_name: string; ticket_id: string; ticket_number: number | null; title: string; type: string; status: string; priority: string; occurred_at: string | null }
 
 const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 const av = (color: string, name: string, cls = '') => <span className={`wf-av ${cls}`} style={{ background: color }}>{initials(name)}</span>;
@@ -59,6 +65,12 @@ const WorkforceOSPage: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Could not load the AI Workforce.'); } finally { setBusy(''); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // Collision-avoiding, not a bare per-id hash: assigned across the WHOLE current
+  // roster so every simultaneously-displayed card is guaranteed a different color
+  // (up to the 8-color palette) — a bare agentAvatarColor(id) call per card can and
+  // did collide live (cory-engine and InboxCaseEngine both landed on '#C2185B').
+  // Declared before the early `error` return below, per the Rules of Hooks.
+  const liveAgentColors = useMemo(() => assignDistinctAvatarColors(liveAgents.map((a) => a.id)), [liveAgents]);
 
   const toggleTheme = () => { const t = theme === 'dark' ? 'light' : 'dark'; setTheme(t); writeTheme(t); };
   const openOffice = async (slug: string) => { try { setOffice((await api.get(`/api/admin/workforce/employee/${slug}`)).data); } catch { setError('Could not open office.'); } };
@@ -160,12 +172,12 @@ const WorkforceOSPage: React.FC = () => {
           <div className="wf-dirs">
             {liveAgents.map((a) => (
               <Link to={`/admin/agents/${a.id}`} className="wf-emp" key={a.id} style={{ display: 'flex', textDecoration: 'none', color: 'inherit' }}>
-                {av('#7A5AF0', a.agent_name)}
+                {av(liveAgentColors[a.id], a.display_name)}
                 <div style={{ minWidth: 0 }}>
-                  <div className="nm">{a.agent_name}</div>
+                  <div className="nm">{a.display_name}</div>
                   <div className="rl">{a.category || a.agent_type}</div>
                 </div>
-                <div className={`wl ${a.live_status === 'online' ? 'busy' : ''}`}><b>{a.ticket_count}</b><br />tickets</div>
+                <div className={`wl ${a.live_status === 'online' ? 'busy' : ''}`}><b>{a.open_ticket_count}</b><br />open tickets</div>
               </Link>
             ))}
           </div>
@@ -191,7 +203,7 @@ const WorkforceOSPage: React.FC = () => {
                 key={ev.ticket_id}
                 style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
               >
-                <div className="rt">{ev.agent_name} · TK-{ev.ticket_number ?? '—'} · {ev.occurred_at ? fmtCentralDateTime(ev.occurred_at) : ''}</div>
+                <div className="rt">{ev.agent_display_name} · TK-{ev.ticket_number ?? '—'} · {ev.occurred_at ? fmtCentralDateTime(ev.occurred_at) : ''}</div>
                 <div className="sb" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {ev.title}
                   <StatusBadge label={getTicketTypeLabel(ev.type)} tone={getTicketTypeTone(ev.type)} />

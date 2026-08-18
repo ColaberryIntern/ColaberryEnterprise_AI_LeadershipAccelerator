@@ -153,11 +153,52 @@ F. *(real commit)* Wire ticket-linkage: a thin wrapper file (mirroring
 G. *(real commit)* Wire a reply loop if the agent is conversational, mirroring
    `reeseReplyService.ts`'s loop-guard/scope-guard pattern (never reply to your own
    messages; only reply within your own room membership).
+G.5. *(real commit, REQUIRED if this agent creates tickets — see below)* Satisfy
+   `directives/register-ticket-creating-agent.md`, the Agent Ticket Standard —
+   codified from real bugs found and fixed in all 6 of this platform's other
+   ticket-creating agents (cory-engine, CoryBrain, workforce_intelligence_engine,
+   InboxCaseEngine, Reese, bpos_orchestrator) during the 2026-08-15–17 audit sweep.
+   Any new agent that opens tickets (step F above) is exactly the kind of agent that
+   standard governs — do not treat it as optional or "can add later." Concretely,
+   before this agent is considered built:
+   1. The ticket-creation call's `entity_type`/`entity_id` (or title) dedup key is
+      stable across repeated cycles for the same finding — never a fresh id/UUID
+      regenerated every run (the exact live bug PR #1554 fixed for cory-engine:
+      1,731 duplicate tickets from a dedup key keyed on a per-cycle decision id).
+   2. `tools_granted` on the `AGENT_REGISTRY` entry (step E above) lists this
+      agent's real capabilities, re-verified against its actual code — not copied
+      from a sibling entry.
+   3. If this agent's tickets ever need to close on anything other than a human
+      manually resolving them, the resolver re-derives the SAME live signal the
+      ticket was opened under. **A ticket-age or elapsed-wall-clock-time check
+      ("close after N days untouched") is permanently banned as a closure
+      condition in this codebase** — it was removed once already for being
+      dishonest and this week's own history shows the temptation to reintroduce
+      it keeps recurring. Comparing two *persisted* timestamps to each other
+      (e.g. to order two records) is fine; comparing either to `Date.now()`/
+      `new Date()` to decide closure is exactly the forbidden pattern.
+   4. Register the resolver (if any) as a real `AiAgent` cron row
+      (`trigger_type: 'cron'`, a real `schedule`) — or state in the `AGENT_REGISTRY`
+      entry's `description` exactly why none is needed.
+   5. Any bulk/historical ticket cleanup ships as `--plan`/`--apply`/`--revert`,
+      never a single irreversible script, and is proven idempotent by actually
+      running `--apply` twice and confirming the second run makes zero additional
+      writes.
+   6. Check the checkable subset of all of the above by running
+      `backend/src/scripts/validateAgentTicketStandard.ts` against this agent's
+      real `agentName` (see that file's header for the exact invocation, both
+      local/dev via `ts-node` and production via `docker exec accelerator-backend
+      node dist/scripts/validateAgentTicketStandard.js <agentName>`). It is a
+      read-only diagnostic, not a blocking gate — it reports PASS/FAIL/INFO per
+      check; a FAIL means go fix the underlying thing, not silently ignore the
+      output.
 H. *(deploy + verify)* `tsc --noEmit` both stacks; unit tests (happy/failure/boundary/
    idempotency per CLAUDE.md's Mandatory Test Types); deploy; confirm a real message
    exchange and a real linked ticket live, then confirm the Agent Detail page renders
    real (not empty) identity/prompt/tickets — the same close-out verification Reese
-   Phase 1 used.
+   Phase 1 used. If step G.5 applied, also run
+   `validateAgentTicketStandard.ts` against the new agent live in production and
+   attach its real output to this build's `PROGRESS.md` entry.
 
 ## If this agent needs to be proactive (initiates contact on its own)
 
@@ -190,7 +231,8 @@ show once real) · ticket-linkage shape (`ticketType`/`entityType`/title-descrip
 templates) · reactive-only or proactive (and if proactive, the 4 safety-rail values
 chosen) · a ✅/⚠️ checklist (registry-entry-exists · identity-preview-clean ·
 persona-drafted · prompt-drafted · ticket-shape-defined · transparency-page-confirmed-
-generic-no-change-needed · governance-checklist-reviewed) · explicit confirmation nothing
+generic-no-change-needed · agent-ticket-standard-reviewed (step G.5, if this agent
+creates tickets) · governance-checklist-reviewed) · explicit confirmation nothing
 was actually created (zero real writes) · the exact next step if the producer wants to
 proceed to a real commit.
 
@@ -205,6 +247,15 @@ Before ANY agent built this way goes live:
    real linked ticket, real page render) BEFORE any proactive capability is added.
 4. A pilot-cohort or equivalent eligible-population gate is mandatory before any
    autonomous outreach ships, fail-closed by design — no exceptions.
+5. Any agent that creates tickets satisfies
+   `directives/register-ticket-creating-agent.md` (see step G.5 above) —
+   non-negotiable, not a "nice to have for high-volume agents only." The standard
+   was codified specifically because all 6 of this platform's existing
+   ticket-creating agents shipped without it and each needed a real bug fixed as a
+   result (stale dedup keys, generic display-name collapse, no resolution
+   mechanism at all, time-based fallback closures, non-idempotent bulk cleanups).
+   Run `backend/src/scripts/validateAgentTicketStandard.ts` against the new
+   agent's real name before considering this checklist item done.
 
 ## Worked example (CurriculumQA, preview only, done 2026-08-10)
 

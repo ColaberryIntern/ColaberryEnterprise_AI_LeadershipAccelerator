@@ -1,5 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import { ticketCreationLedgerHook } from '../services/workLedger/ticketCreationLedgerHook';
 
 export type TicketStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
 export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
@@ -265,6 +266,25 @@ Ticket.init(
     sequelize,
     tableName: 'tickets',
     timestamps: false,
+    // Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz) — the structural
+    // fix for ~90% of tickets having no work_ledger_events coverage. At least 3 real
+    // creation paths (services/company/ticketOrchestrator.ts's createTrackedTicket()
+    // family, and its own fallback bypass in routes/projectRoutes.ts) call
+    // Ticket.create() directly, skipping ticketService.ts's createTicket() — the only
+    // place a ledger event was being emitted. A model-level afterCreate hook is the one
+    // choke point every creation path passes through regardless of which service wrote
+    // it, so no future service wrapper can silently reintroduce this bug. Mirrors
+    // TimelineCard.ts's capeSkillMappingHook precedent exactly (dynamic import inside
+    // the hook to avoid a circular dependency with the service it calls — this file
+    // would otherwise import workLedger/*, which imports ../../models, which imports
+    // this file; defense-in-depth try/catch inside the hook itself so a ledger failure
+    // can never abort the ticket create it's attached to). See
+    // services/workLedger/ticketCreationLedgerHook.ts for the full rationale, the
+    // idempotency-key contract with ticketService.createTicket()'s own emit call, and
+    // the disclosed raw-SQL-bypass residual gap.
+    hooks: {
+      afterCreate: ticketCreationLedgerHook,
+    },
     indexes: [
       { fields: ['status'] },
       { fields: ['priority', 'status'] },
@@ -272,6 +292,12 @@ Ticket.init(
       { fields: ['parent_ticket_id'] },
       { fields: ['entity_type', 'entity_id'] },
       { fields: ['assigned_to_id'] },
+      // Workforce OS perf fix (2026-08-18) — documentation-only entry; the actual
+      // runtime index is created by ensureTicketCreatorIndexSchema.ts's raw SQL at
+      // boot (this repo never calls sequelize.sync() at boot). EXPLAIN ANALYZE
+      // confirmed every per-agent ticket-count query (liveAgentsService.ts,
+      // agentDetailService.ts) was doing a full Seq Scan on this column.
+      { fields: ['created_by_id'] },
     ],
   }
 );

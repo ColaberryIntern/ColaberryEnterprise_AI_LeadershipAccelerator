@@ -1,5 +1,6 @@
 import { createTicket, updateTicketStatus, addTicketComment, getTicketsByEntity } from '../ticketService';
 import { CaseMode, CaseState } from '../../types/inboxCase';
+import { getTicketCreatorAdminUserId } from '../agentBlueprint/ticketCreatorIdentitySeed';
 
 // Bridges the Inbox Intel Case Resolution Engine into the existing Tickets
 // board (Ali: "All work should be done in a ticket by the agents... I can
@@ -90,13 +91,32 @@ async function advanceTicketTo(ticketId: string, target: TicketStatus, current: 
 // rather than trying to un-terminate the old one).
 export async function ensureCaseTicket(caseId: string, title: string, mode: CaseMode, openedBy: string): Promise<void> {
   try {
+    // Agent Alias & Identity Fix (forward-fix) — safe to stamp InboxCaseEngine's
+    // real AdminUser identity on the assignee fields going forward. Unlike
+    // cory-engine's Review tickets, this ticket's status:'todo' (see
+    // BOARD_ADJACENCY/mapCaseStateToTicketStatus above) is NEVER a stable end
+    // state — mapCaseStateToTicketStatus() only ever targets in_progress/
+    // in_review/done, so 'todo' is passed through only as a transient BFS hop
+    // en route, never left sitting there for ticketManagementAgent.ts's
+    // auto-dispatch sweep to find. Stamping assigned_to_id here, if anything,
+    // shrinks the tiny pre-existing window where that transient hop could
+    // theoretically race the sweep — it never widens it.
+    const inboxCaseAdminUserId = await getTicketCreatorAdminUserId('InboxCaseEngine');
+    // Agent Quality Cleanup, Item 4 — every ticket used to get the byte-
+    // identical description below regardless of what the case was actually
+    // about, so the board's ticket list told you nothing beyond "some case
+    // exists." `title` is already real, per-case content this function
+    // receives (the case's real subject) — it was just never threaded into
+    // the description. No fabricated detail: leads with the real title,
+    // keeps the process-narrative sentence after it (nothing lost, only added).
     await createTicket({
       title: `[Inbox Case] ${title}`,
-      description: `Resolve-Work case (${mode.toLowerCase()}) opened by ${openedBy}. Tracks Discover -> Assess -> Plan -> Approve -> Execute -> Verify -> Close.`,
+      description: `${title}\n\nResolve-Work case (${mode.toLowerCase()}) opened by ${openedBy}. Tracks Discover -> Assess -> Plan -> Approve -> Execute -> Verify -> Close.`,
       type: 'inbox_case' as any,
       source: 'inbox_case',
       created_by_type: ACTOR_TYPE,
       created_by_id: ACTOR_ID,
+      ...(inboxCaseAdminUserId ? { assigned_to_type: 'ai_staff' as const, assigned_to_id: inboxCaseAdminUserId } : {}),
       entity_type: 'inbox_case',
       entity_id: caseId,
       metadata: { case_id: caseId, mode },

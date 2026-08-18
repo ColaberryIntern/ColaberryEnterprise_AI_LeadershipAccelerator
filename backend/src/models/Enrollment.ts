@@ -44,6 +44,15 @@ export interface EnrollmentAttributes {
    *  payment_status='paid'; free-tier/Explorer portal access is unaffected. See
    *  contentEntitlement.ts. Format: 'YYYY-MM-DD'. */
   access_starts_at?: string | null;
+  /** Nullable per-student notification pause. NULL (the default for every
+   *  pre-existing row) = notifiable, unchanged behavior. Set = the Accelerator
+   *  senders keyed on this enrollment (session reminders, missed-session mail)
+   *  must withhold. This is the enrollment-side equivalent of the lead-side
+   *  unsubscribe machinery, which these senders never consulted. See
+   *  services/notifications/enrollmentNotificationSuppression.ts. */
+  notifications_paused_at?: Date | string | null;
+  /** Why the pause was applied, for the operator who finds it later. */
+  notifications_paused_reason?: string | null;
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -84,6 +93,8 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare enrollment_type: 'standard' | 'explorer';
   declare avatar_data_url: string | null;
   declare access_starts_at: string | null;
+  declare notifications_paused_at: Date | string | null;
+  declare notifications_paused_reason: string | null;
   declare created_at: Date;
 }
 
@@ -262,6 +273,17 @@ Enrollment.init(
       // (see contentEntitlement.ts hasFullCurriculumAccess). Free-tier access is
       // never affected by this field.
       type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    notifications_paused_at: {
+      // NULL = notifiable (every pre-existing row). Set = the Accelerator
+      // senders keyed on this enrollment must withhold. Column added additively
+      // by db/ensureEnrollmentNotificationSchema.ts.
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    notifications_paused_reason: {
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     created_at: {

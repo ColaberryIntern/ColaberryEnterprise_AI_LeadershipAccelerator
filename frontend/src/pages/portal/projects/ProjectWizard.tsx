@@ -35,12 +35,39 @@ const SIZES: { key: BuildSize; title: string; depth: string; desc: string }[] = 
 
 const STEPS = ['Your idea', 'Sharpen it', 'Review & confirm'];
 
+// These mirror startSchema in backend/src/routes/sbpRoutes.ts. They are enforced
+// HERE, in the box, because the alternative is what happened to Taiwo Oludimimu
+// on 2026-08-14: he pasted a full requirements document into an interview
+// answer, pressed Confirm, and the server refused the request on a length he
+// was never shown, on a field he never filled in. A limit a student cannot see
+// until they have violated it is not a limit, it is a trapdoor.
+const IDEA_MAX = 20_000;
+const ANSWER_MAX = 4_000;
+const NAME_MAX = 200;
+
+/** Shows a count only once it is worth knowing about. */
+const Counter: React.FC<{ value: string; max: number }> = ({ value, max }) => {
+  if (value.length < max * 0.8) return null;
+  const full = value.length >= max;
+  return (
+    <div className="small" style={{ marginTop: 4, color: full ? '#B5710A' : undefined, opacity: full ? 1 : .75 }}>
+      {value.length.toLocaleString()} / {max.toLocaleString()} characters
+      {full && ' — that is as much as we can take here. Anything more is best kept for the build itself.'}
+    </div>
+  );
+};
+
 const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise<void> }> = ({ onCreate }) => {
   const demo = useIsExplorer();
   const [step, setStep] = useState(1);
+  const [qIndex, setQIndex] = useState(0);   // which interview question is on screen
   const [idea, setIdea] = useState('');
   const [name, setName] = useState('');
-  const [size, setSize] = useState<BuildSize>('project');
+  // Size is no longer asked. A student cannot know on day one whether their idea
+  // is "8-12 requirements" or "30-40" — that is a judgement about a system that
+  // does not exist yet, and the pipeline works it out from the interview anyway.
+  // Held as a constant so the request shape and the tier targets are unchanged.
+  const size: BuildSize = 'project';
   const [weeks, setWeeks] = useState(6);
 
   // Step 2 is server-driven. `generated` false means the model was unreachable
@@ -58,6 +85,8 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   const answered = questions
     .map((q) => ({ id: q.id, question: q.question, answer: (replies[q.id] || '').trim() }))
     .filter((a) => a.answer.length > 0);
+
+  const currentQ = questions[qIndex] ?? null;
 
   const answers: NewBuildAnswers = { idea, name, size, weeks, answers: answered };
 
@@ -98,21 +127,10 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
         <div className="card pjw-pane">
           <h3>What do you want to build?</h3>
           <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise; the more you pour out here, the better we shape it. The next step reads what you wrote and asks you about it.</p>
-          <textarea value={idea} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
+          <textarea value={idea} maxLength={IDEA_MAX} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
+          <Counter value={idea} max={IDEA_MAX} />
           <label className="pjw-label">Give it a name (optional)</label>
-          <input className="txt" value={name} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
-          <label className="pjw-label">How big is what you're building?</label>
-          <div className="pjw-sizes">
-            {SIZES.map((sz) => (
-              <button key={sz.key} type="button" className={`pjw-size${size === sz.key ? ' sel' : ''}`} onClick={() => setSize(sz.key)}>
-                <span className="rb" />
-                <span className="sz-b">
-                  <span className="sz-t">{sz.title} <span className="sz-time">{sz.depth}</span></span>
-                  <span className="sz-d">{sz.desc}</span>
-                </span>
-              </button>
-            ))}
-          </div>
+          <input className="txt" value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
           <div className="pjw-actions">
             <button className="btn primary grow" disabled={idea.trim().length < 20} onClick={goSharpen}>Sharpen my idea
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -153,24 +171,75 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
                   ? 'These come from what you just wrote. Answer what you can — anything you skip, we infer.'
                   : 'Our standard scoping questions. Answer what you can — anything you skip, we infer.'}
               </p>
-              {questions.map((q) => (
-                <div key={q.id}>
-                  <label className="pjw-label" htmlFor={`q-${q.id}`}>{q.question}</label>
-                  {q.why && <div className="small" style={{ opacity: .75, margin: '-2px 0 6px' }}>{q.why}</div>}
-                  <input
-                    id={`q-${q.id}`}
+              {/* ONE question at a time. Seven boxes on a page reads as a form and
+                  gets form answers — short, hedged, and written to get to the
+                  end. One at a time, with the count visible so it feels finite,
+                  gets a sentence that is actually about their work. */}
+              {currentQ && (
+                <div className="pjw-q">
+                  <div className="pjw-qprog">
+                    <span className="small">Question {qIndex + 1} of {questions.length}</span>
+                    <span className="pjw-qbar" aria-hidden="true">
+                      <i style={{ width: `${((qIndex + 1) / questions.length) * 100}%` }} />
+                    </span>
+                  </div>
+
+                  <label className="pjw-label" htmlFor={`q-${currentQ.id}`} style={{ fontSize: 17 }}>{currentQ.question}</label>
+                  {currentQ.why && <div className="small" style={{ opacity: .75, margin: '-2px 0 10px' }}>{currentQ.why}</div>}
+
+                  <textarea
+                    id={`q-${currentQ.id}`}
                     className="txt"
-                    value={replies[q.id] || ''}
-                    placeholder={q.placeholder}
-                    onChange={(e) => setReplies((r) => ({ ...r, [q.id]: e.target.value }))}
+                    style={{ minHeight: 96 }}
+                    maxLength={ANSWER_MAX}
+                    value={replies[currentQ.id] || ''}
+                    placeholder={currentQ.placeholder}
+                    onChange={(e) => setReplies((r) => ({ ...r, [currentQ.id]: e.target.value }))}
                   />
+                  <Counter value={replies[currentQ.id] || ''} max={ANSWER_MAX} />
+
+                  {/* Tappable example answers. Half of why a beginner can answer
+                      this at all, and where they find out what they can ask for
+                      — "let me undo it afterwards" is not a thing most people
+                      know to want. Tapping fills the box so they can edit it,
+                      rather than submitting for them. */}
+                  {currentQ.suggestions && currentQ.suggestions.length > 0 && (
+                    <div className="pjw-sugs">
+                      <span className="small" style={{ opacity: .75 }}>Not sure? Start from one of these:</span>
+                      <div className="pjw-sugrow">
+                        {currentQ.suggestions.map((sug) => (
+                          <button
+                            key={sug}
+                            type="button"
+                            className="pjw-sug"
+                            onClick={() => setReplies((r) => ({ ...r, [currentQ.id]: sug }))}
+                          >
+                            {sug}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
+              )}
+
               <div className="pjw-actions">
-                <button className="btn ghost" onClick={() => setStep(1)}>Back</button>
-                <button className="btn primary grow" onClick={() => setStep(3)}>Review &amp; confirm
-                  <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                <button
+                  className="btn ghost"
+                  onClick={() => (qIndex === 0 ? setStep(1) : setQIndex((i) => i - 1))}
+                >
+                  Back
                 </button>
+                {qIndex < questions.length - 1 ? (
+                  <button className="btn primary grow" onClick={() => setQIndex((i) => i + 1)}>
+                    {(replies[currentQ?.id || ''] || '').trim() ? 'Next' : 'Skip this one'}
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                ) : (
+                  <button className="btn primary grow" onClick={() => setStep(3)}>Review &amp; confirm
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                )}
               </div>
             </>
           )}

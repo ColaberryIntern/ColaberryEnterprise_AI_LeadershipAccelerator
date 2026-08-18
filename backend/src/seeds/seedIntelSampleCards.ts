@@ -8,9 +8,20 @@
  * a live LLM or a network feed; (2) the "sample Timeline Cards" deliverable.
  *
  * Idempotent: keyed on metadata.sample_key === slug, program-wide (cohort_id
- * null), published. Re-running updates the card in place — never duplicates.
- * MANUAL/dev validation seed (not wired into boot); the live pipeline is the
- * production source. Run: `node dist/seeds/seedIntelSampleCards.js`.
+ * null). Re-running updates the card in place — never duplicates.
+ *
+ * MANUAL/dev validation seed. The live pipeline is the production source.
+ * Run: `node dist/seeds/seedIntelSampleCards.js`, or set
+ * SEED_INTEL_SAMPLE_CARDS=true to have boot run it on a fresh dev/preview DB.
+ *
+ * This docstring used to claim "not wired into boot", and was wrong — server.ts
+ * called it unconditionally on every start, which is how a corrected card kept
+ * reverting in production. Boot now honours the env flag, so the claim is true
+ * again; keep it that way.
+ *
+ * An update deliberately does NOT touch `visibility`. Re-publishing a card an
+ * admin had archived is what turned this seed from a convenience into a thing
+ * that fought its operators. Only a freshly created card is published.
  */
 import { sequelize } from '../config/database';
 import TimelineCard from '../models/TimelineCard';
@@ -44,7 +55,12 @@ export const META: Record<string, SampleMeta> = {
     summary: 'Splitting exploration from editing, using subagents, and keeping context lean.',
     reflection: 'Which exploration task would you delegate to a read-only subagent first?',
     discussion: 'What is the right boundary between exploration and mutation in your agents?',
-    video: { url: 'https://www.youtube.com/watch?v=aihgAvpirDU', title: 'How Claude Code Works in Large Codebases', presenter: 'Anthropic' },
+    // Was aihgAvpirDU, which was removed from YouTube (oEmbed 404) and left 145
+    // students with a dead player. Fixed in the DB on 2026-08-12 and silently
+    // reverted hours later by this seed, which re-asserts all 10 sample cards on
+    // every boot — so the seed is the only durable place to fix it. Replacement
+    // verified via oEmbed author_name: channel "Claude", 170s.
+    video: { url: 'https://www.youtube.com/watch?v=6bs5b4FltCU', title: 'How Claude Code Works', presenter: 'Claude' },
   },
   ai_quote_of_the_day: {
     title: 'Trust Before Intelligence', render_band: 'intel', bucket: 'reflect',
@@ -118,7 +134,10 @@ export async function seedIntelSampleCards(): Promise<{ created: string[]; updat
     if (existingId) {
       const card = await TimelineCard.findByPk(existingId);
       if (card) {
-        await card.update({ title: m.title, description: m.summary, metadata, visibility: 'published', status: 'active' });
+        // No `visibility` here on purpose — see the header. An archived sample
+        // card stays archived; the seed refreshes its content, never its
+        // publication state.
+        await card.update({ title: m.title, description: m.summary, metadata, status: 'active' });
         updated.push(slug);
       }
     } else {

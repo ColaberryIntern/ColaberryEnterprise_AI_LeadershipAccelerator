@@ -10,6 +10,7 @@ import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { studentSignals } from '../runtime/runtimeService';
 import { computeEmploymentReadiness } from '../runtime/employmentReadiness';
 import { computeCertificationReadiness } from '../runtime/certificationReadiness';
+import { mapWithConcurrency } from '../../utils/concurrencyLimit';
 
 export interface StudentRollup {
   id: string; name: string; cohort_id: string | null;
@@ -33,6 +34,22 @@ export interface SchoolSignals {
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
+// Workforce OS perf fix (2026-08-18, session CC-20260818-wf9k) — the per-student
+// roster loop below used to be `for (const e of enrollments) { await
+// studentSignals(e.id); ... }`, a fully sequential N+1: ~4 queries per student x
+// up to `cap` students, one at a time. Measured live on production: 3,431ms for
+// briefing() (this function's only caller besides runDailyMeeting(), which
+// short-circuits when today's meeting already exists) — the single dominant cost
+// of the whole Workforce OS page load (every other parallel call on that page
+// measured under 300ms). studentSignals() is a pure read (no writes except
+// getProgressionSummary()'s StudentLevel.findOrCreate(), which is keyed uniquely
+// per enrollment_id, so concurrent calls for DIFFERENT students never race).
+// Capped at 15 concurrent — under config/database.ts's pool `max: 20` (whose own
+// comment already anticipates "25 concurrent students + CB PMO batch headroom"),
+// leaving headroom for the other parallel calls the Workforce OS page fires on
+// the same request (roster/live-agents/etc. share this same connection pool).
+const STUDENT_SIGNAL_CONCURRENCY = 15;
+
 /** Gather the school-wide signal vector. Capped roster for a responsive home;
  *  large schools should move this to a nightly snapshot (see PHASE_4.md). */
 export async function gatherSignals(cap = 200): Promise<SchoolSignals> {
@@ -40,8 +57,7 @@ export async function gatherSignals(cap = 200): Promise<SchoolSignals> {
   const levels = await StudentLevel.findAll();
   const levelByEnrollment = new Map(levels.map((l) => [l.enrollment_id, l.architect_readiness]));
 
-  const roster: StudentRollup[] = [];
-  for (const e of enrollments) {
+  const roster: StudentRollup[] = await mapWithConcurrency(enrollments, STUDENT_SIGNAL_CONCURRENCY, async (e) => {
     const sig = await studentSignals(e.id);
     const emp = computeEmploymentReadiness(sig);
     const cert = computeCertificationReadiness(sig);
@@ -52,13 +68,13 @@ export async function gatherSignals(cap = 200): Promise<SchoolSignals> {
     const started = sig.xp.builder > 0 || sig.xp.learning > 0 || sig.portfolio.entries > 0 || attendance > 0;
     const at_risk = started && (emp.overall < 30 || (attendance > 0 && attendance < 60));
     const excelling = emp.overall >= 70 || architect >= 0.7;
-    roster.push({
+    return {
       id: e.id, name: (e as any).full_name || (e as any).email || 'Student', cohort_id: e.cohort_id ?? null,
       employment: emp.overall, band: emp.band, cert_pass: cert.pass_probability, architect_readiness: architect,
       builder_xp: sig.xp.builder, portfolio: sig.portfolio.entries, github_commits: sig.github.commits,
       attendance, started, at_risk, excelling,
-    });
-  }
+    };
+  });
   // Averages reflect students who have actually started (fall back to all).
   const startedRoster = roster.filter((s) => s.started);
   const forAvg = startedRoster.length ? startedRoster : roster;

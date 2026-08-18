@@ -21,6 +21,7 @@ import { getSetting } from './settingsService';
 import { emitAlert } from './alertService';
 import { logAiEvent } from './aiEventService';
 import { rebuildCampaignQueue } from './campaignRecoveryService';
+import { isCampaignWithinSendWindow } from './campaignSendWindow';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,22 +121,48 @@ async function checkNoRecentSends(checks: WatchdogCheck[]): Promise<void> {
     },
   });
 
+  // Silence outside the send window. Overnight, at weekends, and before the
+  // window opens, "0 sends with a pending backlog" is the CORRECT state — the
+  // scheduler is deliberately holding traffic until morning, exactly as
+  // isWithinSendWindow() instructs it to. Alerting on it fired this warning
+  // every cycle, all night, every night, about healthy campaigns; the backlog
+  // it quoted was simply tomorrow's queue.
+  //
+  // Deliberately evaluated per campaign against each campaign's OWN window
+  // rather than one global business-hours guess, because send_time_start/end
+  // and send_active_days are per-campaign settings.
+  const activeCampaigns = await Campaign.findAll({ where: { status: 'active' } });
+  const sendingCampaigns = activeCampaigns.filter((c) => isCampaignWithinSendWindow(c));
+
+  if (recentSends === 0 && overduePending > 0 && sendingCampaigns.length === 0) {
+    checks.push({
+      name: 'no_recent_sends',
+      status: 'ok',
+      detail: `0 sends in last 10 min, ${overduePending} pending — no campaign is inside its send window (quiet period)`,
+    });
+    return;
+  }
+
   if (recentSends === 0 && overduePending > 0) {
     checks.push({
       name: 'no_recent_sends',
       status: 'warning',
-      detail: `0 sends in last 10 min but ${overduePending} overdue pending actions exist`,
+      detail: `0 sends in last 10 min but ${overduePending} overdue pending actions exist (${sendingCampaigns.length} campaign(s) inside send window)`,
     });
 
     await emitAlert({
       type: 'warning',
       severity: 3,
       title: 'Campaign Watchdog: No sends in 10 minutes',
-      description: `No outbound messages sent in the last 10 minutes, but ${overduePending} actions are overdue. The scheduler may be stalled or paused.`,
+      description: `No outbound messages sent in the last 10 minutes, but ${overduePending} actions are overdue and ${sendingCampaigns.length} campaign(s) are inside their send window. The scheduler may be stalled or paused.`,
       sourceType: 'system',
       impactArea: 'campaigns',
       urgency: 'high',
-      metadata: { overdue_pending: overduePending, recent_sends: 0 },
+      metadata: {
+        overdue_pending: overduePending,
+        recent_sends: 0,
+        campaigns_in_send_window: sendingCampaigns.length,
+      },
     }).catch(() => {});
   } else {
     checks.push({
@@ -208,22 +235,36 @@ async function checkEmptyQueues(
             result: `Requeued ${rebuild.leadsRequeued} leads, created ${rebuild.actionsCreated} actions`,
           });
 
-          await emitAlert({
-            type: 'warning',
-            severity: 2,
-            title: `Watchdog: Auto-rebuilt queue for "${campaign.name}"`,
-            description: `Campaign had ${activeLeadCount} active leads but 0 pending actions. Rebuilt queue: ${rebuild.leadsRequeued} leads re-enrolled.`,
-            sourceType: 'system',
-            impactArea: 'campaigns',
-            entityType: 'campaign',
-            entityId: campaign.id,
-            urgency: 'medium',
-            metadata: {
-              active_leads: activeLeadCount,
-              leads_requeued: rebuild.leadsRequeued,
-              actions_created: rebuild.actionsCreated,
-            },
-          }).catch(() => {});
+          // Only alert when the rebuild actually changed something. A rebuild that
+          // re-enrolls 0 leads and creates 0 actions is a no-op: the campaign has
+          // active leads that are legitimately un-enrollable (suppressed, bounced,
+          // completed-but-not-marked). Alerting on it fired every watchdog cycle
+          // forever and produced the bulk of the alert email volume without ever
+          // representing a new or actionable event.
+          if (rebuild.leadsRequeued > 0 || rebuild.actionsCreated > 0) {
+            await emitAlert({
+              type: 'warning',
+              severity: 2,
+              title: `Watchdog: Auto-rebuilt queue for "${campaign.name}"`,
+              description: `Campaign had ${activeLeadCount} active leads but 0 pending actions. Rebuilt queue: ${rebuild.leadsRequeued} leads re-enrolled.`,
+              sourceType: 'system',
+              impactArea: 'campaigns',
+              entityType: 'campaign',
+              entityId: campaign.id,
+              urgency: 'medium',
+              metadata: {
+                active_leads: activeLeadCount,
+                leads_requeued: rebuild.leadsRequeued,
+                actions_created: rebuild.actionsCreated,
+              },
+            }).catch(() => {});
+          } else {
+            console.warn(JSON.stringify({
+              level: 'warn', service: 'backend', event: 'campaign_queue_rebuild_noop',
+              outcome: 'partial',
+              context: { campaign_id: campaign.id, campaign_name: campaign.name, active_leads: activeLeadCount },
+            }));
+          }
         } catch (err: any) {
           autoActions.push({
             campaignId: campaign.id,

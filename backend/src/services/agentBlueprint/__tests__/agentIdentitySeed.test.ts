@@ -146,6 +146,53 @@ describe('seedAgentIdentity', () => {
       expect.objectContaining({ config: expect.objectContaining({ pilot_cohort_ids: ['cohort-1'] }) })
     );
   });
+
+  it('legacy-creator-ids is opt-in: omitted entirely when legacyCreatorIds is not set', async () => {
+    await seedAgentIdentity(CONFIG);
+    expect(fakeAgent.update).not.toHaveBeenCalled();
+  });
+
+  it('legacy-creator-ids: first run populates config.legacy_creator_ids on an agent with no prior config', async () => {
+    await seedAgentIdentity({ ...CONFIG, legacyCreatorIds: ['CurriculumQA'] });
+    expect(fakeAgent.update).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.objectContaining({ legacy_creator_ids: ['CurriculumQA'] }) })
+    );
+  });
+
+  it('legacy-creator-ids: idempotent — running twice with the same alias never calls update the second time', async () => {
+    fakeAgent = makeFakeAgent({ legacy_creator_ids: ['CurriculumQA'] });
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+    await seedAgentIdentity({ ...CONFIG, legacyCreatorIds: ['CurriculumQA'] });
+
+    expect(fakeAgent.update).not.toHaveBeenCalled();
+  });
+
+  it('legacy-creator-ids: self-heal never removes a manually-added alias already on the row', async () => {
+    fakeAgent = makeFakeAgent({ legacy_creator_ids: ['CurriculumQA', 'HandAddedAlias'] });
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+    await seedAgentIdentity({ ...CONFIG, legacyCreatorIds: ['CurriculumQA'] });
+
+    // The config's own list is a subset of what's already on the row — nothing new to
+    // merge, so no write happens and the hand-added alias is never touched.
+    expect(fakeAgent.update).not.toHaveBeenCalled();
+  });
+
+  it('legacy-creator-ids: merges a new alias onto an existing list without dropping the old one', async () => {
+    fakeAgent = makeFakeAgent({ legacy_creator_ids: ['OldAlias'] });
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+    await seedAgentIdentity({ ...CONFIG, legacyCreatorIds: ['NewAlias'] });
+
+    expect(fakeAgent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ legacy_creator_ids: expect.arrayContaining(['OldAlias', 'NewAlias']) }),
+      })
+    );
+    const call = fakeAgent.update.mock.calls[0][0];
+    expect(call.config.legacy_creator_ids).toHaveLength(2);
+  });
 });
 
 describe('getAgentEnrollmentId / getAgentAdminUserId — per-email cache', () => {

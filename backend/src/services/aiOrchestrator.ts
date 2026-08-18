@@ -639,6 +639,97 @@ export async function runWorkforceIntelligenceAgent(): Promise<AgentExecutionRes
   }));
 }
 
+// Workforce Ticket Auto-Resolver — re-checks every OPEN workforce_decision ticket
+// against live ai_agents data and closes it (with a real evidence comment) once the
+// condition it was opened under has genuinely cleared. Unlike
+// runWorkforceIntelligenceAgent above, this does NOT gate on getActiveCompany(): a
+// ticket already carries its own company_id from creation time, and closing it doesn't
+// depend on whether a company is presently "active" (see workforceTicketAutoResolver.ts
+// header for the full design rationale). Deterministic, no LLM — matches
+// workforce_intelligence_engine's own nature.
+export async function runWorkforceTicketAutoResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('WorkforceTicketAutoResolver', wrapSkoolAgent(async () => {
+    const { reCheckAndAutoResolveWorkforceTickets } = await import('./company/workforceTicketAutoResolver');
+    return reCheckAndAutoResolveWorkforceTickets();
+  }));
+}
+
+// cory-engine ticket auto-resolve — re-checks every open cory-engine ticket against the
+// SAME detection logic autonomousEngine.ts used to create it and closes it only when
+// that specific condition no longer holds (see
+// backend/src/intelligence/autonomy/coryEngineTicketAutoResolver.ts for the full
+// design). Deterministic, no LLM — mirrors runWorkforceTicketAutoResolverAgent's
+// pattern above for the identical class of problem. Registered `enabled: false` in
+// agentRegistrySeed.ts on purpose — this cron must not fire until the human-reviewed
+// historical bulk-clear has run and been verified (see this run's execution-contract.md
+// §3b); it is flipped to enabled:true manually, once, after that.
+export async function runCoryEngineTicketAutoResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('CoryEngineTicketAutoResolver', wrapSkoolAgent(async () => {
+    const { reCheckAndAutoResolveCoryEngineTickets } = await import('../intelligence/autonomy/coryEngineTicketAutoResolver');
+    return reCheckAndAutoResolveCoryEngineTickets();
+  }));
+}
+
+// CoryBrain initiative-ticket reconciliation — re-checks every open CoryBrain ticket
+// (both a strategic initiative's own parent ticket and its subtask tickets) against the
+// CURRENT live status of the `strategic_initiatives` row it is linked to, and syncs the
+// ticket to match once that initiative has genuinely reached a terminal state (see
+// backend/src/intelligence/autonomy/corybrainInitiativeTicketAutoResolver.ts for the
+// full design). This is a reconciliation/sync fix, not a new decision engine — it never
+// decides whether an initiative itself should be approved/rejected/completed; that
+// authority stays entirely with coryInitiatives.ts/ticketReplyService.ts's already-fixed
+// mechanism (PRs #1491/#1495/#1499/#1502/#1513), which this resolver never imports or
+// modifies. Deterministic, no LLM — mirrors runCoryEngineTicketAutoResolverAgent's
+// pattern above for a structurally different but related class of problem. Registered
+// `enabled: false` in agentRegistrySeed.ts on purpose — this cron must not fire until
+// the human-reviewed historical bulk-clear has run and been verified (see this run's
+// execution-contract.md); it is flipped to enabled:true manually, once, after that.
+export async function runCoryBrainInitiativeTicketAutoResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('CoryBrainInitiativeTicketAutoResolver', wrapSkoolAgent(async () => {
+    const { reCheckAndAutoResolveCoryBrainInitiativeTickets } = await import('../intelligence/autonomy/corybrainInitiativeTicketAutoResolver');
+    return reCheckAndAutoResolveCoryBrainInitiativeTickets();
+  }));
+}
+
+// InboxCaseEngine source-completion reconciliation — DISCOVER (execution-contract.md,
+// run 20260816-inboxcase-source-completion-resolver) proved the ticket-board sync is
+// already correct (zero stuck tickets link to an already-RESOLVED case); the real gap
+// is that nothing ever autonomously invokes the existing closure authority
+// (evaluateClosureGuard()/closeCase()), and that one item category — basecamp_todo —
+// has a real, live, re-derivable "is this done" signal (Basecamp's own completion
+// state) nothing had ever wired in. See
+// backend/src/intelligence/autonomy/inboxCaseSourceCompletionResolver.ts for the full
+// design. Deterministic, no LLM — mirrors runCoryBrainInitiativeTicketAutoResolverAgent's
+// pattern above for a structurally different but related class of problem. Registered
+// `enabled: false` in agentRegistrySeed.ts on purpose — this cron must not fire until
+// the human-reviewed historical bulk-clear has run and been verified (see this run's
+// execution-contract.md); it is flipped to enabled:true manually, once, after that.
+export async function runInboxCaseSourceCompletionResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('InboxCaseSourceCompletionResolver', wrapSkoolAgent(async () => {
+    const { reCheckAndCloseInboxCasesOnSourceCompletion } = await import('../intelligence/autonomy/inboxCaseSourceCompletionResolver');
+    return reCheckAndCloseInboxCasesOnSourceCompletion();
+  }));
+}
+
+// bpos_orchestrator capability ticket auto-resolve — re-checks every open
+// bpos_execution ticket against the CURRENT live Capability.user_status of the
+// capability it references, and closes it once a real signal exists (verified ->
+// done, deleted -> cancelled). See
+// backend/src/services/company/bposCapabilityTicketAutoResolver.ts for the full
+// design. Deterministic, no LLM — mirrors runWorkforceTicketAutoResolverAgent's
+// pattern above (same "company" module, same non-gated-on-active-company shape,
+// since a ticket already carries its own capability entity_id from creation time).
+// Registered `enabled: false` in agentRegistrySeed.ts on purpose — this cron must not
+// fire until the human-reviewed historical bulk-clear has run and been verified (see
+// this run's execution-contract.md); it is flipped to enabled:true manually, once,
+// after that.
+export async function runBposCapabilityTicketAutoResolverAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('BposCapabilityTicketAutoResolver', wrapSkoolAgent(async () => {
+    const { resolveBposCapabilityTickets } = await import('./company/bposCapabilityTicketAutoResolver');
+    return resolveBposCapabilityTickets();
+  }));
+}
+
 export async function runCompanyStrategicCycleAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('CompanyStrategicCycle', wrapSkoolAgent(async () => {
     const { getActiveCompany } = require('./company/companyService');

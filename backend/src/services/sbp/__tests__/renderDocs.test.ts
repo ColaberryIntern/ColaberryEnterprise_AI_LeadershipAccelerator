@@ -22,10 +22,15 @@ describe('the file set', () => {
     }
   });
 
-  it('renders exactly one story file per story', () => {
+  it('renders exactly one story file per story, plus STORY-000', () => {
+    // STORY-000 is kept out of `plan.stories` (gate, XP divisor, materialize
+    // ordering all read it) but MUST still reach the repo: it is the one story
+    // every student builds first, and while it was missing here the student's
+    // agent had no local reference for it at all. See renderDocs.story000.test.ts.
     const storyFiles = pathsOf().filter((p) => p.startsWith('docs/stories/'));
-    expect(storyFiles).toHaveLength(pilot.stories.length);
+    expect(storyFiles).toHaveLength(pilot.stories.length + 1);
     for (const s of pilot.stories) expect(storyFiles).toContain(`docs/stories/${s.id}.md`);
+    expect(storyFiles).toContain('docs/stories/STORY-000.md');
   });
 
   it('renders the machine-readable bookkeeping', () => {
@@ -155,9 +160,23 @@ describe('CLAUDE.md — the conventions the agent inherits', () => {
     }
   });
 
-  it('teaches the commit convention the progress signal depends on', () => {
+  it('teaches BOTH halves of the completion rule the verification loop reads', () => {
+    // Ticking the criteria and naming the story in a commit are each necessary
+    // and neither is sufficient. If the block stops saying so, students stop
+    // doing one half and their work silently never verifies.
     expect(doc()).toMatch(/STORY-001: /);
-    expect(doc()).toMatch(/commit message names the story/i);
+    expect(doc()).toMatch(/naming the story in a trailer/i);
+    expect(doc()).toMatch(/Story: STORY-001/);
+    expect(doc()).toMatch(/\.colaberry\/progress\.json/);
+    expect(doc()).toMatch(/every.+acceptance criterion/i);
+  });
+
+  it('does not tell the student their progress file is disposable', () => {
+    // `.colaberry/progress.json` is co-owned and merged on sync. The old blanket
+    // "`.colaberry/` is overwritten on every sync" would read as "do not bother
+    // writing to it", which is the opposite of what the loop needs.
+    expect(doc()).not.toMatch(/`\.colaberry\/` is platform bookkeeping/);
+    expect(doc()).toMatch(/progress\.json` is shared/i);
   });
 
   it('states the non-negotiables: timeouts, idempotency, no swallowed errors', () => {

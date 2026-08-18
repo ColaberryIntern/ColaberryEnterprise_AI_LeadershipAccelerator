@@ -175,6 +175,19 @@ export async function verifyMagicLink(token: string): Promise<{ jwt: string; enr
 
   const jwtToken = signParticipantJwt(enrollment);
 
+  // Reese's intros (account, and student once they join a class).
+  // Fire-and-forget on purpose:
+  // the login response must not wait on a DM round trip, and a welcome failure
+  // must never cost a student their session. maybeSendWelcomes is idempotent —
+  // safe to call on EVERY login — and short-circuits for anyone already
+  // greeted, which is the overwhelming majority of calls.
+  void (async () => {
+    try {
+      const { maybeSendWelcomes } = await import('./reese/reeseWelcomeService');
+      await maybeSendWelcomes(enrollment.id);
+    } catch { /* never allowed to affect login */ }
+  })();
+
   return {
     jwt: jwtToken,
     enrollment: {

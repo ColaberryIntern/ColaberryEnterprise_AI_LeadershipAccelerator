@@ -19,6 +19,14 @@
  */
 import { createHash } from 'crypto';
 import { RenderedFile, isAllowedPath } from './renderDocs';
+import { spliceManagedBlock } from './managedBlock';
+import {
+  PROGRESS_FILE_PATH,
+  mergeProgressFile,
+  parseProgressFile,
+  serialiseProgressFile,
+} from './verification/progressContract';
+import { PROFILE_FILE_PATH } from './profileContract';
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_RETRIES = 3;
@@ -90,6 +98,34 @@ function log(event: string, correlationId: string | undefined, outcome: string, 
  * Bounded GitHub call. Retries only transient failures (429/5xx); a 4xx is
  * terminal because retrying a rejected request just burns rate limit.
  */
+/**
+ * Read a file from the default branch, or null when it is not there.
+ *
+ * Deliberately soft: a 404 is the normal "they have no CLAUDE.md yet" case, and
+ * any other failure must not abort a publish — the caller splices against null,
+ * which appends our block rather than replacing a file we could not read.
+ */
+async function readRepoFile(
+  target: RepoTarget,
+  path: string,
+  token: string,
+  fetchImpl: typeof fetch,
+  correlationId?: string,
+): Promise<string | null> {
+  try {
+    const res = await gh(
+      `/repos/${target.owner}/${target.repo}/contents/${encodeURIComponent(path)}`,
+      { method: 'GET' }, token, fetchImpl,
+    );
+    if (!res?.content) return null;
+    return Buffer.from(String(res.content), 'base64').toString('utf8');
+  } catch (err: any) {
+    if (/404/.test(String(err?.message ?? ''))) return null;
+    log('sbp_repo_read_failed', correlationId, 'partial', { path, message: err?.message });
+    return null;
+  }
+}
+
 async function gh(
   path: string,
   init: RequestInit,
@@ -180,6 +216,25 @@ export function changedFiles(files: RenderedFile[], existing: Record<string, str
 }
 
 /**
+ * Read `.colaberry/manifest.json` out of the repo, or null when it is not there.
+ *
+ * This is the input that makes the content-hash idempotency real: without it,
+ * `parseManifestHashes` sees `{}`, every file looks new, and every publish
+ * commits the whole set. Soft on every failure — a manifest we cannot read is
+ * treated as absent, which rewrites everything once. Degrading to "rewrite" is
+ * safe; degrading to "assume unchanged" would silently stop syncing a student's
+ * plan, so the fallback direction is deliberate.
+ */
+export async function readRepoManifest(
+  target: RepoTarget,
+  opts: WriteOptions = {},
+): Promise<string | null> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token?.trim()) return null;
+  return readRepoFile(target, MANIFEST_PATH, token, opts.fetchImpl ?? fetch, opts.correlationId);
+}
+
+/**
  * Write the document set. Returns `committed: false` when nothing changed.
  *
  * @throws RepoWriteError('AllowlistViolation') before any network call if a path
@@ -206,10 +261,81 @@ export async function writeDocsToRepo(
 
   const token = requireToken();
   const { owner, repo } = target;
-  const changed = changedFiles(files, parseManifestHashes(existingManifest));
+
+  // The change check runs on the RENDERED content, before any splicing, so an
+  // unchanged plan still makes zero network calls.
+  let changed = changedFiles(files, parseManifestHashes(existingManifest));
 
   if (changed.length === 0) {
     log('sbp_repo_write_noop', opts.correlationId, 'success', { owner, repo, files: files.length });
+    return { committed: false, changedPaths: [], skippedUnchanged: files.length };
+  }
+
+  // CLAUDE.md belongs to the STUDENT. They arrive with one that already carries
+  // their own conventions, and this used to replace the whole file — so a
+  // republish silently deleted work they had written. Read theirs and splice
+  // our delimited block into it, leaving every other line as found. Done only
+  // for a file we are already committing, so the no-op path above stays silent.
+  // A failed read splices against null, which APPENDS rather than clobbering
+  // a file we could not see.
+  for (let i = 0; i < changed.length; i++) {
+    if (changed[i].path !== 'CLAUDE.md') continue;
+    const existing = await readRepoFile(target, 'CLAUDE.md', token, fetchImpl, opts.correlationId);
+    changed[i] = { ...changed[i], content: spliceManagedBlock(existing, changed[i].content) };
+  }
+
+  // `.colaberry/progress.json` is co-owned for exactly the same reason CLAUDE.md
+  // is. The platform owns the story list and the criterion text; Claude Code
+  // owns the `passed` flags it wrote back. Replacing the whole file on a
+  // republish would drop every tick the student's agent had recorded — stories
+  // sitting at "3 of 4" would silently reset to "not started", which reads as
+  // the platform losing their work. Merge instead: our side replaced, their side
+  // carried across by story id and criterion text.
+  for (let i = 0; i < changed.length; i++) {
+    if (changed[i].path !== PROGRESS_FILE_PATH) continue;
+    const existing = await readRepoFile(target, PROGRESS_FILE_PATH, token, fetchImpl, opts.correlationId);
+    const parsed = parseProgressFile(changed[i].content);
+    // Our own render failing to parse is a defect in renderDocs, not a student
+    // problem — leave the rendered bytes alone rather than merging blind.
+    if (!parsed.ok) continue;
+    changed[i] = {
+      ...changed[i],
+      content: serialiseProgressFile(mergeProgressFile(parsed.file, existing)),
+    };
+  }
+
+  // `.colaberry/profile.json` is SEED-ONCE. It carries the student's portfolio
+  // prose and their publication consent, and neither is ours to rewrite — a
+  // consent flag the platform can flip back is not consent.
+  //
+  // The guard matters because of a specific path, not a hypothetical one:
+  // normally the rendered seed is byte-identical every time, so `changedFiles`
+  // skips it and the file is never revisited. But the seed embeds the repo URL,
+  // so renaming a repo changes the seed's hash, drags the file into `changed`,
+  // and would overwrite prose the student had written. Dropping it whenever the
+  // repo already has one makes the seed genuinely once-only regardless of what
+  // moves upstream.
+  //
+  // NOTE: the manifest records the hash of the SEED, not of whatever the student
+  // has since written, because it was rendered upstream of this check. That is
+  // stable and harmless — the seed hash is exactly what keeps this file out of
+  // `changed` on every subsequent publish.
+  if (changed.some((f) => f.path === PROFILE_FILE_PATH)) {
+    const existing = await readRepoFile(target, PROFILE_FILE_PATH, token, fetchImpl, opts.correlationId);
+    if (existing !== null && existing.trim() !== '') {
+      // DROPPED, not substituted. Writing their own bytes back would still be a
+      // commit that changes nothing, which is the exact churn this module exists
+      // to prevent.
+      changed = changed.filter((f) => f.path !== PROFILE_FILE_PATH);
+    }
+  }
+
+  // Dropping the profile can empty the change set, leaving only the manifest —
+  // which alone is never worth a commit, since it describes files nobody touched.
+  if (changed.length === 0 || (changed.length === 1 && changed[0].path === MANIFEST_PATH)) {
+    log('sbp_repo_write_noop', opts.correlationId, 'success', {
+      owner, repo, files: files.length, reason: 'nothing left to write after seed-once and merge',
+    });
     return { committed: false, changedPaths: [], skippedUnchanged: files.length };
   }
 

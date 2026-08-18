@@ -6,6 +6,9 @@ import {
   getTicketStatusTone,
   isTicketStale,
   STALE_THRESHOLD_MS,
+  formatTicketAgeLabel,
+  formatNextCheckLabel,
+  TicketAutoCheck,
 } from '../ticketTypeMeta';
 import { TONE } from '../../components/admin/shell/StatusBadge';
 
@@ -132,6 +135,73 @@ describe('ticketTypeMeta', () => {
       expect(isTicketStale(null, 'in_progress')).toBe(false);
       expect(isTicketStale(undefined, 'todo')).toBe(false);
       expect(isTicketStale('not-a-date', 'backlog')).toBe(false);
+    });
+  });
+
+  // Ticket Board UX fixes (2026-08-17) — "how long has this been open", visible
+  // directly on the Kanban card.
+  describe('formatTicketAgeLabel', () => {
+    it('a ticket created 4 days ago (open) shows an "Open 4d"-shaped label', () => {
+      const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+      const label = formatTicketAgeLabel(fourDaysAgo, 'in_progress');
+      expect(label).toContain('Open');
+      expect(label).toContain('4d');
+      expect(label).not.toContain('ago'); // "Open 4d ago" reads redundant on a compact card badge
+    });
+
+    it('a ticket created 30 seconds ago reads "Opened just now", not "Open just now"', () => {
+      const justNow = new Date(Date.now() - 30 * 1000).toISOString();
+      expect(formatTicketAgeLabel(justNow, 'backlog')).toBe('Opened just now');
+    });
+
+    it('a done ticket never gets an age label, no matter how old — matches isTicketStale\'s own terminal-status exclusion', () => {
+      const veryOld = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      expect(formatTicketAgeLabel(veryOld, 'done')).toBeNull();
+    });
+
+    it('a cancelled ticket never gets an age label', () => {
+      const veryOld = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      expect(formatTicketAgeLabel(veryOld, 'cancelled')).toBeNull();
+    });
+
+    it('handles null/invalid createdAt without throwing', () => {
+      expect(formatTicketAgeLabel(null, 'backlog')).toBeNull();
+      expect(formatTicketAgeLabel(undefined, 'todo')).toBeNull();
+    });
+  });
+
+  // Ticket Board UX fixes (2026-08-17) — "when will this be automatically
+  // re-checked", derived from the backend's real, live cron-schedule answer.
+  describe('formatNextCheckLabel', () => {
+    const REAL: TicketAutoCheck = {
+      hasAutoCheck: true,
+      resolverAgentName: 'CoryEngineTicketAutoResolver',
+      nextCheckAt: '2026-08-17T18:00:00.000Z',
+      nextCheckLabel: '2h',
+    };
+    const NONE: TicketAutoCheck = {
+      hasAutoCheck: false,
+      resolverAgentName: null,
+      nextCheckAt: null,
+      nextCheckLabel: null,
+      reason: 'No automated resolver owns this ticket type',
+    };
+
+    it('a real hasAutoCheck:true value produces a "Next check ~2h"-shaped label', () => {
+      expect(formatNextCheckLabel(REAL)).toBe('Next check ~2h');
+    });
+
+    it('hasAutoCheck:false never produces a fabricated timer — returns null, not a placeholder string', () => {
+      expect(formatNextCheckLabel(NONE)).toBeNull();
+    });
+
+    it('handles null/undefined input without throwing', () => {
+      expect(formatNextCheckLabel(null)).toBeNull();
+      expect(formatNextCheckLabel(undefined)).toBeNull();
+    });
+
+    it('hasAutoCheck:true but a missing nextCheckLabel (defensive) still returns null rather than "Next check ~null"', () => {
+      expect(formatNextCheckLabel({ ...REAL, nextCheckLabel: null })).toBeNull();
     });
   });
 

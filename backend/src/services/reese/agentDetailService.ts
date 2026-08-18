@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import AiAgent from '../../models/AiAgent';
 import AdminUser from '../../models/AdminUser';
 import Enrollment from '../../models/Enrollment';
@@ -5,6 +6,8 @@ import CommunityMember from '../../models/CommunityMember';
 import { Ticket } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
+import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
+import { deriveAgentCapabilities } from './agentToolCapabilities';
 
 // Agent Detail — the transparency page Ali asked for: real identity, real
 // system prompt, real tools, live status, real linked ticket activity. Written
@@ -43,6 +46,19 @@ export interface AgentDetailResult {
     created_at: Date | null;
     updated_at: Date | null;
   }>;
+  /** What this agent reads / produces — Agent Detail transparency, part 2
+   * (2026-08-18). Derived from the agent's real, live `tools_granted` (declared
+   * capability, via deriveAgentCapabilities()) UNIONED with the real, live
+   * DISTINCT ticket types it has actually created (observed behavior, via an
+   * unlimited grouped query — not the capped/ordered `tickets` list above).
+   * Doubly grounded, never hand-written prose: change tools_granted or what the
+   * agent actually creates, and this self-corrects with zero code change. */
+  capabilities: {
+    reads: string[];
+    produces: string[];
+    undocumented_tools: string[];
+    produced_ticket_types: string[];
+  };
 }
 
 const MAX_TICKETS = 50;
@@ -62,16 +78,45 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     }
   }
 
-  // The core "who is Reese targeting, why, and follow up over time" view — only
-  // tickets actually assigned to THIS agent's real staff identity, never every
-  // ticket in the system.
+  // The core "who is this agent targeting, why, and follow up over time" view —
+  // only tickets actually belonging to THIS agent's real staff identity, never
+  // every ticket in the system. Agent Alias & Identity Fix: matches EITHER the
+  // real AdminUser.id (assigned_to_id, going forward) OR any of this agent's
+  // known legacy raw creator strings (created_by_id — the only field this
+  // agent's historical tickets may have ever populated, e.g. cory-engine's
+  // 9,606 tickets). An agent with zero legacy aliases (Reese) gets a match list
+  // of exactly its own id, so this is unchanged for Reese.
   const tickets = adminUser
     ? await Ticket.findAll({
-        where: { assigned_to_type: 'ai_staff', assigned_to_id: adminUser.id },
+        where: {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: buildCreatorIdMatchList(adminUser.id, agent) } },
+            { created_by_id: { [Op.in]: buildCreatorIdMatchList(adminUser.id, agent) } },
+          ],
+        },
         order: [['created_at', 'DESC']],
         limit: MAX_TICKETS,
       })
     : [];
+
+  // Agent Detail transparency, part 2 (2026-08-18) — the real, live, DISTINCT
+  // ticket types this agent has ever created/been assigned, UNLIMITED (not the
+  // capped-50/DESC `tickets` list above, which can miss older types entirely).
+  // Same match-list where-clause as the tickets query, so "produces" is grounded
+  // in the exact same real data the Ticket activity table already shows.
+  const producedTicketTypeRows = adminUser
+    ? await Ticket.findAll({
+        attributes: ['type'],
+        where: {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: buildCreatorIdMatchList(adminUser.id, agent) } },
+            { created_by_id: { [Op.in]: buildCreatorIdMatchList(adminUser.id, agent) } },
+          ],
+        },
+        group: ['type'],
+      })
+    : [];
+  const capabilities = deriveAgentCapabilities(agent.tools_granted);
 
   return {
     agent: {
@@ -105,5 +150,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       created_at: t.created_at ?? null,
       updated_at: t.updated_at ?? null,
     })),
+    capabilities: {
+      reads: capabilities.reads,
+      produces: capabilities.produces,
+      undocumented_tools: capabilities.undocumentedTools,
+      produced_ticket_types: producedTicketTypeRows.map((t: any) => t.type),
+    },
   };
 }

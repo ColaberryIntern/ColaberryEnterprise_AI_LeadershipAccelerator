@@ -3,18 +3,51 @@
  * Archive is non-critical: failures are logged but never thrown.
  */
 import { google } from 'googleapis';
-let graphArchiveMessage: any;
-let isMsGraphConfigured: () => boolean = () => false;
-try {
-  const msGraph = require('./msGraphService');
-  graphArchiveMessage = msGraph.archiveMessage;
-  isMsGraphConfigured = msGraph.isConfigured;
-} catch {
-  // MS Graph not available
-}
 import { logAuditEvent } from './inboxAuditService';
 
 const LOG_PREFIX = '[InboxCOS][Archive]';
+
+/**
+ * Hotmail archiving has TWO possible Graph clients, and this service was hard-wired
+ * to the one production does not have credentials for:
+ *
+ *   msGraphService    confidential client — needs CLIENT_ID + CLIENT_SECRET +
+ *                     TENANT_ID + REFRESH_TOKEN (MSAL)
+ *   graphMailService  public client — needs CLIENT_ID + REFRESH_TOKEN only
+ *
+ * Production provisions the public-client pair only (no secret, no tenant), so
+ * `msGraphService.isConfigured()` returned false on every call and every Hotmail
+ * archive was skipped with "MS Graph not configured" — while Hotmail *sync*,
+ * which reads through graphMailService, worked the whole time. That mismatch is
+ * why ~281 alert emails accumulated in the inbox instead of being filed.
+ *
+ * Resolved at call time rather than at import: whichever client is actually
+ * configured wins, so this works under either credential setup instead of
+ * assuming one.
+ */
+interface GraphArchiveClient {
+  name: string;
+  archiveMessage: (messageId: string) => Promise<void>;
+}
+
+function resolveGraphArchiveClient(): GraphArchiveClient | null {
+  // Prefer the confidential client when fully provisioned; fall back to the
+  // public client, which needs no secret.
+  for (const name of ['msGraphService', 'graphMailService']) {
+    try {
+      const mod = require(`./${name}`);
+      if (typeof mod.isConfigured === 'function' && mod.isConfigured() && typeof mod.archiveMessage === 'function') {
+        return { name, archiveMessage: mod.archiveMessage };
+      }
+    } catch (err: any) {
+      // A module that genuinely cannot load is worth a line — the previous bare
+      // `catch {}` here meant a broken import was indistinguishable from
+      // "not configured", which is what made this take so long to spot.
+      console.warn(`${LOG_PREFIX} Graph client ${name} failed to load: ${err.message}`);
+    }
+  }
+  return null;
+}
 
 interface ArchiveTarget {
   id: string;
@@ -186,11 +219,21 @@ async function archiveGmail(
 // ─── Hotmail Archive ────────────────────────────────────────────────────────
 
 async function archiveHotmail(providerMessageId: string): Promise<void> {
-  if (!isMsGraphConfigured()) {
-    console.warn(`${LOG_PREFIX} MS Graph not configured — cannot archive Hotmail message`);
-    return;
+  const client = resolveGraphArchiveClient();
+  if (!client) {
+    // THROW, do not return. Returning quietly here is what made this failure
+    // invisible for months: archiveEmail() carries on and writes an `archived`
+    // audit event, so the database recorded ~1,638 Hotmail archives while 171 of
+    // those messages were still sitting in the inbox. Nothing ever retried them,
+    // because the system believed the work was done. Throwing routes this into
+    // archiveEmail's catch, which records `archive_failed` — visibly wrong
+    // instead of silently wrong.
+    const present = ['MS_GRAPH_CLIENT_ID', 'MS_GRAPH_CLIENT_SECRET', 'MS_GRAPH_TENANT_ID', 'MS_GRAPH_REFRESH_TOKEN']
+      .map((v) => `${v}=${process.env[v] ? 'set' : 'MISSING'}`)
+      .join(' ');
+    throw new Error(`No configured MS Graph client — cannot archive Hotmail message. ${present}`);
   }
 
-  await graphArchiveMessage(providerMessageId);
-  console.log(`${LOG_PREFIX} Hotmail archived message ${providerMessageId}`);
+  await client.archiveMessage(providerMessageId);
+  console.log(`${LOG_PREFIX} Hotmail archived message ${providerMessageId} via ${client.name}`);
 }

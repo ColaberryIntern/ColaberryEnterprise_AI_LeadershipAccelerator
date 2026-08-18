@@ -8,6 +8,7 @@ import CompetencyDomain from '../../models/CompetencyDomain';
 import BuilderLevel from '../../models/BuilderLevel';
 import PointsConfig from '../../models/PointsConfig';
 import { CARD_TYPES } from '../timeline/typeRegistry';
+import { AWARD_MODEL_BUDGET_PER_BUILD } from './pointsConfigService';
 
 export const COMPETENCY_DOMAINS: Array<{ domain_id: string; name: string; weight: number }> = [
   { domain_id: 'prompt_engineering', name: 'Prompt Engineering', weight: 1.4 },
@@ -81,10 +82,75 @@ export async function seedPointsConfigFromRegistry(): Promise<number> {
   return n;
 }
 
+/**
+ * The XP knob for a VERIFIED Student Build Pipeline story.
+ *
+ * A key of its own rather than reusing the `project_task` card type: the
+ * curriculum economy and the build economy should be tunable independently.
+ *
+ * THE MODEL IS A BUDGET PER CAPSTONE, DIVIDED ACROSS THAT BUILD'S STORIES.
+ * Ali chose this over a flat per-story rate so that a student is not rewarded
+ * for their plan happening to decompose into more pieces: an 800 budget pays 40
+ * a story across a 20-story build and 27 across a 30-story build, and the same
+ * work is worth the same either way. `builder_xp` on this row is therefore the
+ * WHOLE-BUILD BUDGET, not a per-story rate — `config.award_model` is what says
+ * so, and pointsConfigService is the only thing allowed to divide it.
+ *
+ * STORY-000 (the Command Center) counts as an ordinary story and takes an equal
+ * share. It is substantial and every student builds it, so weighting it would
+ * mean a second config concept (per-story weights) for very little gain.
+ */
+export const BUILD_STORY_POINTS_KEY = 'project_story_verified';
+
+/** Builder XP for one whole capstone, split across the stories in its plan. */
+export const BUILD_STORY_XP_BUDGET = 800;
+
+const BUILD_STORY_CONFIG = {
+  award_model: AWARD_MODEL_BUDGET_PER_BUILD,
+  note: 'builder_xp is a WHOLE-CAPSTONE BUDGET, not a per-story rate. A verified story '
+    + 'awards round(builder_xp / number of stories in that project\'s published plan). '
+    + 'Edit builder_xp to retune the economy. See docs/BUILD_VERIFICATION_CONTRACT.md.',
+};
+
+/**
+ * Seed or adopt the build-story budget row.
+ *
+ * `findOrCreate` first, so a tuned budget survives every redeploy — this is a
+ * live config knob and boot must never stamp on an operator's edit.
+ *
+ * The one exception is a NARROW, SELF-LIMITING migration: a row still carrying
+ * `award_model: 'undecided'` is the placeholder the previous release seeded
+ * (builder_xp NULL, awards resolving to 0). Nobody chose those values, so boot
+ * adopts the decided budget over them exactly once. After that the row is on
+ * the budget model and this function never touches it again, which is what
+ * keeps a later retune from being silently reverted on the next deploy.
+ */
+export async function seedBuildStoryPointsConfig(): Promise<number> {
+  const [row, created] = await PointsConfig.findOrCreate({
+    where: { scope: 'type_default', key: BUILD_STORY_POINTS_KEY },
+    defaults: {
+      scope: 'type_default',
+      key: BUILD_STORY_POINTS_KEY,
+      learning_xp: 0,
+      builder_xp: BUILD_STORY_XP_BUDGET,
+      community_xp: 0,
+      config: BUILD_STORY_CONFIG,
+      is_active: true,
+    },
+  });
+  if (created) return 1;
+
+  const model = (row.config as Record<string, unknown> | null)?.award_model;
+  if (model === 'undecided') {
+    await row.update({ builder_xp: BUILD_STORY_XP_BUDGET, config: BUILD_STORY_CONFIG });
+    return 1;
+  }
+  return 0;
+}
+
 export async function seedProgressionConfig(): Promise<{ domains: number; levels: number; points: number }> {
-  return {
-    domains: await seedCompetencyDomains(),
-    levels: await seedBuilderLevels(),
-    points: await seedPointsConfigFromRegistry(),
-  };
+  const domains = await seedCompetencyDomains();
+  const levels = await seedBuilderLevels();
+  const points = (await seedPointsConfigFromRegistry()) + (await seedBuildStoryPointsConfig());
+  return { domains, levels, points };
 }

@@ -5,6 +5,17 @@ import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
 import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
+import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
+import HomeV2 from './pages/publicV2/HomeV2';
+import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
+import PlatformV2 from './pages/publicV2/PlatformV2';
+import ProofV2 from './pages/publicV2/ProofV2';
+import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
+import TryV2 from './pages/publicV2/TryV2';
+import PrivacyV2 from './pages/publicV2/PrivacyV2';
+import SignupV2 from './pages/publicV2/SignupV2';
+import PricingV2 from './pages/publicV2/PricingV2';
+import StoriesV2 from './pages/publicV2/StoriesV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -39,6 +50,35 @@ function App() {
         {adminRoutes}
         {portalRoutes}
         {referralRoutes}
+        {/*
+            CUTOVER, 2026-08-13: V2 IS the public site. It was mounted at /v2 as a
+            preview; it now owns "/".
+
+            The old marketing pages are retired in routes/publicRoutes.tsx, where
+            their paths redirect to the nearest V2 equivalent rather than 404 --
+            inbound links and search results still point at them. The functional
+            public routes (enrolment and payment, sponsor dashboard, challenge,
+            leaderboard, pilot and membership pages) are untouched.
+
+            This block must stay ABOVE the PublicLayout block below, so that "/"
+            resolves to V2 rather than to the old home page.
+        */}
+        <Route path="/" element={<PublicLayoutV2 />}>
+          <Route index element={<HomeV2 />} />
+          <Route path="services" element={<ServicesV2 />} />
+          <Route path="services/:slug" element={<ServiceDetailV2 />} />
+          <Route path="platform" element={<PlatformV2 />} />
+          <Route path="proof" element={<ProofV2 />} />
+          <Route path="lab" element={<OpportunityLabV2 />} />
+          {/* NOT "try": /try is the real product workspace
+              (ManagementPreviewPage, declared above). Mounting the V2 explainer
+              there post-cutover would shadow the product itself. */}
+          <Route path="free-workspace" element={<TryV2 />} />
+          <Route path="privacy" element={<PrivacyV2 />} />
+          <Route path="start" element={<SignupV2 />} />
+          <Route path="pricing" element={<PricingV2 />} />
+          <Route path="stories" element={<StoriesV2 />} />
+        </Route>
         <Route element={<PublicLayout />}>
           {publicRoutes}
         </Route>

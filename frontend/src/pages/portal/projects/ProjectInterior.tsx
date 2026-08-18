@@ -4,9 +4,9 @@ import {
   projectProgress, reqVerified, nextTask, skipTask, isTaskBlocked,
 } from './projectsStore';
 import NextSessionStrip from './NextSessionStrip';
-import ProjectWorkspaceDrawer from './ProjectWorkspaceDrawer';
 import { CorySpark } from '../../../components/portal/CoryMark';
 import { useIsExplorer } from '../useIsExplorer';
+import ProjectsNextStepHero from './ProjectsNextStepHero';
 
 // The portal-native project workspace, in the Today-page shape: a full-width
 // build header, then a two-column grid — left is the FB timeline (hero "your
@@ -142,22 +142,24 @@ const ActivityCard: React.FC<{ a: ProjectActivity }> = ({ a }) => (
   </div>
 );
 
-const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }> = ({ project, onBack }) => {
+const ProjectInterior: React.FC<{
+  project: StudentProject;
+  onBack: () => void;
+  /** True while the page header is showing the condensed next-step card. */
+  condensed?: boolean;
+  /**
+   * Open a task. The page navigates to the project WORKSPACE — the full page
+   * with the mentor on the right, the build-side twin of the classroom runtime.
+   * This component used to own a slide-over drawer instead, which is not the
+   * same thing and did not feel like the same product.
+   */
+  onOpenTask: (taskId: string) => void;
+}> = ({ project, onBack, condensed, onOpenTask }) => {
   const demo = useIsExplorer();   // Explorer = demo mode
   const [sel, setSel] = useState<string>('all'); // 'all' or a list id (drives the outline filter)
-  const [wsTaskId, setWsTaskId] = useState<string | null>(null); // task open in the workspace drawer
   const prog = projectProgress(project);
   const rv = reqVerified(project);
   const nx = nextTask(project);
-
-  // Resolve the task currently open in the drawer (re-derived so it stays in
-  // sync with the store after mark-done / skip mutations). Never resolve a BLOCKED
-  // task — the workspace must not open for a locked dependency (guard, alongside
-  // the drawer's own).
-  const resolved = wsTaskId
-    ? project.lists.flatMap((l) => l.tasks).find((t) => t.id === wsTaskId) || null
-    : null;
-  const wsTask = resolved && !isTaskBlocked(project, resolved).blocked ? resolved : null;
 
   // stat tiles (whole project, regardless of filter)
   let open = 0, today = 0, overdue = 0, done = 0;
@@ -189,57 +191,52 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
         </div>
       )}
 
-      {/* full-width build header */}
-      <div className="card pj-head">
-        <div className="pj-cover" style={{ background: project.cover }}>
-          {/* themed watermark — the project's own icon, big + low-opacity, behind
-              the title. Auto-derived from `project.icon` (scissors for the salon). */}
-          <span className="pj-wm" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none"><path d={project.icon} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" /></svg>
-          </span>
+      {/* Your next action, ABOVE the build header. The first thing a student
+          should see on a build is the thing to do next — the project's name and
+          cover are context for it, not the headline. Wrapped in
+          `te-condense-body` so it rides up into the page header on scroll, the
+          same way the overview's hero does; without that the two screens
+          scrolled differently for no reason a student could see. */}
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+        <ProjectsNextStepHero
+          variant="full"
+          primary={project}
+          primaryNext={nx}
+          demo={demo}
+          onOpenBuild={() => nx && onOpenTask(nx.task.id)}
+          onCopyPrompt={() => { if (navigator.clipboard && nx?.task.prompt) navigator.clipboard.writeText(nx.task.prompt); }}
+          onStartBuild={onBack}
+        />
+      </div>
+
+      {/* A build header of a few lines, not a page. The name, descriptor, stage
+          and preview URL moved to the top of the Project outline card in the
+          right column — that is where you look for "which build is this", and
+          the full-bleed cover was pushing the actual work below the fold. */}
+      <div className="pj-headbar">
+        <span className="pj-av sm" style={{ background: project.accent }}>
+          <svg viewBox="0 0 24 24" fill="none"><path d={project.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>
+        </span>
+        <div className="pj-hb-t">
+          <div className="pj-hb-name">{project.name}</div>
+          <div className="pj-hb-sub">{project.stage}{project.sample ? ' · training example' : ''}</div>
         </div>
-        <div className="pj-hbody">
-          <div className="pj-avwrap">
-            <span className="pj-av" style={{ background: project.accent }}><svg viewBox="0 0 24 24" fill="none"><path d={project.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></span>
-            <div style={{ minWidth: 0 }}>
-              <div className="pj-name">{project.name}</div>
-              <div className="pj-desc">{project.descriptor}</div>
-            </div>
-          </div>
-          <div className="pj-metarow">
-            <span className="pj-pill"><span className="chip" style={{ margin: 0, padding: '2px 10px', background: 'rgba(54,120,149,.12)', color: '#2E6A86' }}><span className="sw" style={{ background: '#367895' }} />{project.stage}</span></span>
-            {project.sample && <span className="pj-pill" style={{ borderColor: '#E8920C', color: '#B5710A' }}>Training example · from Basecamp</span>}
-            <span className="pj-pill prev"><svg viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>{project.slug}.preview.colaberry.ai</span>
-          </div>
-          <div className="pj-prog"><div className="meter"><i style={{ width: `${prog.pct}%`, background: '#5BA63C' }} /></div><span className="pct">{prog.pct}%</span></div>
+        <div className="pj-hb-prog">
+          <span className="meter"><i style={{ width: `${prog.pct}%`, background: '#5BA63C' }} /></span>
+          <span className="pct">{prog.pct}%</span>
         </div>
       </div>
 
       {/* Today-shaped two-column body */}
       <div className="te-grid">
         <div>
-          {/* hero: your next action — pinned (not header-condensed) once
-              you're inside a single build, see .pj-nexthero-pinned above */}
-          {nx ? (
-            <div className="te-hero pj-nexthero-pinned">
-              <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next action on this build</div>
-              <h2>{nx.task.title}</h2>
-              <p>{nx.task.what || 'Pick this up next — it keeps the walking skeleton moving.'}</p>
-              <div style={{ marginTop: 4 }}>
-                <TaskActions project={project} task={nx.task} onOpen={setWsTaskId} />
-              </div>
-            </div>
-          ) : (
-            <div className="te-hero pj-nexthero-pinned"><div className="eyebrow">This build</div><h2>Every open task is done</h2><p>Nice work — nothing else queued on this build right now.</p></div>
-          )}
-
           <NextSessionStrip />
 
           {/* the FB timeline, filtered by the outline selection */}
           <div className="te-sec-title">{selName ? `${selName} · tasks` : 'This build · next task due first'}</div>
-          {openTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={setWsTaskId} />)}
+          {openTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={onOpenTask} />)}
           {sel === 'all' && project.activity.map((a) => <ActivityCard key={a.id} a={a} />)}
-          {doneTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={setWsTaskId} />)}
+          {doneTasks.map(({ t, list }) => <TaskCard key={t.id} project={project} task={t} listName={list} onOpen={onOpenTask} />)}
           {!openTasks.length && !doneTasks.length && <div className="fc-empty">No tasks in this section.</div>}
         </div>
 
@@ -247,6 +244,31 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
         <aside className="te-side">
           <div className="te-card te-scard">
             <h3><svg viewBox="0 0 24 24" fill="none"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Project outline</h3>
+
+            {/* Who this build is — moved off the page header, where it was a
+                full-bleed banner, to the top of the card you already look at to
+                navigate the build. */}
+            <div className="pj-ol-ident">
+              <div className="nm">{project.name}</div>
+              <div className="ds">{project.descriptor}</div>
+              <div className="mt">
+                <span className="chip sm">{project.stage}</span>
+                {project.sample && <span className="chip sm warn">Training example</span>}
+                {/* Inside the build too, not just on the card that got you
+                    here. A student reading their task list is exactly who needs
+                    to know whether these are their generated stories or the
+                    browser's ten-task template. */}
+                {!project.sample && project.origin === 'pipeline' && (
+                  <span className="chip sm" title="Generated from your answers, scheduled against your cohort, every requirement traced to a story.">Your tailored plan</span>
+                )}
+                {!project.sample && project.origin === 'local' && (
+                  <span className="chip sm warn" title="A general starter template built in your browser — no schedule, no Command Center, generic prompts.">Starter template</span>
+                )}
+              </div>
+              <a className="prev" href={`https://${project.slug}.preview.colaberry.ai`} target="_blank" rel="noreferrer">
+                {project.slug}.preview.colaberry.ai
+              </a>
+            </div>
             <div className="pj-outline">
               <button className={`pj-olrow${sel === 'all' ? ' active' : ''}`} onClick={() => setSel('all')}>
                 <span className="nm">All tasks</span><span className="ct">{open + done}</span>
@@ -273,13 +295,6 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
           </div>
         </aside>
       </div>
-
-      <ProjectWorkspaceDrawer
-        project={project}
-        task={wsTask}
-        open={wsTask !== null}
-        onClose={() => setWsTaskId(null)}
-      />
     </>
   );
 };

@@ -51,12 +51,22 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // first use with 'relation does not exist'. Both are idempotent and assert
 // their own post-conditions.
 import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
+import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
+import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
+import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
+import { ensureReeseWelcomeSchema } from './db/ensureReeseWelcomeSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
+import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
+import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
+import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotificationSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
+import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -2354,6 +2364,14 @@ async function start(): Promise<void> {
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
+  // Ticket Board Performance fix (2026-08-18): idx_tickets_created_at +
+  // idx_tickets_status_created_at, CONCURRENTLY (tickets is write-heavy). Powers the
+  // new "last 7 days" default board view. See ensureTicketIndexesSchema.ts header.
+  await ensureTicketIndexesSchema();
+  // Session-reminder arming columns on live_sessions. Must be ensured before the
+  // reminder cron starts, or the sweep falls back to re-sending on every deploy.
+  await ensureSessionReminderSchema();
+  await ensureEnrollmentNotificationSchema();
   // ProofDesk Work Graph — Milestone 3 (Multi-Agent Work Graph): 3 work-graph tables
   // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
   // additive only).
@@ -2364,6 +2382,12 @@ async function start(): Promise<void> {
   // Nothing that reads this table gates a real action yet — see
   // agentActionAuthorizationBridge.ts's header.
   await ensureApprovalRequestsSchema();
+  // Business accounts: organizations.status / status_changed_at / status_changed_by /
+  // lead_id, plus the org_cohorts join table (idempotent DDL, additive only).
+  // Before this, `organizations` had no lifecycle column, so an account could not be
+  // suspended without deleting the row and cascading its members away; and there was
+  // no org<->cohort relationship anywhere in the schema.
+  await ensureOrgAccountSchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.
@@ -2416,7 +2440,28 @@ async function start(): Promise<void> {
   // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
   await ensureSponsorPortalAuditSchema();
   await ensureSbpSchema();
+  // projects.archived_at — the soft-delete stamp behind "remove my own project".
+  // Must run before any request can hit the archive routes, because every
+  // student-project listing query now filters on this column and a missing
+  // column would 500 the whole Projects surface rather than degrade it.
+  await ensureProjectArchiveSchema();
+  // Transactional email dedup ledger. CLAUDE.md mandates application-level
+  // dedup on (recipient, subject, business_event_id) for Mandrill sends and
+  // production had no such table, so every batch send was one retry away from
+  // mailing a student twice. The claim in services/email/idempotentSend.ts is
+  // useless without the UNIQUE indexes this creates, which is why it is
+  // ensured at boot alongside its siblings rather than by the send script.
+  await ensureEmailSendLedgerSchema();
+  // Durable store for provider-rotated OAuth refresh tokens (MS Graph/Hotmail).
+  // Without it every rotation is discarded and the deployment drifts toward a
+  // dead credential that only an interactive re-consent can recover.
+  await ensureOauthTokenVaultSchema();
   await ensureWorkspaceRepoSchema();
+  // Files a student hands to an agent (Cory, Reese) for the read_attachments tool.
+  await ensureAgentAttachmentSchema();
+  // Reese's first-login welcome ledger — also the "has this student logged in
+  // before" marker, since enrollments carry no last_login_at.
+  await ensureReeseWelcomeSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
@@ -2465,6 +2510,9 @@ async function start(): Promise<void> {
   await ensureRuntimeSchema();
   await ensureOpsCenterSchema();
   await ensureWorkforceSchema();
+  // Workforce OS perf fix — missing tickets.created_by_id index (EXPLAIN ANALYZE-
+  // confirmed Seq Scan on every per-agent ticket count). Additive, idempotent, no flag.
+  await ensureTicketCreatorIndexSchema();
   await ensureIntelligenceSchema();
   // Colaberry Commons — Community Rooms tables (idempotent, additive). Created
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
@@ -2491,15 +2539,31 @@ async function start(): Promise<void> {
       console.warn('[CommunityRooms] default room seed failed:', err?.message);
     }
   }
-  // Intelligence-pipeline sample cards — one evergreen card per intel type so the
-  // Today feed carries this content before the ingestion pipelines run. Idempotent
-  // (upserts by type); fail-soft so a fresh DB without the types can't break boot.
-  try {
-    const { seedIntelSampleCards } = await import('./seeds/seedIntelSampleCards');
-    const r = await seedIntelSampleCards();
-    console.log(`[IntelSamples] ${r.created.length} created, ${r.updated.length} updated`);
-  } catch (err: any) {
-    console.warn('[IntelSamples] sample-card seed failed:', err?.message);
+  // Intelligence-pipeline sample cards — one evergreen card per intel type, to
+  // carry the Today feed before the ingestion pipelines have produced anything.
+  //
+  // OFF by default. That cold-start justification has expired: the pipelines
+  // have since generated hundreds of real published cards across all ten types,
+  // so on a populated database this seed only adds demo content on top of real
+  // content. Running it unconditionally caused two production problems:
+  //   1. It re-asserted all ten cards on EVERY boot and forced them back to
+  //      published, so a correction made in the DB or by an admin silently
+  //      reverted on the next deploy (a dead video link came back this way on
+  //      2026-08-13).
+  //   2. Its permanent card meant a type's card count was never 0, which
+  //      suppressed the INTEL_SOURCE_EXHAUSTED / POOL_EMPTY diagnostics until
+  //      feedTypeStatsService.ts added an explicit exclusion on 2026-08-10.
+  //
+  // Set SEED_INTEL_SAMPLE_CARDS=true to run it — intended for a fresh dev or
+  // preview database, which is what it was written for. Still fail-soft.
+  if (process.env.SEED_INTEL_SAMPLE_CARDS === 'true') {
+    try {
+      const { seedIntelSampleCards } = await import('./seeds/seedIntelSampleCards');
+      const r = await seedIntelSampleCards();
+      console.log(`[IntelSamples] ${r.created.length} created, ${r.updated.length} updated`);
+    } catch (err: any) {
+      console.warn('[IntelSamples] sample-card seed failed:', err?.message);
+    }
   }
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any
@@ -2805,6 +2869,15 @@ async function start(): Promise<void> {
   if (env.enableFollowUpScheduler) {
     startScheduler();
   }
+
+  // Register the cognitive-incident email subscriber (BC #10099862873 P1 item 3,
+  // idempotent — re-registering on restart is safe, registerIncidentSubscriber
+  // just replaces the in-memory subscriber list)
+  import('./services/incidentSubscriberBootstrap').then(({ registerCognitiveIncidentSubscriber }) => {
+    registerCognitiveIncidentSubscriber().catch((err) => {
+      console.error('[Server] Failed to register cognitive incident subscriber:', err.message);
+    });
+  });
 
   app.listen(env.port, () => {
     console.log(`Server running on port ${env.port} [${env.nodeEnv}]`);

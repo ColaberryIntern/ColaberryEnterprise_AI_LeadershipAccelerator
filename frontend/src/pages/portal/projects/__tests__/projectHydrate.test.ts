@@ -52,7 +52,11 @@ test('overlay is idempotent — second pass reports no change', () => {
 
 test('overlay never regresses a locally-done task', () => {
   const local = [localProject('p1', [localTask('p1-t1', undefined, 'done')])];
-  const tree = bTree([bTask('p1-t1', 'not_started')]);
+  // Named 'p1' to match the local fixture. Since 2026-08-17 the overlay also
+  // adopts the server's NAME (see adoptServerIdentity), so a differently-named
+  // tree is a real change — which would turn this completion-regression test
+  // into a naming test. The property under test is that `done` is never undone.
+  const tree = bTree([bTask('p1-t1', 'not_started')], 'p1');
   const r = reconcileProjects(local, tree);
   expect(r.changed).toBe(false);
   expect(r.next[0].lists[0].tasks[0].state).toBe('done');
@@ -89,4 +93,78 @@ test('backendTreeToProject maps status→state and flags the first open task as 
   expect(tasks.map((t) => t.due)).toEqual(['done', 'today', 'up']); // first OPEN task is "today"
   expect(p.reqs.map((r) => r.id)).toEqual(['R1']); // requirement catalog derived from keys
   expect(p.status).toBe('ready');
+});
+
+// ── identity: story ids are NOT unique across projects ──────────────────────────
+describe('a new build is not swallowed by an older one', () => {
+  /**
+   * MEASURED, 2026-08-13, on ali@colaberry.com's own machine. The match used to
+   * be "does a local project share ANY task key with the tree?", and task keys
+   * are story ids — which every plan numbers STORY-001 upward. An older build
+   * sitting in localStorage therefore matched every newly published project, so
+   * the new tree was overlaid onto the old project and never appeared. The
+   * build was perfectly correct on the server and invisible in the browser.
+   *
+   * The same story-id-is-not-unique assumption clobbered 18 tasks server-side
+   * the same morning. This is that bug one layer up.
+   */
+  const OLD = localProject('old-meal-project', [
+    localTask('t1', 'STORY-001'), localTask('t2', 'STORY-002'),
+  ]);
+  const newTree = bTree(
+    [bTask('STORY-000'), bTask('STORY-001'), bTask('STORY-002')],
+    'Client Onboarding Concierge',
+  );
+
+  it('hydrates the new project even though every story id collides', () => {
+    const r = reconcileProjects([OLD], newTree);
+
+    expect(r.mode).toBe('hydrate');
+    expect(r.changed).toBe(true);
+    expect(r.next).toHaveLength(2);
+    expect(r.next[0].name).toBe('Client Onboarding Concierge');
+    expect(r.next[0].id).toBe('proj-uuid');
+  });
+
+  it('leaves the older project untouched rather than rewriting it', () => {
+    const r = reconcileProjects([OLD], newTree);
+    expect(r.next[1]).toBe(OLD);
+  });
+
+  it('puts the new build first, where the student will see it', () => {
+    const r = reconcileProjects([OLD], newTree);
+    expect(r.next[0].id).toBe('proj-uuid');
+  });
+
+  it('overlays — not duplicates — once the project has been hydrated', () => {
+    const once = reconcileProjects([OLD], newTree);
+    const twice = reconcileProjects(once.next, newTree);
+
+    expect(twice.mode).toBe('noop');
+    expect(twice.next).toHaveLength(2);
+  });
+
+  it('overlays a completion onto the matching project, keyed on project id', () => {
+    const hydrated = reconcileProjects([OLD], newTree).next;
+    const withDone = bTree(
+      [bTask('STORY-000', 'complete'), bTask('STORY-001'), bTask('STORY-002')],
+      'Client Onboarding Concierge',
+    );
+
+    const r = reconcileProjects(hydrated, withDone);
+
+    expect(r.mode).toBe('overlay');
+    expect(r.next).toHaveLength(2);
+    expect(r.next[0].lists[0].tasks.find((t) => t.storyId === 'STORY-000')!.state).toBe('done');
+    // and the old project is still not involved
+    expect(r.next[1]).toBe(OLD);
+  });
+
+  it('never matches the seeded demo project, whatever its id', () => {
+    const demo = { ...localProject('proj-uuid', [localTask('t1', 'STORY-001')], true) };
+    const r = reconcileProjects([demo], newTree);
+
+    expect(r.mode).toBe('hydrate');
+    expect(r.next).toHaveLength(2);
+  });
 });

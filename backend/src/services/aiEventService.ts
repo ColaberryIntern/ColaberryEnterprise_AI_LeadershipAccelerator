@@ -6,6 +6,7 @@ import type { AiEventOutcome } from '../models/AiEvent';
 import { emitAlert } from './alertService';
 import { getTraceId } from '../utils/requestContext';
 import { redactSensitive } from '../utils/piiRedaction';
+import { truncateWithMarker } from '../utils/truncateWithMarker';
 
 /**
  * Log an AI system event (campaign scans, agent triggers, repairs, failures, etc.)
@@ -24,6 +25,22 @@ export async function logAiEvent(
     entity_id: entity_id || undefined,
     details: details || undefined,
   });
+}
+
+/**
+ * ai_agent_activity_logs.action is varchar(100). Callers build this string by
+ * joining an agent's distinct action names, which silently exceeded 100 chars
+ * for richer agents — Postgres rejected the INSERT, the throw propagated out of
+ * the orchestrator's success path, and the run was recorded as FAILED even
+ * though the agent's actual work had completed. That produced permanent
+ * "100% of last 10 runs failed" critical alerts for healthy jobs.
+ *
+ * Enforced here, at the single write boundary, so no caller can reintroduce it.
+ */
+const ACTION_MAX_LENGTH = 100;
+
+function fitAction(action: string): string {
+  return truncateWithMarker(action, ACTION_MAX_LENGTH);
 }
 
 /**
@@ -49,7 +66,7 @@ export async function logAgentActivity(params: {
   return AiAgentActivityLog.create({
     agent_id: params.agent_id,
     campaign_id: params.campaign_id || undefined,
-    action: params.action,
+    action: fitAction(params.action),
     reason: params.reason || undefined,
     confidence: params.confidence || undefined,
     before_state: params.before_state || undefined,

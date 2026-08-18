@@ -59,6 +59,41 @@ export async function ensureSbpSchema(): Promise<void> {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS due_baseline_on DATE`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_due ON student_tasks (due_on) WHERE due_on IS NOT NULL`,
 
+    // Verification, as distinct from self-report. `status = 'complete'` is the
+    // student's claim; `verified_at` is the platform having CONFIRMED the story
+    // is actually done, and `verified_by` is who or what confirmed it (a human
+    // reviewer's identity, or the agent/check that passed). They are separate
+    // columns rather than a richer status value because points will be gated on
+    // `verified_at` being set, and a gate needs a field that cannot be reached
+    // by a student toggling their own checkbox.
+    //
+    // Nullable with no DEFAULT on purpose: a default would backdate every task a
+    // live cohort has already marked complete into "verified", which is the one
+    // outcome this column exists to prevent. Nullable + no default also keeps
+    // this a catalog-only change in Postgres — no table rewrite, no exclusive
+    // lock held while rows are copied — which is what makes it safe to run on
+    // every boot against a table a cohort is using right now.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_by TEXT`,
+
+    // The evidence commit sha, FROZEN at award time. Same write-once discipline
+    // as verified_at, and added for a specific defect: `evidence_records` keys
+    // an award on `<story>@<sha-at-award-time>`, and the XP read was rebuilding
+    // that key from the CURRENT repo state. A student who force-pushes or
+    // squashes therefore orphaned their own banked award and the story read
+    // 0 XP forever. The sha existed only inside a log line until now, so there
+    // was nothing durable to look it up by.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verified_ref TEXT`,
+
+    // The live verdict, refreshed on every sync: state, which acceptance
+    // criteria are outstanding, the evidence commit, and why it is not verified
+    // yet. `verified_at` above answers "was it confirmed"; this answers "what is
+    // left", which is the question a student sitting at 3 of 4 criteria is
+    // actually asking. JSONB rather than a second table because it is read
+    // exactly once per task, always alongside the task, and never queried
+    // across rows. Nullable, no default — same catalog-only, lock-free change.
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS verification_json JSONB`,
+
     `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS answers JSONB`,
     `CREATE UNIQUE INDEX IF NOT EXISTS build_intake_unique_project ON build_intake (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_enrollment ON build_intake (enrollment_id)`,
@@ -85,6 +120,42 @@ export async function ensureSbpSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS build_plans_unique_project_version ON build_plans (project_id, version)`,
     `CREATE INDEX IF NOT EXISTS idx_build_plans_project ON build_plans (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_plans_status ON build_plans (status)`,
+
+    // Webhook delivery ledger. GitHub retries a delivery it believes failed —
+    // including one we handled perfectly but answered slowly — and every retry
+    // would otherwise re-run a verification pass that reads GitHub several
+    // times. The award itself is already safe (evidence_records has its own
+    // unique idempotency key), so this table is not the last line of defence;
+    // it is the one that stops us spending a student's rate limit re-deciding a
+    // question we already answered.
+    //
+    // `delivery_id` is GitHub's X-GitHub-Delivery UUID, unique per delivery and
+    // stable across its retries — which is exactly the property that makes it
+    // the right key.
+    `CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
+       delivery_id VARCHAR(120) PRIMARY KEY,
+       event VARCHAR(60),
+       repo_full_name VARCHAR(255),
+       project_id UUID,
+       outcome VARCHAR(30),
+       received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    // Housekeeping reads only. The table is append-only and small (one row per
+    // push per student), but a date index keeps any future prune cheap.
+    `CREATE INDEX IF NOT EXISTS idx_github_webhook_deliveries_received ON github_webhook_deliveries (received_at)`,
+
+    // PER-REPO webhook secret.
+    //
+    // Until now one `GITHUB_WEBHOOK_SECRET` covered every student repo. That was
+    // survivable while the platform installed every hook itself; it stops being
+    // survivable the moment students register their own, because the secret has
+    // to be SHOWN to whoever registers it. One shared secret shown to thirty
+    // students is a secret that lets any one of them forge pushes for all the
+    // others — and student repos are public by default, so a single careless
+    // commit would expose the whole cohort.
+    //
+    // One secret per connection instead. Its blast radius is exactly one repo.
+    `ALTER TABLE github_connections ADD COLUMN IF NOT EXISTS webhook_secret VARCHAR(120)`,
   ];
 
   for (const sql of statements) {
@@ -99,12 +170,26 @@ export async function ensureSbpSchema(): Promise<void> {
 }
 
 /** What ensureSbpSchema must have produced. Checked, not assumed. */
-const REQUIRED_TABLES = ['build_intake', 'build_plans'] as const;
+export const REQUIRED_TABLES = ['build_intake', 'build_plans', 'github_webhook_deliveries'] as const;
 /** Columns added after their table's first release. Checked, not assumed. */
-const REQUIRED_COLUMNS = [
+export const REQUIRED_COLUMNS = [
   'build_intake.answers',
   'student_tasks.due_on',
   'student_tasks.due_baseline_on',
+  // If these two are missing, every task looks unverified forever and the points
+  // gate silently awards nothing — a failure with no error attached to it.
+  'student_tasks.verified_at',
+  'student_tasks.verified_by',
+  // Missing ⇒ the frozen evidence sha is never persisted, and every XP lookup
+  // falls back to matching the current repo state — which is the defect the
+  // column exists to close.
+  'student_tasks.verified_ref',
+  // Missing => every student repo falls back to the one shared secret, which is
+  // the exact exposure per-repo secrets exist to close.
+  'github_connections.webhook_secret',
+  // Missing ⇒ the verification loop writes a verdict Sequelize silently drops,
+  // and every story renders "not started" while the run logs success.
+  'student_tasks.verification_json',
 ] as const;
 const REQUIRED_INDEXES = [
   'build_intake_unique_project',
@@ -140,7 +225,11 @@ export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[
     const [colRows]: any = await sequelize.query(
       `SELECT table_name, column_name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = ANY($tables)`,
-      { bind: { tables: ['build_intake', 'student_tasks'] } },
+      // Derived from REQUIRED_COLUMNS rather than hardcoded: a hardcoded list
+      // silently stops covering any column added on a NEW table, and the entry
+      // then reports missing on every boot forever while the column exists.
+      // That happened with github_connections.webhook_secret.
+      { bind: { tables: [...new Set(REQUIRED_COLUMNS.map((c) => c.split('.')[0]))] } },
     );
     const found = new Set((colRows ?? []).map((r: any) => `${r.table_name}.${r.column_name}`));
     for (const c of REQUIRED_COLUMNS) if (!found.has(c)) missing.push(`column:${c}`);
@@ -159,7 +248,7 @@ export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[
       error_class: 'SchemaInvariantViolation',
       context: {
         missing,
-        impact: 'build intake cannot be persisted, so a failed generation is not replayable and the reviewed plan is not the plan that ships',
+        impact: 'build intake cannot be persisted, so a failed generation is not replayable and the reviewed plan is not the plan that ships; a missing student_tasks column means the pipeline writes a value the table cannot hold and it is dropped without an error',
         remedy: 'inspect the [DB] sbp schema stmt skipped warnings above; the CREATE statements are idempotent and safe to re-run',
       },
     }));

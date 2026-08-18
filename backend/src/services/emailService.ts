@@ -4,7 +4,9 @@ import { getTestOverrides, getSetting } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
-import { formatCentralClock } from './centralDate';
+import { formatCentralClock, sessionDayLabel } from './centralDate';
+import { isDev } from '../config/featureFlags';
+import { decideDevEmailRouting } from './devEmailGuard';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -49,21 +51,100 @@ async function guardedSendMail(options: nodemailer.SendMailOptions): Promise<nod
       envelope: { from: '', to: [] },
     } as unknown as nodemailer.SentMessageInfo;
   }
-  return transporter!.sendMail(options);
+  // Environment backstop. Every send in this file funnels through here, so this
+  // is the one place that can guarantee a dev process cannot reach a real
+  // address regardless of database state — see devEmailGuard.ts for why a
+  // settings row alone was not enough.
+  const routed = await applyDevEmailGuard(options);
+  if (!routed) {
+    const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
+    return {
+      messageId: '',
+      accepted: [],
+      rejected: to ? [to] : [],
+      pending: [],
+      response: 'blocked_by_dev_email_guard',
+      envelope: { from: '', to: [] },
+    } as unknown as nodemailer.SentMessageInfo;
+  }
+
+  return transporter!.sendMail(routed);
+}
+
+/**
+ * Apply the dev-environment guard, resolving the sink at call time.
+ *
+ * Returns the options to send, or null when the send must be blocked.
+ *
+ * Sink precedence is env-var first, DB setting second, deliberately: the guard
+ * exists because a database value can vanish on a refresh, so the durable
+ * source is checked ahead of the fragile one. If both are absent the send is
+ * blocked rather than delivered.
+ */
+async function applyDevEmailGuard(
+  options: nodemailer.SendMailOptions
+): Promise<nodemailer.SendMailOptions | null> {
+  if (!isDev) return options;
+
+  let sink = (process.env.DEV_EMAIL_SINK || '').trim();
+  if (!sink) {
+    try {
+      const test = await getTestOverrides();
+      if (test.email) sink = test.email;
+    } catch {
+      // Settings unreadable — fall through with no sink, which fails closed.
+    }
+  }
+
+  const decision = decideDevEmailRouting(options as any, sink || null, true);
+  if (decision.action === 'block') {
+    console.warn(
+      `[Email] BLOCKED by dev guard — APP_ENV=dev with no DEV_EMAIL_SINK and no test_email setting. ` +
+        `Refusing to send to ${redactForLogs(decision.originalRecipients)} (subject: ${options.subject ?? ''})`
+    );
+    return null;
+  }
+  if (decision.action === 'redirect') {
+    console.warn(
+      `[Email] DEV REDIRECT — ${redactForLogs(decision.originalRecipients)} -> ${redactForLogs(sink)} ` +
+        `(subject: ${options.subject ?? ''})`
+    );
+    return decision.options as nodemailer.SendMailOptions;
+  }
+  return options;
+}
+
+async function resolveTestRedirect(): Promise<string | null> {
+  try {
+    const test = await getTestOverrides();
+    if (test.enabled && test.email) return test.email;
+  } catch {
+    // If settings DB fails, don't block email sending
+  }
+  return null;
+}
+
+/**
+ * The mailbox an email addressed to `intended` will actually be delivered to.
+ *
+ * Test mode does not suppress sends, it rewrites the recipient \u2014 so several
+ * distinct intended recipients can collapse into a single mailbox. Any caller
+ * that dedups "one email per recipient" must dedup on THIS address, not on the
+ * intended one, or it will still deliver one copy per intended recipient into
+ * the same inbox.
+ */
+export async function resolveDeliveryAddress(intended: string): Promise<string> {
+  return (await resolveTestRedirect()) ?? intended;
 }
 
 async function resolveEmailRecipient(
   intended: string,
   subject: string
 ): Promise<{ to: string; subject: string }> {
-  try {
-    const test = await getTestOverrides();
-    if (test.enabled && test.email) {
-      console.log(`[Email] TEST MODE: redirecting from ${redactForLogs(intended)} to ${redactForLogs(test.email)}`);
-      return { to: test.email, subject: `[TEST \u2192 ${intended}] ${subject}` };
-    }
-  } catch {
-    // If settings DB fails, don't block email sending
+  const redirect = await resolveTestRedirect();
+  if (redirect) {
+    console.log(`[Email] TEST MODE: redirecting from ${redactForLogs(intended)} to ${redactForLogs(redirect)}`);
+    return { to: redirect, subject: `[TEST \u2192 ${intended}] ${subject}` };
   }
   return { to: intended, subject };
 }
@@ -1242,27 +1323,120 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
     return;
   }
 
-  const urgency = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
+  // Computed ONCE and threaded into the body, so the subject line and the banner
+  // inside the email can never disagree about which day the class is — two
+  // independent Date.now() reads could straddle midnight and do exactly that.
+  const urgency = data.isOneHour
+    ? 'Starting in 1 Hour'
+    : sessionDayLabel(data.sessionDate, Date.now());
   const r = await resolveEmailRecipient(
     data.to,
     `[Accelerator] ${urgency}: Session ${data.sessionNumber} - ${data.sessionTitle}`
   );
-  const html = buildSessionReminderHtml(data);
-  const info = await guardedSendMail({
-    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    to: r.to,
-    subject: r.subject,
-    html,
-    text: htmlToPlainText(html),
-    headers: emailHeaders('accelerator-session-reminder'),
-  });
+  const html = buildSessionReminderHtml(data, urgency);
 
-  console.log(`[Email] Session reminder sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+  let info: any;
+  try {
+    info = await guardedSendMail({
+      from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+      replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+      to: r.to,
+      subject: r.subject,
+      html,
+      text: htmlToPlainText(html),
+      headers: emailHeaders('accelerator-session-reminder'),
+    });
+  } catch (err: any) {
+    // Log the failure before rethrowing. The scheduler's per-recipient .catch()
+    // swallows this into a console line, so without a row here a failed reminder
+    // leaves no queryable trace at all.
+    await recordSessionReminderLog(data, r, urgency, null, err);
+    throw err;
+  }
+
+  // guardedSendMail resolves with an empty messageId instead of throwing when a
+  // guard stops the send (kill switch, or the dev-environment guard). Recording
+  // that as 'sent' would put a delivery in communication_logs that never
+  // happened — which defeats the point of the audit row. Same
+  // Boolean(info.messageId) test the training-welcome sender already uses.
+  const delivered = Boolean(info?.messageId);
+  await recordSessionReminderLog(data, r, urgency, info, null, delivered);
+  console.log(
+    `[Email] Session reminder ${delivered ? 'sent' : `BLOCKED (${info?.response || 'guard'})`} to: ` +
+      `${redactForLogs(r.to)} | msgId: ${info?.messageId || ''}`
+  );
 }
 
-function buildSessionReminderHtml(data: SessionReminderData): string {
-  const urgencyLabel = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
+/**
+ * Audit row for one session-reminder send.
+ *
+ * Added because the 2026-08-13 "Tomorrow"-on-the-day incident could not be
+ * queried: `SELECT ... FROM communication_logs WHERE subject ILIKE '%Session 7%'`
+ * returned zero rows for an email 55 people had received, so who-got-what had to
+ * be reconstructed from Docker container timestamps and a git pull time. Every
+ * other outbound channel in this codebase (admissions email/SMS/calls, alerts,
+ * callbacks, the Mandrill webhooks) already writes here; session reminders were
+ * the gap.
+ *
+ * NEVER throws. logCommunication() rethrows on failure by contract, and this runs
+ * inside the send path — a DB hiccup must not turn a delivered email into a
+ * thrown reminder, nor a failed one into a lost error. Audit is strictly
+ * best-effort relative to delivery.
+ */
+async function recordSessionReminderLog(
+  data: SessionReminderData,
+  r: { to: string; subject: string },
+  urgency: string,
+  info: any | null,
+  err: any | null,
+  delivered: boolean = true
+): Promise<void> {
+  try {
+    // Required lazily, NOT imported at the top of the file — do not "tidy" this
+    // into a static import. communicationLogService imports ../models, which
+    // loads the whole Sequelize model graph and constructs the connection at
+    // module load. A static import therefore makes emailService unimportable
+    // without a live DATABASE_URL, which immediately broke two existing suites
+    // (emailService.digest, trainingWelcomeEmail) that mock ./config/env with no
+    // databaseUrl. Same deferral pattern schedulerService uses for its heavier
+    // service requires.
+    const { logCommunication } = require('./communicationLogService');
+    await logCommunication({
+      channel: 'email',
+      direction: 'outbound',
+      // resolveEmailRecipient rewrites the recipient when the test-override
+      // setting is on; recording which mode was in play is the difference
+      // between "55 students were mailed" and "55 copies went to one inbox".
+      delivery_mode: r.to === data.to ? 'live' : 'test_redirect',
+      // 'blocked' is a third outcome, distinct from both: the message was never
+      // handed to the transport (kill switch or dev guard). Collapsing it into
+      // 'sent' would record a delivery that did not occur; collapsing it into
+      // 'failed' would imply something went wrong when the block was deliberate.
+      status: err ? 'failed' : delivered ? 'sent' : 'blocked',
+      to_address: r.to,
+      from_address: env.emailFrom,
+      subject: r.subject,
+      provider: 'smtp',
+      provider_message_id: info?.messageId || null,
+      error_message: err ? String(err?.message || err) : null,
+      metadata: {
+        email_type: 'accelerator-session-reminder',
+        reminder_type: data.isOneHour ? '1h' : '24h',
+        // The rendered day word, so a future "why did it say that?" is one query
+        // rather than another forensic reconstruction.
+        urgency_label: urgency,
+        session_number: data.sessionNumber,
+        session_date: data.sessionDate,
+        start_time: data.startTime,
+        intended_to: data.to,
+      },
+    });
+  } catch (logErr: any) {
+    console.error('[Email] Session reminder audit log failed:', logErr?.message);
+  }
+}
+
+function buildSessionReminderHtml(data: SessionReminderData, urgencyLabel: string): string {
   const materialsHtml = data.materialsJson?.length
     ? `<h2>Session Materials</h2><ul>${data.materialsJson.map((m: any) => `<li><a href="${m.url}">${m.title || m.url}</a></li>`).join('')}</ul>`
     : '';
@@ -1595,6 +1769,114 @@ function buildOrgInviteHtml(data: OrgInviteData, magicLink: string): string {
   `.trim();
 }
 
+// --- Business-account welcome ---
+
+interface OrgWelcomeData {
+  to: string;
+  fullName: string;
+  orgName: string;
+  /** True when the person typed a company name; false when we fell back to their own name. */
+  hasRealCompanyName: boolean;
+}
+
+/**
+ * Welcome the person who just created a business account.
+ *
+ * Registration previously sent NOTHING — someone created a company account on
+ * the public site and heard back only silence. This is the counterpart to
+ * `sendOrgInviteEmail`, which their teammates already receive.
+ *
+ * It is NOT idempotent by itself, deliberately: this function sends whenever it
+ * is called, and `registerManager` owns the "only on first creation" decision
+ * via the `created` flag from `findOrCreate`. Putting the guard at the call site
+ * keeps the rule next to the state that decides it, rather than making this
+ * function query the database to find out whether it should run.
+ *
+ * No magic-link token here, unlike the invite: the person is already signed in
+ * (registration mints their JWT and redirects them into the workspace), so a
+ * second activation link would be confusing. The CTA is a plain portal link.
+ */
+export async function sendOrgWelcomeEmail(data: OrgWelcomeData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping org welcome to:', redactForLogs(data.to));
+    return;
+  }
+
+  const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const companyLink = `${portalBaseUrl}/portal/company`;
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    data.hasRealCompanyName
+      ? `${data.orgName} is set up on Colaberry`
+      : 'Your Colaberry business account is ready',
+  );
+  const html = buildOrgWelcomeHtml(data, companyLink);
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-org-welcome'),
+  });
+
+  console.log(`[Email] Org welcome sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+}
+
+function buildOrgWelcomeHtml(data: OrgWelcomeData, companyLink: string): string {
+  const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
+  const name = escapeHtml(firstName);
+  const org = escapeHtml(data.orgName);
+
+  // When no company name was supplied the org is named after the person, so
+  // "Welcome to Dana Reyes" would read as nonsense. Address the account instead.
+  const heading = data.hasRealCompanyName
+    ? `${org} is set up`
+    : 'Your business account is ready';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    .notice { font-size: 13px; color: #718096; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(heading)}</h1>
+
+  <p>Hi ${name},</p>
+
+  <p>Your business account on the Colaberry Enterprise AI platform is ready. You can invite your team, see what each person is building, and track readiness across the company from one place.</p>
+
+  <p><a href="${companyLink}" class="cta">Open Your Company Workspace</a></p>
+
+  <div class="highlight">
+    <strong>What you can do now:</strong><br>
+    &bull; Invite teammates &mdash; each gets their own free builder account<br>
+    &bull; Watch skills, evidence and readiness roll up across your team<br>
+    &bull; Keep your own builder track alongside the manager view
+  </div>
+
+  <p class="notice">You are signed in already &mdash; this link opens your workspace directly. If you did not create this account, reply to this email and we will remove it.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
 // --- Admissions Document Delivery ---
 
 interface AdmissionsDocumentParams {
@@ -1785,7 +2067,7 @@ export async function sendTicketApprovalEmail(data: {
   ${safeDescription ? `<div class="detail">${safeDescription}</div>` : ''}
   <div class="meta"><strong>Raised by:</strong> ${escapeHtml(data.directorName)}</div>
   <p><a href="${ticketUrl}" class="cta">Review the ticket</a></p>
-  <p style="font-size: 13px; color: #718096;">Nothing has been published or sent. This director works independently on everything else — you're only hearing from it because this one action needs a decision first.</p>
+  <p style="font-size: 13px; color: #718096;">Nothing has been published or sent. Everything else here runs on its own — you're only hearing about this one because it needs a decision first.</p>
   <div class="footer">
     <p>Colaberry AI Workforce</p>
   </div>
@@ -1838,6 +2120,68 @@ export async function sendTicketReplyConfirmation(data: {
     headers: emailHeaders('ai-workforce-ticket-reply-confirmation'),
   });
   console.log(`[Email] Ticket reply confirmation sent to: ${redactForLogs(r.to)} | ticket #${data.ticketNumber} | msgId: ${info.messageId}`);
+}
+
+// ─── Generic Send (EmailSendFn adapter) ────────────────────────────────────
+// Matches intelligence/systemStateEngine/incidents/subscribers/emailSubscriber.ts's
+// injected send_fn shape — lets any {to, subject, html, text} caller ride the
+// same guarded/kill-switch-aware transport as every purpose-built sender above,
+// without needing to know about Mandrill/nodemailer directly.
+
+export async function sendRawEmail(input: {
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+  /**
+   * Sender identity. Optional and defaulted to the historical
+   * "Cory - AI Operations" so every existing caller is unchanged. Supplied by
+   * campaigns that are NOT from Cory — a personal note from Ali arriving under
+   * an ops-agent byline is a content defect, not a cosmetic one.
+   */
+  fromName?: string;
+  fromEmail?: string;
+  replyTo?: string;
+  /** Mandrill X-MC-Tags value, for per-campaign reporting. */
+  tag?: string;
+}): Promise<{ ok: boolean; error?: string; messageId?: string }> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping send to:', input.to.join(', '));
+    return { ok: false, error: 'SMTP not configured' };
+  }
+  if (input.to.length === 0) {
+    return { ok: false, error: 'No recipients' };
+  }
+
+  try {
+    const info = await guardedSendMail({
+      from: `"${input.fromName ?? 'Cory - AI Operations'}" <${input.fromEmail ?? env.emailFrom}>`,
+      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+      to: input.to.join(', '),
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+      headers: emailHeaders(input.tag ?? 'incident-notification'),
+    });
+    // guardedSendMail resolves (doesn't throw) when the kill switch blocks the
+    // send — callers of this adapter (e.g. the incident subscriber) treat
+    // ok:true as "actually delivered," so a blocked send must report false,
+    // not silently look like success.
+    if (info.response === 'blocked_by_kill_switch') {
+      return { ok: false, error: 'blocked by kill switch' };
+    }
+    if (info.response === 'blocked_by_dev_email_guard') {
+      return { ok: false, error: 'blocked by dev email guard' };
+    }
+    console.log(`[Email] Raw send to: ${input.to.join(', ')} | msgId: ${info.messageId}`);
+    // The provider's message id is RETURNED, not merely logged. An idempotent
+    // send ledger has to record which provider message a claim produced, and a
+    // value that exists only inside a log line cannot be written to a row.
+    return { ok: true, messageId: info.messageId };
+  } catch (err: any) {
+    console.error(`[Email] Raw send failed to ${input.to.join(', ')}: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
 }
 
 // ─── Executive Briefing Email ─────────────────────────────────────────────

@@ -63,6 +63,12 @@ const DETAIL: AgentDetail = {
     { id: 't-1', ticket_number: 1, title: 'Reaching out to Jordan Rivera', status: 'in_progress', priority: 'high', type: 'reese_autonomous_outreach', created_at: null, updated_at: '2026-08-12T15:00:00Z' },
     { id: 't-2', ticket_number: 2, title: 'DM conversation with Alex Chen', status: 'done', priority: 'medium', type: 'student_support', created_at: null, updated_at: '2026-01-15T15:00:00Z' },
   ],
+  capabilities: {
+    reads: ['ProofDesk learner-progress signals (XP, competencies, timeline state) for the student in the conversation'],
+    produces: ['A reply message in the student DM thread'],
+    undocumented_tools: [],
+    produced_ticket_types: ['reese_autonomous_outreach', 'student_support'],
+  },
 };
 
 let container: HTMLDivElement;
@@ -172,5 +178,100 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
 
     expect(container.textContent).toContain('Last activity');
     expect(container.textContent).toContain('unknown');
+  });
+});
+
+// Agent Detail transparency, part 2 (2026-08-18, session CC-20260818-wf9k) —
+// "what it reads / what it produces", derived from real tools_granted + real
+// observed ticket types, never hand-written per-agent prose.
+describe('AgentDetailPage — "what this agent reads / produces" section', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('renders the real reads/produces text derived from tools_granted, and the live produced-ticket-type badges', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL);
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('What this agent reads / produces');
+    expect(container.textContent).toContain('ProofDesk learner-progress signals');
+    expect(container.textContent).toContain('A reply message in the student DM thread');
+    // Ticket-type badges reuse the same getTicketTypeLabel() humanization as the
+    // Ticket activity table below it — "Reese Outreach" is reese_autonomous_outreach's label.
+    expect(container.textContent).toContain('Reese Outreach');
+    expect(container.textContent).toContain('Student Support');
+  });
+
+  it('honesty path: an agent with an undocumented tool renders the disclosure note, never silent, never fabricated text', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      capabilities: { reads: [], produces: [], undocumented_tools: ['a_tool_from_the_future'], produced_ticket_types: [] },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('a_tool_from_the_future');
+    expect(container.textContent).toContain('no documented reads/produces yet');
+  });
+
+  it('boundary: an agent with empty reads/produces (no granted tools) shows an honest empty state, not a blank section', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [] },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain("don't read any external data source");
+    expect(container.textContent).toContain("don't produce anything on their own");
+  });
+});
+
+// Agent Alias & Identity Fix — page title/breadcrumb prefer the real
+// AdminUser.display_name over the raw technical agent_name (same bug, same fix
+// as the Live Agents card list).
+describe('AgentDetailPage — title prefers identity.display_name over raw agent_name', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('display name fix: renders the real display_name in the title when identity exists and differs from agent_name', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      agent: { ...DETAIL.agent, id: 'agent-process-1', agent_name: 'cory-engine' },
+      identity: { admin_user_id: 'admin-process-1', email: 'cory-engine@colaberry.com', display_name: 'Cory Engine — Autonomous Operations', is_ai_operated: true },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Cory Engine — Autonomous Operations');
+    // The h1/page title must never show the raw technical id.
+    const h1 = container.querySelector('h1, .page-title, [class*="title"]');
+    expect(h1?.textContent).not.toBe('cory-engine');
+  });
+
+  it('boundary: falls back to agent_name when identity is null (a non-blueprint agent with no linked AdminUser)', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, identity: null });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Reese');
   });
 });

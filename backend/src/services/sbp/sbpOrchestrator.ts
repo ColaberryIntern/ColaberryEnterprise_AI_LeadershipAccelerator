@@ -4,10 +4,10 @@
  * Everything else in services/sbp/ is a correct, tested component that nothing
  * called. This is what calls them, in order:
  *
- *   intake → generate → gate → repair → persist(draft) → [review] → publish
+ *   intake → generate → gate → repair → persist(draft) → publish
  *          → render → commit to the workspace repo
  *
- * Two design rules the pilot taught us the hard way:
+ * Three design rules the pilot taught us the hard way:
  *
  *  1. **Generate once.** The draft is written at generation and `publish`
  *     promotes THAT row. The pilot regenerated between review and commit, which
@@ -15,6 +15,17 @@
  *  2. **Fail closed, and say why.** A plan that cannot pass the gate is never
  *     persisted as publishable. The violations are stored so the student sees
  *     what is missing rather than a spinner that stops.
+ *  3. **Nothing waits on a human.** Generation ends by publishing a gate-clean
+ *     plan itself (see `autoPublish`). There used to be a `[review]` step in
+ *     this chain with nothing on either end of it: no UI offered the review, no
+ *     UI offered the publish, and `publishBuild` had exactly one caller — an
+ *     HTTP route nothing in the product called. So every gate-clean plan came
+ *     to rest in `build_plans.status = 'draft'` and never became the lists,
+ *     dates and prompts in `student_tasks` that the portal renders. Measured on
+ *     2026-08-12/13: five students finished the wizard, five correct plans were
+ *     generated, and all five students were left looking at the browser's local
+ *     fallback build. Publishing is what makes a plan real, so publishing is
+ *     part of generating.
  *
  * Generation is minutes long, so `startBuild` returns immediately and the work
  * runs on the bounded queue. State lives in `build_intake.status` and
@@ -26,26 +37,38 @@ import { decomposeBuild } from './decomposeService';
 import { tierTargets } from './buildTiers';
 import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
+import { scopeAgents, agentScopingEnabledFor } from './scopeAgents';
+import { env } from '../../config/env';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
-import { writeDocsToRepo } from './repoWriter';
+import { writeDocsToRepo, readRepoManifest } from './repoWriter';
+import { loadBuildProgress } from './buildProgressSnapshot';
 import { materializePlanAsTasks } from './materializeTasks';
-import { buildSchedule, Schedule } from './buildSchedule';
+import { Schedule } from './buildSchedule';
+import { scheduleForEnrollment } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
 import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
 } from './planStore';
 import { getProvisionQueue } from './boundedQueue';
+import { setProjectNameIfEmpty } from './projectNaming';
 
 /** Where a build is. Stored on `build_intake.status`. */
 export type BuildStatus =
   | 'captured'        // intake saved, nothing generated yet
   | 'generating'      // a model call is in flight
-  | 'gate_failed'     // generated, but the plan has violations — not publishable
-  | 'drafted'         // generated and gate-clean, awaiting review
+  | 'gate_failed'     // generated, but the plan has BLOCKING violations — not publishable
+  | 'drafted'         // gate-clean and stored, but not yet promoted. Since
+                      // auto-publish this is a FAILURE state, not a resting
+                      // one: the plan is good and something downstream of it
+                      // (repo lookup, materialization, the database) refused.
+                      // The student is told, and POST .../publish retries it.
   | 'published'       // promoted; documents written if a repo exists
   | 'awaiting_repo'   // published, but no repo to write documents into
   | 'failed';         // generation itself failed; intake is replayable
+
+/** Statuses in which the plan has actually reached the student's portal. */
+export const DELIVERED_STATUSES: ReadonlySet<BuildStatus> = new Set<BuildStatus>(['published', 'awaiting_repo']);
 
 export interface BuildState {
   projectId: string;
@@ -121,6 +144,20 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
   });
   log('sbp_build_started', correlationId, 'success', { projectId: input.projectId, idea_chars: input.idea.length });
 
+  // Name the project from what the student just typed. THIS IS THE FIRST MOMENT
+  // THE NAME IS KNOWABLE: the `projects` row is created by POST /api/portal/
+  // projects (projectService.buildAndActivateProject) before the wizard is ever
+  // submitted, so there is nothing to name it with at creation.
+  //
+  // Until now the name stopped here — it went into `build_intake.name` and no
+  // reader existed, so every student build carried `projects.name = NULL` and
+  // the portal rendered the literal "Your build" for all 20 of them.
+  //
+  // Non-fatal on purpose: a build is worth more than its title, and this runs
+  // before generation. It also cannot overwrite a name the student already set
+  // (see setProjectNameIfEmpty), so re-submitting the wizard is a no-op here.
+  await nameProject(input.projectId, input.name, 'intake', correlationId);
+
   // Bounded: a cohort starting together queues rather than fanning out. The
   // promise is deliberately not awaited — the caller gets its answer now — but
   // it is never unhandled, because a lost rejection is how a build silently dies.
@@ -168,7 +205,20 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
     // to mean an empty Projects page; a slightly redundant story beats no plan.
     const publishable = isPublishable(gate.violations);
 
-    await savePlanDraft(input.projectId, repaired.plan, { gate, model, attempts, correlationId });
+    // Scope the AI team from the finished plan. Deliberately AFTER the gate:
+    // agents describe how the student's system runs, not whether the plan is
+    // sound, and a scoping failure must never cost them a publishable build —
+    // scopeAgents returns the plan untouched when anything goes wrong.
+    const scoped = agentScopingEnabledFor(input.enrollmentId, env.sbpAgentScoping)
+      ? await scopeAgents(repaired.plan, { client, correlationId })
+      : { plan: repaired.plan, scoped: false, gated: [] as string[], reason: 'disabled' };
+    if (scoped.gated.length) {
+      log('sbp_agents_autonomy_capped', correlationId, 'partial', {
+        projectId: input.projectId, agents: scoped.gated,
+      });
+    }
+
+    const draft = await savePlanDraft(input.projectId, scoped.plan, { gate, model, attempts, correlationId });
     await setStatus(input.projectId, publishable ? 'drafted' : 'gate_failed');
 
     log('sbp_build_generated', correlationId, gate.ok ? 'success' : 'partial', {
@@ -177,6 +227,9 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       attempts,
       requirements: repaired.plan.requirements.length,
       stories: repaired.plan.stories.length,
+      agents: scoped.plan.agents?.length ?? 0,
+      agents_scoped: scoped.scoped,
+      agents_gated: scoped.gated.length,
       repair_attempts: repaired.attempts,
       repair_rejected: repaired.rejected,
       repaired_stories: repaired.changed.flat(),
@@ -187,6 +240,15 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       advisory: advisoryViolations(gate.violations).map((v) => v.rule),
     });
     if (!gate.ok) console.log(formatViolations(gate));
+
+    // The step that was missing. A gate-clean plan is promoted here, in the same
+    // job that generated it, so it becomes lists/dates/prompts the student can
+    // actually see. A plan with blocking violations deliberately falls through:
+    // it stays `gate_failed` with its violations stored, and the poll endpoint
+    // hands the student the reason.
+    if (publishable) {
+      await autoPublish(input.projectId, input.enrollmentId, draft.plan_sha256, correlationId);
+    }
   } catch (err: any) {
     await setStatus(input.projectId, 'failed').catch(() => { /* status write must not mask the real error */ });
     log('sbp_build_failed', correlationId, 'failure', {
@@ -196,6 +258,74 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       message: err?.message,
     });
   }
+}
+
+/**
+ * Promote the plan generation just produced, without waiting for anyone.
+ *
+ * WHY IT CANNOT THROW: by the time this runs the plan is already durable. The
+ * student's work is safe whatever happens next, and a publish failure must not
+ * be reported as a generation failure — `failed` means "regenerate", `drafted`
+ * means "the plan is good, retry the promotion", and telling a student to
+ * regenerate a perfectly good plan burns minutes of model time for nothing.
+ * So every failure is contained here, logged with its class, and leaves the
+ * status at `drafted` for `POST /builds/:id/publish` to retry.
+ *
+ * `expectedSha` is the hash of the draft we just wrote. Passing it makes "the
+ * plan we generated is the plan we published" enforced rather than assumed: if
+ * a concurrent generation slipped a newer version underneath us, publishPlan
+ * refuses on the mismatch instead of promoting a plan this run never graded.
+ *
+ * Idempotent, because everything it calls is: publishPlan returns the existing
+ * row when the version is already published, materializePlanAsTasks upserts on
+ * (project_id, story_id) and preserves completed work, and the active-project
+ * write is a guarded UPDATE. Re-running it is a no-op, which is what makes the
+ * manual retry safe.
+ */
+async function autoPublish(
+  projectId: string, enrollmentId: string, expectedSha: string, correlationId: string | null,
+): Promise<void> {
+  if (!autoPublishEnabled()) {
+    log('sbp_autopublish_disabled', correlationId, 'partial', { projectId });
+    return;
+  }
+  const started = Date.now();
+  try {
+    const { repoForProject } = await import('./workspaceRepo');
+    const repo = await repoForProject(projectId);
+    const result = await publishBuild(projectId, { enrollmentId, expectedSha, repo });
+    log('sbp_autopublished', correlationId, 'success', {
+      projectId, duration_ms: Date.now() - started,
+      status: result.status, version: result.planVersion,
+      files: result.filesWritten, has_repo: Boolean(repo),
+    });
+  } catch (err: any) {
+    // Named loudly. This is the difference between a student seeing their plan
+    // and a student seeing the browser's fallback, so it is an error with a
+    // class on it, not a swallowed exception.
+    log('sbp_autopublish_failed', correlationId, 'failure', {
+      projectId, duration_ms: Date.now() - started,
+      error_class: err?.error_class ?? err?.name ?? 'Error',
+      status: typeof err?.status === 'number' ? err.status : null,
+      message: err?.message,
+      recovery: 'plan is drafted and intact; POST /api/portal/sbp/builds/:projectId/publish retries',
+    });
+  }
+}
+
+/**
+ * Auto-publish is ON unless explicitly switched off.
+ *
+ * Deliberately not a default-OFF flag like the rest of this subsystem. The whole
+ * SBP surface already sits behind SBP_PIPELINE_ENABLED; a second default-OFF
+ * flag in front of this one would mean shipping the fix and leaving production
+ * in the exact broken state it is meant to end. `SBP_AUTO_PUBLISH=off` is the
+ * kill switch if a review step is ever genuinely wanted — and when it is off,
+ * the plan is still visibly `drafted` rather than silently stuck, and the
+ * publish route is still there to promote it.
+ */
+function autoPublishEnabled(): boolean {
+  return (process.env.SBP_AUTO_PUBLISH ?? 'on').trim().toLowerCase() !== 'off';
 }
 
 /**
@@ -231,6 +361,32 @@ export function buildBriefText(input: StartBuildInput): string {
     );
   }
   return parts.join('\n\n');
+}
+
+/**
+ * Give the project a real name, from `source`, if it does not have one yet.
+ *
+ * Never throws. Naming is presentation: it must not be able to fail a build
+ * that is otherwise fine, and at publish time the plan is already durable. But
+ * it is logged with an error_class when it fails, because "every project has a
+ * name" is a product promise and a silent miss is how the current state
+ * (twenty unnamed builds) lasted as long as it did.
+ */
+async function nameProject(
+  projectId: string, candidate: string | null | undefined,
+  source: 'intake' | 'plan', correlationId: string | null,
+): Promise<void> {
+  try {
+    const named = await setProjectNameIfEmpty(projectId, candidate);
+    log(named ? 'sbp_project_named' : 'sbp_project_name_noop', correlationId, 'success', {
+      projectId, source, named,
+    });
+  } catch (err: any) {
+    log('sbp_project_name_failed', correlationId, 'failure', {
+      projectId, source, error_class: err?.name ?? 'Error', message: err?.message,
+      impact: 'the project renders the generic fallback title until it is named',
+    });
+  }
 }
 
 async function setStatus(projectId: string, status: BuildStatus): Promise<void> {
@@ -293,12 +449,24 @@ export async function publishBuild(
   const published = await publishPlan(projectId, draft.version, opts.expectedSha);
   const correlationId = published.correlation_id;
 
+  // Second and last chance to name the project. Five of the twenty live builds
+  // reached publish with no intake name — the wizard's name field is optional —
+  // and for those the plan's own `project_name` is the best thing anybody has.
+  // It is not invented here: it was generated from the student's idea and is a
+  // required field of the plan contract, so it is plumbing, not authorship.
+  //
+  // Placed before both return paths so the no-repo publish gets it too, and
+  // guarded on emptiness so an intake name set at startBuild always wins.
+  await nameProject(projectId, (published.plan as BuildPlan)?.project_name, 'plan', correlationId);
+
   if (!opts.repo) {
     // No repo yet, but the plan must still reach the portal — otherwise a
     // student completes a build and sees nothing change on screen, which is the
     // exact failure this pipeline was built to fix. Prompts fall back to
     // inlining their context instead of citing paths (FR-031).
-    const schedule = await scheduleFor(opts.enrollmentId, published.plan as BuildPlan, correlationId);
+    const schedule = await scheduleFor(
+      opts.enrollmentId, published.plan as BuildPlan, correlationId, published.published_at,
+    );
     const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule });
     await makeActiveProject(opts.enrollmentId, projectId, correlationId);
     await setStatus(projectId, 'awaiting_repo');
@@ -308,23 +476,55 @@ export async function publishBuild(
     return { status: 'awaiting_repo', planVersion: published.version, commitSha: null, filesWritten: 0, repoUrl: null };
   }
 
+  // The schedule is now computed BEFORE the render, not after it. Real dates
+  // (due dates, baselines, demo day, the demo target release) are part of the
+  // Command Center's data contract, and a page cannot show a Gantt chart of
+  // dates the file does not carry. Materialization still consumes the same
+  // object further down, so this is a hoist, not a second computation.
+  // `published.published_at` is what floors the build window, so a plan that
+  // lands after its cohort's week-4 Thursday is dated from the plan's own
+  // existence rather than from a date that has already gone by.
+  const schedule = await scheduleFor(
+    opts.enrollmentId, published.plan as BuildPlan, correlationId, published.published_at,
+  );
+
+  // What the platform already knows about this build, mirrored into the repo so
+  // a static page can render verified/points/commit without an API call.
+  const snapshot = await loadBuildProgress(projectId, opts.enrollmentId);
+
   const files = renderDocs(published.plan as BuildPlan, {
     repoUrl: opts.repo.url,
     generatedAt: new Date().toISOString(),
     planVersion: published.version,
     planSha256: published.plan_sha256,
     correlationId: correlationId ?? undefined,
+    schedule,
+    progress: snapshot.progress,
+    baselineByStory: snapshot.baselineByStory,
   });
+
+  // Read the manifest that is already in the repo, so the content-hash check in
+  // `changedFiles` can actually run.
+  //
+  // This argument was `null` with a TODO against it, and the cost was concrete:
+  // `parseManifestHashes(null)` returns `{}`, every file therefore looked
+  // changed, and every republish committed the whole document set. The
+  // "unchanged ⇒ no commit" guarantee was fully implemented and unit-tested but
+  // never once exercised in production — students got a commit per publish that
+  // touched nothing.
+  const existingManifest = await readRepoManifest(
+    { owner: opts.repo.owner, repo: opts.repo.repo },
+    { correlationId: correlationId ?? undefined },
+  );
 
   const write = await writeDocsToRepo(
     { owner: opts.repo.owner, repo: opts.repo.repo },
     files,
-    null,   // TODO(step 6): read the existing manifest so conflict detection can run
+    existingManifest,
     { correlationId: correlationId ?? undefined },
   );
 
   // Materialize AFTER the write, so prompts can cite paths now proven to exist.
-  const schedule = await scheduleFor(opts.enrollmentId, published.plan as BuildPlan, correlationId);
   const materialized = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, {
     repoUrl: opts.repo.url,
     manifestPaths: files.map((f) => f.path),
@@ -354,49 +554,11 @@ export function planMatchesReviewed(plan: BuildPlan, expectedSha: string): boole
 
 
 /**
- * Real dates for this student's cohort, or null when the cohort has no start
- * date recorded.
- *
- * Null is a normal outcome, not an error: tasks materialize without due dates
- * exactly as they did before. A missing cohort date must never cost a student
- * their build.
+ * Real dates for this student's cohort. Lives in `scheduleForEnrollment` now,
+ * because the sync-time document refresh needs the same answer and a second
+ * copy is how the two paths would drift.
  */
-async function scheduleFor(
-  enrollmentId: string, plan: BuildPlan, correlationId: string | null,
-): Promise<Schedule | null> {
-  try {
-    const { sequelize } = await import('../../config/database');
-    const [rows]: any = await sequelize.query(
-      `SELECT c.start_date FROM enrollments e
-         JOIN cohorts c ON c.id = e.cohort_id
-        WHERE e.id = $eid AND c.start_date IS NOT NULL LIMIT 1`,
-      { bind: { eid: enrollmentId } },
-    );
-    const start = rows?.[0]?.start_date;
-    if (!start) {
-      log('sbp_schedule_skipped', correlationId, 'partial', { enrollmentId, reason: 'cohort has no start_date' });
-      return null;
-    }
-
-    const storiesByRelease = new Map<string, string[]>();
-    for (const rel of plan.releases) {
-      storiesByRelease.set(rel.key, plan.stories.filter((s) => s.release === rel.key).map((s) => s.id));
-    }
-    const schedule = buildSchedule({
-      window: { cohortStart: new Date(start) },
-      releases: plan.releases,
-      storiesByRelease,
-    });
-    log('sbp_schedule_built', correlationId, 'success', {
-      buildWeeks: schedule.buildWeeks, capacity: schedule.capacity, totalTasks: schedule.totalTasks,
-      demoRelease: schedule.demoReleaseKey, demoDay: schedule.demoDay.toISOString().slice(0, 10),
-    });
-    return schedule;
-  } catch (err: any) {
-    log('sbp_schedule_failed', correlationId, 'failure', { enrollmentId, message: err?.message });
-    return null;
-  }
-}
+const scheduleFor = scheduleForEnrollment;
 
 /**
  * Point the student's portal at the project they just published.

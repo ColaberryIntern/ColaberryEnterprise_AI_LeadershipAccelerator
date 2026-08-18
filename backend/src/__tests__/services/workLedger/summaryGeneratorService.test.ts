@@ -256,4 +256,57 @@ describe('generateTicketSummary', () => {
     expect(result.outcome).not.toContain(REESE_ADMIN_ID);
     expect(mockResolveActorDisplayName).not.toHaveBeenCalled();
   });
+
+  // Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz) — the "no ledger
+  // activity" fallback used to be a single, unconditional line regardless of WHY the
+  // ticket has zero events. It now distinguishes "created before the afterCreate hook
+  // shipped" (honest, expected, not a gap) from "created after, still zero" (a real
+  // gap now that the hook covers every known creation path).
+  describe('zero-event fallback — pre/post TICKET_LEDGER_HOOK_LIVE_SINCE honesty split', () => {
+    it('a ticket created BEFORE the hook shipped gets the honest historical note, not a fabricated or generic claim', async () => {
+      linkFindAll.mockResolvedValue([]);
+      mockGetEvidence.mockResolvedValue([]);
+      ticketFindByPk.mockResolvedValue({
+        id: TICKET_ID,
+        title: 'Old ticket',
+        created_at: new Date('2026-07-01T00:00:00Z'), // predates 2026-08-16
+      });
+
+      const result = await generateTicketSummary(TICKET_ID);
+
+      expect(result.outcome).toContain('before activity tracking was reliable');
+      expect(result.humanAction).toContain('predates reliable ledger tracking');
+      // Still honest — never a fabricated claim word, matching this file's own
+      // established anti-fabrication convention.
+      expect(result.outcome).not.toMatch(CLAIM_WORDS);
+      expect(result.proof).not.toMatch(CLAIM_WORDS);
+      expect(result.humanAction).not.toMatch(CLAIM_WORDS);
+    });
+
+    it('a ticket created AFTER the hook shipped with zero events keeps the existing "no ledger activity" text — now a real, flaggable gap rather than the norm', async () => {
+      linkFindAll.mockResolvedValue([]);
+      mockGetEvidence.mockResolvedValue([]);
+      ticketFindByPk.mockResolvedValue({
+        id: TICKET_ID,
+        title: 'New ticket',
+        created_at: new Date('2026-08-17T00:00:00Z'), // after 2026-08-16
+      });
+
+      const result = await generateTicketSummary(TICKET_ID);
+
+      expect(result.outcome).toBe('Outcome: No ledger activity recorded yet for this ticket.');
+      expect(result.humanAction).toContain('assign or dispatch');
+      expect(result.outcome).not.toMatch(CLAIM_WORDS);
+    });
+
+    it('a ticket with no created_at at all (defensive) falls back to the existing generic text rather than crashing', async () => {
+      linkFindAll.mockResolvedValue([]);
+      mockGetEvidence.mockResolvedValue([]);
+      ticketFindByPk.mockResolvedValue({ id: TICKET_ID, title: 'No timestamp' });
+
+      const result = await generateTicketSummary(TICKET_ID);
+
+      expect(result.outcome).toBe('Outcome: No ledger activity recorded yet for this ticket.');
+    });
+  });
 });

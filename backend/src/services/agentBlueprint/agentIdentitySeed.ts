@@ -4,6 +4,7 @@ import Enrollment from '../../models/Enrollment';
 import CommunityMember, { type CommunityMemberRole } from '../../models/CommunityMember';
 import AiAgent from '../../models/AiAgent';
 import Cohort from '../../models/Cohort';
+import { getLegacyCreatorIds } from './legacyCreatorAliases';
 
 // Reese Phase 3 (Agent Blueprint) — the AdminUser/Enrollment/CommunityMember/AiAgent
 // identity-linkage core, extracted from Reese Phase 1's reeseIdentitySeed.ts so the
@@ -56,6 +57,14 @@ export interface AgentIdentityConfig {
   };
   /** Off by default — opt in only if this agent will gate a proactive capability on an eligible population. */
   pilotCohortGate?: boolean;
+  /**
+   * Raw `created_by_id`/`assigned_to_id` strings this process used to stamp on
+   * tickets BEFORE it had a real AdminUser identity (e.g. 'cory-engine'). Omitted or
+   * empty for a net-new agent with no such history (e.g. Reese). Self-heals into
+   * `AiAgent.config.legacy_creator_ids` — additive only, never removes an alias a
+   * human may have added by hand. See legacyCreatorAliases.ts for the read side.
+   */
+  legacyCreatorIds?: string[];
 }
 
 export interface AgentIdentityIds {
@@ -184,6 +193,18 @@ export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<Ag
           config: { ...(aiAgent.config || {}), pilot_cohort_ids: [pilotCohort.id] },
         } as any);
       }
+    }
+  }
+
+  if (config.legacyCreatorIds && config.legacyCreatorIds.length > 0) {
+    // Additive self-heal, same shape as the pilot-cohort block above: merge in any
+    // alias not already present, never remove one a human (or an earlier boot) added.
+    const existingAliases = getLegacyCreatorIds(aiAgent);
+    const merged = Array.from(new Set([...existingAliases, ...config.legacyCreatorIds]));
+    if (merged.length !== existingAliases.length) {
+      await aiAgent.update({
+        config: { ...(aiAgent.config || {}), legacy_creator_ids: merged },
+      } as any);
     }
   }
 

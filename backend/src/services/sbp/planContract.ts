@@ -71,12 +71,43 @@ export interface PlanStory {
   blocked_by?: string[];
 }
 
+/**
+ * One unit of autonomous work in the system the student is building — not a
+ * person and not a department. Scoped from the requirements AFTER the plan is
+ * gate-clean (see scopeAgents), so it is optional: a plan that predates
+ * scoping, or one whose scoping call failed, is still a valid plan.
+ */
+export interface PlanAgent {
+  /** AGENT-001, … sequential. */
+  id: string;
+  /** What it DOES ("Agreement Reader"), never a job title ("Contract Manager"). */
+  name: string;
+  purpose: string;
+  trigger_type: 'event' | 'schedule' | 'manual';
+  trigger: string;
+  inputs: string[];
+  outputs: string[];
+  /** The LEAST autonomy the requirements permit. */
+  autonomy_level: 'suggests' | 'acts_with_approval' | 'acts_autonomously';
+  /**
+   * SAFE requirements this agent's own stories touch. Populated by scopeAgents,
+   * never by the model: an agent with a gate here cannot be autonomous.
+   */
+  approval_gates: string[];
+  escalation_rules: string[];
+  skills: string[];
+  /** Story ids this agent owns. */
+  owns: string[];
+}
+
 export interface BuildPlan {
   project_name: string;
   descriptor: string;
   requirements: PlanRequirement[];
   releases: PlanRelease[];
   stories: PlanStory[];
+  /** The AI team, when it has been scoped. Absent on older plans. */
+  agents?: PlanAgent[];
 }
 
 /** True when this requirement is an implementation constraint (exempt from story coverage). */

@@ -14,6 +14,70 @@ import { executeAction } from '../agents/ExecutionAgent';
 import { updateFromDecision } from '../memory/learningEngine';
 import { getVectorMemory } from '../memory/vectorMemory';
 import { createTicket } from '../../services/ticketService';
+import { getTicketCreatorAdminUserId } from '../../services/agentBlueprint/ticketCreatorIdentitySeed';
+
+// Agent Alias & Identity Fix — forward-fix for cory-engine's ticket-creator
+// identity, scoped narrowly to the auto-executable branch only. cory-engine's
+// non-auto-executable "Review" tickets are created with status:'todo' and
+// genuinely rely on assigned_to_id IS NULL to reach
+// backend/src/services/agents/ticketManagementAgent.ts's real 15-minute
+// auto-dispatch sweep (`status:'todo' AND assigned_to_id IS NULL`) — stamping
+// those would silently remove them from real dispatch logic, not just cosmetics.
+// "Auto" tickets (status:'in_progress') never enter that sweep (it only scans
+// status:'todo'), so attributing them to cory-engine's own real identity is both
+// accurate and safe. Extracted as a small pure function so it's testable in
+// isolation without mocking the full 8-step autonomous cycle.
+export function resolveCoryEngineTicketAssignee(
+  isAutoExec: boolean,
+  adminUserId: string | null,
+): { assigned_to_type: 'ai_staff'; assigned_to_id: string } | Record<string, never> {
+  if (!isAutoExec || !adminUserId) return {};
+  return { assigned_to_type: 'ai_staff', assigned_to_id: adminUserId };
+}
+
+// Agent Quality Cleanup, Item 2 — cory-engine's ticket dedup key. Before this,
+// every ticket was keyed on entity_type:'decision' + the freshly-created (and
+// therefore always-unique) IntelligenceDecision id, so createTicket()'s own
+// proven "reuse any still-open ticket on the same entity, no time window"
+// dedup (ticketService.ts:68-81) never fired here — a still-unresolved
+// finding (e.g. an agent stuck in status:'error') refiled a brand-new ticket
+// roughly every hour, forever, once the separate 60-minute IntelligenceDecision
+// merge window lapsed. When the triggering problem carries a stable identity
+// (populated by ProblemDiscoveryAgent for agent_failure: 'agent' + the real
+// AiAgent.id), key the ticket on that identity + the recommended action
+// instead — createTicket()'s dedup then naturally reuses the open ticket
+// while the condition persists, and opens a fresh one once it's resolved
+// (done/cancelled) and the same or a different finding recurs.
+//
+// Follow-up (2026-08-17) — the "falls back to the decision-id key for
+// conversion_drop/error_spike, zero behavior change" note above turned out to
+// describe a live bug, not a safe no-op: ProblemDiscoveryAgent.ts's
+// detectConversionDrops() NEVER sets entity_type/entity_id (it's one
+// system-wide "lead generation dropped" signal, not per-campaign — confirmed
+// by ActionPlannerAgent.ts's update_campaign_config rule having
+// default_params: {}, i.e. there is no campaign-specific data to key on even
+// if we wanted to). Every occurrence therefore fell through to the
+// always-fresh decisionId, so createTicket()'s entity dedup could never find
+// the still-open ticket — this is what refiled `[Review]
+// update_campaign_config` roughly every 60-70 minutes for a full day in
+// production (1,731 tickets total, 14 open at once, live-confirmed before
+// this fix). The fallback now keys on the problem's own `type` + the
+// recommended `action` instead of the decision id — still stable across
+// cycles (same finding -> same key -> createTicket() reuses the open
+// ticket), still opens a genuinely fresh ticket the moment a different
+// problem type or a different recommended action is produced. `type` is
+// included (not just the bare action) so two different problem types that
+// happen to recommend the same action string can never collide.
+export function resolveCoryEngineTicketDedupKey(
+  problem: Pick<DetectedProblem, 'type' | 'entity_type' | 'entity_id'>,
+  action: string,
+  decisionId: string,
+): { entity_type: string; entity_id: string } {
+  if (problem.entity_type && problem.entity_id) {
+    return { entity_type: problem.entity_type, entity_id: `${problem.entity_id}:${action}` };
+  }
+  return { entity_type: 'problem_type', entity_id: `${problem.type}:${action}` };
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -150,6 +214,14 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
       const effortEstimate = estimateEffort(risk.risk_score, impact);
       const dueDate = estimateDueDate(effortEstimate);
       try {
+        // Forward-fix (Agent Alias & Identity Fix) — see resolveCoryEngineTicketAssignee's
+        // header comment for why this is scoped to isAutoExec only.
+        const coryEngineAdminUserId = await getTicketCreatorAdminUserId('cory-engine');
+        const dedupKey = resolveCoryEngineTicketDedupKey(
+          problem,
+          recommendation.action,
+          decision.get('decision_id') as string,
+        );
         const ticket = await createTicket({
           title: `[${isAutoExec ? 'Auto' : 'Review'}] ${recommendation.action}`,
           description: [
@@ -167,18 +239,20 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
           source: 'cory_autonomous_cycle',
           created_by_type: 'cory',
           created_by_id: 'cory-engine',
-          entity_type: 'decision',
-          entity_id: decision.get('decision_id') as string,
+          entity_type: dedupKey.entity_type,
+          entity_id: dedupKey.entity_id,
           confidence: risk.confidence_score / 100,
           estimated_effort: effortEstimate,
           due_date: dueDate,
           metadata: {
             trace_id: traceId,
+            decision_id: decision.get('decision_id'),
             risk_tier: risk.risk_tier,
             auto_executed: isAutoExec,
             impact_metric: impact.metric,
             impact_change_pct: impact.change_pct,
           },
+          ...resolveCoryEngineTicketAssignee(isAutoExec, coryEngineAdminUserId),
         });
 
         tickets.push({

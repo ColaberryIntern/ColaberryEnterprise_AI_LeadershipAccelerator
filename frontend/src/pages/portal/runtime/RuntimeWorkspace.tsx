@@ -18,6 +18,10 @@ import PromptCatalogRender from '../../../components/timeline/PromptCatalogRende
 import ArchitectTimeMachine from '../../../components/timeline/ArchitectTimeMachine';
 import BuildArtifactsRender from '../../../components/timeline/BuildArtifactsRender';
 import ReflectionReview from '../../../components/timeline/ReflectionReview';
+import {
+  useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
+  type SentAttachment,
+} from '../../../components/portal/AgentAttachments';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -28,7 +32,7 @@ import ReflectionReview from '../../../components/timeline/ReflectionReview';
  * — with no admin work. Route: /portal/runtime/:cardId.
  */
 
-type Msg = { role: 'user' | 'assistant'; content: string; kind?: string };
+type Msg = { role: 'user' | 'assistant'; content: string; kind?: string; attachments?: SentAttachment[] };
 const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 
 const RuntimeWorkspace: React.FC = () => {
@@ -74,6 +78,12 @@ const RuntimeWorkspace: React.FC = () => {
   const [mentorInput, setMentorInput] = useState('');
   const [nudge, setNudge] = useState<string | null>(null);   // proactive struggle nudge — the mentor offers help first
   const mentorEnd = useRef<HTMLDivElement>(null);
+  // Screenshots the student hands Cory — drag, paste, or click. Same hook the
+  // project workspace and Reese's DMs use, so the gesture is identical everywhere.
+  const attach = useAgentAttachments();
+  // A screenshot with no caption is a perfectly good message, so Send unlocks
+  // on text OR a finished upload — but never while one is still in flight.
+  const canSend = (mentorInput.trim().length > 0 || attach.refs().length > 0) && !attach.busy;
 
   // cohort comments (media cards) — newest first
   const [comments, setComments] = useState<CardComment[]>([]);
@@ -84,7 +94,10 @@ const RuntimeWorkspace: React.FC = () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
         setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null); setNudge(null);
-        setMsgs([{ role: 'assistant', content: `I'm Cory, your mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        // The screenshot line is in the opening turn rather than a tooltip: a
+        // paperclip nobody notices is the same as no paperclip, and this is the
+        // one place every student actually reads.
+        setMsgs([{ role: 'assistant', content: `I'm Cory, your mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers. Stuck on an error? Paste or drag a screenshot straight in and I'll read it.`, kind: 'intro' }]);
         // Every card type has a cohort comment thread in its workspace.
         runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
         // Proactive nudge — if the student looks stuck on this card, the mentor offers help first.
@@ -164,14 +177,18 @@ const RuntimeWorkspace: React.FC = () => {
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
-    setMsgs((m) => [...m, { role: 'user', content: message || `(${mode})` }]);
-    setBusy('mentor'); setMentorInput('');
+    // Snapshot the tray BEFORE clearing it, so the sent message keeps its
+    // thumbnails and the composer empties immediately.
+    const attachments = attach.refs();
+    const shown = attach.sentPreviews();
+    setMsgs((m) => [...m, { role: 'user', content: message || `(${mode})`, attachments: shown }]);
+    setBusy('mentor'); setMentorInput(''); attach.clear(false);
     try {
       const history = msgs.filter((m) => m.kind !== 'intro').map((m) => ({ role: m.role, content: m.content }));
-      const r = await runtimeApi.mentor(card.id, mode, message, history);
+      const r = await runtimeApi.mentor(card.id, mode, message, history, attachments);
       setMsgs((m) => [...m, { role: 'assistant', content: r.reply, kind: r.kind }]);
     } catch { setMsgs((m) => [...m, { role: 'assistant', content: 'I had trouble reaching you — try again.', kind: 'error' }]); } finally { setBusy(''); }
-  }, [card, msgs]);
+  }, [card, msgs, attach]);
 
   const postComment = async () => {
     const body = commentInput.trim();
@@ -488,8 +505,10 @@ const RuntimeWorkspace: React.FC = () => {
           )}
         </main>
 
-        {/* RIGHT — AI Mentor */}
-        <aside className="rt-mentor">
+        {/* RIGHT — AI Mentor. The whole rail takes a drop: a student dragging a
+            screenshot aims at the conversation, not at the 34px text box. */}
+        <aside className="rt-mentor" style={{ position: 'relative' }} {...attach.dropProps}>
+          <DropOverlay active={attach.dragging} label="Drop to show Cory" />
           <div className="rt-mentor-h"><span className="rt-dot" /> Cory</div>
           {isSetupLab && (labCopied || completed) && (
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
@@ -504,7 +523,12 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
           <div className="rt-thread">
-            {msgs.map((m, i) => <div key={i} className={`rt-msg ${m.role}`}>{m.content}</div>)}
+            {msgs.map((m, i) => (
+              <div key={i} className={`rt-msg ${m.role}`}>
+                {m.content}
+                <SentAttachments items={m.attachments} />
+              </div>
+            ))}
             <div ref={mentorEnd} />
           </div>
           {nudge && (
@@ -519,9 +543,11 @@ const RuntimeWorkspace: React.FC = () => {
           <div className="rt-modes">
             {(['hint', 'explain', 'review'] as const).map((mo) => <button key={mo} className="rt-chip" disabled={busy === 'mentor'} onClick={() => ask(mo, mo === 'review' ? (isLab ? prompt : reflectionText) || 'Review my work.' : `Give me a ${mo}.`)}>{mo}</button>)}
           </div>
+          <AttachmentTray items={attach.items} notice={attach.notice} onRemove={attach.remove} />
           <div className="rt-ask">
-            <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && mentorInput.trim() && ask('ask', mentorInput)} placeholder="Ask your mentor…" />
-            <button className="rt-btn pri" disabled={busy === 'mentor' || !mentorInput.trim()} onClick={() => ask('ask', mentorInput)}>Send</button>
+            <AttachButton onFiles={attach.addFiles} disabled={busy === 'mentor'} />
+            <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canSend && ask('ask', mentorInput || 'Take a look at this.')} placeholder="Ask your mentor, or paste a screenshot…" {...attach.pasteProps} />
+            <button className="rt-btn pri" disabled={busy === 'mentor' || !canSend} onClick={() => ask('ask', mentorInput || 'Take a look at this.')}>Send</button>
           </div>
           {/* Cohort comments live in the rail for every card type, so the center is a
               single clean scroll (no comments stacked under a tall activity). */}

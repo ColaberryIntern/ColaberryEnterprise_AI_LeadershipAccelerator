@@ -1,0 +1,166 @@
+{
+ "captured_at": "2026-08-15T00:56:43.987Z",
+ "A_keep": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+ "B_retire": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+ "enrollments": [
+  {
+   "id": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+   "full_name": "Million Abate Meshesha",
+   "email": "millionabate19@gmail.com",
+   "status": "active",
+   "payment_status": "paid",
+   "amount_paid": "0.00",
+   "enrollment_type": "standard",
+   "cohort_id": "1f1d86f4-6da5-4767-a250-cd8310570bea",
+   "paysimple_customer_id": "43552399",
+   "paysimple_payment_id": null,
+   "paysimple_external_id": "CB-43552399-1784415358325",
+   "portal_enabled": true,
+   "created_at": "2026-07-18T22:55:59.044Z",
+   "enrolled_at": "2026-08-12T21:07:44.043Z",
+   "notes": "Retired 2026-07-30: redundant duplicate of the real, fully-paid enrollment (78f2c3e3-be12-43a2-b41f-be1a3ec224e5, same email), which predates this row and already has payment_status=paid. | amount_paid zeroed 2026-08-12 (CC-20260812-k4rp): received no payment; the sibling enrollment holds the real charge. Revenue was double-counting this person."
+  },
+  {
+   "id": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+   "full_name": "Million Meshesha",
+   "email": "millionabate19@gmail.com",
+   "status": "active",
+   "payment_status": "paid",
+   "amount_paid": "199.00",
+   "enrollment_type": "standard",
+   "cohort_id": "1f1d86f4-6da5-4767-a250-cd8310570bea",
+   "paysimple_customer_id": "43540872",
+   "paysimple_payment_id": "155166568",
+   "paysimple_external_id": null,
+   "portal_enabled": true,
+   "created_at": "2026-07-07T19:51:34.390Z",
+   "enrolled_at": "2026-07-17T16:59:40.409Z",
+   "notes": "OH 7/16 seat hold: $50 paid (PaySimple #154860612). $50 credit -> first month. Consolidated to July 2026 on 7/17; balance pending."
+  }
+ ],
+ "subscriptions": [
+  {
+   "id": "a8fdb70d-6387-475c-8ead-0b456e39449e",
+   "enrollment_id": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+   "plan": "monthly",
+   "status": "active",
+   "amount_cents": 19900,
+   "payment_ref": "SUB-c43995068b454b1ab71f066a9e2a850e-ms70vzf9",
+   "paysimple_customer_id": "43633732",
+   "paysimple_payment_id": "155166568",
+   "started_at": "2026-08-12T21:07:44.043Z",
+   "current_period_end": "2026-09-12T21:07:44.043Z",
+   "canceled_at": null,
+   "cancel_reason": null,
+   "created_at": "2026-07-30T04:37:50.997Z",
+   "updated_at": "2026-08-12T21:07:44.043Z",
+   "applied_credit_cents": 0
+  }
+ ],
+ "account_credits": [
+  {
+   "id": "2f49e262-f1b4-44e8-af29-8475638021f1",
+   "enrollment_id": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+   "amount_cents": 5000,
+   "reason": "open_house_deposit",
+   "source_event_id": "ps-payment-154860612",
+   "status": "void",
+   "applied_subscription_id": null,
+   "applied_at": null,
+   "granted_by": "openhouse-2026-07-16",
+   "note": "$50 Open House seat deposit — Million Meshesha",
+   "created_at": "2026-07-17T14:08:12.588Z",
+   "updated_at": "2026-08-06T17:21:05.364Z"
+  }
+ ],
+ "refunds": [
+  {
+   "id": "8b7feb88-3ad4-4ac3-a705-063b124266af",
+   "enrollment_id": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+   "paysimple_payment_id": "154860612",
+   "paysimple_refund_id": "155517815",
+   "amount_cents": 5000,
+   "method": "refund",
+   "status": "succeeded",
+   "reason": null,
+   "customer_email": "millionabate19@gmail.com",
+   "voided_credit_cents": 5000,
+   "issued_by": "taiwo@colaberry.com",
+   "error": null,
+   "created_at": "2026-08-06T17:21:04.791Z",
+   "updated_at": "2026-08-06T17:21:05.372Z"
+  }
+ ],
+ "points_summary": [
+  {
+   "enrollment_id": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+   "n": "1",
+   "pts": "5"
+  },
+  {
+   "enrollment_id": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+   "n": "60",
+   "pts": "1880"
+  }
+ ],
+ "points_rows_B": [
+  {
+   "id": "f3f6565a-115e-4b74-8020-1ff8706b84b2",
+   "enrollment_id": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+   "event_type": "card_complete",
+   "event_key": "card:948e737d-815a-4037-9f79-c229ad2718e4",
+   "points": 5,
+   "metadata": {
+    "type": "announcement",
+    "card_id": "948e737d-815a-4037-9f79-c229ad2718e4"
+   },
+   "created_at": "2026-08-12T22:09:53.570Z",
+   "updated_at": "2026-08-12T22:09:53.570Z"
+  }
+ ],
+ "xp_summary": [
+  {
+   "enrollment_id": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+   "n": "51",
+   "xp": "1250"
+  }
+ ],
+ "timeline_progress": [
+  {
+   "enrollment_id": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+   "n": "659",
+   "completed": "47"
+  },
+  {
+   "enrollment_id": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+   "n": "692",
+   "completed": "1"
+  }
+ ],
+ "attendance": [
+  {
+   "enrollment_id": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+   "n": "7"
+  },
+  {
+   "enrollment_id": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+   "n": "1"
+  }
+ ],
+ "skill_evidence": [
+  {
+   "enrollment_id": "c4399506-8b45-4b1a-b71f-066a9e2a850e",
+   "n": "6"
+  },
+  {
+   "enrollment_id": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+   "n": "184"
+  }
+ ],
+ "evidence_records": [
+  {
+   "enrollment_id": "78f2c3e3-be12-43a2-b41f-be1a3ec224e5",
+   "n": "11"
+  }
+ ]
+}

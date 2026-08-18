@@ -14,6 +14,7 @@
  * Returns the SAME shape as runtimeAi.chatText/chatJson so callers are agnostic.
  */
 import Anthropic from '@anthropic-ai/sdk';
+import type { TurnContent } from '../agents/tools/types';
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
@@ -57,9 +58,43 @@ function textOf(content: Anthropic.ContentBlock[]): string {
 }
 const stripFences = (s: string) => s.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
 
+/**
+ * Convert one turn's content into Claude content blocks.
+ *
+ * Callers speak the OpenAI shape (see runtimeAi's ChatMessage). The two APIs
+ * differ on images: OpenAI takes an `image_url` whose url may be a data URL;
+ * Claude takes a base64 `source` with the media type as its own field. An
+ * image that cannot be parsed into that shape is DROPPED rather than sent
+ * malformed — a dropped image costs the model one piece of context, a
+ * malformed block costs the student their whole turn to a 400.
+ */
+const DATA_URL_RE = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.+)$/;
+
+export function toAnthropicContent(content: TurnContent): string | Anthropic.ContentBlockParam[] {
+  if (typeof content === 'string') return content;
+  const blocks: Anthropic.ContentBlockParam[] = [];
+  for (const part of content) {
+    if (part.type === 'text') {
+      blocks.push({ type: 'text', text: part.text });
+      continue;
+    }
+    const m = DATA_URL_RE.exec(part.image_url?.url || '');
+    if (!m) continue; // remote URLs and unsupported types are not sent
+    blocks.push({
+      type: 'image',
+      source: { type: 'base64', media_type: m[1] as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: m[2] },
+    });
+  }
+  // A turn whose every block was dropped would be an empty content array,
+  // which the API rejects — send a line saying so instead, so the mentor can
+  // tell the student rather than erroring out.
+  if (!blocks.length) blocks.push({ type: 'text', text: '(the attached file could not be included)' });
+  return blocks;
+}
+
 export async function anthropicChatText(
   system: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  messages: Array<{ role: 'user' | 'assistant'; content: TurnContent }>,
   max_tokens = 700,
 ) {
   const started = Date.now();
@@ -67,7 +102,7 @@ export async function anthropicChatText(
     model: MENTOR_MODEL,
     max_tokens,
     system,
-    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    messages: messages.map((m) => ({ role: m.role, content: toAnthropicContent(m.content) })),
   });
   return { text: textOf(r.content), runtime_ms: Date.now() - started, cost_usd: cost(MENTOR_MODEL, r.usage) };
 }

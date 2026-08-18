@@ -1,8 +1,10 @@
+import { Op } from 'sequelize';
 import { Ticket, TicketActivity } from '../../models';
 import { emitEvent } from '../../services/workLedger/workLedgerService';
 import { scheduleOutcomeMeasurement } from '../../services/outcomes/outcomeMeasurementService';
-import { resolveActorDisplayName } from '../../services/actorIdentity/resolveActorDisplayName';
-import { createTicket, updateTicketStatus, addAgentOutput, getTicketById } from '../../services/ticketService';
+import { resolveActorDisplayName, resolveActorDisplayNamesBatch, actorRefKey } from '../../services/actorIdentity/resolveActorDisplayName';
+import { buildTicketAutoCheckResolver } from '../../services/ticketAutoCheckService';
+import { createTicket, updateTicketStatus, addAgentOutput, getTicketById, getTicketsForBoard, getTicketStats } from '../../services/ticketService';
 
 /** Dynamic import() hooks (cory + outcome-measurement) run in a `.then()` chain that
  * is deliberately NOT awaited by updateTicketStatus (non-blocking by design) — flush
@@ -15,7 +17,7 @@ async function flushMicrotasks(): Promise<void> {
 
 jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 jest.mock('../../models', () => ({
-  Ticket: { findOne: jest.fn(), create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn() },
+  Ticket: { findOne: jest.fn(), create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn(), count: jest.fn() },
   TicketActivity: { create: jest.fn(), findAll: jest.fn() },
 }));
 jest.mock('../../services/workLedger/workLedgerService', () => ({
@@ -30,23 +32,48 @@ jest.mock('../../services/outcomes/outcomeMeasurementService', () => ({
 // attach the result under the right key) rather than re-testing DB lookups.
 jest.mock('../../services/actorIdentity/resolveActorDisplayName', () => ({
   resolveActorDisplayName: jest.fn(),
+  resolveActorDisplayNamesBatch: jest.fn(),
+  actorRefKey: (type: string, id: string) => `${type}:${id}`,
+}));
+// Ticket Board UX fixes (2026-08-17) — getTicketsForBoard()/getTicketById() now
+// call buildTicketAutoCheckResolver() (ticketAutoCheckService.ts). That module
+// imports the REAL AiAgent model directly, which throws against this file's
+// intentionally-minimal `config/database` mock — mocked here for the same
+// reason resolveActorDisplayName is mocked above: this file tests WIRING, not
+// ticketAutoCheckService's own ownership-rule logic (that has its own unit
+// tests in services/__tests__/ticketAutoCheckService.test.ts).
+jest.mock('../../services/ticketAutoCheckService', () => ({
+  buildTicketAutoCheckResolver: jest.fn(),
 }));
 
 const ticketFindOne = Ticket.findOne as unknown as jest.Mock;
 const ticketCreate = Ticket.create as unknown as jest.Mock;
 const ticketFindByPk = Ticket.findByPk as unknown as jest.Mock;
 const ticketFindAll = Ticket.findAll as unknown as jest.Mock;
+const ticketCount = Ticket.count as unknown as jest.Mock;
 const activityCreate = TicketActivity.create as unknown as jest.Mock;
 const activityFindAll = TicketActivity.findAll as unknown as jest.Mock;
 const mockEmit = emitEvent as unknown as jest.Mock;
 const mockScheduleOutcome = scheduleOutcomeMeasurement as unknown as jest.Mock;
 const mockResolveActorDisplayName = resolveActorDisplayName as unknown as jest.Mock;
+const mockResolveActorDisplayNamesBatch = resolveActorDisplayNamesBatch as unknown as jest.Mock;
+const mockBuildTicketAutoCheckResolver = buildTicketAutoCheckResolver as unknown as jest.Mock;
+
+const NO_AUTO_CHECK = {
+  hasAutoCheck: false,
+  resolverAgentName: null,
+  nextCheckAt: null,
+  nextCheckLabel: null,
+  reason: 'No automated resolver owns this ticket type',
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockEmit.mockResolvedValue({ event_id: 'evt-mock' });
   mockScheduleOutcome.mockResolvedValue({ id: 'om-mock' });
   mockResolveActorDisplayName.mockImplementation(async (_type: string, id: string) => id);
+  mockResolveActorDisplayNamesBatch.mockResolvedValue(new Map());
+  mockBuildTicketAutoCheckResolver.mockResolvedValue(jest.fn(() => NO_AUTO_CHECK));
 });
 
 /** Minimal Sequelize-instance-shaped mock: real getTicketById() calls .toJSON() on
@@ -402,9 +429,9 @@ describe('getTicketById', () => {
     expect(result?.activities[0].actor_id).toBe(REESE_ADMIN_ID);
   });
 
-  it('boundary: an unassigned ticket (assigned_to_id null) gets assigned_to_display_name null, with zero resolver calls for it', async () => {
+  it('boundary: an unassigned ticket (assigned_to_id null) gets assigned_to_display_name null, with zero resolver calls FOR THE ASSIGNEE specifically (created_by_display_name — Ticket Board UX fixes — is resolved unconditionally, since every ticket has a real creator, unlike an optional assignee)', async () => {
     ticketFindByPk.mockResolvedValue(
-      mockRow({ id: 'tk-2', assigned_to_type: null, assigned_to_id: null }),
+      mockRow({ id: 'tk-2', assigned_to_type: null, assigned_to_id: null, created_by_type: 'human', created_by_id: 'admin-2' }),
     );
     activityFindAll.mockResolvedValue([]);
     ticketFindAll.mockResolvedValue([]);
@@ -412,7 +439,8 @@ describe('getTicketById', () => {
     const result = await getTicketById('tk-2');
 
     expect(result?.ticket.assigned_to_display_name).toBeNull();
-    expect(mockResolveActorDisplayName).not.toHaveBeenCalled();
+    expect(mockResolveActorDisplayName).not.toHaveBeenCalledWith(null, null);
+    expect(mockResolveActorDisplayName).toHaveBeenCalledWith('human', 'admin-2'); // the created_by resolution
   });
 
   it('boundary: an activity whose actor cannot be resolved still returns successfully with the resolver\'s own honest fallback label, never dropping the activity or throwing', async () => {
@@ -462,5 +490,284 @@ describe('getTicketById', () => {
     expect(result).toBeNull();
     expect(activityFindAll).not.toHaveBeenCalled();
     expect(mockResolveActorDisplayName).not.toHaveBeenCalled();
+  });
+
+  // Ticket Board UX fixes (2026-08-17) — the detail modal gets the SAME two
+  // additive fields the board card does, so the founder sees one consistent
+  // picture whether they're scanning the board or reading one ticket.
+  it('Ticket Board UX fix: adds created_by_display_name (resolved) and auto_check (from buildTicketAutoCheckResolver) to the returned ticket', async () => {
+    ticketFindByPk.mockResolvedValue(
+      mockRow({
+        id: 'tk-5',
+        created_by_type: 'cory',
+        created_by_id: 'cory-engine',
+        type: 'agent_action',
+        source: 'cory_autonomous_cycle',
+        entity_type: null,
+        status: 'backlog',
+        assigned_to_type: null,
+        assigned_to_id: null,
+      }),
+    );
+    activityFindAll.mockResolvedValue([]);
+    ticketFindAll.mockResolvedValue([]);
+    mockResolveActorDisplayName.mockImplementation(async (type: string, id: string) =>
+      type === 'cory' && id === 'cory-engine' ? 'Cory Engine — Autonomous Operations' : id,
+    );
+    const fakeAutoCheck = {
+      hasAutoCheck: true,
+      resolverAgentName: 'CoryEngineTicketAutoResolver',
+      nextCheckAt: '2026-08-17T12:00:00.000Z',
+      nextCheckLabel: '2h',
+    };
+    const resolverFn = jest.fn(() => fakeAutoCheck);
+    mockBuildTicketAutoCheckResolver.mockResolvedValue(resolverFn);
+
+    const result = await getTicketById('tk-5');
+
+    expect(result?.ticket.created_by_display_name).toBe('Cory Engine — Autonomous Operations');
+    expect(result?.ticket.auto_check).toEqual(fakeAutoCheck);
+    expect(resolverFn).toHaveBeenCalledWith(
+      expect.objectContaining({ created_by_type: 'cory', created_by_id: 'cory-engine', status: 'backlog' }),
+    );
+  });
+});
+
+// Ticket Board UX fixes (2026-08-17) — getTicketsForBoard() previously returned raw
+// Ticket rows with zero enrichment; this is what fed the Kanban card's collapsed
+// "Cory" badge (cory-engine/CoryBrain/bpos_orchestrator all share created_by_type
+// 'cory', and the card rendered that generic type, never a real per-agent name).
+describe('getTicketsForBoard', () => {
+  function makeBoardTicket(overrides: Partial<Record<string, any>>) {
+    return mockRow({
+      id: 'tk-x',
+      status: 'backlog',
+      priority: 'medium',
+      type: 'task',
+      source: 'manual',
+      created_by_type: 'human',
+      created_by_id: 'admin-1',
+      entity_type: null,
+      ...overrides,
+    });
+  }
+
+  it('a cory-engine ticket and a CoryBrain ticket resolve to DIFFERENT created_by_display_name values in the SAME board load — the exact collapse bug this run fixes', async () => {
+    ticketFindAll.mockResolvedValue([
+      makeBoardTicket({ id: 't-1', created_by_type: 'cory', created_by_id: 'cory-engine' }),
+      makeBoardTicket({ id: 't-2', created_by_type: 'cory', created_by_id: 'CoryBrain' }),
+    ]);
+    mockResolveActorDisplayNamesBatch.mockResolvedValue(
+      new Map([
+        [actorRefKey('cory', 'cory-engine'), 'Cory Engine — Autonomous Operations'],
+        [actorRefKey('cory', 'CoryBrain'), 'Cory Brain — Strategic Initiatives'],
+      ]),
+    );
+
+    const board = await getTicketsForBoard();
+
+    const names = board.backlog.map((t: any) => t.created_by_display_name);
+    expect(names).toEqual(
+      expect.arrayContaining(['Cory Engine — Autonomous Operations', 'Cory Brain — Strategic Initiatives']),
+    );
+    expect(names[0]).not.toBe(names[1]);
+  });
+
+  it('bpos_orchestrator (which shows NO badge at all today — its source, bpos_engine, does not even match the old startsWith("cory") check) now resolves a real name too', async () => {
+    ticketFindAll.mockResolvedValue([
+      makeBoardTicket({ id: 't-3', created_by_type: 'cory', created_by_id: 'bpos_orchestrator', source: 'bpos_engine', type: 'bpos_execution', entity_type: 'capability' }),
+    ]);
+    mockResolveActorDisplayNamesBatch.mockResolvedValue(
+      new Map([[actorRefKey('cory', 'bpos_orchestrator'), 'BPOS Orchestrator — Universal Ticket Layer']]),
+    );
+
+    const board = await getTicketsForBoard();
+
+    expect(board.backlog[0].created_by_display_name).toBe('BPOS Orchestrator — Universal Ticket Layer');
+  });
+
+  it('raw created_by_type/created_by_id are unchanged on the returned ticket — additive field, not a replacement', async () => {
+    ticketFindAll.mockResolvedValue([makeBoardTicket({ created_by_type: 'cory', created_by_id: 'cory-engine' })]);
+    mockResolveActorDisplayNamesBatch.mockResolvedValue(new Map([[actorRefKey('cory', 'cory-engine'), 'Cory Engine']]));
+
+    const board = await getTicketsForBoard();
+
+    expect(board.backlog[0].created_by_type).toBe('cory');
+    expect(board.backlog[0].created_by_id).toBe('cory-engine');
+  });
+
+  it('passes ALL fetched tickets\' actor refs to the batch resolver in ONE call, not one call per ticket — 50 tickets sharing 3 creators still means exactly 1 batch call', async () => {
+    const creators = ['cory-engine', 'CoryBrain', 'bpos_orchestrator'];
+    const tickets = Array.from({ length: 50 }, (_, i) =>
+      makeBoardTicket({ id: `t-${i}`, created_by_type: 'cory', created_by_id: creators[i % 3] }),
+    );
+    ticketFindAll.mockResolvedValue(tickets);
+
+    await getTicketsForBoard();
+
+    expect(mockResolveActorDisplayNamesBatch).toHaveBeenCalledTimes(1);
+    expect(mockResolveActorDisplayNamesBatch.mock.calls[0][0]).toHaveLength(50);
+  });
+
+  it('a ticket whose actor has no entry in the resolved map falls back to null, never throws', async () => {
+    ticketFindAll.mockResolvedValue([makeBoardTicket({ created_by_type: 'human', created_by_id: 'ghost' })]);
+    mockResolveActorDisplayNamesBatch.mockResolvedValue(new Map());
+
+    const board = await getTicketsForBoard();
+
+    expect(board.backlog[0].created_by_display_name).toBeNull();
+  });
+
+  it('groups enriched tickets into the correct status bucket — unchanged behavior from before this run', async () => {
+    ticketFindAll.mockResolvedValue([
+      makeBoardTicket({ id: 't-done', status: 'done' }),
+      makeBoardTicket({ id: 't-todo', status: 'todo' }),
+    ]);
+
+    const board = await getTicketsForBoard();
+
+    expect(board.done).toHaveLength(1);
+    expect(board.done[0].id).toBe('t-done');
+    expect(board.todo).toHaveLength(1);
+  });
+
+  it('attaches auto_check (from the per-request resolver function) to every returned ticket', async () => {
+    const fakeInfo = { hasAutoCheck: true, resolverAgentName: 'CoryEngineTicketAutoResolver', nextCheckAt: '2026-08-17T12:00:00.000Z', nextCheckLabel: '2h' };
+    const resolverFn = jest.fn(() => fakeInfo);
+    mockBuildTicketAutoCheckResolver.mockResolvedValue(resolverFn);
+    ticketFindAll.mockResolvedValue([makeBoardTicket({ created_by_type: 'cory', created_by_id: 'cory-engine', type: 'agent_action', source: 'cory_autonomous_cycle' })]);
+
+    const board = await getTicketsForBoard();
+
+    expect(board.backlog[0].auto_check).toEqual(fakeInfo);
+    expect(resolverFn).toHaveBeenCalledWith(
+      expect.objectContaining({ created_by_id: 'cory-engine', created_by_type: 'cory' }),
+    );
+  });
+
+  // Ticket Board Performance fix (2026-08-18) — the "last 7 days" default view.
+  // getTicketsForBoard() is mocked at the Ticket.findAll layer here, so these
+  // tests pin the WHERE clause getTicketsForBoard() builds (the real Op.gte
+  // filtering behavior is Sequelize's own, out of scope to re-test), matching
+  // this file's established "test the wiring" convention.
+  describe('createdAfter filter (last-7-days default view)', () => {
+    it('happy path: passing createdAfter adds a created_at >= filter to the Ticket.findAll where clause', async () => {
+      ticketFindAll.mockResolvedValue([]);
+      const sevenDaysAgo = new Date('2026-08-11T00:00:00.000Z');
+
+      await getTicketsForBoard({ createdAfter: sevenDaysAgo });
+
+      const calledWhere = ticketFindAll.mock.calls[0][0].where;
+      expect(calledWhere.created_at).toEqual({ [Op.gte]: sevenDaysAgo });
+    });
+
+    it('boundary: no createdAfter -> no created_at key in the where clause at all, unchanged legacy behavior (matches every existing test above, which calls getTicketsForBoard() with no filters)', async () => {
+      ticketFindAll.mockResolvedValue([]);
+
+      await getTicketsForBoard();
+
+      const calledWhere = ticketFindAll.mock.calls[0][0].where;
+      expect(calledWhere.created_at).toBeUndefined();
+    });
+
+    it('composition: createdAfter composes with an existing filter (priority) in the same where clause, not a parallel query', async () => {
+      ticketFindAll.mockResolvedValue([]);
+      const sevenDaysAgo = new Date('2026-08-11T00:00:00.000Z');
+
+      await getTicketsForBoard({ createdAfter: sevenDaysAgo, priority: 'critical' });
+
+      const calledWhere = ticketFindAll.mock.calls[0][0].where;
+      expect(calledWhere.priority).toBe('critical');
+      expect(calledWhere.created_at).toBeDefined();
+    });
+
+    it('only returns tickets the mocked findAll resolves (proves the filter is passed to the DB layer, not applied client-side in this function)', async () => {
+      ticketFindAll.mockResolvedValue([makeBoardTicket({ id: 'recent-1' })]);
+
+      const board = await getTicketsForBoard({ createdAfter: new Date('2026-08-11T00:00:00.000Z') });
+
+      expect(board.backlog).toHaveLength(1);
+      expect(board.backlog[0].id).toBe('recent-1');
+    });
+  });
+});
+
+// Ticket Board Performance fix (2026-08-18) — getTicketStats() previously pulled
+// EVERY ticket row (status/priority/type only, but still all 16,000+ rows) into
+// Node and counted in JS. Rewritten to DB-side aggregation (Ticket.count() +
+// GROUP BY). No pre-existing coverage for this function existed before this run
+// (confirmed by grep) — these are the first tests, and pin BOTH the unchanged
+// public output shape AND the new implementation strategy (regression guard
+// against silently reverting to the full-table-pull shape).
+describe('getTicketStats', () => {
+  function mockGroupedFindAll(byGroupKey: Record<'status' | 'priority' | 'type', Array<Record<string, any>>>) {
+    ticketFindAll.mockImplementation(async (options: any) => {
+      const groupKey = options?.group?.[0] as 'status' | 'priority' | 'type' | undefined;
+      if (!groupKey) throw new Error(`getTicketStats() called Ticket.findAll without a group option: ${JSON.stringify(options)}`);
+      return byGroupKey[groupKey] ?? [];
+    });
+  }
+
+  it('happy path: assembles the same {total, open, byStatus, byPriority, byType} shape as before, via 4 small DB-side aggregate queries instead of a full-table pull', async () => {
+    ticketCount.mockResolvedValue(16186);
+    mockGroupedFindAll({
+      status: [
+        { status: 'backlog', count: '10861' },
+        { status: 'todo', count: '2000' },
+        { status: 'in_progress', count: '1500' },
+        { status: 'in_review', count: '500' },
+        { status: 'done', count: '1300' },
+        { status: 'cancelled', count: '25' },
+      ],
+      priority: [
+        { priority: 'critical', count: '50' },
+        { priority: 'high', count: '4000' },
+        { priority: 'medium', count: '10000' },
+        { priority: 'low', count: '2136' },
+      ],
+      type: [
+        { type: 'task', count: '16186' },
+      ],
+    });
+
+    const stats = await getTicketStats();
+
+    expect(stats.total).toBe(16186);
+    expect(stats.open).toBe(10861 + 2000 + 1500 + 500); // backlog+todo+in_progress+in_review, matches the pre-existing formula exactly
+    expect(stats.byStatus).toEqual({ backlog: 10861, todo: 2000, in_progress: 1500, in_review: 500, done: 1300, cancelled: 25 });
+    expect(stats.byPriority).toEqual({ critical: 50, high: 4000, medium: 10000, low: 2136 });
+    expect(stats.byType).toEqual({ task: 16186 });
+    // Counts are real numbers, not the raw Postgres-driver strings — a frontend
+    // stat card doing `stats.byPriority.critical ?? 0` must get a real 0, not the
+    // string '0' coercing oddly in arithmetic/display contexts elsewhere.
+    expect(typeof stats.byStatus.backlog).toBe('number');
+  });
+
+  it('boundary: an empty table returns all-zero counts, never throws', async () => {
+    ticketCount.mockResolvedValue(0);
+    mockGroupedFindAll({ status: [], priority: [], type: [] });
+
+    const stats = await getTicketStats();
+
+    expect(stats).toEqual({ total: 0, open: 0, byStatus: {}, byPriority: {}, byType: {} });
+  });
+
+  it('regression guard: getTicketStats() no longer pulls the full row set (uses GROUP BY, not an unbounded findAll)', async () => {
+    ticketCount.mockResolvedValue(3);
+    mockGroupedFindAll({
+      status: [{ status: 'todo', count: '3' }],
+      priority: [{ priority: 'medium', count: '3' }],
+      type: [{ type: 'task', count: '3' }],
+    });
+
+    await getTicketStats();
+
+    // Every findAll call this function makes must declare a `group` — proves it
+    // never falls back to "SELECT status, priority, type FROM tickets" and counts
+    // in JS the old way.
+    for (const call of ticketFindAll.mock.calls) {
+      expect(call[0]?.group).toBeDefined();
+    }
+    expect(ticketCount).toHaveBeenCalledTimes(1);
   });
 });

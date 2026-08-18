@@ -14,8 +14,9 @@ import WorkforceMessage from '../../models/WorkforceMessage';
 import { AI_ORG, findEmployee, directors, chiefOfStaff, AiEmployee } from './orgRegistry';
 import { gatherSignals } from '../ops/schoolSignals';
 import { runDirectors, rankRecommendations, Director } from '../ops/directors';
-import { generateBriefing } from '../ops/executiveBriefing';
-import { computeSchoolHealth } from '../ops/schoolHealth';
+import { generateBriefing, deterministicBriefing, Briefing } from '../ops/executiveBriefing';
+import { computeSchoolHealth, SchoolHealth } from '../ops/schoolHealth';
+import { SchoolSignals } from '../ops/schoolSignals';
 
 const OPEN = ['assigned', 'planning', 'working', 'needs_approval'];
 const today = () => new Date().toISOString().slice(0, 10);
@@ -50,12 +51,59 @@ export async function office(slug: string) {
   };
 }
 
-/** Chief of Staff morning briefing (consumes the ops signals + directors). */
+// Workforce OS perf fix, round 2 (2026-08-18, session CC-20260818-wf9k) —
+// independent `loop-production-verifier` caught a real gap the first round
+// missed: gatherSignals()'s N+1 fix (this same session, see schoolSignals.ts)
+// cut ITS OWN cost from ~3,400ms-dominant to ~630ms, but briefing()'s OTHER leg,
+// generateBriefing()'s uncached, synchronous LLM call, measured live at 2,369ms
+// alone and was never decomposed out during DISCOVER — so the page-blocking
+// call the whole run was commissioned to fix was still ~3-4s live after round 1.
+// Root cause: DISCOVER profiled `briefing()` as one opaque unit and attributed
+// 100% of its cost to the loop it could see; it never isolated the LLM call as
+// a second, independent cost center. Fix: never let a request AWAIT the LLM
+// call. A simple in-process TTL cache (single backend container, no horizontal
+// scaling in this compose file — see docker-compose.production.yml — so an
+// in-memory cache is safe, no cross-instance staleness). On a cold/expired
+// cache, serve the SAME deterministic narrative this file already falls back to
+// on an LLM error (deterministicBriefing(), Failure-First Design's fallback
+// pattern, now serving two legitimate callers instead of one) INSTANTLY, while
+// kicking off a real LLM regeneration in the background for the NEXT request.
+// briefingRegenerating guards against a thundering herd of duplicate (paid) LLM
+// calls when multiple requests land during the same cold window.
+const BRIEFING_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes — a morning briefing doesn't need per-pageview freshness.
+let briefingCache: { briefing: Briefing; generatedAt: number } | null = null;
+let briefingRegenerating = false;
+
+function isBriefingCacheFresh(): boolean {
+  return !!briefingCache && Date.now() - briefingCache.generatedAt < BRIEFING_CACHE_TTL_MS;
+}
+
+/** Fire-and-forget by design — the calling request must never await this. */
+function warmBriefingCacheInBackground(signals: SchoolSignals, health: SchoolHealth, dirs: Director[]): void {
+  if (briefingRegenerating) return;
+  briefingRegenerating = true;
+  generateBriefing(signals, health, dirs)
+    .then((brief) => { briefingCache = { briefing: brief, generatedAt: Date.now() }; })
+    .catch((err: any) => console.warn('[Workforce] background briefing regeneration failed:', err?.message))
+    .finally(() => { briefingRegenerating = false; });
+}
+
+/** Test-only: clears the module-level cache so tests don't leak state across cases. */
+export function __resetBriefingCacheForTests(): void {
+  briefingCache = null;
+  briefingRegenerating = false;
+}
+
+/** Chief of Staff morning briefing (consumes the ops signals + directors). Never
+ *  awaits the LLM call — see BRIEFING_CACHE_TTL_MS block above. */
 export async function briefing() {
   const signals = await gatherSignals();
   const health = computeSchoolHealth(signals);
   const dirs = runDirectors(signals);
-  const brief = await generateBriefing(signals, health, dirs);
+
+  if (!isBriefingCacheFresh()) warmBriefingCacheInBackground(signals, health, dirs);
+  const brief = briefingCache?.briefing ?? deterministicBriefing(signals, health, dirs);
+
   return { by: pub(chiefOfStaff()), health, briefing: brief, generated_at: signals.generated_at };
 }
 

@@ -2,6 +2,7 @@ import AiAgent from '../models/AiAgent';
 import type { AiAgentType, AiAgentTriggerType, AiAgentCategory } from '../models/AiAgent';
 import { Op } from 'sequelize';
 import { seedReeseIdentity } from './reese/reeseIdentitySeed';
+import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
 import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
 
 interface AgentSeedEntry {
@@ -103,6 +104,39 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'maintenance',
     description:
       'Data retention: deletes PageEvent records older than 90 days to manage database size.',
+  },
+  {
+    // BC #10099862873 P1: previously ran untracked, invisible to cron health alerting.
+    agent_name: 'PreviewStackReaper',
+    agent_type: 'maintenance',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/previewStackReaper.ts',
+    trigger_type: 'cron',
+    schedule: '*/5 * * * *',
+    category: 'maintenance',
+    description: 'Stops preview Docker stacks untouched for 30+ minutes to free resources.',
+  },
+  {
+    // BC #10099862873 P1: previously ran untracked, invisible to cron health alerting.
+    agent_name: 'StaleActionRecovery',
+    agent_type: 'maintenance',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/schedulerService.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'maintenance',
+    description: 'Recovers ScheduledAction rows stuck in "processing" past their max age.',
+  },
+  {
+    // BC #10099862873 P1: previously ran untracked, invisible to cron health alerting.
+    agent_name: 'AutonomousIngestInsights',
+    agent_type: 'insight_computer',
+    module: 'schedulerService',
+    source_file: 'backend/src/jobs/autonomousIngestInsights.ts',
+    trigger_type: 'cron',
+    schedule: '0 */6 * * *',
+    category: 'autonomous',
+    description: 'Regenerates autonomous suggestion cards from ingest data. Never auto-applies.',
   },
   {
     agent_name: 'ChatMessageCleanup',
@@ -1696,6 +1730,15 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
   },
 
   // --- Department Strategy Architect agents (16) ---
+  // Agent Ticket Standard audit (2026-08-18, session CC-20260818-a7d2): all 16 share one
+  // engine (strategyArchitectAgent.ts / departmentInitiativeEngine.ts), re-verified against
+  // that engine's real exported functions for tools_granted (never boilerplate/aspirational —
+  // directive Step 4). Each description now also states why no recurring resolver is
+  // registered (directive Step 6): `Initiative.status` (the model backing every one of these
+  // 16 agents' tickets) has zero write paths anywhere in this codebase today — nothing, human
+  // or automated, ever transitions it away from 'planned' — so there is no live signal to
+  // build an honest resolver against yet. A time-based/elapsed-age fallback is permanently
+  // banned in this repo, so these tickets stay open rather than being force-closed.
   {
     agent_name: 'ExecutiveStrategyArchitect',
     agent_type: 'dept_strategy_architect',
@@ -1704,7 +1747,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '0 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Executive Office. Evaluates organizational health, identifies cross-department alignment opportunities, and generates executive-level initiatives.',
+    description: 'Strategic planning agent for Executive Office. Evaluates organizational health, identifies cross-department alignment opportunities, and generates executive-level initiatives. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'executive', agent_name: 'ExecutiveStrategyArchitect' },
   },
   {
@@ -1715,7 +1759,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '2 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Governance & Compliance. Monitors compliance posture, identifies risk patterns, and ensures policy adherence across departments.',
+    description: 'Strategic planning agent for Governance & Compliance. Monitors compliance posture, identifies risk patterns, and ensures policy adherence across departments. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'governance', agent_name: 'GovernanceStrategyArchitect' },
   },
   {
@@ -1726,7 +1771,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '4 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Strategy & Analytics. Drives data-driven planning, forecasting accuracy, and strategic initiative pipeline.',
+    description: 'Strategic planning agent for Strategy & Analytics. Drives data-driven planning, forecasting accuracy, and strategic initiative pipeline. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'strategy', agent_name: 'StrategyFuturesArchitect' },
   },
   {
@@ -1737,7 +1783,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '6 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Finance. Optimizes cost structures, revenue forecasting accuracy, and scholarship allocation efficiency.',
+    description: 'Strategic planning agent for Finance. Optimizes cost structures, revenue forecasting accuracy, and scholarship allocation efficiency. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'finance', agent_name: 'FinanceIntelligenceArchitect' },
   },
   {
@@ -1748,7 +1795,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '8 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Operations. Drives workflow optimization, quality assurance improvements, and process automation.',
+    description: 'Strategic planning agent for Operations. Drives workflow optimization, quality assurance improvements, and process automation. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'operations', agent_name: 'OperationsOptimizationArchitect' },
   },
   {
@@ -1759,7 +1807,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '10 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Orchestration. Coordinates agent fleet performance, decision simulation, and system-wide optimization.',
+    description: 'Strategic planning agent for Orchestration. Coordinates agent fleet performance, decision simulation, and system-wide optimization. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'orchestration', agent_name: 'OrchestrationEcosystemArchitect' },
   },
   {
@@ -1770,7 +1819,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '12 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Intelligence & AI Ops. Identifies anomaly patterns, generates strategic insights, and improves autonomous operations.',
+    description: 'Strategic planning agent for Intelligence & AI Ops. Identifies anomaly patterns, generates strategic insights, and improves autonomous operations. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'intelligence', agent_name: 'InsightArchitect' },
   },
   {
@@ -1781,7 +1831,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '14 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Partnerships. Identifies expansion opportunities, strengthens corporate relationships, and develops institutional alliances.',
+    description: 'Strategic planning agent for Partnerships. Identifies expansion opportunities, strengthens corporate relationships, and develops institutional alliances. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'partnerships', agent_name: 'PartnershipExpansionArchitect' },
   },
   {
@@ -1792,7 +1843,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '16 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Growth. Designs growth experiments, scans for expansion opportunities, and drives partnership development.',
+    description: 'Strategic planning agent for Growth. Designs growth experiments, scans for expansion opportunities, and drives partnership development. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'growth', agent_name: 'GrowthExperimentArchitect' },
   },
   {
@@ -1803,7 +1855,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '18 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Marketing. Optimizes lead generation, content strategy, campaign performance, and brand positioning.',
+    description: 'Strategic planning agent for Marketing. Optimizes lead generation, content strategy, campaign performance, and brand positioning. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'marketing', agent_name: 'MarketingAutomationArchitect' },
   },
   {
@@ -1814,7 +1867,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '20 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Admissions. Improves enrollment pipeline, student recruitment efficiency, and conversion optimization.',
+    description: 'Strategic planning agent for Admissions. Improves enrollment pipeline, student recruitment efficiency, and conversion optimization. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'admissions', agent_name: 'AdmissionsConversionArchitect' },
   },
   {
@@ -1825,7 +1879,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '22 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Infrastructure. Monitors system health, security posture, AI model performance, and reliability improvements.',
+    description: 'Strategic planning agent for Infrastructure. Monitors system health, security posture, AI model performance, and reliability improvements. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'infrastructure', agent_name: 'InfrastructureEvolutionArchitect' },
   },
   {
@@ -1836,7 +1891,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '24 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Platform. Drives UX optimization, deployment improvements, and performance monitoring enhancements.',
+    description: 'Strategic planning agent for Platform. Drives UX optimization, deployment improvements, and performance monitoring enhancements. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'platform', agent_name: 'PlatformInnovationArchitect' },
   },
   {
@@ -1847,7 +1903,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '26 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Education. Innovates curriculum design, content generation methods, and learning outcome measurement.',
+    description: 'Strategic planning agent for Education. Innovates curriculum design, content generation methods, and learning outcome measurement. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'education', agent_name: 'LearningInnovationArchitect' },
   },
   {
@@ -1858,7 +1915,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '28 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Student Success. Improves retention, mentoring programs, learning outcomes, and student experience.',
+    description: 'Strategic planning agent for Student Success. Improves retention, mentoring programs, learning outcomes, and student experience. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'student_success', agent_name: 'StudentSuccessArchitect' },
   },
   {
@@ -1869,7 +1927,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '30 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Alumni Relations. Strengthens post-graduation engagement, referral programs, and community building.',
+    description: 'Strategic planning agent for Alumni Relations. Strengthens post-graduation engagement, referral programs, and community building. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'alumni', agent_name: 'AlumniNetworkArchitect' },
   },
 
@@ -2185,6 +2244,120 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description: 'Sofia Lindqvist. Manual-trigger only. Drafts ONE content idea (one gpt-4o-mini call) grounded in the top ranked signal and queues it in proposed_agent_actions for human review — never posts or sends.',
     enabled: true,
   },
+
+  // --- BC #10099862873 P1 item 1: previously ran untracked in aiOpsScheduler.ts,
+  // invisible to cronHealthAlertService.ts's error-rate/missed-run alerting ---
+  {
+    agent_name: 'AutonomousRequirementExpansion',
+    agent_type: 'action_planner',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/autonomousRequirementExpansionService.ts',
+    trigger_type: 'cron',
+    schedule: '3,18,33,48 * * * *',
+    category: 'autonomous',
+    description: 'Expands autonomous requirement discovery cycles.',
+  },
+  {
+    agent_name: 'ProposalCleanupService',
+    agent_type: 'maintenance',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/proposalCleanupService.ts',
+    trigger_type: 'cron',
+    schedule: '0 2 * * *',
+    category: 'governance_ops',
+    description: 'Expires stale governance proposals past their review window.',
+  },
+  {
+    agent_name: 'CoryEvolutionCycle',
+    agent_type: 'strategic_cycle',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/cory/coryBrain.ts',
+    trigger_type: 'cron',
+    schedule: '20 */6 * * *',
+    category: 'executive',
+    description: 'Cory self-evolution cycle — reviews and tunes its own strategic cycle behavior.',
+  },
+  {
+    agent_name: 'DailyExecutiveBriefing',
+    agent_type: 'executive_briefing',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/executiveBriefingService.ts',
+    trigger_type: 'cron',
+    schedule: '45 6 * * *',
+    category: 'executive',
+    description: 'Generates and sends the daily executive briefing email.',
+  },
+  {
+    agent_name: 'WeeklyStrategicBriefing',
+    agent_type: 'executive_briefing',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/executiveBriefingService.ts',
+    trigger_type: 'cron',
+    schedule: '45 6 * * 1',
+    category: 'executive',
+    description: 'Generates and sends the weekly strategic briefing email.',
+  },
+  {
+    agent_name: 'ExecutiveAwarenessEveningDigest',
+    agent_type: 'digest',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/executiveBriefingService.ts',
+    trigger_type: 'cron',
+    schedule: '0 18 * * *',
+    category: 'executive',
+    description: 'Evening executive awareness digest.',
+  },
+  {
+    agent_name: 'StrategicMetricCapture',
+    agent_type: 'strategic_intelligence',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/strategic-intelligence/strategicStateStore.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'strategic',
+    description: 'Captures a periodic strategic-state snapshot for trend/anomaly analysis.',
+  },
+  {
+    agent_name: 'StrategicTrendAnalysis',
+    agent_type: 'trend_detection',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/strategic-intelligence/anomalyDetectionEngine.ts',
+    trigger_type: 'cron',
+    schedule: '5,35 * * * *',
+    category: 'strategic',
+    description: 'Detects and emits strategic trend anomalies.',
+  },
+  {
+    agent_name: 'StrategicRecommendationCycle',
+    agent_type: 'strategic_intelligence',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/strategic-intelligence/recommendationEngine.ts',
+    trigger_type: 'cron',
+    schedule: '10,40 * * * *',
+    category: 'strategic',
+    description: 'Full strategic inference + recommendation cycle (metrics, trends, anomalies, inferences, recommendations).',
+  },
+  {
+    agent_name: 'CampaignTrafficEnforcement',
+    agent_type: 'maintenance',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/campaignLinkService.ts',
+    trigger_type: 'cron',
+    schedule: '0 */2 * * *',
+    category: 'operations',
+    description: 'Flags unregistered campaign traffic for review.',
+  },
+  {
+    agent_name: 'IntelligenceRetentionCycle',
+    agent_type: 'memory',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/cory/intelligenceRetention.ts',
+    trigger_type: 'cron',
+    schedule: '15 3 * * *',
+    category: 'memory',
+    description: 'Daily intelligence-data retention cleanup cycle.',
+  },
+
   // --- Reese Phase 1: real staff AI mentor identity ---
   {
     agent_name: 'Reese',
@@ -2250,12 +2423,411 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'reached.',
     enabled: true,
   },
+  // --- Reese ticket auto-resolve (2026-08-16): student_support supersession ---
+  // `student_support` tickets (one per DM room, created by reeseTicketLinkService.ts
+  // on every inbound student message) have NO ReeseOutreach-style closure mechanism
+  // at all — nothing has ever advanced or closed one once opened. The one real,
+  // non-time-based signal available: a room's OLDER student_support ticket is
+  // provably superseded once a STRICTLY NEWER ticket exists for the same room (see
+  // intelligence/autonomy/reeseStudentSupportSupersessionRules.ts and this run's
+  // execution-contract.md for the full DISCOVER trail). Seeded `enabled:false` —
+  // held until the reviewed historical bulk-clear (2 tickets, 2026-08-16) succeeds
+  // in production, matching today's established hold-until-reviewed gate for every
+  // other autoresolve cron shipped this session.
+  {
+    agent_name: 'ReeseStudentSupportSupersessionResolver',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/intelligence/autonomy/reeseStudentSupportSupersessionResolver.ts',
+    trigger_type: 'cron',
+    schedule: '0 17 * * *',
+    category: 'student_success',
+    description:
+      'Reese — daily sweep of open student_support (DM conversation) tickets. ' +
+      'Closes a ticket ONLY when a strictly newer student_support ticket now exists ' +
+      'for the same room (a real, structural, non-time-based fact — never "N hours ' +
+      'with no reply"); every other open ticket, including the newest ticket in any ' +
+      'multi-ticket room, is left untouched.',
+    enabled: false,
+  },
+
+  // ─── Agent Registration Stage 1 — ticket-creator identities ────────────────
+  // Identity-only registrations for real, high-volume ticket-creator processes
+  // that had no backing AiAgent/AdminUser row before this. Each row exists so
+  // resolveActorDisplayName() (backend/src/services/actorIdentity/
+  // resolveActorDisplayName.ts) can resolve the process's real created_by_id
+  // string to a real display name — nothing else. These are NOT the same rows
+  // as the scheduler run-tracking entries above with different names for the
+  // same underlying cron (e.g. 'AutonomousEngine' tracks run_count/status for
+  // the 10-min cron; 'cory-engine' below is the separate identity that cron's
+  // OWN ticket-creation code stamps onto every ticket it makes). See
+  // agentBlueprint/ticketCreatorIdentitySeed.ts for the AdminUser/Enrollment/
+  // CommunityMember identity wiring, and .loop-architect/runs/
+  // 20260813-agent-registration-stage1/execution-contract.md for the full
+  // 31-pair production cross-reference this registration set was derived from.
+  {
+    agent_name: 'cory-engine',
+    agent_type: 'ticket_creator_identity',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/autonomousEngine.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'executive',
+    description:
+      'Ticket-creator identity for the COO autonomous operations loop (the ' +
+      '"AutonomousEngine" cron, every 10 min — see that separate registry row ' +
+      'for run-tracking). Every ticket this loop opens is stamped ' +
+      "created_by_type='cory', created_by_id='cory-engine'; this row exists so " +
+      'those tickets resolve to a real display name instead of the raw string. ' +
+      "Colaberry's single highest-volume ticket creator.",
+    // Agent Quality Cleanup, Item 5 — re-verified against autonomousEngine.ts's
+    // real runAutonomousCycle() 8-step pipeline: discoverProblems() (via
+    // ProblemDiscoveryAgent), IntelligenceDecision.create(), createTicket(),
+    // and executeAction() (ExecutionAgent, transactional mutation of
+    // ai_agents.config/status/error_count for low-risk safe actions only).
+    tools_granted: [
+      'detect_problems',
+      'create_intelligence_decisions',
+      'create_tickets',
+      'auto_execute_safe_actions',
+    ],
+  },
+  {
+    agent_name: 'CoryBrain',
+    agent_type: 'ticket_creator_identity',
+    module: 'cory',
+    source_file: 'backend/src/services/cory/coryInitiatives.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'executive',
+    description:
+      'Ticket-creator identity for strategic-initiative tickets ' +
+      "(createStrategicInitiative()). Fires from both the AICOOStrategicCycle " +
+      "cron (every 30 min) and the CoryEvolutionCycle cron (every 6h) — see " +
+      "those separate registry rows for run-tracking. Every initiative + " +
+      "subtask ticket is stamped created_by_type='cory', " +
+      "created_by_id='CoryBrain'; this row exists so those tickets resolve to " +
+      "a real display name instead of the raw string.",
+    // Agent Quality Cleanup, Item 5 — re-verified against coryBrain.ts's
+    // generateStrategicActions() (creates AgentTask rows),
+    // coryInitiatives.ts's createStrategicInitiative() (creates
+    // StrategicInitiative rows + tickets), and proposeNewAgent() (creates
+    // AgentCreationProposal rows for admin approval — never auto-creates an
+    // agent itself).
+    tools_granted: [
+      'create_agent_tasks',
+      'create_strategic_initiatives',
+      'propose_new_agents',
+    ],
+  },
+  {
+    agent_name: 'InboxCaseEngine',
+    agent_type: 'ticket_creator_identity',
+    module: 'inboxCase',
+    source_file: 'backend/src/services/inboxCase/caseTicketService.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Inbox Intel Case Resolution Engine — ' +
+      'bridges every inbox case into the tickets board (one ticket per case, ' +
+      'walked through backlog -> todo -> in_progress -> in_review -> done as ' +
+      "the case progresses). Event-driven on case open/reopen, not cron. " +
+      "Every case ticket is stamped created_by_type='agent', " +
+      "created_by_id='InboxCaseEngine'; this row exists so those tickets " +
+      'resolve to a real display name instead of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // caseTicketService.ts's real exports: ensureCaseTicket() (creates,
+    // deduped via createTicket()'s entity dedup), syncTicketForCase() (walks
+    // the ticket through the board's real state machine as the case
+    // progresses), postCaseProgressNote() (narrative comments on the ticket).
+    tools_granted: [
+      'create_case_tickets',
+      'sync_case_ticket_status',
+      'post_case_progress_notes',
+    ],
+  },
+  {
+    agent_name: 'workforce_intelligence_engine',
+    agent_type: 'ticket_creator_identity',
+    module: 'company',
+    source_file: 'backend/src/services/company/workforceIntelligenceEngine.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Workforce Intelligence Engine ' +
+      '(runWorkforceAnalysis()) — analyzes the agent fleet\'s run/error counts ' +
+      'and opens a workforce-decision ticket per insight, deterministic rules, ' +
+      "no LLM. Fires from the WorkforceIntelligence cron (every 6h — see that " +
+      "separate registry row for run-tracking). Every ticket is stamped " +
+      "created_by_type='agent', created_by_id='workforce_intelligence_engine'; " +
+      'this row exists so those tickets resolve to a real display name instead ' +
+      'of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // workforceIntelligenceEngine.ts's real runWorkforceAnalysis(): queries
+    // ai_agents fleet stats (run_count/error_count) directly via SQL, and
+    // creates workforce-decision tickets through createWorkforceTicket()
+    // (now dedup'd — Item 2 of this same cleanup — while a finding for the
+    // same agent/condition stays open).
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'create_workforce_tickets',
+    ],
+  },
+  {
+    agent_name: 'WorkforceTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'company',
+    source_file: 'backend/src/services/company/workforceTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '15 */6 * * *',
+    category: 'operations',
+    description:
+      'Re-checks every OPEN workforce_decision ticket workforce_intelligence_engine ' +
+      "created against live ai_agents data and closes it (status 'done') with a real, " +
+      'numbers-grounded evidence comment once the error-rate condition it was opened ' +
+      'under has genuinely cleared. Deterministic re-derivation of the exact same ' +
+      "threshold (>20% error rate, >=10 errors) the ticket was created under -- no LLM, " +
+      'no human-approval step (matches the alert type: a mechanically re-checkable ' +
+      'metric, not a judgment call). Explicit in every close comment that this reflects ' +
+      'the CURRENTLY OBSERVED metric, not a verified root-cause fix. Runs 15 minutes ' +
+      "after each WorkforceIntelligence analysis pass (see that row's schedule).",
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'close_workforce_tickets_on_recovery',
+    ],
+  },
+  {
+    agent_name: 'CoryEngineTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/coryEngineTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '25 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md §3b requires: the 6,843-ticket historical
+    // backlog must be cleared through the reviewed --plan/--apply CLI sequence first,
+    // and ONLY THEN is this flipped to enabled:true (a single documented production
+    // UPDATE, no redeploy needed — same admin-toggle mechanism already used elsewhere
+    // in this file) so the cron carries the recurring re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN cory-engine ticket (autonomousEngine.ts / ' +
+      'runAutonomousCycle()) against the SAME detection logic that created it -- ' +
+      'detectAgentFailures()/detectConversionDrops() from ProblemDiscoveryAgent.ts -- ' +
+      "and closes it (status 'done') with a real, numbers-grounded evidence comment " +
+      'only when that specific condition no longer holds. error_spike tickets are ' +
+      "classified but never auto-closed (detectErrorSpikes()'s SQL references a column " +
+      'that does not exist in production, so a live re-check can never be trusted for ' +
+      'that condition-type -- left untouched by design, not force-closed). ' +
+      'Deterministic re-derivation, no LLM, no time-based fallback of any kind. ' +
+      'Explicit in every close comment that this reflects the CURRENTLY OBSERVED ' +
+      'condition, not a verified root-cause fix.',
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'query_lead_conversion_metrics',
+      'close_cory_engine_tickets_on_recovery',
+    ],
+  },
+  {
+    agent_name: 'CoryBrainInitiativeTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/corybrainInitiativeTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '40 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the 1,323-ticket historical
+    // backlog (of 1,348 total CoryBrain tickets stuck in `backlog`) must be cleared
+    // through the reviewed --plan/--apply CLI sequence first, and ONLY THEN is this
+    // flipped to enabled:true (a single documented production UPDATE, no redeploy
+    // needed — same admin-toggle mechanism already used for
+    // CoryEngineTicketAutoResolver above) so the cron carries the recurring re-check
+    // going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN CoryBrain ticket (a strategic initiative\'s own parent ' +
+      'ticket, or one of its subtasks -- coryInitiatives.ts / createStrategicInitiative()) ' +
+      'against the CURRENT live status of the strategic_initiatives row it is linked to ' +
+      '(parent tickets via the initiative\'s own ticket_id, subtasks via ' +
+      'metadata.initiative_id), and syncs the ticket to match (\'done\' if the initiative ' +
+      'is completed, \'cancelled\' if cancelled) once that has genuinely happened. This is ' +
+      'a reconciliation/sync fix, not a new decision engine -- it never decides whether an ' +
+      'initiative itself should be approved/rejected/completed, only propagates an ' +
+      'already-established fact from that already-fixed mechanism onto the dependent ' +
+      'ticket. Deterministic re-derivation, no LLM, no time-based fallback of any kind. ' +
+      'A ticket whose linked initiative is still proposed/approved/in_progress, or has no ' +
+      'matching initiative row at all, is left untouched and reported, never force-closed.',
+    tools_granted: [
+      'query_strategic_initiative_status',
+      'close_corybrain_tickets_on_initiative_terminal_state',
+    ],
+  },
+  {
+    agent_name: 'InboxCaseSourceCompletionResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/inboxCaseSourceCompletionResolver.ts',
+    trigger_type: 'cron',
+    schedule: '19 * * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the historical backlog (627
+    // InboxCaseEngine tickets stuck in_progress/in_review at DISCOVER time, none linked
+    // to an already-RESOLVED case -- confirmed NOT a sync gap) must be cleared through
+    // the reviewed --plan/--apply CLI sequence first, and ONLY THEN is this flipped to
+    // enabled:true (a single documented production UPDATE, no redeploy needed -- same
+    // admin-toggle mechanism already used for CoryEngineTicketAutoResolver/
+    // CoryBrainInitiativeTicketAutoResolver above) so the cron carries the recurring
+    // re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every InboxCaseEngine case not yet in a terminal state against two ' +
+      'things: (1) the live Basecamp completion status of any undispositioned ' +
+      "basecamp_todo case item (via ops_bc_todos, the existing AI Ops Command Center's " +
+      "read-mirror -- 'completed' dispositions the item RESOLVED, 'trashed' dispositions " +
+      "it NO_ACTION, 'active' or no live signal leaves it untouched), mirroring " +
+      "caseAutoSyncService.ts's existing disposeItemsDeletedAtSource() pattern for a " +
+      'structurally identical but distinct source category; and (2) the real, ' +
+      'unmodified evaluateClosureGuard()/closeCase() (caseClosureService.ts) across ' +
+      'every non-terminal case, so any case already closeable for ANY reason -- not ' +
+      'just this signal -- that nothing has ever autonomously invoked closeCase() on ' +
+      'also closes. Never decides a case is done beyond re-deriving a real, live, ' +
+      'already-established fact or re-checking the existing closure authority -- no new ' +
+      'judgment logic, no time-based fallback of any kind. A case with a genuinely ' +
+      'still-active basecamp_todo, an undispositioned email/sent_email item (no ' +
+      'reliable live re-check exists for those today), or any other real open blocker ' +
+      'is left untouched and reported, never force-closed.',
+    tools_granted: [
+      'query_basecamp_todo_completion_status',
+      'close_inboxcase_cases_on_source_completion_or_existing_guard_pass',
+    ],
+  },
+  {
+    agent_name: 'bpos_orchestrator',
+    agent_type: 'ticket_creator_identity',
+    module: 'company',
+    source_file: 'backend/src/services/company/ticketOrchestrator.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Universal Ticket Creation Layer\'s BPOS ' +
+      '(business-process) execution tickets (createBPOSTicket() and the ' +
+      'direct-Ticket.create() bypass in projectRoutes.ts\'s execution-ticket ' +
+      "route). Event-driven on build actions, not cron. Every BPOS ticket is " +
+      "stamped created_by_type='cory', created_by_id='bpos_orchestrator'; " +
+      'this row exists so those tickets resolve to a real display name instead ' +
+      'of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // ticketOrchestrator.ts's real exports: createBPOSTicket() (creates/
+    // transitions [BPOS] tickets tracking build stages),
+    // updateTicketStatus() (the same status-transition primitive every
+    // ticket-creator shares), and addTicketOutput() (attaches real build
+    // outputs to a ticket's activity feed — a capability unique to this
+    // agent among the 5).
+    tools_granted: [
+      'create_bpos_tickets',
+      'transition_bpos_ticket_status',
+      'attach_build_outputs',
+    ],
+  },
+  {
+    agent_name: 'BposCapabilityTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'company',
+    source_file: 'backend/src/services/company/bposCapabilityTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '55 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the historical backlog (11
+    // bpos_execution tickets stuck in_progress since 2026-04-24..2026-04-30 at DISCOVER
+    // time) must be cleared through the reviewed --plan/--apply CLI sequence first, and
+    // ONLY THEN is this flipped to enabled:true (a single documented production UPDATE,
+    // no redeploy needed — same admin-toggle mechanism already used for
+    // CoryEngineTicketAutoResolver/CoryBrainInitiativeTicketAutoResolver/
+    // InboxCaseSourceCompletionResolver above) so the cron carries the recurring
+    // re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN bpos_execution ticket (created by the bpos_orchestrator ' +
+      'ticket-creator identity above) against the CURRENT live state of the Capability ' +
+      'row it references (entity_id), and closes it once a real, human-asserted signal ' +
+      'exists: user_status:\'verified\' (Capability.ts\'s own documented "user clicked ' +
+      'Mark Verified" contract) closes to \'done\'; the capability row no longer ' +
+      'existing at all (a real hard delete -- capabilities has no soft-delete column) ' +
+      'closes to \'cancelled\'. This exists because the only mechanism that used to ' +
+      'close these tickets -- projectRoutes.ts\'s POST /api/portal/project/' +
+      'execution-ticket route\'s action:\'complete\'/\'fail\' -- has had its sole ' +
+      'frontend caller (the AI Project Builder) deliberately deleted (2026-07-18, ' +
+      'commit 13f8f0e5, "backend untouched, per Ali"), so no ticket of this type can ' +
+      'ever be told it finished through that path again. Deterministic re-derivation, ' +
+      'no LLM, no time-based fallback of any kind -- a capability still ' +
+      'user_status:\'in_progress\' (no human has confirmed its build complete) is left ' +
+      'untouched and reported, never force-closed on elapsed time.',
+    tools_granted: [
+      'query_capability_verification_status',
+      'close_bpos_tickets_on_capability_verified_or_deleted',
+    ],
+  },
 ];
 
 /**
  * Seed the full agent registry (129 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
+/**
+ * Agents deliberately taken out of service, with the reason. The cron
+ * registration in aiOpsScheduler.ts is removed separately; this keeps the
+ * AiAgent row disabled so health alerting does not fire on a job nobody
+ * intends to run. Value is the reason, surfaced in the boot log.
+ */
+export const RETIRED_AGENTS: Record<string, string> = {
+  // Detected stalled students, missing artifacts and gating checkpoints, but an
+  // exhaustive search of the build found NOTHING reading its output. Had been
+  // silently disabled for five months with no student-facing impact, because
+  // the agent has no side effects (no writes, no sends).
+  StudentProgressMonitor: 'retired 2026-08-15 — nothing consumed its output',
+  // Was registered twice under one agent_name with two different runners and
+  // two different schedules, so it ran on both while a single governance row
+  // covered them ambiguously. The manual admin trigger in companyRoutes.ts is
+  // left working, so the cycle can still be run on demand.
+  CompanyStrategicCycle: 'retired 2026-08-15 — duplicate registration; run manually via companyRoutes',
+};
+
+/**
+ * Hold every retired agent disabled, whether or not it appears in
+ * AGENT_REGISTRY — CompanyStrategicCycle, for one, was never seeded there, so a
+ * check inside the seed loop would silently skip it.
+ *
+ * Removing the cron registration alone is NOT enough: the AiAgent row would stay
+ * `enabled` with `trigger_type: 'cron'`, and cronHealthAlertService selects on
+ * exactly that pair — it would raise a severity-5 "missed runs" alert forever
+ * about a job we retired on purpose. Runs every boot so it cannot drift back on.
+ */
+async function enforceRetiredAgents(): Promise<void> {
+  for (const [agentName, reason] of Object.entries(RETIRED_AGENTS)) {
+    try {
+      const agent = await AiAgent.findOne({ where: { agent_name: agentName } });
+      if (!agent) continue; // never registered here — nothing to hold down
+      if (!agent.enabled) continue; // already retired; stay quiet on every boot
+      await agent.update({ enabled: false, status: 'paused' });
+      console.warn(`[AI Ops] RETIRED: Disabled ${agentName} — ${reason}`);
+    } catch (err: any) {
+      // One bad row must not abort seeding for everything else.
+      console.error(`[AI Ops] Failed to enforce retirement for ${agentName}: ${err.message}`);
+    }
+  }
+}
+
 export async function seedAgentRegistry(): Promise<void> {
   for (const entry of AGENT_REGISTRY) {
     const [agent, created] = await AiAgent.findOrCreate({
@@ -2292,7 +2864,10 @@ export async function seedAgentRegistry(): Promise<void> {
       await agent.update({ enabled: false, status: 'paused' });
       console.warn(`[AI Ops] SAFETY: Disabled ${entry.agent_name} — must use suggestion-only mode`);
     }
+
   }
+
+  await enforceRetiredAgents();
 
   // Assign agent_group to existing agents for super-agent aggregation
   await assignAgentGroups();
@@ -2305,6 +2880,15 @@ export async function seedAgentRegistry(): Promise<void> {
     await seedReeseIdentity();
   } catch (err: any) {
     console.warn('[AI Ops] Reese identity seed failed:', err?.message);
+  }
+
+  // Agent Registration Stage 1 — identity-only registrations for the 5
+  // ticket-creator processes registered above. Same fail-open posture: one
+  // agent's identity-seed failure must never block another's or boot.
+  try {
+    await seedTicketCreatorIdentities();
+  } catch (err: any) {
+    console.warn('[AI Ops] Ticket-creator identity seed failed:', err?.message);
   }
 }
 

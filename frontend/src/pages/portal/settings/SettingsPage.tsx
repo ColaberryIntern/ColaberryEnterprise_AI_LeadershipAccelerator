@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
@@ -12,6 +12,8 @@ import {
   SettingsView, SettingsPreferences,
 } from '../../../services/portalSettingsApi';
 import SubscriptionSection from './SubscriptionSection';
+import TeamSection from './TeamSection';
+import { useOrgManager } from '../useIsOrgManager';
 import EnrollmentSection from './EnrollmentSection';
 import PointsDrilldown from '../points/PointsDrilldown';
 import './SettingsPage.css';
@@ -30,15 +32,52 @@ const DEFAULT_PREFS: SettingsPreferences = {
   timezone: null, weekly_hours: null, primary_goal: null, preferred_contact: null, experience_level: null,
 };
 
-type SetTab = 'enrollment' | 'subscription' | 'profile' | 'points' | 'preferences' | 'account';
-const SET_TABS: { id: SetTab; label: string }[] = [
-  { id: 'enrollment', label: 'Enrollment' },
-  { id: 'subscription', label: 'Subscription' },
-  { id: 'profile', label: 'Profile' },
-  { id: 'points', label: 'Points' },
-  { id: 'preferences', label: 'Preferences' },
-  { id: 'account', label: 'Account' },
-];
+type SetTab = 'enrollment' | 'team' | 'subscription' | 'profile' | 'points' | 'preferences' | 'account';
+
+/**
+ * WHICH TABS A BUSINESS ACCOUNT SEES, and why — assessed one tab at a time.
+ *
+ * The governing fact is that a business-account manager holds a DUAL ACCOUNT:
+ * `registerManager` creates their organization AND their own free student
+ * enrollment. So most of this page is still theirs personally, and hiding it
+ * would take away their own learning account. Only the tabs that assume they are
+ * a *student buying a seat for themselves* are wrong.
+ *
+ *   Enrollment    MANAGER-WRONG, replaced. It reserves a seat for YOU in an
+ *                 upcoming cohort. A manager's job is to place their team, not
+ *                 to enrol themselves, and doing so from here would put the
+ *                 manager in a cohort they probably did not want. Replaced by
+ *                 Team, which is the equivalent action at company scale.
+ *   Team          MANAGER-ONLY, new. Invite teammates and see the roster —
+ *                 previously reachable only from /portal/company.
+ *   Subscription  KEPT. Plans are per-person today and the manager has their own
+ *                 student seat. There is no org-level billing to show instead;
+ *                 when there is, this is where it belongs.
+ *   Profile       KEPT. Name, title, photo, resume — all personal, all still theirs.
+ *   Points        KEPT. Points accrue to their own builder track. A manager who
+ *                 is also learning has real points here.
+ *   Preferences   KEPT. Notification and theme settings are per-person.
+ *   Account       KEPT. Sign-in link, sign out, tier. Identity, not enrolment.
+ *
+ * Deliberately NOT done: no tab is hidden from a regular student, and nothing
+ * here changes what a non-manager sees.
+ */
+const TAB_LABELS: Record<SetTab, string> = {
+  enrollment: 'Enrollment',
+  team: 'Team',
+  subscription: 'Subscription',
+  profile: 'Profile',
+  points: 'Points',
+  preferences: 'Preferences',
+  account: 'Account',
+};
+
+const STUDENT_TABS: SetTab[] = ['enrollment', 'subscription', 'profile', 'points', 'preferences', 'account'];
+const MANAGER_TABS: SetTab[] = ['team', 'subscription', 'profile', 'points', 'preferences', 'account'];
+
+export function tabsFor(isOrgManager: boolean): { id: SetTab; label: string }[] {
+  return (isOrgManager ? MANAGER_TABS : STUDENT_TABS).map((id) => ({ id, label: TAB_LABELS[id] }));
+}
 const initialsOf = (name: string, email: string) => {
   const src = (name || email || 'You').trim();
   const parts = src.split(/[\s@.]+/).filter(Boolean);
@@ -66,10 +105,31 @@ const SettingsPage: React.FC = () => {
   // (enroll), then lock the seat on the Subscription tab (pay). A ?tab= query
   // (e.g. the HUD's "?tab=points" deep-link) opens straight to that tab.
   const [searchParams] = useSearchParams();
+  // A business-account manager gets Team where a student gets Enrollment.
+  const { isManager: isOrgManager, loaded: orgLoaded } = useOrgManager();
+  const tabs = useMemo(() => tabsFor(isOrgManager), [isOrgManager]);
   const [tab, setTab] = useState<SetTab>(() => {
     const t = searchParams.get('tab');
-    return SET_TABS.some((x) => x.id === t) ? (t as SetTab) : 'enrollment';
+    // Any declared tab is accepted from the query here; the effect below
+    // corrects it once we know whether this viewer is a manager. Doing it in one
+    // step is not possible -- `is_org_manager` arrives asynchronously.
+    return (Object.keys(TAB_LABELS) as SetTab[]).includes(t as SetTab) ? (t as SetTab) : 'enrollment';
   });
+
+  /*
+   * Keep the selected tab valid for this viewer.
+   *
+   * Two cases this exists for, both reachable today:
+   *   - a manager lands on the default 'enrollment', which is not in their set;
+   *   - anyone deep-links ?tab=team or ?tab=enrollment for the wrong account
+   *     type (the HUD and emails link with ?tab=).
+   * Waits for `orgLoaded` so it does not bounce a manager off Team during the
+   * moment before is_org_manager resolves.
+   */
+  useEffect(() => {
+    if (!orgLoaded) return;
+    if (!tabs.some((t: { id: SetTab }) => t.id === tab)) setTab(tabs[0].id);
+  }, [orgLoaded, tabs, tab]);
   const avatarRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLInputElement>(null);
 
@@ -251,7 +311,7 @@ const SettingsPage: React.FC = () => {
 
       <div className="set-shell">
         <div className="set-tabs" role="tablist" aria-label="Settings sections">
-          {SET_TABS.map((t) => (
+          {tabs.map((t: { id: SetTab; label: string }) => (
             <button
               key={t.id}
               type="button"
@@ -267,6 +327,8 @@ const SettingsPage: React.FC = () => {
 
         <div className="set-panel">
         {tab === 'enrollment' && <EnrollmentSection onToast={flash} onGoToSubscription={() => setTab('subscription')} />}
+
+        {tab === 'team' && <TeamSection onToast={flash} />}
 
         {tab === 'subscription' && <SubscriptionSection onToast={flash} />}
 

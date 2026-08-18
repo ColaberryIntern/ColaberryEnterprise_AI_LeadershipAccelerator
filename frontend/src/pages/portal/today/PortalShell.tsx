@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './TodayShell.css';
-import { fetchPoints, fetchSchedule, levelFor, bandHudNext, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
+import { fetchPoints, fetchSchedule, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
+import { hudView } from './pointsHud';
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
@@ -17,7 +18,7 @@ import { openDm } from '../../../services/dmApi';
 import ChatDock, { DmTarget } from './ChatDock';
 import MessagesButton from './MessagesButton';
 import { useEntitlement } from '../useEntitlement';
-import { useIsOrgManager } from '../useIsOrgManager';
+import { useOrgManager, companyLabel } from '../useIsOrgManager';
 import { useMgmtStatus } from '../useMgmtStatus';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 import type { GatedFeatureKey } from '../../../components/paywall/gatedFeatures';
@@ -88,14 +89,22 @@ export const NAV_GROUPS: NavGroup[] = [
 // "Your company" — prepended above "Your day" only for org managers. Single item
 // to the real, authed manager page. Kept out of NAV_GROUPS so normal students
 // never see it.
-const COMPANY_NAV_GROUP: NavGroup = {
-  grp: 'Your company',
-  items: [
-    { label: 'Your company', to: '/portal/company', icon: (
-      <svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M12 9h.01M15 9h.01M9 13h.01M12 13h.01M15 13h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-    ) },
-  ],
-};
+const COMPANY_ICON = (
+  <svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M12 9h.01M15 9h.01M9 13h.01M12 13h.01M15 13h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+
+/**
+ * The company nav group, named after the actual company.
+ *
+ * Was a module-level constant with the string "Your company" hardcoded twice,
+ * so every business account's sidebar read the same generic label even though
+ * the org's real name was already on the settings payload the shell fetches.
+ * Now built per-render from that name, falling back to the generic label only
+ * when no company was supplied at signup (see companyLabel / has_real_name).
+ */
+function buildCompanyNavGroup(label: string): NavGroup {
+  return { grp: label, items: [{ label, to: '/portal/company', icon: COMPANY_ICON }] };
+}
 
 // "Management Portal" — a single link that opens the admin portal for employees
 // (staff with a management role). Shown only when useMgmtStatus().is_mgmt. Routes
@@ -134,17 +143,19 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   // drift a frame apart. See useScrollCondense.ts for the hysteresis logic.
   const condensed = useScrollCondense();
   const { isStaff, hasFullAccess } = useEntitlement();   // drives the nav lock badge on gated items
-  const isOrgManager = useIsOrgManager(); // manager = also sees a "Your company" nav group
+  // The org itself, not just the boolean: the nav group is named after the company.
+  const { isManager: isOrgManager, org } = useOrgManager();
+  const companyNavLabel = companyLabel(org);
   const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
   // Effective nav: employees get "Management Portal", managers get "Your company",
   // both prepended above "Your day".
   const groups = useMemo<NavGroup[]>(
     () => [
       ...(mgmt.is_mgmt ? [MGMT_NAV_GROUP] : []),
-      ...(isOrgManager ? [COMPANY_NAV_GROUP] : []),
+      ...(isOrgManager ? [buildCompanyNavGroup(companyNavLabel)] : []),
       ...NAV_GROUPS,
     ],
-    [isOrgManager, mgmt.is_mgmt],
+    [isOrgManager, companyNavLabel, mgmt.is_mgmt],
   );
   // Mobile bottom tab bar mirrors the effective, navigable destinations.
   const tabItems = useMemo(
@@ -264,10 +275,25 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
     return () => window.removeEventListener('te-open-dm', onOpenDm as EventListener);
   }, [openChatTarget, flashDmError]);
 
+  /**
+   * Two INDEPENDENT reads, settled independently.
+   *
+   * MEASURED 2026-08-15 on production: GET /api/portal/points answers in ~7ms
+   * (median), GET /api/portal/onboarding/schedule in ~2,090ms — the schedule
+   * handler opens a fresh MSSQL connection to CCPP per request. These used to
+   * share one `await Promise.allSettled([...])`, which resolves only when BOTH
+   * settle, so the fast read was held hostage by the slow one and the header sat
+   * in its unresolved state for two seconds on every single page load.
+   *
+   * Awaiting them separately costs nothing — they were already in flight
+   * concurrently — and lets the points HUD paint as soon as its own data lands.
+   * The schedule's latency is a real problem, but it is the schedule's problem;
+   * it should not be the header's.
+   */
   const load = useCallback(async () => {
-    const [p, s] = await Promise.allSettled([fetchPoints(), fetchSchedule()]);
-    if (p.status === 'fulfilled') setPoints(p.value);
-    if (s.status === 'fulfilled') setSchedule(s.value);
+    const points = fetchPoints().then(setPoints, () => { /* stays unknown; never falls back to 0 */ });
+    const schedule = fetchSchedule().then(setSchedule, () => { /* non-fatal */ });
+    await Promise.allSettled([points, schedule]);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -328,16 +354,11 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
     };
   }, []);
 
-  const total = points?.total ?? 0;
-  const lvl = levelFor(total);
-  // 5-band re-skin (runtime flag on the points payload). When ON, the HUD shows
-  // the canonical band rung (e.g. "AI Enabled II") as the level identity; when OFF
-  // band is null and the legacy "Apprentice/…/Principal" identity is byte-identical.
-  const band = points?.fiveBandUiEnabled ? points.band ?? null : null;
-  const idName = band ? band.rungName : lvl.name;
-  const nextLine = band
-    ? bandHudNext(band, total)
-    : (lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level');
+  // What the points HUD may state, and what it must withhold. The rule (never
+  // render a level or a total the server has not supplied — no zero defaults)
+  // lives in ./pointsHud as a pure function so it can be tested; see the header
+  // comment there for the defect it exists to prevent.
+  const hud = hudView(points, displayTotal);
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const nextLiveSessionTargetMs = (() => {
@@ -425,14 +446,28 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
           </button>
           <Link
             to="/portal/settings?tab=points"
-            className={`te-hud${fx ? ' bump' : ''}${active.startsWith('/portal/settings') ? ' active' : ''}`}
+            className={`te-hud${fx ? ' bump' : ''}${active.startsWith('/portal/settings') ? ' active' : ''}${hud.known ? '' : ' pending'}`}
             title="View your points breakdown"
-            aria-label={`${total} points, level ${idName} — view your points breakdown`}
+            aria-label={hud.ariaLabel}
+            aria-busy={hud.known ? undefined : true}
           >
             {fx && <span key={fx.key} className="te-hud-burst" aria-hidden="true">+{fx.delta}</span>}
-            <div className="row"><span className="lvl"><svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>{idName}</span><span className="pts">{displayTotal.toLocaleString()} pts</span></div>
-            <div className="bar"><i style={{ width: `${lvl.pct}%` }} /></div>
-            <div className="next">{nextLine}</div>
+            {/*
+              Same box, same height, same rhythm whether or not the numbers have
+              landed — a placeholder, not a spinner, so the header stays calm and
+              nothing reflows underneath the student when the real value arrives.
+            */}
+            <div className="row">
+              <span className="lvl">
+                <svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+                {hud.levelName ?? <i className="te-hud-skel lvl" aria-hidden="true" />}
+              </span>
+              <span className="pts">
+                {hud.totalText ?? <i className="te-hud-skel pts" aria-hidden="true" />}
+              </span>
+            </div>
+            <div className="bar"><i style={{ width: `${hud.pct}%` }} /></div>
+            <div className="next">{hud.nextLine ?? <i className="te-hud-skel next" aria-hidden="true" />}</div>
           </Link>
           <Link to="/portal/settings" className={`te-iconbtn${active.startsWith('/portal/settings') ? ' active' : ''}`} title="Settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" /><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.5 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 13a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 6.5a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 2.6h.09A1.65 1.65 0 0 0 11 1.09V1a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16.5 4.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21.4 11H21a2 2 0 0 1 0 4z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>

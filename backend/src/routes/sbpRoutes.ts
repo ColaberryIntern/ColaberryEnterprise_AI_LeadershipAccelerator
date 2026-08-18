@@ -20,8 +20,43 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { env } from '../config/env';
+// planGate is pure (no I/O, no model client), so it is safe to import eagerly.
+// The orchestrator is NOT — it pulls in the model client and the database — so
+// it stays behind the dynamic imports the handlers already use, and only its
+// TYPES are named here.
+import { GateViolation, blockingViolations, advisoryViolations } from '../services/sbp/planGate';
+import type { BuildStatus } from '../services/sbp/sbpOrchestrator';
 
 const router = Router();
+
+/**
+ * The poll response, declared rather than implied (CLAUDE.md contract layer).
+ * The client mirrors this in frontend/src/services/sbpApi.ts; changing either
+ * side without the other is a breaking contract change.
+ */
+interface BuildStateResponse {
+  project_id: string;
+  status: BuildStatus;
+  correlation_id: string | null;
+  gate: {
+    ok: boolean;
+    violations: GateViolation[];
+    /** Why the plan cannot be published. Non-empty ⇒ the student must act. */
+    blocking: GateViolation[];
+    /** Quality warnings that ride along with a plan that shipped anyway. */
+    advisory: GateViolation[];
+  } | null;
+  /** True once the plan is materialized into the portal's tasks. */
+  delivered: boolean;
+  plan: {
+    version: number;
+    sha256: string;
+    status: string;
+    requirements: number;
+    releases: Array<{ key: string; name: string; week_start: number; week_end: number; stories: number }>;
+    stories: Array<{ id: string; title: string; release: string; fulfills: string[] }>;
+  } | null;
+}
 const eid = (req: Request) => req.participant!.sub;
 
 function gate(res: Response): boolean {
@@ -36,7 +71,32 @@ function gate(res: Response): boolean {
 }
 
 function fail(res: Response, err: any, next: NextFunction) {
-  if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
+  if (err instanceof z.ZodError) {
+    // Log it. This branch returns without calling next(), so the global error
+    // middleware never sees a rejected build and NOTHING recorded which field
+    // failed — the response body was the only copy, and the browser threw it
+    // away. Two students were handed a ten-task template on 2026-08-14 and the
+    // server kept no evidence of why.
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'sbp_request_rejected',
+      outcome: 'failure',
+      error_class: 'ValidationError',
+      context: {
+        path: res.req?.path,
+        // Field paths and size limits only. Never the student's own text.
+        issues: err.issues.map((i) => ({
+          path: i.path.join('.'),
+          code: i.code,
+          ...(typeof (i as any).maximum === 'number' ? { maximum: (i as any).maximum } : {}),
+          ...(typeof (i as any).minimum === 'number' ? { minimum: (i as any).minimum } : {}),
+        })),
+      },
+    }));
+    return res.status(400).json({ error: 'Invalid input', issues: err.issues });
+  }
   if (typeof err?.status === 'number') return res.status(err.status).json({ error: err.message });
   if (err?.error_class === 'QueueFull') return res.status(503).json({ error: err.message });
   if (err?.error_class === 'PromptPathNotWritten') return res.status(409).json({ error: err.message });
@@ -59,12 +119,19 @@ async function requireOwnedProject(req: Request, projectId: string): Promise<any
   return project;
 }
 
-/** The student's workspace repo for this project, or null when unprovisioned. */
+/**
+ * The student's workspace repo for this project, or null when there is not one
+ * the platform can write to yet.
+ *
+ * Shared with the orchestrator's auto-publish so the two publish paths cannot
+ * disagree about whether a project has a repo — see services/sbp/workspaceRepo,
+ * which is also where "writable" is decided. Both mid-connect states resolve to
+ * null there, so publish takes the already-built `awaiting_repo` path instead of
+ * failing at the GitHub boundary on a missing ref.
+ */
 async function repoFor(projectId: string): Promise<{ owner: string; repo: string; url: string } | null> {
-  const { GitHubConnection } = await import('../models');
-  const conn: any = await GitHubConnection.findOne({ where: { project_id: projectId } });
-  if (!conn?.repo_owner || !conn?.repo_name) return null;
-  return { owner: conn.repo_owner, repo: conn.repo_name, url: conn.repo_url || `https://github.com/${conn.repo_owner}/${conn.repo_name}` };
+  const { repoForProject } = await import('../services/sbp/workspaceRepo');
+  return repoForProject(projectId);
 }
 
 // ── interview ───────────────────────────────────────────────────────────────
@@ -93,16 +160,38 @@ router.post('/api/portal/sbp/intake/questions', requireParticipant, async (req: 
 });
 
 // ── start ───────────────────────────────────────────────────────────────────
-const startSchema = z.object({
+/**
+ * The most a student may write in one interview reply.
+ *
+ * Named once because four fields have to agree on it: the reply itself, and the
+ * three legacy scope fields the browser fills BY COPYING a reply. They did not
+ * agree, and the mismatch was invisible from either side on its own. The wizard
+ * now enforces the same number in the textarea, so the boundary is something a
+ * student meets while typing rather than after pressing Confirm.
+ */
+export const ANSWER_MAX = 4_000;
+
+/**
+ * Exported so the contract is testable. A cap that only exists inside a closure
+ * cannot be asserted against the payload the wizard actually builds, and that is
+ * precisely how the `users` ceiling below drifted below its own source field.
+ */
+export const startSchema = z.object({
   project_id: z.string().uuid(),
   // Generous: the wizard explicitly asks students to pour everything out, and
   // the pilot's failure was throwing that away. 20k is the documented cap.
   idea: z.string().min(20, 'Tell us a bit more about what you want to build').max(20_000),
   name: z.string().max(200).optional(),
   size: z.enum(['workflow', 'project', 'autonomous']).optional(),
-  users: z.string().max(2_000).optional(),
-  data_sources: z.string().max(2_000).optional(),
-  done_definition: z.string().max(2_000).optional(),
+  // These three are NOT independently typed by the student. The browser copies
+  // one whole interview answer into each (frontend deriveLegacyScope), so their
+  // ceiling must be the answer ceiling. At 2,000 against a 4,000 answer they
+  // were the binding constraint on the entire wizard: a student who wrote more
+  // than 2,000 characters in a single reply was rejected on a field they had
+  // never seen, and told the requirements service was unreachable.
+  users: z.string().max(ANSWER_MAX).optional(),
+  data_sources: z.string().max(ANSWER_MAX).optional(),
+  done_definition: z.string().max(ANSWER_MAX).optional(),
   target_weeks: z.number().int().min(1).max(52).optional(),
   document: z.string().max(400_000).optional(),
   // The adaptive interview's answers: [{id, question, answer}]. The three
@@ -111,7 +200,7 @@ const startSchema = z.object({
   answers: z.array(z.object({
     id: z.string().max(80),
     question: z.string().max(500),
-    answer: z.string().max(4_000),
+    answer: z.string().max(ANSWER_MAX),
   })).max(20).optional(),
 });
 
@@ -146,19 +235,34 @@ router.get('/api/portal/sbp/builds/:projectId', requireParticipant, async (req: 
     const projectId = z.string().uuid().parse(req.params.projectId);
     await requireOwnedProject(req, projectId);
 
-    const { getBuildState } = await import('../services/sbp/sbpOrchestrator');
+    const { getBuildState, DELIVERED_STATUSES } = await import('../services/sbp/sbpOrchestrator');
     const state = await getBuildState(projectId);
     if (!state) return res.status(404).json({ error: 'No build for this project' });
 
     // The plan can be large; the poller wants status and a summary, not 200KB
     // on every tick. The full plan comes from the documents once published.
     const plan = state.plan;
-    res.json({
+    const violations = state.gate?.violations ?? [];
+    const body: BuildStateResponse = {
       project_id: state.projectId,
       status: state.status,
       correlation_id: state.correlationId,
-      gate: state.gate,
-      plan: plan && {
+      // Split at the boundary rather than in the browser. The client used to
+      // take the first three of `violations` and present them as the reason a
+      // build was refused — but that array is mostly ADVISORY warnings, so a
+      // student blocked on an uncovered must-have was told about a stylistically
+      // redundant story instead. Only `blocking` is a reason; `advisory` rides
+      // along with a plan that shipped.
+      gate: state.gate ? {
+        ok: state.gate.ok,
+        violations,
+        blocking: blockingViolations(violations),
+        advisory: advisoryViolations(violations),
+      } : null,
+      // Whether the plan actually reached the portal. `drafted` looks like
+      // success on the wire and is not: it means generated-but-not-promoted.
+      delivered: DELIVERED_STATUSES.has(state.status),
+      plan: plan ? {
         version: plan.version,
         sha256: plan.plan_sha256,
         status: plan.status,
@@ -170,8 +274,9 @@ router.get('/api/portal/sbp/builds/:projectId', requireParticipant, async (req: 
         stories: plan.plan.stories.map((s) => ({
           id: s.id, title: s.title, release: s.release, fulfills: s.fulfills,
         })),
-      },
-    });
+      } : null,
+    };
+    res.json(body);
   } catch (e) { fail(res, e, next); }
 });
 
@@ -212,7 +317,6 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
     if (!stored) return res.status(404).json({ error: 'No plan for this project' });
 
     const story = stored.plan.stories.find((s) => s.id.toUpperCase() === storyId.toUpperCase());
-    if (!story) return res.status(404).json({ error: `Story ${storyId} is not in this plan` });
 
     // The manifest is the list of paths actually committed. Passing it is what
     // lets prompt assembly REFUSE to cite a file that was never written — the
@@ -220,6 +324,46 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
     // prompt inlines its context and names no paths.
     const repo = await repoFor(projectId);
     const manifest = repo ? await readManifestPaths(repo) : [];
+
+    // ── STORY-000 IS NOT IN `plan.stories`, AND THAT IS ON PURPOSE ───────────
+    //
+    // The Command Center fulfils no requirement of the student's system, so it
+    // is kept out of the plan — otherwise it distorts the traceability gate and
+    // the release sizing. The cost is that EVERY path which iterates or looks
+    // up `plan.stories` silently omits it, and this route was one of them:
+    // the validator regex `^STORY-\d+$` happily accepts `STORY-000`, the lookup
+    // below then finds nothing, and the caller got
+    // `404 {"error":"Story STORY-000 is not in this plan"}` for the one story
+    // every student builds first.
+    //
+    // Not student-visible today only because the workspace UI copies
+    // `task.build` off the project tree rather than calling this — which makes
+    // it a trap for the next caller, not a fixed bug. The same omission has
+    // already cost this workstream a verification miss, a missing
+    // `docs/stories/STORY-000.md`, and a missing `progress.json` entry.
+    //
+    // Resolved the way the other paths resolve it (`buildVerificationService`,
+    // `renderDocs`): if the plan does not carry it, supply it. The prompt comes
+    // from `commandCenterPrompt` rather than `buildStoryPrompt`, because that
+    // is the same function `materializeTasks` stored on `student_tasks.build` —
+    // a second assembly path for STORY-000 would be a second thing to drift.
+    const { COMMAND_CENTER_STORY_ID, commandCenterPrompt } =
+      await import('../services/sbp/commandCenterStory');
+    if (!story && storyId.toUpperCase() === COMMAND_CENTER_STORY_ID) {
+      const { scheduleForEnrollment } = await import('../services/sbp/scheduleForEnrollment');
+      // Null is a normal answer here (cohort with no start date) and the prompt
+      // renders without dates rather than throwing, so a schedule lookup that
+      // comes back empty must not cost the student their prompt.
+      const schedule = await scheduleForEnrollment(eid(req), stored.plan, null, stored.published_at);
+      return res.json({
+        story_id: COMMAND_CENTER_STORY_ID,
+        prompt: commandCenterPrompt(stored.plan, schedule),
+        has_repo: Boolean(repo),
+        paths_verified: manifest.length > 0,
+      });
+    }
+
+    if (!story) return res.status(404).json({ error: `Story ${storyId} is not in this plan` });
 
     const { buildStoryPrompt } = await import('../services/sbp/buildStoryPrompt');
     const prompt = buildStoryPrompt(stored.plan, story, {

@@ -51,9 +51,12 @@ export async function runAdmissionsConversationTaskMonitor(
         whereClause.id = { [Op.gt]: lastScannedId };
       }
 
+      // ChatMessage is timestamps:false and the chat_messages table names its
+      // clock column `timestamp`, not `created_at` — ordering by created_at made
+      // every run of this monitor throw "column ChatMessage.created_at does not exist".
       const messages = await ChatMessage.findAll({
         where: whereClause,
-        order: [['created_at', 'ASC']],
+        order: [['timestamp', 'ASC']],
         limit: 50,
       });
 

@@ -1,0 +1,812 @@
+/* ============================================================================
+   homeV2.css -- Homepage V2.
+   Extends publicV2.css. Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+.cbv2-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  font-weight: 700;
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--brand-accent);
+  margin: 0;
+}
+.cbv2-eyebrow--info { color: var(--brand-tertiary); }
+.cbv2-eyebrow--warn { color: var(--status-warning); }
+
+.cbv2-section { padding-block: var(--space-24); }
+.cbv2-section--sunken { background: var(--surface-sunken); }
+.cbv2-section--inverse {
+  background: var(--surface-inverse, #0e1420);
+  color: var(--text-on-inverse, #f8f8f7);
+}
+.cbv2-section--inverse h2 { color: var(--text-on-inverse, #f8f8f7); }
+.cbv2-section--inverse .cbv2-lede { color: var(--text-on-inverse-muted, #a9b4c4); }
+
+.cbv2-section__head { max-width: 64ch; margin-bottom: var(--space-12); }
+.cbv2-section__head h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-heading);
+  color: var(--text-strong);
+  margin: var(--space-3) 0;
+}
+.cbv2-lede {
+  font-size: var(--fs-body-lg);
+  color: var(--text-muted);
+  line-height: var(--lh-relaxed);
+  margin: 0;
+}
+.cbv2-wrap--narrow { max-width: var(--container-sm, 820px); }
+
+/* ------------------------------------------------------------------ hero -- */
+
+.cbv2-hero {
+  background: var(--surface-inverse, #0e1420);
+  color: var(--text-on-inverse, #f8f8f7);
+  padding-block: var(--space-20);
+  position: relative;
+  overflow: hidden;
+}
+.cbv2-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(820px 440px at 82% -10%, rgba(251, 40, 50, 0.22), transparent 62%),
+    radial-gradient(640px 360px at 2% 10%, rgba(54, 120, 149, 0.20), transparent 60%);
+}
+.cbv2-hero__grid {
+  position: relative;
+  display: grid;
+  gap: var(--space-12);
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+  align-items: center;
+}
+@media (max-width: 1080px) {
+  .cbv2-hero__grid { grid-template-columns: minmax(0, 1fr); }
+}
+.cbv2-hero__title {
+  font-family: var(--font-display);
+  font-size: clamp(38px, 5.2vw, 60px);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tighter);
+  color: var(--text-on-inverse, #f8f8f7);
+  margin: var(--space-5) 0;
+}
+.cbv2-hero__title em { font-style: normal; color: #ff5a63; }
+.cbv2-hero__body {
+  font-size: var(--fs-body-lg);
+  color: var(--text-on-inverse-muted, #a9b4c4);
+  max-width: 56ch;
+  margin-bottom: var(--space-8);
+}
+.cbv2-hero__ctas { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; }
+.cbv2-btn--ghost {
+  background: transparent;
+  color: var(--text-on-inverse, #f8f8f7);
+  border-color: rgba(248, 248, 247, 0.28);
+}
+
+/* hero product panel -- the readiness rollup is a LIVE surface */
+.cbv2-hero__panel {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  min-width: 0;
+}
+.cbv2-panel__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-sunken);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-panel__url { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); }
+.cbv2-panel__body { padding: var(--space-6); }
+
+/* The hero panel is a light card inside a dark section: it must opt out of the
+   section colour or its headings render near-invisible. This exact defect
+   (1.03:1 contrast) shipped once in the prototype. */
+.cbv2-hero .cbv2-hero__panel,
+.cbv2-hero .cbv2-hero__panel h1,
+.cbv2-hero .cbv2-hero__panel h2,
+.cbv2-hero .cbv2-hero__panel h3,
+.cbv2-hero .cbv2-hero__panel .cbv2-metric__value { color: var(--text-strong); }
+.cbv2-hero .cbv2-hero__panel .cbv2-metric__label,
+.cbv2-hero .cbv2-hero__panel .cbv2-track { color: var(--text-muted); }
+
+.cbv2-tracks { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-6); }
+.cbv2-track {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+.cbv2-track > span:first-child { flex: 0 0 104px; }
+.cbv2-track__rail {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+  min-width: 0;
+}
+.cbv2-track__rail i { display: block; height: 100%; background: var(--chart-1); border-radius: 3px; }
+.cbv2-track b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+
+/* ----------------------------------------------------------------- cards -- */
+
+.cbv2-grid { display: grid; gap: var(--space-6); }
+.cbv2-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .cbv2-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .cbv2-grid--3 { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-card {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+.cbv2-card--dashed { border-style: dashed; }
+.cbv2-card__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h5);
+  color: var(--text-strong);
+  margin: var(--space-2) 0;
+}
+.cbv2-card__body { font-size: var(--fs-body-sm); color: var(--text-muted); margin: 0; }
+
+/* --------------------------------------------------------- goal chooser --- */
+
+/* The old chooser's .cbv2-chooser / .cbv2-chooser__btn / .cbv2-chooser__out
+   rules were removed here when the tablist replaced them -- nothing references
+   those class names any more. .cbv2-field below is NOT dead and stays:
+   OpportunityLabV2 uses it for form-field labels. */
+.cbv2-field {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+}
+.cbv2-field h3 {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin: 0 0 var(--space-2);
+}
+.cbv2-field p { font-size: var(--fs-body-sm); color: var(--text-body); margin: 0; }
+
+/* ---------------------------------------------------------------- engine -- */
+
+.cbv2-engine { display: grid; gap: var(--space-6); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .cbv2-engine { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-lane {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+.cbv2-lane--system { border-top: var(--border-3) solid var(--chart-1); }
+.cbv2-lane--people { border-top: var(--border-3) solid var(--chart-3); }
+.cbv2-lane h3 { font-family: var(--font-display); font-size: var(--fs-h5); margin: 0 0 var(--space-4); }
+.cbv2-lane__steps {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.cbv2-lane__steps li {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+.cbv2-lane__n {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  border-radius: var(--radius-pill);
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-default);
+  color: var(--text-muted);
+}
+.cbv2-lane__t { font-weight: 700; font-size: var(--fs-body-sm); color: var(--text-strong); display: block; }
+.cbv2-lane__d { font-size: var(--fs-caption); color: var(--text-muted); display: block; }
+.cbv2-converge {
+  margin: var(--space-6) 0 0;
+  text-align: center;
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--surface-brand-subtle, rgba(251, 40, 50, 0.06));
+  border: var(--border-1) solid var(--brand-accent);
+}
+.cbv2-converge strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--fs-h5);
+  color: var(--text-strong);
+}
+.cbv2-converge span {
+  display: block;
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+}
+
+/* --------------------------------------------------------- services grid -- */
+/*
+   Was: five equal text columns in one flush ribbon (.cbv2-ribbon, removed with
+   its markup). It squeezed each engagement into roughly a 19ch column, so every
+   title wrapped to two or three lines and the whole block read as a wall of
+   small grey type -- accurate, and completely inert.
+
+   Now: five picture cards on a SIX-column grid. Cards 1-3 span two columns each
+   and cards 4-5 span three, which fills the second row exactly. Five cards in an
+   even grid always orphans (5 into 3 leaves a hole, 5 into 2 leaves a half-row);
+   spanning the final pair wider closes it by construction rather than by hiding
+   the gap. The original ribbon comment warned about exactly this orphaning and
+   solved it by refusing to wrap at all -- at the cost of the cramped columns.
+*/
+
+.cbv2-svcgrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+.cbv2-svcgrid > :nth-child(-n + 3) { grid-column: span 2; }
+.cbv2-svcgrid > :nth-child(n + 4) { grid-column: span 3; }
+
+@media (max-width: 1080px) {
+  /* Two up: spans reset or the six-column maths strands the last card. */
+  .cbv2-svcgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cbv2-svcgrid > * { grid-column: span 1 !important; }
+  /* Odd count, so the last card takes the full width instead of sitting alone. */
+  .cbv2-svcgrid > :last-child { grid-column: span 2 !important; }
+}
+@media (max-width: 620px) {
+  .cbv2-svcgrid { grid-template-columns: minmax(0, 1fr); }
+  .cbv2-svcgrid > *,
+  .cbv2-svcgrid > :last-child { grid-column: span 1 !important; }
+}
+
+.cbv2-svccard {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+  text-decoration: none;
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.cbv2-svccard:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-default);
+}
+
+.cbv2-svccard__media {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--surface-sunken);
+}
+.cbv2-svccard__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cbv2-svccard:hover .cbv2-svccard__media img { transform: scale(1.04); }
+
+/* The number sits ON the photo, so it needs its own opaque ground rather than
+   relying on the image behind it -- these are photographs, and the pixels under
+   the badge differ per image and per crop. A solid chip is legible on all five. */
+.cbv2-svccard__n {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
+  background: var(--cherry);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.cbv2-svccard__text {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-5);
+}
+.cbv2-svccard__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-h6, 17px);
+  line-height: var(--lh-heading);
+  color: var(--text-strong);
+}
+.cbv2-svccard__body {
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-normal);
+}
+.cbv2-svccard__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: end;
+  margin-top: var(--space-2);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  /* --cherry-text, not --cherry: this is small text on a light card. */
+  color: var(--cherry-text);
+}
+.cbv2-svccard__go svg { transition: transform 200ms ease; }
+.cbv2-svccard:hover .cbv2-svccard__go svg { transform: translateX(3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-svccard,
+  .cbv2-svccard__media img,
+  .cbv2-svccard__go svg { transition: none; }
+  .cbv2-svccard:hover { transform: none; }
+  .cbv2-svccard:hover .cbv2-svccard__media img { transform: none; }
+  .cbv2-svccard:hover .cbv2-svccard__go svg { transform: none; }
+}
+
+/* ------------------------------------------------------------------ book -- */
+
+/* Warm, low-contrast ground so the section reads as a pause between the product
+   argument and the closing ask, rather than another card wall. */
+.cbv2-book {
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--chart-1) 7%, var(--surface-sunken)),
+    var(--surface-sunken) 60%);
+}
+.cbv2-book__grid {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--space-9, 48px);
+  align-items: center;
+}
+.cbv2-book__cover {
+  margin: 0;
+  /* Lift and tilt, so a flat scan of a cover reads as a physical object. */
+  transform: rotate(-2.2deg);
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cbv2-book__cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.16),
+    0 18px 40px rgba(0, 0, 0, 0.22),
+    /* the spine edge */
+    -6px 0 0 -2px rgba(0, 0, 0, 0.10);
+}
+.cbv2-book:hover .cbv2-book__cover { transform: rotate(-0.8deg) translateY(-4px); }
+
+.cbv2-book__body {
+  margin: var(--space-5) 0 0;
+  max-width: 62ch;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.cbv2-book__by {
+  margin: var(--space-5) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+@media (max-width: 860px) {
+  .cbv2-book__grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+  .cbv2-book__cover { max-width: 200px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-book__cover,
+  .cbv2-book:hover .cbv2-book__cover { transition: none; transform: rotate(-2.2deg); }
+}
+
+/* ----------------------------------------------------------- photography -- */
+
+/*
+ * Photographs are ATMOSPHERE, never evidence. They carry no caption asserting
+ * who the people are, because they are licensed stock rather than Colaberry
+ * staff or customers -- see docs/V2_CUTOVER_CARRYOVER.md. A picture presented as
+ * proof of something that did not happen is a fabricated claim made of pixels.
+ */
+.cbv2-photo {
+  margin: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+}
+.cbv2-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A cherry wash ties stock imagery to the palette instead of leaving it generic. */
+.cbv2-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(150deg,
+    color-mix(in srgb, var(--cherry) 12%, transparent),
+    transparent 55%);
+  pointer-events: none;
+}
+
+.cbv2-engine__photo { margin-top: var(--space-8); aspect-ratio: 21 / 7; }
+
+/* ============================================================================
+   D7 -- the service ribbon was a wall of five identical cards.
+   The first engagement is the one most buyers start with, so it takes a wider
+   cell and heavier type; the rest read as a supporting row. Asymmetry that
+   encodes something true beats five equal boxes.
+   ========================================================================== */
+@media (min-width: 1000px) {
+  .cbv2-ribbon {
+    grid-template-columns: 1.5fr repeat(4, 1fr);
+    align-items: stretch;
+  }
+  .cbv2-ribbon__item:first-child {
+    background: linear-gradient(160deg,
+      color-mix(in srgb, var(--cherry) 6%, var(--surface-card)),
+      var(--surface-card) 65%);
+    border-color: color-mix(in srgb, var(--cherry) 28%, transparent);
+  }
+  .cbv2-ribbon__item:first-child .cbv2-ribbon__title {
+    font-size: var(--fs-h4);
+    line-height: 1.2;
+  }
+}
+/* Reveal the reading order on hover without moving anything around it. */
+.cbv2-ribbon__item { transition: border-color 220ms ease, transform 220ms ease; }
+.cbv2-ribbon__item:hover { transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-ribbon__item, .cbv2-ribbon__item:hover { transition: none; transform: none; }
+}
+
+/* ============================================================================
+   GOAL CHOOSER -- rebuilt.
+
+   The previous version was four flat text buttons above four equal-height
+   boxes. Two problems it had, both visible in a screenshot: the boxes were
+   top-aligned and stretched to match the tallest, so the short one (the service
+   name) carried a large empty hole; and nothing tied the selected goal to the
+   answer, so it read as two unrelated rows of cards.
+
+   Now: tabs that connect to the panel with a notch, and one composed answer
+   where the recommendation leads at display size.
+
+   NAMING: these are .cbv2-goalcard, not .cbv2-goal, because signupV2.css already
+   defines .cbv2-goal for its radio options -- three grid columns. All V2 CSS is
+   bundled into one stylesheet, so the two collided and the signup rule laid these
+   cards out in columns, pushing the hint text outside the card and over its
+   neighbour. Caught in a screenshot, not by a test.
+   ========================================================================== */
+
+.cbv2-goalpicker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: 0;
+}
+
+.cbv2-goalcard {
+  position: relative;
+  display: grid;
+  /* The last row takes the slack, and align-content pins the first two. Left as
+     three `auto` rows under the default align-content:stretch, the leftover
+     height of a card whose hint fits on one line is split across ALL THREE rows,
+     so the icon and label of a one-line card sit ~12px lower than a two-line
+     card's. The labels read as misaligned across the row; only the hint should
+     move. */
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-2);
+  justify-items: start;
+  text-align: left;
+  padding: var(--space-5);
+  min-height: var(--target-min, 44px);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--surface-card);
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+.cbv2-goalcard:hover { border-color: var(--text-subtle); transform: translateY(-2px); }
+
+.cbv2-goalcard__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--surface-sunken);
+  color: var(--text-subtle);
+  transition: background 180ms ease, color 180ms ease;
+}
+.cbv2-goalcard__label {
+  font-weight: 700;
+  color: var(--text-strong);
+  line-height: 1.3;
+}
+.cbv2-goalcard__hint {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* Selected: filled ground, accent icon, and a notch that points into the panel.
+   Weight and the notch carry the state as well as colour, so the selection is
+   still readable in greyscale. */
+.cbv2-goalcard.is-active {
+  border-color: var(--cherry);
+  border-bottom-color: var(--surface-card);
+  background: var(--surface-card);
+  box-shadow: 0 -3px 0 0 var(--cherry) inset;
+  transform: none;
+  z-index: 2;
+}
+.cbv2-goalcard.is-active .cbv2-goalcard__icon {
+  background: color-mix(in srgb, var(--cherry) 12%, transparent);
+  color: var(--cherry);
+}
+/* The notch: a small square rotated 45deg, sitting on the seam. */
+.cbv2-goalcard.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--surface-card);
+  border-right: var(--border-1) solid var(--border-default);
+  border-bottom: var(--border-1) solid var(--border-default);
+  transform: rotate(45deg);
+  z-index: 3;
+}
+
+/* ------------------------------------------------------------- the answer -- */
+
+.cbv2-answer {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: var(--space-7);
+  padding: var(--space-8);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background:
+    radial-gradient(80% 120% at 0% 0%, color-mix(in srgb, var(--cherry) 5%, transparent), transparent 60%),
+    var(--surface-card);
+  animation: cbv2-answer-in 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes cbv2-answer-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.cbv2-answer__eyebrow {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  /* --cherry-text, not --cherry: the brand red is 3.85:1 on this ground, which
+     fails AA for text under 18.66px. The design system already ships a
+     text-safe variant of the same hue; this is what it is for. */
+  color: var(--cherry-text);
+  font-weight: 700;
+}
+/* The recommendation is the answer, so it is set as one, not as body copy. */
+.cbv2-answer__service {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 2.8vw, 2.25rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+  text-wrap: balance;
+}
+.cbv2-answer__why {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.7;
+  max-width: 52ch;
+}
+
+.cbv2-answer__side {
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  padding-left: var(--space-7);
+  border-left: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-answer__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+.cbv2-answer__n {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--green-700);
+  margin-top: 2px;
+}
+.cbv2-answer__row h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-subtle);
+}
+.cbv2-answer__row p { margin: 0; color: var(--text-body, var(--text-muted)); line-height: 1.6; }
+
+.cbv2-answer__foot {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: var(--space-6);
+  border-top: var(--border-1) solid var(--border-subtle);
+}
+
+@media (max-width: 900px) {
+  .cbv2-goalpicker { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+  .cbv2-goalcard { border-radius: var(--radius-md); }
+  /* The notch only makes sense when the active tab sits directly above the
+     panel. On a wrapped two-column grid it would point at another tab. */
+  .cbv2-goalcard.is-active::after { display: none; }
+  .cbv2-answer {
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: var(--radius-lg);
+    margin-top: var(--space-4);
+    padding: var(--space-6);
+  }
+  .cbv2-answer__side { padding-left: 0; border-left: 0; padding-top: var(--space-5); border-top: var(--border-1) solid var(--border-subtle); }
+}
+@media (max-width: 560px) {
+  .cbv2-goalpicker { grid-template-columns: minmax(0, 1fr); }
+  .cbv2-goalcard__hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-answer { animation: none; }
+  .cbv2-goalcard, .cbv2-goalcard:hover { transition: none; transform: none; }
+}
+
+/* ------------------------------------------------------ idea to shipped -- */
+/*
+   Three beats, then the repo. The steps are a 3-up that collapses to one column;
+   the repo block is a split with the story-workspace capture beside the copy.
+
+   The capture is TALL (820x1000, a story workspace) so it is height-capped and
+   top-anchored: the story, its requirement trace and the "0 of 3 confirmed"
+   criteria all sit in the top two-thirds, which is the part that carries the
+   argument. Letting it run full height would push the copy off the screen.
+*/
+
+.cbv2-buildflow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+@media (max-width: 900px) { .cbv2-buildflow { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-buildstep {
+  position: relative;
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.cbv2-buildstep__n {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-xs);
+  background: var(--cherry);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+}
+.cbv2-buildstep h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h6, 17px);
+  color: var(--text-strong);
+  margin: 0 0 var(--space-2);
+}
+.cbv2-buildstep p {
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-normal);
+  margin: 0;
+}
+
+.cbv2-buildrepo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  gap: var(--space-9, 48px);
+  align-items: center;
+  margin-top: var(--space-9, 48px);
+}
+@media (max-width: 900px) { .cbv2-buildrepo { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-buildrepo__body {
+  font-size: var(--fs-body-lg);
+  color: var(--text-body);
+  line-height: var(--lh-relaxed);
+  margin: var(--space-3) 0 0;
+  max-width: 56ch;
+}
+
+.cbv2-buildrepo__shot {
+  margin: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: var(--border-1) solid var(--border-default);
+  box-shadow: var(--shadow-lg);
+  background: var(--surface-card);
+  max-height: 520px;
+}
+.cbv2-buildrepo__shot img {
+  width: 100%;
+  height: auto;
+  display: block;
+  /* Top-anchored: the story, its REQ trace and the unconfirmed criteria are the
+     argument, and they live at the top of the capture. */
+  object-fit: cover;
+  object-position: top center;
+  max-height: 520px;
+}
+
+/* The repo capture is WIDE and short (943x426), unlike the tall story
+   workspace it replaced, so it must not inherit that block's 520px height cap
+   and top-anchored cover crop -- that would letterbox it. */
+.cbv2-buildrepo__shot--repo { max-height: none; }
+.cbv2-buildrepo__shot--repo img {
+  max-height: none;
+  object-fit: contain;
+}
+.cbv2-buildrepo__cap {
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-1) solid var(--border-subtle);
+  background: var(--surface-sunken);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}

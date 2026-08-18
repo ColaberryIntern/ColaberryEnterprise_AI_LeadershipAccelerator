@@ -8,6 +8,8 @@ import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import WarRoomPage from '../pages/admin/WarRoomPage';
 import AdminCohortDetailPage from '../pages/admin/AdminCohortDetailPage';
 import AdminLeadsPage from '../pages/admin/AdminLeadsPage';
+import AdminBusinessAccountsPage from '../pages/admin/AdminBusinessAccountsPage';
+import AdminBusinessAccountDetailPage from '../pages/admin/AdminBusinessAccountDetailPage';
 import AdminLeadDetailPage from '../pages/admin/AdminLeadDetailPage';
 import AdminPipelinePage from '../pages/admin/AdminPipelinePage';
 
@@ -80,6 +82,11 @@ const adminRoutes = (
         <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
         <Route path="/admin/pipeline" element={<AdminPipelinePage />} />
         <Route path="/admin/leads" element={<AdminLeadsPage />} />
+        {/* Business accounts: the staff-side view of `organizations`. Detail is
+            declared after the list so "/admin/business-accounts" is not eaten
+            by the ":id" segment. */}
+        <Route path="/admin/business-accounts" element={<AdminBusinessAccountsPage />} />
+        <Route path="/admin/business-accounts/:id" element={<AdminBusinessAccountDetailPage />} />
         <Route path="/admin/leads/:id" element={<AdminLeadDetailPage />} />
         <Route path="/admin/visitors" element={<AdminVisitorsPage />} />
         <Route path="/admin/funnel" element={<AdminFunnelPage />} />

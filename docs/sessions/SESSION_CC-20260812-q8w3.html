@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260812-q8w3 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Thursday, August 13, 2026 at 10:49 AM</div>
+    <div><span class="sid">CC-20260812-q8w3</span><span class="count">5 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Built EPIC 1 of the Explorer Growth OS plan: 5 new tables, the Explorer↔Lead identity bridge, and fixes for two verified pre-existing production defects**</h2>
+          <span class="badge">2026-08-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">25 files, +3050 / **-0** (purely additive), all backend, on `workstream/explorer-growth-epic1` off `origin/main@1bf1a782`. **T001** `config/explorerGrowthFlags.ts` + 9 env flags, all default OFF, resolved by one pure function so `env.ts` has a single parse site; sub-flags are subordinate to the master via `isExplorerFeatureEnabled()`. **T002** five Sequelize models (`ExplorerJourneyProfile|JourneyDecision|ScoreSnapshot|ExperimentAssignment|ContentAsset`) plus `types/explorerGrowth.ts` for shared domain types and barrel wiring; the profile is keyed on `enrollment_id` itself so duplicate profiles are structurally impossible. **T003** `db/ensureExplorerGrowthSchema.ts` creating those 5 tables + 17 indexes with idempotent raw SQL (prod runs no `sequelize.sync`), wired into `server.ts` boot. **T004/T005/T006 — defect D1**: `page_events.lead_id` added (column + model in all three places + index), `resolveIdentity()` extended to populate it going forward, and a resumable batched backfill script for history. **T007 — defect D2**: hard bounce now writes `Lead.status=&#39;bounced&#39;`. **T008** `services/explorerGrowth/explorerIdentityBridge.ts` making the Explorer↔Lead email link durable and reportable. Nothing in this epic sends anything, registers any cron, or adds any route.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Plan independently audited by `loop-plan-auditor` — cycle 1 FAILED 17/20, cycle 2 PASSED 20/20.** The cycle-1 failure was correct and material: the plan demanded a fully green `npm test`, which is false at `origin/main` (repo&#39;s own documented baseline is ~29–30 pre-existing failing suites, PROGRESS.md lines 12423/12429/12472/12507), so the gate could never have passed and the run would have hard-stopped before deploy; it also had no dev stage despite the contract requiring &quot;dev and prod&quot;, and the worktree had no `node_modules` so every `npx` command in it was unrunnable. Fixed by adding T000 (baseline capture + junctions) and T009 (dev rehearsal), and switching to a differential gate. **Tasks graded by `loop-task-verifier` with fresh evidence it gathered itself: T001 PASS 11/12, T002 PASS 11/12, T003 PASS 12/12** (T004–T008 verification in flight at time of writing). **Quality gate: backend jest 7378 passed / 41 failed across 534 suites; zero failing suites outside the pre-measured known-failing union, and all 8 new suites green** — 142 new tests total. `secret-scan.js` OK (3944 files), `lint-route-auth.js` OK (90 admin route files). Greps confirm **0 new `cron.schedule`** and **0 new send paths** (`sendMail`/`triggerVoiceCall`/`sendSmsViaGhl`/`enrollLeadInSequence`). **Schema rehearsed on the real `accelerator_dev1` Postgres before any prod exposure**: pass 1 created 5 tables + 17 indexes with zero errors, pass 2 was a clean no-op (idempotency proven, not assumed), all 86 columns machine-diffed against the Sequelize models with zero drift, and the `UNIQUE (enrollment_id, decision_date)` constraint proven live by an INSERT that Postgres rejected with `duplicate key value violates unique constraint &quot;idx_explorer_decisions_daily&quot;`. `accelerator_prod` confirmed untouched (0 `explorer_%` tables).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**D1 was a live, silent production defect and is now proven both ways.** `contextGraphService.ts:135-139` has always queried `page_events WHERE lead_id = :leadId`, and that column has never existed. Because the query sits inside a `Promise.all`, it took down all of `buildCompositeContext()`, which `schedulerService.ts:311` then swallowed — so **every campaign email this system has ever sent was generated from the legacy prompt path rather than the grounded one**, losing engagement history, recent clicked URLs, cohort facts and URL grounding, with no error surfacing anywhere. Demonstrated by running the exact query against both databases: `accelerator_dev1` (fixed) returns `booking_attempts = 0`; `accelerator_prod` returns `ERROR: column &quot;lead_id&quot; does not exist`. **D2** was similar in shape: `checkLeadSendable` blocks on `Lead.status=&#39;bounced&#39;` but nothing ever wrote that value, so the branch was unreachable and a hard-bounced address stayed globally sendable — only the campaign it bounced on dropped it. Fixed for `hard_bounce`/`reject` only; `soft_bounce` is deliberately excluded because it is transient and suppressing on it would discard recoverable recipients. **Three defects were found in my own work by the graders and fixed rather than argued with**: the T001 verifier caught that `env.explorerGrowth` exposes raw sub-flags so a future consumer could bypass the master switch — there is now a guard test scanning backend source for direct sub-flag reads, proven by planting a real bypass file and watching it fail; the T002 verifier caught `ExplorerAssetType` declared verbatim in two files with the model using its local copy — an untested drift pair inside a task whose whole thesis is anti-drift, now deleted and guarded by a test that fails on any type re-declared across `types/` and the models; and T006&#39;s own suite caught that a shared `&gt; 0` guard silently rejected `--pause-ms 0`, so an operator asking for a fast backfill would have got a slow one with no indication why. **Also corrected here rather than by rewriting history**: T002&#39;s commit body claimed the model files were &quot;max 149&quot; lines; the true maximum is 159, computed over a set that excluded the largest file. The ≤160 criterion holds either way, but the stated number was wrong. **The jest baseline itself proved unreliable and that changed the gate**: measured twice on identical code it gave 26 failing suites quiet and 42 under load, several with 33–44s timeout durations, so a naive &quot;passed before, fails now ⇒ regression&quot; rule would manufacture false regressions from CPU contention; the arbiter is now a per-suite isolation re-run, which is what prior loop-architect runs in this repo already did. **Not yet merged or deployed** — `main` requires 1 approving review, which this loop cannot give itself.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Dead curriculum videos (2), hardcoded &quot;ET&quot; on every session time, and the invisible answer selection in the Evaluation drawer**</h2>
+          <span class="badge">2026-08-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Three unrelated reports triaged together. **(1) Dead videos — Farhat, on behalf of Regina Asafor.** Week 3 learn card `aebd4db9` pointed at `Yjfh5jtaLx4` (&quot;AIMTECH Academy&quot;), whose channel was terminated; oEmbed returns 404. Because a dead video never emits watch beats, `watched_pct` stays 0, `assertWatchRequirement` throws 422 forever, the card can never complete, and `section_complete` gating therefore keeps the whole Week 3 reflect/share chain locked — Regina had completed all 17 other Week 3 items. Probed all 75 active `type=&#39;video&#39;` cards via oEmbed: that was the only dead one. Widening the sweep past the type filter found a **second**: `f79441f2` (`ai_video_stream`, published, 145 students provisioned) pointed at `aihgAvpirDU`, also 404. Both replaced with verified first-party videos — `6wkFb2_cUik` &quot;Tool use with the Claude 3 model family&quot; (channel `Anthropic`) and `6bs5b4FltCU` &quot;How Claude Code Works&quot; (channel `Claude`) — chosen over higher-production third-party alternatives specifically because an institutional channel is what does *not* vanish, which is the failure being fixed. New `backend/src/scripts/auditCurriculumVideoLinks.js` polls every active card carrying a `metadata.video.url` (keyed on the URL&#39;s presence, not a type allowlist, so a new video-bearing type is covered the day it ships) and exits non-zero only on a link a student can actually reach. **(2) Session times labelled ET — Taiwo.** `live_sessions.start_time` is a Central wall-clock VARCHAR and the scheduler&#39;s own math already treats it that way (`classInstant`), but three user-visible surfaces glued a literal &quot; ET&quot; onto the raw string, so a 6:30 PM CT class was announced as &quot;18:30:00 ET&quot;: `emailService.ts:1296` (the reminder Taiwo received), `PortalSessionsPage.tsx:91`, `PortalDashboardPage.tsx:215`. New `formatCentralClock()` (backend) and `formatCentralSessionTime`/`formatCentralSessionRange` (frontend) format the clock and *derive* the zone from the session&#39;s own date, so it reads CDT in summer and CST in winter rather than hardcoding either. Also corrected the seed data that would reintroduce it: `canonicalCourse.ts` was seeding `timezone: &#39;America/New_York&#39;` + `core_time: &#39;1:00–3:00 PM ET&#39;`, plus three `EST` strings in other seeds. **(3) Evaluation answers not highlighting — Kes.** `AssessmentPanel` consumed ~18 CSS custom properties it never declared, relying on `.rt` (runtimeKit) supplying them. In the Classroom drawer the scope is `.tl-de`, which defines only `--berry`/`--cherry`/`--leaf`/`--amber`; `border:1.5px solid var(--line)` was therefore invalid at computed-value time (border-style fell back to `none`) and `background:var(--berry-soft)` resolved to transparent, making a selected answer pixel-identical to an unselected one. Nothing was locked — Kes only felt so because nothing changed on screen (`pick()` re-selects freely when `isEval`). Made the panel self-contained like every sibling renderer (`.svx`, `.rfx`, `.am`), with dark-theme overrides for both scopes it renders in, and closed the parallel a11y gap: the options were bare `&lt;button&gt;`s with no `role=&quot;radio&quot;`/`aria-checked`, so screen-reader users had the same problem for a different reason.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend jest 52/52 across the touched modules (17 new: `centralDate.formatCentralClock.test.ts` pins &quot;6:30 PM CDT&quot; for the exact reported email, the CDT/CST DST flip, and that no Eastern label can ever be emitted; `auditCurriculumVideoLinks.test.ts` pins DEAD-vs-UNKNOWN so a 429 or a timeout can never be mistaken for a dead video). Frontend 36/36 (32 sessionTime + 4 new `AssessmentPanel.tokens.test.ts`). Both stacks `tsc --noEmit` **clean — 0 errors in `src/`** (the zod-v4/d3 parse noise is the documented root-TS-4.9.5 artifact). Both prod DB updates verified idempotent by re-running: `UPDATE 1` then `UPDATE 0`. One pre-existing failure disclosed rather than hidden: `portalEnrollmentService.test.ts` fails to load locally on a Sequelize env error — confirmed identical with my changes stashed, so it is not mine.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The `AssessmentPanel` test deliberately asserts the *invariant* (every `var(--x)` the stylesheet reads, it must also define) rather than the specific tokens that broke, so the whole class of bug fails in CI rather than just this instance. **Flagged, not fixed — needs a content decision, not a code one:** card `f79441f2` is one of **10 published `intel_sample_seed` cards** whose `body_html` carries invented figures (it claims &quot;32 min&quot; and lists chapter marks at 02:10 / 11:40 / 21:05 for what is really a 2m50s video). I replaced only the dead URL and left that copy alone; seeded sample content sitting published in front of 145 students is a scope expansion and Ali&#39;s call. Also left alone: an archived `live_class` card still pointing at a `BigBuckBunny.mp4` placeholder (403) — harmless while archived, which is why the audit reports it but does not fail on it. **The audit script is not scheduled yet** — it ships runnable and tested, but nothing calls it on a cron, so recurrence is still caught by a human until that is wired.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Follow-up: make the video link audit actually runnable where it is meant to run**</h2>
+          <span class="badge">2026-08-13</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The audit script shipped in the entry above as `auditCurriculumVideoLinks.js`, whose header told you to run it as `docker exec accelerator-backend node /app/dist/scripts/auditCurriculumVideoLinks.js`. That command fails with `MODULE_NOT_FOUND`: `backend/tsconfig.json` sets no `allowJs`, so a `.js` file under `src/` is never emitted to `dist/` — all 57 scripts in `dist/scripts/` are compiled from `.ts`. Caught by actually running the documented command against prod rather than assuming the deploy carried it. Rewritten as `auditCurriculumVideoLinks.ts` with typed row/outcome contracts (`VideoCardRow`, `ProbeOutcome`, `AuditResult`) instead of untyped rows, matching the convention of the other audit scripts that already live in `dist`. Behavior is unchanged; the header now documents why it must stay TypeScript so nobody &quot;simplifies&quot; it back.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">10/10 jest, `tsc --noEmit` 0 errors in `src/`, and the previously-failing command re-run live in the prod container.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">This is the failure mode the repo&#39;s own rule about verifying against a real artifact exists to catch — the script was tested, typechecked, and merged, and still could not run in the one place it was written for.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**The seeded sample card reverted my DB fix on the next boot — fixed at the source**</h2>
+          <span class="badge">2026-08-13</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Running the newly-deployed audit against prod immediately caught a regression I would otherwise have reported as fixed: card `f79441f2` was back on the dead `aihgAvpirDU`, with the `metadata.replaced_video` rollback key gone. Cause, confirmed in the boot log: `[IntelSamples] 0 created, 10 updated` — `seedIntelSampleCards.ts` re-asserts all 10 sample cards on **every backend boot**, so any DB-level edit to a seeded card survives only until the next deploy. Regina&#39;s Week 3 card was unaffected (`metadata.authored = true`, not seeded, still on the replacement and untouched since 08-12), which is what made the difference visible. Fixed durably in `seedIntelSampleCards.ts:47`. Also corrected the copy that ships with it in `intelCardFormats.ts`: the card advertised a 32-minute &quot;Conference talk&quot; with chapter marks at 02:10 / 11:40 / 21:05 against a video that is 2m50s long. Title, speaker and length are now the oEmbed-verified values; `moments` is **empty** rather than re-invented, since real chapter marks cannot be verified without watching the video and inventing them is what produced the wrong ones. The renderer now omits the &quot;Key moments&quot; heading and list entirely when there are no moments, instead of emitting an orphaned heading over an empty `&lt;ul&gt;`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` 0 errors in `src/`, 10/10 jest, and the live audit re-run in the prod container after redeploy — `checked=77 ok=76 dead=0 (0 student-facing) unknown=0 skipped=1`, exit 0. The one SKIPPED is the archived `BigBuckBunny.mp4` placeholder, which is not a YouTube URL and not student-facing.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">This is the entry I would have gotten wrong. The DB update reported `UPDATE 1`, the verification SELECT showed the new URL, and both were true — and the fix still evaporated hours later. What caught it was running the audit against production rather than trusting the earlier green check. **Still open and still Ali&#39;s call:** the other 9 `intel_sample_seed` cards remain published to 145 students, and they are seeded specimens rather than authored curriculum. Only this one&#39;s dead link and false figures were corrected.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Stop the dev sample-card seed from force-publishing demo content to production on every boot, and wire the video audit to actually alert**</h2>
+          <span class="badge">2026-08-13</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Closes the two items left open above. **(1) The sample seed.** `seedIntelSampleCards.ts` describes itself in its own docstring as a &quot;MANUAL/dev validation seed (**not wired into boot**)&quot; — and `server.ts:2501` called it unconditionally on every backend start, force-setting `visibility: &#39;published&#39;, status: &#39;active&#39;` on all 10 cards each time. That is what reverted the dead-video fix, and it also meant no admin could ever unpublish a sample card. The boot comment justified it as carrying the Today feed &quot;before the ingestion pipelines run&quot;; those pipelines have since produced **351 real published cards** across the same 10 types (17 to 69 each), so the justification has expired. The seed is now behind `SEED_INTEL_SAMPLE_CARDS=true` (default off, so prod stops running it, dev/preview can opt in), and an **update no longer touches `visibility`** — an archived card stays archived, and the seed only refreshes content. The stale docstring is corrected rather than left to mislead the next reader. **(2) Alerting.** The audit shipped read-only with an exit code and nothing watching it. New `scripts/videoLinkAuditAlert.js` runs it in the container, parses `--json`, and emails on **change** rather than on state: a dead link already triaged does not re-send daily (that is how people learn to filter a sender), and a link that starts resolving again sends an all-clear so the channel is provably not write-only. State persists to `/var/lib/colaberry/video-link-audit/known-dead.json`; a failed send deliberately does **not** advance state, so the next run retries instead of swallowing the only warning anyone would see. Always exits 0.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">13/13 new jest on the pure alert logic (including the load-bearing &quot;does NOT re-alert while the same link stays dead&quot; and the no-week/pluralisation cases), `tsc --noEmit` 0 errors in `src/`. Deployed, then the 10 sample cards archived in prod and **confirmed still archived after a full backend restart** — the exact check the earlier fix failed. Cron installed and the alert script run live end to end.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Worth recording that this seed had already caused a *second*, separate production bug: its permanent card meant an intel type&#39;s card count was never 0, which silently suppressed the `INTEL_SOURCE_EXHAUSTED` / `POOL_EMPTY` diagnostics until `feedTypeStatsService.ts` added an explicit `metadata-&gt;&gt;&#39;source&#39; IS DISTINCT FROM &#39;intel_sample_seed&#39;` exclusion on 2026-08-10. I left that exclusion in place; it is defensive and correct either way. On the content itself: the samples are demo specimens with placeholder attribution (a research digest linking to `arxiv.org` root rather than a paper, a quote credited to &quot;An enterprise-AI leader&quot; at &quot;Industry keynote&quot;, generic `github.com` URLs), which is fine for a render fixture and not fine in front of 145 students, which is why they are archived rather than rewritten. Archiving is reversible and preserves every progress row and points event. **Session ID note:** this session originally minted `CC-20260812-k4m9` without first checking `PROGRESS.md` for it, and a concurrent instance had already used that exact ID for three unrelated entries (Explorer Growth OS EPIC 2 x2, a backfill row-count fix). Discovered when the changelog generator pulled all eight entries into one report. My five entries were retagged to `CC-20260812-q8w3`; the other instance&#39;s three were left untouched, per the rule about never editing another session&#39;s entries. Commit bodies and PR descriptions for this work still reference the original `k4m9` and are traceable through this note. The mint step should grep `PROGRESS.md` first, which is the whole point of the uniqueness requirement and is exactly what I skipped.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260812-q8w3</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

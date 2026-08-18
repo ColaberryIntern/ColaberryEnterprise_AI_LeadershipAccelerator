@@ -35,6 +35,7 @@ import { resolvePrompt } from '../components/promptTesterService';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
 import { rankImportance } from './rssParser';
+import { videoMetadataForUrl } from '../../utils/videoUrl';
 import { decideBootAction } from './aiNewsBootDecision';
 import {
   NormalizedIntelItem,
@@ -181,6 +182,13 @@ export async function materializeIntelCard(item: IntelItem, model = DEFAULT_MODE
       source: `${slug}_pipeline`,
       intel_item_id: item.id,
       item: { title: item.title, source: item.source, url: item.url, date: item.published_at },
+      // `item.url` alone is invisible to the player: videoFromMetadata reads only
+      // `metadata.video`, and nothing anywhere reads item.url. Video-bearing
+      // sources (ai_video_stream) therefore produced cards with a real YouTube
+      // link that could never play. Mirror the link into `video` when, and only
+      // when, it is genuinely playable — a plain article link must stay absent
+      // here or every non-video intel card would render a dead player box.
+      ...(videoMetadataForUrl(item.url, item.title) ? { video: videoMetadataForUrl(item.url, item.title) } : {}),
     },
     // as any: the TimelineCard create payload is broader than the strict attrs
     // typing (mirrors materializeNewsCard); the shape is validated by the DB.

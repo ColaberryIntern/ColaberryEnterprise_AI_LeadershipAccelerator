@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import salonData from './salonData.json';
+import { adoptServerIds, isUuid } from './projectIdentity';
 
 // ============================================================================
 // Portal-native project store — the student's "builds" live HERE (not Basecamp),
@@ -36,6 +37,20 @@ export type ProjectTask = {
   blockedBy?: string[];   // storyIds of prerequisite tasks that must be DONE first
   state: TaskState;
   due: TaskDue;
+  /**
+   * Points this task is worth, when the backend has said. Optional and never
+   * defaulted: the hero shows the badge only when a real number exists, because
+   * an invented one would be the dashboard lying on the first screen a student
+   * sees. Wired to points_config once story verification lands.
+   */
+  points?: number;
+  /**
+   * When the backend recorded this story as VERIFIED, if it ever did. Distinct
+   * from `state: 'done'`, which is the student saying so — this is the server
+   * saying so. Carried now so the verification signal survives a hydrate;
+   * nothing renders it yet.
+   */
+  verifiedAt?: string | null;
 };
 
 export type ProjectList = {
@@ -80,10 +95,47 @@ export type StudentProject = {
   size: BuildSize;
   idea: string;
   sample?: boolean;     // seeded demo build
+  /**
+   * WHICH PIPELINE PRODUCED THIS BUILD. The single most important field on this
+   * type for anyone debugging what a student is looking at.
+   *
+   *  - `'pipeline'` — the real thing: a server-generated, gate-checked plan
+   *    materialized into `student_tasks`, with dates, STORY-000 and full prompts.
+   *  - `'local'`    — the browser's fallback: a fixed ten-task template from
+   *    `generateSkeleton` below, no dates, no Command Center, prompts written
+   *    from three form fields rather than the student's requirements.
+   *
+   * The two used to be indistinguishable on screen. On 2026-08-12/13 five
+   * students were served the fallback and had no way to know — which is also
+   * why nobody reported it as a bug for the whole evening. Absent on projects
+   * stored before this field existed; treat absent as unknown, not as real.
+   */
+  origin?: 'local' | 'pipeline';
+  /**
+   * The backend `projects.id` this local build is standing in for, once the
+   * wizard has resolved one. Set on the optimistic placeholder so that when the
+   * server's plan arrives it REPLACES the placeholder instead of sitting next
+   * to it as a second, near-identical build. See projectHydrate.reconcileProjects.
+   */
+  pipelineProjectId?: string | null;
+  /**
+   * Pseudo ids (`p<epoch>`) this project used to be keyed by, before it adopted
+   * its server UUID. Kept so a workspace URL a student bookmarked — or has open
+   * in another tab — still resolves to the project after the heal.
+   * See projectIdentity.adoptServerIds.
+   */
+  legacyIds?: string[];
   reqs: ProjectReq[];
   lists: ProjectList[];
   activity: ProjectActivity[];
   preview: ToolPreview;
+  /**
+   * Where this build's Command Center is running, once STORY-000 ships it.
+   * Absent until the student has deployed one, so every consumer must treat
+   * "no URL" as the normal first-week state and render nothing rather than a
+   * dead link.
+   */
+  commandCenterUrl?: string | null;
 };
 
 export type NewBuildAnswers = {
@@ -107,6 +159,44 @@ export type NewBuildAnswers = {
 // ── persistence ────────────────────────────────────────────────────────────
 const KEY = 'te_projects_v1';
 
+/**
+ * Move any storage keyed on a project id that just changed.
+ *
+ * Only the per-story acceptance ticks are keyed this way
+ * (`te_ws_acc_<projectId>_<taskId>`, written by ProjectWorkspacePage). Without
+ * this, healing a stale id would silently un-tick every box a student had
+ * checked — the heal would read to them as data loss.
+ */
+function migrateIdKeyedStorage(remapped: Array<{ from: string; to: string }>): void {
+  for (const { from, to } of remapped) {
+    const prefix = `te_ws_acc_${from}_`;
+    let keys: string[];
+    try { keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix)); }
+    catch { return; /* private mode */ }
+    for (const key of keys) {
+      try {
+        const value = localStorage.getItem(key);
+        if (value !== null) localStorage.setItem(`te_ws_acc_${to}_${key.slice(prefix.length)}`, value);
+        localStorage.removeItem(key);
+      } catch { /* quota / private mode — the tick is a note-to-self, not evidence */ }
+    }
+  }
+}
+
+/**
+ * Adopt server ids on the way out of storage, so a pseudo id already sitting in
+ * a student's browser heals on their next load rather than persisting forever.
+ * Writes back only when something actually moved, so this stays a no-op on the
+ * overwhelming majority of reads.
+ */
+function healProjectIds(list: StudentProject[]): StudentProject[] {
+  const { list: healed, remapped } = adoptServerIds(list);
+  if (!remapped.length) return list;
+  migrateIdKeyedStorage(remapped);
+  write(healed);
+  return healed;
+}
+
 function read(): StudentProject[] {
   try {
     const raw = localStorage.getItem(KEY);
@@ -122,18 +212,62 @@ function read(): StudentProject[] {
       if (stale) {
         const migrated = [buildSalonProject(), ...list.filter((p) => !p.sample)];
         write(migrated);
-        return migrated;
+        return healProjectIds(migrated);
       }
-      return list;
+      return healProjectIds(list);
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    // Falling back to a re-seed is right (an unreadable cache is not a reason to
+    // show the student nothing), but doing it SILENTLY is not: this branch
+    // discards whatever was in localStorage, and it used to do that without
+    // leaving a trace. The server refetch on the next sync restores any build
+    // that ever reached it; a browser-only build is genuinely lost here, which
+    // is exactly the kind of thing that must be greppable in a bug report.
+    logStoreFailure('projects_cache_unreadable', err);
+  }
   const seeded = [buildSalonProject()];
   write(seeded);
   return seeded;
 }
 
-function write(list: StudentProject[]): void {
-  try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* ignore */ }
+/**
+ * Stable, structured, and never secret-bearing. Matches the observability
+ * contract in CLAUDE.md: an `error_class` a human can grep for beats a stack
+ * trace nobody sees.
+ */
+function logStoreFailure(event: string, err: unknown): void {
+  const errorClass = err instanceof Error ? err.name : typeof err;
+  console.error(JSON.stringify({
+    level: 'error', service: 'portal-projects', event,
+    error_class: errorClass || 'UnknownError',
+    message: err instanceof Error ? err.message : String(err),
+  }));
+}
+
+/**
+ * Persist the project list. Returns whether it actually landed.
+ *
+ * WHY THIS REPORTS FAILURE. It used to be a bare try/setItem with an empty
+ * catch, which is the one shape this store could not afford. A `QuotaExceededError`
+ * left the OLD value in localStorage while every caller carried on as though the
+ * new one had been written, so the next load quietly served a stale card and
+ * nothing anywhere said so. Published plans are not small — one live build
+ * carries a 30,027-character STORY-000 prompt inside a 114 KB tree — so this is
+ * a real budget, not a theoretical one.
+ *
+ * The honest behaviour on a failed write is to say so and let the next sync
+ * refetch from the server, which is authoritative anyway. What we must never do
+ * is drop the largest item to make the rest fit: a cache that silently discards
+ * a student's most important task is worse than one that refuses.
+ */
+function write(list: StudentProject[]): boolean {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(list));
+    return true;
+  } catch (err) {
+    logStoreFailure('projects_cache_write_failed', err);
+    return false;
+  }
 }
 
 // ── pub/sub ─────────────────────────────────────────────────────────────────
@@ -149,8 +283,29 @@ export function subscribe(fn: Listener): () => void {
 
 // ── reads ────────────────────────────────────────────────────────────────────
 export function loadProjects(): StudentProject[] { return read(); }
+/**
+ * Look a project up by its current id, falling back to any pseudo id it used to
+ * carry. The fallback is what keeps a workspace URL a student bookmarked (or
+ * still has open) working after the project adopts its server UUID.
+ */
 export function getProject(id: string): StudentProject | undefined {
-  return read().find((p) => p.id === id);
+  const list = read();
+  return list.find((p) => p.id === id)
+    ?? list.find((p) => p.legacyIds?.includes(id));
+}
+
+/**
+ * The id this project is REALLY keyed by now — its server UUID once adopted.
+ *
+ * A route param can still carry a pseudo id long after the heal: a bookmark, a
+ * tab left open, a link shared before the adoption. Resolving a route param
+ * through here is what stops that id reaching `/api/portal/workspace/*`, where
+ * a Zod `.uuid()` rejects it with a 400 that surfaces under whatever field the
+ * student was touching. Unknown ids pass through unchanged.
+ */
+export function canonicalProjectId(routeId: string): string {
+  if (!routeId) return routeId;
+  return getProject(routeId)?.id ?? routeId;
 }
 
 /**
@@ -159,6 +314,54 @@ export function getProject(id: string): StudentProject | undefined {
  * a fresh device). This is the store's only backend-authoritative write entry.
  */
 export function hydrateProjects(list: StudentProject[]): void { write(list); notify(); }
+
+/**
+ * Record that a local placeholder is standing in for a specific backend project.
+ *
+ * Written to localStorage rather than held in React state on purpose: the
+ * server build takes minutes, and a student who reloads or navigates away in
+ * the meantime must still get their real plan folded into the placeholder
+ * rather than added alongside it. A claim is a promise that survives a refresh.
+ */
+/**
+ * Drop one project from THIS BROWSER's list.
+ *
+ * Two callers, one behaviour:
+ *  - after a successful server archive, so the card goes at once instead of
+ *    waiting for the next pull's prune (and so it cannot linger as a ghost);
+ *  - for a browser-only build that never reached the server, where there is no
+ *    server row to archive and localStorage is the only place it exists.
+ *
+ * The seeded training example is REFUSED. `read()` re-seeds it whenever it is
+ * missing, so "removing" it would silently come back on the next load — a
+ * control that appears to work and does not is worse than no control.
+ */
+export function removeProjectLocally(id: string): boolean {
+  const list = read();
+  const target = list.find((p) => p.id === id);
+  if (!target || target.sample) return false;
+  write(list.filter((p) => p.id !== id));
+  notify();
+  return true;
+}
+
+export function claimBackendProject(localId: string, backendProjectId: string): void {
+  // A claim that is not a UUID cannot be adopted and must not be recorded: it
+  // would only travel into a /workspace/:projectId route and 400 there.
+  if (!isUuid(backendProjectId)) return;
+  const list = read();
+  const p = list.find((x) => x.id === localId) ?? list.find((x) => x.legacyIds?.includes(localId));
+  if (!p) return;
+  if (p.pipelineProjectId === backendProjectId && p.id === backendProjectId) return;
+  p.pipelineProjectId = backendProjectId;
+  // ADOPT THE SERVER ID, don't just remember it. Recording the claim in the
+  // side-car field alone was the whole defect: the placeholder id stayed the
+  // project's identity, went into the workspace route, and was rejected 400.
+  const { list: adopted, remapped } = adoptServerIds(list);
+  migrateIdKeyedStorage(remapped);
+  write(adopted);
+  notify();
+}
 
 // Fire-and-forget the task's status through to the backend (best-effort, flag-
 // gated inside projectSync). Dynamic import keeps the store free of any static
@@ -247,6 +450,44 @@ export function markTaskDone(projectId: string, taskId: string): void {
   }
   write(list); notify();
   if (changed) emitTaskStatus(p, changed);
+}
+
+/**
+ * Mirror a completion the PLATFORM already granted into the local board.
+ *
+ * Identical bookkeeping to `markTaskDone` with one deliberate omission: it does
+ * NOT emit a status push. The completion originated on the server — the
+ * verification loop set `status = 'complete'` and stamped `verified_at` after
+ * reading the repo — so pushing `complete` back would be telling the server
+ * something it just told us, and `CLIENT_SETTABLE_STATUSES` answers that with a
+ * 409 by design. Before this existed the workspace's only "done" path fired
+ * exactly that rejected request and logged a sync failure on every verified
+ * story.
+ *
+ * Safe to call twice: a task already `done` is left alone.
+ */
+export function mirrorVerifiedCompletion(projectId: string, taskId: string): void {
+  const list = read();
+  const p = list.find((x) => x.id === projectId);
+  if (!p) return;
+  for (const l of p.lists) {
+    const t = l.tasks.find((x) => x.id === taskId);
+    if (t && t.state !== 'done') {
+      t.state = 'done'; t.due = 'done';
+      if (t.req) {
+        const req = p.reqs.find((r) => r.id === t.req);
+        if (req) {
+          const order: ReqState[] = ['unmapped', 'planned', 'built', 'verified'];
+          const i = order.indexOf(req.state);
+          if (i > -1 && i < 3) req.state = order[i + 1];
+        }
+      }
+      p.activity.unshift({ id: 'a' + Date.now(), kind: 'done', who: 'You', time: 'just now',
+        title: `Verified: ${t.title}`, body: 'Confirmed from your repo by the build pipeline.' });
+      break;
+    }
+  }
+  write(list); notify();
 }
 
 export function skipTask(projectId: string, taskId: string): void {
@@ -373,6 +614,10 @@ export function createProjectFromAnswers(answers: NewBuildAnswers): string {
   // empty so the workspace shows an assembling state.
   const creating: StudentProject = {
     id, status: 'creating', createdAt: Date.now(),
+    // Honest from the moment it exists. This is the browser's template, and it
+    // stays labelled as such until the server's plan supersedes it.
+    origin: 'local',
+    pipelineProjectId: null,
     ...skeleton,
     lists: [],
     activity: [{ id: 'a-init', kind: 'note', who: 'Cory', time: 'now', title: `Building ${skeleton.name}…`, body: 'Generating your requirements, lists, and tasks in the background.' }],
@@ -385,7 +630,14 @@ export function createProjectFromAnswers(answers: NewBuildAnswers): string {
   // Assemble in the background so the student can keep moving.
   window.setTimeout(() => {
     const current = read();
-    const p = current.find((x) => x.id === id);
+    // Resolved by pseudo id OR by `legacyIds`, because `claimBackendProject`
+    // re-keys this very project to its server UUID the moment GET /active
+    // answers — normally in well under 7s, so adoption usually wins the race.
+    // A raw `x.id === id` lookup therefore found NOTHING in the common case and
+    // returned early, stranding the card at `creating` with empty lists
+    // forever. Measured 2026-08-18 in production; see creatingCardState.test.ts.
+    const p = current.find((x) => x.id === id)
+      ?? current.find((x) => x.legacyIds?.includes(id));
     if (!p) return;
     p.status = 'ready';
     p.lists = skeleton.lists;

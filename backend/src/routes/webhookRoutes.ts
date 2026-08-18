@@ -65,11 +65,20 @@ router.post('/api/webhook/github', express.raw({ type: 'application/json' }), as
 
   const { validateWebhookSignature, findEnrollmentByRepo, syncStudentActivity } = await import('../services/githubIntegrationService');
 
-  if (!validateWebhookSignature(req.body as Buffer, signature)) {
-    res.status(401).json({ error: 'Invalid signature' });
-    return;
-  }
-
+  // PARSE BEFORE VERIFY — deliberately, and safely.
+  //
+  // Secrets are now PER REPO (students register their own hooks, so the secret
+  // has to be shown to them, and one shared secret shown to thirty students lets
+  // any one of them forge pushes for all the others). Choosing which secret to
+  // verify against therefore requires knowing which repo this is, and the only
+  // place that is written down is the body.
+  //
+  // This is the standard multi-tenant webhook shape and it is safe under one
+  // strict condition, held below: the parsed body is used ONLY to select a key.
+  // Nothing is read from it, nothing is written, and no side effect of any kind
+  // fires until the signature has been verified over the RAW BYTES. An attacker
+  // choosing which key we check against does not help them: they still have to
+  // produce a valid HMAC under it.
   let payload: any;
   try {
     payload = JSON.parse((req.body as Buffer).toString('utf-8'));
@@ -80,6 +89,16 @@ router.post('/api/webhook/github', express.raw({ type: 'application/json' }), as
 
   const owner: string | undefined = payload.repository?.owner?.login;
   const repo: string | undefined = payload.repository?.name;
+
+  const { resolveWebhookSecret } = await import('../services/sbp/repoConnect/webhookSecretService');
+  const secret = await resolveWebhookSecret(owner ?? '', repo ?? '');
+
+  // No secret at all — neither per-repo nor shared — is a REJECT, never a skip.
+  // An unconfigured platform must fail closed on a signature check.
+  if (!secret || !validateWebhookSignature(req.body as Buffer, signature, secret)) {
+    res.status(401).json({ error: 'Invalid signature' });
+    return;
+  }
 
   if (owner && repo) {
     const enrollmentId = await findEnrollmentByRepo(owner, repo);
@@ -107,8 +126,40 @@ router.post('/api/webhook/github', express.raw({ type: 'application/json' }), as
         });
       }
     }
+
+    // 4. STORY VERIFICATION — the build pipeline's completion loop.
+    //
+    // Deliberately OUTSIDE the `enrollmentId` branch above. That lookup is
+    // enrollment-keyed and predates project-scoped repos (FR-037); story
+    // verification resolves the repo to a PROJECT on its own, so a repo bound to
+    // a project but not matched by the legacy path still verifies.
+    //
+    // Fire-and-forget, like its three siblings, because GitHub counts a slow
+    // response against the endpoint's health and the work here includes several
+    // GitHub reads. The handler never throws and classifies its own failures.
+    const { handlePushForVerification } = await import('../services/sbp/verification/githubPushVerification');
+    handlePushForVerification({
+      deliveryId: String(req.headers['x-github-delivery'] ?? ''),
+      event: String(req.headers['x-github-event'] ?? 'push'),
+      owner,
+      repo,
+      // Used ONLY to answer "was this push entirely our own bot?". Nothing that
+      // decides credit is read from the payload — see the module header.
+      commits: Array.isArray(payload.commits) ? payload.commits : [],
+    }).catch((err: Error) => {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+        event: 'github_webhook_story_verification_failed', outcome: 'failure',
+        error_class: err?.constructor?.name ?? 'Error',
+        context: { message: err?.message, owner, repo },
+      }));
+    });
   }
 
+  // 200 regardless of what the work above concludes. GitHub retries non-2xx,
+  // and a retry driven by our own downstream failure would re-read the repo
+  // without changing the outcome. Everything that could go wrong past this
+  // point is logged with a correlation id instead.
   res.status(200).json({ ok: true });
 });
 

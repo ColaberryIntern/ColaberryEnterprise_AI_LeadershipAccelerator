@@ -4722,7 +4722,33 @@ router.post('/api/portal/project/cognitive/incidents/:id/dispatch', requireParti
     if ((inc as any).project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
 
     const { fanOutIncident, persistDispatchLog } = await import('../intelligence/systemStateEngine/incidents/incidentFanoutEngine');
+    const { default: IncidentDispatchLog } = await import('../models/IncidentDispatchLog');
     const r = inc as any;
+
+    // Idempotency: a double-click or client retry on this endpoint must not
+    // re-send the incident email. Registering the email subscriber (this
+    // ticket) turns this manual-trigger route from an inert fanout (no
+    // subscribers were ever registered before) into one with a real side
+    // effect, so a dedup gate is required per the repo's idempotency rule.
+    const DISPATCH_COOLDOWN_MS = 15 * 60 * 1000;
+    const recent = await IncidentDispatchLog.findOne({
+      where: { incident_id: r.id },
+      order: [['dispatched_at', 'DESC']],
+    });
+    if (recent && Date.now() - new Date((recent as any).dispatched_at).getTime() < DISPATCH_COOLDOWN_MS) {
+      res.json({
+        incident_id: r.id,
+        attempted_subscribers: (recent as any).attempted_subscribers,
+        outcomes: (recent as any).outcomes,
+        succeeded: (recent as any).succeeded,
+        failed: (recent as any).failed,
+        skipped: 0,
+        elapsed_ms: 0,
+        deduped: true,
+      });
+      return;
+    }
+
     const payload = {
       incident_id: r.id,
       project_id: r.project_id,
@@ -7970,6 +7996,12 @@ router.post('/api/portal/project/execution-ticket', requireParticipant, async (r
       } catch (innerErr: any) {
         // Fallback: create a simple ticket directly if orchestrator fails (e.g., missing columns)
         const { Ticket } = await import('../models');
+        // Agent Alias & Identity Fix (forward-fix) — this fallback always creates
+        // status:'in_progress' directly (never 'todo'), so it's safe to fully
+        // stamp bpos_orchestrator's real AdminUser id as assignee, same as the
+        // primary createBPOSTicket() path above.
+        const { getTicketCreatorAdminUserId } = await import('../services/agentBlueprint/ticketCreatorIdentitySeed');
+        const bposAdminUserId = await getTicketCreatorAdminUserId('bpos_orchestrator');
         const ticket = await (Ticket as any).create({
           title: `[BPOS] ${componentName || 'Unknown'} — ${stepLabel || 'Build step'}`,
           type: 'bpos_execution',
@@ -7978,6 +8010,7 @@ router.post('/api/portal/project/execution-ticket', requireParticipant, async (r
           source: 'bpos_engine',
           created_by_type: 'cory',
           created_by_id: 'bpos_orchestrator',
+          ...(bposAdminUserId ? { assigned_to_type: 'ai_staff', assigned_to_id: bposAdminUserId } : {}),
           entity_type: 'capability',
           entity_id: componentId || null,
           metadata: { prompt_target: promptTarget, step_label: stepLabel, component_name: componentName },

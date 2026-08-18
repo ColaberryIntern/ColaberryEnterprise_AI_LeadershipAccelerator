@@ -14,7 +14,10 @@ export interface SettingsAccount {
   // Organization / manager layer: true when this enrollment owns or manages an
   // org; `org` is that org's identity (drives the "Your company" nav + page).
   is_org_manager: boolean;
-  org: { id: string; name: string } | null;
+  // `has_real_name` is false when the org name is only the fallback to the
+  // person's own name (no company typed at signup), so the portal shows a
+  // generic label instead of addressing their workspace by their own name.
+  org: { id: string; name: string; has_real_name: boolean } | null;
 }
 export interface SettingsProfile {
   title: string | null;

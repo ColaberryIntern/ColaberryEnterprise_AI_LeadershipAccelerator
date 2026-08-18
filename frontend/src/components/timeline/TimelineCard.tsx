@@ -318,7 +318,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         autoplay
         badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
         onEnded={() => setPlayingInline(false)}
-        onWatchBeat={watchable && !done
+        // Sibling of CardDetailBody's reportBeats: the heartbeat deliberately
+        // outlives completion. Gating it on `!done` froze watched_pct at the
+        // moment the student collected points (75%), so the stored value was
+        // capped at the unlock threshold instead of measuring real playback.
+        onWatchBeat={watchable
           ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
           : undefined}
       />
