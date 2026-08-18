@@ -108,8 +108,18 @@ const storyProgressSchema = z.object({
   notes: z.string().max(4000).nullish(),
   /** ISO-8601, written by the agent. Advisory only — never trusted as proof. */
   updated_at: z.string().max(64).nullish(),
-  /** Platform-owned (v2+). Absent on a file written before verification ran. */
-  verification: storyVerificationSchema.nullish(),
+  /**
+   * Platform-owned (v2+). Absent on a file written before verification ran.
+   *
+   * `.catch(null)` is what keeps `MIN_READABLE_PROGRESS_VERSION = 1` honest. A
+   * v1 file carried `{state, commit}` here, which does not satisfy v2's shape,
+   * and without the catch one stale block rejected the WHOLE file and every
+   * criterion the student had ticked with it. This side is ours and is
+   * recomputed on every run, so a copy we cannot read is discarded rather than
+   * treated as a reason to disbelieve the student's side. See
+   * `__tests__/progressV1PlatformBlocks.test.ts`.
+   */
+  verification: storyVerificationSchema.nullish().catch(null),
 });
 
 /** Whole-build counts, so a page can show a headline without summing 40 stories. */
@@ -128,8 +138,14 @@ export const progressFileSchema = z.object({
   schema_version: z.number().int(),
   /** Informational; the platform writes it so a human opening the file knows whose it is. */
   project: z.string().nullish(),
-  /** Platform-owned rollup (v2+). */
-  totals: progressTotalsSchema.nullish(),
+  /**
+   * Platform-owned rollup (v2+).
+   *
+   * Leniently parsed for the same reason as `verification` above: v1 emitted
+   * five of these eight keys, and a partial rollup we never read must not be
+   * able to condemn the criteria we do read.
+   */
+  totals: progressTotalsSchema.nullish().catch(null),
   stories: z.array(storyProgressSchema).max(500),
 });
 
