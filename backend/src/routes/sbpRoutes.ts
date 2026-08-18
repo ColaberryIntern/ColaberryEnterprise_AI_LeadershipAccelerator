@@ -71,7 +71,32 @@ function gate(res: Response): boolean {
 }
 
 function fail(res: Response, err: any, next: NextFunction) {
-  if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
+  if (err instanceof z.ZodError) {
+    // Log it. This branch returns without calling next(), so the global error
+    // middleware never sees a rejected build and NOTHING recorded which field
+    // failed — the response body was the only copy, and the browser threw it
+    // away. Two students were handed a ten-task template on 2026-08-14 and the
+    // server kept no evidence of why.
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'sbp_request_rejected',
+      outcome: 'failure',
+      error_class: 'ValidationError',
+      context: {
+        path: res.req?.path,
+        // Field paths and size limits only. Never the student's own text.
+        issues: err.issues.map((i) => ({
+          path: i.path.join('.'),
+          code: i.code,
+          ...(typeof (i as any).maximum === 'number' ? { maximum: (i as any).maximum } : {}),
+          ...(typeof (i as any).minimum === 'number' ? { minimum: (i as any).minimum } : {}),
+        })),
+      },
+    }));
+    return res.status(400).json({ error: 'Invalid input', issues: err.issues });
+  }
   if (typeof err?.status === 'number') return res.status(err.status).json({ error: err.message });
   if (err?.error_class === 'QueueFull') return res.status(503).json({ error: err.message });
   if (err?.error_class === 'PromptPathNotWritten') return res.status(409).json({ error: err.message });
@@ -135,16 +160,38 @@ router.post('/api/portal/sbp/intake/questions', requireParticipant, async (req: 
 });
 
 // ── start ───────────────────────────────────────────────────────────────────
-const startSchema = z.object({
+/**
+ * The most a student may write in one interview reply.
+ *
+ * Named once because four fields have to agree on it: the reply itself, and the
+ * three legacy scope fields the browser fills BY COPYING a reply. They did not
+ * agree, and the mismatch was invisible from either side on its own. The wizard
+ * now enforces the same number in the textarea, so the boundary is something a
+ * student meets while typing rather than after pressing Confirm.
+ */
+export const ANSWER_MAX = 4_000;
+
+/**
+ * Exported so the contract is testable. A cap that only exists inside a closure
+ * cannot be asserted against the payload the wizard actually builds, and that is
+ * precisely how the `users` ceiling below drifted below its own source field.
+ */
+export const startSchema = z.object({
   project_id: z.string().uuid(),
   // Generous: the wizard explicitly asks students to pour everything out, and
   // the pilot's failure was throwing that away. 20k is the documented cap.
   idea: z.string().min(20, 'Tell us a bit more about what you want to build').max(20_000),
   name: z.string().max(200).optional(),
   size: z.enum(['workflow', 'project', 'autonomous']).optional(),
-  users: z.string().max(2_000).optional(),
-  data_sources: z.string().max(2_000).optional(),
-  done_definition: z.string().max(2_000).optional(),
+  // These three are NOT independently typed by the student. The browser copies
+  // one whole interview answer into each (frontend deriveLegacyScope), so their
+  // ceiling must be the answer ceiling. At 2,000 against a 4,000 answer they
+  // were the binding constraint on the entire wizard: a student who wrote more
+  // than 2,000 characters in a single reply was rejected on a field they had
+  // never seen, and told the requirements service was unreachable.
+  users: z.string().max(ANSWER_MAX).optional(),
+  data_sources: z.string().max(ANSWER_MAX).optional(),
+  done_definition: z.string().max(ANSWER_MAX).optional(),
   target_weeks: z.number().int().min(1).max(52).optional(),
   document: z.string().max(400_000).optional(),
   // The adaptive interview's answers: [{id, question, answer}]. The three
@@ -153,7 +200,7 @@ const startSchema = z.object({
   answers: z.array(z.object({
     id: z.string().max(80),
     question: z.string().max(500),
-    answer: z.string().max(4_000),
+    answer: z.string().max(ANSWER_MAX),
   })).max(20).optional(),
 });
 

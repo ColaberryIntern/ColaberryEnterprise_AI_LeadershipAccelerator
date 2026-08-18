@@ -19,6 +19,19 @@
 
 export interface InterviewAnswer { id: string; question: string; answer: string }
 
+/**
+ * Mirrors ANSWER_MAX in backend/src/routes/sbpRoutes.ts.
+ *
+ * These fields are a COPY of an answer, so they inherit the answer's ceiling.
+ * Truncating here costs the pipeline nothing: the full text always travels in
+ * the `answers` array, and these three are only a convenience projection of it.
+ * What it buys is that a client which somehow holds a longer answer degrades to
+ * a shorter legacy field instead of 400-ing the whole build.
+ */
+const LEGACY_FIELD_MAX = 4_000;
+
+const clamp = (s: string): string => (s.length <= LEGACY_FIELD_MAX ? s : s.slice(0, LEGACY_FIELD_MAX));
+
 export interface LegacyScope {
   users?: string;
   dataSources?: string;
@@ -56,8 +69,11 @@ export function deriveLegacyScope(answers: InterviewAnswer[] | undefined): Legac
   const borrow = (): string | undefined => (next < remainder.length ? remainder[next++] : undefined);
 
   const scope: LegacyScope = {};
-  scope.users = users || borrow();
-  scope.dataSources = dataSources || borrow();
-  scope.done = done || borrow();
+  const users2 = users || borrow();
+  const data2 = dataSources || borrow();
+  const done2 = done || borrow();
+  if (users2 !== undefined) scope.users = clamp(users2);
+  if (data2 !== undefined) scope.dataSources = clamp(data2);
+  if (done2 !== undefined) scope.done = clamp(done2);
   return scope;
 }

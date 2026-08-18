@@ -88,11 +88,23 @@ function defaultClient(): Pick<OpenAI['chat']['completions'], 'create'> | null {
   return sharedClient.chat.completions;
 }
 
+/**
+ * Upper bounds on what we GENERATE, matching what `startSchema` will accept
+ * back. The wizard echoes each question's `id` and `question` verbatim in the
+ * build request, so a model that wrote a 600-character question would 400 the
+ * student's build on text they never wrote and cannot edit. Only a lower bound
+ * existed here, which left the round trip unbounded in the one direction that
+ * breaks it.
+ */
+const QUESTION_ID_MAX = 80;
+const QUESTION_TEXT_MAX = 500;
+
 function isQuestionShaped(v: unknown): v is IntakeQuestion {
   const q = v as IntakeQuestion | null;
   return !!q
-    && typeof q.id === 'string' && q.id.length > 0
+    && typeof q.id === 'string' && q.id.length > 0 && q.id.length <= QUESTION_ID_MAX
     && typeof q.question === 'string' && q.question.trim().length > 8
+    && q.question.length <= QUESTION_TEXT_MAX
     && typeof q.why === 'string'
     && typeof q.placeholder === 'string'
     // Suggestions are optional on the wire (an older cached response has none)
