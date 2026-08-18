@@ -464,15 +464,28 @@ function HomeV2(): React.ReactElement {
                   never costs anyone their credit.
                 </p>
               </div>
-              <figure className="cbv2-buildrepo__shot">
+              {/*
+                EXTERNAL evidence, not a product screenshot. This is a real
+                public GitHub repository showing the files the pipeline commits
+                and the `chore(colaberry):` bot commit that put them there. A
+                reader can open it themselves, which is the whole point -- it is
+                the most checkable claim on the page.
+
+                Colaberry's OWN repo, deliberately: a student's personal repo is
+                theirs, and publishing it is not ours to do.
+              */}
+              <figure className="cbv2-buildrepo__shot cbv2-buildrepo__shot--repo">
                 <img
-                  src="/site-v2/shot-story-build.png"
-                  alt="A story in the build workspace: the user story with the requirement it fulfils, three acceptance criteria showing nought of three confirmed, and the generated Claude Code prompt."
-                  width={820}
-                  height={1000}
+                  src="/site-v2/shot-repo-evidence.png"
+                  alt="A GitHub repository listing showing REQUIREMENTS.md, STORIES.md, TRACEABILITY.md and a stories folder, each last touched by a commit reading chore(colaberry): sync build plan."
+                  width={943}
+                  height={426}
                   loading="lazy"
                   decoding="async"
                 />
+                <figcaption className="cbv2-buildrepo__cap">
+                  A real repository, committed by the pipeline. Open it and check.
+                </figcaption>
               </figure>
             </div>
           </div>

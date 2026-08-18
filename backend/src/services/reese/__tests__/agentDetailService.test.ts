@@ -61,6 +61,40 @@ describe('getAgentDetail', () => {
     expect(result!.tickets).toHaveLength(1);
   });
 
+  it('capabilities (reads/produces): derives from the agent\'s real tools_granted, not hand-written text', async () => {
+    mockTicketFindAll.mockResolvedValue([]);
+
+    const result = await getAgentDetail('agent-1');
+
+    // reeseAgent's tools_granted is ['respond_to_dm'] — grounded in
+    // agentToolCapabilities.ts's real dictionary entry.
+    expect(result!.capabilities.produces).toContain('A reply message in the student DM thread');
+    expect(result!.capabilities.undocumented_tools).toEqual([]);
+  });
+
+  it('capabilities honesty path: an agent with an undocumented tool discloses it, never fabricates reads/produces for it', async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, tools_granted: ['a_tool_from_the_future'] });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.capabilities.undocumented_tools).toEqual(['a_tool_from_the_future']);
+  });
+
+  it('capabilities.produced_ticket_types: reflects the real, live DISTINCT ticket types this agent has created — a second, unlimited grouped query, not the capped 50-row tickets list', async () => {
+    // The capped tickets list only has 1 recent ticket, but the agent has
+    // historically created 3 distinct types — produced_ticket_types must reflect
+    // the full picture, proving it's a SEPARATE unlimited query, not derived from
+    // the capped `tickets` array.
+    mockTicketFindAll
+      .mockResolvedValueOnce([{ id: 't-recent', ticket_number: 5, title: 'Recent', status: 'todo', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date() }])
+      .mockResolvedValueOnce([{ type: 'student_support' }, { type: 'reese_autonomous_outreach' }]);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.tickets).toHaveLength(1);
+    expect(result!.capabilities.produced_ticket_types.sort()).toEqual(['reese_autonomous_outreach', 'student_support']);
+  });
+
   it('boundary (the core check): a Ticket.findAll filtered on the real match list returns ONLY the agent\'s own tickets, not every ticket in the system', async () => {
     // Simulate the real DB filter's effect: the mock only "returns" what a real
     // WHERE clause would — proving the SERVICE constructs that filter correctly,
@@ -121,5 +155,9 @@ describe('getAgentDetail', () => {
     expect(result!.live_status).toBe('unknown');
     expect(result!.tickets).toEqual([]);
     expect(mockTicketFindAll).not.toHaveBeenCalled();
+    // capabilities.reads/produces still derive from tools_granted (identity-
+    // independent), but produced_ticket_types is honestly empty — no admin
+    // identity means no match list to query tickets by at all.
+    expect(result!.capabilities.produced_ticket_types).toEqual([]);
   });
 });

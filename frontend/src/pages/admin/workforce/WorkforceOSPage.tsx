@@ -24,7 +24,12 @@ interface Meeting { meeting_date: string; agenda: any; contributions: Array<{ sl
 // Distinct shape from Employee above on purpose: a Live Agent is a real, ticketed,
 // ProofDesk-governed operating agent, not a conceptual department-strategy persona
 // like the static AI_ORG directors — see the "Live Agents" section below.
-interface LiveAgent { id: string; agent_name: string; display_name: string; agent_type: string; category: string | null; description: string | null; enabled: boolean; live_status: string; ticket_count: number }
+// open_ticket_count (not ticket_count) — Workforce OS perf fix (2026-08-18): the
+// backend used to return a LIFETIME TOTAL under the name `ticket_count`, which read
+// as if it meant "open" and caused real founder confusion (12,574 lifetime across 6
+// agents vs. 4,154 open board-wide). Now genuinely open-only, renamed so the two
+// can never be silently conflated again. See liveAgentsService.ts.
+interface LiveAgent { id: string; agent_name: string; display_name: string; agent_type: string; category: string | null; description: string | null; enabled: boolean; live_status: string; open_ticket_count: number }
 interface LiveAgentActivityEvent { agent_id: string; agent_name: string; agent_display_name: string; ticket_id: string; ticket_number: number | null; title: string; type: string; status: string; priority: string; occurred_at: string | null }
 
 const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
@@ -172,7 +177,7 @@ const WorkforceOSPage: React.FC = () => {
                   <div className="nm">{a.display_name}</div>
                   <div className="rl">{a.category || a.agent_type}</div>
                 </div>
-                <div className={`wl ${a.live_status === 'online' ? 'busy' : ''}`}><b>{a.ticket_count}</b><br />tickets</div>
+                <div className={`wl ${a.live_status === 'online' ? 'busy' : ''}`}><b>{a.open_ticket_count}</b><br />open tickets</div>
               </Link>
             ))}
           </div>

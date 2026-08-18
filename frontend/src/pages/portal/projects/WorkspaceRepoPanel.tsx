@@ -149,9 +149,14 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
       // Revoked on the next tick: revoking synchronously can beat the download
       // in some browsers and produce an empty file.
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNote(`Downloaded ${filename}. Unzip it into your project folder. Verification and points still need a connected repo.`);
+      // The tail of this line is only true before a repo is connected. Said to
+      // someone who has already connected one, it reads as a warning about a
+      // problem they do not have.
+      setNote(state === 'connected'
+        ? `Downloaded ${filename}. Unzip it into your repo, keeping the paths as they are, then commit.`
+        : `Downloaded ${filename}. Unzip it into your project folder. Verification and points still need a connected repo.`);
     },
-  ), [run, projectId]);
+  ), [run, projectId, state]);
 
   // ── connected ─────────────────────────────────────────────────────────────
   if (state === 'connected' && repo?.repo_owner) {
@@ -188,11 +193,14 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
           <p className="rt-muted" style={{ margin: '8px 0' }}>
             <strong>The platform has read-only access to this repo.</strong> That is fine — it reads your
             commits and confirms your stories exactly as normal, and everything you earn is recorded here
-            rather than in the repo. It does mean the platform cannot put files INTO your repo, so
-            <code> .colaberry/progress.json</code> is yours to create. Open <strong>STORY-000</strong> and
-            copy the JSON block under Step 3 — it is generated from the criteria the platform actually
-            checks. If you would rather the platform maintained it for you, add it as a collaborator with
-            write access and reconnect.
+            rather than in the repo. It does mean the platform cannot put files INTO your repo, so the whole of
+            <code> .colaberry/</code> is yours to place — <code>.colaberry/progress.json</code>,
+            <code> .colaberry/plan.json</code> and <code> .colaberry/manifest.json</code>. Open{' '}
+            <strong>STORY-000</strong> and copy the JSON block under Step 3 for the progress file; it is
+            generated from the criteria the platform actually checks. The other two are build outputs rather
+            than files to write by hand, so take them from <strong>Download the documents</strong> below and
+            unzip them into your repo. If you would rather the platform maintained all three for you, add it
+            as a collaborator with write access and reconnect.
           </p>
         )}
 
@@ -203,11 +211,28 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
           <button className="rt-btn" onClick={() => { editRef(''); onConnectChange({ ...(connect as ConnectStateView), state: 'not_connected' }); }}>
             {lostAccess ? 'Reconnect' : 'Use a different repo'}
           </button>
+          {/* THE DATA FILES HAVE TO STAY REACHABLE AFTER CONNECTING.
+              STORY-000 criteria 3 and 4 are scored against a Command Center that
+              reads `.colaberry/plan.json` and `.colaberry/manifest.json` at
+              runtime, and the prompt tells the student the platform commits
+              those files on every sync. On a repo we cannot push to, the write
+              fails at the GitHub boundary and they never arrive — leaving the
+              two criteria unsatisfiable through no fault of the student.
+
+              This bundle is the only surface that hands over those exact files,
+              and it used to be offered ONLY before connecting, so connecting
+              took it away. Offered here too: a no-op for anyone whose repo we
+              can write, and the entire answer for anyone whose repo we cannot. */}
+          <button className="rt-btn" disabled={busy === 'download'} onClick={doDownload}>
+            {busy === 'download' ? 'Building…' : 'Download the documents'}
+          </button>
         </div>
 
         {/* One-time plumbing, only offered once a repo is actually connected —
             there is nothing to register a hook against before that. */}
         <WebhookSetupBlock projectId={projectId} repoLabel={`${repo.repo_owner}/${repo.repo_name}`} />
+
+        {note && <p className="rt-muted" style={{ margin: '8px 0 0' }}>{note}</p>}
 
         {repo.recent_commits?.length > 0 && (
           <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>

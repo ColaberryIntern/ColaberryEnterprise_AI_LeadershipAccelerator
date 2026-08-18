@@ -125,7 +125,7 @@
 }
 .cbv2-mesh i:nth-child(1) {
   width: 46%; height: 58%; left: 56%; top: -16%;
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-cherry, #fb2832) 55%, transparent), transparent 70%);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--cherry) 55%, transparent), transparent 70%);
   animation: cbv2-drift1 20s ease-in-out infinite alternate;
 }
 .cbv2-mesh i:nth-child(2) {
@@ -339,7 +339,7 @@ html.cbv2-reveal-on .cbv2-rv.is-in { opacity: 1; transform: none; }
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(46% 52% at 82% 6%, color-mix(in srgb, var(--color-cherry, #fb2832) 34%, transparent), transparent 70%),
+    radial-gradient(46% 52% at 82% 6%, color-mix(in srgb, var(--cherry) 34%, transparent), transparent 70%),
     radial-gradient(40% 48% at 4% 40%, color-mix(in srgb, var(--chart-1) 30%, transparent), transparent 72%);
   filter: blur(44px);
   opacity: 0.85;
@@ -403,8 +403,8 @@ html.cbv2-reveal-on .cbv2-rv.is-in { opacity: 1; transform: none; }
 /* Warmed neutrals. A pure grey ground reads as unstyled; a few degrees toward
    the accent reads as chosen. Scoped to the V2 shell only. */
 .cbv2-shell {
-  --cbv2-warm-sunken: color-mix(in srgb, var(--color-cherry, #fb2832) 2.5%, var(--surface-sunken));
-  --cbv2-warm-page: color-mix(in srgb, var(--color-cherry, #fb2832) 1.2%, var(--surface-card));
+  --cbv2-warm-sunken: color-mix(in srgb, var(--cherry) 2.5%, var(--surface-sunken));
+  --cbv2-warm-page: color-mix(in srgb, var(--cherry) 1.2%, var(--surface-card));
 }
 .cbv2-section--sunken { background: var(--cbv2-warm-sunken); }
 
@@ -466,8 +466,8 @@ html.cbv2-reveal-on .cbv2-rv.is-in { opacity: 1; transform: none; }
 }
 /* The convergence statement is the point of the section: give it the accent. */
 .cbv2-section--berry .cbv2-converge {
-  background: color-mix(in srgb, var(--color-cherry, #fb2832) 18%, transparent);
-  border-color: color-mix(in srgb, var(--color-cherry, #fb2832) 45%, transparent);
+  background: color-mix(in srgb, var(--cherry) 18%, transparent);
+  border-color: color-mix(in srgb, var(--cherry) 45%, transparent);
 }
 .cbv2-section--berry .cbv2-converge strong { color: var(--text-on-inverse, #fff); }
 
@@ -505,7 +505,7 @@ html.cbv2-reveal-on .cbv2-rv.is-in { opacity: 1; transform: none; }
   z-index: 0;
   pointer-events: none;
   background: radial-gradient(90% 70% at 78% 18%,
-    color-mix(in srgb, var(--color-cherry, #fb2832) 16%, transparent), transparent 62%);
+    color-mix(in srgb, var(--cherry) 16%, transparent), transparent 62%);
 }
 
 /* Page heroes get the same treatment at lower strength. */

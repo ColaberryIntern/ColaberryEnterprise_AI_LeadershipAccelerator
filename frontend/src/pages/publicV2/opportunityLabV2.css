@@ -136,7 +136,7 @@
   color: var(--text-strong);
   font: inherit;
 }
-.cbv2-field__input[aria-invalid='true'] { border-color: var(--color-cherry, currentColor); }
+.cbv2-field__input[aria-invalid='true'] { border-color: var(--cherry); }
 
 .cbv2-consent {
   display: grid;
@@ -149,10 +149,16 @@
 }
 .cbv2-consent input { margin-top: 3px; min-width: 18px; min-height: 18px; }
 
-/* Errors are announced and prefixed, never signalled by colour alone. */
+/* Errors are announced and prefixed, never signalled by colour alone.
+
+   These three rules used to read var(--color-cherry, currentColor). That token
+   has never existed, so the fallback won every time and the error state rendered
+   in the INHERITED text colour -- i.e. not red at all. The real tokens are
+   --cherry (brand red, for borders) and --cherry-text (the AA-passing variant,
+   for the small error copy). */
 .cbv2-err {
   margin: var(--space-2) 0 0;
-  color: var(--color-cherry, currentColor);
+  color: var(--cherry-text);
   font-size: var(--fs-body-sm);
   font-weight: 600;
 }
@@ -160,7 +166,7 @@
 .cbv2-err--server {
   margin-top: var(--space-5);
   padding: var(--space-3) var(--space-4);
-  border-left: var(--border-3) solid var(--color-cherry, currentColor);
+  border-left: var(--border-3) solid var(--cherry);
   background: var(--surface-sunken);
 }
 

@@ -316,3 +316,114 @@ describe('AdminTicketBoardPage — clickable stat cards', () => {
     expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
   });
 });
+
+// Ticket Board Performance fix (2026-08-18) — the board previously loaded every
+// ticket ever created (16,000+ rows) on every page open. Defaults to the last 7
+// days with an explicit "All time" toggle, composing with the existing
+// Priority/Type/Source filters rather than replacing them.
+describe('AdminTicketBoardPage — last-7-days default view', () => {
+  function boardFetchCalls(): string[] {
+    return ((global as any).fetch as jest.Mock).mock.calls
+      .map((c: any[]) => c[0])
+      .filter((url: string) => url.startsWith('/api/admin/tickets/board'));
+  }
+
+  async function click(el: Element) {
+    await act(async () => {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  }
+
+  it('defaults to "Last 7 Days" active, and the initial board fetch includes a created_after param', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'x-1' })] });
+    await renderBoard();
+
+    const calls = boardFetchCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatch(/created_after=/);
+
+    const toggle = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Last 7 Days'));
+    expect(toggle?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('clicking "All Time" re-fetches WITHOUT created_after; clicking "Last 7 Days" again re-adds it', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'x-2' })] });
+    await renderBoard();
+
+    const allTimeBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'All Time') as HTMLButtonElement;
+    await click(allTimeBtn);
+
+    let calls = boardFetchCalls();
+    expect(calls[calls.length - 1]).not.toMatch(/created_after=/);
+    expect(allTimeBtn.getAttribute('aria-pressed')).toBe('true');
+
+    const recentBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Last 7 Days')) as HTMLButtonElement;
+    await click(recentBtn);
+
+    calls = boardFetchCalls();
+    expect(calls[calls.length - 1]).toMatch(/created_after=/);
+  });
+
+  it('composes with an existing dropdown filter (Priority): both created_after and priority appear in the same fetch', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'x-3' })] });
+    await renderBoard();
+
+    const prioritySelect = container.querySelector('select') as HTMLSelectElement;
+    await act(async () => {
+      prioritySelect.value = 'critical';
+      prioritySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    const calls = boardFetchCalls();
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall).toMatch(/created_after=/);
+    expect(lastCall).toMatch(/priority=critical/);
+  });
+
+  it('clicking "Clear" does NOT reset the date-range toggle back to "Last 7 Days" after switching to "All Time" — a deliberate view-mode choice, not a filter Clear should undo', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'x-4' })] });
+    await renderBoard();
+
+    const allTimeBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'All Time') as HTMLButtonElement;
+    await click(allTimeBtn);
+
+    const clearBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Clear') as HTMLButtonElement;
+    await click(clearBtn);
+
+    const calls = boardFetchCalls();
+    expect(calls[calls.length - 1]).not.toMatch(/created_after=/);
+    expect(allTimeBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('shows the "N older tickets hidden" honesty banner when stats.total exceeds the visible (7-day) board count, with a working "Show all" link', async () => {
+    (global as any).fetch = jest.fn((url: string) => {
+      if (url.startsWith('/api/admin/tickets/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ board: { backlog: [makeTicket({ id: 'recent-1' })], todo: [], in_progress: [], in_review: [], done: [], cancelled: [] } }) });
+      }
+      if (url === '/api/admin/tickets/stats') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ total: 16186, open: 5325, byStatus: {}, byPriority: {}, byType: {} }) });
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+    await renderBoard();
+
+    expect(container.textContent).toContain('16,185 older tickets hidden');
+
+    const showAllLink = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Show all') as HTMLButtonElement;
+    expect(showAllLink).toBeDefined();
+    await click(showAllLink);
+
+    const allTimeBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'All Time') as HTMLButtonElement;
+    expect(allTimeBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('does NOT show the honesty banner once "All Time" is active (board and stats.total agree)', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'x-5' })] });
+    await renderBoard();
+
+    const allTimeBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'All Time') as HTMLButtonElement;
+    await click(allTimeBtn);
+
+    expect(container.textContent).not.toContain('older ticket');
+  });
+});
