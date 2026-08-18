@@ -54,15 +54,15 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize creation attrs
   const enrollment: any = existing || (await Enrollment.create(guestEnrollmentDefaults(clean) as any));
 
-  // First-login welcome from Reese (admissions). Self-serve signup is the other
+  // Reese's intros. Self-serve signup is the other
   // way a student reaches the portal for the first time, so it gets the same
   // greeting as the magic-link path. Fire-and-forget: signup must not wait on a
-  // DM, and maybeSendWelcome is idempotent, so a returning guest whose account
+  // DM, and maybeSendWelcomes is idempotent, so a returning guest whose account
   // is merely being reused is short-circuited rather than greeted twice.
   void (async () => {
     try {
-      const { maybeSendWelcome } = await import('./reese/reeseWelcomeService');
-      await maybeSendWelcome(enrollment.id);
+      const { maybeSendWelcomes } = await import('./reese/reeseWelcomeService');
+      await maybeSendWelcomes(enrollment.id);
     } catch { /* never allowed to affect signup */ }
   })();
 
