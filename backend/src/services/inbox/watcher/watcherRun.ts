@@ -387,7 +387,10 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
         continue;
       }
 
-      const result = await diagnose(classification.issueClass, msg.fromAddress, ports.data, new Date());
+      // `now`, not `new Date()`. Line 143 already resolved the cycle's clock from
+      // opts.now; passing a fresh wall-clock read here threw it away at the one
+      // call that uses it to decide whether a repair landed. See diagnose.ts.
+      const result = await diagnose(classification.issueClass, msg.fromAddress, ports.data, now);
       if (result.outcome === 'escalate') {
         await escalateWith(`diagnosis_${classification.issueClass}`, result.detail);
         continue;

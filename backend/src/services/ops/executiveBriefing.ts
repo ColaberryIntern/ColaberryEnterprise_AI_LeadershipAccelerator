@@ -31,12 +31,17 @@ export async function generateBriefing(signals: SchoolSignals, health: SchoolHea
       };
     }
   } catch { /* fall through */ }
-  return deterministic(signals, health, directors);
+  return deterministicBriefing(signals, health, directors);
 }
 
 function arr(v: any, fallback: string[]): string[] { return Array.isArray(v) && v.length ? v.map(String) : fallback; }
 
-function deterministic(s: SchoolSignals, h: SchoolHealth, directors: Director[]): Briefing {
+/** Exported (2026-08-18, Workforce OS perf fix, session CC-20260818-wf9k) so
+ * workforceService.ts's briefing() can serve this INSTANTLY on a cold/expired
+ * cache while a real LLM-written narrative regenerates in the background — see
+ * that file's briefingCache for the full rationale. Was already the existing
+ * on-LLM-failure fallback; this just gives it a second legitimate caller. */
+export function deterministicBriefing(s: SchoolSignals, h: SchoolHealth, directors: Director[]): Briefing {
   const top = rankRecommendations(directors);
   const priorities = top.slice(0, 5).map((r) => r.title);
   const risks: string[] = [];

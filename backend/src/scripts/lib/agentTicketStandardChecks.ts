@@ -244,6 +244,55 @@ export const AGENT_TICKET_RESOLVER_REGISTRY: readonly ResolverMapping[] = [
       "as a fresh defect. ReeseOutreachFollowUps' own health is out of scope for " +
       'this check.',
   },
+
+  // --- Department Strategy Architect agents (16) — Agent Ticket Standard audit, 2026-08-18,
+  // session CC-20260818-a7d2. All 16 share one engine (departmentInitiativeEngine.ts /
+  // strategyArchitectAgent.ts) and, as of this audit, genuinely have no recurring resolver:
+  // Initiative.status (the model backing every one of their tickets) has zero write paths
+  // anywhere in this codebase - confirmed by grep, not assumed - so there is no live
+  // terminal-state signal to build an honest resolver against yet. `resolverAgentName: null`
+  // is the accurate, honest state, not a placeholder; `knownGap` documents why so the
+  // validator reports this as an INFO gap, never a silent pass or a fresh-looking FAIL.
+  ...([
+    'ExecutiveStrategyArchitect',
+    'GovernanceStrategyArchitect',
+    'StrategyFuturesArchitect',
+    'FinanceIntelligenceArchitect',
+    'OperationsOptimizationArchitect',
+    'OrchestrationEcosystemArchitect',
+    'InsightArchitect',
+    'PartnershipExpansionArchitect',
+    'GrowthExperimentArchitect',
+    'MarketingAutomationArchitect',
+    'AdmissionsConversionArchitect',
+    'InfrastructureEvolutionArchitect',
+    'PlatformInnovationArchitect',
+    'LearningInnovationArchitect',
+    'StudentSuccessArchitect',
+    'AlumniNetworkArchitect',
+  ] as const).map((creatorAgentName): ResolverMapping => ({
+    creatorAgentName,
+    resolverAgentName: null,
+    resolverRulesFile: null,
+    resolverIoFile: null,
+    artifactsFile: null,
+    knownGap:
+      "No recurring resolver exists yet. This agent's tickets (type='strategic', " +
+      "source='strategy_architect') are linked via entity_type='initiative' to a row in the " +
+      "'initiatives' table (models/Initiative.ts) - a DIFFERENT table from CoryBrain's " +
+      "'strategic_initiatives' (models/StrategicInitiative.ts), which does have a resolver " +
+      '(CoryBrainInitiativeTicketAutoResolver). A repo-wide grep for any write of ' +
+      'Initiative.status found zero call sites - nothing, human or automated, has ever ' +
+      'transitioned it away from its create-time default of \'planned\'. Per this ' +
+      'directive\'s hard ban on time-based/elapsed-age fallback closure, no resolver is built ' +
+      'until a genuine terminal-state signal exists (e.g. a real admin \'mark initiative ' +
+      'complete\' action, which does not exist yet either) - these tickets are left open and ' +
+      'this is disclosed, not force-closed to produce a clean number. The dedup-key fix ' +
+      'shipped in the same change (departmentInitiativeDedupKey.ts) addresses this agent\'s ' +
+      'separate, confirmed duplicate-explosion bug (an LLM-paraphrased title defeating the ' +
+      'old exact-title-match dedup) but does not add a resolver - those are two independent ' +
+      'fixes.',
+  })),
 ];
 
 /** Looks up the resolver mapping for a creator agent name, or undefined if the

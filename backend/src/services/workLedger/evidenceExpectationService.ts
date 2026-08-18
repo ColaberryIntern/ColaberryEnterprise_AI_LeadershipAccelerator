@@ -75,9 +75,13 @@ const TYPE_DEFAULTS: Record<TicketType, TicketEvidenceExpectations> = {
   // routine, single-action, no connected evidence mechanism.
   agent_action: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: NOT_APPLICABLE },
 
-  // Cory-originated strategic tickets — human-judgment tickets by name; no confirmed
-  // subtask/work-graph usage for this specific type (vs. strategic_initiative below,
-  // which explicitly does).
+  // Human-judgment tickets by name; no confirmed subtask/work-graph usage for this specific
+  // type (vs. strategic_initiative below, which explicitly does). Two real automated
+  // creators share this type: CoryBrain's evolution proposals, and the 16 department
+  // Strategy Architect agents (strategyArchitectAgent.ts / departmentInitiativeEngine.ts,
+  // source='strategy_architect') confirmed during the 2026-08-18 Agent Ticket Standard audit
+  // (session CC-20260818-a7d2) — this entry already covers both, no change needed for that
+  // audit beyond this comment.
   strategic: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: EXPECTED },
 
   // All six created through coryInitiatives.ts's createStrategicInitiative (directly

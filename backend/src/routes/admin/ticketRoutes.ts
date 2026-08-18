@@ -29,6 +29,19 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 
 const router = Router();
 
+// Ticket Board Performance fix (2026-08-18) — parses the optional `created_after`
+// query param the board's new "last 7 days" default view sends. This is a display
+// filter, not a required contract field: an absent or unparseable value is treated
+// as "no filter" (falls through to today's unbounded behavior) rather than a 400,
+// since a malformed date here can never cause an unsafe query (Sequelize's Op.gte
+// parameterizes it) and a stale/buggy client value should degrade to "show
+// everything" rather than break the whole board.
+function parseCreatedAfter(value: unknown): Date | undefined {
+  if (typeof value !== 'string' || !value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 // SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
 // endpoints publicly callable. Require an authenticated admin for every route below.
 router.use(requireAdmin);
@@ -50,7 +63,7 @@ router.use(requireAdmin);
 // ── List with filters ────────────────────────────────────────────────────
 router.get('/api/admin/tickets', async (req: Request, res: Response) => {
   try {
-    const { status, priority, type, source, assigned_to_id, entity_type, entity_id } = req.query;
+    const { status, priority, type, source, assigned_to_id, entity_type, entity_id, created_after } = req.query;
     const board = await getTicketsForBoard({
       status: status as TicketStatus | undefined,
       priority: priority as TicketPriority | undefined,
@@ -59,6 +72,7 @@ router.get('/api/admin/tickets', async (req: Request, res: Response) => {
       assigned_to_id: assigned_to_id as string | undefined,
       entity_type: entity_type as string | undefined,
       entity_id: entity_id as string | undefined,
+      createdAfter: parseCreatedAfter(created_after),
     });
 
     // Flatten for list view
@@ -72,13 +86,14 @@ router.get('/api/admin/tickets', async (req: Request, res: Response) => {
 // ── Kanban board format ──────────────────────────────────────────────────
 router.get('/api/admin/tickets/board', async (req: Request, res: Response) => {
   try {
-    const { status, priority, type, source, assigned_to_id } = req.query;
+    const { status, priority, type, source, assigned_to_id, created_after } = req.query;
     const board = await getTicketsForBoard({
       status: status as TicketStatus | undefined,
       priority: priority as TicketPriority | undefined,
       type: type as TicketType | undefined,
       source: source as string | undefined,
       assigned_to_id: assigned_to_id as string | undefined,
+      createdAfter: parseCreatedAfter(created_after),
     });
     res.json({ board });
   } catch (err: any) {
