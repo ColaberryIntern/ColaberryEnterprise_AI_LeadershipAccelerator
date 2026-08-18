@@ -80,8 +80,12 @@ function facts(over: Partial<any> = {}) {
   };
 }
 
-function makePorts(messages: any[], opts: { linkLands?: boolean } = {}) {
+function makePorts(
+  messages: any[],
+  opts: { linkLands?: boolean; postRepairExpiry?: string } = {},
+) {
   let requested = false;
+  const freshExpiry = opts.postRepairExpiry ?? '2026-08-18T04:00:05.000Z';
   return {
     fetchRecentInbound: async () => messages,
     fetchThreadMessages: async (threadId: string | null) =>
@@ -94,7 +98,7 @@ function makePorts(messages: any[], opts: { linkLands?: boolean } = {}) {
     data: {
       loadStudentFacts: async () =>
         facts(requested && opts.linkLands !== false
-          ? { portalTokenExpiresAt: '2026-08-18T04:00:05.000Z' }
+          ? { portalTokenExpiresAt: freshExpiry }
           : {}),
       requestFreshLoginLink: async (email: string) => { mutations.push(email); requested = true; },
     },
@@ -335,5 +339,43 @@ describe('escalations reach Ali rather than becoming silence', () => {
     );
     expect(out.sent).toBe(0);
     expect(escalations[0].reason).toBe('unclassifiable');
+  });
+});
+
+/**
+ * ── THE DEFECT THIS TEST EXISTS FOR ─────────────────────────────────────────
+ *
+ * `runCycle` resolves a clock (`opts.now ?? new Date()`) and threads it
+ * everywhere -- except that it used to hand `diagnose()` a fresh `new Date()`,
+ * and `diagnose` then read the wall clock AGAIN for the one comparison that
+ * decides whether the repair landed. The injected clock was dead at the only
+ * point it decides anything.
+ *
+ * What that cost: the suite pinned `now` to 2026-08-17 and minted a token
+ * expiring 2026-08-18T04:00:05Z. It passed until real time crossed that
+ * instant, and then every live run read its own freshly-minted token as already
+ * expired and escalated instead of replying. main went red mid-morning on
+ * 2026-08-18 with nobody having touched the watcher. A test that fails by
+ * calendar tells you nothing about the code on the day it breaks.
+ *
+ * This test is the discriminator the old fixtures could not be. The repaired
+ * token expires an hour after the PINNED now and long before real wall-clock
+ * now, so it is live on the cycle's clock and expired on the wall clock. It
+ * passes only while the injected clock is honoured, and it gets sharper with
+ * age rather than rotting.
+ */
+describe('the cycle judges a repair on its own clock, not the wall clock', () => {
+  it('sends when the fresh token is live at the cycle time, though long expired in real time', async () => {
+    const out = await runCycle(
+      makePorts([bccCopy, studentReply()], { postRepairExpiry: '2026-08-17T05:00:00.000Z' }),
+      { stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS, now: NOW },
+    );
+
+    // On the wall clock this token expired long ago and the cycle would escalate
+    // instead, which is exactly the regression.
+    expect(new Date('2026-08-17T05:00:00.000Z').getTime()).toBeLessThan(Date.now());
+    expect(out.sent).toBe(1);
+    expect(escalations).toEqual([]);
+    expect(sent[0].to).toBe('Liza Ayele <bfglz@yahoo.com>');
   });
 });
