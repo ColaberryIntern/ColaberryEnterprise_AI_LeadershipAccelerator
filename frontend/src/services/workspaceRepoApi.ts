@@ -188,6 +188,20 @@ export interface StoryVerificationDto {
   latched: boolean;
   /** What the CURRENT read concluded, when it disagrees with the latch. Diagnostic only. */
   live_state: StoryVerificationDto['state'] | null;
+  /**
+   * Set when the last sync could not READ `.colaberry/progress.json` — bad
+   * JSON, wrong shape, an unknown version. One sentence, written for the
+   * student, rendered verbatim.
+   *
+   * WHEN THIS IS SET EVERYTHING ABOVE IT IS STALE: it is the last verdict the
+   * platform could actually reach, not a conclusion about the push that just
+   * landed. Render this INSTEAD of `outstanding` and `reasons`, never beside
+   * them. Optional because a row written before this field existed will not
+   * carry it.
+   */
+  read_error?: string | null;
+  /** `ProgressFileSchemaMismatch`, `ProgressFileNotJson`, … For triage, not display. */
+  read_error_class?: string | null;
 }
 
 export interface StoryVerificationView {

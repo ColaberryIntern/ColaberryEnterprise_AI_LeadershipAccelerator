@@ -75,6 +75,17 @@ export interface StoryVerificationState {
   missing: string[];
   /** Set when the plan gave this story no criteria, so it can never verify. */
   blockedReason: string | null;
+  /**
+   * Set when the last sync could not READ `.colaberry/progress.json`.
+   *
+   * This SUPPRESSES `missing` and `blockedReason`, which is the whole point of
+   * carrying it separately: while the file is unreadable, the outstanding list
+   * is the last verdict we could reach and not a statement about the push that
+   * just landed. Showing it would tell a student their criteria failed when
+   * what actually happened is that we could not see them — the precise
+   * confusion that cost one student an evening of re-verifying correct code.
+   */
+  readError: string | null;
   phase: CelebrationPhase;
   /** Builder XP banked for this story. Render the points beat only when > 0. */
   xpAwarded: number;
@@ -276,26 +287,43 @@ export function useStoryVerification(projectId: string, storyId: string): StoryV
    * outstanding criteria and "no commit names this story" are two different
    * kinds of missing and the student fixes them in two different places.
    */
+  /**
+   * The progress file itself could not be read, so nothing derived from it is
+   * this push's answer. One sentence, from the server, rendered verbatim.
+   */
+  const readError = useMemo(() => {
+    if (view?.verified_at) return null;
+    return view?.verification?.read_error ?? null;
+  }, [view]);
+
   const missing = useMemo(() => {
     const v = view?.verification;
     if (!v || view?.verified_at) return [];
+    // Suppressed while the file is unreadable: these criteria may well be done
+    // and we simply cannot see the claim. Listing them here is what sent a
+    // student back to redo work she had already finished.
+    if (readError) return [];
     const out = [...v.outstanding];
     if (!v.commit_sha && v.criteria_total > 0) {
       out.push(`a commit naming ${view?.story_id ?? 'this story'} — add it to your commit message and push`);
     }
     return out;
-  }, [view]);
+  }, [view, readError]);
 
   /** A story the plan gave no criteria can never verify. Say so rather than hanging. */
   const blockedReason = useMemo(() => {
     const v = view?.verification;
     if (!v || view?.verified_at) return null;
+    // The read error is the more specific, more actionable explanation, and it
+    // ends in "tell your instructor" — advice that is wrong here, because this
+    // is a file the student can fix themselves.
+    if (readError) return null;
     if (v.criteria_total === 0) {
       return v.reasons[0]
         ?? 'This story has no acceptance criteria in the published plan, so there is nothing to verify against.';
     }
     return null;
-  }, [view]);
+  }, [view, readError]);
 
   return {
     view,
@@ -306,6 +334,7 @@ export function useStoryVerification(projectId: string, storyId: string): StoryV
     verifiedAt: view?.verified_at ?? null,
     missing,
     blockedReason,
+    readError,
     phase,
     xpAwarded: view?.xp_awarded ?? 0,
     refresh: load,

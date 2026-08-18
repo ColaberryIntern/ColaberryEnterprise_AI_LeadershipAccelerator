@@ -70,6 +70,26 @@ const StoryCompletionPanel: React.FC<StoryCompletionPanelProps> = ({
             </div>
           )}
 
+          {/* THE FILE COULD NOT BE READ. Rendered ahead of everything else and
+              in place of it: while this is set the outstanding list is the last
+              verdict we could reach, not an answer about the push that just
+              landed, and showing it tells a student their criteria failed when
+              the truth is we could not see them. That mistake cost one student
+              an evening re-verifying code that was already correct.
+
+              Not "tell your instructor" — this is a file in their repo, and the
+              sentence from the server names exactly what to change. */}
+          {!verified && verif.readError && (
+            <div className="rt-waiting">
+              <div className="rt-waiting-h">We could not read your progress file</div>
+              <p className="rt-waiting-p">{verif.readError}</p>
+              <p className="rt-waiting-p">
+                Nothing you have already finished is affected — verification is recorded here on the
+                platform, so anything confirmed before this stays confirmed.
+              </p>
+            </div>
+          )}
+
           {!verified && verif.blockedReason && (
             <div className="rt-waiting">
               <div className="rt-waiting-h">This story cannot be verified automatically</div>

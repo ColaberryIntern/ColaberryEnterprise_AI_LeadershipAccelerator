@@ -82,6 +82,25 @@ export interface VerificationRecord {
    * Diagnostic only — never authoritative, never displayed as the state.
    */
   live_state?: StoryVerificationState | null;
+  /**
+   * One sentence for the student, set when the last sync could not READ the
+   * progress file at all — not "your criteria are failing" but "we could not
+   * tell what your criteria say".
+   *
+   * Distinct from `reasons` in what it licenses the UI to do: while this is
+   * set, the counts beside it are stale by definition and the page must not
+   * present them as this push's verdict.
+   */
+  read_error?: string | null;
+  /** `ProgressFileNotJson`, `ProgressFileSchemaMismatch`, … Never shown raw. */
+  read_error_class?: string | null;
+}
+
+/** A progress-file read that failed, reduced to what a student needs. */
+export interface ProgressReadError {
+  error_class: string;
+  /** The student-facing sentence from `ProgressParseFailure.reason`. */
+  reason: string;
 }
 
 export const isLatched = (latch: VerificationLatch | null | undefined): boolean =>
@@ -144,6 +163,82 @@ export function applyVerificationLatch(
     reasons: [latchNote(live.state)],
     latched: true,
     live_state: live.state,
+  };
+}
+
+/**
+ * Annotate a stored record with "we could not read your progress file".
+ *
+ * WHY THIS EXISTS. The reject path used to return early and write nothing, so
+ * the row kept the verdict from the last READABLE sync. Confirmed live on
+ * 2026-08-17: a student's row still said *"None of the 5 acceptance criteria
+ * are marked as passing yet"* while every sync since had been rejected with
+ * `ProgressFileSchemaMismatch`. Those are not the same claim — the first says
+ * her work is failing, the second says we cannot see her work — and she spent
+ * an evening re-verifying correct code because the page asserted the first.
+ * Writing nothing is not neutral when something false is already on screen.
+ *
+ * WHAT IT MAY AND MAY NOT CHANGE. Only the prose moves. `state`,
+ * `criteria_passed`, `criteria_total`, `outstanding`, the commit fields and
+ * `checked_at` are all carried forward untouched, because an unreadable file is
+ * evidence of nothing: it can neither advance a story nor lower one, and
+ * `checked_at` must not move because no new verdict was reached.
+ *
+ * A VERIFIED RECORD IS RETURNED UNCHANGED. Verification never revokes, and a
+ * finished story has nothing for the student to act on, so annotating it would
+ * only add alarm to work that is already banked.
+ *
+ * PURE and a FIXED POINT: annotating an annotated record returns the same
+ * record, which is what lets the caller re-run a rejected sync as often as the
+ * student presses the button without the stored state drifting.
+ */
+export function annotateReadError(
+  prior: Partial<VerificationRecord> | null | undefined,
+  err: ProgressReadError,
+): VerificationRecord {
+  const base = normaliseRecord(prior);
+  if (base.state === 'verified') return (prior as VerificationRecord) ?? base;
+
+  return {
+    ...base,
+    // `reasons` answers "why is this not verified yet", and the honest answer
+    // is now the read error. Leaving the previous sentence beside it would let
+    // the misleading one keep rendering, which is the defect itself.
+    reasons: [err.reason],
+    read_error: err.reason,
+    read_error_class: err.error_class,
+  };
+}
+
+const STATES: readonly StoryVerificationState[] = ['not_started', 'in_progress', 'submitted', 'verified'];
+
+/**
+ * A stored JSONB blob, read defensively into a full record.
+ *
+ * A row can predate any field, or hold nothing at all when the platform has
+ * never managed a readable sync. The floor is `not_started` with zero counts —
+ * which is what every display surface already defaults an absent blob to, so
+ * this states the default rather than inventing progress. An unrecognised
+ * `state` falls to the floor too: the generous direction on a field that gates
+ * credit is the wrong direction.
+ */
+function normaliseRecord(prior: Partial<VerificationRecord> | null | undefined): VerificationRecord {
+  const p = (prior && typeof prior === 'object' && !Array.isArray(prior) ? prior : {}) as Partial<VerificationRecord>;
+  const state = STATES.includes(p.state as StoryVerificationState)
+    ? (p.state as StoryVerificationState)
+    : 'not_started';
+  return {
+    state,
+    criteria_total: Number(p.criteria_total ?? 0) || 0,
+    criteria_passed: Number(p.criteria_passed ?? 0) || 0,
+    outstanding: Array.isArray(p.outstanding) ? p.outstanding.map(String) : [],
+    commit_sha: typeof p.commit_sha === 'string' ? p.commit_sha : null,
+    commit_at: typeof p.commit_at === 'string' ? p.commit_at : null,
+    reasons: Array.isArray(p.reasons) ? p.reasons.map(String) : [],
+    rejected_claims: Array.isArray(p.rejected_claims) ? p.rejected_claims.map(String) : [],
+    checked_at: typeof p.checked_at === 'string' ? p.checked_at : null,
+    ...(p.latched === undefined ? {} : { latched: Boolean(p.latched) }),
+    ...(p.live_state === undefined ? {} : { live_state: p.live_state ?? null }),
   };
 }
 
