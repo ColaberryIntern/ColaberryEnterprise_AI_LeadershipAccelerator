@@ -58,6 +58,7 @@ import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
+import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
@@ -2503,6 +2504,9 @@ async function start(): Promise<void> {
   await ensureRuntimeSchema();
   await ensureOpsCenterSchema();
   await ensureWorkforceSchema();
+  // Workforce OS perf fix — missing tickets.created_by_id index (EXPLAIN ANALYZE-
+  // confirmed Seq Scan on every per-agent ticket count). Additive, idempotent, no flag.
+  await ensureTicketCreatorIndexSchema();
   await ensureIntelligenceSchema();
   // Colaberry Commons — Community Rooms tables (idempotent, additive). Created
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind

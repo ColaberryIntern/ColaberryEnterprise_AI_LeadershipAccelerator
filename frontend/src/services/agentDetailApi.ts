@@ -23,6 +23,16 @@ export interface AgentDetailTicket {
   updated_at: string | null;
 }
 
+/** What this agent reads / produces — derived from its real, live tools_granted
+ * (+ real, live observed ticket types it creates), never hand-written free text.
+ * See backend/src/services/reese/agentToolCapabilities.ts. */
+export interface AgentDetailCapabilities {
+  reads: string[];
+  produces: string[];
+  undocumented_tools: string[];
+  produced_ticket_types: string[];
+}
+
 export interface AgentDetail {
   agent: {
     id: string;
@@ -39,6 +49,7 @@ export interface AgentDetail {
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';
   tickets: AgentDetailTicket[];
+  capabilities: AgentDetailCapabilities;
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
