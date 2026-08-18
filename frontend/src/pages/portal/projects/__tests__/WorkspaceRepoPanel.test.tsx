@@ -402,3 +402,59 @@ describe('a repo the platform can only read', () => {
     expect(text()).not.toContain('read-only access');
   });
 });
+
+/*
+ * ── A CONNECTED STUDENT STILL NEEDS THEIR .colaberry FILES ──────────────────
+ *
+ * STORY-000 criteria 3 and 4 require the Command Center to read
+ * `.colaberry/plan.json` and `.colaberry/manifest.json` at runtime. The prompt
+ * tells the student those files are "committed by the platform" and rewritten
+ * on every sync. On a repo we cannot push to, that never happens: the write
+ * fails at the GitHub boundary and the two files simply never arrive.
+ *
+ * The only surface that hands a student those exact files is the document
+ * bundle, and it was offered ONLY in the `not_connected` branch — so connecting
+ * a repo removed the one way to obtain them. A student who connected correctly
+ * was strictly worse off than one who had not, and had no route to the files at
+ * all. Confirmed live on 2026-08-18: a student sat at 3 of 5 with the two
+ * outstanding criteria pointing at files absent from their repo.
+ *
+ * The download is therefore offered whenever a repo is connected too. It costs
+ * nothing on a repo we can write, and it is the whole answer on one we cannot.
+ */
+describe('a connected student who needs the data files the platform could not write', () => {
+  const connectedRepo = (writeAccess: 'push' | 'pull_only' | null = null) => view({
+    connected: true, provisioned: true,
+    repo_owner: 'me', repo_name: 'nightshift', repo_url: 'https://github.com/me/nightshift',
+    connect: connectState({
+      state: 'connected', method: 'byo', owner: 'me', repo: 'nightshift',
+      url: 'https://github.com/me/nightshift', write_access: writeAccess,
+    }),
+  });
+
+  it('can still reach the documents after connecting, not only before', async () => {
+    await mount(connectedRepo());
+    expect(buttonNamed('Download the documents')).toBeDefined();
+  });
+
+  it('hands back the same bundle, for this project', async () => {
+    mockDownload.mockResolvedValue({ blob: new Blob(['x']), filename: 'build-docs.zip' });
+    await mount(connectedRepo());
+    await click('Download the documents');
+    expect(mockDownload).toHaveBeenCalledWith('p1');
+  });
+
+  it('keeps Sync as the primary action rather than displacing it', async () => {
+    await mount(connectedRepo());
+    expect(buttonNamed('Sync from GitHub')).toBeDefined();
+  });
+
+  it('names every file that becomes the student\'s on a read-only repo, not just progress.json', async () => {
+    // progress.json was the only one named. Criteria 3 and 4 are scored against
+    // the other two, so a student told about one file of three cannot finish.
+    await mount(connectedRepo('pull_only'));
+    expect(text()).toContain('.colaberry/progress.json');
+    expect(text()).toContain('.colaberry/plan.json');
+    expect(text()).toContain('.colaberry/manifest.json');
+  });
+});

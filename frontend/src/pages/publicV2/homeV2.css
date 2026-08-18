@@ -794,3 +794,19 @@
   object-position: top center;
   max-height: 520px;
 }
+
+/* The repo capture is WIDE and short (943x426), unlike the tall story
+   workspace it replaced, so it must not inherit that block's 520px height cap
+   and top-anchored cover crop -- that would letterbox it. */
+.cbv2-buildrepo__shot--repo { max-height: none; }
+.cbv2-buildrepo__shot--repo img {
+  max-height: none;
+  object-fit: contain;
+}
+.cbv2-buildrepo__cap {
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-1) solid var(--border-subtle);
+  background: var(--surface-sunken);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
