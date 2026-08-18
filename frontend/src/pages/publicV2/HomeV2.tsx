@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import HeroV7 from '../../components/publicV2/HeroV7';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
 import Accolades from '../../components/publicV2/Accolades';
@@ -10,6 +11,7 @@ import { GOALS, ENGINE } from '../../config/v2Content';
 // five engagements in the same order, and HomeV2.test asserts they stay in sync.
 import { SERVICE_DETAILS } from '../../config/v2Services';
 import './homeV2.css';
+import '../../components/publicV2/heroV7.css';
 
 /**
  * HomeV2 — the V2 homepage.
@@ -71,72 +73,63 @@ function HomeV2(): React.ReactElement {
       />
 
       {/* 1 ─────────────────────────────────────────────────────────── hero ── */}
-      <section className="cbv2-hero" aria-labelledby="cbv2-hero-title">
-        {/* Ambient depth. Purely decorative, sits behind content, and carries no
-            information -- so it is hidden from assistive tech and stops moving
-            entirely under prefers-reduced-motion. */}
-        <div className="cbv2-mesh" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </div>
-        <div className="cbv2-gridlines" aria-hidden="true" />
-        <div className="cbv2-wrap cbv2-hero__grid">
-          <div>
-            <p className="cbv2-eyebrow">Enterprise AI &middot; Systems + People</p>
-            <h1 id="cbv2-hero-title" className="cbv2-hero__title">
-              Build the system. Build the people. <em>Prove the capability.</em>
-            </h1>
-            <p className="cbv2-hero__body">
-              Colaberry helps organizations identify high-value AI opportunities, deploy governed
-              Claude-powered systems, and develop the people who will own them&mdash;through one
-              connected platform.
+      <HeroV7 />
+
+      {/*
+        THE OPERATING MODEL, MOVED UP. It used to sit below the goal chooser,
+        five sections down. It is the thesis the hero states -- two engines, one
+        owned capability -- so it now answers the hero directly instead of
+        making a reader scroll past four other things to find out what we mean.
+      */}
+{/* 4 ────────────────────────────────────────── dual transformation ──── */}
+      <section className="cbv2-rv cbv2-section cbv2-section--berry" aria-labelledby="cbv2-engine-title">
+        <div className="cbv2-wrap">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">The operating model</p>
+            <h2 id="cbv2-engine-title">Two engines, one owned capability</h2>
+            <p className="cbv2-lede">
+              Most programmes build a system nobody can maintain, or train people with nothing
+              real to build. These run together.
             </p>
-            <div className="cbv2-hero__ctas">
-              <Link className="cbv2-btn cbv2-btn--primary" to="/platform">
-                Explore the Live Platform
-              </Link>
-              <Link className="cbv2-btn cbv2-btn--ghost" to="/lab">
-                Map an AI Opportunity
-              </Link>
-            </div>
           </div>
 
-          {/*
-            The readiness rollup is a LIVE surface, so it may be depicted -- and it
-            is depicted with an actual capture of the product rather than boxes
-            drawn in HTML. The capture carries its own on-screen "sample data"
-            labelling, and a SampleBadge sits in the caption regardless, so the
-            claim holds even if the image fails to load.
-          */}
-          {canShow('surface.readiness.rollup', ROUTE) ? (
-            <figure className="cbv2-shot-stack">
-              <div className="cbv2-shot-stack__main">
-                <img
-                  className="cbv2-shot"
-                  src="/site-v2/shot-hero-dashboard.png"
-                  alt="The organization readiness dashboard, showing average architect readiness, builder XP and evidence shipped for a sample company."
-                  width={1680}
-                  height={1120}
-                  loading="eager"
-                  decoding="async"
-                />
+          <div className="cbv2-engine">
+            {(['system', 'people'] as const).map((lane) => (
+              <div className={`cbv2-lane cbv2-lane--${lane}`} key={lane}>
+                <h3>{lane === 'system' ? 'System Engine' : 'People Engine'}</h3>
+                <ol className="cbv2-lane__steps">
+                  {ENGINE[lane].map((step, i) => (
+                    <li key={step.title}>
+                      <span className="cbv2-lane__n">{i + 1}</span>
+                      <span>
+                        <span className="cbv2-lane__t">{step.title}</span>
+                        <span className="cbv2-lane__d">{step.detail}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
               </div>
-              <div className="cbv2-shot-stack__badge" aria-hidden="true">
-                <span className="cbv2-pulse" />
-                <span>
-                  <b>+18 pts</b>
-                  <span>readiness in 8 weeks</span>
-                </span>
-              </div>
-              <figcaption className="cbv2-shot-caption">
-                <SampleBadge inverse />
-                <span>The company view, as it ships today.</span>
-              </figcaption>
-            </figure>
-          ) : null}
+            ))}
+          </div>
+
+          <figure className="cbv2-photo cbv2-engine__photo">
+            <img
+              src="/site-v2/photos/team-collab.jpg"
+              alt=""
+              width={1280}
+              height={960}
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
+
+          <p className="cbv2-converge">
+            <strong>Owned Enterprise AI Capability</strong>
+            <span>The system runs in production, and your own people own it.</span>
+          </p>
         </div>
       </section>
+
 
       {/* 2 ──────────────────────────────────────── what we can state today ── */}
       <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-label="What we can state today">
@@ -349,56 +342,7 @@ function HomeV2(): React.ReactElement {
         </div>
       </section>
 
-      {/* 4 ────────────────────────────────────────── dual transformation ──── */}
-      <section className="cbv2-rv cbv2-section cbv2-section--berry" aria-labelledby="cbv2-engine-title">
-        <div className="cbv2-wrap">
-          <div className="cbv2-section__head">
-            <p className="cbv2-eyebrow">The operating model</p>
-            <h2 id="cbv2-engine-title">Two engines, one owned capability</h2>
-            <p className="cbv2-lede">
-              Most programmes build a system nobody can maintain, or train people with nothing
-              real to build. These run together.
-            </p>
-          </div>
-
-          <div className="cbv2-engine">
-            {(['system', 'people'] as const).map((lane) => (
-              <div className={`cbv2-lane cbv2-lane--${lane}`} key={lane}>
-                <h3>{lane === 'system' ? 'System Engine' : 'People Engine'}</h3>
-                <ol className="cbv2-lane__steps">
-                  {ENGINE[lane].map((step, i) => (
-                    <li key={step.title}>
-                      <span className="cbv2-lane__n">{i + 1}</span>
-                      <span>
-                        <span className="cbv2-lane__t">{step.title}</span>
-                        <span className="cbv2-lane__d">{step.detail}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ))}
-          </div>
-
-          <figure className="cbv2-photo cbv2-engine__photo">
-            <img
-              src="/site-v2/photos/team-collab.jpg"
-              alt=""
-              width={1280}
-              height={960}
-              loading="lazy"
-              decoding="async"
-            />
-          </figure>
-
-          <p className="cbv2-converge">
-            <strong>Owned Enterprise AI Capability</strong>
-            <span>The system runs in production, and your own people own it.</span>
-          </p>
-        </div>
-      </section>
-
-      {/* 4b ───────────────────────────────────────────────── idea to build ── */}
+            {/* 4b ───────────────────────────────────────────────── idea to build ── */}
       {/*
         The story-build system. Three beats -- plan, build, verified -- ending on
         the repo, because the repo is the part a sceptical buyer can check.
@@ -575,17 +519,35 @@ function HomeV2(): React.ReactElement {
               another chart because this is the screen that shows movement, which
               is what a manager is actually buying.
             */}
+            {/*
+              The readiness dashboard moved here when the hero became typographic.
+              It still renders ONLY behind `surface.readiness.rollup`: it depicts a
+              live product surface, and the gate that licenses that depiction has to
+              travel with the image rather than being left behind in the hero. If
+              that claim ever regresses, this falls back to the accomplishments feed
+              rather than showing an unlicensed surface.
+            */}
             <figure className="cbv2-shot-frame">
-              <img
-                className="cbv2-shot"
-                src="/site-v2/shot-accomplishments.png"
-                alt="The team accomplishments feed: a promotion to Architect after clearing the final evidence gate, a shipped portfolio artifact, validated evidence logged from a GitHub pull request, an evaluation passed at 86 percent, a seven-day build streak, and a most-improved entry."
-                loading="lazy"
-                decoding="async"
-              />
+              {canShow('surface.readiness.rollup', ROUTE) ? (
+                <img
+                  className="cbv2-shot"
+                  src="/site-v2/shot-hero-dashboard.png"
+                  alt="The organization readiness dashboard, showing average architect readiness, builder XP and evidence shipped for a sample company."
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <img
+                  className="cbv2-shot"
+                  src="/site-v2/shot-accomplishments.png"
+                  alt="The team accomplishments feed: a promotion to Architect after clearing the final evidence gate, a shipped portfolio artifact, validated evidence logged from a GitHub pull request, an evaluation passed at 86 percent, a seven-day build streak, and a most-improved entry."
+                  loading="lazy"
+                  decoding="async"
+                />
+              )}
               <figcaption className="cbv2-shot-caption">
                 <SampleBadge />
-                <span>Sample team, real event types.</span>
+                <span>The company view, on sample data.</span>
               </figcaption>
             </figure>
           </div>
