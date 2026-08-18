@@ -170,14 +170,58 @@ function read(): StudentProject[] {
       }
       return list;
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    // Falling back to a re-seed is right (an unreadable cache is not a reason to
+    // show the student nothing), but doing it SILENTLY is not: this branch
+    // discards whatever was in localStorage, and it used to do that without
+    // leaving a trace. The server refetch on the next sync restores any build
+    // that ever reached it; a browser-only build is genuinely lost here, which
+    // is exactly the kind of thing that must be greppable in a bug report.
+    logStoreFailure('projects_cache_unreadable', err);
+  }
   const seeded = [buildSalonProject()];
   write(seeded);
   return seeded;
 }
 
-function write(list: StudentProject[]): void {
-  try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* ignore */ }
+/**
+ * Stable, structured, and never secret-bearing. Matches the observability
+ * contract in CLAUDE.md: an `error_class` a human can grep for beats a stack
+ * trace nobody sees.
+ */
+function logStoreFailure(event: string, err: unknown): void {
+  const errorClass = err instanceof Error ? err.name : typeof err;
+  console.error(JSON.stringify({
+    level: 'error', service: 'portal-projects', event,
+    error_class: errorClass || 'UnknownError',
+    message: err instanceof Error ? err.message : String(err),
+  }));
+}
+
+/**
+ * Persist the project list. Returns whether it actually landed.
+ *
+ * WHY THIS REPORTS FAILURE. It used to be a bare try/setItem with an empty
+ * catch, which is the one shape this store could not afford. A `QuotaExceededError`
+ * left the OLD value in localStorage while every caller carried on as though the
+ * new one had been written, so the next load quietly served a stale card and
+ * nothing anywhere said so. Published plans are not small — one live build
+ * carries a 30,027-character STORY-000 prompt inside a 114 KB tree — so this is
+ * a real budget, not a theoretical one.
+ *
+ * The honest behaviour on a failed write is to say so and let the next sync
+ * refetch from the server, which is authoritative anyway. What we must never do
+ * is drop the largest item to make the rest fit: a cache that silently discards
+ * a student's most important task is worse than one that refuses.
+ */
+function write(list: StudentProject[]): boolean {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(list));
+    return true;
+  } catch (err) {
+    logStoreFailure('projects_cache_write_failed', err);
+    return false;
+  }
 }
 
 // ── pub/sub ─────────────────────────────────────────────────────────────────
