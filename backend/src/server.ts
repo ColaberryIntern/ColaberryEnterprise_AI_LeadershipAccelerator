@@ -60,6 +60,7 @@ import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchem
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
+import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotificationSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
@@ -2363,6 +2364,7 @@ async function start(): Promise<void> {
   // Session-reminder arming columns on live_sessions. Must be ensured before the
   // reminder cron starts, or the sweep falls back to re-sending on every deploy.
   await ensureSessionReminderSchema();
+  await ensureEnrollmentNotificationSchema();
   // ProofDesk Work Graph — Milestone 3 (Multi-Agent Work Graph): 3 work-graph tables
   // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
   // additive only).
