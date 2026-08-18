@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import HeroV7 from '../../components/publicV2/HeroV7';
+import EngineModel from '../../components/publicV2/EngineModel';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
 import Accolades from '../../components/publicV2/Accolades';
@@ -12,6 +13,7 @@ import { GOALS, ENGINE } from '../../config/v2Content';
 import { SERVICE_DETAILS } from '../../config/v2Services';
 import './homeV2.css';
 import '../../components/publicV2/heroV7.css';
+import '../../components/publicV2/engineModel.css';
 
 /**
  * HomeV2 — the V2 homepage.
@@ -89,44 +91,12 @@ function HomeV2(): React.ReactElement {
             <h2 id="cbv2-engine-title">Two engines, one owned capability</h2>
             <p className="cbv2-lede">
               Most programmes build a system nobody can maintain, or train people with nothing
-              real to build. These run together.
+              real to build. These run together &mdash; and every stage hands off to the one
+              beside it.
             </p>
           </div>
 
-          <div className="cbv2-engine">
-            {(['system', 'people'] as const).map((lane) => (
-              <div className={`cbv2-lane cbv2-lane--${lane}`} key={lane}>
-                <h3>{lane === 'system' ? 'System Engine' : 'People Engine'}</h3>
-                <ol className="cbv2-lane__steps">
-                  {ENGINE[lane].map((step, i) => (
-                    <li key={step.title}>
-                      <span className="cbv2-lane__n">{i + 1}</span>
-                      <span>
-                        <span className="cbv2-lane__t">{step.title}</span>
-                        <span className="cbv2-lane__d">{step.detail}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ))}
-          </div>
-
-          <figure className="cbv2-photo cbv2-engine__photo">
-            <img
-              src="/site-v2/photos/team-collab.jpg"
-              alt=""
-              width={1280}
-              height={960}
-              loading="lazy"
-              decoding="async"
-            />
-          </figure>
-
-          <p className="cbv2-converge">
-            <strong>Owned Enterprise AI Capability</strong>
-            <span>The system runs in production, and your own people own it.</span>
-          </p>
+          <EngineModel />
         </div>
       </section>
 
