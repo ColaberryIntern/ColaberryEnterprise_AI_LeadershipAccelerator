@@ -7,6 +7,7 @@ import { checkCaps, CapLimits } from './replyCaps';
 import { classifyInbound } from './issueClassifier';
 import { verifyClaims } from './claimGate';
 import { diagnose, WatcherDataAccess } from './diagnose';
+import { shouldLogExpiry, noteExpiryObserved } from './watcherRetirement';
 
 /**
  * One poll cycle.
@@ -154,15 +155,40 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
 
   const window = checkWindow(opts.stateDir, now);
   if (!window.active) {
-    const log = WatcherLog.open(opts.stateDir);
-    try {
-      log.append({
-        ts: now.toISOString(), type: 'window_expired', run_id: opts.runId,
-        reason: window.reason,
-        detail: `Watch window is over. Nothing further will be sent. Kill: ${killCommand(opts.stateDir)}`,
-      });
-    } finally {
-      log.close();
+    // THE EXPIRY IS WORTH ONE LINE, NOT ONE PER TICK.
+    //
+    // This used to append unconditionally. The 2026-08-17 window closed at
+    // 16:57Z, the crontab entry stayed, and every five minutes after that wrote
+    // another one of these into a log that had reached 15MB — 288 a day, saying
+    // the same thing. `shouldLogExpiry` is true only until the retirement
+    // sentinel exists, so the first expired tick records the fact and the rest
+    // are silent.
+    //
+    // Scoped to `window_elapsed`. A malformed or future-dated window file is
+    // not a window running its course, it is corruption someone has to look at,
+    // and silencing THAT after one line would hide it.
+    const elapsed = window.reason === 'window_elapsed';
+    if (!elapsed || shouldLogExpiry(opts.stateDir)) {
+      const log = WatcherLog.open(opts.stateDir);
+      try {
+        log.append({
+          ts: now.toISOString(), type: 'window_expired', run_id: opts.runId,
+          reason: window.reason,
+          detail: `Watch window is over. Nothing further will be sent. Kill: ${killCommand(opts.stateDir)}`,
+        });
+      } finally {
+        log.close();
+      }
+      // Written AFTER the log line, so a crash in between repeats the line
+      // rather than losing it. One duplicate line is recoverable; a silently
+      // unrecorded expiry is the thing that hid this bug for a day.
+      if (elapsed) {
+        noteExpiryObserved(opts.stateDir, {
+          runId: opts.runId,
+          now,
+          windowExpiresAt: window.state?.expires_at ?? 'unknown',
+        });
+      }
     }
     return { ...base, status: 'expired', reason: window.reason };
   }

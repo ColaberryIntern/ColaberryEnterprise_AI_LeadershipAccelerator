@@ -275,6 +275,36 @@ describe('the window and the kill switch stop the cycle before anything is read'
     expect(sent).toEqual([]);
   });
 
+  it('logs the expiry once, so the elapsed window costs one line and not one per tick', async () => {
+    const expiredOpts = {
+      stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS,
+      now: new Date('2026-08-18T08:00:00.000Z'),
+    };
+    await runCycle(makePorts([studentReply()]), expiredOpts);
+
+    await runCycle(makePorts([studentReply()]), {
+      ...expiredOpts, now: new Date('2026-08-18T08:05:00.000Z'),
+    });
+
+    // Two expired ticks, one `window_expired` record. The leftover cron entry
+    // fired 288 times a day and appended one of these on every single one.
+    expect(readLog().filter((e) => e.type === 'window_expired')).toHaveLength(1);
+  });
+
+  it('still reports expired on the tick it stays quiet for', async () => {
+    const expiredOpts = {
+      stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS,
+      now: new Date('2026-08-18T08:00:00.000Z'),
+    };
+    await runCycle(makePorts([studentReply()]), expiredOpts);
+
+    const second = await runCycle(makePorts([studentReply()]), {
+      ...expiredOpts, now: new Date('2026-08-18T08:05:00.000Z'),
+    });
+
+    expect(second.status).toBe('expired');
+  });
+
   it('does nothing when the kill file is present, without even reading the mailbox', async () => {
     fs.writeFileSync(path.join(dir, 'WATCHER-HALT'), '');
     const ports = makePorts([studentReply()]);

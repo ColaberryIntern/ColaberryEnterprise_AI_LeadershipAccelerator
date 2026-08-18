@@ -21,8 +21,35 @@
  * A single process holding a 30-hour timer is one OOM kill, container bounce or
  * dropped SSH session away from stopping silently, and nothing would notice
  * until Monday. A cron tick that reads its deadline off disk each time survives
- * all of those, and after the deadline every tick is a no-op that logs and
- * exits 0 — so the leftover crontab line is harmless rather than a liability.
+ * all of those.
+ *
+ * This header used to finish that thought with "after the deadline every tick
+ * is a no-op that logs and exits 0 — so the leftover crontab line is harmless
+ * rather than a liability". That was wrong, and it was wrong in production for
+ * a day: the 2026-08-17 window closed at 16:57Z and the entry kept firing 288
+ * times a day, each tick appending another `window_expired` line to a log that
+ * had reached 15MB. Inert is not the same as free.
+ *
+ * So expiry now cleans up after itself, in two independent steps:
+ *
+ *   - the cycle writes the `window_expired` line ONCE (watcherRetirement.ts),
+ *     which is the cheap half and always works;
+ *   - the runner then removes this watcher's own crontab line (cronRetirement.
+ *     ts), which is the half that actually stops the wake-ups and the half that
+ *     can fail. It is idempotent, capped at three attempts, backs the crontab
+ *     up first, and refuses unless exactly one line carries BOTH the script
+ *     name and this run directory. That crontab holds ~40 other jobs and has
+ *     been wiped once already by a careless edit.
+ *
+ * ── LOOKBACK, IF YOU ARE REOPENING A WINDOW ─────────────────────────────────
+ *
+ * A cycle reads inbound mail with `received_at >= <window start>`. For the
+ * original run that was right, because the window opened as the campaign went
+ * out. A REOPENED window starts its clock at the restart, so with no lookback
+ * the watcher only ever sees mail that arrives after the moment it restarted,
+ * and every reply already sitting unanswered is invisible to it. Set
+ * WATCHER_LOOKBACK_HOURS to widen the floor. It only ever widens: the window
+ * start remains the latest the floor can be.
  *
  * ── WHERE IT HAS TO RUN ─────────────────────────────────────────────────────
  *
@@ -49,7 +76,12 @@ import path from 'path';
 import { Op } from 'sequelize';
 import { runCycle, InboundMessage, WatcherPorts, EscalationInput } from '../services/inbox/watcher/watcherRun';
 import { openWindow, checkWindow, WATCH_WINDOW_HOURS } from '../services/inbox/watcher/watchWindow';
-import { resolveWatcherDryRun, resolvePollIntervalMs, checkHalt, killCommand } from '../services/inbox/watcher/watcherConfig';
+import {
+  resolveWatcherDryRun, resolvePollIntervalMs, checkHalt, killCommand,
+  resolveLookbackHours, resolveInboundSince,
+} from '../services/inbox/watcher/watcherConfig';
+import { retireWatcherCron } from '../services/inbox/watcher/watcherRetirement';
+import { systemCronIo } from '../services/inbox/watcher/cronRetirement';
 import { resolveCaps } from '../services/inbox/watcher/replyCaps';
 import { loadOutboundLedger } from '../services/inbox/watcher/outboundIdentity';
 import { StudentFacts, FactGroup, WatcherDataAccess } from '../services/inbox/watcher/diagnose';
@@ -59,6 +91,13 @@ const RUN_ID = '20260816-student-unblock-and-watch';
 const BUSINESS_EVENT_ID = 'story000-unblock-2026-08-17';
 const PROVIDER = 'gmail_colaberry';
 const ESCALATION_TO = process.env.WATCHER_ESCALATION_TO || 'ali@colaberry.com';
+/**
+ * Half of what identifies this watcher's own crontab line. The other half is
+ * the resolved run directory, supplied at the call site. BOTH must appear in a
+ * line before it is removed, so a second watcher on this host, or this same
+ * script pointed at a different run, is never swept up.
+ */
+const CRON_SCRIPT_MARKER = 'runInboxWatcher30h.js';
 
 const argOf = (flag: string): string | undefined => {
   const i = process.argv.indexOf(flag);
@@ -286,15 +325,26 @@ async function main(): Promise<void> {
   const dryRun = resolveWatcherDryRun();
   const caps = resolveCaps();
   const pollMs = resolvePollIntervalMs();
+  const lookbackHours = resolveLookbackHours();
 
   if (hasFlag('--status')) {
-    const w = checkWindow(stateDir, new Date());
+    const now = new Date();
+    const w = checkWindow(stateDir, now);
     const ledger = loadOutboundLedger(stateDir);
+    const { readRetirement } = await import('../services/inbox/watcher/watcherRetirement');
     console.log(JSON.stringify({
       run_id: RUN_ID, state_dir: stateDir, dry_run: dryRun, caps,
       poll_interval_seconds: pollMs / 1000,
+      lookback_hours: lookbackHours,
       window: w.active ? { active: true, remaining_hours: +(w.remainingMs / 3_600_000).toFixed(2) } : w,
-      send_ledger: { available: ledger.available, reason: ledger.unavailableReason, sends: ledger.sentCount },
+      inbound_since: w.state
+        ? resolveInboundSince(new Date(w.state.started_at), now, lookbackHours).toISOString()
+        : null,
+      send_ledger: {
+        available: ledger.available, reason: ledger.unavailableReason,
+        sends: ledger.sentCount, roster: ledger.recipients.size,
+      },
+      retirement: readRetirement(stateDir),
       halt: checkHalt(stateDir),
       kill_command: killCommand(stateDir),
     }, null, 2));
@@ -325,6 +375,45 @@ async function main(): Promise<void> {
     } catch (err: any) {
       console.error(`[watcher] LEDGER PROJECTION FAILED: ${err?.message ?? err}`);
       process.exit(4);
+    }
+  }
+
+  // Bring an EXISTING ledger up to date with the DB.
+  //
+  // --project-ledger refuses on an existing file, correctly — it can be the
+  // only record of who has been emailed. But the campaign kept going: more mail
+  // went out to the same students under new business event ids, recorded in
+  // Postgres and absent from the JSONL. That drift disables the watcher twice.
+  // Our own BCC copies of those sends carry the outbound header but no matching
+  // ledger id, which trips `outbound_identification_seam` and pins the cycle to
+  // escalate-only; and the roster is read off the ledger, so a student it does
+  // not list is skipped as `not_campaign_recipient` — ignored, not escalated.
+  // This appends only what is missing and never rewrites a byte.
+  if (hasFlag('--reconcile-ledger')) {
+    const { reconcileSendLedger } = await import('../services/inbox/watcher/projectSendLedger');
+    const { sequelize } = await import('../config/database');
+    const since = argOf('--reconcile-since');
+    try {
+      const result = await reconcileSendLedger(stateDir, async () => {
+        const [rows]: any = await sequelize.query(
+          `SELECT idempotency_key, recipient, subject, business_event_id,
+                  provider_message_id, sent_at
+             FROM email_send_ledger
+            WHERE status = 'sent'
+              AND ($since::timestamptz IS NULL OR sent_at >= $since::timestamptz)
+            ORDER BY sent_at ASC`,
+          { bind: { since: since ?? null } },
+        );
+        return rows ?? [];
+      });
+      console.log(
+        `[watcher] ledger reconcile: appended ${result.appended}, already present ` +
+        `${result.alreadyPresent} -> ${result.path}`,
+      );
+      for (const key of result.appendedKeys) console.log(`[watcher]   + ${key}`);
+    } catch (err: any) {
+      console.error(`[watcher] LEDGER RECONCILE FAILED: ${err?.message ?? err}`);
+      process.exit(5);
     }
   }
 
@@ -365,19 +454,44 @@ async function main(): Promise<void> {
   const window = openWindow(stateDir, { now: new Date(), runId: RUN_ID });
   console.log(
     `[watcher] run=${RUN_ID} dry_run=${dryRun} started=${window.started_at} expires=${window.expires_at} ` +
-    `(${WATCH_WINDOW_HOURS}h) poll=${pollMs / 1000}s caps=${JSON.stringify(caps)}`,
+    `(${window.duration_hours}h, default ${WATCH_WINDOW_HOURS}h) poll=${pollMs / 1000}s ` +
+    `lookback=${lookbackHours}h caps=${JSON.stringify(caps)}`,
   );
   console.log(`[watcher] STOP IT WITH:  ${killCommand(stateDir)}`);
   if (!dryRun) console.warn('[watcher] LIVE SEND ENABLED (WATCHER_DRY_RUN="false") — real replies will go out.');
 
   const once = hasFlag('--once');
   for (;;) {
-    const outcome = await runCycle(buildPorts(stateDir, new Date(window.started_at)), {
+    const cycleNow = new Date();
+    // The floor for "recent" inbound. With no lookback this is the window
+    // start, exactly as before. A reopened window needs one: its clock starts
+    // at the restart, so without a lookback the watcher would only ever see
+    // mail that arrives after the moment it was restarted.
+    const since = resolveInboundSince(new Date(window.started_at), cycleNow, lookbackHours);
+    const outcome = await runCycle(buildPorts(stateDir, since), {
       stateDir, runId: RUN_ID, dryRun, caps,
     });
     console.log(`[watcher] ${JSON.stringify(outcome)}`);
     if (outcome.status !== 'ran') {
       console.log(`[watcher] stopping: ${outcome.status} (${outcome.reason ?? 'no reason given'})`);
+      // ── CLEAN UP AFTER ITSELF ────────────────────────────────────────────
+      // An elapsed window used to leave the crontab entry in place, on the
+      // reasoning that a post-deadline tick is a harmless no-op. It is inert,
+      // but it is not free: 288 wake-ups a day, each appending to a 15MB log.
+      // The cycle above has already stopped writing that line; this stops the
+      // wake-ups. Idempotent, capped at three attempts, and it refuses outright
+      // unless exactly one crontab line carries BOTH markers — the crontab is
+      // shared with ~40 other jobs and has been wiped by a careless edit before.
+      if (outcome.status === 'expired' && outcome.reason === 'window_elapsed') {
+        const record = retireWatcherCron(stateDir, {
+          io: systemCronIo(),
+          markers: [CRON_SCRIPT_MARKER, stateDir],
+          now: cycleNow,
+          runId: RUN_ID,
+          windowExpiresAt: window.expires_at,
+        });
+        console.log(`[watcher] cron retirement: ${record.cron_status} — ${record.cron_detail}`);
+      }
       return;
     }
     if (once) return;

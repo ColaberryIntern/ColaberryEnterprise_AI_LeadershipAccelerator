@@ -69,6 +69,57 @@ export function resolvePollIntervalMs(env: NodeJS.ProcessEnv = process.env): num
   return n * 1000;
 }
 
+/**
+ * Ceiling on the lookback. 14 days is generous for "mail we have not answered
+ * yet" and still far short of a whole mailbox; the point of the cap is that a
+ * fat-fingered `240` reads as ten days rather than quietly pulling in a year.
+ */
+export const MAX_LOOKBACK_HOURS = 336;
+
+/**
+ * How far before NOW a cycle is willing to look for inbound mail.
+ *
+ * Default 0 means "only since the window opened", which is what the original
+ * run wanted: the window opened as the campaign went out. A REOPENED window
+ * starts its clock at the restart, so without a lookback the watcher can only
+ * see mail that arrives after the moment it was restarted, and every reply
+ * already sitting unanswered in the mailbox is invisible to it.
+ *
+ * Rejects rather than defaults on a bad value. Silently reading a typo as 0
+ * would produce a watcher that looks healthy and sees nothing, which is the
+ * failure mode this whole module keeps arguing against.
+ */
+export function resolveLookbackHours(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.WATCHER_LOOKBACK_HOURS;
+  if (raw === undefined || raw === '') return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(
+      `WATCHER_LOOKBACK_HOURS="${raw}" must be a non-negative number of hours. A negative ` +
+      'lookback would put the floor in the future and the watcher would see nothing.',
+    );
+  }
+  if (n > MAX_LOOKBACK_HOURS) {
+    throw new Error(
+      `WATCHER_LOOKBACK_HOURS="${raw}" exceeds the ${MAX_LOOKBACK_HOURS}-hour ceiling. Reading ` +
+      'further back than that is a mailbox sweep, not a watch.',
+    );
+  }
+  return n;
+}
+
+/**
+ * The `received_at >=` floor for a cycle.
+ *
+ * Whichever is EARLIER: the window start, or `hours` before now. Clamping to
+ * the window start means a short lookback can never hide mail the window itself
+ * already covers — the lookback only ever widens the view, never narrows it.
+ */
+export function resolveInboundSince(windowStart: Date, now: Date, hours: number): Date {
+  const floor = new Date(now.getTime() - hours * 3_600_000);
+  return floor.getTime() < windowStart.getTime() ? floor : windowStart;
+}
+
 export function checkHalt(stateDir: string): HaltVerdict {
   const watcherHalt = path.join(stateDir, WATCHER_HALT_FILENAME);
   const campaignHalt = path.join(stateDir, CAMPAIGN_HALT_FILENAME);
