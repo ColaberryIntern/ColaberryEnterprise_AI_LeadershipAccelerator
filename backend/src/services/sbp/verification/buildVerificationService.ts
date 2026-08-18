@@ -50,7 +50,12 @@ import {
   RepoReadError,
   RepoReadErrorClass,
 } from './repoProgressReader';
-import { applyVerificationLatch, VerificationRecord } from './verificationLatch';
+import {
+  annotateReadError,
+  applyVerificationLatch,
+  ProgressReadError,
+  VerificationRecord,
+} from './verificationLatch';
 
 /**
  * The points_config key a verified story awards against.
@@ -246,11 +251,23 @@ export async function verifyBuildFromRepo(
 
   // A malformed file is REJECTED, not read as "nothing done". Existing
   // verifications are untouched: this loop never revokes.
+  //
+  // It used to return here having written NOTHING, which sounds conservative
+  // and is not: the row keeps whatever the last READABLE sync concluded, and
+  // the portal renders that stale verdict as though it were this push's answer.
+  // A student in exactly that position was told "None of the 5 acceptance
+  // criteria are marked as passing yet" for hours while every sync was in fact
+  // failing to parse her file, and she went back to re-verify finished code.
+  // The reason is documented as "one sentence a student can act on"; it now
+  // reaches them instead of stopping at the log line.
   const parsed = parseProgressFile(inputs.progressRaw);
   if (!parsed.ok && parsed.error_class !== 'ProgressFileMissing') {
     log('sbp_verification_progress_rejected', opts.correlationId, 'failure', {
       projectId, error_class: parsed.error_class, issues: parsed.issues ?? [],
     });
+    await recordProgressReadError(
+      projectId, specs, { error_class: parsed.error_class, reason: parsed.reason }, opts,
+    );
     return failure(projectId, parsed.error_class, parsed.reason);
   }
 
@@ -404,6 +421,68 @@ export async function verifyBuildFromRepo(
   });
 
   return summary;
+}
+
+/**
+ * Tell every story on the build that the progress file could not be read.
+ *
+ * THE ONLY WRITE ON THE REJECT PATH, and deliberately the narrowest one that
+ * exists: `verification_json` and nothing else. No `markTaskVerifiedComplete`,
+ * no `recordEvidence`, no touch of `verified_at` / `verified_by` /
+ * `verified_ref`. A file we could not read is the weakest evidence there is —
+ * it may not award anything and it may not revoke anything.
+ *
+ * VERIFIED STORIES ARE SKIPPED ENTIRELY. Their record already says the work is
+ * done and banked, there is nothing for the student to act on, and leaving the
+ * row untouched is the strongest possible statement that the latch is not in
+ * play here.
+ *
+ * IDEMPOTENT. The written record is a pure function of (prior record, error)
+ * and `annotateReadError` is a fixed point, so a student mashing Sync against a
+ * broken file converges on one state and stays there. The write is
+ * unconditional rather than diffed first: re-writing an identical blob costs
+ * one UPDATE and removes a branch that could otherwise skip a row whose stored
+ * copy had drifted.
+ *
+ * FAILS SOFT per story. One unwritable row must not cost the other nineteen
+ * their message, and the caller's `failure(...)` is returned either way — this
+ * function only ever adds honesty to what the student sees.
+ */
+async function recordProgressReadError(
+  projectId: string,
+  specs: PlanStorySpec[],
+  err: ProgressReadError,
+  opts: VerifyOptions,
+): Promise<void> {
+  let annotated = 0;
+  let skippedVerified = 0;
+
+  for (const spec of specs) {
+    try {
+      const task = await StudentTask.findOne({ where: { project_id: projectId, story_id: spec.id } });
+      if (!task) continue;
+      if (task.verified_at) { skippedVerified += 1; continue; }
+
+      const next = annotateReadError(task.verification_json as Partial<VerificationRecord> | null, err);
+      await StudentTask.update({ verification_json: next }, { where: { id: task.id } });
+      annotated += 1;
+    } catch (e: unknown) {
+      log('sbp_verification_read_error_write_failed', opts.correlationId, 'partial', {
+        projectId,
+        storyId: spec.id,
+        error_class: (e as { name?: string })?.name ?? 'Error',
+        message: (e as { message?: string })?.message,
+      });
+    }
+  }
+
+  log('sbp_verification_read_error_recorded', opts.correlationId, 'partial', {
+    projectId,
+    error_class: err.error_class,
+    stories_annotated: annotated,
+    stories_skipped_verified: skippedVerified,
+    note: 'the student now sees why the file could not be read; nothing was awarded or revoked',
+  });
 }
 
 /** A student-facing sentence per upstream failure class. Never the raw GitHub body. */

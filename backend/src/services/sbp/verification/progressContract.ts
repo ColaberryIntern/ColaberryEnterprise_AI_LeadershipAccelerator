@@ -226,9 +226,20 @@ export function parseProgressFile(raw: string | null | undefined): ProgressParse
     return {
       ok: false,
       error_class: 'ProgressFileSchemaMismatch',
+      // THE ADVICE MUST BE ADVICE THE STUDENT CAN TAKE. This used to end "Sync
+      // your build plan from the portal to restore the file", which assumes the
+      // platform can WRITE to their repo. It writes with
+      // `process.env.GITHUB_TOKEN`, and on a bring-your-own repo that identity
+      // routinely holds only `pull` — verified live on 2026-08-17, where
+      // ColaberryIntern's permissions on one student's repo were
+      // {"admin":false,"maintain":false,"push":false,"triage":false,"pull":true}.
+      // No number of Syncs could ever have restored her file, so the sentence
+      // sent her round a loop with no exit. The shape is the thing she can
+      // actually fix, so the shape is what it names.
       reason:
         `${PROGRESS_FILE_PATH} does not match the expected shape, so the platform cannot tell which `
-        + 'criteria you marked as passing. Sync your build plan from the portal to restore the file.',
+        + 'criteria you marked as passing. It needs a top-level "schema_version" number and a '
+        + '"stories" array — correct those in the file, commit it, and push.',
       issues: result.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`),
     };
   }

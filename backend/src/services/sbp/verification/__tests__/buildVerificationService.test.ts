@@ -273,15 +273,32 @@ describe('the two halves fail independently', () => {
 });
 
 describe('failure paths never look like "nothing done"', () => {
-  it('a malformed progress file is rejected loudly and writes nothing', async () => {
+  /**
+   * This used to assert `mockTaskUpdate` was never called, on the theory that
+   * writing nothing was the conservative choice. It is not: the row keeps the
+   * last READABLE verdict and the portal renders it as this push's answer, so
+   * "writes nothing" means "leaves something false on the student's screen".
+   * See progressReadError.test.ts for the production case that proved it.
+   *
+   * What must stay untouched is the RECORD — verified_at and the award — never
+   * the message. So the assertion is now narrower and stronger: the only field
+   * this path may write is `verification_json`.
+   */
+  it('a malformed progress file is rejected loudly, telling the student why and awarding nothing', async () => {
     const summary = await verifyBuildFromRepo(PROJECT_ID, {
       fetchImpl: githubFetch({ progress: '{ "schema_version": 1, "stories": [ }' }),
     });
     expect(summary.ok).toBe(false);
     expect(summary.error_class).toBe('ProgressFileNotJson');
     expect(summary.reason).toMatch(/not valid JSON/);
-    expect(mockTaskUpdate).not.toHaveBeenCalled();
+
+    for (const call of mockTaskUpdate.mock.calls) {
+      expect(Object.keys(call[0])).toEqual(['verification_json']);
+      expect(call[0].verification_json.read_error).toMatch(/not valid JSON/);
+      expect(call[0].verification_json.read_error_class).toBe('ProgressFileNotJson');
+    }
     expect(mockMarkVerified).not.toHaveBeenCalled();
+    expect(mockRecordEvidence).not.toHaveBeenCalled();
   });
 
   it('a missing progress file is a normal state, not a rejection', async () => {

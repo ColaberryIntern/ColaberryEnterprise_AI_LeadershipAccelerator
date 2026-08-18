@@ -69,6 +69,28 @@ describe('parseProgressFile', () => {
     if (!r.ok) expect(r.error_class).toBe('ProgressFileSchemaMismatch');
   });
 
+  /**
+   * The advice has to be advice the student can actually take.
+   *
+   * It used to end "Sync your build plan from the portal to restore the file".
+   * The platform writes repo files with `process.env.GITHUB_TOKEN`, and on a
+   * bring-your-own repo it frequently holds only `pull` — confirmed live on
+   * 2026-08-17, where the platform identity's permissions on one student's repo
+   * were {"admin":false,"maintain":false,"push":false,"triage":false,
+   * "pull":true}. A Sync could never restore her file, so the sentence sent her
+   * round a loop that had no exit. The honest instruction is the SHAPE.
+   */
+  it('names the shape to fix rather than prescribing a sync the platform may be unable to perform', () => {
+    const r = parseProgressFile(JSON.stringify({ project: 'Roster' }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error_class).toBe('ProgressFileSchemaMismatch');
+      expect(r.reason).toMatch(/schema_version/);
+      expect(r.reason).toMatch(/stories/);
+      expect(r.reason).not.toMatch(/[Ss]ync/);
+    }
+  });
+
   it('names a version mismatch as a version problem, not a malformed file', () => {
     const r = parseProgressFile(JSON.stringify({ schema_version: 99, stories: [] }));
     expect(r.ok).toBe(false);
