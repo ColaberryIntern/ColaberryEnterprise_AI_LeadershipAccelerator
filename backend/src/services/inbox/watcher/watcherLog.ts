@@ -39,6 +39,13 @@ export type WatcherEventType =
   | 'preflight_failed'
   | 'inbound_classified'
   | 'skipped'
+  /**
+   * Written BEFORE the escalation is delivered, so a crash between the two
+   * under-escalates rather than repeating. Mirrors `reply_attempt` exactly —
+   * the ceilings already count attempts for the same reason, and one mechanism
+   * that is understood beats two that disagree.
+   */
+  | 'escalation_attempt'
   | 'escalated'
   /** An escalation that could NOT be delivered. The watcher stops on this. */
   | 'escalation_failed'
@@ -133,6 +140,17 @@ export interface ReplayedState {
   ownReplyIds: Set<string>;
   /** Threads already answered or attempted, whatever the outcome. */
   answeredThreads: Set<string>;
+  /**
+   * Threads already escalated, or attempted, whatever the outcome.
+   *
+   * Without this the watcher re-escalated the same message on every tick: one
+   * thread went out 7 times, and a second cycle escalated 17 having already
+   * escalated 7. At 12 ticks an hour over a 30-hour window that is thousands of
+   * emails to one person. Attempts count, not just successes, for the same
+   * reason they do for replies — a crash after the send but before the outcome
+   * must not free the slot for a second copy.
+   */
+  escalatedThreads: Set<string>;
   eventCount: number;
 }
 
@@ -157,6 +175,7 @@ export function replayWatcherLog(stateDir: string): ReplayedState {
     sentReplies: [],
     ownReplyIds: new Set(),
     answeredThreads: new Set(),
+    escalatedThreads: new Set(),
     eventCount: 0,
   };
 
@@ -175,6 +194,7 @@ export function replayWatcherLog(stateDir: string): ReplayedState {
     sentReplies: [],
     ownReplyIds: new Set(),
     answeredThreads: new Set(),
+    escalatedThreads: new Set(),
     eventCount: 0,
   };
 
@@ -205,6 +225,13 @@ export function replayWatcherLog(stateDir: string): ReplayedState {
     if (ev.type === 'reply_sent' && ev.reply_message_id) {
       const id = normalizeMessageId(ev.reply_message_id);
       if (id) state.ownReplyIds.add(id);
+    }
+
+    // Escalations, same rule as replies: the attempt is what closes the thread,
+    // and `escalated` is replayed too so a log written before this event type
+    // existed still suppresses a repeat.
+    if (ev.type === 'escalation_attempt' || ev.type === 'escalated' || ev.type === 'escalation_failed') {
+      if (ev.thread_key) state.escalatedThreads.add(ev.thread_key);
     }
   }
 

@@ -53,6 +53,15 @@ export interface OutboundLedgerView {
   messageIds: Set<string>;
   businessEventIds: Set<string>;
   sentCount: number;
+  /**
+   * THE CAMPAIGN ROSTER: lower-cased addresses the send harness actually mailed.
+   *
+   * Derived from the ledger rather than typed by hand, so it cannot drift from
+   * who really received the campaign. Without it the watcher considered every
+   * message in the mailbox — and what it actually escalated on its first live
+   * run was Basecamp standup notifications.
+   */
+  recipients: Set<string>;
 }
 
 /**
@@ -80,6 +89,7 @@ function empty(
     messageIds: new Set(),
     businessEventIds: new Set(),
     sentCount: 0,
+    recipients: new Set(),
   };
 }
 
@@ -101,6 +111,7 @@ export function loadOutboundLedger(runDir: string): OutboundLedgerView {
 
   const messageIds = new Set<string>();
   const businessEventIds = new Set<string>();
+  const recipients = new Set<string>();
   let sentCount = 0;
 
   const lines = raw.split('\n');
@@ -130,9 +141,45 @@ export function loadOutboundLedger(runDir: string): OutboundLedgerView {
     }
     messageIds.add(id);
     if (typeof rec.business_event_id === 'string') businessEventIds.add(rec.business_event_id);
+    // The roster. A send with no recipient is not fatal the way a missing
+    // message id is — the id is what stops us answering ourselves, while a
+    // missing address only narrows the roster, which fails toward silence.
+    if (typeof rec.recipient === 'string' && rec.recipient.trim()) {
+      recipients.add(rec.recipient.trim().toLowerCase());
+    }
   }
 
-  return { available: true, messageIds, businessEventIds, sentCount };
+  return { available: true, messageIds, businessEventIds, sentCount, recipients };
+}
+
+/**
+ * Is this sender one of the people the campaign actually mailed?
+ *
+ * `null` means WE CANNOT TELL — there is no roster to check against, because the
+ * ledger is unavailable. That is deliberately different from `false`.
+ *
+ * The pull here is real and worth stating. This module's existing contract is
+ * that an unavailable ledger degrades to escalate-only rather than to silence:
+ * the watcher stops sending and still tells a human about every message, because
+ * degrading to a human beats degrading to nobody. Making a missing roster mean
+ * "match nothing" would have quietly reversed that.
+ *
+ * So the roster narrows the field only when there IS a roster. What makes
+ * "escalate everything" safe in the other case is the per-thread escalation
+ * record — one message, one escalation, ever. The flood was never caused by a
+ * missing ledger; it happened with the ledger present, because nothing bounded
+ * repeats and nothing bounded WHO was considered. The two guards are one fix.
+ */
+export function isCampaignRecipient(
+  ledger: OutboundLedgerView,
+  fromAddress: string | null | undefined,
+): boolean | null {
+  if (!ledger.available) return null;
+  const addr = (fromAddress ?? '').trim().toLowerCase();
+  if (!addr) return false;
+  // Gmail hands back `Name <addr@host>` as often as a bare address.
+  const bare = addr.replace(/^.*<([^>]+)>\s*$/, '$1').trim();
+  return ledger.recipients.has(addr) || ledger.recipients.has(bare);
 }
 
 export interface InboundMessageIdentity {
