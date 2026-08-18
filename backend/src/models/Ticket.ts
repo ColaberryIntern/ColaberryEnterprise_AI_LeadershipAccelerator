@@ -292,6 +292,12 @@ Ticket.init(
       { fields: ['parent_ticket_id'] },
       { fields: ['entity_type', 'entity_id'] },
       { fields: ['assigned_to_id'] },
+      // Workforce OS perf fix (2026-08-18) — documentation-only entry; the actual
+      // runtime index is created by ensureTicketCreatorIndexSchema.ts's raw SQL at
+      // boot (this repo never calls sequelize.sync() at boot). EXPLAIN ANALYZE
+      // confirmed every per-agent ticket-count query (liveAgentsService.ts,
+      // agentDetailService.ts) was doing a full Seq Scan on this column.
+      { fields: ['created_by_id'] },
     ],
   }
 );
