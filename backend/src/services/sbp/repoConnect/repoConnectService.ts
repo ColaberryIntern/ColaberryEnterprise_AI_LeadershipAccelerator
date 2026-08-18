@@ -51,9 +51,23 @@ import {
   CONNECT_FILE_PATH, mintChallengeToken, matchesChallenge, isChallengeExpired,
   renderChallengeFile, connectCommands, adoptCommands, isChallengeToken,
 } from './connectChallenge';
+import {
+  storedConnect, writeAccessOf,
+  ConnectStateName, ConnectMethod, RepoWriteAccess, StoredConnect,
+} from './connectionAccess';
 
-export type ConnectStateName = 'not_connected' | 'awaiting_proof' | 'awaiting_push' | 'connected';
-export type ConnectMethod = 'byo' | 'provisioned';
+/**
+ * The row-shape predicates live in `connectionAccess` — pure, model-free, and
+ * asked by the verification loop and the publisher as well as by this service.
+ * Re-exported here so the many existing importers of `isWritableConnection` and
+ * the connect types keep working unchanged.
+ */
+export {
+  isWritableConnection, writeAccessOf, storedConnect,
+} from './connectionAccess';
+export type {
+  ConnectStateName, ConnectMethod, RepoWriteAccess, StoredConnect,
+} from './connectionAccess';
 
 export interface ConnectChallengeView {
   path: string;
@@ -75,6 +89,12 @@ export interface ConnectStateView {
   /** Present only while the provisioned repo is still empty. */
   adopt_commands: string[] | null;
   /**
+   * Whether the PLATFORM can commit to this repo. Null for connections made
+   * before the permission was recorded. See RepoWriteAccess — the panel renders
+   * `pull_only` as a stated consequence, never as a failure.
+   */
+  write_access: RepoWriteAccess | null;
+  /**
    * Whether the last read of this repo worked. A revoked or deleted repo is a
    * NORMAL state, not an error: everything already verified stays verified, and
    * the student is asked to reconnect rather than told something broke.
@@ -83,24 +103,10 @@ export interface ConnectStateView {
   connected_at: string | null;
 }
 
-/** What we persist under `github_connections.status_json.connect`. */
-interface StoredConnect {
-  state?: ConnectStateName;
-  method?: ConnectMethod;
-  owner?: string;
-  repo?: string;
-  url?: string;
-  private?: boolean;
-  default_branch?: string;
-  challenge_token?: string;
-  challenge_issued_at?: string;
-  connected_at?: string;
-}
-
 const NOT_CONNECTED: ConnectStateView = {
   state: 'not_connected', method: null, owner: null, repo: null, url: null,
   private: null, default_branch: null, challenge: null, adopt_commands: null,
-  access: null, connected_at: null,
+  write_access: null, access: null, connected_at: null,
 };
 
 // ── guards ───────────────────────────────────────────────────────────────────
@@ -185,11 +191,6 @@ async function assertRebindAllowed(
 
 // ── state ────────────────────────────────────────────────────────────────────
 
-function storedConnect(connection: any): StoredConnect {
-  const status = (connection?.status_json ?? {}) as Record<string, unknown>;
-  return (status.connect ?? {}) as StoredConnect;
-}
-
 /**
  * Derive the connect view from a connection row. PURE — no I/O — so the panel's
  * state and the workspace view can be built from the same row without a second
@@ -249,6 +250,7 @@ export function connectViewFrom(connection: any): ConnectStateView {
       }
       : null,
     adopt_commands: state === 'awaiting_push' && url ? adoptCommands(url) : null,
+    write_access: writeAccessOf(connection),
     access: status.access
       ? {
         ok: Boolean(status.access.ok),
@@ -346,6 +348,10 @@ export async function startConnect(
     url: facts.html_url,
     private: facts.private,
     default_branch: facts.default_branch,
+    // Recorded at the ONE moment the platform reads this repo's own metadata.
+    // Everything downstream — whether we install the contract, whether a
+    // rejection may say "Sync" — reads it from here rather than re-asking GitHub.
+    platform_can_push: facts.platform_can_push,
     challenge_token: reuse ? prior.challenge_token : mintChallengeToken(),
     challenge_issued_at: reuse ? prior.challenge_issued_at : new Date().toISOString(),
   });
@@ -418,9 +424,17 @@ export async function confirmConnect(
   connection.repo_url = ref.url;
   const status = { ...(connection.status_json ?? {}) };
   // `provisioned` is the legacy marker the rest of the platform reads to mean
-  // "there is a usable repo here". A connected BYO repo is exactly that, so it
-  // is set — the METHOD is what distinguishes the two, not this flag.
-  status.provisioned = true;
+  // "there is a usable repo here" — usable meaning the platform can WRITE it.
+  //
+  // This was an unconditional `true`, which is how a repo the platform holds
+  // read access to came to be recorded, and reported, as a working connection it
+  // did not have. Four of the five live workspace connections were in that state
+  // on 2026-08-17. `state: 'connected'` stays true either way, because reading
+  // genuinely works and downgrading it would send the student back to the
+  // paste-your-repo step for a repo that is correctly connected.
+  //
+  // Unknown (a legacy row with no permission recorded) keeps the old `true`.
+  status.provisioned = c.platform_can_push !== false;
   status.access = { ok: true, error_class: null, checked_at: new Date().toISOString() };
   connection.status_json = status;
   writeConnect(connection, {
@@ -497,22 +511,6 @@ export async function markPushObserved(projectId: string): Promise<void> {
   if (storedConnect(connection).state !== 'awaiting_push') return;
   writeConnect(connection, { state: 'connected', connected_at: new Date().toISOString() });
   await connection.save();
-}
-
-/**
- * Is this repo ready for the platform to WRITE documents into?
- *
- * A candidate awaiting proof has no repo bound at all; a provisioned repo
- * awaiting its first push has no branch for a commit to sit on. Publishing into
- * either fails at the GitHub boundary, so callers ask here first and take the
- * already-built "no repo yet" path instead.
- */
-export function isWritableConnection(connection: any): boolean {
-  if (!connection?.repo_owner || !connection?.repo_name) return false;
-  const state = storedConnect(connection).state;
-  // No `connect` key at all is a legacy provisioned row — writable, as it was
-  // before this step existed.
-  return state === undefined || state === 'connected';
 }
 
 export { CONNECT_FILE_PATH };

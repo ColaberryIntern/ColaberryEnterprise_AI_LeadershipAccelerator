@@ -22,7 +22,11 @@ set -uo pipefail
 ADVISOR='ai-project-architect-app-1'   # owns the Fernet vault + OAuth mint
 BACKEND='accelerator-backend'          # owns the CCPP (MSSQL) connection
 OPERATOR='usr-cbdd2c8ffc'              # Ali's vault grant -> ali@colaberry.com (bc 16988292)
-CCPP_ROW='237'                         # the single active Basecamp_AuthInfo row (IsActive=1)
+# NOTE: there is deliberately no hardcoded row id here. The UPDATE below targets
+# MAX(BasecampAuthInfoID) WHERE IsActive=1 and reports the id it actually wrote.
+# A CCPP_ROW='237' constant used to be echoed as "row 237 refreshed" on every
+# run while the SQL wrote whichever row was newest (242 as of 2026-08-17), which
+# sent the next person debugging a token failure to the wrong row.
 EXPIRES='1209600'                      # token lifetime seconds (~14d); ExpiresAt is NOT-NULL INT
 ACCOUNT='3945211'
 CACHE='/opt/colaberry-accelerator/tmp/ops-engine/bc-token.cache'
@@ -64,23 +68,26 @@ echo "probe HTTP $CODE (expect 200)"
 [ "$CODE" = "200" ] || { echo "token not valid (HTTP $CODE); NOT writing CCPP"; exit 1; }
 
 if [ "$COMMIT" != 'yes' ]; then
-  echo "DRY-RUN ok: mint + probe succeeded. Re-run with --commit to update CCPP row $CCPP_ROW."
+  echo "DRY-RUN ok: mint + probe succeeded. Re-run with --commit to update the newest active CCPP row."
   exit 0
 fi
 
 # 3) In-place UPDATE of the active CCPP row via the backend container's MSSQL env.
-docker exec -e NEW_TOKEN="$NEW" -e CCPP_ROW="$CCPP_ROW" -e EXPIRES="$EXPIRES" "$BACKEND" node -e '
+docker exec -e NEW_TOKEN="$NEW" -e EXPIRES="$EXPIRES" "$BACKEND" node -e '
 const sql=require("mssql");(async()=>{
   await sql.connect({server:process.env.MSSQL_HOST,port:parseInt(process.env.MSSQL_PORT||"1433",10),user:process.env.MSSQL_USER,password:process.env.MSSQL_PASS,database:process.env.MSSQL_DATABASE||"CCPP",options:{encrypt:true,trustServerCertificate:true}});
-  const r=new sql.Request();
-  r.input("t",process.env.NEW_TOKEN); r.input("e",parseInt(process.env.EXPIRES,10)); r.input("id",parseInt(process.env.CCPP_ROW,10));
   // Target the NEWEST active row to match every CCPP reader (SELECT TOP 1 ... WHERE IsActive=1 ORDER BY BasecampAuthInfoID DESC).
   // Updating a hardcoded id (was 237) silently orphaned the refresh whenever the rotation worker inserted a newer active row.
-  const res=await r.query("UPDATE Basecamp_AuthInfo SET AccessToken=@t, ExpiresAt=@e WHERE BasecampAuthInfoID = (SELECT MAX(BasecampAuthInfoID) FROM Basecamp_AuthInfo WHERE IsActive=1)");
+  const target=(await new sql.Request().query("SELECT MAX(BasecampAuthInfoID) AS id FROM Basecamp_AuthInfo WHERE IsActive=1")).recordset[0];
+  if(!target||!target.id){console.error("CCPP WRITE FAILED: no IsActive=1 row to update");process.exit(1)}
+  const r=new sql.Request();
+  r.input("t",process.env.NEW_TOKEN); r.input("e",parseInt(process.env.EXPIRES,10)); r.input("id",target.id);
+  const res=await r.query("UPDATE Basecamp_AuthInfo SET AccessToken=@t, ExpiresAt=@e WHERE BasecampAuthInfoID=@id");
   await sql.close();
-  console.log("CCPP rows updated: "+((res.rowsAffected&&res.rowsAffected[0])||0));
+  // Report the row actually written, never a constant.
+  console.log("CCPP rows updated: "+((res.rowsAffected&&res.rowsAffected[0])||0)+" (row "+target.id+")");
 })().catch(e=>{console.error("CCPP WRITE FAILED: "+e.message);process.exit(1)})' || { echo "CCPP write failed"; exit 1; }
 
 # 4) Clear the stale on-disk cache so consumers refetch the new token immediately.
 rm -f "$CACHE"
-echo "DONE: CCPP row $CCPP_ROW refreshed (ExpiresAt=$EXPIRES), cache cleared. Every BC consumer recovers on next call."
+echo "DONE: newest active CCPP row refreshed (ExpiresAt=$EXPIRES), cache cleared. Every BC consumer recovers on next call."

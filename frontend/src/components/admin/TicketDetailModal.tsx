@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { fmtCentralDateTime } from '../../utils/centralTime';
 import { timeAgo } from './shell/trust';
 import StatusBadge from './shell/StatusBadge';
-import { isTicketStale } from '../../utils/ticketTypeMeta';
+import { isTicketStale, formatNextCheckLabel, TicketAutoCheck } from '../../utils/ticketTypeMeta';
 import StoryTab from './ticketDetailTabs/StoryTab';
 import VisualProofTab from './ticketDetailTabs/VisualProofTab';
 import DecisionsTab from './ticketDetailTabs/DecisionsTab';
@@ -43,6 +43,11 @@ interface Ticket {
   // Resolved server-side by getTicketById() — see the Activity interface's
   // actor_display_name comment above for the same optionality/fallback rationale.
   assigned_to_display_name?: string | null;
+  // Ticket Board UX fixes (2026-08-17) — the SAME two additive fields the board
+  // card gets, resolved server-side by getTicketById(). Optional/nullable for
+  // the same not-yet-redeployed-backend reason as every other new field here.
+  created_by_display_name?: string | null;
+  auto_check?: TicketAutoCheck | null;
   parent_ticket_id: string | null;
   entity_type: string | null;
   entity_id: string | null;
@@ -419,6 +424,34 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
                       ? Math.floor((Date.now() - new Date(ticket.updated_at).getTime()) / ONE_DAY_MS)
                       : '3+'}{' '}
                     days — needs a reason it&apos;s still open.
+                  </span>
+                </div>
+              )}
+
+              {/* Ticket Board UX fixes (2026-08-17) — the full honest auto-check
+                  disclosure lives here (not repeated on every board card — see
+                  execution-contract.md Assumption 2): a real "next check" time
+                  when one of the 6 registered auto-resolvers owns this ticket
+                  and is actually live, or an explicit, non-alarming statement
+                  when none does — never silence, never a fabricated timer. */}
+              {ticket.auto_check && (
+                <div className="alert alert-light border d-flex align-items-center gap-2 mb-3" role="status">
+                  <StatusBadge
+                    label={ticket.auto_check.hasAutoCheck ? 'Auto-check active' : 'No automated check'}
+                    tone={ticket.auto_check.hasAutoCheck ? 'info' : 'neutral'}
+                    icon="refresh-line"
+                  />
+                  <span className="text-muted small">
+                    {ticket.auto_check.hasAutoCheck
+                      ? // Defensive: formatNextCheckLabel() only returns non-null when
+                        // hasAutoCheck is true AND nextCheckLabel is present, but a
+                        // malformed/future backend response could theoretically send
+                        // hasAutoCheck:true with no label — fall back to an honest
+                        // resolver-only line rather than ever rendering "null, by...".
+                        formatNextCheckLabel(ticket.auto_check)
+                        ? `${formatNextCheckLabel(ticket.auto_check)}, by ${ticket.auto_check.resolverAgentName}.`
+                        : `Auto-checked by ${ticket.auto_check.resolverAgentName}.`
+                      : ticket.auto_check.reason || 'No automated resolver owns this ticket type.'}
                   </span>
                 </div>
               )}

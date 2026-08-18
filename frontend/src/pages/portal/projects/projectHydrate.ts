@@ -1,11 +1,16 @@
 /**
  * projectHydrate — PURE reconcilers (no I/O, no React) that merge the persisted
  * Project Backend tree into the localStorage `projectsStore` shape. This is the
- * read half of the backend-source flip: the server is authoritative for task
- * COMPLETION (the durable, cross-device fact), localStorage keeps presentation.
+ * read half of the backend-source flip: the server is authoritative for what
+ * EXISTS and for task COMPLETION (the durable, cross-device facts), while
+ * localStorage keeps presentation.
  *
- *  - overlayCompletions: a project already on this device — mark done anything the
- *    backend has as `complete` (a completion on another device shows up here).
+ *  - adoptServerTasks: a story the tree has and this device does not — add it.
+ *    Adds and never removes; see the function for why that asymmetry is the
+ *    safe one.
+ *  - overlayCompletions: a project already on this device — adopt any missing
+ *    stories, then mark done anything the backend has as `complete` (a
+ *    completion on another device shows up here).
  *  - backendTreeToProject: a project NOT on this device (a fresh browser) —
  *    reconstruct the StudentProject from the tree so the build appears at all.
  *  - reconcileProjects: pick which of the two applies and return the merged list.
@@ -21,6 +26,7 @@
 import type {
   StudentProject, ProjectList, ProjectTask, ProjectReq, TaskDue, TaskState,
 } from './projectsStore';
+import { UUID_RE } from './projectIdentity';
 
 // ── the slice of the backend ProjectTreeDto this module consumes ──────────────
 export interface BackendTaskNode {
@@ -152,18 +158,121 @@ export function adoptServerIdentity(p: StudentProject, tree: BackendProjectTree)
 }
 
 /**
- * Return a project with backend completions overlaid: any local task whose key
+ * THE SERVER OWNS WHAT EXISTS. Add tasks (and whole lists) the tree has and this
+ * device does not.
+ *
+ * MEASURED 2026-08-17, production, qninying@gmail.com. His card showed
+ * STORY-001 and not STORY-000, from the same list, at adjacent positions, while
+ * the read API returned both. The card was cached without STORY-000 — the
+ * Command Center story is deliberately absent from `plan.stories`, so anything
+ * built from a plan is short by exactly that one story — and after that no code
+ * path could ever put it there. `overlayCompletions` updated task STATE, the
+ * name and the Command Center URL; a task the server had and the browser did
+ * not was simply never noticed. `reconcileProjects` called it `noop`.
+ *
+ * ADDS AND NEVER REMOVES, and that asymmetry is deliberate:
+ *
+ *  - a task the SERVER has and the browser lacks is added. The server is
+ *    authoritative for what exists, and this is the whole repair.
+ *  - a task the BROWSER has and the server lacks is KEPT. He had ten hand-ticked
+ *    completions on a legacy generation that the published plan knows nothing
+ *    about. Failing to show a story is the bug being fixed here; deleting ten
+ *    completions would just be a worse one. Removal, if it is ever wanted, is a
+ *    separate decision with a different risk profile — see pruneDeadProjects for
+ *    how carefully the project-level version of that question is handled.
+ *
+ * Idempotent by construction: the second pass finds nothing missing and returns
+ * the SAME reference, which is what keeps a quiet sync quiet.
+ */
+export function adoptServerTasks(p: StudentProject, tree: BackendProjectTree): StudentProject {
+  const localKeys = new Set(p.lists.flatMap((l) => l.tasks.map((t) => taskKey(t))));
+
+  // Server order, so the earliest missing story is the one that may claim `today`.
+  const serverLists = [...tree.lists].sort((a, b) => a.position - b.position);
+  const missingByList = new Map<string, BackendTaskNode[]>();
+  let missingCount = 0;
+  for (const l of serverLists) {
+    const missing = (Array.isArray(l.tasks) ? l.tasks : [])
+      .filter((t) => !localKeys.has(serverTaskKey(t)))
+      .sort((a, b) => a.position - b.position);
+    if (missing.length) { missingByList.set(l.id, missing); missingCount += missing.length; }
+  }
+  if (missingCount === 0) return p;
+
+  // `today` is claimed only if nothing on the card already holds it. Promoting
+  // without demoting keeps this additive: two tasks labelled "Due today" would
+  // be a new inconsistency, and silently restyling work the student is already
+  // looking at is not this function's job.
+  let needToday = !p.lists.some((l) => l.tasks.some((t) => t.due === 'today'));
+  const dueFor = (t: BackendTaskNode): TaskDue => {
+    if (stateFromStatus(t.status) === 'done') return 'done';
+    if (needToday) { needToday = false; return 'today'; }
+    return 'up';
+  };
+
+  // Only the count-style subtitle that `backendTreeToProject` writes is
+  // refreshed. Every other `sub` on a card is prose a human wrote ("Build the
+  // MCP server", "Prove it at the Architect Expo") and rewriting that as a
+  // count would destroy information to fix a number.
+  const COUNT_SUB = /^\d+ stor(y|ies)$/;
+  const countSub = (n: number): string => `${n} stor${n === 1 ? 'y' : 'ies'}`;
+
+  const lists: ProjectList[] = p.lists.map((l) => {
+    const missing = missingByList.get(l.id);
+    if (!missing) return l;
+    const tasks = l.tasks.slice();
+    for (const t of missing) {
+      // Slotted at the server's index rather than appended: STORY-000 is the
+      // first thing a student builds, and a Command Center story sorted to the
+      // bottom of the release is a different bug wearing the same clothes.
+      tasks.splice(Math.min(Math.max(t.position, 0), tasks.length), 0, taskFromServer(t, dueFor(t)));
+    }
+    return { ...l, tasks, sub: COUNT_SUB.test(l.sub) ? countSub(tasks.length) : l.sub };
+  });
+
+  // Whole lists this device has never seen. Placed at the server's position
+  // where that index still exists, appended otherwise — his project carries two
+  // generations sharing one position space (two lists at 2, two at 5), so an
+  // exact placement is not always available and guessing past the end would
+  // just throw. `step` is presentation only and nothing renders off it.
+  const known = new Set(p.lists.map((l) => l.id));
+  for (const l of serverLists) {
+    if (known.has(l.id)) continue;
+    const at = Math.min(Math.max(l.position, 0), lists.length);
+    lists.splice(at, 0, {
+      id: l.id,
+      step: 2 + at,
+      name: l.title || `Release ${at + 1}`,
+      sub: countSub(Array.isArray(l.tasks) ? l.tasks.length : 0),
+      tasks: (Array.isArray(l.tasks) ? [...l.tasks] : [])
+        .sort((a, b) => a.position - b.position)
+        .map((t) => taskFromServer(t, dueFor(t))),
+    });
+  }
+
+  return { ...p, lists };
+}
+
+/**
+ * Return a project reconciled with the backend tree: stories the server has and
+ * this device lacks are added (see adoptServerTasks), any local task whose key
  * matches a backend task marked `complete` becomes `done`, and the server's name
- * adopted (see adoptServerIdentity). Returns the SAME reference when nothing
+ * is adopted (see adoptServerIdentity). Returns the SAME reference when nothing
  * changed, so callers can skip a write/re-render.
  */
 export function overlayCompletions(p: StudentProject, tree: BackendProjectTree): StudentProject {
+  // Adoption runs FIRST so the rest of this function sees the full card. An
+  // adopted task already carries the server's status, so the completion overlay
+  // below is a no-op on it rather than a second source of truth.
+  const withServerTasks = adoptServerTasks(p, tree);
+  const adopted = withServerTasks !== p;
+
   const done = new Set<string>();
   for (const l of tree.lists) for (const t of l.tasks) {
     if (t.status === 'complete' && t.story_id) done.add(t.story_id);
   }
   let changed = false;
-  const lists = p.lists.map((l) => {
+  const lists = withServerTasks.lists.map((l) => {
     const tasks = l.tasks.map((t) => {
       if (t.state !== 'done' && done.has(taskKey(t))) {
         changed = true;
@@ -184,8 +293,8 @@ export function overlayCompletions(p: StudentProject, tree: BackendProjectTree):
   const nextUrl = tree.command_center_url ?? null;
   const urlChanged = nextUrl !== (p.commandCenterUrl ?? null);
 
-  const base: StudentProject = (!changed && !urlChanged) ? p : {
-    ...p,
+  const base: StudentProject = (!changed && !urlChanged && !adopted) ? p : {
+    ...withServerTasks,
     ...(changed ? { lists } : {}),
     ...(urlChanged ? { commandCenterUrl: nextUrl } : {}),
   };
@@ -245,6 +354,45 @@ const asAcceptance = (v: unknown): string[] | undefined =>
   Array.isArray(v) ? v.map(String) : undefined;
 
 /**
+ * One backend task node as a client task.
+ *
+ * Shared by the two paths that can bring a server task onto this device:
+ * `backendTreeToProject` (never seen this build) and `adoptServerTasks` (has the
+ * build, is missing a story). They MUST agree — a story adopted onto an
+ * existing card has to carry the same prompt, acceptance criteria and blockers
+ * as the same story on a fresh device, or the workspace shows different work
+ * depending on which browser opened it.
+ *
+ * `due` is presentation and is decided by the caller, which is the only thing
+ * the two paths legitimately disagree about: a fresh device ranks the whole
+ * plan at once, while adoption is slotting one story into a card that already
+ * has an order.
+ */
+function taskFromServer(t: BackendTaskNode, due: TaskDue): ProjectTask {
+  return {
+    id: t.id,
+    title: t.title || 'Task',
+    what: t.description || undefined,
+    prompt: t.build || undefined,
+    req: t.requirement_key || undefined,
+    acceptance: asAcceptance(t.acceptance),
+    owner: t.owner_agent || undefined,
+    release: t.release_key || undefined,
+    storyId: t.story_id || undefined,
+    blockedBy: Array.isArray(t.blocked_by) && t.blocked_by.length ? t.blocked_by : undefined,
+    // Normalised to null rather than left undefined: "the server has not
+    // verified this" and "this server does not report verification" are
+    // the same fact to every reader, and one shape is easier to assert on.
+    verifiedAt: t.verified_at ?? null,
+    state: stateFromStatus(t.status),
+    due,
+  };
+}
+
+/** The server's key for a task node — the mirror of `taskKey` on the client side. */
+const serverTaskKey = (t: BackendTaskNode): string => t.story_id || t.id;
+
+/**
  * Reconstruct a StudentProject from a backend tree for a device that has never
  * seen this build. Task identity/state is faithful; presentation is regenerated
  * deterministically from the name. The first still-open task is flagged `today`.
@@ -264,28 +412,10 @@ export function backendTreeToProject(tree: BackendProjectTree): StudentProject {
       tasks: [...l.tasks]
         .sort((a, b) => a.position - b.position)
         .map((t): ProjectTask => {
-          const state = stateFromStatus(t.status);
           let due: TaskDue = 'up';
-          if (state === 'done') due = 'done';
+          if (stateFromStatus(t.status) === 'done') due = 'done';
           else if (firstOpen) { due = 'today'; firstOpen = false; }
-          return {
-            id: t.id,
-            title: t.title || 'Task',
-            what: t.description || undefined,
-            prompt: t.build || undefined,
-            req: t.requirement_key || undefined,
-            acceptance: asAcceptance(t.acceptance),
-            owner: t.owner_agent || undefined,
-            release: t.release_key || undefined,
-            storyId: t.story_id || undefined,
-            blockedBy: Array.isArray(t.blocked_by) && t.blocked_by.length ? t.blocked_by : undefined,
-            // Normalised to null rather than left undefined: "the server has not
-            // verified this" and "this server does not report verification" are
-            // the same fact to every reader, and one shape is easier to assert on.
-            verifiedAt: t.verified_at ?? null,
-            state,
-            due,
-          };
+          return taskFromServer(t, due);
         }),
     }));
 
@@ -372,8 +502,11 @@ export const UNKNOWN_INVENTORY: ServerInventory = { known: false, ids: [], activ
  * demo is the literal `sample-salon`. That difference is what lets us tell a
  * project the SERVER produced from one the BROWSER produced, on a device whose
  * localStorage predates the `origin` field.
+ *
+ * The pattern itself lives in projectIdentity — it is shared with the store's
+ * id-adoption pass, and two copies of this regex is exactly the kind of pair
+ * that drifts.
  */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The backend project id this local project is bound to, or null if it is not

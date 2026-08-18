@@ -203,11 +203,38 @@ second sends them off to redo work they already did.
 |---|---|---|
 | `ProgressFileMissing` | file absent or empty | "Sync your build plan from the portal to get it." — a normal state, not an error |
 | `ProgressFileNotJson` | `JSON.parse` threw | "not valid JSON … a trailing comma or an unclosed brace is the usual cause" |
-| `ProgressFileSchemaMismatch` | Zod rejected the shape | "does not match the expected shape … sync to restore the file" |
+| `ProgressFileSchemaMismatch` | Zod rejected the shape | "does not match the expected shape … it needs a top-level `schema_version` number and a `stories` array" |
 | `ProgressFileUnsupportedVersion` | `schema_version` is outside 1…2 | "declares schema_version N, but this platform reads versions 1 to 2" |
 
-A rejected read **writes nothing** and **revokes nothing**. Revocation is not
+The schema-mismatch sentence deliberately does **not** say "sync to restore the
+file". The platform writes repo files with `process.env.GITHUB_TOKEN`, and on a
+bring-your-own repo that identity often holds only `pull` — so for the student
+who most needs the advice, a Sync can never deliver it. The shape is what they
+can fix, so the shape is what we name.
+
+A rejected read **awards nothing** and **revokes nothing**. Revocation is not
 something this loop does at all.
+
+It does, however, write ONE thing: `verification_json.read_error`, the
+student-facing sentence, on every non-verified story of the build. Returning
+early having written nothing sounds conservative and is not — the row keeps the
+last **readable** verdict and the portal renders it as this push's answer. A
+student in exactly that position was shown *"None of the 5 acceptance criteria
+are marked as passing yet"* for hours while every sync was failing to parse her
+file, and she went back to re-verify code that was already correct. See
+`annotateReadError` in `verificationLatch.ts`.
+
+What the annotation may touch is the **prose only**: `state`,
+`criteria_passed`, `criteria_total`, `outstanding`, the commit fields and
+`checked_at` are all carried forward untouched, because an unreadable file can
+neither advance a story nor lower one. Verified stories are skipped entirely,
+`verified_at` / `verified_by` / `verified_ref` are never written, and the
+operation is a fixed point — re-running a rejected sync converges on one state.
+
+**`read_error` suppresses the outstanding list in the UI.** While it is set,
+those criteria are the last verdict we could reach, not a verdict on the push
+that just landed; rendering them beside the error would restate the exact lie
+the field exists to retire.
 
 ### 4.1 The version rule is a RANGE, not an equality
 

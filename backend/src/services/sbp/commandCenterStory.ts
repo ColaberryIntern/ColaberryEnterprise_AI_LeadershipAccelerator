@@ -28,7 +28,7 @@ import {
   rolesFrom as rolesOf,
   systemsOfRecord as systemsOf,
 } from './planDocument';
-import { PROGRESS_FILE_PATH } from './verification/progressContract';
+import { PROGRESS_FILE_PATH, PROGRESS_SCHEMA_VERSION } from './verification/progressContract';
 import { PROFILE_FILE_PATH } from './profileContract';
 import { BLOCK_BEGIN, BLOCK_END } from './managedBlock';
 import {
@@ -951,10 +951,30 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
  * this example is how the prompt and the matcher drift apart, and a drifted
  * example is worse than none: the student follows it exactly and their claims
  * still land in `rejected_claims`.
+ *
+ * ── `schema_version` IS NOT DECORATION ──────────────────────────────────────
+ *
+ * `progressFileSchema` REQUIRES it, and requires it as a number. This example
+ * omitted it, which made the block below a file the platform's own reader
+ * refuses: `schema_version: Invalid input: expected number, received undefined`
+ * — the whole file rejected at the schema gate before a single criterion was
+ * compared. Confirmed live in production on 2026-08-17.
+ *
+ * That is survivable for a student whose repo the platform can write, because
+ * Sync seeds a correct file over the top. For a student on a repo we hold
+ * `push: false` on, this block is the ONLY copy of the shape that exists — no
+ * managed block in their CLAUDE.md, no seeded progress file, nothing. Getting
+ * it wrong there is not a typo, it is the contract being unavailable.
+ *
+ * Rendered from the constant rather than the literal `2`, so a schema bump
+ * carries here on its own. `commandCenterStory.progressExample.test.ts` pushes
+ * this block back through `parseProgressFile`, which is the only check that
+ * cannot drift.
  */
 function progressFileExample(): string {
   return JSON.stringify(
     {
+      schema_version: PROGRESS_SCHEMA_VERSION,
       stories: [
         {
           id: COMMAND_CENTER_STORY_ID,

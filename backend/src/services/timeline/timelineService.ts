@@ -78,7 +78,7 @@ export interface FeedCard {
   points: any;
   competencies: any;
   status: TimelineCardStatus;
-  lock_reason: string | null;         // when status='locked', the student-facing "why" (e.g. "Finish the Learn tasks first")
+  lock_reason: string | null;         // when status='locked', the student-facing "why" — NAMES the outstanding item(s) (e.g. '“Context Engineering 101” in the Learn section'), falling back to the section label only when a title is unknown
   quiz_score: number | null;
   completed_at: Date | null;
   video: FeedVideo | null;
@@ -263,7 +263,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     } else {
       try {
         const gc = gateCardById.get(card.id)
-          || { id: card.id, type: card.type, bucket: card.bucket, week: card.week, program_id: (card as any).program_id ?? null, unlock_rules: card.unlock_rules };
+          || { id: card.id, type: card.type, bucket: card.bucket, week: card.week, program_id: (card as any).program_id ?? null, unlock_rules: card.unlock_rules, title: card.title };
         const verdict = evaluateCardLock(gc, gateCtx);
         status = verdict.locked ? 'locked' : 'available';
         lock_reason = verdict.locked ? (verdict.unmet[0]?.label ?? null) : null;

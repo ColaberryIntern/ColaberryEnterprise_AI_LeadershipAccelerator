@@ -35,6 +35,28 @@ const SIZES: { key: BuildSize; title: string; depth: string; desc: string }[] = 
 
 const STEPS = ['Your idea', 'Sharpen it', 'Review & confirm'];
 
+// These mirror startSchema in backend/src/routes/sbpRoutes.ts. They are enforced
+// HERE, in the box, because the alternative is what happened to Taiwo Oludimimu
+// on 2026-08-14: he pasted a full requirements document into an interview
+// answer, pressed Confirm, and the server refused the request on a length he
+// was never shown, on a field he never filled in. A limit a student cannot see
+// until they have violated it is not a limit, it is a trapdoor.
+const IDEA_MAX = 20_000;
+const ANSWER_MAX = 4_000;
+const NAME_MAX = 200;
+
+/** Shows a count only once it is worth knowing about. */
+const Counter: React.FC<{ value: string; max: number }> = ({ value, max }) => {
+  if (value.length < max * 0.8) return null;
+  const full = value.length >= max;
+  return (
+    <div className="small" style={{ marginTop: 4, color: full ? '#B5710A' : undefined, opacity: full ? 1 : .75 }}>
+      {value.length.toLocaleString()} / {max.toLocaleString()} characters
+      {full && ' — that is as much as we can take here. Anything more is best kept for the build itself.'}
+    </div>
+  );
+};
+
 const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise<void> }> = ({ onCreate }) => {
   const demo = useIsExplorer();
   const [step, setStep] = useState(1);
@@ -105,9 +127,10 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
         <div className="card pjw-pane">
           <h3>What do you want to build?</h3>
           <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise; the more you pour out here, the better we shape it. The next step reads what you wrote and asks you about it.</p>
-          <textarea value={idea} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
+          <textarea value={idea} maxLength={IDEA_MAX} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
+          <Counter value={idea} max={IDEA_MAX} />
           <label className="pjw-label">Give it a name (optional)</label>
-          <input className="txt" value={name} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
+          <input className="txt" value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
           <div className="pjw-actions">
             <button className="btn primary grow" disabled={idea.trim().length < 20} onClick={goSharpen}>Sharpen my idea
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -168,10 +191,12 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
                     id={`q-${currentQ.id}`}
                     className="txt"
                     style={{ minHeight: 96 }}
+                    maxLength={ANSWER_MAX}
                     value={replies[currentQ.id] || ''}
                     placeholder={currentQ.placeholder}
                     onChange={(e) => setReplies((r) => ({ ...r, [currentQ.id]: e.target.value }))}
                   />
+                  <Counter value={replies[currentQ.id] || ''} max={ANSWER_MAX} />
 
                   {/* Tappable example answers. Half of why a beginner can answer
                       this at all, and where they find out what they can ask for

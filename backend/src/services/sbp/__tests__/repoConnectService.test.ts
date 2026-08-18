@@ -83,9 +83,17 @@ const repoOk = (over: Record<string, unknown> = {}) => ({
   body: {
     owner: { login: 'a-student' }, name: 'nightshift', full_name: 'a-student/nightshift',
     html_url: 'https://github.com/a-student/nightshift', private: true, default_branch: 'main',
-    permissions: { push: false }, archived: false, fork: false, ...over,
+    // The DEFAULT is a repo the platform can write, because that is the shape the
+    // rest of the pipeline assumes: managed block installed, docs refreshed,
+    // `.colaberry/progress.json` seeded. `push: false` is a real and supported
+    // choice, and it gets its own fixture below rather than being the silent
+    // default nobody notices.
+    permissions: { push: true }, archived: false, fork: false, ...over,
   },
 });
+
+/** The same repo, with the platform holding read access only. */
+const repoPullOnly = () => repoOk({ permissions: { push: false, pull: true } });
 const fileWith = (content: string) => ({
   match: /\/contents\//, status: 200, body: { content: Buffer.from(content, 'utf8').toString('base64') },
 });
@@ -529,5 +537,80 @@ describe('getConnectState', () => {
       expect(Conn._rows[PRJ].status_json.connect.challenge_token).toBe('a'.repeat(32));
       expect(Conn._rows[PRJ].status_json.connect.state).toBe('awaiting_proof');
     });
+  });
+});
+
+/**
+ * ── PULL-ONLY IS A REAL ANSWER, AND THE PLATFORM HAS TO SAY IT ───────────────
+ *
+ * `fetchRepoFacts` has always returned `platform_can_push`. Nothing read it.
+ * `confirmConnect` stamped `provisioned: true` on every repo whose proof file
+ * landed, so a connection the platform holds READ access to was recorded — and
+ * reported — as a fully working one.
+ *
+ * The consequences are all silent. No managed block in their CLAUDE.md, no
+ * seeded `.colaberry/progress.json`, no doc refresh on sync. Their agent then
+ * has nothing in-repo to copy the contract from and invents a shape the reader
+ * rejects. On production, 4 of the 5 live workspace connections were in exactly
+ * this state (2026-08-17).
+ *
+ * A repo we cannot write is a legitimate choice. Recording it as one we can is
+ * not.
+ */
+describe('connecting a repo the platform cannot push to', () => {
+  const pending = async (repo: ReturnType<typeof repoOk>): Promise<string> => {
+    const view = await connect.startConnect(ENR, PRJ, 'a-student/nightshift', { fetchImpl: github([repo]) });
+    return view.challenge!.token;
+  };
+  const confirmWith = async (token: string) =>
+    connect.confirmConnect(ENR, PRJ, { fetchImpl: github([fileWith(renderChallengeFile(token))]) });
+
+  it('records the permission at connect instead of assuming it', async () => {
+    await pending(repoPullOnly());
+    // Captured at the only moment the platform reads the repo's own metadata.
+    expect(Conn._rows[PRJ].status_json.connect.platform_can_push).toBe(false);
+  });
+
+  it('still binds the repo and still reports connected — reading works', async () => {
+    const view = await confirmWith(await pending(repoPullOnly()));
+    expect(view.state).toBe('connected');
+    expect(Conn._rows[PRJ].repo_owner).toBe('a-student');
+  });
+
+  it('does NOT record provisioned: true for a repo it cannot write', async () => {
+    await confirmWith(await pending(repoPullOnly()));
+    expect(Conn._rows[PRJ].status_json.provisioned).toBe(false);
+  });
+
+  it('surfaces the access level on the view, so the panel can say what it means', async () => {
+    const view = await confirmWith(await pending(repoPullOnly()));
+    expect(view.write_access).toBe('pull_only');
+  });
+
+  it('refuses to hand a pull-only repo to the writer', async () => {
+    await confirmWith(await pending(repoPullOnly()));
+    // repoForProject gates on this. Returning true here means every publish and
+    // every sync tries a commit that GitHub will refuse.
+    expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(false);
+  });
+
+  it('a repo the platform CAN push is unchanged in every one of those respects', async () => {
+    const view = await confirmWith(await pending(repoOk()));
+    expect(view.state).toBe('connected');
+    expect(view.write_access).toBe('push');
+    expect(Conn._rows[PRJ].status_json.provisioned).toBe(true);
+    expect(Conn._rows[PRJ].status_json.connect.platform_can_push).toBe(true);
+    expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(true);
+  });
+
+  it('leaves a connection that predates permission capture exactly as it was', async () => {
+    // Every row connected before this shipped. Withdrawing write access on a
+    // guess would break working builds to fix a reporting problem.
+    Conn._seed(PRJ, {
+      repo_owner: 'a-student', repo_name: 'nightshift',
+      status_json: { provisioned: true, connect: { state: 'connected', method: 'byo' } },
+    });
+    expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(true);
+    expect((await connect.getConnectState(ENR, PRJ)).write_access).toBeNull();
   });
 });

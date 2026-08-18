@@ -101,6 +101,20 @@ export interface TaskVerificationDto {
    * Diagnostic only. Never render this as the story's state.
    */
   live_state: TaskVerificationDto['state'] | null;
+  /**
+   * Set when the last sync could not READ `.colaberry/progress.json` — bad
+   * JSON, wrong shape, a version we do not know. One sentence, written for the
+   * student, rendered verbatim.
+   *
+   * WHEN THIS IS SET, THE FIELDS ABOVE IT ARE STALE. They are the last verdict
+   * we could actually reach, not a conclusion about the push that just landed,
+   * and a UI that lists `outstanding` beside this is telling a student their
+   * criteria failed when the truth is we could not see them. Render this
+   * INSTEAD, not alongside.
+   */
+  read_error: string | null;
+  /** `ProgressFileSchemaMismatch`, `ProgressFileNotJson`, … For triage, not display. */
+  read_error_class: string | null;
 }
 
 /** Build-level roll-up, derived from the per-story verdicts already on the tree. */
@@ -175,6 +189,8 @@ export interface ProjectSummaryDto {
 
 type Plain = Record<string, any>;
 const asArray = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+/** A non-empty string or null. A blank message must not render as an empty banner. */
+const asText = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
 const byPosition = (a: { position: number }, b: { position: number }) => a.position - b.position;
 
 /**
@@ -248,13 +264,21 @@ export function toTaskVerificationDto(v: unknown, latch?: VerificationLatch | nu
     reasons: asArray(raw.reasons),
     rejected_claims: asArray(raw.rejected_claims),
     checked_at: asIsoTimestamp(raw.checked_at),
+    read_error: asText(raw.read_error),
+    read_error_class: asText(raw.read_error_class),
   };
   const applied = applyVerificationLatch(stored, latch, stored);
+  // A verified story is finished, so a leftover read error on it is noise
+  // attached to work that is already banked. The writer never annotates a
+  // verified record; this drops one that arrived by any other route.
+  const verified = applied.state === 'verified';
   return {
     ...applied,
     commit_at: asIsoTimestamp(applied.commit_at),
     latched: Boolean(applied.latched),
     live_state: applied.live_state ?? null,
+    read_error: verified ? null : (applied.read_error ?? null),
+    read_error_class: verified ? null : (applied.read_error_class ?? null),
   };
 }
 
@@ -272,6 +296,8 @@ function latchedFromNothing(latch: VerificationLatch): TaskVerificationDto {
     checked_at: asIsoTimestamp(latch.verified_at),
     latched: true,
     live_state: null,
+    read_error: null,
+    read_error_class: null,
   };
 }
 
