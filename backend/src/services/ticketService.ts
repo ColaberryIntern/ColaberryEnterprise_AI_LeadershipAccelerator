@@ -58,6 +58,12 @@ export interface TicketFilters {
   parent_ticket_id?: string | null;
   entity_type?: string;
   entity_id?: string;
+  // Ticket Board Performance fix (2026-08-18) — powers the board's "last 7 days"
+  // default view. Additive/optional: every existing caller that doesn't pass this
+  // keeps today's unbounded behavior unchanged. See ensureTicketIndexesSchema.ts
+  // for the supporting idx_tickets_created_at index this filter relies on to stay
+  // fast as the table grows.
+  createdAfter?: Date;
 }
 
 // ── Create ───────────────────────────────────────────────────────────────
@@ -384,6 +390,9 @@ export async function getTicketsForBoard(filters?: TicketFilters) {
   if (filters?.parent_ticket_id !== undefined) {
     where.parent_ticket_id = filters.parent_ticket_id;
   }
+  if (filters?.createdAfter) {
+    where.created_at = { [Op.gte]: filters.createdAfter };
+  }
 
   const tickets = await Ticket.findAll({
     where,
@@ -446,24 +455,13 @@ export async function getTicketsForBoard(filters?: TicketFilters) {
   return board;
 }
 
-export async function getTicketStats() {
-  const tickets = await Ticket.findAll({ attributes: ['status', 'priority', 'type'], raw: true });
-
-  const byStatus: Record<string, number> = {};
-  const byPriority: Record<string, number> = {};
-  const byType: Record<string, number> = {};
-
-  for (const t of tickets) {
-    byStatus[t.status] = (byStatus[t.status] || 0) + 1;
-    byPriority[t.priority] = (byPriority[t.priority] || 0) + 1;
-    byType[t.type] = (byType[t.type] || 0) + 1;
-  }
-
-  const openCount = (byStatus.backlog || 0) + (byStatus.todo || 0) +
-    (byStatus.in_progress || 0) + (byStatus.in_review || 0);
-
-  return { total: tickets.length, open: openCount, byStatus, byPriority, byType };
-}
+// Ticket Board Performance fix (2026-08-18) — getTicketStats() moved to its own
+// module, ticketStatsService.ts (this file was already over CLAUDE.md's 500-line
+// hard ceiling; stats aggregation is a clean, separable responsibility from the
+// ticket CRUD/state-machine logic that makes up the rest of this file).
+// Re-exported here so existing callers (ticketRoutes.ts) keep working unchanged
+// — no consumer-facing contract break.
+export { getTicketStats } from './ticketStatsService';
 
 // ── Sub-Tasks ────────────────────────────────────────────────────────────
 
