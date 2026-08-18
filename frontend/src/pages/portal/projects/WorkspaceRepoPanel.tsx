@@ -173,6 +173,29 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
           </p>
         )}
 
+        {/* PULL-ONLY IS A CHOICE, AND ITS CONSEQUENCE IS THE STUDENT'S TO KNOW.
+            The platform holds read access to this repo and nothing more, so it
+            never installs the managed block or seeds `.colaberry/progress.json`.
+            Left unsaid, that reads to a student as a working connection: they
+            press Sync, nothing lands, their agent has no contract to copy, and
+            it invents a file the platform cannot read. That is the whole of the
+            2026-08-17 failure, and it was silent from end to end.
+
+            Stated plainly here, with the one thing they have to do about it, and
+            deliberately not styled as an error — verification, points and the
+            whole build work exactly the same on a repo we only read. */}
+        {connect?.write_access === 'pull_only' && (
+          <p className="rt-muted" style={{ margin: '8px 0' }}>
+            <strong>The platform has read-only access to this repo.</strong> That is fine — it reads your
+            commits and confirms your stories exactly as normal, and everything you earn is recorded here
+            rather than in the repo. It does mean the platform cannot put files INTO your repo, so
+            <code> .colaberry/progress.json</code> is yours to create. Open <strong>STORY-000</strong> and
+            copy the JSON block under Step 3 — it is generated from the criteria the platform actually
+            checks. If you would rather the platform maintained it for you, add it as a collaborator with
+            write access and reconnect.
+          </p>
+        )}
+
         <div className="rt-row">
           <button className="rt-btn" disabled={busy === 'sync'} onClick={doSync}>
             {busy === 'sync' ? 'Syncing…' : 'Sync from GitHub'}

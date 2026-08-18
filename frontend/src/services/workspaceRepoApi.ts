@@ -31,6 +31,18 @@ export interface ConnectStateView {
   challenge: { path: string; token: string; file_content: string; commands: string[] } | null;
   /** The `git remote add` / `push -u` block, while a provisioned repo is empty. */
   adopt_commands: string[] | null;
+  /**
+   * Whether the PLATFORM can commit to this repo. `null` on connections made
+   * before the permission was recorded.
+   *
+   * `pull_only` is a choice, not a fault — reading is all the platform needs to
+   * verify work, and every point earned lives in our tables either way. What it
+   * costs is the WRITING half: no managed block installed in their CLAUDE.md and
+   * no `.colaberry/progress.json` seeded, so the student has to create that file
+   * themselves. Saying so is the whole point; a silent pull-only connection is
+   * how a student ends up with an invented file the platform cannot read.
+   */
+  write_access: 'push' | 'pull_only' | null;
   /** Whether the last read worked. Lost access is a reconnect prompt, not an error. */
   access: { ok: boolean; error_class: string | null; checked_at: string | null } | null;
   connected_at: string | null;

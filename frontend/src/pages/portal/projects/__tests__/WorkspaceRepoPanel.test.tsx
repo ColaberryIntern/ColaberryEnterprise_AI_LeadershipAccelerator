@@ -62,7 +62,7 @@ afterEach(() => {
 const connectState = (over: Partial<ConnectStateView> = {}): ConnectStateView => ({
   state: 'not_connected', method: null, owner: null, repo: null, url: null,
   private: null, default_branch: null, challenge: null, adopt_commands: null,
-  access: null, connected_at: null, ...over,
+  write_access: null, access: null, connected_at: null, ...over,
 });
 
 const view = (over: Partial<WorkspaceRepoView> = {}): WorkspaceRepoView => ({
@@ -338,5 +338,67 @@ describe('once connected', () => {
     // The load-bearing promise: evidence lives in our tables, not in the repo.
     expect(text()).toMatch(/already had verified stays exactly as it is/i);
     expect(buttonNamed('Reconnect')).toBeDefined();
+  });
+});
+
+/**
+ * ── A READ-ONLY CONNECTION HAS TO SAY SO ────────────────────────────────────
+ *
+ * The platform can hold `pull` and not `push` on a student's repo, and until
+ * 2026-08-17 nothing said which it had: `confirmConnect` stamped
+ * `provisioned: true` regardless and the panel rendered an ordinary connected
+ * repo. The student's experience of that is a connection that looks fine and
+ * quietly never receives anything — no managed block in their CLAUDE.md, no
+ * seeded `.colaberry/progress.json` — so their agent invents a progress file
+ * shape the platform's reader rejects, and the portal reports nothing useful.
+ *
+ * The copy is the fix. It has to say what the platform CANNOT do, name the one
+ * file that becomes theirs, and point at where the exact contents live.
+ */
+describe('a repo the platform can only read', () => {
+  const connected = (writeAccess: 'push' | 'pull_only' | null) => view({
+    connected: true, provisioned: writeAccess !== 'pull_only',
+    repo_owner: 'me', repo_name: 'nightshift', repo_url: 'https://github.com/me/nightshift',
+    connect: connectState({
+      state: 'connected', method: 'byo', owner: 'me', repo: 'nightshift',
+      url: 'https://github.com/me/nightshift', write_access: writeAccess,
+    }),
+  });
+
+  it('states the access level plainly rather than leaving it to be discovered', async () => {
+    await mount(connected('pull_only'));
+    expect(text()).toContain('The platform has read-only access to this repo');
+  });
+
+  it('names the file that is now the student\'s to create, and where to get it', async () => {
+    await mount(connected('pull_only'));
+    expect(text()).toContain('.colaberry/progress.json');
+    expect(text()).toContain('STORY-000');
+  });
+
+  it('does not present it as a failure — verification still works either way', async () => {
+    await mount(connected('pull_only'));
+    // The reassurance is load-bearing: a student who reads this as broken will
+    // go looking for a problem that is not there.
+    expect(text()).toContain('confirms your stories exactly as normal');
+    // And the repo is still connected, with its Sync button.
+    expect(buttonNamed('Sync from GitHub')).toBeDefined();
+  });
+
+  it('offers the way out, for a student who would rather we maintained it', async () => {
+    await mount(connected('pull_only'));
+    expect(text()).toContain('write access and reconnect');
+  });
+
+  it('says NOTHING of the sort on a repo the platform can write', async () => {
+    await mount(connected('push'));
+    expect(text()).not.toContain('read-only access');
+  });
+
+  it('says nothing on a connection made before the permission was recorded', async () => {
+    // `null` is every pre-existing row. Guessing "pull_only" there would put a
+    // false warning on working builds.
+    await mount(connected(null));
+    expect(text()).not.toContain('read-only access');
   });
 });
