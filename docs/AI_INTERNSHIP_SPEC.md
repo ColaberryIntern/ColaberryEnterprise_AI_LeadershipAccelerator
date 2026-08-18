@@ -98,3 +98,83 @@ already-paid-and-still-marketed-to failure the `CONVERTED` fix was meant to prev
    `capacity`, currently unused.
 4. **Must the subscription exist before applying, or is applying the trigger to
    subscribe?** This decides whether the form gates on payment or leads into it.
+
+---
+
+# Ali's decisions, 2026-08-18 — and what they mean for the build
+
+All four open questions above are now answered, and the fourth changes the
+architecture rather than just filling in a field.
+
+## The answers
+
+1. **Yes, an applicant IS a lead.** The goal is to move them into a subscription.
+   **Past students may join free for a period** — so comped access is a real,
+   expected state, not an edge case.
+2. **The portal REPLACES the email intake entirely.** The whole flow runs through
+   the portal and is **managed by Dhee**. She needs a real admin surface, not a
+   forwarded inbox.
+3. **No real capacity cap.** "Space is limited" is urgency copy. Do not build a
+   seat-counting gate; `capacity` stays unused and should probably be dropped.
+4. **The internship is a CLASS you enroll in.** There is **one class that all
+   interns are enrolled in**. Internship access grants the **full training** —
+   project work and class. Sign-up is **the same flow as a class, an option in
+   the existing dropdown**. A student enrolled in a class **can move to the
+   internship later**, and vice versa. Interns can self-serve the training and
+   **also drop into live classes** that are running.
+
+## The consequence: my two tables are largely the wrong shape
+
+Decision 4 means the internship is **not a parallel system**. It is an
+**enrollment option on the existing one**. That collapses most of what I built
+on 2026-08-13:
+
+- **`internship_applications` duplicates `enrollments`.** An application IS an
+  enrollment in the internship class. Keeping a second table would create two
+  divergent records of "this person is in the internship", and the portal, the
+  entitlement check, and the Explorer journey would each have to pick one.
+  **Do not carry this table forward without a specific reason it cannot be an
+  enrollment.**
+- **`internship_offerings` is probably one cohort row**, not a new table. There
+  is ONE internship class. The existing cohort machinery already models a class
+  with dates, and `hasFullCurriculumAccess()` already answers "can this person
+  see the training."
+- **The rolling-Monday start** is a property of when someone joins, not of a
+  cohort record — consistent with the internship being continuous rather than
+  dated.
+- **Comped past students** are already expressible: `activeCompEnrollmentIds()`
+  exists and the entitlement layer already distinguishes comp from paid. That is
+  precisely the "free for a little while" case, and it is already built.
+
+What genuinely does NOT exist yet and must be built:
+
+- The **internship option in the signup dropdown**, and the enrollment path behind it.
+- **Dhee's management surface** — review, accept, move a student between class and
+  internship. This is the piece with no analogue today.
+- The **eligibility attestation** (not employed full-time) and the **commitment
+  acknowledgement**. These attach to the enrollment; they are the two things the
+  email intake collects that nothing in the portal currently does.
+- **Class-to-internship movement** in both directions, without losing history.
+
+## Recommended next step, revised
+
+**Do not extend `internship_offerings` / `internship_applications`.** Before
+writing more code, verify against the live schema whether an internship cohort
+plus an enrollment type covers this, and reserve the bespoke tables for whatever
+genuinely does not fit — most likely just the attestation and commitment fields,
+which could as easily hang off the enrollment.
+
+The two commits from 2026-08-13 (`6a0189fb`, `a8bc3c29`) are **unmerged and
+undeployed**. Reverting them costs nothing. The service logic worth keeping is
+the idempotency rule (re-submitting never overwrites a decision a human made) and
+the anti-enumeration behaviour — both belong wherever the enrollment path lands.
+
+## Explorer Growth OS consequence
+
+Because internship access grants full training access,
+`hasFullCurriculumAccess()` will return **true** for an intern. So an intern is
+already `CONVERTED` under §8.1's first disjunct, with no internship-specific rule
+needed at all. **P24 can be closed as redundant rather than deferred.**
+
+`INTERNSHIP_READY` still needs care: it should target learners who are **not yet
+subscribed and not yet enrolled**, since interns by definition already have both.
