@@ -41,7 +41,7 @@
   border: var(--border-1) solid var(--border-subtle);
   color: var(--text-strong);
 }
-.cbv2-rm__phase:nth-child(1) { background: color-mix(in srgb, var(--color-cherry, #fb2832) 8%, var(--surface-card)); }
+.cbv2-rm__phase:nth-child(1) { background: color-mix(in srgb, var(--cherry) 8%, var(--surface-card)); }
 .cbv2-rm__phase:nth-child(2) { background: color-mix(in srgb, var(--green-600) 10%, var(--surface-card)); }
 .cbv2-rm__phase:nth-child(3) { background: color-mix(in srgb, var(--chart-1) 10%, var(--surface-card)); }
 .cbv2-rm__phase:nth-child(4) { background: color-mix(in srgb, var(--amber-500, #e8a33d) 12%, var(--surface-card)); }
@@ -91,9 +91,9 @@
   border: 2px solid var(--chart-1);
 }
 .cbv2-rm__week:last-child .cbv2-rm__dot {
-  background: var(--color-cherry, #fb2832);
-  border-color: var(--color-cherry, #fb2832);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-cherry, #fb2832) 20%, transparent);
+  background: var(--cherry);
+  border-color: var(--cherry);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cherry) 20%, transparent);
 }
 .cbv2-rm__wk {
   font-family: var(--font-mono);
@@ -115,8 +115,8 @@
 /* Lanes are distinguished by border style AND colour, so they remain separable
    in greyscale -- the live version relies on colour alone. */
 .cbv2-rm__lane--project {
-  border-color: color-mix(in srgb, var(--color-cherry, #fb2832) 55%, transparent);
-  color: var(--color-cherry, #fb2832);
+  border-color: color-mix(in srgb, var(--cherry) 55%, transparent);
+  color: var(--cherry);
 }
 .cbv2-rm__lane--certification {
   border-style: dotted;
@@ -143,7 +143,7 @@
   width: 26px;
   height: 0;
   margin-top: 10px;
-  border-top: 2px dashed var(--color-cherry, #fb2832);
+  border-top: 2px dashed var(--cherry);
 }
 .cbv2-rm__swatch--certification {
   border-top-style: dotted;
