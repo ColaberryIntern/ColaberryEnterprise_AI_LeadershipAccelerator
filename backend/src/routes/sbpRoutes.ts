@@ -354,7 +354,7 @@ router.get('/api/portal/sbp/builds/:projectId/stories/:storyId/prompt', requireP
       // Null is a normal answer here (cohort with no start date) and the prompt
       // renders without dates rather than throwing, so a schedule lookup that
       // comes back empty must not cost the student their prompt.
-      const schedule = await scheduleForEnrollment(eid(req), stored.plan, null);
+      const schedule = await scheduleForEnrollment(eid(req), stored.plan, null, stored.published_at);
       return res.json({
         story_id: COMMAND_CENTER_STORY_ID,
         prompt: commandCenterPrompt(stored.plan, schedule),

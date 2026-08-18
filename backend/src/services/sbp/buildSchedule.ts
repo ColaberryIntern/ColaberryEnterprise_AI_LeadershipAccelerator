@@ -40,6 +40,22 @@ export const DEFAULT_DEMO_WEEK = 12;
 export interface CohortWindow {
   /** Cohort week 1, day 1. */
   cohortStart: Date;
+  /**
+   * The day this schedule is being computed for — in practice the plan's
+   * `published_at`. The build window is floored here.
+   *
+   * WHY THIS EXISTS: the July 2026 cohort's window opened Thu 2026-08-13, but
+   * all 21 builds were published 2026-08-14..08-17. Every one of them was
+   * dated against a window that had already opened, so 44 tasks were overdue
+   * the moment a student first saw them. A build window cannot begin before
+   * the plan that describes it exists.
+   *
+   * Pass the PUBLISH timestamp, never `Date.now()` at read time: the schedule
+   * has to be reproducible, and a floor that tracks the wall clock would creep
+   * every time the documents were refreshed. Omitted, the window is the
+   * cohort's alone — correct only when the plan lands before the window opens.
+   */
+  asOf?: Date;
   startWeek?: number;
   prepWeek?: number;
   demoWeek?: number;
@@ -83,6 +99,22 @@ const DAY = 86_400_000;
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * DAY);
 const addWeeks = (d: Date, n: number) => addDays(d, n * 7);
 
+/** Drop the time of day. Due dates are days, and a publish at 14:32 is not half a day late. */
+const startOfUtcDay = (d: Date) =>
+  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+/**
+ * Move forward to the next `weekday` (UTC 0-6), or stay put if already on it.
+ *
+ * Every anchor in a cohort is the same weekday as its start — week 4, week 11
+ * and demo day are all Thursdays for July 2026. A window that opens on a
+ * Tuesday because that is when someone happened to hit publish puts the
+ * student on a cadence the class does not run on.
+ */
+function alignForwardToWeekday(d: Date, weekday: number): Date {
+  return addDays(d, (weekday - d.getUTCDay() + 7) % 7);
+}
+
 /** Start of cohort week N (week 1 === cohortStart). */
 export function weekStart(cohortStart: Date, week: number): Date {
   return addWeeks(cohortStart, Math.max(0, week - 1));
@@ -119,9 +151,22 @@ export function buildSchedule(input: ScheduleInput): Schedule {
   const prepWeek = input.window.prepWeek ?? DEFAULT_PREP_WEEK;
   const demoWeek = input.window.demoWeek ?? DEFAULT_DEMO_WEEK;
 
-  const buildStart = weekStart(cohortStart, startWeek);
   const buildEnd = weekStart(cohortStart, prepWeek);
   const demoDay = weekStart(cohortStart, demoWeek);
+
+  // The window opens on the cohort's week-`startWeek` day, or on the day the
+  // plan was published if that is later — whichever is further out. buildEnd
+  // and demoDay do NOT move: prep week and the stage are real cohort events
+  // the whole class committed to. A late plan compresses the build window, it
+  // does not push Demo Day. Clamped to buildEnd so a plan published after the
+  // window closed still yields a usable (if degenerate) schedule.
+  let buildStart = weekStart(cohortStart, startWeek);
+  if (input.window.asOf) {
+    const floor = alignForwardToWeekday(startOfUtcDay(input.window.asOf), cohortStart.getUTCDay());
+    if (floor.getTime() > buildStart.getTime()) {
+      buildStart = floor.getTime() > buildEnd.getTime() ? buildEnd : floor;
+    }
+  }
 
   const buildWeeks = Math.max(1, Math.round((buildEnd.getTime() - buildStart.getTime()) / (7 * DAY)));
   const capacity = { low: buildWeeks * TASKS_PER_WEEK_LOW, high: buildWeeks * TASKS_PER_WEEK_HIGH };
@@ -179,7 +224,15 @@ export function buildSchedule(input: ScheduleInput): Schedule {
       // Spread within the release, last task landing on the release's end date.
       const offset = relStartDay + (slice * (i + 1)) / ids.length;
       const due = addDays(buildStart, Math.round(offset));
-      tasks.push({ storyId, releaseKey: rel.key, dueOn: due > buildEnd ? buildEnd : due });
+      // Clamp BOTH ends. The upper clamp keeps build work out of prep week.
+      // The lower one matters just as much: a release the model emitted with
+      // `week_start: 0` makes relStartDay negative — 5 of the 21 live July
+      // plans did exactly that, and one student's first story landed five days
+      // before his build window opened.
+      const clamped = due.getTime() < buildStart.getTime() ? buildStart
+        : due.getTime() > buildEnd.getTime() ? buildEnd
+          : due;
+      tasks.push({ storyId, releaseKey: rel.key, dueOn: clamped });
     });
   }
 

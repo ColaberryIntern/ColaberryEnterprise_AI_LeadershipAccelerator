@@ -105,8 +105,12 @@ export async function refreshRepoDocuments(
     }
 
     const plan = stored.plan as BuildPlan;
+    // `stored.published_at`, never `new Date()`. This path runs on every repo
+    // sync; a wall-clock floor would nudge the student's whole schedule further
+    // out each time they pushed, and plan.json would disagree with the tasks
+    // table it is supposed to mirror.
     const schedule = enrollmentId
-      ? await scheduleForEnrollment(enrollmentId, plan, opts.correlationId ?? null)
+      ? await scheduleForEnrollment(enrollmentId, plan, opts.correlationId ?? null, stored.published_at)
       : null;
     const snapshot = await loadBuildProgress(projectId, enrollmentId || null);
 
