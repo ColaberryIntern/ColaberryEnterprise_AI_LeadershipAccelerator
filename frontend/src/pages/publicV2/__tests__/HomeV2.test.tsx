@@ -92,11 +92,27 @@ describe('HomeV2 — governance guarantees', () => {
 });
 
 describe('HomeV2 — structure', () => {
+  /**
+   * UPDATED with the v7 hero. Two changes, both deliberate.
+   *
+   * The third line is now the payoff rather than a third verb: "Prove the
+   * capability" read as one more thing you DO, which flattened the structure
+   * into a list when lines one and two already carry the differentiator.
+   *
+   * And the assertion no longer runs through textOf(). The progress rails are
+   * real DOM sitting INSIDE the words -- "system" and "people" each wrap a span
+   * -- so replacing tags with a space, which is right for prose, reads
+   * "Build the system ." here. Tag boundaries are collapsed instead, so this
+   * asserts the sentence a reader actually sees rather than the markup that
+   * produces it.
+   */
   it('carries the positioning line as the h1', () => {
     const h = html();
     const h1 = h.slice(h.indexOf('<h1'), h.indexOf('</h1>'));
-    expect(textOf(h1)).toContain('Build the system. Build the people.');
-    expect(textOf(h1)).toContain('Prove the capability.');
+    const line = h1.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    expect(line).toContain('Build the system.');
+    expect(line).toContain('Build the people.');
+    expect(line).toContain('Your team owns it.');
   });
 
   it('has exactly one h1', () => {
