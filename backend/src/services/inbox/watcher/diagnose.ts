@@ -146,12 +146,34 @@ async function diagnoseLoginLink(
     };
   }
 
-  const actionAt = new Date();
+  const actionAt = readAt;
   await deps.requestFreshLoginLink(facts.email);
 
   // Verified by re-reading, not by the call returning without throwing.
   const after = await deps.loadStudentFacts(facts.email);
-  const verifiedAt = new Date();
+  /*
+   * The CYCLE's clock, not the wall clock.
+   *
+   * This function is handed a clock and every sibling diagnosis threads it
+   * through as `readAt`. This one branch used to call `new Date()` twice, which
+   * made the injected clock dead at the only place it decides anything -- the
+   * `landed` comparison below. Two consequences, both real:
+   *
+   *  1. The cycle became untestable against a pinned clock. The suite pinned
+   *     `now` to 2026-08-17 and minted a token expiring 2026-08-18T04:00:05Z;
+   *     it passed until real time crossed that instant, then every live run
+   *     started reading its own fresh token as already expired and escalating
+   *     instead of replying. It went red mid-morning on 2026-08-18 with nobody
+   *     having touched the watcher -- a test that fails by calendar.
+   *  2. A replay or backfill run, which exists precisely to reason about a past
+   *     window, would judge that window's tokens against today.
+   *
+   * Using the cycle clock does mean a token that expires DURING the cycle is
+   * still called live. That window is seconds against an expiry measured in
+   * hours, and the honest reading of `landed` is "did the link the repair just
+   * minted take effect", which is a question about the moment of repair.
+   */
+  const verifiedAt = readAt;
   const postRead = ev(
     'enrollment-post',
     'enrollments: re-read after requesting the link',

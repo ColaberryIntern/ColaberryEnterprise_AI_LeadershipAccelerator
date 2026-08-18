@@ -1,4 +1,5 @@
 import { seedAgentIdentity, getAgentAdminUserId, type AgentIdentityConfig } from './agentIdentitySeed';
+import { STRATEGY_CONFIGS } from '../agents/strategy/departmentStrategyConfigs';
 
 // Agent Registration Stage 1 — thin wrapper supplying identity config for the
 // 5 real, high-volume ticket-creator processes registered in
@@ -96,6 +97,45 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     pilotCohortGate: false,
     legacyCreatorIds: ['bpos_orchestrator'],
   },
+
+  // --- Department Strategy Architect agents (16) — Agent Ticket Standard audit, 2026-08-18,
+  // session CC-20260818-a7d2. Founder-confirmed live: these 16 accounted for 3,576 open
+  // tickets (100% of everything they ever created) and were completely invisible on the
+  // Workforce OS "Live Agents" panel (liveAgentsService.ts only surfaces an AdminUser with a
+  // linked agent_id — none of these 16 had one until now). Same identity-quad pattern as the
+  // 5 above; displayName is derived directly from STRATEGY_CONFIGS' own `label` (never
+  // hand-typed/invented) so it can't drift from the real department name. ---
+  ...(Object.entries(STRATEGY_CONFIGS).map(([slug, cfg]): AgentIdentityConfig => {
+    const agentNameBySlug: Record<string, string> = {
+      executive: 'ExecutiveStrategyArchitect',
+      governance: 'GovernanceStrategyArchitect',
+      strategy: 'StrategyFuturesArchitect',
+      finance: 'FinanceIntelligenceArchitect',
+      operations: 'OperationsOptimizationArchitect',
+      orchestration: 'OrchestrationEcosystemArchitect',
+      intelligence: 'InsightArchitect',
+      partnerships: 'PartnershipExpansionArchitect',
+      growth: 'GrowthExperimentArchitect',
+      marketing: 'MarketingAutomationArchitect',
+      admissions: 'AdmissionsConversionArchitect',
+      infrastructure: 'InfrastructureEvolutionArchitect',
+      platform: 'PlatformInnovationArchitect',
+      education: 'LearningInnovationArchitect',
+      student_success: 'StudentSuccessArchitect',
+      alumni: 'AlumniNetworkArchitect',
+    };
+    const agentName = agentNameBySlug[slug];
+    return {
+      agentName,
+      email: `${agentName.toLowerCase()}@colaberry.com`,
+      displayName: `${cfg.label} Strategy Architect`,
+      role: 'ai_staff',
+      communityRole: 'staff',
+      enrollmentDefaults: ENROLLMENT_DEFAULTS,
+      pilotCohortGate: false,
+      legacyCreatorIds: [agentName],
+    };
+  })),
 ];
 
 /** agentName -> email, for the AdminUser lookup helper below. Built once from the

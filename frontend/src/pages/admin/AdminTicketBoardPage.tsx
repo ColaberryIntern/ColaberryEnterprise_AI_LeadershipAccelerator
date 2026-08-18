@@ -115,6 +115,12 @@ export default function AdminTicketBoardPage() {
   // bucket regardless of this value (see fetchBoard below, unchanged), so
   // "filtering" here means which columns render, not a new backend query.
   const [filterStatus, setFilterStatus] = useState<'' | 'open' | 'done'>('');
+  // Ticket Board Performance fix (2026-08-18) — the board used to load every
+  // ticket ever created (16,000+ rows, ~500+/week from agent activity alone) on
+  // every page open. Defaults to the last 7 days; an explicit toggle switches to
+  // "All time" and back. Deliberately NOT reset by clearAllFilters/"Clear" below
+  // (see that function's own comment) — it's a view mode, not a dropdown filter.
+  const [dateRange, setDateRange] = useState<'recent' | 'all'>('recent');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'medium', type: 'task' });
   const [creating, setCreating] = useState(false);
@@ -125,6 +131,18 @@ export default function AdminTicketBoardPage() {
       if (filterPriority) params.set('priority', filterPriority);
       if (filterType) params.set('type', filterType);
       if (filterSource) params.set('source', filterSource);
+      // Ticket Board Performance fix (2026-08-18) — the actual fix for "takes
+      // forever to load": by default, only ask the server for tickets created in
+      // the last 7 days (backend/src/db/ensureTicketIndexesSchema.ts adds the
+      // supporting idx_tickets_created_at index so this stays fast as the table
+      // grows). 'all' omits the param entirely, matching today's unbounded
+      // behavior exactly. /api/admin/tickets/stats is deliberately NOT scoped by
+      // this — the KPI cards stay honest, whole-system totals regardless of the
+      // currently-viewed slice, same as they already ignore Priority/Type/Source.
+      if (dateRange === 'recent') {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        params.set('created_after', sevenDaysAgo.toISOString());
+      }
 
       const [boardRes, statsRes] = await Promise.all([
         fetch(`/api/admin/tickets/board?${params}`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -139,7 +157,7 @@ export default function AdminTicketBoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, filterPriority, filterType, filterSource]);
+  }, [token, filterPriority, filterType, filterSource, dateRange]);
 
   useEffect(() => { fetchBoard(); }, [fetchBoard]);
 
@@ -225,7 +243,11 @@ export default function AdminTicketBoardPage() {
   // SAME filter state the Priority dropdown already drives (Critical) or a new,
   // client-side-only filterStatus (Open/Done — see its declaration above). Total
   // resets every filter, dropdowns included, rather than adding a 5th parallel
-  // "no filter" state.
+  // "no filter" state. Deliberately does NOT touch dateRange (Ticket Board
+  // Performance fix, 2026-08-18): the 7-day view is a deliberate, explicit choice
+  // via its own toggle, not a "filter" a user would expect "Clear" to blow away —
+  // clearing Priority/Type/Source should never silently dump 16,000+ tickets back
+  // onto the board as a side effect.
   const noFiltersActive = !filterPriority && !filterType && !filterSource && !filterStatus;
   const clearAllFilters = () => {
     setFilterPriority('');
@@ -236,6 +258,18 @@ export default function AdminTicketBoardPage() {
   const toggleOpenFilter = () => setFilterStatus((prev) => (prev === 'open' ? '' : 'open'));
   const toggleCriticalFilter = () => setFilterPriority((prev) => (prev === 'critical' ? '' : 'critical'));
   const toggleDoneFilter = () => setFilterStatus((prev) => (prev === 'done' ? '' : 'done'));
+
+  // Ticket Board Performance fix (2026-08-18) — how many tickets exist system-wide
+  // (stats.total, unscoped) vs. how many the current 7-day-filtered board actually
+  // holds (summed from the real board buckets the server just returned) — the gap
+  // is what the honesty banner discloses, so "last 7 days" never reads as "this is
+  // everything." Only meaningful while dateRange === 'recent'; 0 once the toggle
+  // shows everything (board and stats.total then agree).
+  const visibleTicketCount = useMemo(
+    () => (board ? Object.values(board).reduce((sum, list) => sum + list.length, 0) : 0),
+    [board],
+  );
+  const hiddenByDateRange = dateRange === 'recent' ? Math.max((stats?.total ?? 0) - visibleTicketCount, 0) : 0;
 
   // filterStatus never changes what fetchBoard() requests (every status bucket
   // is always fetched) — it only changes which columns render, so Open/Done
@@ -348,7 +382,47 @@ export default function AdminTicketBoardPage() {
         <button className="btn btn-sm btn-outline-secondary" onClick={clearAllFilters}>
           Clear
         </button>
+        <div className="vr d-none d-md-block mx-1" aria-hidden="true" />
+        {/* Ticket Board Performance fix (2026-08-18) — the "last 7 days" default
+            view toggle. Deliberately styled as its own segmented control, separate
+            from the Priority/Type/Source dropdowns and the "Clear" button, since
+            it's a view mode (what time window am I looking at) rather than a
+            filter (what subset of that window matches). */}
+        <div className="btn-group btn-group-sm" role="group" aria-label="Date range">
+          <button
+            type="button"
+            className={`btn ${dateRange === 'recent' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            aria-pressed={dateRange === 'recent'}
+            onClick={() => setDateRange('recent')}
+          >
+            <i className="ri-calendar-line" aria-hidden="true" /> Last 7 Days
+          </button>
+          <button
+            type="button"
+            className={`btn ${dateRange === 'all' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            aria-pressed={dateRange === 'all'}
+            onClick={() => setDateRange('all')}
+          >
+            All Time
+          </button>
+        </div>
       </div>
+
+      {/* Ticket Board Performance fix (2026-08-18) — honesty banner: the 7-day
+          default is a VIEW, not the whole system. Only rendered when it's
+          actually hiding something, so it never adds noise to a genuinely quiet
+          week. */}
+      {hiddenByDateRange > 0 && (
+        <div className="alert alert-light border d-flex justify-content-between align-items-center py-2 px-3 mb-3 small">
+          <span>
+            <i className="ri-information-line me-1" aria-hidden="true" />
+            Showing tickets from the last 7 days — {hiddenByDateRange.toLocaleString()} older ticket{hiddenByDateRange === 1 ? '' : 's'} hidden.
+          </span>
+          <button type="button" className="btn btn-sm btn-link p-0" onClick={() => setDateRange('all')}>
+            Show all
+          </button>
+        </div>
+      )}
 
       {/* Kanban Board */}
       <SectionCard padded={false} className="admin-section-card--bare">

@@ -59,7 +59,9 @@ import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
 import { ensureReeseWelcomeSchema } from './db/ensureReeseWelcomeSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
+import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
@@ -2361,6 +2363,10 @@ async function start(): Promise<void> {
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
+  // Ticket Board Performance fix (2026-08-18): idx_tickets_created_at +
+  // idx_tickets_status_created_at, CONCURRENTLY (tickets is write-heavy). Powers the
+  // new "last 7 days" default board view. See ensureTicketIndexesSchema.ts header.
+  await ensureTicketIndexesSchema();
   // Session-reminder arming columns on live_sessions. Must be ensured before the
   // reminder cron starts, or the sweep falls back to re-sending on every deploy.
   await ensureSessionReminderSchema();
@@ -2502,6 +2508,9 @@ async function start(): Promise<void> {
   await ensureRuntimeSchema();
   await ensureOpsCenterSchema();
   await ensureWorkforceSchema();
+  // Workforce OS perf fix — missing tickets.created_by_id index (EXPLAIN ANALYZE-
+  // confirmed Seq Scan on every per-agent ticket count). Additive, idempotent, no flag.
+  await ensureTicketCreatorIndexSchema();
   await ensureIntelligenceSchema();
   // Colaberry Commons — Community Rooms tables (idempotent, additive). Created
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
