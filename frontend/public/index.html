@@ -25,7 +25,11 @@
     <meta property="og:image" content="%PUBLIC_URL%/colaberry-logo.png" />
     <meta name="twitter:image" content="%PUBLIC_URL%/colaberry-logo.png" />
 
-    <link rel="canonical" href="https://www.colaberry.com/" />
+    <!-- Canonical for crawlers that do not execute JS. SeoV2 overrides this
+         per-route at runtime, but the static value is what a non-JS crawler
+         indexes -- and it used to read https://www.colaberry.com/, telling search
+         engines that every page of THIS site was a duplicate of another domain. -->
+    <link rel="canonical" href="https://enterprise.colaberry.ai/" />
     <title>Colaberry Enterprise AI Leadership Accelerator</title>
     <script src="https://d3js.org/d3.v7.min.js" defer></script>
     <!--
@@ -34,7 +38,6 @@
       banner was answered, handing the visitor's IP and user-agent to Google
       whatever they then chose. Same files, served from our own origin.
     -->
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
