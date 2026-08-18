@@ -17,6 +17,7 @@ import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { partitionNotifiable, isNotificationSuppressed } from './notifications/enrollmentNotificationSuppression';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
@@ -2284,7 +2285,15 @@ export function startScheduler(): void {
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
-        for (const e of enrollments) {
+        // Withhold from anyone whose notifications are paused. NOTE: arming
+        // below still keys off the FULL roster, not this filtered list — a
+        // cohort where everyone is paused must still arm, or this session is
+        // re-entered every tick forever.
+        const { notifiable, suppressed } = partitionNotifiable(enrollments);
+        if (suppressed.length > 0) {
+          console.log(`[Scheduler] Session ${session.session_number}: withheld 24h reminder from ${suppressed.length} paused enrollment(s)`);
+        }
+        for (const e of notifiable) {
           await sendSessionReminder({
             to: e.email,
             fullName: e.full_name,
@@ -2299,7 +2308,7 @@ export function startScheduler(): void {
         }
         if (enrollments.length > 0) {
           await session.update({ reminder_24h_sent_at: new Date() });
-          console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
+          console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${notifiable.length} participant(s)`);
         }
       }
 
@@ -2310,7 +2319,12 @@ export function startScheduler(): void {
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
-        for (const e of enrollments) {
+        // Same withholding as the 24h sweep; arming still keys off the full roster.
+        const { notifiable, suppressed } = partitionNotifiable(enrollments);
+        if (suppressed.length > 0) {
+          console.log(`[Scheduler] Session ${session.session_number}: withheld 1h reminder from ${suppressed.length} paused enrollment(s)`);
+        }
+        for (const e of notifiable) {
           await sendSessionReminder({
             to: e.email,
             fullName: e.full_name,
@@ -2325,7 +2339,7 @@ export function startScheduler(): void {
         }
         if (enrollments.length > 0) {
           await session.update({ reminder_1h_sent_at: new Date() });
-          console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
+          console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${notifiable.length} participant(s)`);
         }
       }
     }).catch((err: any) => {
@@ -2370,6 +2384,13 @@ export function startScheduler(): void {
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);
         for (const { enrollment, consecutiveMisses, missedTitles } of absentees) {
+          // Attendance is still RECORDED for a paused student (detectAbsentParticipants
+          // above already wrote the record) — pausing notifications must not quietly
+          // edit somebody's academic history. Only the mail is withheld.
+          if (isNotificationSuppressed(enrollment)) {
+            console.log(`[Scheduler] Withheld missed-session mail for a paused enrollment on session ${session.session_number}`);
+            continue;
+          }
           // Send missed session recap
           await sendMissedSessionEmail({
             to: enrollment.email,
