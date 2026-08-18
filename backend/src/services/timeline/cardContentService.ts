@@ -14,6 +14,7 @@ import { resolvePrompt } from '../components/promptTesterService';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL, MODEL_PRICING } from '../components/costEstimationService';
 import { createHash } from 'crypto';
+import { repairMalformedBlockOpenTags, findMalformedBlockOpenTags } from './cardBodyHtmlSanitizer';
 
 export interface CardContent {
   title?: string;
@@ -114,10 +115,32 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
   const content: CardContent = {
     title: typeof parsed.title === 'string' ? parsed.title : undefined,
     summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
-    body_html: typeof parsed.body_html === 'string' ? parsed.body_html : undefined,
+    // The model occasionally drops the ">" on a block-level open tag (e.g.
+    // "<pThis prompt ..."). Left alone that swallows the paragraph AND re-parents
+    // every following sibling inside a bogus element, so PromptCatalogRender --
+    // which pairs <h4>/<p>/<pre> across DIRECT children only -- silently renders an
+    // empty prompt box and drops the rest of the card. Repair on the way in; the
+    // helper is byte-identical on well-formed HTML. See cardBodyHtmlSanitizer.ts.
+    body_html: typeof parsed.body_html === 'string'
+      ? repairMalformedBlockOpenTags(parsed.body_html)
+      : undefined,
     questions: Array.isArray(parsed.questions) ? parsed.questions.map(String) : undefined,
     reflection: typeof parsed.reflection === 'string' ? parsed.reflection : undefined,
   };
+
+  // Observability: a repair means the generator produced malformed HTML. The card
+  // is saved correctly either way, but this is the only signal that the prompt
+  // needs tightening, so log it rather than fixing it silently.
+  if (typeof parsed.body_html === 'string') {
+    const malformed = findMalformedBlockOpenTags(parsed.body_html);
+    if (malformed.length) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'timeline-card-content', event: 'malformed_body_html_repaired',
+        outcome: 'success', error_class: 'ContractViolation',
+        context: { card_id: card.id, card_type: card.type, week: card.week, count: malformed.length, samples: malformed.slice(0, 3) },
+      }));
+    }
+  }
 
   // Roster-summary titles are DETERMINISTIC — no model paraphrase, so the name never
   // drifts (this also kills the "random title" bug, e.g. "Build Your AI Foundation").
