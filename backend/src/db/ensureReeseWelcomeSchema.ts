@@ -9,14 +9,18 @@ import { sequelize } from '../config/database';
 // Additive only: creates 1 new table, never alters or drops anything existing.
 // Columns must match backend/src/models/ReeseWelcome.ts EXACTLY.
 //
-// THE UNIQUE CONSTRAINT ON enrollment_id IS THE FEATURE, not a nicety. This
-// table is simultaneously the send ledger AND the "has this student ever
-// logged in before" marker — there is no last_login_at on enrollments, so the
-// absence of a row here is what defines a first login. A student opening the
-// portal in two tabs, or on a phone and a laptop at once, produces concurrent
-// login requests; the unique index is what makes "greeted exactly once, ever"
-// a database invariant rather than an application hope. The service races
-// INSERT-then-send against it deliberately.
+// THE UNIQUE CONSTRAINT ON (enrollment_id, kind) IS THE FEATURE, not a nicety.
+// This table is simultaneously the send ledger AND the "has this person had
+// this intro yet" marker — there is no last_login_at on enrollments, so the
+// absence of an 'account' row is what defines a first login. Someone opening
+// the portal in two tabs, or on a phone and a laptop at once, produces
+// concurrent requests; the unique index is what makes "each intro exactly
+// once, ever" a database invariant rather than an application hope. The
+// service races INSERT-then-send against it deliberately.
+//
+// `kind` is what makes TWO intros possible without them colliding: 'account'
+// when someone first gets a login, 'student' when they join a real class. A
+// person who signs up and later enrols legitimately receives both.
 //
 // Deliberately NOT reusing reese_autonomous_outreach: that table requires a
 // ticket_id (NOT NULL, FK to tickets), so every welcome would mint a ticket.
@@ -27,13 +31,17 @@ export async function ensureReeseWelcomeSchema(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS reese_welcomes (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        enrollment_id UUID NOT NULL REFERENCES enrollments(id),
+       kind VARCHAR(20) NOT NULL DEFAULT 'account',
        room_id UUID,
        message_id UUID,
        outcome VARCHAR(20) NOT NULL DEFAULT 'sent',
        detail TEXT,
        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_reese_welcomes_enrollment_once ON reese_welcomes (enrollment_id)`,
+    // Additive for an environment that already ran the single-intro version:
+    // the column is added before the composite index is built on it.
+    `ALTER TABLE reese_welcomes ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'account'`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_reese_welcomes_enrollment_kind_once ON reese_welcomes (enrollment_id, kind)`,
   ];
 
   for (const sql of statements) {
