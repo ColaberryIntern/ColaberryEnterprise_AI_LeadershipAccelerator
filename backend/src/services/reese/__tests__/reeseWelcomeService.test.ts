@@ -154,20 +154,30 @@ describe('joining a class', () => {
     expect(mockInitiate).toHaveBeenCalledWith(PERSON, studentWelcomeMessage('Ali', 'July 2026'));
   });
 
-  it('gives someone who arrives already enrolled BOTH intros, account first', async () => {
+  it('gives someone whose FIRST contact is already enrolled the student intro ONLY', async () => {
     const r = await maybeSendWelcomes(PERSON);
 
-    expect(outcomes(r)).toEqual({ account: 'sent', student: 'sent' });
-    expect(mockInitiate).toHaveBeenCalledTimes(2);
-    expect(mockInitiate.mock.calls[0][1]).toBe(accountWelcomeMessage('Ali'));
-    expect(mockInitiate.mock.calls[1][1]).toBe(studentWelcomeMessage('Ali', 'July 2026'));
+    expect(outcomes(r)).toEqual({ account: 'superseded', student: 'sent' });
+    // One message, not two in the same second.
+    expect(mockInitiate).toHaveBeenCalledTimes(1);
+    expect(mockInitiate).toHaveBeenCalledWith(PERSON, studentWelcomeMessage('Ali', 'July 2026'));
+  });
+
+  it('RETIRES the account intro rather than leaving it to fire on a later login', async () => {
+    await maybeSendWelcomes(PERSON);
+
+    // A row is still claimed for 'account' — that is what stops a stale
+    // "have a look around" message turning up next week.
+    const kinds = mockCreate.mock.calls.map((c: any[]) => [c[0].kind, c[0].outcome]);
+    expect(kinds).toContainEqual(['account', 'superseded']);
+    expect(kinds).toContainEqual(['student', 'sent']);
   });
 
   it('counts a member with no cohort as a student', async () => {
     mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'member', cohort_id: null });
     mockCohort.mockResolvedValue(null);
 
-    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'sent', student: 'sent' });
+    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'superseded', student: 'sent' });
   });
 
   it('does NOT count an Explorer-cohort guest as a student', async () => {
@@ -262,13 +272,16 @@ describe('never breaks a login', () => {
     expect(mockInitiate).not.toHaveBeenCalled();
   });
 
-  it('still sends the student intro if the account intro failed', async () => {
-    // One intro failing must not suppress the other.
+  it('still sends the student intro later if the account intro had failed', async () => {
+    // The guest-then-enrol path: the account intro was attempted and failed on
+    // an earlier login, so its row exists. Joining a class must still produce
+    // the student intro — one intro failing cannot suppress the other.
     mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'member', cohort_id: null });
-    mockInitiate
-      .mockRejectedValueOnce(new Error('transient'))
-      .mockResolvedValueOnce({ roomId: 'room-2', messageId: 'msg-2' });
+    mockFindOne.mockImplementation(async ({ where }: any) =>
+      where.kind === 'account' ? { id: 'failed-claim', outcome: 'failed' } : null);
 
-    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'send_failed', student: 'sent' });
+    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'already_sent', student: 'sent' });
+    // firstNameOf('Ali M') is 'Ali' — the greeting uses the first token only.
+    expect(mockInitiate).toHaveBeenCalledWith(PERSON, studentWelcomeMessage('Ali', null));
   });
 });
