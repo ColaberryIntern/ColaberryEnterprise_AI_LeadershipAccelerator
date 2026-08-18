@@ -400,8 +400,6 @@ import CapeGovernancePolicy from './CapeGovernancePolicy';
 import CapeLifecycleModePolicy from './CapeLifecycleModePolicy';
 // --- Explorer Growth OS (docs/EXPLORER_GROWTH_OS_PLAN.md EPIC 1) ---
 import ExplorerJourneyProfile from './ExplorerJourneyProfile';
-import InternshipOffering from './InternshipOffering';
-import InternshipApplication from './InternshipApplication';
 import ExplorerJourneyDecision from './ExplorerJourneyDecision';
 import ExplorerScoreSnapshot from './ExplorerScoreSnapshot';
 import ExplorerExperimentAssignment from './ExplorerExperimentAssignment';
@@ -1222,8 +1220,6 @@ export {
   DecisionRecord,
   TicketWorkUnit,
   ExplorerJourneyProfile,
-  InternshipOffering,
-  InternshipApplication,
   ExplorerJourneyDecision,
   ExplorerScoreSnapshot,
   ExplorerExperimentAssignment,
@@ -1619,14 +1615,6 @@ ExplorerJourneyProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 
 // an unresolved learner is a reportable condition, not an error.
 ExplorerJourneyProfile.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Lead.hasOne(ExplorerJourneyProfile, { foreignKey: 'lead_id', as: 'explorerProfile' });
-
-// AI Internship (plan §22). Only offering -> applications is a real FK; the
-// enrollment_id and lead_id columns are deliberately unconstrained at the DB
-// level (see ensureInternshipSchema.ts) because an applicant may be neither an
-// enrolled learner nor a captured lead. Associations here are for query
-// convenience only and must stay optional on both sides.
-InternshipOffering.hasMany(InternshipApplication, { foreignKey: 'offering_id', as: 'applications' });
-InternshipApplication.belongsTo(InternshipOffering, { foreignKey: 'offering_id', as: 'offering' });
 
 Enrollment.hasMany(ExplorerJourneyDecision, { foreignKey: 'enrollment_id', as: 'explorerDecisions' });
 ExplorerJourneyDecision.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
