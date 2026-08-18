@@ -8,8 +8,8 @@
  */
 jest.mock('../../../models/AdminUser', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/AiAgent', () => ({ findAll: jest.fn() }));
-jest.mock('../../../models/Enrollment', () => ({ findOne: jest.fn() }));
-jest.mock('../../../models/CommunityMember', () => ({ findOne: jest.fn() }));
+jest.mock('../../../models/Enrollment', () => ({ findAll: jest.fn() }));
+jest.mock('../../../models/CommunityMember', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn(), count: jest.fn() } }));
 jest.mock('../../communityService', () => ({ derivePresence: jest.fn() }));
 
@@ -26,8 +26,8 @@ import { listLiveAgents, listLiveAgentActivity } from '../liveAgentsService';
 
 const mockAdminUserFindAll = AdminUser.findAll as unknown as jest.Mock;
 const mockAiAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
-const mockEnrollmentFindOne = Enrollment.findOne as unknown as jest.Mock;
-const mockCommunityMemberFindOne = CommunityMember.findOne as unknown as jest.Mock;
+const mockEnrollmentFindAll = Enrollment.findAll as unknown as jest.Mock;
+const mockCommunityMemberFindAll = CommunityMember.findAll as unknown as jest.Mock;
 const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockTicketCount = Ticket.count as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
@@ -51,15 +51,15 @@ const processAgent = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockEnrollmentFindOne.mockResolvedValue({ id: 'enrollment-1' });
-  mockCommunityMemberFindOne.mockResolvedValue({ last_active_at: new Date() });
+  mockEnrollmentFindAll.mockResolvedValue([{ id: 'enrollment-1', email: 'reese@colaberry.com' }]);
+  mockCommunityMemberFindAll.mockResolvedValue([{ enrollment_id: 'enrollment-1', last_active_at: new Date() }]);
   mockDerivePresence.mockReturnValue('online');
   mockTicketCount.mockResolvedValue(0);
   mockTicketFindAll.mockResolvedValue([]);
 });
 
 describe('listLiveAgents', () => {
-  it('Reese-only real shape: returns exactly 1 agent with real identity + live status + ticket count', async () => {
+  it('Reese-only real shape: returns exactly 1 agent with real identity + live status + open ticket count', async () => {
     mockAdminUserFindAll.mockResolvedValue([reeseAdmin]);
     mockAiAgentFindAll.mockResolvedValue([reeseAgent]);
     mockTicketCount.mockResolvedValue(4);
@@ -73,8 +73,43 @@ describe('listLiveAgents', () => {
       display_name: 'Reese',
       agent_type: 'ai_staff_mentor',
       live_status: 'online',
-      ticket_count: 4,
+      open_ticket_count: 4,
     });
+  });
+
+  it('Open, not Total: filters the per-agent ticket count to status NOT IN (done, cancelled) — the exact fix for the founder-facing total-vs-open confusion (12,574 lifetime vs. 4,154 open board-wide)', async () => {
+    mockAdminUserFindAll.mockResolvedValue([reeseAdmin]);
+    mockAiAgentFindAll.mockResolvedValue([reeseAgent]);
+    mockTicketCount.mockResolvedValue(4);
+
+    await listLiveAgents();
+
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    const andClauses = countArgs.where[Op.and];
+    const statusClause = andClauses.find((c: any) => 'status' in c);
+    expect(statusClause.status[Op.notIn]).toEqual(['done', 'cancelled']);
+    // The OR match-list clause must still be present, nested inside the AND —
+    // this is a status filter ADDED to the existing match, not a replacement of it.
+    const orWrapper = andClauses.find((c: any) => Op.or in c);
+    expect(orWrapper[Op.or]).toBeDefined();
+  });
+
+  it('N+1 regression guard: batches Enrollment/CommunityMember lookups into exactly one query each, regardless of agent count', async () => {
+    const secondAdmin = { id: 'admin-2', email: 'second@colaberry.com', agent_id: 'agent-2', is_ai_operated: true, display_name: 'Second' };
+    const secondAgent = { id: 'agent-2', agent_name: 'SecondAgent', agent_type: 'ai_staff_mentor', category: null, description: null, enabled: true };
+    mockAdminUserFindAll.mockResolvedValue([reeseAdmin, processAdmin, secondAdmin]);
+    mockAiAgentFindAll.mockResolvedValue([reeseAgent, processAgent, secondAgent]);
+
+    await listLiveAgents();
+
+    // Exactly one batched call each, no matter how many agents were processed —
+    // this is the regression guard for the N+1 (was: 1 call per agent).
+    expect(mockEnrollmentFindAll).toHaveBeenCalledTimes(1);
+    expect(mockCommunityMemberFindAll).toHaveBeenCalledTimes(1);
+    const enrollmentCallArgs = mockEnrollmentFindAll.mock.calls[0][0];
+    expect(enrollmentCallArgs.where.email[Op.in]).toEqual(
+      expect.arrayContaining(['reese@colaberry.com', 'process@colaberry.com', 'second@colaberry.com']),
+    );
   });
 
   it('display name fix: shows the real AdminUser.display_name, not the raw agent_name, when they differ (the exact bug Ali flagged)', async () => {
@@ -103,12 +138,13 @@ describe('listLiveAgents', () => {
 
     const agents = await listLiveAgents();
 
-    expect(agents[0].ticket_count).toBe(9606);
+    expect(agents[0].open_ticket_count).toBe(9606);
     const countArgs = mockTicketCount.mock.calls[0][0];
     // The real query must be able to match EITHER identifier — assert the actual
     // match lists include both the real AdminUser id and the legacy raw string,
-    // not just one or the other.
-    const orClauses = countArgs.where[Op.or];
+    // not just one or the other. The OR clause is now nested inside the AND
+    // wrapper alongside the status filter (see the "Open, not Total" test above).
+    const orClauses = countArgs.where[Op.and].find((c: any) => Op.or in c)[Op.or];
     const assignedClause = orClauses.find((c: any) => 'assigned_to_id' in c);
     const createdClause = orClauses.find((c: any) => 'created_by_id' in c);
     expect(assignedClause.assigned_to_id[Op.in]).toEqual(expect.arrayContaining(['admin-process-1', 'cory-engine']));
@@ -122,9 +158,9 @@ describe('listLiveAgents', () => {
 
     const agents = await listLiveAgents();
 
-    expect(agents[0].ticket_count).toBe(22);
+    expect(agents[0].open_ticket_count).toBe(22);
     const countArgs = mockTicketCount.mock.calls[0][0];
-    const orClauses = countArgs.where[Op.or];
+    const orClauses = countArgs.where[Op.and].find((c: any) => Op.or in c)[Op.or];
     const assignedClause = orClauses.find((c: any) => 'assigned_to_id' in c);
     expect(assignedClause.assigned_to_id[Op.in]).toEqual(['admin-reese']);
   });
