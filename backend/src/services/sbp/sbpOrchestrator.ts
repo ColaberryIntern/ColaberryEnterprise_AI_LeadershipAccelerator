@@ -464,7 +464,9 @@ export async function publishBuild(
     // student completes a build and sees nothing change on screen, which is the
     // exact failure this pipeline was built to fix. Prompts fall back to
     // inlining their context instead of citing paths (FR-031).
-    const schedule = await scheduleFor(opts.enrollmentId, published.plan as BuildPlan, correlationId);
+    const schedule = await scheduleFor(
+      opts.enrollmentId, published.plan as BuildPlan, correlationId, published.published_at,
+    );
     const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule });
     await makeActiveProject(opts.enrollmentId, projectId, correlationId);
     await setStatus(projectId, 'awaiting_repo');
@@ -479,7 +481,12 @@ export async function publishBuild(
   // Command Center's data contract, and a page cannot show a Gantt chart of
   // dates the file does not carry. Materialization still consumes the same
   // object further down, so this is a hoist, not a second computation.
-  const schedule = await scheduleFor(opts.enrollmentId, published.plan as BuildPlan, correlationId);
+  // `published.published_at` is what floors the build window, so a plan that
+  // lands after its cohort's week-4 Thursday is dated from the plan's own
+  // existence rather than from a date that has already gone by.
+  const schedule = await scheduleFor(
+    opts.enrollmentId, published.plan as BuildPlan, correlationId, published.published_at,
+  );
 
   // What the platform already knows about this build, mirrored into the repo so
   // a static page can render verified/points/commit without an API call.

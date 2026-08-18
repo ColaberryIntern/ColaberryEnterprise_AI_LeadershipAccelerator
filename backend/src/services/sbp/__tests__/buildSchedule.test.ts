@@ -22,7 +22,7 @@ const releases = (n: number) => Array.from({ length: n }, (_, i) => ({
 }));
 
 /** `counts` = stories per release, in order. */
-function scheduleFor(counts: number[], window = { cohortStart: JULY }) {
+function scheduleFor(counts: number[], window: { cohortStart: Date; asOf?: Date } = { cohortStart: JULY }) {
   const rels = releases(counts.length);
   const storiesByRelease = new Map<string, string[]>();
   let n = 1;
@@ -165,5 +165,113 @@ describe('date arithmetic', () => {
     const nov = scheduleFor([3, 3], { cohortStart: new Date('2026-11-12T00:00:00.000Z') });
     expect(iso(nov.buildStart)).toBe('2026-12-03');
     expect(iso(nov.demoDay)).toBe('2027-01-28');
+  });
+});
+
+/**
+ * REGRESSION — builds born overdue (July 2026 cohort, 2026-08-18).
+ *
+ * All 21 July builds published 2026-08-14..2026-08-17, but the schedule is a
+ * pure function of the cohort start, so every one of them was dated against a
+ * build window that opened on Thursday 2026-08-13 — one to four days BEFORE
+ * the plan existed. 44 of 416 dated tasks were overdue the moment a student
+ * first opened their Projects page. Taiwo Oludimimu asked about it on the 13th.
+ *
+ * Two distinct defects, both proved here:
+ *  1. no floor at "today" — the window can open before the plan is published
+ *  2. no lower clamp on task dates — a release with week_start <= 0 pushes
+ *     its first task BEFORE buildStart (Marcus Zeno's STORY-001: 2026-08-08)
+ */
+describe('a build is never born overdue', () => {
+  const PUBLISHED_LATE = new Date('2026-08-18T14:32:07.000Z'); // Tue, cohort week 4
+
+  it('floors the build start at the day the schedule is computed', () => {
+    const s = scheduleFor([3, 3, 3], { cohortStart: JULY, asOf: PUBLISHED_LATE });
+    // Not 2026-08-13 — that Thursday is gone.
+    expect(iso(s.buildStart)).toBe('2026-08-20');
+  });
+
+  it('keeps the cohort grid: the floored start lands on the cohort weekday', () => {
+    // Every anchor in this cohort is a Thursday. A build window that opens on
+    // a Tuesday because that is when someone hit publish teaches the student
+    // a cadence the class does not run on.
+    const s = scheduleFor([3, 3, 3], { cohortStart: JULY, asOf: PUBLISHED_LATE });
+    expect(s.buildStart.getUTCDay()).toBe(JULY.getUTCDay());
+  });
+
+  it('does not skip a week when the schedule is computed on the cohort weekday', () => {
+    const onThursday = new Date('2026-08-20T09:00:00.000Z');
+    const s = scheduleFor([3, 3, 3], { cohortStart: JULY, asOf: onThursday });
+    expect(iso(s.buildStart)).toBe('2026-08-20');
+  });
+
+  it('gives no task a date in the past', () => {
+    const s = scheduleFor([3, 3, 3], { cohortStart: JULY, asOf: PUBLISHED_LATE });
+    s.tasks.forEach((t) => {
+      expect(t.dueOn.getTime()).toBeGreaterThanOrEqual(s.buildStart.getTime());
+    });
+  });
+
+  it('leaves demo prep and demo day exactly where the cohort put them', () => {
+    // The fix compresses the build window. It must NOT move the two dates the
+    // cohort actually committed to — prep week and the stage.
+    const s = scheduleFor([3, 3, 3], { cohortStart: JULY, asOf: PUBLISHED_LATE });
+    expect(iso(s.buildEnd)).toBe('2026-10-01');
+    expect(iso(s.demoDay)).toBe('2026-10-08');
+  });
+
+  it('tells the truth about the shortened window', () => {
+    // 6 weeks, not 7. A verdict that still promises 7 build weeks after the
+    // window was compressed is the same lie in a different column.
+    const s = scheduleFor([3, 3, 3], { cohortStart: JULY, asOf: PUBLISHED_LATE });
+    expect(s.buildWeeks).toBe(6);
+    expect(s.capacity).toEqual({ low: 6 * TASKS_PER_WEEK_LOW, high: 6 * TASKS_PER_WEEK_HIGH });
+  });
+
+  it('leaves an on-time publish completely unchanged', () => {
+    // asOf before the window opens must be a no-op, or every existing plan
+    // silently re-dates itself.
+    const early = new Date('2026-07-30T00:00:00.000Z');
+    const withAsOf = scheduleFor([3, 3, 3], { cohortStart: JULY, asOf: early });
+    const without = scheduleFor([3, 3, 3]);
+    expect(iso(withAsOf.buildStart)).toBe(iso(without.buildStart));
+    expect(withAsOf.tasks.map((t) => iso(t.dueOn))).toEqual(without.tasks.map((t) => iso(t.dueOn)));
+  });
+
+  it('degrades safely when the plan is published after the build window closed', () => {
+    const tooLate = new Date('2026-10-05T00:00:00.000Z'); // inside prep week
+    const s = scheduleFor([3, 3], { cohortStart: JULY, asOf: tooLate });
+    expect(s.buildWeeks).toBeGreaterThanOrEqual(1);
+    expect(s.buildStart.getTime()).toBeLessThanOrEqual(s.buildEnd.getTime());
+    s.tasks.forEach((t) => expect(t.dueOn.getTime()).toBeLessThanOrEqual(s.buildEnd.getTime()));
+  });
+});
+
+describe('a release that starts at week 0 does not reach into the past', () => {
+  // 5 of the 21 live July plans emitted r0 with week_start: 0. The offset
+  // formula ((week_start - 1) / planLastWeek) * span then goes NEGATIVE, and
+  // the only clamp in buildSchedule was the upper one. Marcus Zeno's first
+  // story landed on 2026-08-08 — five days before his build window opened.
+  const zeroStart = [
+    { key: 'r0', name: 'Foundation', week_start: 0, week_end: 1 },
+    { key: 'r1', name: 'Core', week_start: 1, week_end: 2 },
+    { key: 'r2', name: 'Polish', week_start: 2, week_end: 3 },
+  ];
+  const stories = new Map<string, string[]>([
+    ['r0', ['STORY-001', 'STORY-002', 'STORY-003', 'STORY-004']],
+    ['r1', ['STORY-005', 'STORY-006']],
+    ['r2', ['STORY-007', 'STORY-008']],
+  ]);
+
+  it('never dates a task before the build start', () => {
+    const s = buildSchedule({ window: { cohortStart: JULY }, releases: zeroStart, storiesByRelease: stories });
+    s.tasks.forEach((t) => {
+      expect(iso(t.dueOn) >= iso(s.buildStart)).toBe(true);
+    });
+  });
+
+  it('still spreads the rest of the release instead of stacking it on day one', () => {
+    const s = buildSchedule({ window: { cohortStart: JULY }, releases: zeroStart, storiesByRelease: stories });
+    expect(new Set(s.tasks.map((t) => iso(t.dueOn))).size).toBeGreaterThan(1);
   });
 });
