@@ -630,7 +630,14 @@ export function createProjectFromAnswers(answers: NewBuildAnswers): string {
   // Assemble in the background so the student can keep moving.
   window.setTimeout(() => {
     const current = read();
-    const p = current.find((x) => x.id === id);
+    // Resolved by pseudo id OR by `legacyIds`, because `claimBackendProject`
+    // re-keys this very project to its server UUID the moment GET /active
+    // answers — normally in well under 7s, so adoption usually wins the race.
+    // A raw `x.id === id` lookup therefore found NOTHING in the common case and
+    // returned early, stranding the card at `creating` with empty lists
+    // forever. Measured 2026-08-18 in production; see creatingCardState.test.ts.
+    const p = current.find((x) => x.id === id)
+      ?? current.find((x) => x.legacyIds?.includes(id));
     if (!p) return;
     p.status = 'ready';
     p.lists = skeleton.lists;

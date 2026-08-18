@@ -74,7 +74,11 @@ function storedPlan() {
   return {
     id: 'plan-1', project_id: PROJECT, version: 2, status: 'published',
     plan_sha256: 'x'.repeat(64), gate_ok: true, gate_violations: [],
-    model: 'test', attempts: 1, correlation_id: null, published_at: null,
+    model: 'test', attempts: 1, correlation_id: null,
+    // A real publish timestamp, because the route must forward it: the build
+    // window is floored on it, and a prompt built without it would quote dates
+    // the student's task rows do not have.
+    published_at: '2026-08-14T18:05:00.000Z',
     plan: {
       project_name: 'Student Engagement Monitoring Tool',
       descriptor: 'watches who is falling behind',
@@ -157,7 +161,12 @@ describe('STORY-000 resolves even though it is not in plan.stories', () => {
 
     const res = await get(COMMAND_CENTER_STORY_ID);
 
-    expect(mockSchedule).toHaveBeenCalledWith(ENROLLMENT, expect.anything(), null);
+    // The 4th argument is load-bearing. `scheduleForEnrollment` floors the
+    // build window on the plan's publish date, so a caller that drops it gets
+    // the pre-fix behaviour back — dates against a window that already opened.
+    expect(mockSchedule).toHaveBeenCalledWith(
+      ENROLLMENT, expect.anything(), null, '2026-08-14T18:05:00.000Z',
+    );
     expect(res.body.prompt).toContain('Demo day is 2026-10-08');
   });
 
