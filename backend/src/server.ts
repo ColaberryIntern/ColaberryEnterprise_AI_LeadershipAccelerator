@@ -56,6 +56,7 @@ import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
+import { ensureReeseWelcomeSchema } from './db/ensureReeseWelcomeSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
@@ -2458,6 +2459,9 @@ async function start(): Promise<void> {
   await ensureWorkspaceRepoSchema();
   // Files a student hands to an agent (Cory, Reese) for the read_attachments tool.
   await ensureAgentAttachmentSchema();
+  // Reese's first-login welcome ledger — also the "has this student logged in
+  // before" marker, since enrollments carry no last_login_at.
+  await ensureReeseWelcomeSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
