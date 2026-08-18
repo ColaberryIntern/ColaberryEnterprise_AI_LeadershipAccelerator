@@ -12,11 +12,16 @@ import { sequelize } from '../config/database';
  * bookkeeping after the fact — it is the claim on the greeting, taken before
  * the message is sent.
  *
- * `outcome` records rows where the claim was taken but the send did not
- * succeed, so a failed welcome is visible in the ledger instead of looking
- * identical to a student who was never eligible.
+ * `outcome` records rows where the claim was taken but no message went out:
+ *  'failed'     — the send was attempted and did not succeed.
+ *  'superseded' — deliberately never sent. Someone whose FIRST contact is
+ *                 already as an enrolled student gets the student intro only,
+ *                 so the account intro is retired here rather than left
+ *                 pending, where it would surface later out of order.
+ * Both are visible in the ledger instead of looking identical to a person who
+ * was simply never eligible.
  */
-export type ReeseWelcomeOutcome = 'sent' | 'failed';
+export type ReeseWelcomeOutcome = 'sent' | 'failed' | 'superseded';
 
 /**
  * Which introduction this row records.

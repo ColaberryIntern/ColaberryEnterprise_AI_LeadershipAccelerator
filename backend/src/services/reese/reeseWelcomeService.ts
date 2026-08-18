@@ -10,6 +10,11 @@
  * Someone who signs up and later enrols therefore receives two intros, in that
  * order. Someone who only ever browses on a free account receives one.
  *
+ * Someone whose FIRST contact is already as an enrolled student receives the
+ * student intro ONLY — two DMs in the same second is not a welcome, it is
+ * noise. The account intro is retired unsent rather than left pending, so it
+ * cannot surface later out of order.
+ *
  * FIVE DESIGN DECISIONS WORTH KNOWING, because each is a place this could have
  * gone wrong:
  *
@@ -48,6 +53,7 @@ import { getReeseEnrollmentId } from './reeseIdentitySeed';
 
 export type WelcomeOutcome =
   | 'sent'
+  | 'superseded'
   | 'already_sent'
   | 'not_applicable'
   | 'disabled'
@@ -135,6 +141,24 @@ export function isRealClassCohort(cohort: { name?: string | null; cohort_type?: 
   return String(cohort.cohort_type ?? '').toLowerCase() !== 'business';
 }
 
+/**
+ * Claim an intro WITHOUT sending it, so it can never fire later.
+ *
+ * Used for the account intro when someone's first contact is already as an
+ * enrolled student: that message would be stale on arrival, and leaving the
+ * slot unclaimed would mean it turns up on some future login, out of order and
+ * out of context.
+ */
+async function retireUnsent(enrollmentId: string, kind: ReeseWelcomeKind): Promise<WelcomeResult> {
+  try {
+    await ReeseWelcome.create({ enrollment_id: enrollmentId, kind, outcome: 'superseded' });
+  } catch {
+    // Lost the race to a concurrent request — the slot is claimed either way,
+    // which is the only thing that matters here.
+  }
+  return { kind, outcome: 'superseded' };
+}
+
 /** Send one intro if it has never been sent. Never throws. */
 async function sendOnce(
   enrollmentId: string,
@@ -214,15 +238,31 @@ export async function maybeSendWelcomes(enrollmentId: string): Promise<WelcomeRe
     const isStudent = enrollment.tier === 'member' || inRealClass;
     const cohortName = inRealClass ? (cohort?.name ?? null) : null;
 
-    const results: WelcomeResult[] = [];
-    // Account intro always comes first, so a person who arrives already
-    // enrolled still meets Reese in the intended order.
-    results.push(await sendOnce(enrollmentId, 'account', firstName, null));
-    if (isStudent) {
-      results.push(await sendOnce(enrollmentId, 'student', firstName, cohortName));
-    } else {
-      results.push({ kind: 'student', outcome: 'not_applicable' });
+    // Has this person met Reese at all yet? Decides between "first contact"
+    // and "they already have the account intro, this is the class one".
+    const accountAlready = await ReeseWelcome.findOne({
+      where: { enrollment_id: enrollmentId, kind: 'account' },
+    });
+
+    // FIRST CONTACT AND ALREADY A STUDENT: send the student intro only. The
+    // account intro would say "have a look around, tell me what you want to
+    // build" to someone who has already enrolled and paid — stale on arrival —
+    // and firing both in the same second reads as a bot, not a welcome. It is
+    // retired rather than skipped so it can never arrive on a later login.
+    if (isStudent && !accountAlready) {
+      return [
+        await retireUnsent(enrollmentId, 'account'),
+        await sendOnce(enrollmentId, 'student', firstName, cohortName),
+      ];
     }
+
+    const results: WelcomeResult[] = [];
+    results.push(await sendOnce(enrollmentId, 'account', firstName, null));
+    results.push(
+      isStudent
+        ? await sendOnce(enrollmentId, 'student', firstName, cohortName)
+        : { kind: 'student', outcome: 'not_applicable' },
+    );
     return results;
   } catch (e: any) {
     // Nothing above may take down a login.
