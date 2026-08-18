@@ -178,3 +178,47 @@ needed at all. **P24 can be closed as redundant rather than deferred.**
 
 `INTERNSHIP_READY` still needs care: it should target learners who are **not yet
 subscribed and not yet enrolled**, since interns by definition already have both.
+
+---
+
+# Flow decisions, 2026-08-18
+
+1. **Dhee approves first.** Signup creates a **pending application**; Dhee reviews
+   and accepts. A human checks the not-employed-full-time attestation. **We build a
+   review queue.**
+2. **Payment on acceptance, before access.** Dhee accepts, applicant gets a checkout
+   link, training access unlocks when payment clears. Needs a **nudge and an expiry**
+   for accepted people who never pay, or they stall in limbo indefinitely.
+3. **Moving from a class KEEPS the class enrollment** and adds the internship on top.
+   Progress, cohort and history survive untouched, and interns can drop into live
+   classes anyway. **A person may legitimately hold two active enrollments.**
+4. **Dhee can grant free access with an end date she sets.** On lapse, access
+   converts to requiring a subscription, and she is **warned before it expires**.
+   Comp is time-boxed per person, not open-ended and not a fixed global window.
+
+## The collision decision 3 creates — resolve before building
+
+`participantService.pickBestEnrollment` exists because `enrollments.email` is not
+unique and duplicates are routine noise. Decision 3 makes **two concurrent
+enrollments a legitimate state** for the first time: class *and* internship, both
+active, both correct.
+
+So `pickBestEnrollment` can no longer treat "two rows for one email" as a duplicate
+to collapse. Anything that calls it — the portal, the entitlement check, the
+Explorer Growth identity bridge and profile recompute — must decide whether it wants
+*the* enrollment or *all* of them. **Silently picking one would hide a student's
+internship or their class, depending on which row wins.**
+
+This is the highest-risk integration point in the whole feature and it is not
+internship-specific: it changes an assumption several existing systems already rely
+on. Audit every `pickBestEnrollment` call site before writing the enrollment path.
+
+## Revised build order
+
+1. **Audit `pickBestEnrollment` call sites** against the two-active-enrollments case.
+2. **Internship option in the signup dropdown**, creating a pending application
+   carrying the attestation and commitment acknowledgement.
+3. **Dhee's review queue** — accept, decline, comp with an end date, move a student
+   between class and internship.
+4. **Acceptance to checkout to access**, with the unpaid-limbo nudge and expiry.
+5. **Comp expiry**, with the advance warning to Dhee.
