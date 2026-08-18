@@ -1730,6 +1730,15 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
   },
 
   // --- Department Strategy Architect agents (16) ---
+  // Agent Ticket Standard audit (2026-08-18, session CC-20260818-a7d2): all 16 share one
+  // engine (strategyArchitectAgent.ts / departmentInitiativeEngine.ts), re-verified against
+  // that engine's real exported functions for tools_granted (never boilerplate/aspirational —
+  // directive Step 4). Each description now also states why no recurring resolver is
+  // registered (directive Step 6): `Initiative.status` (the model backing every one of these
+  // 16 agents' tickets) has zero write paths anywhere in this codebase today — nothing, human
+  // or automated, ever transitions it away from 'planned' — so there is no live signal to
+  // build an honest resolver against yet. A time-based/elapsed-age fallback is permanently
+  // banned in this repo, so these tickets stay open rather than being force-closed.
   {
     agent_name: 'ExecutiveStrategyArchitect',
     agent_type: 'dept_strategy_architect',
@@ -1738,7 +1747,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '0 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Executive Office. Evaluates organizational health, identifies cross-department alignment opportunities, and generates executive-level initiatives.',
+    description: 'Strategic planning agent for Executive Office. Evaluates organizational health, identifies cross-department alignment opportunities, and generates executive-level initiatives. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'executive', agent_name: 'ExecutiveStrategyArchitect' },
   },
   {
@@ -1749,7 +1759,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '2 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Governance & Compliance. Monitors compliance posture, identifies risk patterns, and ensures policy adherence across departments.',
+    description: 'Strategic planning agent for Governance & Compliance. Monitors compliance posture, identifies risk patterns, and ensures policy adherence across departments. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'governance', agent_name: 'GovernanceStrategyArchitect' },
   },
   {
@@ -1760,7 +1771,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '4 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Strategy & Analytics. Drives data-driven planning, forecasting accuracy, and strategic initiative pipeline.',
+    description: 'Strategic planning agent for Strategy & Analytics. Drives data-driven planning, forecasting accuracy, and strategic initiative pipeline. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'strategy', agent_name: 'StrategyFuturesArchitect' },
   },
   {
@@ -1771,7 +1783,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '6 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Finance. Optimizes cost structures, revenue forecasting accuracy, and scholarship allocation efficiency.',
+    description: 'Strategic planning agent for Finance. Optimizes cost structures, revenue forecasting accuracy, and scholarship allocation efficiency. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'finance', agent_name: 'FinanceIntelligenceArchitect' },
   },
   {
@@ -1782,7 +1795,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '8 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Operations. Drives workflow optimization, quality assurance improvements, and process automation.',
+    description: 'Strategic planning agent for Operations. Drives workflow optimization, quality assurance improvements, and process automation. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'operations', agent_name: 'OperationsOptimizationArchitect' },
   },
   {
@@ -1793,7 +1807,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '10 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Orchestration. Coordinates agent fleet performance, decision simulation, and system-wide optimization.',
+    description: 'Strategic planning agent for Orchestration. Coordinates agent fleet performance, decision simulation, and system-wide optimization. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'orchestration', agent_name: 'OrchestrationEcosystemArchitect' },
   },
   {
@@ -1804,7 +1819,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '12 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Intelligence & AI Ops. Identifies anomaly patterns, generates strategic insights, and improves autonomous operations.',
+    description: 'Strategic planning agent for Intelligence & AI Ops. Identifies anomaly patterns, generates strategic insights, and improves autonomous operations. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'intelligence', agent_name: 'InsightArchitect' },
   },
   {
@@ -1815,7 +1831,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '14 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Partnerships. Identifies expansion opportunities, strengthens corporate relationships, and develops institutional alliances.',
+    description: 'Strategic planning agent for Partnerships. Identifies expansion opportunities, strengthens corporate relationships, and develops institutional alliances. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'partnerships', agent_name: 'PartnershipExpansionArchitect' },
   },
   {
@@ -1826,7 +1843,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '16 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Growth. Designs growth experiments, scans for expansion opportunities, and drives partnership development.',
+    description: 'Strategic planning agent for Growth. Designs growth experiments, scans for expansion opportunities, and drives partnership development. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'growth', agent_name: 'GrowthExperimentArchitect' },
   },
   {
@@ -1837,7 +1855,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '18 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Marketing. Optimizes lead generation, content strategy, campaign performance, and brand positioning.',
+    description: 'Strategic planning agent for Marketing. Optimizes lead generation, content strategy, campaign performance, and brand positioning. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'marketing', agent_name: 'MarketingAutomationArchitect' },
   },
   {
@@ -1848,7 +1867,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '20 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Admissions. Improves enrollment pipeline, student recruitment efficiency, and conversion optimization.',
+    description: 'Strategic planning agent for Admissions. Improves enrollment pipeline, student recruitment efficiency, and conversion optimization. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'admissions', agent_name: 'AdmissionsConversionArchitect' },
   },
   {
@@ -1859,7 +1879,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '22 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Infrastructure. Monitors system health, security posture, AI model performance, and reliability improvements.',
+    description: 'Strategic planning agent for Infrastructure. Monitors system health, security posture, AI model performance, and reliability improvements. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'infrastructure', agent_name: 'InfrastructureEvolutionArchitect' },
   },
   {
@@ -1870,7 +1891,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '24 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Platform. Drives UX optimization, deployment improvements, and performance monitoring enhancements.',
+    description: 'Strategic planning agent for Platform. Drives UX optimization, deployment improvements, and performance monitoring enhancements. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'platform', agent_name: 'PlatformInnovationArchitect' },
   },
   {
@@ -1881,7 +1903,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '26 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Education. Innovates curriculum design, content generation methods, and learning outcome measurement.',
+    description: 'Strategic planning agent for Education. Innovates curriculum design, content generation methods, and learning outcome measurement. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'education', agent_name: 'LearningInnovationArchitect' },
   },
   {
@@ -1892,7 +1915,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '28 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Student Success. Improves retention, mentoring programs, learning outcomes, and student experience.',
+    description: 'Strategic planning agent for Student Success. Improves retention, mentoring programs, learning outcomes, and student experience. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'student_success', agent_name: 'StudentSuccessArchitect' },
   },
   {
@@ -1903,7 +1927,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '30 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Alumni Relations. Strengthens post-graduation engagement, referral programs, and community building.',
+    description: 'Strategic planning agent for Alumni Relations. Strengthens post-graduation engagement, referral programs, and community building. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'alumni', agent_name: 'AlumniNetworkArchitect' },
   },
 

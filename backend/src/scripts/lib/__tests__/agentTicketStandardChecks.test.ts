@@ -173,6 +173,9 @@ describe('scanForTimeBasedClosurePatterns', () => {
 });
 
 describe('AGENT_TICKET_RESOLVER_REGISTRY / findResolverMapping', () => {
+  // The original 6 agents' ticket-creator names — each of these genuinely has a real,
+  // registered recurring resolver today (Reese is the sole documented partial-coverage
+  // exception, asserted separately below).
   const expectedCreators = [
     'cory-engine',
     'CoryBrain',
@@ -182,8 +185,29 @@ describe('AGENT_TICKET_RESOLVER_REGISTRY / findResolverMapping', () => {
     'Reese',
   ];
 
-  it('happy path: all 6 real ticket-creator agents have a mapping', () => {
+  // The 16 department Strategy Architect agents added in the 2026-08-18 Agent Ticket Standard
+  // audit (session CC-20260818-a7d2) — confirmed to have NO recurring resolver yet
+  // (Initiative.status has zero write paths in this codebase), a documented, honest gap, not
+  // an oversight. Listed explicitly (not derived from STRATEGY_CONFIGS) so this test file has
+  // no import-time dependency on that module and stays a pure fixture-comparison test.
+  const departmentArchitectCreators = [
+    'ExecutiveStrategyArchitect', 'GovernanceStrategyArchitect', 'StrategyFuturesArchitect',
+    'FinanceIntelligenceArchitect', 'OperationsOptimizationArchitect', 'OrchestrationEcosystemArchitect',
+    'InsightArchitect', 'PartnershipExpansionArchitect', 'GrowthExperimentArchitect',
+    'MarketingAutomationArchitect', 'AdmissionsConversionArchitect', 'InfrastructureEvolutionArchitect',
+    'PlatformInnovationArchitect', 'LearningInnovationArchitect', 'StudentSuccessArchitect',
+    'AlumniNetworkArchitect',
+  ];
+
+  it('happy path: all 6 original real ticket-creator agents have a mapping', () => {
     for (const name of expectedCreators) {
+      expect(findResolverMapping(name)).toBeDefined();
+    }
+  });
+
+  it('happy path: all 16 department Strategy Architect agents also have a mapping (audited, not silently skipped)', () => {
+    expect(departmentArchitectCreators).toHaveLength(16);
+    for (const name of departmentArchitectCreators) {
       expect(findResolverMapping(name)).toBeDefined();
     }
   });
@@ -192,24 +216,35 @@ describe('AGENT_TICKET_RESOLVER_REGISTRY / findResolverMapping', () => {
     expect(findResolverMapping('SomeBrandNewAgentNobodyRegisteredYet')).toBeUndefined();
   });
 
-  it('every mapped resolver has a non-null resolverAgentName (all 6 have a real recurring resolver today)', () => {
-    for (const mapping of AGENT_TICKET_RESOLVER_REGISTRY) {
-      expect(mapping.resolverAgentName).not.toBeNull();
+  it('every one of the original 6 mapped resolvers has a non-null resolverAgentName (a real recurring resolver today)', () => {
+    for (const name of expectedCreators) {
+      expect(findResolverMapping(name)?.resolverAgentName).not.toBeNull();
     }
   });
 
-  it('workforce_intelligence_engine is the one documented exception with no separate rules file or artifacts module', () => {
+  it('every one of the 16 department Strategy Architects has a null resolverAgentName — honest, not a placeholder (no live re-checkable signal exists yet)', () => {
+    for (const name of departmentArchitectCreators) {
+      const mapping = findResolverMapping(name);
+      expect(mapping?.resolverAgentName).toBeNull();
+      expect(mapping?.resolverRulesFile).toBeNull();
+      expect(mapping?.resolverIoFile).toBeNull();
+      expect(mapping?.artifactsFile).toBeNull();
+    }
+  });
+
+  it('workforce_intelligence_engine is the one documented exception among the original 6 with no separate rules file or artifacts module', () => {
     const mapping = findResolverMapping('workforce_intelligence_engine');
     expect(mapping?.resolverRulesFile).toBeNull();
     expect(mapping?.resolverIoFile).toBe('services/company/workforceTicketAutoResolver.ts');
     expect(mapping?.artifactsFile).toBeNull();
   });
 
-  it('every other mapped resolver (all but workforce_intelligence_engine) has a real artifactsFile', () => {
-    for (const mapping of AGENT_TICKET_RESOLVER_REGISTRY) {
-      if (mapping.creatorAgentName !== 'workforce_intelligence_engine') {
-        expect(mapping.artifactsFile).not.toBeNull();
-        expect(mapping.artifactsFile).toMatch(/^scripts\/lib\/.+\.ts$/);
+  it('every other mapped resolver among the original 6 (all but workforce_intelligence_engine) has a real artifactsFile', () => {
+    for (const name of expectedCreators) {
+      if (name !== 'workforce_intelligence_engine') {
+        const mapping = findResolverMapping(name);
+        expect(mapping?.artifactsFile).not.toBeNull();
+        expect(mapping?.artifactsFile).toMatch(/^scripts\/lib\/.+\.ts$/);
       }
     }
   });
@@ -221,9 +256,19 @@ describe('AGENT_TICKET_RESOLVER_REGISTRY / findResolverMapping', () => {
     expect(mapping?.knownGap).toMatch(/ReeseOutreachFollowUps/);
   });
 
-  it('no other agent carries an undocumented knownGap (only Reese has a disclosed gap today)', () => {
+  it('every one of the 16 department Strategy Architects carries its own documented knownGap explaining the missing resolver', () => {
+    for (const name of departmentArchitectCreators) {
+      const mapping = findResolverMapping(name);
+      expect(mapping?.knownGap).toBeDefined();
+      expect(mapping?.knownGap).toMatch(/Initiative\.status/);
+      expect(mapping?.knownGap).not.toMatch(/daysSince|ageInDays|Date\.now\(\)/); // never a time-based excuse
+    }
+  });
+
+  it('no agent outside the original-6-minus-Reese and the 16 Architects carries an undocumented knownGap', () => {
+    const expectedGapBearers = new Set(['Reese', ...departmentArchitectCreators]);
     for (const mapping of AGENT_TICKET_RESOLVER_REGISTRY) {
-      if (mapping.creatorAgentName !== 'Reese') {
+      if (!expectedGapBearers.has(mapping.creatorAgentName)) {
         expect(mapping.knownGap).toBeUndefined();
       }
     }
