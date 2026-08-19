@@ -823,3 +823,136 @@
 @media (max-width: 860px) {
   .cbv2-buildshots { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------------------------------------------- from idea to shipped: beats */
+
+/*
+ * Four alternating rows, each a picture beside the claim it proves. This
+ * replaced a grid of three captures sitting together with nothing saying what
+ * they were -- the pictures were doing no work because nothing tied them to an
+ * argument.
+ */
+.cbv2-bstack { display: grid; gap: var(--space-9); }
+
+.cbv2-brow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--space-7);
+  align-items: center;
+}
+/* Alternating sides, so the eye zig-zags down the section instead of running a
+   single column of images. */
+.cbv2-brow--flip .cbv2-brow__shot { order: 2; }
+
+.cbv2-brow__shot {
+  margin: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  box-shadow: var(--shadow-md);
+}
+.cbv2-brow__shot img { display: block; width: 100%; height: auto; }
+
+.cbv2-brow__say h3 {
+  margin: var(--space-2) 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 2.1vw, 1.8rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+  text-wrap: balance;
+}
+.cbv2-brow__say p { margin: 0; color: var(--text-muted); line-height: var(--lh-relaxed, 1.65); }
+
+@media (max-width: 860px) {
+  .cbv2-brow { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  /* The flip has to be undone when stacked, or every other row puts its picture
+     under its own paragraph and the pairing stops reading. */
+  .cbv2-brow--flip .cbv2-brow__shot { order: 0; }
+}
+
+/* ------------------------------------------------- the connected-repo card */
+
+/*
+ * DRAWN, NOT SCREENSHOT. The real panel prints a per-repo webhook signing
+ * secret and these repos are public, so a crop of it does not belong on a
+ * marketing page -- and no crop stays safe from a later re-capture.
+ */
+.cbv2-repocard { padding: 0; background: var(--surface-card); }
+.cbv2-repocard__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+}
+.cbv2-repocard__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-600, #4b9b2f); }
+.cbv2-repocard__path { flex: 1; }
+.cbv2-repocard__ok { color: var(--green-600, #4b9b2f); font-weight: 700; }
+
+.cbv2-repocard__body { padding: var(--space-5); display: grid; gap: var(--space-4); }
+.cbv2-repocard__name {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-body-sm);
+  color: var(--text-strong);
+  word-break: break-all;
+}
+.cbv2-repocard__checks { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-2); }
+.cbv2-repocard__checks li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+}
+.cbv2-repocard__checks i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--green-600, #4b9b2f);
+  position: relative;
+}
+.cbv2-repocard__checks i::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  width: 4px;
+  height: 7px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.cbv2-repocard__cory {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  border: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-repocard__avatar {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--cherry);
+  color: #fff;
+  font-weight: 700;
+  font-size: var(--fs-body-sm);
+}
+.cbv2-repocard__cory p { margin: 0; display: grid; gap: 2px; }
+.cbv2-repocard__cory b { color: var(--text-strong); font-size: var(--fs-body-sm); }
+.cbv2-repocard__cory span { color: var(--text-muted); font-size: var(--fs-body-sm); line-height: 1.5; }

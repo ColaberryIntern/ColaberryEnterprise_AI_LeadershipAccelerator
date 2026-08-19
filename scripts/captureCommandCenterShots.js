@@ -55,6 +55,30 @@ const SHOTS = [
     bannerInFrame: true,
   },
   {
+    /*
+     * The agent roster. This is the differentiator Ali wants shown: the plan
+     * does not stop at software, it enumerates the work of running the thing
+     * and splits it into what an agent does and what a person does, naming an
+     * AI role for each agent position.
+     *
+     * Each card states what fires it, what it produces and what skills it uses,
+     * and carries a live/needs-attention state -- so the crop has to be wide
+     * enough to include those states, or it reads as a static list.
+     */
+    name: 'shot-agents.png',
+    url: `${BASE}/07-agents.html`,
+    mustContain: ['Sample data', 'Every agent', 'Fires on', 'Produces'],
+    /*
+     * MEASURED, not guessed. A hand-picked x=356 sliced the leading column down
+     * the middle -- the grid actually runs 144..1296 at this viewport, with the
+     * "Every agent" heading at y=96 once scrolled. Two rows of cards is enough
+     * to show the pattern without the crop turning into a wall.
+     */
+    clip: { x: 130, y: 78, width: 1180, height: 700 },
+    bannerInFrame: false,
+    scrollTo: 'Every agent',
+  },
+  {
     name: 'shot-build-schedule.png',
     url: `${BASE}/06-project.html`,
     mustContain: ['Sample data', 'Schedule', 'STORY-001'],
