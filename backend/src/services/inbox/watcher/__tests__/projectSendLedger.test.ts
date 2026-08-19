@@ -20,8 +20,17 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { loadOutboundLedger, sendLedgerPath, normalizeMessageId } from '../outboundIdentity';
-import { LedgerProjectionError, projectSendLedger } from '../projectSendLedger';
+import {
+  loadOutboundLedger,
+  sendLedgerPath,
+  normalizeMessageId,
+  isCampaignRecipient,
+} from '../outboundIdentity';
+import {
+  LedgerProjectionError,
+  projectSendLedger,
+  reconcileSendLedger,
+} from '../projectSendLedger';
 
 const EVENT = 'story000-unblock-2026-08-17';
 
@@ -121,5 +130,157 @@ describe('projectSendLedger', () => {
     await projectSendLedger(dir, EVENT, query);
 
     expect(query).toHaveBeenCalledWith(EVENT);
+  });
+});
+
+/**
+ * Keeping an EXISTING ledger current.
+ *
+ * `projectSendLedger` refuses to overwrite, which is right — the file can be
+ * the only record of who has been emailed. But refusing is not the same as
+ * having a way forward, and the gap showed: mail kept going out to these
+ * students under new business events (Chuks, Farhat, Taiwo, Quincy, Shabana,
+ * Million, Marcus, Hellen, Liza, Jude, Swati, Michael Castellanos and more),
+ * every one of those sends recorded in Postgres and none of them in the file.
+ *
+ * That is not a cosmetic drift. It breaks the watcher two ways at once:
+ *
+ *   1. Ali is BCC'd, so our own copy lands in the mailbox the watcher reads.
+ *      With its Message-ID absent from the ledger, `identifyOutbound` sees the
+ *      outbound-copy header on a message it cannot find in the ledger, reports
+ *      `seamDisagreement`, and the cycle drops to ESCALATE-ONLY.
+ *   2. The roster is derived from the ledger's recipients. A student who is not
+ *      in the file is `not_campaign_recipient`, so their genuine reply is
+ *      SKIPPED — silently ignored rather than escalated.
+ *
+ * So this appends what is missing and never rewrites a byte of what is there.
+ */
+describe('reconcileSendLedger tops up a ledger that has fallen behind the DB', () => {
+  const existing = (over: Partial<any> = {}) => ({
+    ts: '2026-08-17T02:05:00.000Z',
+    type: 'sent',
+    key: 'k-original',
+    recipient: 'bfglz@yahoo.com',
+    subject: 'Your build, and a fresh sign in link',
+    business_event_id: EVENT,
+    message_id: '<campaign-1@colaberry.com>',
+    ...over,
+  });
+
+  const seed = (...records: any[]) =>
+    fs.writeFileSync(sendLedgerPath(dir), records.map((r) => JSON.stringify(r)).join('\n') + '\n');
+
+  const later = (over: Partial<any> = {}) =>
+    row({
+      idempotency_key: 'k-later',
+      recipient: 'chukseneh@outlook.com',
+      business_event_id: 'eneh-sixthings-2026-08-18',
+      provider_message_id: '<later-1@colaberry.com>',
+      sent_at: '2026-08-18T12:00:00.000Z',
+      ...over,
+    });
+
+  it('appends the send the file was missing', async () => {
+    // The file already knows about `row()`; only `later()` is new to it.
+    seed(existing({ key: '9602f29db9d97f1feed0a10ca2202951' }));
+
+    const result = await reconcileSendLedger(dir, queryReturning([row(), later()]));
+
+    expect(result.appended).toBe(1);
+  });
+
+  it('leaves the line that was already there untouched, byte for byte', async () => {
+    seed(existing());
+    const before = fs.readFileSync(sendLedgerPath(dir), 'utf8');
+
+    await reconcileSendLedger(dir, queryReturning([row(), later()]));
+
+    expect(fs.readFileSync(sendLedgerPath(dir), 'utf8').startsWith(before)).toBe(true);
+  });
+
+  it('does not re-append a send the file already records', async () => {
+    seed(existing({ key: '9602f29db9d97f1feed0a10ca2202951' }));
+
+    const result = await reconcileSendLedger(dir, queryReturning([row()]));
+
+    expect(result.appended).toBe(0);
+  });
+
+  it('is a no-op on a ledger that is already current', async () => {
+    seed(existing({ key: '9602f29db9d97f1feed0a10ca2202951' }));
+    const before = fs.readFileSync(sendLedgerPath(dir), 'utf8');
+
+    await reconcileSendLedger(dir, queryReturning([row()]));
+
+    expect(fs.readFileSync(sendLedgerPath(dir), 'utf8')).toBe(before);
+  });
+
+  it('puts the newly-seen student on the campaign roster', async () => {
+    seed(existing());
+
+    await reconcileSendLedger(dir, queryReturning([row(), later()]));
+
+    // Without this the student's genuine reply is skipped as not_campaign_recipient.
+    expect(isCampaignRecipient(loadOutboundLedger(dir), 'chukseneh@outlook.com')).toBe(true);
+  });
+
+  it("registers the new send's message id, so our own BCC copy is recognised", async () => {
+    seed(existing());
+
+    await reconcileSendLedger(dir, queryReturning([row(), later()]));
+
+    expect(
+      loadOutboundLedger(dir).messageIds.has(normalizeMessageId('<later-1@colaberry.com>')),
+    ).toBe(true);
+  });
+
+  it('leaves the ledger loadable, which is the whole point of topping it up', async () => {
+    seed(existing());
+
+    await reconcileSendLedger(dir, queryReturning([row(), later()]));
+
+    expect(loadOutboundLedger(dir).available).toBe(true);
+  });
+
+  it('counts every send afterwards, the old and the new', async () => {
+    seed(existing());
+
+    await reconcileSendLedger(dir, queryReturning([row(), later()]));
+
+    expect(loadOutboundLedger(dir).sentCount).toBe(3);
+  });
+
+  it('THROWS on a row with no provider message id rather than poisoning the ledger', async () => {
+    seed(existing());
+
+    await expect(
+      reconcileSendLedger(dir, queryReturning([later({ provider_message_id: null })])),
+    ).rejects.toThrow(/k-later/);
+  });
+
+  it('appends nothing at all when one row in the batch is unusable', async () => {
+    seed(existing());
+    const before = fs.readFileSync(sendLedgerPath(dir), 'utf8');
+
+    await reconcileSendLedger(
+      dir,
+      queryReturning([later(), later({ idempotency_key: 'k-bad', provider_message_id: '' })]),
+    ).catch(() => undefined);
+
+    expect(fs.readFileSync(sendLedgerPath(dir), 'utf8')).toBe(before);
+  });
+
+  it('REFUSES when there is no ledger to top up, rather than inventing a partial one', async () => {
+    await expect(reconcileSendLedger(dir, queryReturning([row()]))).rejects.toThrow(
+      /--project-ledger/,
+    );
+  });
+
+  it('REFUSES to append to a ledger it cannot fully parse', async () => {
+    fs.writeFileSync(sendLedgerPath(dir), '{"type":"sent","key":"a","message_id":"<a@b>"}\nnot-json\n');
+
+    await expect(reconcileSendLedger(dir, queryReturning([row()]))).rejects.toThrow(
+      LedgerProjectionError,
+    );
   });
 });
