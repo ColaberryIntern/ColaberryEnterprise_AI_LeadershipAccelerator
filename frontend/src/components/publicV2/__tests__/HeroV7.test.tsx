@@ -82,13 +82,27 @@ describe('HeroV7', () => {
   });
 
   /**
-   * The hero is now typographic: its dashboard screenshot moved down to the
-   * free-workspace section. A screenshot reappearing here would be an unlabelled
-   * depiction of a product surface in the most prominent slot on the site, which
-   * is exactly what the claims registry exists to prevent.
+   * UPDATED: the hero now carries a PHOTOGRAPH, and the distinction is the whole
+   * point of this test.
+   *
+   * What must never come back here is a product SCREENSHOT: an unlabelled
+   * depiction of a product surface in the most prominent slot on the site is
+   * exactly what the claims registry exists to prevent, and the dashboard that
+   * used to sit here now lives in the free-workspace section behind its gate.
+   *
+   * A photograph of people working is not a claim about the product, so it needs
+   * no sample label -- and it is decorative, since every claim beside it is
+   * already made in the text, which is why it is aria-hidden with empty alt
+   * rather than described twice.
    */
-  it('ships no image, so nothing here needs a sample label', () => {
-    expect(html()).not.toContain('<img');
+  it('carries a decorative photograph and no product screenshot', () => {
+    const h = html();
+    expect(h).toContain('/site-v2/photos/');
+    expect(h).toContain('alt=""');
+    expect(h).toContain('aria-hidden="true"');
+    // No captured product surface, and therefore nothing needing a sample badge.
+    expect(h).not.toContain('/site-v2/shot-');
+    expect(h).not.toContain('data-sample');
   });
 
   /**
