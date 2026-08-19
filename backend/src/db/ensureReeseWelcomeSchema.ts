@@ -42,6 +42,14 @@ export async function ensureReeseWelcomeSchema(): Promise<void> {
     // the column is added before the composite index is built on it.
     `ALTER TABLE reese_welcomes ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'account'`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_reese_welcomes_enrollment_kind_once ON reese_welcomes (enrollment_id, kind)`,
+    // Drop the single-intro version's index. `CREATE ... IF NOT EXISTS` never
+    // removes anything, so an environment that booted the first release keeps a
+    // UNIQUE index on enrollment_id ALONE — which silently caps each person at
+    // ONE row and makes the student intro impossible: its insert is rejected,
+    // the service reads that as "already sent", and the class message never
+    // arrives. Observed on production 2026-08-18, where both indexes coexisted.
+    // The composite index above is the real constraint; this one must go.
+    `DROP INDEX IF EXISTS idx_reese_welcomes_enrollment_once`,
   ];
 
   for (const sql of statements) {
