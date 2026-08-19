@@ -31,6 +31,18 @@ import { OPEN_TICKET_STATUS_FILTER } from './liveAgentsService';
 
 const COLABERRY_ORG_NAME = 'Colaberry';
 
+/** Ali's 6 named departments (live, 2026-08-19, session CC-20260818-x4nk
+ * continued — see the org-chart-departments run's request.md), in the order
+ * he gave them. Any human whose `team` isn't one of these (including null)
+ * buckets into `OTHER_DEPARTMENT` — never silently dropped from the chart. */
+export const NAMED_DEPARTMENTS = ['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing'] as const;
+export const OTHER_DEPARTMENT = 'Other';
+
+function resolveDepartment(team: string | null): string {
+  if (team && (NAMED_DEPARTMENTS as readonly string[]).includes(team)) return team;
+  return OTHER_DEPARTMENT;
+}
+
 /** Thrown when the "Colaberry" Organization row itself can't be found — a
  * distinct, named error class (not a generic Error) per this repo's error-
  * classification rule, since a missing seed row is a different failure mode
@@ -59,6 +71,10 @@ export interface OrgChartHuman {
   name: string;
   email: string;
   team: string | null;
+  /** One of `NAMED_DEPARTMENTS`, or `OTHER_DEPARTMENT` for a null/
+   * unrecognized `team` — always present, never null (the frontend's
+   * department-grouping render key). */
+  department: string;
   role: 'manager' | 'member';
   /** AiAgent ids with reports_to_type='human' resolving directly to this human. */
   leadership_agent_ids: string[];
@@ -77,6 +93,12 @@ export interface OrgChartLeadershipAgent {
   agent_name: string;
   display_name: string;
   reports_to_human_id: string;
+  /** Real, human-readable "Reports to: <human name>" string — present on
+   * every resolved leadership entry so a card can show it before a click
+   * (Ali, live: "Each AI staff should have a tag on them to show who they
+   * report to on their cards before even clicking"). Never present for an
+   * `unresolved` agent, which has no chain to summarize. */
+  reports_to_summary: string;
   staff_ids: string[];
   open_ticket_count: number;
 }
@@ -86,6 +108,9 @@ export interface OrgChartStaffAgent {
   agent_name: string;
   display_name: string;
   reports_to_agent_id: string;
+  /** Real "Reports to: <leadership agent's display name>" string — same
+   * pre-click visibility requirement as OrgChartLeadershipAgent's. */
+  reports_to_summary: string;
   open_ticket_count: number;
 }
 
@@ -204,6 +229,14 @@ async function fetchHumanNames(humanMembers: OrgMember[]): Promise<Map<string, s
   return new Map(enrollments.map((e) => [e.id, e.full_name]));
 }
 
+/** The ONE display-name resolution rule for a human (Enrollment.full_name,
+ * falling back to email) — shared by the final `humans` map AND the
+ * leadership `reports_to_summary` computation below, so the two can never
+ * drift into showing a different name for the same person. */
+function humanDisplayName(member: OrgMember, nameByEnrollmentId: Map<string, string>): string {
+  return (member.enrollment_id && nameByEnrollmentId.get(member.enrollment_id)) || member.email;
+}
+
 /** Excludes org_members whose email belongs to an AI-operated AdminUser
  * identity (e.g. reese@colaberry.com, the Reese agent's real free-account
  * email) — those are AI Staff wearing a human roster row, not real humans;
@@ -233,6 +266,18 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
   const identityByAgentId = await fetchAgentIdentities(agents.map((a) => a.id));
   const openCountByAgentId = await fetchOpenTicketCountsByAgent(agents, identityByAgentId);
 
+  // Precomputed once, before the resolution loop, so a staff entry's
+  // `reports_to_summary` can look up its target leadership agent's display
+  // name regardless of which order `agents` iterates in (a staff agent may
+  // be processed before the leadership agent it reports to). Same source of
+  // truth the loop itself would otherwise compute per-agent — no duplicate
+  // logic, just precomputed for random-access lookup.
+  const agentDisplayNameById = new Map(agents.map((a) => [a.id, identityByAgentId.get(a.id)?.display_name || a.agent_name]));
+  // Same idea for humans' reports_to_summary — reuses the exact humanDisplayName()
+  // rule the final `humans` map below also uses, so the two can never show a
+  // different name for the same person.
+  const humanDisplayNameById = new Map(humanMembers.map((m) => [m.id, humanDisplayName(m, nameByEnrollmentId)]));
+
   const leadership: OrgChartLeadershipAgent[] = [];
   const staff: OrgChartStaffAgent[] = [];
   const unresolved: OrgChartUnresolvedAgent[] = [];
@@ -246,7 +291,7 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
   };
 
   for (const agent of agents) {
-    const displayName = identityByAgentId.get(agent.id)?.display_name || agent.agent_name;
+    const displayName = agentDisplayNameById.get(agent.id) || agent.agent_name;
     const openTicketCount = openCountByAgentId.get(agent.id) ?? 0;
     // eslint-disable-next-line no-await-in-loop -- only 23 agents today, each a
     // fast indexed findByPk per hop (1-2 hops); reuses the canonical resolver
@@ -259,21 +304,26 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
     }
 
     if (agent.reports_to_type === 'human') {
+      const reportsToName = humanDisplayNameById.get(resolvedHumanId) ?? resolvedHumanId;
       leadership.push({
         id: agent.id,
         agent_name: agent.agent_name,
         display_name: displayName,
         reports_to_human_id: resolvedHumanId,
+        reports_to_summary: `Reports to: ${reportsToName}`,
         staff_ids: [],
         open_ticket_count: openTicketCount,
       });
       bumpRollup(resolvedHumanId, true, agent.id);
     } else {
+      const reportsToAgentId = agent.reports_to_id as string;
+      const reportsToName = agentDisplayNameById.get(reportsToAgentId) ?? reportsToAgentId;
       staff.push({
         id: agent.id,
         agent_name: agent.agent_name,
         display_name: displayName,
-        reports_to_agent_id: agent.reports_to_id as string,
+        reports_to_agent_id: reportsToAgentId,
+        reports_to_summary: `Reports to: ${reportsToName}`,
         open_ticket_count: openTicketCount,
       });
       bumpRollup(resolvedHumanId, false, agent.id);
@@ -290,9 +340,10 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
     const task = taskByHuman.get(m.id);
     return {
       id: m.id,
-      name: (m.enrollment_id && nameByEnrollmentId.get(m.enrollment_id)) || m.email,
+      name: humanDisplayName(m, nameByEnrollmentId),
       email: m.email,
       team: m.team,
+      department: resolveDepartment(m.team),
       role: m.role,
       leadership_agent_ids: rollup.leadershipIds,
       staff_count: rollup.staffCount,

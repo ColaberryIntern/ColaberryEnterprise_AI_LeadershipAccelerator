@@ -27,6 +27,7 @@ import {
   seedTicketCreatorIdentities,
   getTicketCreatorAdminUserId,
   TICKET_CREATOR_IDENTITIES,
+  REASSIGNED_TO_TAIWO_AGENT_NAMES,
 } from '../ticketCreatorIdentitySeed';
 
 const mockSeedAgentIdentity = seedAgentIdentity as unknown as jest.Mock;
@@ -133,48 +134,74 @@ describe('TICKET_CREATOR_IDENTITIES', () => {
     }
   });
 
-  it('exactly 2 entries are AI Leadership (report directly to a human): CoryBrain -> Ali, workforce_intelligence_engine -> Kes', () => {
+  // Restore Taiwo's AI Staff (Ali, live, 2026-08-19, session
+  // CC-20260818-x4nk continued): 4 of the 16 Department Strategy Architects
+  // (Finance/Operations/Admissions/StudentSuccess) move back from AI Staff
+  // (through CoryBrain) to AI Leadership, reporting directly to Taiwo — a
+  // deliberate, explicit partial reversal of the 2-tier consolidation this
+  // file's history documents above, making Taiwo a 3rd AI Leadership human
+  // alongside Ali and Kes. 6 (not 2) entries are AI Leadership now.
+  it('exactly 6 entries are AI Leadership (report directly to a human): CoryBrain -> Ali, workforce_intelligence_engine -> Kes, and 4 Architects -> Taiwo', () => {
     const ORG_MEMBER = {
       ALI: 'f179c222-284e-4180-a335-cca9e4918b2e',
       KES: '3df017df-affa-49ab-884f-a99a4bd2ef4e',
+      TAIWO: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f',
     };
     const leadership = TICKET_CREATOR_IDENTITIES.filter((c) => !!c.reportsToOrgMemberId);
     const byAgentName = Object.fromEntries(leadership.map((c) => [c.agentName, c.reportsToOrgMemberId]));
 
-    expect(leadership).toHaveLength(2);
+    expect(leadership).toHaveLength(6);
     expect(byAgentName).toEqual({
       CoryBrain: ORG_MEMBER.ALI,
       workforce_intelligence_engine: ORG_MEMBER.KES,
+      FinanceIntelligenceArchitect: ORG_MEMBER.TAIWO,
+      OperationsOptimizationArchitect: ORG_MEMBER.TAIWO,
+      AdmissionsConversionArchitect: ORG_MEMBER.TAIWO,
+      StudentSuccessArchitect: ORG_MEMBER.TAIWO,
     });
   });
 
-  it('the remaining 20 entries are AI Staff, reporting through CoryBrain (all 16 Architects) or workforce_intelligence_engine (cory-engine, InboxCaseEngine, bpos_orchestrator, AgentBehaviorMonitorAgent)', () => {
+  // Drift guard: REASSIGNED_TO_TAIWO_AGENT_NAMES is a second, exported list
+  // (consumed by scripts/reassignArchitectsToTaiwo20260819.ts's own targeted
+  // AiAgent backfill query) that duplicates — rather than derives from — the
+  // 4 agent names actually wired to ORG_MEMBER.TAIWO above. This test is
+  // what keeps the two from silently drifting apart if either list is ever
+  // edited without the other.
+  it('REASSIGNED_TO_TAIWO_AGENT_NAMES matches exactly the agents wired to reportsToOrgMemberId: Taiwo above — never drifts', () => {
+    const ORG_MEMBER_TAIWO = '1fbb5316-1381-4b8a-81a8-3a7325b39d5f';
+    const actualTaiwoAgents = TICKET_CREATOR_IDENTITIES.filter((c) => c.reportsToOrgMemberId === ORG_MEMBER_TAIWO).map((c) => c.agentName).sort();
+
+    expect([...REASSIGNED_TO_TAIWO_AGENT_NAMES].sort()).toEqual(actualTaiwoAgents);
+  });
+
+  it('the remaining 16 entries are AI Staff, reporting through CoryBrain (the other 12 Architects) or workforce_intelligence_engine (cory-engine, InboxCaseEngine, bpos_orchestrator, AgentBehaviorMonitorAgent)', () => {
     const staff = TICKET_CREATOR_IDENTITIES.filter((c) => !!c.reportsToAgentName);
     const byAgentName = Object.fromEntries(staff.map((c) => [c.agentName, c.reportsToAgentName]));
 
-    expect(staff).toHaveLength(EXPECTED_COUNT - 2);
+    expect(staff).toHaveLength(EXPECTED_COUNT - 6);
     expect(byAgentName).toMatchObject({
       'cory-engine': 'workforce_intelligence_engine',
       InboxCaseEngine: 'workforce_intelligence_engine',
       bpos_orchestrator: 'workforce_intelligence_engine',
       AgentBehaviorMonitorAgent: 'workforce_intelligence_engine',
-      AdmissionsConversionArchitect: 'CoryBrain',
       AlumniNetworkArchitect: 'CoryBrain',
       ExecutiveStrategyArchitect: 'CoryBrain',
-      FinanceIntelligenceArchitect: 'CoryBrain',
       GovernanceStrategyArchitect: 'CoryBrain',
       GrowthExperimentArchitect: 'CoryBrain',
       InfrastructureEvolutionArchitect: 'CoryBrain',
       InsightArchitect: 'CoryBrain',
       LearningInnovationArchitect: 'CoryBrain',
       MarketingAutomationArchitect: 'CoryBrain',
-      OperationsOptimizationArchitect: 'CoryBrain',
       OrchestrationEcosystemArchitect: 'CoryBrain',
       PartnershipExpansionArchitect: 'CoryBrain',
       PlatformInnovationArchitect: 'CoryBrain',
       StrategyFuturesArchitect: 'CoryBrain',
-      StudentSuccessArchitect: 'CoryBrain',
     });
+    // The 4 reassigned-to-Taiwo Architects must NOT appear in the staff (reportsToAgentName) set at all — they're AI Leadership now (covered by the test above).
+    expect(Object.keys(byAgentName)).not.toContain('AdmissionsConversionArchitect');
+    expect(Object.keys(byAgentName)).not.toContain('FinanceIntelligenceArchitect');
+    expect(Object.keys(byAgentName)).not.toContain('OperationsOptimizationArchitect');
+    expect(Object.keys(byAgentName)).not.toContain('StudentSuccessArchitect');
   });
 });
 

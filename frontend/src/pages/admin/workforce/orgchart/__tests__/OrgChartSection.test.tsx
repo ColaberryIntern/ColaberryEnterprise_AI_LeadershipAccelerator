@@ -30,23 +30,29 @@ jest.mock('../OrgChartMermaid', () => ({ __esModule: true, default: () => null }
 // Real live shape from execution-contract.md (2026-08-19): 6 named humans,
 // only Ali and Kes currently have a real open task; Taiwo/Jackie/Swati/Sohail
 // have none yet — the fixture below mirrors that exactly, not an invented
-// "everyone has a task" scenario.
+// "everyone has a task" scenario. Departments build (2026-08-19, continued):
+// each human now carries a real `department` (Ali=Exec, Kes/Jackie=
+// Operations, Sohail=Marketing, Taiwo/Swati=Other — spanning 3 named
+// departments + the trailing "Other" bucket in one fixture; Taiwo/Swati keep
+// `team: null` so the pre-existing "no team" drawer test below stays exactly
+// accurate), and every leadership/staff entry carries a real
+// `reports_to_summary`.
 const CHART: OrgChartResponse = {
   organization: { id: 'org-colaberry', name: 'Colaberry' },
   humans: [
-    { id: 'f179c222-284e-4180-a335-cca9e4918b2e', name: 'Ali Muwwakkil', email: 'ali@colaberry.com', team: null, role: 'manager', leadership_agent_ids: ['corybrain-id'], staff_count: 14, task: { id: 't-ali', ticket_number: null, title: '[Student Success] Cross-Departmental Initiative Execution', status: 'backlog', priority: 'medium', type: 'strategic', created_at: '2026-08-19T11:28:06.114Z' } },
-    { id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', name: 'kesetebirhan@gmail.com', email: 'kesetebirhan@gmail.com', team: 'Staff', role: 'member', leadership_agent_ids: ['wie-id'], staff_count: 4, task: { id: 't-kes', ticket_number: null, title: '[Inbox Case] Employee Access To Enterprise Platform', status: 'in_progress', priority: 'medium', type: 'inbox_case', created_at: '2026-08-19T12:00:24.739Z' } },
-    { id: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f', name: 'Taiwo Oludimimu', email: 'taiwooludimimu@gmail.com', team: null, role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
-    { id: 'a6db5276-2993-4e0b-ace9-0052ba841c80', name: 'Jackie', email: 'jackie@colaberry.com', team: 'Staff', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
-    { id: '5db87b51-4554-4e52-93d7-c61f9887352c', name: 'Swati', email: 'swati@colaberry.com', team: null, role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
-    { id: '4e255894-ac0b-4367-ae06-27459ea05f66', name: 'Sohail', email: 'sohail@colaberry.com', team: 'Staff', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
+    { id: 'f179c222-284e-4180-a335-cca9e4918b2e', name: 'Ali Muwwakkil', email: 'ali@colaberry.com', team: 'Exec', department: 'Exec', role: 'manager', leadership_agent_ids: ['corybrain-id'], staff_count: 14, task: { id: 't-ali', ticket_number: null, title: '[Student Success] Cross-Departmental Initiative Execution', status: 'backlog', priority: 'medium', type: 'strategic', created_at: '2026-08-19T11:28:06.114Z' } },
+    { id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', name: 'kesetebirhan@gmail.com', email: 'kesetebirhan@gmail.com', team: 'Operations', department: 'Operations', role: 'member', leadership_agent_ids: ['wie-id'], staff_count: 4, task: { id: 't-kes', ticket_number: null, title: '[Inbox Case] Employee Access To Enterprise Platform', status: 'in_progress', priority: 'medium', type: 'inbox_case', created_at: '2026-08-19T12:00:24.739Z' } },
+    { id: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f', name: 'Taiwo Oludimimu', email: 'taiwooludimimu@gmail.com', team: null, department: 'Other', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
+    { id: 'a6db5276-2993-4e0b-ace9-0052ba841c80', name: 'Jackie', email: 'jackie@colaberry.com', team: 'Operations', department: 'Operations', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
+    { id: '5db87b51-4554-4e52-93d7-c61f9887352c', name: 'Swati', email: 'swati@colaberry.com', team: null, department: 'Other', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
+    { id: '4e255894-ac0b-4367-ae06-27459ea05f66', name: 'Sohail', email: 'sohail@colaberry.com', team: 'Marketing', department: 'Marketing', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
   ],
   leadership: [
-    { id: 'corybrain-id', agent_name: 'CoryBrain', display_name: 'Cory Brain — Strategic Initiatives', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', staff_ids: ['staff-1-id'], open_ticket_count: 129 },
-    { id: 'wie-id', agent_name: 'workforce_intelligence_engine', display_name: 'Workforce Intelligence Engine', reports_to_human_id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', staff_ids: [], open_ticket_count: 202 },
+    { id: 'corybrain-id', agent_name: 'CoryBrain', display_name: 'Cory Brain — Strategic Initiatives', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: ['staff-1-id'], open_ticket_count: 129 },
+    { id: 'wie-id', agent_name: 'workforce_intelligence_engine', display_name: 'Workforce Intelligence Engine', reports_to_human_id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', reports_to_summary: 'Reports to: kesetebirhan@gmail.com', staff_ids: [], open_ticket_count: 202 },
   ],
   staff: [
-    { id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', display_name: 'Admissions Conversion Architect', reports_to_agent_id: 'corybrain-id', open_ticket_count: 12 },
+    { id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', display_name: 'Admissions Conversion Architect', reports_to_agent_id: 'corybrain-id', reports_to_summary: 'Reports to: Cory Brain — Strategic Initiatives', open_ticket_count: 12 },
   ],
   unresolved: [],
   generated_at: '2026-08-19T14:00:00.000Z',
@@ -163,5 +169,138 @@ describe('OrgChartSection — failure and boundary states', () => {
 
     expect(container.textContent).toContain('1 agent(s) have a broken reports-to chain');
     expect(container.textContent).toContain('OrphanedAgent');
+  });
+});
+
+// Departments build (2026-08-19, session CC-20260818-x4nk continued): "we
+// need to divide them up into dept" + "Each AI staff should have a tag on
+// them to show who they report to on their cards before even clicking" +
+// "option to go full screen".
+describe('OrgChartSection — department grouping', () => {
+  it('groups humans under their real department headers, and buckets a null/unrecognized team into "Other" — never drops anyone', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const groups = Array.from(container.querySelectorAll('.wf-dept-group'));
+    const execGroup = groups.find((g) => g.textContent?.includes('Exec ·'));
+    const opsGroup = groups.find((g) => g.textContent?.includes('Operations ·'));
+    const marketingGroup = groups.find((g) => g.textContent?.includes('Marketing ·'));
+    const otherGroup = groups.find((g) => g.textContent?.includes('Other ·'));
+
+    expect(execGroup?.textContent).toContain('Ali Muwwakkil');
+    expect(execGroup?.textContent).not.toContain('Sohail');
+
+    expect(opsGroup?.textContent).toContain('kesetebirhan@gmail.com');
+    expect(opsGroup?.textContent).toContain('Jackie');
+
+    expect(marketingGroup?.textContent).toContain('Sohail');
+
+    expect(otherGroup?.textContent).toContain('Taiwo Oludimimu');
+    expect(otherGroup?.textContent).toContain('Swati');
+
+    // Every one of the 6 humans is accounted for across the 4 groups — none silently dropped.
+    const allGroupedText = groups.map((g) => g.textContent).join(' ');
+    for (const name of ['Ali Muwwakkil', 'kesetebirhan@gmail.com', 'Taiwo Oludimimu', 'Jackie', 'Swati', 'Sohail']) {
+      expect(allGroupedText).toContain(name);
+    }
+  });
+
+  it('a department with zero members renders no section at all (e.g. "Recruiting" and "Customer Support" are absent from this fixture)', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    expect(container.textContent).not.toContain('Recruiting ·');
+    expect(container.textContent).not.toContain('Customer Support ·');
+  });
+});
+
+describe('OrgChartSection — reports-to tags (visible before any click)', () => {
+  it('every AI Leadership and AI Staff card shows its real reports_to_summary tag in the initial render, with no interaction required', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    expect(container.textContent).toContain('Reports to: Ali Muwwakkil');
+    expect(container.textContent).toContain('Reports to: kesetebirhan@gmail.com');
+    expect(container.textContent).toContain('Reports to: Cory Brain — Strategic Initiatives');
+  });
+});
+
+describe('OrgChartSection — fullscreen toggle', () => {
+  let fullscreenElement: Element | null;
+  let requestFullscreenMock: jest.Mock;
+  let exitFullscreenMock: jest.Mock;
+  let definedFullscreenElement = false;
+
+  beforeEach(() => {
+    fullscreenElement = null;
+    requestFullscreenMock = jest.fn().mockImplementation(function (this: Element) {
+      fullscreenElement = this;
+      return Promise.resolve();
+    });
+    exitFullscreenMock = jest.fn().mockImplementation(() => {
+      fullscreenElement = null;
+      return Promise.resolve();
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsdom has no real Fullscreen API; these are test-only shims, not app code.
+    (Element.prototype as any).requestFullscreen = requestFullscreenMock;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (document as any).exitFullscreen = exitFullscreenMock;
+    try {
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreenElement });
+      definedFullscreenElement = true;
+    } catch {
+      // Some jsdom versions ship a non-configurable fullscreenElement getter
+      // already — if so, the sync-with-native-Esc-exit test below is
+      // skipped rather than crashing the whole suite (guarded per-test).
+      definedFullscreenElement = false;
+    }
+  });
+
+  it('clicking the fullscreen button calls requestFullscreen() on the chart container', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const button = container.querySelector('button[aria-label="View fullscreen"]') as HTMLElement;
+    expect(button).toBeTruthy();
+
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(requestFullscreenMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggling off while fullscreen calls document.exitFullscreen(), and a native fullscreenchange event (e.g. the user pressing Esc) flips the button back to "enter" state without a second click', async () => {
+    if (!definedFullscreenElement) return; // guarded — see beforeEach
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const enterButton = container.querySelector('button[aria-label="View fullscreen"]') as HTMLElement;
+    await act(async () => {
+      enterButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      document.dispatchEvent(new Event('fullscreenchange'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const exitButton = container.querySelector('button[aria-label="Exit fullscreen"]') as HTMLElement;
+    expect(exitButton).toBeTruthy();
+
+    await act(async () => {
+      exitButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(exitFullscreenMock).toHaveBeenCalledTimes(1);
+
+    // Simulate the browser itself exiting fullscreen (Esc) — fires
+    // fullscreenchange with fullscreenElement now null WITHOUT the
+    // component's own button being clicked again.
+    await act(async () => {
+      fullscreenElement = null;
+      document.dispatchEvent(new Event('fullscreenchange'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.querySelector('button[aria-label="View fullscreen"]')).toBeTruthy();
   });
 });

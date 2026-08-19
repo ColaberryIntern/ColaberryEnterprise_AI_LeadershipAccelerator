@@ -8,7 +8,14 @@ import { STRATEGY_CONFIGS } from '../agents/strategy/departmentStrategyConfigs';
 // ids, this session). This mapping is given, not derived — do not recompute it
 // from department semantics; the founder assigned it agent-by-agent in
 // conversation.
-const ORG_MEMBER = {
+// Exported (not just module-private) so
+// scripts/reassignArchitectsToTaiwo20260819.ts — the required companion
+// backfill for the Taiwo reversal below, since seedAgentIdentity()'s
+// boot-time self-heal only fills reports_to_type/reports_to_id when they
+// are currently null, never overwrites an already-set value — can reuse
+// the SAME real ids rather than re-hardcoding them a second place they
+// could drift from.
+export const ORG_MEMBER = {
   ALI: 'f179c222-284e-4180-a335-cca9e4918b2e',
   KES: '3df017df-affa-49ab-884f-a99a4bd2ef4e',
   TAIWO: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f',
@@ -65,16 +72,36 @@ const ENROLLMENT_DEFAULTS: AgentIdentityConfig['enrollmentDefaults'] = {
 // AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19 — confirmed via a
 // direct AskUserQuestion exchange; see
 // C:\Users\ali_m\.claude\projects\...\memory\project_ai_workforce_2tier_hierarchy_confirmed.md
-// for the full record). Only 2 of the 23 registered ticket-creator agents
-// report directly to a human now (AI Leadership); everyone else reports
-// through one of these two (AI Staff) — see each entry's reportsToAgentName
-// below. AGENT_LEADERSHIP names them by string, not by re-deriving the
-// mapping, so it can't drift from the two entries below that actually carry
-// reportsToOrgMemberId.
+// for the full record). AGENT_LEADERSHIP names the 2-tier consolidation's two
+// leadership agents by string, not by re-deriving the mapping, so it can't
+// drift from the entries below that actually carry reportsToOrgMemberId.
 const AGENT_LEADERSHIP = {
   CORY_BRAIN: 'CoryBrain',
   WORKFORCE_INTELLIGENCE: 'workforce_intelligence_engine',
 } as const;
+
+// Restore Taiwo's AI Staff (Ali, live, 2026-08-19, session CC-20260818-x4nk
+// continued — see the Department Strategy Architect block below for the full
+// history). These 4 of the 16 Architects report directly to Taiwo instead of
+// through CoryBrain, making 3 humans (Ali, Kes, Taiwo) have a direct AI
+// Leadership report — 6 of the 23 registered agents report directly to a
+// human in total (CoryBrain, workforce_intelligence_engine, and these 4); the
+// other 17 (12 remaining Architects + cory-engine/InboxCaseEngine/
+// bpos_orchestrator/AgentBehaviorMonitorAgent + Reese) are AI Staff,
+// reporting through one of the 6.
+const TAIWO_DIRECT_SLUGS = new Set(['finance', 'operations', 'admissions', 'student_success']);
+
+// The 4 real agent_names TAIWO_DIRECT_SLUGS resolves to (derived from the
+// SAME agentNameBySlug map the .map() below uses, not hand-typed a second
+// time) — exported for reassignArchitectsToTaiwo20260819.ts's own targeted
+// backfill query, so that script's target list can never drift from this
+// file's actual, real reassignment.
+export const REASSIGNED_TO_TAIWO_AGENT_NAMES = [
+  'FinanceIntelligenceArchitect',
+  'OperationsOptimizationArchitect',
+  'AdmissionsConversionArchitect',
+  'StudentSuccessArchitect',
+] as const;
 
 export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
   {
@@ -182,28 +209,30 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
       alumni: 'AlumniNetworkArchitect',
     };
     const agentName = agentNameBySlug[slug];
-    return {
+    const base = {
       agentName,
       email: `${agentName.toLowerCase()}@colaberry.com`,
       displayName: `${cfg.label} Strategy Architect`,
-      role: 'ai_staff',
-      communityRole: 'staff',
+      role: 'ai_staff' as const,
+      communityRole: 'staff' as const,
       enrollmentDefaults: ENROLLMENT_DEFAULTS,
       pilotCohortGate: false,
       legacyCreatorIds: [agentName],
-      // AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19). Was a
-      // per-department direct-to-human mapping (session CC-20260818-a7d2,
-      // preserved below for history); all 16 Architects are now AI Staff,
-      // uniformly reporting through CoryBrain (AI Leadership), which itself
-      // still reports to Ali. The old per-department humans (Ali/Taiwo/Kes/
-      // Sohail/Swati/Jackie) remain each Architect's real ultimate human via
-      // the chain — CoryBrain -> Ali specifically, which changes WHO some of
-      // these resolve to (e.g. finance/operations/admissions/student_success
-      // moved from Taiwo to Ali; marketing moved from Sohail to Ali; alumni
-      // moved from Jackie to Ali) — a real, deliberate consequence of the
-      // founder's 2-tier design, not an oversight.
-      reportsToAgentName: AGENT_LEADERSHIP.CORY_BRAIN,
     };
+
+    // Restore Taiwo's AI Staff (Ali, live, 2026-08-19 — session
+    // CC-20260818-x4nk continued): "Taiwo should have some AI staff but
+    // doesn't show here." A deliberate, explicit PARTIAL reversal of the
+    // 2026-08-19 2-tier consolidation above (not a bug fix) — these 4 of the
+    // 16 Architects move back to their pre-consolidation direct human report
+    // (session CC-20260818-a7d2's original per-department mapping,
+    // preserved in the comment above), making Taiwo a 3rd AI Leadership
+    // human alongside Ali and Kes. The other 12 Architects are unaffected
+    // and still report through CoryBrain -> Ali, per the comment above.
+    if (TAIWO_DIRECT_SLUGS.has(slug)) {
+      return { ...base, reportsToOrgMemberId: ORG_MEMBER.TAIWO };
+    }
+    return { ...base, reportsToAgentName: AGENT_LEADERSHIP.CORY_BRAIN };
   })),
 ];
 
