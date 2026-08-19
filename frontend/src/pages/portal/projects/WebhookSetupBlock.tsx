@@ -223,6 +223,29 @@ const WebhookSetupBlock: React.FC<WebhookSetupBlockProps> = ({ projectId, repoLa
         )}
       </div>
 
+      {/*
+        SAY THAT IT IS OPTIONAL, IN THE UI, NOT ONLY IN THIS FILE'S COMMENTS.
+
+        The docstring above has said "the webhook is deliberately optional"
+        since this block was written, and the STORY-000 prompt tells the agent
+        "If I say skip it, skip it and start building." Neither sentence is on
+        the student's screen. What IS on their screen is a numbered checklist,
+        a "0 of 3" counter and a shell command carrying a signing secret, which
+        together read as a gate you must clear before you may build.
+
+        Swati Raman, running STORY-000 herself as curriculum owner, read it that
+        way on 2026-08-19 and asked whether the command was required. If the
+        person who owns the curriculum cannot tell, no student can. The honest
+        answer is cheap to print and it belongs here, next to the counter that
+        caused the doubt.
+      */}
+      <p className="rt-hook-step-d" style={{ margin: '0 0 10px' }}>
+        <strong>Optional, and nothing is blocked without it.</strong> This only decides how
+        quickly the platform notices your work: with it, your criteria tick themselves within
+        seconds of a push. Skip it and everything still verifies exactly the same way — you press{' '}
+        <strong>Sync from GitHub</strong> yourself instead.
+      </p>
+
       <ol className="rt-hook-steps">
         {steps.map((s) => (
           <li key={s.key} className={`rt-hook-step ${s.state}`}>

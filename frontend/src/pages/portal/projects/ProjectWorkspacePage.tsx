@@ -361,12 +361,36 @@ const ProjectWorkspacePage: React.FC = () => {
 
           {/* HOW TO BUILD IT — the prompt and the repo are the same job (get to
               work), so they sit under one heading instead of reading as two
-              more peers of the story. */}
+              more peers of the story.
+              ── THE REPO COMES FIRST, AND THAT ORDER IS LOAD-BEARING ──────────
+              This section used to render the prompt above the connect panel,
+              which invited the student to read top-to-bottom and paste the
+              prompt before connecting anything. STORY-000's prompt opens with
+              "Step 1 — let the platform see your pushes", and that step tells
+              the agent to find the panel **Let the platform see your pushes**
+              in the workspace. That panel is rendered by WorkspaceRepoPanel
+              ONLY in its `connected` branch, so on an unconnected project it
+              does not exist yet: the very first instruction of the prompt
+              pointed at something the page had not drawn. Swati Raman, running
+              STORY-000 herself as curriculum owner, reported exactly this on
+              2026-08-19 — repository setup should come first, then the build
+              prompt. Connect first and the prompt's Step 1 has a panel to find.
+              Keep the repo panel above the prompt. */}
           <section className="rt-step">
             <div className="rt-step-h">
               <span className="rt-step-n">{buildStepNo}</span>
               <span className="rt-step-t">How to build it</span>
             </div>
+
+            {/* The connect step. Owns its own busy/error state because it is a
+                small state machine (validate → prove → bind) and threading that
+                through the page's single `busy` string made both harder to read. */}
+            <WorkspaceRepoPanel
+              projectId={projectId}
+              repo={repo}
+              onRepoChange={setRepo}
+              onConnectChange={applyConnect}
+            />
 
             <div className="rt-card">
               <div className="rt-prompt-h">
@@ -400,16 +424,6 @@ const ProjectWorkspacePage: React.FC = () => {
                 </p>
               )}
             </div>
-
-            {/* The connect step. Owns its own busy/error state because it is a
-                small state machine (validate → prove → bind) and threading that
-                through the page's single `busy` string made both harder to read. */}
-            <WorkspaceRepoPanel
-              projectId={projectId}
-              repo={repo}
-              onRepoChange={setRepo}
-              onConnectChange={applyConnect}
-            />
           </section>
 
           {!blocked.blocked && (
