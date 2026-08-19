@@ -21,6 +21,7 @@ const orgChartHumanSchema = z.object({
   name: z.string(),
   email: z.string(),
   team: z.string().nullable(),
+  department: z.string().min(1),
   role: z.enum(['manager', 'member']),
   leadership_agent_ids: z.array(z.string()),
   staff_count: z.number().int().nonnegative(),
@@ -32,6 +33,7 @@ const orgChartLeadershipAgentSchema = z.object({
   agent_name: z.string(),
   display_name: z.string(),
   reports_to_human_id: z.string(),
+  reports_to_summary: z.string().min(1),
   staff_ids: z.array(z.string()),
   open_ticket_count: z.number().int().nonnegative(),
 });
@@ -41,6 +43,7 @@ const orgChartStaffAgentSchema = z.object({
   agent_name: z.string(),
   display_name: z.string(),
   reports_to_agent_id: z.string(),
+  reports_to_summary: z.string().min(1),
   open_ticket_count: z.number().int().nonnegative(),
 });
 
