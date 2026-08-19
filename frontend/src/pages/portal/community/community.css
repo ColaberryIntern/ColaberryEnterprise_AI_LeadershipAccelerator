@@ -27,6 +27,15 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 .cm-composer-row .spacer{flex:1}
 
 .cm-post-body{white-space:pre-wrap;word-break:break-word}
+
+/* Links inside member-authored post/comment bodies. Berry is the existing
+   accent in this file and clears AA on the card surface (4.9:1). An email is
+   given a tinted chip on top of the link treatment so an internship inbox
+   reads as something to act on rather than as prose. */
+.cm-link{color:var(--berry,#367895);font-weight:600;text-decoration:none;word-break:break-word}
+.cm-link:hover{text-decoration:underline}
+.cm-link:focus-visible{outline:2px solid var(--berry,#367895);outline-offset:2px;border-radius:3px}
+.cm-link-email{background:rgba(54,120,149,.12);border:1px solid rgba(54,120,149,.22);border-radius:6px;padding:0 5px}
 .cm-pin{border:none;background:none;cursor:pointer;color:var(--muted,#6B6B6B);display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;font-family:inherit}
 .cm-pin.pinned{color:var(--amber-deep,#B5710A)}
 .cm-pin svg{width:16px;height:16px}
