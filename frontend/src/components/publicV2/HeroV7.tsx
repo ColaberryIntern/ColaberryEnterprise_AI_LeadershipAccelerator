@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import HeroDiagram from './HeroDiagram';
 
 /**
  * The hero.
@@ -170,25 +171,12 @@ export default function HeroV7(): React.ReactElement {
         </div>
 
         {/*
-          A photograph, not a product screenshot -- which is why it carries no
-          SampleBadge. The badge exists to stop a depiction of PRODUCT DATA being
-          read as a real customer's numbers; a picture of people working is not a
-          claim about the product and labelling it "sample" would be noise.
-
-          alt is empty and the figure is aria-hidden because the image is
-          decorative: every claim it sits beside is already stated in the text to
-          its left, so announcing it would repeat rather than add.
+          Ali's staffed-system diagram, replacing the photograph. Imported as a
+          component rather than an <img> so the animation can drive the actual
+          elements: the pipeline builds, the connectors run, the people arrive --
+          the page's argument, in the order the headline states it.
         */}
-        <figure className="cbv2-h7photo" aria-hidden="true">
-          <img
-            src="/site-v2/photos/team-office-mixed.jpg"
-            alt=""
-            width={1600}
-            height={1067}
-            loading="eager"
-            decoding="async"
-          />
-        </figure>
+        <HeroDiagram />
       </div>
     </section>
   );
