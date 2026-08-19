@@ -52,7 +52,7 @@ import {
   renderChallengeFile, connectCommands, adoptCommands, isChallengeToken,
 } from './connectChallenge';
 import {
-  storedConnect, writeAccessOf,
+  storedConnect, writeAccessOf, writeAccessPatch,
   ConnectStateName, ConnectMethod, RepoWriteAccess, StoredConnect,
 } from './connectionAccess';
 import { acceptInvitationFor, InvitationOutcome } from './repoInvitations';
@@ -64,10 +64,10 @@ import { acceptInvitationFor, InvitationOutcome } from './repoInvitations';
  * the connect types keep working unchanged.
  */
 export {
-  isWritableConnection, writeAccessOf, storedConnect,
+  isWritableConnection, writeAccessOf, writeBlockReason, writeAccessPatch, storedConnect,
 } from './connectionAccess';
 export type {
-  ConnectStateName, ConnectMethod, RepoWriteAccess, StoredConnect,
+  ConnectStateName, ConnectMethod, RepoWriteAccess, StoredConnect, WriteBlockReason,
 } from './connectionAccess';
 
 export interface ConnectChallengeView {
@@ -287,6 +287,36 @@ function writeConnect(connection: any, patch: StoredConnect): void {
   connection.status_json = status;
 }
 
+/**
+ * Record one write-access answer, on BOTH keys, in one call.
+ *
+ * THE ONLY PLACE EITHER KEY IS WRITTEN. `platform_can_push` sits under
+ * `status_json.connect`; `provisioned` sits beside `connect` at the top of
+ * `status_json`. They describe one fact at two nesting levels, and every writer
+ * that touched only one of them is how they came apart: `confirmConnect` derived
+ * `provisioned` from the permission, `recordWriteAccess` wrote the permission
+ * alone, and by 2026-08-19 ten production rows read `platform_can_push: false`
+ * beside `provisioned: true` — correctly refused by the writer, still "usable"
+ * to everything reading the legacy flag.
+ *
+ * A second backfill would have closed those ten rows and left the next ten to
+ * open. Taking the patch from `writeAccessPatch` instead means the two cannot be
+ * written apart, because there is no longer a call that names one without the
+ * other. `repoConnect/__tests__/connectionAccess.test.ts` and the drift guard in
+ * `__tests__/repoConnectService.test.ts` hold that shut.
+ */
+function recordAccessOn(connection: any, canPush: boolean): void {
+  const { platform_can_push, provisioned } = writeAccessPatch(canPush);
+  writeConnect(connection, { platform_can_push });
+  connection.status_json = { ...(connection.status_json ?? {}), provisioned };
+}
+
+/** Do both keys already say exactly this? Used to keep `recordWriteAccess` a no-op when nothing moved. */
+function accessAlreadyRecorded(connection: any, canPush: boolean): boolean {
+  return storedConnect(connection).platform_can_push === canPush
+    && (connection.status_json ?? {}).provisioned === canPush;
+}
+
 /** Read-only current state. Never throws for "not connected" — that is day one. */
 export async function getConnectState(enrollmentId: string, projectId: string): Promise<ConnectStateView> {
   await requireOwnedProject(enrollmentId, projectId);
@@ -433,6 +463,15 @@ export async function confirmConnect(
   connection.repo_name = ref.repo;
   connection.repo_url = ref.url;
   const status = { ...(connection.status_json ?? {}) };
+  status.access = { ok: true, error_class: null, checked_at: new Date().toISOString() };
+  connection.status_json = status;
+  writeConnect(connection, {
+    state: 'connected',
+    method: 'byo',
+    challenge_token: undefined,        // spent; keeping it would invite reuse
+    challenge_issued_at: undefined,
+    connected_at: new Date().toISOString(),
+  });
   // `provisioned` is the legacy marker the rest of the platform reads to mean
   // "there is a usable repo here" — usable meaning the platform can WRITE it.
   //
@@ -443,17 +482,16 @@ export async function confirmConnect(
   // genuinely works and downgrading it would send the student back to the
   // paste-your-repo step for a repo that is correctly connected.
   //
-  // Unknown (a legacy row with no permission recorded) keeps the old `true`.
-  status.provisioned = c.platform_can_push !== false;
-  status.access = { ok: true, error_class: null, checked_at: new Date().toISOString() };
-  connection.status_json = status;
-  writeConnect(connection, {
-    state: 'connected',
-    method: 'byo',
-    challenge_token: undefined,        // spent; keeping it would invite reuse
-    challenge_issued_at: undefined,
-    connected_at: new Date().toISOString(),
-  });
+  // It then became `platform_can_push !== false` — derived here and NOWHERE
+  // ELSE, which is why `recordWriteAccess` could later move the permission out
+  // from under it. Both keys now come from the one patch.
+  //
+  // `=== true` rather than `!== false`: an unrecorded permission is no longer
+  // read as a yes anywhere (see `writeBlockReason`), and `startConnect` always
+  // records one, so the only row this can differ for is one that reached
+  // `confirmConnect` without a `startConnect` — which the `awaiting_proof` guard
+  // above makes unreachable.
+  recordAccessOn(connection, c.platform_can_push === true);
   await connection.save();
 
   return connectViewFrom(connection);
@@ -503,6 +541,25 @@ export async function adoptProvisionedRepo(
     private: true,
     connected_at: undefined,
   });
+  /**
+   * DOOR B ALWAYS HAS PUSH, AND NOW SAYS SO.
+   *
+   * `provisionWorkspaceRepo` just created this repo under GITHUB_WORKSPACE_ORG
+   * with the platform's own token and added the student as a collaborator. The
+   * platform is the owner. This is the one place `platform_can_push: true` is
+   * a demonstrated fact rather than a reading of GitHub's answer.
+   *
+   * Recording it is not cosmetic. Door B never passes through `startConnect`, so
+   * it was the one live path that reached `state: 'connected'` — via
+   * `markPushObserved` — with no permission recorded at all. Under the old
+   * permissive default that was invisible; under `writeBlockReason` an unknown
+   * permission is a refusal, so without this line every platform-provisioned
+   * repo would stop receiving documents the moment the student pushed.
+   *
+   * `provisioned` rides along as `true` from the same patch, which is what
+   * `studentWorkspaceService` set directly a moment ago — now from one source.
+   */
+  recordAccessOn(connection, true);
   await connection.save();
 
   return connectViewFrom(connection);
@@ -538,13 +595,19 @@ export async function markPushObserved(projectId: string): Promise<void> {
  *
  * Returns whether anything actually changed, so callers can log a transition
  * rather than a heartbeat.
+ *
+ * "Changed" means EITHER key moved, not just the permission. The narrower test
+ * — `platform_can_push === canPush` alone — is what let the ten drifted rows
+ * survive: their permission was already `false`, so this returned early and
+ * `provisioned: true` was never corrected, on every sync, forever. Comparing
+ * both keys makes the next sync heal them, which is the point-of-truth repair a
+ * backfill only imitates.
  */
 export async function recordWriteAccess(projectId: string, canPush: boolean): Promise<boolean> {
   const connection = await loadConnection(projectId);
   if (!connection) return false;
-  const before = storedConnect(connection).platform_can_push;
-  if (before === canPush) return false;
-  writeConnect(connection, { platform_can_push: canPush });
+  if (accessAlreadyRecorded(connection, canPush)) return false;
+  recordAccessOn(connection, canPush);
   await connection.save();
   return true;
 }
