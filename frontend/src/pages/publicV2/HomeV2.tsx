@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import HeroV7 from '../../components/publicV2/HeroV7';
 import EngineModel from '../../components/publicV2/EngineModel';
+import GoalDiagram, { GoalKey } from '../../components/publicV2/GoalDiagram';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
 import Accolades from '../../components/publicV2/Accolades';
@@ -14,6 +15,7 @@ import { SERVICE_DETAILS } from '../../config/v2Services';
 import './homeV2.css';
 import '../../components/publicV2/heroV7.css';
 import '../../components/publicV2/engineModel.css';
+import '../../components/publicV2/goalDiagram.css';
 
 /**
  * HomeV2 — the V2 homepage.
@@ -277,6 +279,14 @@ function HomeV2(): React.ReactElement {
               <p className="cbv2-answer__eyebrow">Recommended</p>
               <p className="cbv2-answer__service">{goal.service}</p>
               <p className="cbv2-answer__why">{goal.explain}</p>
+
+              {/*
+                The figure for this goal. It draws the SHAPE of the engagement --
+                no numbers, no outcomes -- because it sits directly under a
+                recommended service, where a diagram implying more than the
+                service delivers would be a claim like any other.
+              */}
+              <GoalDiagram goal={goal.key as GoalKey} />
             </div>
 
             <div className="cbv2-answer__side">
