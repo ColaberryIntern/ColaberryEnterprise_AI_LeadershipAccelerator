@@ -22,9 +22,30 @@
  * in the response headers, and in the UI. It is written as "here is what
  * connecting gets you", not as a scolding.
  *
- * The set is byte-identical to what a connected repo receives, from the same
- * pure renderer. If the two ever drift, the download becomes a lie, and a
- * student who later connects would see a confusing diff on their first sync.
+ * The PLATFORM-OWNED set is byte-identical to what a connected repo receives,
+ * from the same pure renderer. If the two ever drift, the download becomes a
+ * lie, and a student who later connects would see a confusing diff on their
+ * first sync.
+ *
+ * ## What this archive deliberately does NOT contain
+ *
+ * `.colaberry/progress.json` and `.colaberry/profile.json` are not in it at
+ * their live paths, and that is the whole point of this file's shape.
+ *
+ * `renderDocs` is pure: it always renders progress with every criterion
+ * `passed: false`, and profile as a virgin seed. Every repo-write path launders
+ * that through `repoWriter`, which MERGES progress field by field and seeds a
+ * profile once and never again. This module used to skip both guards — it
+ * shipped the raw render to a human under the instruction "unzip it into your
+ * repo", and the student's `unzip` performed exactly the wholesale replace
+ * `repoWriter` exists to prevent. A student who followed our own written
+ * instruction destroyed the record of their verified progress.
+ *
+ * The fix is structural, not editorial. A warning in the copy is not enough:
+ * people skim, and this one costs them their points. So the archive simply
+ * cannot carry a destructive file. Ownership is asked of `fileOwnership`, the
+ * two student files travel as `*.seed.json` siblings, and extracting the whole
+ * thing over a working repo is a no-op against anything the student wrote.
  */
 import { getPublishedPlan, getPlan } from './planStore';
 import { renderDocs, RenderedFile } from './renderDocs';
@@ -32,6 +53,7 @@ import { createZip } from './zipArchive';
 import { BuildPlan } from './planContract';
 import { RepoConnectError } from './repoConnect/connectErrors';
 import { CONNECT_FILE_PATH } from './repoConnect/connectChallenge';
+import { isSafeToOverwrite, seedPathFor } from './fileOwnership';
 
 export const BUNDLE_NOTICE_PATH = 'docs/CONNECT-YOUR-REPO.md';
 
@@ -90,9 +112,22 @@ export function renderBundleNotice(projectName: string, projectId: string): stri
     '',
     '## Unzipping this on top of your folder',
     '',
-    'Safe. It writes only the paths listed above. If you have already edited',
-    '`docs/REQUIREMENTS.md`, take a copy first — this archive is a fresh render and will',
-    'overwrite what is at those paths.',
+    'This archive cannot overwrite anything you wrote. It carries no file at',
+    '`.colaberry/progress.json` or `.colaberry/profile.json` — those two are yours, so they',
+    'travel as `.colaberry/progress.seed.json` and `.colaberry/profile.seed.json` instead and',
+    'land beside your versions rather than on them.',
+    '',
+    'The documents themselves ARE a fresh render and will replace what is at their paths, so',
+    'if you have edited `docs/REQUIREMENTS.md` by hand, take a copy first.',
+    '',
+    '### If you do not have a progress file yet',
+    '',
+    'Copy `.colaberry/progress.seed.json` to `.colaberry/progress.json` yourself — once, and',
+    'only if there is nothing there already. It lists every story and every criterion with',
+    '`passed: false`, which is the starting point your agent ticks as work genuinely passes.',
+    '',
+    '**If you already have `.colaberry/progress.json`, do not copy over it.** It holds the',
+    'ticks you have earned and the seed does not — the seed is blank by construction.',
     '',
     '---',
     '',
@@ -138,12 +173,23 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
 
   const notice = { path: BUNDLE_NOTICE_PATH, content: renderBundleNotice(plan.project_name, projectId) };
 
+  // THE SAFETY PROPERTY, ENFORCED HERE RATHER THAN DESCRIBED IN THE COPY.
+  //
+  // Anything the student owns or co-owns is moved off its live path onto a
+  // `.seed.json` sibling. Nothing is dropped — a student with no repo still
+  // needs the seed to start from — but nothing in this archive can now land on
+  // top of a file the student wrote. Extraction is non-destructive BY
+  // CONSTRUCTION, so the instruction on screen cannot be followed into a loss.
+  const deliverable = files.map((f) => (
+    isSafeToOverwrite(f.path) ? f : { path: seedPathFor(f.path), content: f.content }
+  ));
+
   const slug = plan.project_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'build';
   return {
     // The notice leads so it is the first thing in any archive listing.
     filename: `${slug}-build-docs-v${stored.version}.zip`,
-    bytes: createZip([notice, ...files], { modifiedAt: generatedAt }),
-    paths: [notice.path, ...files.map((f) => f.path)],
+    bytes: createZip([notice, ...deliverable], { modifiedAt: generatedAt }),
+    paths: [notice.path, ...deliverable.map((f) => f.path)],
     planVersion: stored.version,
     published: Boolean(published),
   };

@@ -153,7 +153,8 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
       // someone who has already connected one, it reads as a warning about a
       // problem they do not have.
       setNote(state === 'connected'
-        ? `Downloaded ${filename}. Unzip it into your repo, keeping the paths as they are, then commit.`
+        ? `Downloaded ${filename}. Unzip it into your repo, keeping the paths as they are, then commit. `
+          + 'It carries no .colaberry/progress.json, so it cannot overwrite your ticks.'
         : `Downloaded ${filename}. Unzip it into your project folder. Verification and points still need a connected repo.`);
     },
   ), [run, projectId, state]);
@@ -199,8 +200,10 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
             <strong>STORY-000</strong> and copy the JSON block under Step 3 for the progress file; it is
             generated from the criteria the platform actually checks. The other two are build outputs rather
             than files to write by hand, so take them from <strong>Download the documents</strong> below and
-            unzip them into your repo. If you would rather the platform maintained all three for you, add it
-            as a collaborator with write access and reconnect.
+            unzip it into your repo. The download will not touch your{' '}
+            <code>.colaberry/progress.json</code> — it deliberately carries no file at that path, so
+            extracting it cannot cost you ticks you have already earned. If you would rather the platform
+            maintained all three for you, add it as a collaborator with write access and reconnect.
           </p>
         )}
 
