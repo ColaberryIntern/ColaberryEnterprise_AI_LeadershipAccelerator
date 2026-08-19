@@ -344,3 +344,87 @@ describe('runDuplicateAccountSweep', () => {
     expect(result.scanned).toBe(1); // deduped, not 2
   });
 });
+
+describe('AI Internship rows are not duplicates of class rows', () => {
+  // An internship enrollment is BY DEFINITION in a different cohort from the
+  // student's class, so without the filter in groupActiveEnrollmentsByEmail
+  // every intern is flagged and a non-dry sweep withdraws one of two legitimate
+  // enrollments, moving their points and credits. Data loss, not a false positive.
+
+  it('does not flag a class + internship pair as a cross-cohort duplicate', async () => {
+    enrFindAll.mockResolvedValue([
+      enr('class-row', 'intern@example.com', { cohort_id: 'cohort-july' }),
+      enr('internship-row', 'intern@example.com', {
+        enrollment_type: 'internship',
+        cohort_id: 'cohort-internship',
+        payment_status: 'pending',
+      }),
+    ]);
+
+    const flagged = await findCrossCohortDuplicates();
+
+    expect(flagged).toEqual([]);
+  });
+
+  it('does not flag a class + internship pair as a shadowed account', async () => {
+    enrFindAll.mockResolvedValue([
+      enr('class-row', 'intern@example.com', { cohort_id: 'cohort-july' }),
+      enr('internship-row', 'intern@example.com', {
+        enrollment_type: 'internship',
+        cohort_id: 'cohort-internship',
+        payment_status: 'pending',
+      }),
+    ]);
+    eventsSum.mockResolvedValue(0);
+
+    const flagged = await findShadowedAccounts();
+
+    expect(flagged).toEqual([]);
+  });
+
+  it('STILL flags two internship rows for one email — that is a real duplicate', async () => {
+    // The filter must not make internship rows invisible to duplicate detection
+    // altogether, only immune to pairing with a non-internship row.
+    enrFindAll.mockResolvedValue([
+      enr('internship-a', 'intern@example.com', {
+        enrollment_type: 'internship',
+        cohort_id: 'cohort-internship-1',
+      }),
+      enr('internship-b', 'intern@example.com', {
+        enrollment_type: 'internship',
+        cohort_id: 'cohort-internship-2',
+      }),
+    ]);
+
+    const flagged = await findCrossCohortDuplicates();
+
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0].email).toBe('intern@example.com');
+  });
+
+  it('STILL flags a stray explorer row when an internship row is also present', async () => {
+    // The canonical case this service exists for must keep working even for a
+    // student who is also an intern: the explorer stray is still a duplicate of
+    // the paid class row, and the internship row simply takes no part in it.
+    enrFindAll.mockResolvedValue([
+      enr('class-row', 'intern@example.com', { cohort_id: 'cohort-july' }),
+      enr('explorer-stray', 'intern@example.com', {
+        enrollment_type: 'explorer',
+        payment_status: 'pending',
+        cohort_id: 'cohort-explorer',
+        created_at: '2026-08-01T00:00:00Z',
+      }),
+      enr('internship-row', 'intern@example.com', {
+        enrollment_type: 'internship',
+        cohort_id: 'cohort-internship',
+      }),
+    ]);
+
+    const flagged = await findCrossCohortDuplicates();
+
+    expect(flagged).toHaveLength(1);
+    // the paid standard row wins, and the internship row is NOT listed as a loser
+    expect(flagged[0].winnerId).toBe('class-row');
+    expect(flagged[0].otherRows.map((r: any) => r.id)).toEqual(['explorer-stray']);
+  });
+});
