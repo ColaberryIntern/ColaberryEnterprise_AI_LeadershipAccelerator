@@ -62,6 +62,20 @@ const ENROLLMENT_DEFAULTS: AgentIdentityConfig['enrollmentDefaults'] = {
   portal_enabled: false,
 };
 
+// AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19 — confirmed via a
+// direct AskUserQuestion exchange; see
+// C:\Users\ali_m\.claude\projects\...\memory\project_ai_workforce_2tier_hierarchy_confirmed.md
+// for the full record). Only 2 of the 23 registered ticket-creator agents
+// report directly to a human now (AI Leadership); everyone else reports
+// through one of these two (AI Staff) — see each entry's reportsToAgentName
+// below. AGENT_LEADERSHIP names them by string, not by re-deriving the
+// mapping, so it can't drift from the two entries below that actually carry
+// reportsToOrgMemberId.
+const AGENT_LEADERSHIP = {
+  CORY_BRAIN: 'CoryBrain',
+  WORKFORCE_INTELLIGENCE: 'workforce_intelligence_engine',
+} as const;
+
 export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
   {
     agentName: 'cory-engine',
@@ -72,7 +86,8 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['cory-engine'],
-    reportsToOrgMemberId: ORG_MEMBER.KES,
+    // AI Staff — was ORG_MEMBER.KES directly; now reports through workforce_intelligence_engine (AI Leadership), which itself still reports to Kes.
+    reportsToAgentName: AGENT_LEADERSHIP.WORKFORCE_INTELLIGENCE,
   },
   {
     agentName: 'CoryBrain',
@@ -83,6 +98,7 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['CoryBrain'],
+    // AI Leadership — reports directly to Ali, unchanged.
     reportsToOrgMemberId: ORG_MEMBER.ALI,
   },
   {
@@ -94,7 +110,8 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['InboxCaseEngine'],
-    reportsToOrgMemberId: ORG_MEMBER.ALI,
+    // AI Staff — was ORG_MEMBER.ALI directly; now reports through workforce_intelligence_engine.
+    reportsToAgentName: AGENT_LEADERSHIP.WORKFORCE_INTELLIGENCE,
   },
   {
     agentName: 'workforce_intelligence_engine',
@@ -105,6 +122,7 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['workforce_intelligence_engine'],
+    // AI Leadership — reports directly to Kes, unchanged.
     reportsToOrgMemberId: ORG_MEMBER.KES,
   },
   {
@@ -116,7 +134,25 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['bpos_orchestrator'],
-    reportsToOrgMemberId: ORG_MEMBER.ALI,
+    // AI Staff — was ORG_MEMBER.ALI directly; now reports through workforce_intelligence_engine.
+    reportsToAgentName: AGENT_LEADERSHIP.WORKFORCE_INTELLIGENCE,
+  },
+  {
+    // Real, previously-unregistered "stuck agent" security watchdog — found
+    // creating [Security] tickets under raw, unregistered UUID
+    // 'b95d1700-1a2d-49d0-a8d0-a5859afd360a' (matched no admin_users row).
+    // Already has a real AiAgent registry row (agentRegistrySeed.ts,
+    // agent_type='agent_behavior') — this entry is identity + reports_to
+    // only, same pattern as the other 5 above.
+    agentName: 'AgentBehaviorMonitorAgent',
+    email: 'agentbehaviormonitor@colaberry.com',
+    displayName: 'Agent Behavior Monitor — Security',
+    role: 'ai_staff',
+    communityRole: 'staff',
+    enrollmentDefaults: ENROLLMENT_DEFAULTS,
+    pilotCohortGate: false,
+    legacyCreatorIds: ['b95d1700-1a2d-49d0-a8d0-a5859afd360a'],
+    reportsToAgentName: AGENT_LEADERSHIP.WORKFORCE_INTELLIGENCE,
   },
 
   // --- Department Strategy Architect agents (16) — Agent Ticket Standard audit, 2026-08-18,
@@ -146,28 +182,6 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
       alumni: 'AlumniNetworkArchitect',
     };
     const agentName = agentNameBySlug[slug];
-    // Founder-given mapping (request.md), by agent name — not derivable from
-    // department semantics, deliberately hardcoded here rather than a slug-based
-    // formula so it stays a single, auditable source of truth matching the table
-    // Ali gave in conversation.
-    const reportsToBySlug: Record<string, string> = {
-      executive: ORG_MEMBER.ALI,
-      governance: ORG_MEMBER.ALI,
-      strategy: ORG_MEMBER.ALI,
-      finance: ORG_MEMBER.TAIWO,
-      operations: ORG_MEMBER.TAIWO,
-      orchestration: ORG_MEMBER.KES,
-      intelligence: ORG_MEMBER.ALI,
-      partnerships: ORG_MEMBER.ALI,
-      growth: ORG_MEMBER.ALI,
-      marketing: ORG_MEMBER.SOHAIL,
-      admissions: ORG_MEMBER.TAIWO,
-      infrastructure: ORG_MEMBER.KES,
-      platform: ORG_MEMBER.KES,
-      education: ORG_MEMBER.SWATI,
-      student_success: ORG_MEMBER.TAIWO,
-      alumni: ORG_MEMBER.JACKIE,
-    };
     return {
       agentName,
       email: `${agentName.toLowerCase()}@colaberry.com`,
@@ -177,7 +191,18 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
       enrollmentDefaults: ENROLLMENT_DEFAULTS,
       pilotCohortGate: false,
       legacyCreatorIds: [agentName],
-      reportsToOrgMemberId: reportsToBySlug[slug],
+      // AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19). Was a
+      // per-department direct-to-human mapping (session CC-20260818-a7d2,
+      // preserved below for history); all 16 Architects are now AI Staff,
+      // uniformly reporting through CoryBrain (AI Leadership), which itself
+      // still reports to Ali. The old per-department humans (Ali/Taiwo/Kes/
+      // Sohail/Swati/Jackie) remain each Architect's real ultimate human via
+      // the chain — CoryBrain -> Ali specifically, which changes WHO some of
+      // these resolve to (e.g. finance/operations/admissions/student_success
+      // moved from Taiwo to Ali; marketing moved from Sohail to Ali; alumni
+      // moved from Jackie to Ali) — a real, deliberate consequence of the
+      // founder's 2-tier design, not an oversight.
+      reportsToAgentName: AGENT_LEADERSHIP.CORY_BRAIN,
     };
   })),
 ];

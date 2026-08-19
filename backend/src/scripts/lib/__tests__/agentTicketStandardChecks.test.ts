@@ -5,6 +5,7 @@ import {
   scanForTimeBasedClosurePatterns,
   findResolverMapping,
   evaluateReportsTo,
+  evaluateReportsToChain,
   AGENT_TICKET_RESOLVER_REGISTRY,
   KNOWN_GENERIC_COLLAPSE_LABELS,
 } from '../agentTicketStandardChecks';
@@ -42,6 +43,62 @@ describe('evaluateReportsTo', () => {
       { reports_to_org_member_id: 'some-id' },
       { org_id: 'other-org-id' },
       'SomeOtherCompany',
+    );
+    expect(result.pass).toBe(false);
+    expect(result.reason).toMatch(/SomeOtherCompany/);
+    expect(result.reason).toMatch(/not 'Colaberry'/);
+  });
+});
+
+// AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19) — evaluateReportsTo
+// above still covers the pre-hierarchy flat-model shape unchanged; this is the
+// new chain-aware check the validator actually calls now.
+describe('evaluateReportsToChain', () => {
+  it('happy path (AI Leadership): reports_to_type=human resolves directly to a real Colaberry human', () => {
+    const result = evaluateReportsToChain(
+      { reports_to_type: 'human', reports_to_id: 'f179c222-284e-4180-a335-cca9e4918b2e' },
+      { org_id: 'colaberry-org-id' },
+      'Colaberry',
+      ['CoryBrain (agent)', 'Ali (human)'],
+    );
+    expect(result.pass).toBe(true);
+    expect(result.chainDescription).toBe('CoryBrain (agent) -> Ali (human)');
+  });
+
+  it('happy path (AI Staff): reports_to_type=agent resolves through the chain to a real Colaberry human', () => {
+    const result = evaluateReportsToChain(
+      { reports_to_type: 'agent', reports_to_id: 'corybrain-id' },
+      { org_id: 'colaberry-org-id' },
+      'Colaberry',
+      ['AdmissionsConversionArchitect (agent)', 'CoryBrain (agent)', 'Ali (human)'],
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  it('failure path: reports_to_type/reports_to_id not set at all', () => {
+    const result = evaluateReportsToChain({ reports_to_type: null, reports_to_id: null }, null, null, []);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toMatch(/not set/);
+    expect(result.chainDescription).toBe('(no reports_to set)');
+  });
+
+  it('failure path: chain set but does not resolve to a real human (broken link, cycle, or depth-guard cutoff)', () => {
+    const result = evaluateReportsToChain(
+      { reports_to_type: 'agent', reports_to_id: 'dangling-id' },
+      null,
+      null,
+      ['OrphanedAgent (agent)'],
+    );
+    expect(result.pass).toBe(false);
+    expect(result.reason).toMatch(/does not resolve to a real human/);
+  });
+
+  it("boundary: resolves to a real human, but on the wrong org (not 'Colaberry')", () => {
+    const result = evaluateReportsToChain(
+      { reports_to_type: 'human', reports_to_id: 'some-id' },
+      { org_id: 'other-org-id' },
+      'SomeOtherCompany',
+      ['SomeAgent (agent)', 'SomeHuman (human)'],
     );
     expect(result.pass).toBe(false);
     expect(result.reason).toMatch(/SomeOtherCompany/);
@@ -306,12 +363,19 @@ describe('AGENT_TICKET_RESOLVER_REGISTRY / findResolverMapping', () => {
     }
   });
 
-  it('no agent outside the original-6-minus-Reese and the 16 Architects carries an undocumented knownGap', () => {
-    const expectedGapBearers = new Set(['Reese', ...departmentArchitectCreators]);
+  it('no agent outside the original-6-minus-Reese, the 16 Architects, and AgentBehaviorMonitorAgent carries an undocumented knownGap', () => {
+    const expectedGapBearers = new Set(['Reese', 'AgentBehaviorMonitorAgent', ...departmentArchitectCreators]);
     for (const mapping of AGENT_TICKET_RESOLVER_REGISTRY) {
       if (!expectedGapBearers.has(mapping.creatorAgentName)) {
         expect(mapping.knownGap).toBeUndefined();
       }
     }
+  });
+
+  it('AgentBehaviorMonitorAgent (the security watchdog registered alongside the hierarchy) is mapped with an honest null resolver and a documented knownGap, not a fabricated resolver', () => {
+    const mapping = findResolverMapping('AgentBehaviorMonitorAgent');
+    expect(mapping).toBeDefined();
+    expect(mapping?.resolverAgentName).toBeNull();
+    expect(mapping?.knownGap).toMatch(/point-in-time security/);
   });
 });

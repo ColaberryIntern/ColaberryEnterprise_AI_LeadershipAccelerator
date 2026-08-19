@@ -25,7 +25,8 @@ export class TicketCreatorNotReportableError extends Error {
         ? `no registered AiAgent row resolves for created_by_type='${context.createdByType}', ` +
           `created_by_id='${context.createdById}'`
         : `the registered AiAgent for created_by_type='${context.createdByType}', ` +
-          `created_by_id='${context.createdById}' has no reports_to_org_member_id set`;
+          `created_by_id='${context.createdById}' does not resolve to a real human — its ` +
+          'reports_to chain (directly, or through an AI Leadership agent) is unset, broken, or too deep';
     super(
       `Ticket creation rejected: ${reasonText}. Every ticket-creating agent must report ` +
         'to a real human (org_members row) before it can create tickets — see ' +

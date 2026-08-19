@@ -53,6 +53,19 @@ const CONFIG: AgentIdentityConfig = {
   reportsToOrgMemberId: 'org-member-fixture-id',
 };
 
+// AI Leadership / AI Staff hierarchy (2026-08-19) — CONFIG minus both reports-to
+// fields, for the exactly-one-of validation tests below. Built as a real object
+// literal (not CONFIG-minus-destructure) so no unused-var lint noise from
+// stripping reportsToOrgMemberId off CONFIG.
+const CONFIG_WITHOUT_REPORTS_TO: Omit<AgentIdentityConfig, 'reportsToOrgMemberId' | 'reportsToAgentName'> = {
+  agentName: CONFIG.agentName,
+  email: CONFIG.email,
+  displayName: CONFIG.displayName,
+  role: CONFIG.role,
+  communityRole: CONFIG.communityRole,
+  enrollmentDefaults: CONFIG.enrollmentDefaults,
+};
+
 function makeFakeAgent(config: Record<string, any> = {}) {
   return {
     id: 'agent-cqa-1',
@@ -65,6 +78,13 @@ function makeFakeAgent(config: Record<string, any> = {}) {
     // call incidental to what that test is actually proving. Tests that need to
     // exercise the reports_to self-heal itself explicitly override this field.
     reports_to_org_member_id: CONFIG.reportsToOrgMemberId,
+    // AI Leadership / AI Staff hierarchy (2026-08-19) — same "pre-satisfied by
+    // default" fixture posture as reports_to_org_member_id above, so the new
+    // self-heal block below doesn't fire an incidental extra update() call in
+    // every other test in this file. Tests exercising the hierarchy self-heal
+    // itself explicitly override these two fields.
+    reports_to_type: 'human',
+    reports_to_id: CONFIG.reportsToOrgMemberId,
     update: jest.fn().mockResolvedValue(undefined),
   };
 }
@@ -236,6 +256,83 @@ describe('seedAgentIdentity', () => {
     // called at all — proving the value on the row was left completely untouched.
     expect(fakeAgent.update).not.toHaveBeenCalled();
     expect((fakeAgent as any).reports_to_org_member_id).toBe('already-set-org-member-id');
+  });
+
+  // AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19) — structural
+  // enforcement (exactly one of reportsToOrgMemberId/reportsToAgentName) plus
+  // the reports_to_type/reports_to_id self-heal that supersedes the flat field
+  // above as the resolver's actual source of truth.
+  it('throws if both reportsToOrgMemberId and reportsToAgentName are provided', async () => {
+    await expect(
+      seedAgentIdentity({ ...CONFIG, reportsToOrgMemberId: 'org-1', reportsToAgentName: 'CoryBrain' }),
+    ).rejects.toThrow(/exactly one of reportsToOrgMemberId or reportsToAgentName/);
+    expect(mockAiAgentFindOne).not.toHaveBeenCalled();
+  });
+
+  it('throws if neither reportsToOrgMemberId nor reportsToAgentName is provided', async () => {
+    await expect(seedAgentIdentity(CONFIG_WITHOUT_REPORTS_TO)).rejects.toThrow(
+      /exactly one of reportsToOrgMemberId or reportsToAgentName/,
+    );
+    expect(mockAiAgentFindOne).not.toHaveBeenCalled();
+  });
+
+  it('reports_to_type/reports_to_id (AI Leadership): populates the human target directly on a row where both are currently null, no extra AiAgent lookup', async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_type = null;
+    (fakeAgent as any).reports_to_id = null;
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+    await seedAgentIdentity(CONFIG);
+
+    expect(fakeAgent.update).toHaveBeenCalledWith(
+      expect.objectContaining({ reports_to_type: 'human', reports_to_id: CONFIG.reportsToOrgMemberId }),
+    );
+    // Only the agent's own registry lookup — the human path needs no target lookup.
+    expect(mockAiAgentFindOne).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports_to_type/reports_to_id (AI Staff): resolves reportsToAgentName to the target's real ai_agents.id", async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_type = null;
+    (fakeAgent as any).reports_to_id = null;
+    const targetLeadershipAgent = { id: 'corybrain-real-id', agent_name: 'CoryBrain' };
+    mockAiAgentFindOne
+      .mockResolvedValueOnce(fakeAgent) // this agent's own registry row
+      .mockResolvedValueOnce(targetLeadershipAgent); // the reportsToAgentName lookup
+
+    await seedAgentIdentity({ ...CONFIG_WITHOUT_REPORTS_TO, reportsToAgentName: 'CoryBrain' });
+
+    expect(mockAiAgentFindOne).toHaveBeenNthCalledWith(2, { where: { agent_name: 'CoryBrain' } });
+    expect(fakeAgent.update).toHaveBeenCalledWith(
+      expect.objectContaining({ reports_to_type: 'agent', reports_to_id: 'corybrain-real-id' }),
+    );
+  });
+
+  it('reports_to_type/reports_to_id (AI Staff): throws loudly if reportsToAgentName does not resolve to a registered agent, and never writes', async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_type = null;
+    (fakeAgent as any).reports_to_id = null;
+    mockAiAgentFindOne
+      .mockResolvedValueOnce(fakeAgent)
+      .mockResolvedValueOnce(null); // reportsToAgentName target not found
+
+    await expect(
+      seedAgentIdentity({ ...CONFIG_WITHOUT_REPORTS_TO, reportsToAgentName: 'UnregisteredLeadershipAgent' }),
+    ).rejects.toThrow(/does not resolve to a registered AiAgent/);
+    expect(fakeAgent.update).not.toHaveBeenCalled();
+  });
+
+  it('reports_to_type/reports_to_id: never overwrites already-set values, even when config would resolve to something different (self-heal only when null)', async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_type = 'agent';
+    (fakeAgent as any).reports_to_id = 'already-set-target-id';
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+    await seedAgentIdentity(CONFIG);
+
+    expect(fakeAgent.update).not.toHaveBeenCalled();
+    expect((fakeAgent as any).reports_to_type).toBe('agent');
+    expect((fakeAgent as any).reports_to_id).toBe('already-set-target-id');
   });
 });
 
