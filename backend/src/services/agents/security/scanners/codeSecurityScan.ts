@@ -68,6 +68,38 @@ export const VULN_PATTERNS: VulnPattern[] = [
 
 const EXCLUDE_DIRS = ['node_modules', 'dist', 'build', '.git', 'coverage'];
 
+/**
+ * Files whose CONTENT is not executable application logic, so a pattern match in
+ * them is noise by definition rather than a vulnerability.
+ *
+ * Kept deliberately small and specific — an exclusion list is how a scanner
+ * quietly stops covering real code, so each entry states why it is here and is
+ * matched on an exact repo-relative path, never a broad glob.
+ */
+const EXCLUDE_FILES: { path: string; reason: string }[] = [
+  {
+    // This file IS the pattern list. Its `eval()` rule contains the literal
+    // string `eval(` inside its own regex, so the scanner reports itself every
+    // run — a permanent false positive that can never be "fixed" in place.
+    path: 'backend/src/services/agents/security/scanners/codeSecurityScan.ts',
+    reason: 'scanner pattern definitions match themselves',
+  },
+  {
+    // Curriculum content: teaching material that quotes SQL and JavaScript as
+    // examples for students. The snippets are data in a lesson, never executed.
+    path: 'backend/src/data/classTeachWeeks.ts',
+    reason: 'curriculum content — code samples are lesson data, not executed',
+  },
+];
+
+/** True if this file is on the documented exclusion list. */
+export function isExcludedFile(relativePath: string): boolean {
+  // Normalise BOTH separators, not just path.sep: CI runs on Linux where
+  // path.sep is '/', so a Windows-style path passed in would never match.
+  const normalised = relativePath.replace(/\\/g, '/');
+  return EXCLUDE_FILES.some((e) => e.path === normalised);
+}
+
 /** Recursively collect scannable .ts files (skipping tests, declarations, and build output). */
 export function walkTs(dir: string, files: string[] = []): string[] {
   try {
@@ -87,6 +119,8 @@ export function walkTs(dir: string, files: string[] = []): string[] {
 
 export interface CodeScanResult {
   filesScanned: number;
+  /** Files skipped via EXCLUDE_FILES, reported so coverage loss is never silent. */
+  filesExcluded: { path: string; reason: string }[];
   findings: CodeFinding[];
 }
 
@@ -97,9 +131,20 @@ export interface CodeScanResult {
 export function scanCodeForVulnerabilities(backendSrc: string, projectRoot: string): CodeScanResult {
   const findings: CodeFinding[] = [];
   const files = walkTs(backendSrc);
+  const filesExcluded: { path: string; reason: string }[] = [];
   let filesScanned = 0;
 
   for (const filePath of files) {
+    const relative = path.relative(projectRoot, filePath);
+    // Skip BEFORE counting: an excluded file was never examined, and counting it
+    // as scanned would overstate coverage.
+    if (isExcludedFile(relative)) {
+      const normalised = relative.replace(/\\/g, '/');
+      const entry = EXCLUDE_FILES.find((e) => e.path === normalised);
+      if (entry) filesExcluded.push(entry);
+      continue;
+    }
+
     filesScanned++;
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
@@ -112,7 +157,7 @@ export function scanCodeForVulnerabilities(backendSrc: string, projectRoot: stri
         for (const vp of VULN_PATTERNS) {
           if (vp.pattern.test(line)) {
             findings.push({
-              file: path.relative(projectRoot, filePath),
+              file: relative,
               line: i + 1,
               vuln_name: vp.name,
               category: vp.category,
@@ -126,5 +171,5 @@ export function scanCodeForVulnerabilities(backendSrc: string, projectRoot: stri
     } catch { /* skip unreadable */ }
   }
 
-  return { filesScanned, findings };
+  return { filesScanned, filesExcluded, findings };
 }
