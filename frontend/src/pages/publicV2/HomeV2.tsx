@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
-import HeroV7 from '../../components/publicV2/HeroV7';
+import HeroV8 from '../../components/publicV2/HeroV8';
 import EngineModel from '../../components/publicV2/EngineModel';
 import GoalDiagram, { GoalKey } from '../../components/publicV2/GoalDiagram';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
@@ -13,7 +13,7 @@ import { GOALS, ENGINE } from '../../config/v2Content';
 // five engagements in the same order, and HomeV2.test asserts they stay in sync.
 import { SERVICE_DETAILS } from '../../config/v2Services';
 import './homeV2.css';
-import '../../components/publicV2/heroV7.css';
+import '../../components/publicV2/heroV8.css';
 import '../../components/publicV2/engineModel.css';
 import '../../components/publicV2/goalDiagram.css';
 
@@ -77,7 +77,7 @@ function HomeV2(): React.ReactElement {
       />
 
       {/* 1 ─────────────────────────────────────────────────────────── hero ── */}
-      <HeroV7 />
+      <HeroV8 />
 
       {/*
         THE OPERATING MODEL, MOVED UP. It used to sit below the goal chooser,
