@@ -25,7 +25,11 @@
  *   - Tests passing in CI is explicitly NOT the bar today. See
  *     docs/BUILD_VERIFICATION_CONTRACT.md for where that would slot in.
  */
-import { ProgressFile, normaliseCriterion } from './progressContract';
+import { ProgressFile } from './progressContract';
+import { normaliseCriterion, resolveCriterionKey } from './criterionIdentity';
+import { missingRequiredPaths, RepoTreeContext } from './criterionPaths';
+
+export type { RepoTreeContext } from './criterionPaths';
 
 /**
  * What a human reads. Deliberately not the same vocabulary as
@@ -173,6 +177,7 @@ export function decideStory(
   spec: PlanStorySpec,
   progress: ProgressFile | null,
   commits: CommitFact[],
+  tree: RepoTreeContext | null = null,
 ): StoryVerdict {
   const entry = progress?.stories.find((s) => s.id === spec.id) ?? null;
 
@@ -180,22 +185,52 @@ export function decideStory(
   const rejected: string[] = [];
   const planTexts = new Set(spec.acceptance.map(normaliseCriterion));
   for (const c of entry?.criteria ?? []) {
-    const key = normaliseCriterion(c.text);
-    if (!planTexts.has(key)) {
+    // `resolveCriterionKey`, not a bare normalise, so a claim written against a
+    // wording WE have since rewritten still lands on the criterion it was about.
+    // Nine students' committed files carry the pre-rewording text of STORY-000's
+    // C3 and C4, on repos we frequently cannot push to and therefore can never
+    // correct — matching on today's text alone would reject every one of those
+    // ticks and drop verified stories back to `submitted`. See criterionIdentity.
+    const key = resolveCriterionKey(c.text, planTexts);
+    if (!key) {
       // A claim about something the plan does not ask for. Counted nowhere.
       if (c.passed) rejected.push(c.text);
       continue;
     }
     // Two claims about the same criterion: the pessimistic one wins. A file
     // holding both `true` and `false` for one sentence is not evidence of a
-    // pass, and resolving it optimistically would reward the ambiguity.
+    // pass, and resolving it optimistically would reward the ambiguity. This now
+    // also covers a file carrying BOTH the old and new wording of one criterion,
+    // which is what a half-repaired file looks like.
     claimsByText.set(key, (claimsByText.get(key) ?? true) && c.passed);
   }
 
-  const criteria: CriterionOutcome[] = spec.acceptance.map((text) => ({
-    text,
-    passed: claimsByText.get(normaliseCriterion(text)) === true,
-  }));
+  /**
+   * THE PATH CHECK. A criterion that names a repo path is not satisfied while
+   * that path is absent from the tree, however honestly it was ticked.
+   *
+   * Applied AFTER the claim is matched, never instead of it: a criterion blocked
+   * this way is `outstanding`, not a `rejected_claim`. The student's text
+   * matched the plan perfectly — the file simply is not there — and filing it as
+   * a rejected claim would report a wording problem that does not exist.
+   *
+   * Fails open in every direction that is not a plain fact: no tree read means
+   * no enforcement, and a file the platform owed this particular student is
+   * never charged to them. See criterionPaths.blameForMissing.
+   */
+  const missingByText = new Map<string, string[]>();
+  for (const text of spec.acceptance) {
+    const missing = missingRequiredPaths(text, tree);
+    if (missing.length > 0) missingByText.set(normaliseCriterion(text), missing);
+  }
+
+  const criteria: CriterionOutcome[] = spec.acceptance.map((text) => {
+    const key = normaliseCriterion(text);
+    return {
+      text,
+      passed: claimsByText.get(key) === true && !missingByText.has(key),
+    };
+  });
   const passedCount = criteria.filter((c) => c.passed).length;
   const outstanding = criteria.filter((c) => !c.passed).map((c) => c.text);
 
@@ -227,6 +262,16 @@ export function decideStory(
   if (rejected.length > 0) {
     reasons.push(
       `${rejected.length} claim(s) in the progress file do not match any acceptance criterion in the published plan and were ignored.`,
+    );
+  }
+  // Named individually, because "a criterion is outstanding" is not an
+  // actionable message when the student believes they finished it. The file is
+  // the whole of the problem, so the file is what the sentence says.
+  for (const [, missing] of missingByText) {
+    reasons.push(
+      `${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} not in your repo, so the `
+      + 'criterion that requires it cannot pass yet. Add the file, commit it, and push — you can '
+      + 'download a fresh copy from the workspace panel in the portal.',
     );
   }
 
@@ -261,6 +306,7 @@ export function decideBuild(
   stories: PlanStorySpec[],
   progress: ProgressFile | null,
   commits: CommitFact[],
+  tree: RepoTreeContext | null = null,
 ): BuildVerdict {
   const planIds = new Set(stories.map((s) => s.id));
   const unknown = (progress?.stories ?? [])
@@ -269,7 +315,7 @@ export function decideBuild(
 
   const verdicts = [...stories]
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((s) => decideStory(s, progress, commits));
+    .map((s) => decideStory(s, progress, commits, tree));
 
   const qualifying = commits.filter(
     (c) => c.changed_files > 0 && stories.some((s) => commitNamesStory(c.message, s.id)),

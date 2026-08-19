@@ -303,12 +303,37 @@ function renderClaudeMd(plan: BuildPlan, ctx: RenderContext): string {
     '   file. Then push — the platform reads pushed commits, not your working tree.',
     '',
     ...(ctx.repoUrl ? ['## This repo', '', ctx.repoUrl, ''] : []),
-    '## What not to edit',
+    '## The `.colaberry/` files',
     '',
-    '`.colaberry/plan.json` and `.colaberry/manifest.json` are platform bookkeeping and are',
-    'overwritten on every sync. `.colaberry/progress.json` is shared: the platform owns the',
-    'story and criterion list in it, you own the `passed` flags and the notes, and a sync',
-    'keeps your side. Everything else — including the docs above — is yours to change.',
+    // WHY THIS SECTION WAS REWRITTEN. It used to be headed "What not to edit"
+    // and said plan.json and manifest.json "are platform bookkeeping and are
+    // overwritten on every sync". Two of STORY-000's acceptance criteria ask the
+    // student to attest to those very files, so we were asking them to vouch for
+    // files we had told them were ours and none of their business. 8 of 9
+    // students created manifest.json themselves regardless; one read our sentence
+    // the way it was written and did not, and both readings were defensible.
+    //
+    // The honest statement is that the platform SEEDS these files where it can
+    // push, and cannot where it cannot — and on a pull-only repo (a legitimate
+    // choice, not an error) they are the student's to create and keep. Ownership
+    // now matches what the criteria ask for.
+    'These three files are what your Command Center reads, so they have to be in your repo.',
+    '',
+    '- `.colaberry/plan.json` — your requirements, stories and releases.',
+    '- `.colaberry/progress.json` — the criteria and which of them you have confirmed.',
+    '- `.colaberry/manifest.json` — when the data above was last refreshed.',
+    '',
+    'Where the platform has push access to this repo it writes all three for you on every',
+    'sync, and it will overwrite `plan.json` and `manifest.json` when it does — so edit those',
+    'two only if you are maintaining them yourself. **Where it does not have push access it',
+    'cannot put them there at all**, and they are yours to add: download them from the',
+    'workspace panel in the portal and commit them like any other file. Either way, a',
+    'criterion that names one of these files is not satisfied until the file is really in',
+    'your repo.',
+    '',
+    '`.colaberry/progress.json` is shared in both cases: the platform owns the story and',
+    'criterion list in it, you own the `passed` flags and the notes, and a sync keeps your',
+    'side. Everything else — including the docs above — is yours to change.',
     '',
   ].join('\n');
 }

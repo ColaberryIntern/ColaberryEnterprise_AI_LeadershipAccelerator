@@ -29,6 +29,7 @@ import {
   systemsOfRecord as systemsOf,
 } from './planDocument';
 import { PROGRESS_FILE_PATH, PROGRESS_SCHEMA_VERSION } from './verification/progressContract';
+import { progressFileTemplate } from './commandCenterProgressTemplate';
 import { PROFILE_FILE_PATH } from './profileContract';
 import { BLOCK_BEGIN, BLOCK_END } from './managedBlock';
 import {
@@ -839,10 +840,20 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push(progressFileExample());
   lines.push('```');
   lines.push('');
+  // The example used to ship every line `"passed": true` with this sentence
+  // underneath explaining that it depicted a finished build. Students copy the
+  // block, not the caption — across all 15 verified stories in the system there
+  // was not one partial tick, every criterion everywhere was `true`, and a
+  // pre-ticked template was the strongest nudge in the whole pipeline. It now
+  // ships all-false, matching the file `renderProgressFile` actually seeds, and
+  // this sentence says what that starting state means instead of apologising for
+  // a different one.
   lines.push(
-    `That example is a build where all ${COMMAND_CENTER_ACCEPTANCE.length} lines are genuinely `
-    + 'true. Yours carries `"passed": false` on every line that is not yet, and a file like that '
-    + 'is correct rather than unfinished.',
+    'That is the starting state: nothing claimed yet. Every line is `false` because nothing has '
+    + 'been confirmed, not because the work is bad — a file like that is correct, not unfinished. '
+    + 'Set a line to `true` only when it is genuinely true in the repo today, and leave the rest '
+    + `unticked. Leaving a line \`false\` costs nothing: a story at 3 of ${COMMAND_CENTER_ACCEPTANCE.length} `
+    + 'reports honestly and the portal tells you which ones are left.',
   );
   lines.push('');
   // ── REPAIRING A FILE THAT IS ALREADY THERE ───────────────────────────────
@@ -971,19 +982,12 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
  * this block back through `parseProgressFile`, which is the only check that
  * cannot drift.
  */
+/** Delegates to the leaf module; see commandCenterProgressTemplate.ts for why. */
 function progressFileExample(): string {
-  return JSON.stringify(
-    {
-      schema_version: PROGRESS_SCHEMA_VERSION,
-      stories: [
-        {
-          id: COMMAND_CENTER_STORY_ID,
-          criteria: COMMAND_CENTER_ACCEPTANCE.map((text) => ({ text, passed: true })),
-        },
-      ],
-    },
-    null,
-    2,
+  return progressFileTemplate(
+    PROGRESS_SCHEMA_VERSION,
+    COMMAND_CENTER_STORY_ID,
+    COMMAND_CENTER_ACCEPTANCE,
   );
 }
 
@@ -992,12 +996,36 @@ function rolesFrom(plan: BuildPlan): string[] {
   return rolesOf(plan.stories).slice(0, 6);
 }
 
-/** Acceptance lines stored on the task row, mirroring the prompt's stop condition. */
+/**
+ * Acceptance lines stored on the task row, mirroring the prompt's stop condition.
+ *
+ * ── REWORDING THESE IS A BREAKING CHANGE. READ criterionIdentity.ts FIRST. ───
+ *
+ * This constant is shared by every student in the cohort, and their committed
+ * `.colaberry/progress.json` files carry these sentences verbatim. `decideStory`
+ * matches a tick to a criterion by normalised text and `mergeProgressFile`
+ * carries the tick across a republish the same way, so editing a line in place
+ * rejects every existing claim about it AND lets the next sync overwrite the
+ * student's real work with `false`.
+ *
+ * Two rules follow, and neither is optional:
+ *   - ADD a criterion freely; it begins unticked for everyone, which is correct.
+ *   - REWORD one only by adding an entry to `SUPERSEDED_CRITERIA` in the same
+ *     commit, mapping the exact old sentence to the new one. There is a test
+ *     that every entry points at a line really in this array.
+ *
+ * C3 and C4 were reworded on 2026-08-19. Both were grammatically about code
+ * BEHAVIOUR with the data file as an object — C4 went further and put the file
+ * in its "Given", framing it as a precondition somebody else supplies, which our
+ * own docs then confirmed by calling it "platform bookkeeping". A student could
+ * satisfy either honestly with nothing on disk, and one did. The required state
+ * now sits in the "then" clause where `criterionPaths` can check it.
+ */
 export const COMMAND_CENTER_ACCEPTANCE: readonly string[] = [
   'Given the Command Center, when it is opened, then every tab is reachable and every card drills down one level.',
   'Given sample mode, when any tab is shown, then the sample data is visibly labelled as sample.',
-  `Given the data files, when any tab renders, then its content comes from ${PLAN_FILE_PATH} and ${PROGRESS_FILE_PATH} read at runtime rather than from hard-coded values.`,
-  `Given ${MANIFEST_FILE_PATH}, when any tab is shown, then it displays how old the data is and warns when that age exceeds a week.`,
+  `Given the Command Center, when any tab renders, then ${PLAN_FILE_PATH} and ${PROGRESS_FILE_PATH} are both committed in this repo and every tab reads its content from them at runtime rather than from hard-coded values.`,
+  `Given the Command Center, when any tab is shown, then ${MANIFEST_FILE_PATH} is committed in this repo and every tab shows how old that data is and warns when the age exceeds a week.`,
   'Trust — no tab shows a number, a connection or a result the project has not actually produced.',
 ] as const;
 
