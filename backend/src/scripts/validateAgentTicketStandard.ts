@@ -36,7 +36,7 @@ import {
   isGenericFallbackLabel,
   scanForTimeBasedClosurePatterns,
   findResolverMapping,
-  evaluateReportsTo,
+  evaluateReportsToChain,
   AGENT_TICKET_RESOLVER_REGISTRY,
   type AntiPatternMatch,
 } from './lib/agentTicketStandardChecks';
@@ -149,14 +149,44 @@ async function checkDisplayIdentity(agentName: string, row: AiAgent): Promise<Ch
   };
 }
 
+/**
+ * AI Leadership / AI Staff hierarchy check (Ali, live, 2026-08-19). Does the
+ * real I/O chain walk (unlike evaluateReportsToChain() itself, which stays
+ * pure) — mirrors resolveReportsToHuman() in
+ * ticketCreatorReportsToResolver.ts exactly (same depth guard, same
+ * human/agent dispatch) so this validator can never silently drift from what
+ * the live ticket-creation gate actually enforces. Re-implemented here rather
+ * than imported so this script keeps its own standing no-Sequelize-side-
+ * effects-beyond-reads contract independent of the production resolver
+ * module's import graph — both are covered by regression tests asserting
+ * they agree on the same fixtures.
+ */
+async function walkReportsToChain(
+  agent: AiAgent,
+  trail: string[] = [],
+  depth = 0,
+): Promise<{ resolvedHumanId: string | null; trail: string[] }> {
+  const MAX_DEPTH = 5;
+  if (depth >= MAX_DEPTH) return { resolvedHumanId: null, trail };
+
+  if (agent.reports_to_type === 'human' && agent.reports_to_id) {
+    return { resolvedHumanId: agent.reports_to_id, trail: [...trail, `${agent.agent_name} (agent) -> [human]`] };
+  }
+  if (agent.reports_to_type === 'agent' && agent.reports_to_id) {
+    const nextAgent = await AiAgent.findByPk(agent.reports_to_id);
+    if (!nextAgent) return { resolvedHumanId: null, trail: [...trail, `${agent.agent_name} (agent) -> [dangling]`] };
+    return walkReportsToChain(nextAgent, [...trail, `${agent.agent_name} (agent)`], depth + 1);
+  }
+  return { resolvedHumanId: null, trail: [...trail, `${agent.agent_name} (agent) -> [unset]`] };
+}
+
 async function checkReportsTo(row: AiAgent): Promise<CheckResult> {
+  const { resolvedHumanId, trail } = await walkReportsToChain(row);
+
   let resolvedOrgMember: { org_id: string } | null = null;
   let orgName: string | null = null;
-
-  if (row.reports_to_org_member_id) {
-    const memberRow = await OrgMember.findByPk(row.reports_to_org_member_id, {
-      attributes: ['org_id'],
-    });
+  if (resolvedHumanId) {
+    const memberRow = await OrgMember.findByPk(resolvedHumanId, { attributes: ['org_id'] });
     resolvedOrgMember = memberRow ? { org_id: memberRow.org_id } : null;
     if (memberRow) {
       const org = await Organization.findByPk(memberRow.org_id, { attributes: ['name'] });
@@ -164,9 +194,14 @@ async function checkReportsTo(row: AiAgent): Promise<CheckResult> {
     }
   }
 
-  const result = evaluateReportsTo(row, resolvedOrgMember, orgName);
+  const result = evaluateReportsToChain(
+    { reports_to_type: row.reports_to_type, reports_to_id: row.reports_to_id },
+    resolvedOrgMember,
+    orgName,
+    trail,
+  );
   return {
-    name: 'reports_to_org_member_id set (Agent Ticket Standard, Step 10)',
+    name: 'reports_to chain resolves to a real human (Agent Ticket Standard, Step 10 — AI Leadership/Staff hierarchy)',
     status: result.pass ? 'PASS' : 'FAIL',
     message: result.reason,
   };

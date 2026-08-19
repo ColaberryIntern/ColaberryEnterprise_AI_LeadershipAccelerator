@@ -23,7 +23,19 @@ const mockAdminUserFindOrCreate = AdminUser.findOrCreate as unknown as jest.Mock
 const mockCohortFindOne = Cohort.findOne as unknown as jest.Mock;
 
 function makeFakeAgent(config: Record<string, any> = {}) {
-  return { id: 'agent-reese-1', config, update: jest.fn().mockResolvedValue(undefined) };
+  return {
+    id: 'agent-reese-1',
+    config,
+    // AI Leadership / AI Staff hierarchy (2026-08-19) — pre-satisfied by
+    // default (same posture as agentIdentitySeed.test.ts's own makeFakeAgent())
+    // so the reports_to_type/reports_to_id self-heal doesn't fire an incidental
+    // extra update() call in every OTHER test in this file (happy path,
+    // idempotency, pilot-cohort). The dedicated hierarchy describe block below
+    // explicitly overrides these two fields to exercise the self-heal itself.
+    reports_to_type: 'agent',
+    reports_to_id: 'workforce-intelligence-engine-id',
+    update: jest.fn().mockResolvedValue(undefined),
+  };
 }
 let fakeAgent = makeFakeAgent();
 const fakeEnrollment = { id: 'enrollment-reese-1' };
@@ -127,12 +139,10 @@ describe('seedReeseIdentity — pilot-cohort allowlist (T013)', () => {
   });
 
   it('idempotency/boundary: never overwrites an already-set allowlist (e.g. an admin\'s deliberate later choice)', async () => {
+    // makeFakeAgent() pre-satisfies reports_to_type/reports_to_id by default
+    // (see its own header comment) so the hierarchy self-heal doesn't also
+    // fire and call update() here, unrelated to what this test is proving.
     fakeAgent = makeFakeAgent({ pilot_cohort_ids: ['admin-chosen-cohort'] });
-    // Agent Ticket Standard's own self-heal (reports_to_org_member_id) would
-    // otherwise also fire and call update() here, unrelated to what this test is
-    // proving — give the fixture an already-set value so ONLY the pilot-cohort
-    // behavior under test determines whether update() is called.
-    (fakeAgent as any).reports_to_org_member_id = '1fbb5316-1381-4b8a-81a8-3a7325b39d5f';
     mockAiAgentFindOne.mockResolvedValue(fakeAgent);
     mockCohortFindOne.mockResolvedValue({ id: 'some-other-open-cohort' });
 
@@ -142,29 +152,46 @@ describe('seedReeseIdentity — pilot-cohort allowlist (T013)', () => {
   });
 
   it('boundary: no real open cohort exists yet — leaves config untouched rather than writing a fabricated id', async () => {
-    (fakeAgent as any).reports_to_org_member_id = '1fbb5316-1381-4b8a-81a8-3a7325b39d5f';
     mockCohortFindOne.mockResolvedValue(null);
     await seedReeseIdentity();
     expect(fakeAgent.update).not.toHaveBeenCalled();
   });
 });
 
-describe('seedReeseIdentity — Agent Ticket Standard reports_to_org_member_id (2026-08-18)', () => {
-  it("populates Reese's reports_to_org_member_id (Taiwo) on first run when the row is currently null", async () => {
+describe('seedReeseIdentity — AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19)', () => {
+  // Reese was a direct reportsToOrgMemberId report to Taiwo through session
+  // CC-20260818-x4nk; as of this hierarchy change Reese is AI Staff, reporting
+  // through workforce_intelligence_engine (AI Leadership), which itself still
+  // reports to Kes — see reeseIdentitySeed.ts's own header comment on this call.
+  it("populates reports_to_type='agent'/reports_to_id on first run, resolved to workforce_intelligence_engine's real ai_agents.id, when both are currently null", async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_type = null;
+    (fakeAgent as any).reports_to_id = null;
+    const workforceIntelligenceEngine = { id: 'wie-real-id', agent_name: 'workforce_intelligence_engine' };
+    mockAiAgentFindOne
+      .mockResolvedValueOnce(fakeAgent) // Reese's own registry row
+      .mockResolvedValueOnce(workforceIntelligenceEngine); // the reportsToAgentName lookup
+    mockCohortFindOne.mockResolvedValue(null); // keep the pilot-cohort block a no-op too
+
     await seedReeseIdentity();
 
+    expect(mockAiAgentFindOne).toHaveBeenNthCalledWith(2, { where: { agent_name: 'workforce_intelligence_engine' } });
     expect(fakeAgent.update).toHaveBeenCalledWith(
-      expect.objectContaining({ reports_to_org_member_id: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f' }),
+      expect.objectContaining({ reports_to_type: 'agent', reports_to_id: 'wie-real-id' }),
     );
   });
 
-  it('never overwrites an already-set reports_to_org_member_id', async () => {
-    (fakeAgent as any).reports_to_org_member_id = 'already-set-id';
+  it('never overwrites an already-set reports_to_type/reports_to_id', async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_type = 'agent';
+    (fakeAgent as any).reports_to_id = 'already-set-target-id';
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
     mockCohortFindOne.mockResolvedValue(null); // keep the pilot-cohort block a no-op too
 
     await seedReeseIdentity();
 
     expect(fakeAgent.update).not.toHaveBeenCalled();
-    expect((fakeAgent as any).reports_to_org_member_id).toBe('already-set-id');
+    expect((fakeAgent as any).reports_to_type).toBe('agent');
+    expect((fakeAgent as any).reports_to_id).toBe('already-set-target-id');
   });
 });

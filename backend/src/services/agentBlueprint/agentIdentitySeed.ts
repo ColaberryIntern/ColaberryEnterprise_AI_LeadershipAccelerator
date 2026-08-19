@@ -67,17 +67,24 @@ export interface AgentIdentityConfig {
   legacyCreatorIds?: string[];
   /**
    * Agent Ticket Standard — "every ticket must have a home" (Ali, live,
-   * 2026-08-18). The real human (an `org_members.id` on the "Colaberry" org —
-   * the Business Account "Employee" roster feature) this agent is accountable
-   * to. REQUIRED, not optional — this is the structural enforcement the
-   * founder asked for: any future call to seedAgentIdentity() (any new
-   * ticket-creating agent registered through this module) fails to compile
-   * without one, rather than silently registering an agent nobody can
-   * escalate to. `ticketService.createTicket()` rejects ticket creation
-   * outright when the resolved `AiAgent.reports_to_org_member_id` is null —
-   * see `directives/register-ticket-creating-agent.md`.
+   * 2026-08-18) — AI Leadership case. The real human (an `org_members.id` on
+   * the "Colaberry" org) this agent reports to DIRECTLY. Provide exactly one
+   * of `reportsToOrgMemberId` or `reportsToAgentName` (enforced at runtime in
+   * seedAgentIdentity(), not just by convention) — this agent cannot be both a
+   * direct human report AND an AI Staff agent reporting through another one.
    */
-  reportsToOrgMemberId: string;
+  reportsToOrgMemberId?: string;
+  /**
+   * AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19) — AI Staff
+   * case. The `agent_name` of the AI Leadership agent this agent reports
+   * through (e.g. 'CoryBrain', 'workforce_intelligence_engine') — resolved to
+   * that agent's real `ai_agents.id` at seed time. Provide exactly one of
+   * `reportsToOrgMemberId` or `reportsToAgentName`. The target agent must
+   * already be registered (its AiAgent row must exist) when this seed runs —
+   * seedTicketCreatorIdentities() seeds AI Leadership entries first for
+   * exactly this reason.
+   */
+  reportsToAgentName?: string;
 }
 
 export interface AgentIdentityIds {
@@ -130,6 +137,20 @@ export function __resetAgentIdentityCacheForTests(email: string): void {
 }
 
 export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<AgentIdentityIds> {
+  // Structural enforcement, not just documentation: exactly one of
+  // reportsToOrgMemberId (AI Leadership, direct-to-human) or
+  // reportsToAgentName (AI Staff, through another agent) must be provided —
+  // matching this file's existing "REQUIRED, not optional" posture for the
+  // Agent Ticket Standard.
+  const hasHumanTarget = !!config.reportsToOrgMemberId;
+  const hasAgentTarget = !!config.reportsToAgentName;
+  if (hasHumanTarget === hasAgentTarget) {
+    throw new Error(
+      `[${config.agentName}] must provide exactly one of reportsToOrgMemberId or ` +
+        `reportsToAgentName, got ${hasHumanTarget ? 'both' : 'neither'}.`,
+    );
+  }
+
   const aiAgent = await AiAgent.findOne({ where: { agent_name: config.agentName } });
   if (!aiAgent) {
     // Should not happen in normal boot order (the AGENT_REGISTRY entry is expected to
@@ -219,8 +240,40 @@ export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<Ag
   // this agent's AiAgent row from before this change shipped — no separate
   // one-off data-migration script needed, since seedTicketCreatorIdentities()
   // (and reeseIdentitySeed.ts's own seed call) already run every boot.
+  // Kept for historical/audit value only as of 2026-08-19 — reports_to_type/
+  // reports_to_id below are what the resolver actually reads now.
   if (config.reportsToOrgMemberId && !aiAgent.reports_to_org_member_id) {
     await aiAgent.update({ reports_to_org_member_id: config.reportsToOrgMemberId } as any);
+  }
+
+  // AI Leadership / AI Staff hierarchy (2026-08-19) — same self-heal-only-when-null
+  // shape. AI Leadership (reportsToOrgMemberId set): reports_to_type='human',
+  // reports_to_id=that org_member id directly, no lookup needed. AI Staff
+  // (reportsToAgentName set): resolve the target's real ai_agents.id fresh
+  // every boot (never cached) since the target's own row must already exist by
+  // the time this runs (see AgentIdentityConfig's reportsToAgentName doc) —
+  // fail loudly rather than silently leaving this agent unreportable if the
+  // target is missing (a real registration-order bug, not something to paper
+  // over with a null).
+  if (!aiAgent.reports_to_type || !aiAgent.reports_to_id) {
+    if (config.reportsToOrgMemberId) {
+      await aiAgent.update({
+        reports_to_type: 'human',
+        reports_to_id: config.reportsToOrgMemberId,
+      } as any);
+    } else if (config.reportsToAgentName) {
+      const targetAgent = await AiAgent.findOne({ where: { agent_name: config.reportsToAgentName } });
+      if (!targetAgent) {
+        throw new Error(
+          `[${config.agentName}] reportsToAgentName='${config.reportsToAgentName}' does not resolve to ` +
+            'a registered AiAgent — the target AI Leadership agent must be seeded before this one.',
+        );
+      }
+      await aiAgent.update({
+        reports_to_type: 'agent',
+        reports_to_id: targetAgent.id,
+      } as any);
+    }
   }
 
   if (config.legacyCreatorIds && config.legacyCreatorIds.length > 0) {

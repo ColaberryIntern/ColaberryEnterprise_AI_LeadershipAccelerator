@@ -245,6 +245,27 @@ export const AGENT_TICKET_RESOLVER_REGISTRY: readonly ResolverMapping[] = [
       'this check.',
   },
 
+  {
+    // Real, previously-unregistered "stuck agent" security watchdog,
+    // registered 2026-08-19 alongside the AI Leadership/Staff hierarchy (was
+    // stamping created_by_id as its own raw AiAgent.id UUID instead of its
+    // agent_name — fixed in the same change, see
+    // agentBehaviorMonitorAgent.ts). No recurring resolver: a "4 agents stuck"
+    // finding is a point-in-time security alert, not a state with a clean
+    // terminal signal to auto-resolve against — left open until a human (its
+    // AI Leadership chain resolves to workforce_intelligence_engine -> Kes)
+    // looks at it, same honest-gap posture as the 16 Architects below.
+    creatorAgentName: 'AgentBehaviorMonitorAgent',
+    resolverAgentName: null,
+    resolverRulesFile: null,
+    resolverIoFile: null,
+    artifactsFile: null,
+    knownGap:
+      'No recurring resolver exists. A "N agents stuck" ticket is a point-in-time security ' +
+      'finding, not a state with an obvious terminal signal to auto-resolve against — left ' +
+      'open for human review via its reports_to chain, not force-closed.',
+  },
+
   // --- Department Strategy Architect agents (16) — Agent Ticket Standard audit, 2026-08-18,
   // session CC-20260818-a7d2. All 16 share one engine (departmentInitiativeEngine.ts /
   // strategyArchitectAgent.ts) and, as of this audit, genuinely have no recurring resolver:
@@ -363,5 +384,76 @@ export function evaluateReportsTo(
   return {
     pass: true,
     reason: `reports_to_org_member_id='${agent.reports_to_org_member_id}' resolves to a real org_members row on 'Colaberry'.`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// AI Leadership / AI Staff hierarchy check (Ali, live, 2026-08-19) — supersedes
+// evaluateReportsTo() above as the check the validator actually runs. Kept
+// separate (not a rewrite of evaluateReportsTo) since that function's tests
+// and callers still exercise the pre-hierarchy flat-model shape and remain
+// valid for it; this is the new, chain-aware check.
+// ---------------------------------------------------------------------------
+
+export interface ReportsToChainCheckResult {
+  pass: boolean;
+  reason: string;
+  /** Human-readable chain path, e.g. "AdmissionsConversionArchitect (agent) ->
+   * CoryBrain (agent) -> Ali (human)" — populated even on failure where
+   * possible, to make a broken chain's break point legible at a glance. */
+  chainDescription: string;
+}
+
+/**
+ * Validates an agent's reports_to chain against the AI Leadership / AI Staff
+ * hierarchy. Still zero-I/O itself — the caller does the real chain walk
+ * (resolveReportsToHuman(), which needs DB access to follow an agent->agent
+ * hop) and passes in the already-resolved result plus a human-readable trail
+ * of the hops taken, for display. This function only judges the outcome:
+ * - AI Leadership (reports_to_type='human' directly): must resolve to a real
+ *   org_members row on org "Colaberry", same bar as evaluateReportsTo() above.
+ * - AI Staff (reports_to_type='agent', one or more hops): must resolve, via
+ *   the chain, to that same real "Colaberry" human at the end — an agent
+ *   whose chain is unset, dangling, cyclic, or exceeds the resolver's own
+ *   depth guard is reported as a FAIL with the partial chain shown, never a
+ *   silent pass.
+ */
+export function evaluateReportsToChain(
+  agent: { reports_to_type: 'human' | 'agent' | null; reports_to_id: string | null },
+  resolvedHumanOrgMember: OrgMemberShape | null,
+  orgName: string | null,
+  chainTrail: string[],
+): ReportsToChainCheckResult {
+  const chainDescription = chainTrail.length > 0 ? chainTrail.join(' -> ') : '(no reports_to set)';
+
+  if (!agent.reports_to_type || !agent.reports_to_id) {
+    return {
+      pass: false,
+      reason:
+        'reports_to_type/reports_to_id are not set — ticket creation for this agent is ' +
+        'structurally rejected by ticketService.createTicket() until they are.',
+      chainDescription,
+    };
+  }
+  if (!resolvedHumanOrgMember) {
+    return {
+      pass: false,
+      reason:
+        `reports_to chain (${chainDescription}) does not resolve to a real human — broken link, ` +
+        'cycle, or exceeded the resolver\'s max chain depth.',
+      chainDescription,
+    };
+  }
+  if (orgName !== 'Colaberry') {
+    return {
+      pass: false,
+      reason: `reports_to chain resolves to a real human, but on org '${orgName ?? 'unknown'}', not 'Colaberry'.`,
+      chainDescription,
+    };
+  }
+  return {
+    pass: true,
+    reason: `reports_to chain resolves to a real human on 'Colaberry': ${chainDescription}.`,
+    chainDescription,
   };
 }

@@ -352,29 +352,56 @@ never "looks right" or "should work").
 **Verify:** the entry exists, is tagged with the session's real ID, and every
 `[x]` claim has a concrete artifact attached on the same line.
 
-### 10. Every registered ticket-creating agent MUST have `reports_to_org_member_id` set — ticket creation is structurally blocked without one
+### 10. Every registered ticket-creating agent's `reports_to` chain MUST resolve to a real human — ticket creation is structurally blocked without one
 
-Every agent that creates tickets must resolve to a real human it is
-accountable to: a real `org_members` row (the Business Account "Employee"
-roster feature) on the "Colaberry" org. This is not a recommendation — as of
-2026-08-18 (session CC-20260818-x4nk), `ticketService.createTicket()`
-rejects ticket creation outright (throws `TicketCreatorNotReportableError`,
-never a silent no-op or a warning) for any non-`human` creator whose
-resolved `AiAgent` row has no `reports_to_org_member_id`, or that doesn't
-resolve to a registered `AiAgent` row at all. "Even if there are no human
-approvals" (Ali, live) — an agent that never needs sign-off from its human
-still needs a real human it reports to, for accountability.
+Every agent that creates tickets must resolve, directly or through one or
+more AI Leadership agents, to a real human it is accountable to: a real
+`org_members` row (the Business Account "Employee" roster feature) on the
+"Colaberry" org. This is not a recommendation — as of 2026-08-18 (session
+CC-20260818-x4nk), `ticketService.createTicket()` rejects ticket creation
+outright (throws `TicketCreatorNotReportableError`, never a silent no-op or
+a warning) for any non-`human` creator whose `reports_to` chain doesn't
+resolve to a real human. "Even if there are no human approvals" (Ali, live)
+— an agent that never needs sign-off from its human still needs a real
+human it reports to, for accountability.
 
-**Proof:** PR (this run) added `reports_to_org_member_id` (nullable UUID) to
-`AiAgent`, gated `ticketService.createTicket()` on it, backfilled the
-then-current open-ticket backlog's assignee, and made
-`agentBlueprint/agentIdentitySeed.ts`'s `AgentIdentityConfig.reportsToOrgMemberId`
-a REQUIRED (not optional) TypeScript field — so registering a new
-ticket-creating agent without specifying who it reports to fails to compile,
-not just fails a lint/doc check. All 22 previously-registered agents were
-mapped to a real human by the founder directly (6 humans: Ali, Kes, Taiwo,
-Jackie, Swati, Sohail — see `ticketCreatorIdentitySeed.ts` and
-`reese/reeseIdentitySeed.ts` for the real ids).
+**AI Leadership / AI Staff hierarchy (2026-08-19):** an agent's `reports_to`
+now resolves to EITHER a human directly (**AI Leadership**) OR another agent
+(**AI Staff**, reporting through a leadership agent, which itself reports to
+a human). `AiAgent.reports_to_type` (`'human' | 'agent'`) +
+`reports_to_id` (an `org_members.id` or another `ai_agents.id`, depending on
+type) supersede the flat `reports_to_org_member_id` column from 2026-08-18
+(left in place, unread, for historical value only).
+`ticketCreatorReportsToResolver.ts`'s `resolveReportsToHuman()` walks the
+chain (bounded by a `MAX_CHAIN_DEPTH` cycle guard, currently 5 — not a
+hardcoded "exactly 2 hops" assumption, so a future 3rd tier needs no code
+change) until it lands on a real human. Of the 23 currently-registered
+agents, 2 are AI Leadership (`CoryBrain` → Ali, `workforce_intelligence_engine`
+→ Kes) and the other 21 are AI Staff, reporting through one of those two.
+
+**Proof:** the 2026-08-18 PR added `reports_to_org_member_id` (nullable
+UUID) to `AiAgent` and gated `createTicket()` on it — flat, one hop only.
+The 2026-08-19 change (this step's current form) added the polymorphic
+`reports_to_type`/`reports_to_id` pair, rewrote `enforceReportsToGate()` to
+walk the chain via `resolveReportsToHuman()` instead of reading the flat
+field directly, re-resolved every currently-open ticket's assignee against
+the new chain (`resolveTicketReportsToChain.ts`'s `--plan`/`--apply`/
+`--revert`, same dry-run-then-undo-log-then-apply discipline as every other
+bulk operation this week — a real, deliberate consequence of moving 20
+agents from a direct human report to an AI Leadership report is that many
+of their open tickets' real human assignee CHANGES, e.g. a
+`StudentSuccessArchitect` ticket moves from Taiwo to Ali, since it now
+resolves through `CoryBrain`), and made
+`agentBlueprint/agentIdentitySeed.ts`'s `AgentIdentityConfig` require
+**exactly one** of `reportsToOrgMemberId` (AI Leadership) or
+`reportsToAgentName` (AI Staff, resolved to the target's real `ai_agents.id`
+at seed time) — enforced at runtime in `seedAgentIdentity()`, not just
+documented. Also registered a 23rd agent found in the same pass:
+`AgentBehaviorMonitorAgent` (a real, previously-unregistered security
+watchdog that was stamping `created_by_id` as its own raw `AiAgent.id` UUID
+instead of its `agent_name` — a genuine bug, fixed in the same change,
+alongside giving it a real identity and an AI Staff report to
+`workforce_intelligence_engine`).
 
 **Known structural gap, disclosed not fixed here:** `ticketService.createTicket()`
 is the gate, but at least two call paths bypass it entirely via a direct
@@ -387,13 +414,16 @@ NOT rejected by this new gate. Closing that gap (e.g. a model-level
 follow-up proposal — out of scope for this run per CLAUDE.md's Scope Lock,
 not silently expanded into it.
 
-**Verify:** `reports_to_org_member_id` is set on the agent's real `AiAgent`
-row and resolves to a real `org_members` row on "Colaberry" —
-`validateAgentTicketStandard.ts`'s `reports_to_org_member_id set` check
-covers this mechanically (see Verification below). Attempt creating a
-ticket as the agent locally/in dev with the field temporarily null and
-confirm `createTicket()` throws `TicketCreatorNotReportableError` before any
-row is written.
+**Verify:** `reports_to_type`/`reports_to_id` are set on the agent's real
+`AiAgent` row and the chain resolves to a real `org_members` row on
+"Colaberry" — `validateAgentTicketStandard.ts`'s reports-to check covers
+this mechanically (see Verification below), reporting the full chain path
+taken (e.g. `AdmissionsConversionArchitect (agent) -> CoryBrain (agent) ->
+[human]`) so a broken link's exact break point is visible, not just a
+pass/fail. Attempt creating a ticket as the agent locally/in dev with
+`reports_to_type`/`reports_to_id` temporarily null and confirm
+`createTicket()` throws `TicketCreatorNotReportableError` before any row is
+written.
 
 ## Outputs
 
@@ -424,8 +454,9 @@ not a merge gate - it reports PASS/FAIL/INFO per check and never blocks anything
 on its own (wiring it into CI as a hard gate is a deliberately separate,
 escalation-tier decision, not something this directive authorizes). It checks:
 `AiAgent` registration, `tools_granted` population, display-identity
-registration, `reports_to_org_member_id` set and resolving to a real
-`org_members` row on "Colaberry" (Step 10), recurring-resolver registration
+registration, the `reports_to` chain (direct or through an AI Leadership
+agent) resolving to a real `org_members` row on "Colaberry" (Step 10),
+recurring-resolver registration
 (or an explicit logged reason for none), and a static scan of the resolver's
 rules file for the specific time-based-closure anti-pattern tokens proven
 this week. It does **not** check

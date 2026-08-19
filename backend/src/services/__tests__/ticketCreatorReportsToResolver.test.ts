@@ -12,7 +12,11 @@ jest.mock('../../models/AiAgent', () => ({ findOne: jest.fn(), findByPk: jest.fn
 
 import AdminUser from '../../models/AdminUser';
 import AiAgent from '../../models/AiAgent';
-import { resolveCreatorAiAgent, enforceReportsToGate } from '../ticketCreatorReportsToResolver';
+import {
+  resolveCreatorAiAgent,
+  enforceReportsToGate,
+  resolveReportsToHuman,
+} from '../ticketCreatorReportsToResolver';
 import { TicketCreatorNotReportableError } from '../errors/ticketCreatorErrors';
 
 const mockAdminFindByPk = AdminUser.findByPk as unknown as jest.Mock;
@@ -96,6 +100,65 @@ describe('resolveCreatorAiAgent', () => {
   });
 });
 
+// AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19). resolveReportsToHuman()
+// walks reports_to_type/reports_to_id — either straight to a human (AI Leadership)
+// or through one or more agent hops (AI Staff) — with a MAX_CHAIN_DEPTH cycle guard.
+describe('resolveReportsToHuman', () => {
+  it('AI Leadership: reports_to_type human resolves directly, zero extra lookups', async () => {
+    const agent = { reports_to_type: 'human', reports_to_id: 'ali-org-member-id' } as any;
+
+    const result = await resolveReportsToHuman(agent);
+
+    expect(result).toBe('ali-org-member-id');
+    expect(mockAgentFindByPk).not.toHaveBeenCalled();
+  });
+
+  it('AI Staff: one hop through an AI Leadership agent to a human', async () => {
+    const staffAgent = { agent_name: 'StudentSuccessArchitect', reports_to_type: 'agent', reports_to_id: 'corybrain-id' } as any;
+    const leadershipAgent = { agent_name: 'CoryBrain', reports_to_type: 'human', reports_to_id: 'ali-org-member-id' };
+    mockAgentFindByPk.mockResolvedValueOnce(leadershipAgent);
+
+    const result = await resolveReportsToHuman(staffAgent);
+
+    expect(result).toBe('ali-org-member-id');
+    expect(mockAgentFindByPk).toHaveBeenCalledWith('corybrain-id');
+  });
+
+  it('unset reports_to (neither type nor id) resolves to null', async () => {
+    const agent = { reports_to_type: null, reports_to_id: null } as any;
+
+    const result = await resolveReportsToHuman(agent);
+
+    expect(result).toBeNull();
+    expect(mockAgentFindByPk).not.toHaveBeenCalled();
+  });
+
+  it('AI Staff pointing at a non-existent agent (dangling reports_to_id) resolves to null, does not throw', async () => {
+    const staffAgent = { agent_name: 'OrphanedAgent', reports_to_type: 'agent', reports_to_id: 'nonexistent-id' } as any;
+    mockAgentFindByPk.mockResolvedValueOnce(null);
+
+    const result = await resolveReportsToHuman(staffAgent);
+
+    expect(result).toBeNull();
+  });
+
+  it('a cycle (A -> B -> A) is bounded by MAX_CHAIN_DEPTH and resolves to null, never loops forever', async () => {
+    const agentA = { agent_name: 'A', reports_to_type: 'agent', reports_to_id: 'b-id' } as any;
+    const agentB = { agent_name: 'B', reports_to_type: 'agent', reports_to_id: 'a-id' };
+    // Every hop returns the other agent, forever — the depth guard must stop this,
+    // not the mock running out (mockResolvedValue, not mockResolvedValueOnce, is
+    // deliberate here: proves the guard itself bounds the recursion).
+    mockAgentFindByPk.mockImplementation((id: string) => Promise.resolve(id === 'b-id' ? agentB : agentA));
+
+    const result = await resolveReportsToHuman(agentA);
+
+    expect(result).toBeNull();
+    // MAX_CHAIN_DEPTH is 5 — confirms it actually stopped, not an unbounded loop
+    // that happened to return before the test timed out.
+    expect(mockAgentFindByPk.mock.calls.length).toBeLessThanOrEqual(5);
+  });
+});
+
 // Agent Ticket Standard's actual gate (extracted out of ticketService.createTicket()
 // for CLAUDE.md's file-size ceiling — see ticketService.ts's own header comment).
 describe('enforceReportsToGate', () => {
@@ -107,21 +170,48 @@ describe('enforceReportsToGate', () => {
     expect(mockAdminFindByPk).not.toHaveBeenCalled();
   });
 
-  it('happy path: a registered agent with reports_to_org_member_id set returns that id', async () => {
-    mockAgentFindOne.mockResolvedValue({ reports_to_org_member_id: 'jackie-id' });
+  it('happy path (AI Leadership): a registered agent with reports_to_type=human resolves directly', async () => {
+    mockAgentFindOne.mockResolvedValue({ reports_to_type: 'human', reports_to_id: 'jackie-id' });
 
     const result = await enforceReportsToGate('agent', 'AlumniNetworkArchitect');
 
     expect(result).toBe('jackie-id');
   });
 
-  it("happy path (ai_staff): Reese's real shape (AdminUser id -> agent_id -> AiAgent) resolves successfully — the regression case for plan-audit cycle 1's finding", async () => {
+  it('happy path (AI Staff): resolves through one AI Leadership hop to a human', async () => {
+    mockAgentFindOne.mockResolvedValue({
+      agent_name: 'AdmissionsConversionArchitect',
+      reports_to_type: 'agent',
+      reports_to_id: 'corybrain-id',
+    });
+    mockAgentFindByPk.mockResolvedValueOnce({
+      agent_name: 'CoryBrain',
+      reports_to_type: 'human',
+      reports_to_id: 'ali-org-member-id',
+    });
+
+    const result = await enforceReportsToGate('agent', 'AdmissionsConversionArchitect');
+
+    expect(result).toBe('ali-org-member-id');
+  });
+
+  it("happy path (ai_staff creator type): Reese's real shape (AdminUser id -> agent_id -> AiAgent), now AI Staff reporting through workforce_intelligence_engine — the regression case for plan-audit cycle 1's finding, extended for the 2-tier hierarchy", async () => {
     mockAdminFindByPk.mockResolvedValue({ agent_id: 'reese-aiagent-id' });
-    mockAgentFindByPk.mockResolvedValue({ reports_to_org_member_id: 'taiwo-id' });
+    mockAgentFindByPk
+      .mockResolvedValueOnce({
+        agent_name: 'Reese',
+        reports_to_type: 'agent',
+        reports_to_id: 'wie-id',
+      })
+      .mockResolvedValueOnce({
+        agent_name: 'workforce_intelligence_engine',
+        reports_to_type: 'human',
+        reports_to_id: 'kes-id',
+      });
 
     const result = await enforceReportsToGate('ai_staff', REESE_ADMIN_ID);
 
-    expect(result).toBe('taiwo-id');
+    expect(result).toBe('kes-id');
   });
 
   it('failure path: an unregistered creator throws TicketCreatorNotReportableError BEFORE any caller could write, reason unregistered', async () => {
@@ -136,10 +226,24 @@ describe('enforceReportsToGate', () => {
     );
   });
 
-  it('failure path: a registered agent with a null reports_to_org_member_id throws, reason no_reports_to', async () => {
-    mockAgentFindOne.mockResolvedValue({ reports_to_org_member_id: null });
+  it('failure path: a registered agent with no reports_to_type/reports_to_id set throws, reason no_reports_to', async () => {
+    mockAgentFindOne.mockResolvedValue({ reports_to_type: null, reports_to_id: null });
 
     await expect(enforceReportsToGate('agent', 'SomeFutureAgent')).rejects.toMatchObject({
+      error_class: 'TicketCreatorNotReportableError',
+      context: { reason: 'no_reports_to' },
+    });
+  });
+
+  it('failure path: an AI Staff agent whose leadership target is dangling throws, reason no_reports_to', async () => {
+    mockAgentFindOne.mockResolvedValue({
+      agent_name: 'OrphanedStaffAgent',
+      reports_to_type: 'agent',
+      reports_to_id: 'nonexistent-leadership-id',
+    });
+    mockAgentFindByPk.mockResolvedValueOnce(null);
+
+    await expect(enforceReportsToGate('agent', 'OrphanedStaffAgent')).rejects.toMatchObject({
       error_class: 'TicketCreatorNotReportableError',
       context: { reason: 'no_reports_to' },
     });

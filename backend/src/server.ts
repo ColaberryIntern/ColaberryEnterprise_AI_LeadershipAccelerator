@@ -60,6 +60,7 @@ import { ensureReeseWelcomeSchema } from './db/ensureReeseWelcomeSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
+import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
@@ -2532,6 +2533,9 @@ async function start(): Promise<void> {
   // Agent Ticket Standard — reports_to_org_member_id on ai_agents (every
   // ticket-creating agent must report to a real human). Additive, idempotent, no flag.
   await ensureAiAgentReportsToSchema();
+  // AI Leadership / AI Staff hierarchy — reports_to_type/reports_to_id, superseding
+  // reports_to_org_member_id above as the resolver's source of truth. Additive, idempotent, no flag.
+  await ensureAiAgentHierarchySchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {
