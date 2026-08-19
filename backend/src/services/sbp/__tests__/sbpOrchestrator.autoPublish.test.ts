@@ -45,6 +45,11 @@ jest.mock('../buildProgressSnapshot', () => ({
 }));
 jest.mock('../materializeTasks', () => ({ materializePlanAsTasks: (...a: any[]) => mockMaterialize(...a) }));
 jest.mock('../workspaceRepo', () => ({ repoForProject: (...a: any[]) => mockRepoFor(...a) }));
+// Publishing now asks GitHub's reported write access before rendering, so
+// STORY-000's doc can only claim a seeded progress file on a repo we can write
+// to. Same reasoning as the `workspaceRepo` mock directly above: a real lookup
+// here would reach Sequelize and this suite is about publish sequencing.
+jest.mock('../repoWriteAccess', () => ({ repoWriteAccessForProject: async () => 'push' }));
 // The active-project pointer write and the cohort schedule lookup both reach
 // for the real database through a dynamic import. Mocked for the same reason as
 // in sbpOrchestrator.test.ts: loading Sequelize inside this suite is slow and

@@ -59,6 +59,39 @@ export interface CriterionOutcome {
   passed: boolean;
 }
 
+/**
+ * A criterion sitting in the progress file that matches nothing in the plan.
+ *
+ * ── WHY `asserted` IS A FIELD AND NOT A FILTER ──────────────────────────────
+ *
+ * `rejected_claims` only ever recorded the ones ticked `true`. That made the
+ * signal blind in exactly the state that traps people: an agent that INVENTED
+ * the criterion list — because nothing was seeded for it to copy — writes its
+ * paraphrases in and leaves them all `false`, because it has not built anything
+ * yet. Nothing is asserted, so nothing was recorded, and the verdict read
+ * `0/N passed, rejected_claims: []` — byte-identical to a student who had not
+ * opened their editor. Across 493 task rows in production every single
+ * `rejected_claims` was empty, and this is why.
+ *
+ * The two states are genuinely different and must stay distinguishable:
+ *
+ *   asserted: true   "I have met a requirement you never set." A claim. It is
+ *                    counted nowhere, and the student is told so.
+ *   asserted: false  "The requirements in my file are not your requirements."
+ *                    Not a claim at all — a DRIFTED FILE, discovered before the
+ *                    student has ticked anything and while the fix is still
+ *                    cheap. This is the early-warning case.
+ *
+ * Collapsing them into one count would report the drifted file as a burst of
+ * false claims, which is both wrong about the student and useless for triage.
+ */
+export interface UnrecognisedCriterion {
+  /** Verbatim as written in the file — never normalised. This is what a human must eyeball. */
+  text: string;
+  /** Was it ticked `true`? See above; the whole point is that `false` is also worth recording. */
+  asserted: boolean;
+}
+
 export interface StoryVerdict {
   story_id: string;
   state: StoryVerificationState;
@@ -76,8 +109,23 @@ export interface StoryVerdict {
    * Claims in the progress file that match no criterion in the plan. Recorded
    * rather than silently dropped: a burst of these is either a stale plan or
    * somebody writing their own criteria, and both are worth seeing.
+   *
+   * ASSERTED ONES ONLY, and deliberately unchanged. Everything already reading
+   * this field — `verification_json`, `projectTreeDto`, the frontend DTO — means
+   * "a tick we could not honour" by it, and widening it in place would silently
+   * change what all of them display. `unrecognised_criteria` below is the
+   * complete set; this stays the `asserted: true` subset of it.
    */
   rejected_claims: string[];
+  /**
+   * EVERY criterion in the file that matches no criterion in the plan, ticked or
+   * not. See `UnrecognisedCriterion` for why the unticked half is the half that
+   * mattered.
+   *
+   * A superset of `rejected_claims`: filtering this to `asserted` reproduces
+   * that field exactly, which is the invariant the tests pin.
+   */
+  unrecognised_criteria: UnrecognisedCriterion[];
 }
 
 export interface BuildVerdict {
@@ -178,11 +226,22 @@ export function decideStory(
 
   const claimsByText = new Map<string, boolean>();
   const rejected: string[] = [];
+  /**
+   * Filled from INSIDE the unmatched branch below rather than by a second pass
+   * over `entry.criteria`. A second pass would have to re-implement the match
+   * test, and the match test is under active change — PR #1624 replaces the bare
+   * `planTexts.has(...)` with a supersession-aware `resolveCriterionKey`. Two
+   * copies of that rule would agree today and diverge the moment one of them was
+   * improved, reporting criteria as unrecognised that the decision itself had
+   * just matched. Recording where the branch is actually taken cannot drift.
+   */
+  const unrecognised: UnrecognisedCriterion[] = [];
   const planTexts = new Set(spec.acceptance.map(normaliseCriterion));
   for (const c of entry?.criteria ?? []) {
     const key = normaliseCriterion(c.text);
     if (!planTexts.has(key)) {
       // A claim about something the plan does not ask for. Counted nowhere.
+      unrecognised.push({ text: c.text, asserted: c.passed === true });
       if (c.passed) rejected.push(c.text);
       continue;
     }
@@ -218,6 +277,26 @@ export function decideStory(
         : `${passedCount} of ${criteria.length} acceptance criteria are marked as passing. Outstanding: ${outstanding.join('; ')}`,
     );
   }
+  /**
+   * THE DRIFTED FILE, said out loud.
+   *
+   * Only the UNASSERTED remainder is described here; the asserted ones already
+   * have their own sentence further down and saying it twice would read as two
+   * separate problems. This branch is the one that used to produce nothing at
+   * all: a file whose criteria are all somebody else's wording and all still
+   * `false` scored `0/N` with an empty rejection list, and the student was told
+   * "none are marked as passing yet" — true, unhelpful, and silent about the
+   * only thing they needed to know, which is that the sentences in their file
+   * are not the sentences being graded.
+   */
+  const unassertedCount = unrecognised.length - rejected.length;
+  if (unassertedCount > 0) {
+    reasons.push(
+      `${unassertedCount} criterion/criteria in ${spec.id}'s entry do not match any acceptance criterion `
+      + 'in the published plan, so ticking them would do nothing. Replace them with the exact wording from '
+      + `this story's doc in \`docs/stories/${spec.id}.md\`, then tick the ones that genuinely pass.`,
+    );
+  }
   if (!commit) {
     reasons.push(
       `No commit in the repo names ${spec.id} and changes a file. `
@@ -247,6 +326,7 @@ export function decideStory(
     commit_at: commit?.committed_at ?? null,
     reasons: state === 'verified' ? [] : reasons,
     rejected_claims: rejected,
+    unrecognised_criteria: unrecognised,
   };
 }
 
@@ -289,4 +369,74 @@ export function decideBuild(
       qualifying_commits: qualifying,
     },
   };
+}
+
+/**
+ * The drift signal, flattened for one log line.
+ *
+ * WHY IT IS SHAPED FOR A LOG AND NOT FOR A DASHBOARD. This fires on WORDING,
+ * not on fraud: an agent that retyped a sentence, a plan republished with new
+ * text, or a student who wrote criteria of their own. None of those deserves an
+ * alert and none of them is urgent. What they do deserve is to be COUNTABLE —
+ * "how many builds in this cohort have a drifted progress file" was an
+ * unanswerable question before this, which is how twelve of thirteen went
+ * unnoticed until somebody read the repos by hand.
+ *
+ * The two counts stay apart all the way out to the log. `asserted` is a student
+ * claiming something we never asked for; `unasserted` is a file whose
+ * requirements are not ours, found BEFORE anything was claimed. Only the second
+ * one is invisible in every other signal the platform emits, so collapsing them
+ * into a total would hide the number that is actually new.
+ *
+ * `samples` carries the unmatched sentences verbatim and nothing else — no
+ * student name, no email, no repo contents. The project id is enough to find the
+ * row, and a log stream is not where names belong.
+ *
+ * PURE. Returns null when there is nothing to say, so the caller cannot emit an
+ * empty drift line on every clean sync.
+ */
+export interface UnrecognisedCriteriaSummary {
+  /** Ticked `true` and matching nothing. Equals the total length of `rejected_claims`. */
+  asserted: number;
+  /** Present, unticked, and matching nothing — the state this signal was blind to. */
+  unasserted: number;
+  /** Story ids carrying at least one, unique and sorted. */
+  stories_affected: string[];
+  /** Up to MAX_DRIFT_SAMPLES unmatched sentences, each truncated. The diagnostic payload. */
+  samples: string[];
+}
+
+/** Enough unmatched sentences to diagnose the drift, not enough to flood the stream. */
+const MAX_DRIFT_SAMPLES = 5;
+/** A criterion is a sentence. Anything longer than this is a paste accident, not a claim. */
+const MAX_DRIFT_SAMPLE_CHARS = 200;
+
+export function summariseUnrecognisedCriteria(
+  verdicts: readonly StoryVerdict[],
+): UnrecognisedCriteriaSummary | null {
+  const affected = verdicts.filter((v) => (v.unrecognised_criteria?.length ?? 0) > 0);
+  if (affected.length === 0) return null;
+
+  let asserted = 0;
+  let unasserted = 0;
+  const samples: string[] = [];
+  for (const v of affected) {
+    for (const c of v.unrecognised_criteria) {
+      if (c.asserted) asserted += 1;
+      else unasserted += 1;
+      if (samples.length < MAX_DRIFT_SAMPLES) samples.push(truncateSample(c.text));
+    }
+  }
+
+  return {
+    asserted,
+    unasserted,
+    stories_affected: [...new Set(affected.map((v) => v.story_id))].sort(),
+    samples,
+  };
+}
+
+function truncateSample(s: string): string {
+  const flat = String(s).replace(/\s+/g, ' ').trim();
+  return flat.length <= MAX_DRIFT_SAMPLE_CHARS ? flat : `${flat.slice(0, MAX_DRIFT_SAMPLE_CHARS - 1)}…`;
 }
