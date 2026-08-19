@@ -75,7 +75,7 @@ import fs from 'fs';
 import path from 'path';
 import { Op } from 'sequelize';
 import { runCycle, InboundMessage, WatcherPorts, EscalationInput } from '../services/inbox/watcher/watcherRun';
-import { openWindow, checkWindow, WATCH_WINDOW_HOURS } from '../services/inbox/watcher/watchWindow';
+import { openWindow, checkWindow, WATCH_WINDOW_HOURS, resolveWindowHours } from '../services/inbox/watcher/watchWindow';
 import {
   resolveWatcherDryRun, resolvePollIntervalMs, checkHalt, killCommand,
   resolveLookbackHours, resolveInboundSince,
@@ -451,7 +451,7 @@ async function main(): Promise<void> {
     process.exit(3);
   }
 
-  const window = openWindow(stateDir, { now: new Date(), runId: RUN_ID });
+  const window = openWindow(stateDir, { now: new Date(), runId: RUN_ID, hours: resolveWindowHours() });
   console.log(
     `[watcher] run=${RUN_ID} dry_run=${dryRun} started=${window.started_at} expires=${window.expires_at} ` +
     `(${window.duration_hours}h, default ${WATCH_WINDOW_HOURS}h) poll=${pollMs / 1000}s ` +
