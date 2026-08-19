@@ -392,13 +392,25 @@ router.get('/api/portal/projects', requireParticipant, async (req: Request, res:
   }
 });
 
-/** POST /api/portal/projects — create a NEW project and make it active. */
+/**
+ * POST /api/portal/projects — the project a NEW build should be generated into,
+ * made active.
+ *
+ * This is the ONLY sanctioned way for a client to obtain a project id to build
+ * in. It creates a fresh row unless the active project has never been built into
+ * at all, in which case that empty row is reused and claimed — see
+ * `resolveProjectForNewBuild`, which documents why the decision has to be made
+ * here rather than in the browser.
+ *
+ * `reused` is returned so the caller can tell the two apart. The client must not
+ * act on it to choose a project; it exists for telemetry and tests.
+ */
 router.post('/api/portal/projects', requireParticipant, async (req: Request, res: Response) => {
   try {
     const enrollmentId = req.participant!.sub;
-    const { createNewProjectForEnrollment } = await import('../services/projectService');
-    const project = await createNewProjectForEnrollment(enrollmentId);
-    res.json({ id: project.id, project_stage: (project as any).project_stage });
+    const { resolveProjectForNewBuild } = await import('../services/projectService');
+    const { project, reused } = await resolveProjectForNewBuild(enrollmentId);
+    res.json({ id: project.id, project_stage: (project as any).project_stage, reused });
   } catch (err: any) {
     console.error('[ProjectRoutes] POST /projects error:', err.message);
     res.status(500).json({ error: err.message });

@@ -59,6 +59,11 @@ const importTaskSchema = z.object({
   blocked_by: z.array(z.string()).optional(),
 });
 const importSchema = z.object({
+  // WHICH project this snapshot belongs to. Optional only so a cached older
+  // bundle still mirrors; when it is absent the server falls back to the active
+  // project, which is the behaviour that let one build's local state be written
+  // over another build's rows. See importProject.
+  project_id: z.string().uuid().optional(),
   name: z.string().optional(),
   lists: z.array(z.object({
     cluster: z.string(),
