@@ -1,4 +1,4 @@
-import { Op } from 'sequelize';
+import { Op, WhereOperators } from 'sequelize';
 import AdminUser from '../../models/AdminUser';
 import AiAgent from '../../models/AiAgent';
 import Enrollment from '../../models/Enrollment';
@@ -77,7 +77,20 @@ async function findBlueprintAdminUsers() {
 // consistent with the board's "open" number and wasn't — 12,574 lifetime across
 // the 6 originally-registered agents vs. 4,154 open board-wide, a real founder-
 // facing discrepancy. Now genuinely Open, not Total.
-const OPEN_TICKET_STATUS_FILTER = { [Op.notIn]: ['done', 'cancelled'] };
+// Exported (org-chart hierarchy build, 2026-08-19) so orgChartService.ts
+// reuses this identical filter instead of re-deriving the same
+// ['done','cancelled'] literal a second time and risking drift. Explicitly
+// typed as WhereOperators (Sequelize's own public type for this shape,
+// generic parameter deliberately left at its own default of `any` — a bare
+// `export const` here fails `tsc --noEmit` with TS4023 ("...but cannot be
+// named"), since the Op.notIn computed-key object's inferred type references
+// a Sequelize-internal symbol type that can't be auto-named in an exported
+// declaration; a narrower `WhereOperators<string>` in turn broke the two
+// call sites that filter Ticket.status, typed TicketStatus not string — the
+// interface's own default keeps this a drop-in match at both the original
+// `status: OPEN_TICKET_STATUS_FILTER` (TicketStatus) and the new
+// `assigned_to_id`/status-filter usages in orgChartService.ts).
+export const OPEN_TICKET_STATUS_FILTER: WhereOperators = { [Op.notIn]: ['done', 'cancelled'] };
 
 export async function listLiveAgents(): Promise<LiveAgent[]> {
   const adminUsers = await findBlueprintAdminUsers();

@@ -16,6 +16,7 @@ import {
   resolveCreatorAiAgent,
   enforceReportsToGate,
   resolveReportsToHuman,
+  resolveReportsToChainWithTrail,
 } from '../ticketCreatorReportsToResolver';
 import { TicketCreatorNotReportableError } from '../errors/ticketCreatorErrors';
 
@@ -156,6 +157,84 @@ describe('resolveReportsToHuman', () => {
     // MAX_CHAIN_DEPTH is 5 — confirms it actually stopped, not an unbounded loop
     // that happened to return before the test timed out.
     expect(mockAgentFindByPk.mock.calls.length).toBeLessThanOrEqual(5);
+  });
+});
+
+// Org-chart hierarchy build (2026-08-19) — resolveReportsToHuman() above is
+// now a thin wrapper over this trail-returning function; these tests cover
+// the trail shape directly (AgentDetailPage's "Reports to" section consumes
+// it), while resolveReportsToHuman()'s own tests above (unmodified, still
+// passing) prove the wrapper's resolvedHumanId output is unaffected by the
+// refactor.
+describe('resolveReportsToChainWithTrail', () => {
+  it('AI Leadership (0-hop): trail has exactly 1 entry ending in [human]', async () => {
+    const agent = { agent_name: 'CoryBrain', reports_to_type: 'human', reports_to_id: 'ali-org-member-id' } as any;
+
+    const result = await resolveReportsToChainWithTrail(agent);
+
+    expect(result.resolvedHumanId).toBe('ali-org-member-id');
+    expect(result.trail).toEqual(['CoryBrain (agent) -> [human]']);
+  });
+
+  it('AI Staff (1-hop through AI Leadership): trail has 2 entries, the first bare, the second ending in [human]', async () => {
+    const staffAgent = { agent_name: 'AdmissionsConversionArchitect', reports_to_type: 'agent', reports_to_id: 'corybrain-id' } as any;
+    const leadershipAgent = { agent_name: 'CoryBrain', reports_to_type: 'human', reports_to_id: 'ali-org-member-id' };
+    mockAgentFindByPk.mockResolvedValueOnce(leadershipAgent);
+
+    const result = await resolveReportsToChainWithTrail(staffAgent);
+
+    expect(result.resolvedHumanId).toBe('ali-org-member-id');
+    expect(result.trail).toEqual(['AdmissionsConversionArchitect (agent)', 'CoryBrain (agent) -> [human]']);
+  });
+
+  it('failure: a dangling reports_to_id ends the trail in [dangling], resolvedHumanId null', async () => {
+    const staffAgent = { agent_name: 'OrphanedAgent', reports_to_type: 'agent', reports_to_id: 'nonexistent-id' } as any;
+    mockAgentFindByPk.mockResolvedValueOnce(null);
+
+    const result = await resolveReportsToChainWithTrail(staffAgent);
+
+    expect(result.resolvedHumanId).toBeNull();
+    expect(result.trail).toEqual(['OrphanedAgent (agent) -> [dangling]']);
+  });
+
+  it('boundary: unset reports_to (neither type nor id) ends the trail in [unset]', async () => {
+    const agent = { agent_name: 'SomeFutureAgent', reports_to_type: null, reports_to_id: null } as any;
+
+    const result = await resolveReportsToChainWithTrail(agent);
+
+    expect(result.resolvedHumanId).toBeNull();
+    expect(result.trail).toEqual(['SomeFutureAgent (agent) -> [unset]']);
+  });
+
+  it('a cycle (A -> B -> A) is bounded by MAX_CHAIN_DEPTH: trail stops growing, resolvedHumanId null, never loops forever', async () => {
+    const agentA = { agent_name: 'A', reports_to_type: 'agent', reports_to_id: 'b-id' } as any;
+    const agentB = { agent_name: 'B', reports_to_type: 'agent', reports_to_id: 'a-id' };
+    mockAgentFindByPk.mockImplementation((id: string) => Promise.resolve(id === 'b-id' ? agentB : agentA));
+
+    const result = await resolveReportsToChainWithTrail(agentA);
+
+    expect(result.resolvedHumanId).toBeNull();
+    // MAX_CHAIN_DEPTH is 5 — the trail has at most 5 entries, confirming the
+    // guard actually stopped it rather than the mock happening to end early.
+    expect(result.trail.length).toBeLessThanOrEqual(5);
+    expect(mockAgentFindByPk.mock.calls.length).toBeLessThanOrEqual(5);
+  });
+
+  // Idempotency: a pure function over immutable input with no side effect —
+  // calling it twice with the same agent must return deep-equal results. Not
+  // a vacuous test: the recursive `trail` accumulation uses array spreads
+  // (`[...trail, ...]`), so this also guards against a future edit
+  // accidentally mutating/sharing the trail array across calls.
+  it('idempotency: calling twice with the same agent returns deep-equal results, no shared-array mutation', async () => {
+    const staffAgent = { agent_name: 'AdmissionsConversionArchitect', reports_to_type: 'agent', reports_to_id: 'corybrain-id' } as any;
+    const leadershipAgent = { agent_name: 'CoryBrain', reports_to_type: 'human', reports_to_id: 'ali-org-member-id' };
+    mockAgentFindByPk.mockResolvedValue(leadershipAgent);
+
+    const first = await resolveReportsToChainWithTrail(staffAgent);
+    const second = await resolveReportsToChainWithTrail(staffAgent);
+
+    expect(second).toEqual(first);
+    expect(second.trail).not.toBe(first.trail); // distinct array instances, not a shared reference
   });
 });
 

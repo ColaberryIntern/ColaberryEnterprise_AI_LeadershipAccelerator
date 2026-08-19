@@ -12,14 +12,17 @@ import WorkforceOSPage from '../WorkforceOSPage';
  * react-dom/client + act directly since this page fetches over a real useEffect
  * and needs its async load() to actually resolve, not just a static markup dump.
  *
- * What's under test (T007/T008/T009, Reese Phase 4 — Workforce integration):
- *  (a) the pre-existing static Director roster + office-drawer click path is
- *      UNCHANGED by this run's additive Live Agents / Activity Timeline work;
- *  (b)/(c) the new Live Agents section is generic — it renders whatever real
- *      agents the API returns, 1 or 2, never hardcoded to "Reese";
- *  (d) an empty agent list renders an honest empty state, not a fabricated card;
- *  (e)/(f) the Activity Timeline renders real events when present and an honest
- *      empty state when not — this is the "Reese-only-today" success criterion.
+ * Org-chart hierarchy build (2026-08-19): the previous "Director roster —
+ * unchanged regression" and "Live Agents section — generic, real data"
+ * describe blocks are REMOVED here, not rewritten — that DOM (the static
+ * AI_ORG director tiles + office drawer, and the separate Live Agents grid)
+ * no longer exists on this page (see WorkforceOSPage.tsx's own header
+ * comment). Coverage for the real replacement surface
+ * (OrgChartSection.tsx — drill-down/drill-through, honest empty states) lives
+ * in its own dedicated test file,
+ * frontend/src/pages/admin/workforce/orgchart/__tests__/OrgChartSection.test.tsx,
+ * not a rewritten copy of these blocks here. What remains under test below
+ * (Activity Timeline) is untouched by this run — same tests, same fixtures.
  */
 
 jest.mock('../../../../utils/api', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn() } }));
@@ -27,31 +30,25 @@ jest.mock('../../../../utils/api', () => ({ __esModule: true, default: { get: je
 const api = require('../../../../utils/api').default as { get: jest.Mock; post: jest.Mock };
 
 const DIRECTOR = { slug: 'curriculum', name: 'Dr. Elena Vasquez', role: 'Curriculum Director', department: 'Curriculum', avatar: '#5BA63C', supervisor: 'chief_of_staff', mission: 'm', ops_domain: 'curriculum', workload: 2, status: 'active' };
-const CEO = { slug: 'ceo', name: 'Ada Sterling', role: 'Chief Executive', department: 'Executive', avatar: '#1F2A33', supervisor: null, mission: 'm', ops_domain: null, workload: 0, status: 'active' };
 const COS = { slug: 'chief_of_staff', name: 'Miles Chen', role: 'Chief of Staff', department: 'Executive', avatar: '#2E6A86', supervisor: 'ceo', mission: 'm', ops_domain: null, workload: 1, status: 'active' };
-
-const REESE_AGENT = { id: 'agent-reese', agent_name: 'Reese', display_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success', description: '', enabled: true, live_status: 'online', open_ticket_count: 3 };
-const SECOND_AGENT = { id: 'agent-2', agent_name: 'SecondAgent', display_name: 'SecondAgent', agent_type: 'ai_staff_mentor', category: null, description: '', enabled: true, live_status: 'offline', open_ticket_count: 1 };
-// A Stage-1-style process — display_name sharply different from agent_name, mirroring
-// production exactly (agent_name 'cory-engine' -> display_name 'Cory Engine —
-// Autonomous Operations'), proving the card renders the real name, not the raw one.
-// Uses the REAL production AiAgent.id (see execution-contract.md) rather than a
-// synthetic one, so the color-collision regression test below exercises the exact
-// pair that collided live (loop-production-verifier, deploy cycle 1).
-const PROCESS_AGENT = { id: 'b3fbddfc-8c74-43dc-8525-e96acc7f6644', agent_name: 'cory-engine', display_name: 'Cory Engine — Autonomous Operations', agent_type: 'autonomous_engine', category: 'autonomous', description: '', enabled: true, live_status: 'unknown', open_ticket_count: 9606 };
-const PROCESS_AGENT_2 = { id: '2a301fe3-be8d-4e98-8918-04cf9527f85a', agent_name: 'InboxCaseEngine', display_name: 'Inbox Case Engine', agent_type: 'ticket_creator_identity', category: 'autonomous', description: '', enabled: true, live_status: 'unknown', open_ticket_count: 815 };
 
 const REESE_EVENT = { agent_id: 'agent-reese', agent_name: 'Reese', agent_display_name: 'Reese', ticket_id: 't1', ticket_number: 12, title: 'Reached out to a struggling student', type: 'reese_autonomous_outreach', status: 'in_progress', priority: 'high', occurred_at: '2026-08-10T00:00:00Z' };
 
-function mockApi({ liveAgents = [REESE_AGENT], activity = [REESE_EVENT] }: { liveAgents?: any[]; activity?: any[] }) {
+function mockApi({ activity = [REESE_EVENT] }: { activity?: any[] }) {
   api.get.mockImplementation((url: string) => {
-    if (url === '/api/admin/workforce/roster') return Promise.resolve({ data: { employees: [CEO, COS, DIRECTOR] } });
+    if (url === '/api/admin/workforce/roster') return Promise.resolve({ data: { employees: [COS, DIRECTOR] } });
     if (url === '/api/admin/workforce/briefing') return Promise.resolve({ data: { briefing: { good_morning: 'Morning', yesterday: 'y', priorities: [], risks: [], wins: [] }, health: { overall: 80, band: 'Good', subs: [] } } });
     if (url === '/api/admin/workforce/messages') return Promise.resolve({ data: { messages: [] } });
     if (url === '/api/admin/workforce/analytics') return Promise.resolve({ data: { employees: 3, tasks_total: 0, by_status: {}, meetings: 0, messages: 0 } });
-    if (url === '/api/admin/workforce/live-agents') return Promise.resolve({ data: { agents: liveAgents } });
     if (url === '/api/admin/workforce/live-agents/activity') return Promise.resolve({ data: { activity } });
-    if (url.startsWith('/api/admin/workforce/employee/')) return Promise.resolve({ data: { employee: { ...DIRECTOR, responsibilities: ['r1'], kpis: ['k1'] }, review: { overall: 80, completion_pct: 50, scores: {} }, tasks: [], memory: [] } });
+    // OrgChartSection (org-chart hierarchy build) fetches its own data over
+    // the same mocked `api` module — an empty-but-valid response so it
+    // renders cleanly rather than surfacing an unrelated error banner in
+    // these Activity-Timeline-focused tests. Its own dedicated fixtures live
+    // in OrgChartSection.test.tsx.
+    if (url === '/api/admin/workforce/org-chart') {
+      return Promise.resolve({ data: { organization: { id: 'org-colaberry', name: 'Colaberry' }, humans: [], leadership: [], staff: [], unresolved: [], generated_at: '2026-08-19T00:00:00Z' } });
+    }
     return Promise.reject(new Error(`unexpected GET ${url}`));
   });
   api.post.mockResolvedValue({ data: { meeting: { meeting_date: '2026-08-12', agenda: {}, contributions: [], action_items: [], participants: [] } } });
@@ -78,93 +75,6 @@ beforeEach(() => {
 afterEach(() => {
   act(() => { root.unmount(); });
   container.remove();
-});
-
-describe('Director roster — unchanged regression', () => {
-  it('still renders a Director tile and clicking it still opens the office drawer (openOffice unchanged)', async () => {
-    mockApi({});
-    await renderPage();
-
-    expect(container.textContent).toContain('Dr. Elena Vasquez');
-    expect(container.textContent).toContain('Curriculum Director');
-
-    const tile = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Dr. Elena Vasquez')) as HTMLElement;
-    expect(tile).toBeTruthy();
-
-    await act(async () => {
-      tile.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(api.get).toHaveBeenCalledWith('/api/admin/workforce/employee/curriculum');
-    expect(container.textContent).toContain('Responsibilities');
-  });
-});
-
-describe('Live Agents section — generic, real data', () => {
-  it('renders Reese with real data when the API returns exactly 1 live agent', async () => {
-    mockApi({ liveAgents: [REESE_AGENT] });
-    await renderPage();
-
-    expect(container.textContent).toContain('Live Agents');
-    expect(container.textContent).toContain('Reese');
-    const link = container.querySelector('a[href="/admin/agents/agent-reese"]');
-    expect(link).toBeTruthy();
-    // Open, not Total — Workforce OS perf fix (2026-08-18): the card must label
-    // the stat unambiguously as "open tickets", not the old bare "tickets" (which
-    // silently meant a lifetime total and caused real founder confusion).
-    expect(link!.textContent).toContain('open tickets');
-    expect(link!.textContent).toContain('3');
-  });
-
-  it('renders a second agent automatically — proves the section is generic, not Reese-hardcoded', async () => {
-    mockApi({ liveAgents: [REESE_AGENT, SECOND_AGENT] });
-    await renderPage();
-
-    expect(container.textContent).toContain('Reese');
-    expect(container.textContent).toContain('SecondAgent');
-    expect(container.querySelector('a[href="/admin/agents/agent-2"]')).toBeTruthy();
-  });
-
-  it('display name fix: renders the real display_name, not the raw agent_name, on the card (the exact bug Ali flagged)', async () => {
-    mockApi({ liveAgents: [PROCESS_AGENT] });
-    await renderPage();
-
-    const link = container.querySelector(`a[href="/admin/agents/${PROCESS_AGENT.id}"]`) as HTMLElement;
-    expect(link).toBeTruthy();
-    expect(link.textContent).toContain('Cory Engine — Autonomous Operations');
-    // The card must never show the raw technical id as the visible name.
-    expect(link.querySelector('.nm')?.textContent).not.toBe('cory-engine');
-  });
-
-  // loop-production-verifier (deploy cycle 1) found this exact pair — real ids,
-  // real deployed bundle — rendering the identical avatar color live. This is the
-  // regression test for that fix at the component level (agentAvatarColor.test.ts
-  // covers the underlying assignDistinctAvatarColors() utility in isolation).
-  it('distinct color fix: the two real agents that collided live (cory-engine, InboxCaseEngine) now render two different inline avatar background colors', async () => {
-    mockApi({ liveAgents: [PROCESS_AGENT, PROCESS_AGENT_2] });
-    await renderPage();
-
-    const avatars = Array.from(container.querySelectorAll('.wf-av')) as HTMLElement[];
-    expect(avatars.length).toBeGreaterThanOrEqual(2);
-    const backgrounds = avatars.map((el) => el.style.background);
-    expect(new Set(backgrounds).size).toBeGreaterThan(1);
-  });
-
-  it('renders an honest empty state when there are zero live agents — never a fabricated card', async () => {
-    // Internally consistent with the real backend: listLiveAgents() and
-    // listLiveAgentActivity() are both empty whenever zero blueprint AdminUser rows
-    // exist (see liveAgentsService.test.ts's "returns an empty array" case) — this
-    // fixture mirrors that, rather than an impossible "0 agents but Reese has
-    // activity" combination the real API would never actually return.
-    mockApi({ liveAgents: [], activity: [] });
-    await renderPage();
-
-    expect(container.textContent).toContain('No live agents yet');
-    const liveAgentsSection = Array.from(container.querySelectorAll('.wf-lab.section')).find((el) => el.textContent?.includes('Live Agents'));
-    expect(liveAgentsSection).toBeTruthy();
-    expect(container.querySelector('a[href^="/admin/agents/"]')).toBeFalsy();
-  });
 });
 
 describe('Activity Timeline — real data only', () => {

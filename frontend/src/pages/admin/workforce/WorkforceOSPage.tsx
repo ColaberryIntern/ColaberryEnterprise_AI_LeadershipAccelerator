@@ -1,35 +1,34 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../../utils/api';
 import { workforceCss, readTheme, writeTheme } from './themeKit';
 import StatusBadge from '../../../components/admin/shell/StatusBadge';
 import { getTicketTypeTone, getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
 import { fmtCentralDateTime } from '../../../utils/centralTime';
-import { assignDistinctAvatarColors } from '../../../utils/agentAvatarColor';
+import OrgChartSection from './orgchart/OrgChartSection';
 
 /**
  * WorkforceOSPage — the AI Workforce Operating System. An executive opens one
  * page and observes a functioning AI organization: the Chief of Staff briefing,
  * the daily leadership meeting (each Director speaks + action items get
- * assigned), the org roster with live workload, cross-department communication,
- * workforce analytics, and each employee's office. Light-default, dark-supported,
- * instant theme switch. Consumes /api/admin/workforce/* + the frozen Ops Center.
+ * assigned), the REAL org chart (Human Employees -> AI Leadership -> AI Staff,
+ * see orgchart/OrgChartSection.tsx), cross-department communication, and
+ * workforce analytics. Light-default, dark-supported, instant theme switch.
+ * Consumes /api/admin/workforce/* + the frozen Ops Center.
+ *
+ * Org-chart hierarchy build (2026-08-19): the old "AI Executive Team" roster
+ * (a static, fictional AI_ORG director list — "Ada Sterling, CEO" etc., not
+ * real people) and the separate real "Live Agents" grid both answered "who's
+ * in this org" for the same page, one fictionally and one flatly. Both are
+ * replaced by OrgChartSection below, the one real, drill-down answer. The
+ * Chief of Staff briefing / Daily Leadership Meeting sections stay unchanged —
+ * `emps`/`byslug()`/`cos` are still real dependencies of those sections, not
+ * dead code (see their own usage below).
  */
 
 interface Employee { slug: string; name: string; role: string; department: string; avatar: string; supervisor: string | null; mission: string; ops_domain: string | null; workload: number; status: string }
 interface Meeting { meeting_date: string; agenda: any; contributions: Array<{ slug: string; name: string; role: string; line: string }>; action_items: Array<{ owner: string; title: string; severity: string; rec_key: string }>; participants: string[] }
 
-// Reese Phase 4 (Workforce integration) — real, DB-backed AiAgent rows built via
-// the agentBlueprint pattern (backend/src/services/workforce/liveAgentsService.ts).
-// Distinct shape from Employee above on purpose: a Live Agent is a real, ticketed,
-// ProofDesk-governed operating agent, not a conceptual department-strategy persona
-// like the static AI_ORG directors — see the "Live Agents" section below.
-// open_ticket_count (not ticket_count) — Workforce OS perf fix (2026-08-18): the
-// backend used to return a LIFETIME TOTAL under the name `ticket_count`, which read
-// as if it meant "open" and caused real founder confusion (12,574 lifetime across 6
-// agents vs. 4,154 open board-wide). Now genuinely open-only, renamed so the two
-// can never be silently conflated again. See liveAgentsService.ts.
-interface LiveAgent { id: string; agent_name: string; display_name: string; agent_type: string; category: string | null; description: string | null; enabled: boolean; live_status: string; open_ticket_count: number }
 interface LiveAgentActivityEvent { agent_id: string; agent_name: string; agent_display_name: string; ticket_id: string; ticket_number: number | null; title: string; type: string; status: string; priority: string; occurred_at: string | null }
 
 const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
@@ -42,8 +41,6 @@ const WorkforceOSPage: React.FC = () => {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
-  const [office, setOffice] = useState<any>(null);
-  const [liveAgents, setLiveAgents] = useState<LiveAgent[]>([]);
   const [liveAgentActivity, setLiveAgentActivity] = useState<LiveAgentActivityEvent[]>([]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -51,35 +48,26 @@ const WorkforceOSPage: React.FC = () => {
   const load = useCallback(async () => {
     setBusy('load'); setError('');
     try {
-      const [r, b, m, msg, an, la, lt] = await Promise.all([
+      const [r, b, m, msg, an, lt] = await Promise.all([
         api.get('/api/admin/workforce/roster'),
         api.get('/api/admin/workforce/briefing'),
         api.post('/api/admin/workforce/meeting/daily'),
         api.get('/api/admin/workforce/messages'),
         api.get('/api/admin/workforce/analytics'),
-        api.get('/api/admin/workforce/live-agents'),
         api.get('/api/admin/workforce/live-agents/activity'),
       ]);
       setEmps(r.data.employees); setBrief(b.data); setMeeting(m.data.meeting); setMessages(msg.data.messages); setAnalytics(an.data);
-      setLiveAgents(la.data.agents || []); setLiveAgentActivity(lt.data.activity || []);
+      setLiveAgentActivity(lt.data.activity || []);
     } catch (e: any) { setError(e?.response?.data?.error || 'Could not load the AI Workforce.'); } finally { setBusy(''); }
   }, []);
   useEffect(() => { void load(); }, [load]);
-  // Collision-avoiding, not a bare per-id hash: assigned across the WHOLE current
-  // roster so every simultaneously-displayed card is guaranteed a different color
-  // (up to the 8-color palette) — a bare agentAvatarColor(id) call per card can and
-  // did collide live (cory-engine and InboxCaseEngine both landed on '#C2185B').
-  // Declared before the early `error` return below, per the Rules of Hooks.
-  const liveAgentColors = useMemo(() => assignDistinctAvatarColors(liveAgents.map((a) => a.id)), [liveAgents]);
 
   const toggleTheme = () => { const t = theme === 'dark' ? 'light' : 'dark'; setTheme(t); writeTheme(t); };
-  const openOffice = async (slug: string) => { try { setOffice((await api.get(`/api/admin/workforce/employee/${slug}`)).data); } catch { setError('Could not open office.'); } };
   const byslug = (slug: string) => emps.find((e) => e.slug === slug);
 
   if (error) return <div className="wf" data-theme={theme}><style>{workforceCss}</style><div className="wf-wrap"><div className="wf-err">{error} <button className="wf-btn" onClick={load}>Retry</button></div></div></div>;
 
-  const ceo = byslug('ceo'); const cos = byslug('chief_of_staff');
-  const directors = emps.filter((e) => e.supervisor === 'chief_of_staff');
+  const cos = byslug('chief_of_staff');
   const health = brief?.health;
 
   return (
@@ -146,47 +134,19 @@ const WorkforceOSPage: React.FC = () => {
           </section>
         )}
 
-        {/* Org roster */}
-        <div className="wf-lab section">AI Executive Team · {emps.length} employees</div>
-        {ceo && <div style={{ maxWidth: 340, margin: '0 auto 10px' }}><div className="wf-emp" onClick={() => openOffice('ceo')}>{av(ceo.avatar, ceo.name)}<div><div className="nm">{ceo.name}</div><div className="rl">{ceo.role}</div></div></div></div>}
-        {cos && <div style={{ maxWidth: 340, margin: '0 auto 12px' }}><div className="wf-emp" onClick={() => openOffice('chief_of_staff')}>{av(cos.avatar, cos.name)}<div><div className="nm">{cos.name}</div><div className="rl">{cos.role}</div></div><div className={`wl ${cos.status === 'busy' ? 'busy' : ''}`}><b>{cos.workload}</b><br />open</div></div></div>}
-        <div className="wf-dirs">
-          {directors.map((e) => (
-            <div className="wf-emp" key={e.slug} onClick={() => openOffice(e.slug)} style={{ display: 'flex' }}>
-              {av(e.avatar, e.name)}<div style={{ minWidth: 0 }}><div className="nm">{e.name}</div><div className="rl">{e.role}</div></div>
-              <div className={`wl ${e.status === 'busy' ? 'busy' : ''}`}><b>{e.workload}</b><br />open</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Live Agents — real, DB-backed AiAgent rows built via the agentBlueprint
-            pattern (Reese today; any future agent built the same way appears here
-            automatically). Distinct from the static Directors above: these are
-            real, ticketed, ProofDesk-governed operating agents, not conceptual
-            department-strategy personas, so clicking one opens the real Agent
-            Detail page rather than the Directors' office drawer. */}
-        <div className="wf-lab section">Live Agents · {liveAgents.length} operating</div>
-        {liveAgents.length === 0 ? (
-          <div className="wf-muted" style={{ padding: '8px 0 4px' }}>No live agents yet.</div>
-        ) : (
-          <div className="wf-dirs">
-            {liveAgents.map((a) => (
-              <Link to={`/admin/agents/${a.id}`} className="wf-emp" key={a.id} style={{ display: 'flex', textDecoration: 'none', color: 'inherit' }}>
-                {av(liveAgentColors[a.id], a.display_name)}
-                <div style={{ minWidth: 0 }}>
-                  <div className="nm">{a.display_name}</div>
-                  <div className="rl">{a.category || a.agent_type}</div>
-                </div>
-                <div className={`wl ${a.live_status === 'online' ? 'busy' : ''}`}><b>{a.open_ticket_count}</b><br />open tickets</div>
-              </Link>
-            ))}
-          </div>
-        )}
+        {/* The real org chart — Human Employees -> AI Leadership -> AI Staff
+            (org-chart hierarchy build, 2026-08-19). Replaces the old fictional
+            AI_ORG director roster + the separate real Live Agents grid: both
+            answered "who's in this org" for this page, one fictionally, one
+            flatly. Self-fetching (owns its own /api/admin/workforce/org-chart
+            call) — see orgchart/OrgChartSection.tsx. */}
+        <OrgChartSection />
 
         {/* Activity Timeline — real, chronological ProofDesk ticket events across
-            every Live Agent above. Driven ONLY by real ticket data (see
-            liveAgentsService.ts) — never fabricated for the static Directors, so
-            this is correctly empty/Reese-only today, the first agent on this path. */}
+            every AI Leadership/AI Staff agent in the org chart above. Driven
+            ONLY by real ticket data (see liveAgentsService.ts) — an
+            independent fetch from OrgChartSection's own data, unaffected by
+            the org-chart hierarchy build. */}
         <section className="wf-card" style={{ marginTop: 16 }}>
           <div className="wf-lab">Activity Timeline</div>
           {liveAgentActivity.length === 0 ? (
@@ -194,9 +154,9 @@ const WorkforceOSPage: React.FC = () => {
           ) : (
             liveAgentActivity.map((ev) => (
               // Clickable through to the ticket — reuses the exact same route
-              // pattern AgentDetailPage.tsx's Ticket activity table already uses
-              // (`/admin/tickets?open=<id>`), matching the Live Agents Link 20
-              // lines above rather than inventing a second navigation pattern.
+              // pattern AgentDetailPage.tsx's Ticket activity table already
+              // uses (`/admin/tickets?open=<id>`) rather than inventing a
+              // second navigation pattern.
               <Link
                 to={`/admin/tickets?open=${ev.ticket_id}`}
                 className="wf-msg"
@@ -236,25 +196,6 @@ const WorkforceOSPage: React.FC = () => {
         </>
         )}
       </div>
-
-      {/* Office drawer */}
-      {office && (
-        <div className="wf-scrim" onClick={() => setOffice(null)}>
-          <aside className="wf-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="wf-ohead">{av(office.employee.avatar, office.employee.name, '')}<div><b style={{ fontSize: 16 }}>{office.employee.name}</b><div className="wf-muted">{office.employee.role} · {office.employee.department}</div></div><button className="wf-close" onClick={() => setOffice(null)}>✕</button></div>
-            <p style={{ fontSize: 13.5, margin: '0 0 12px' }}>{office.employee.mission}</p>
-            <div className="wf-lab">Responsibilities</div><div>{office.employee.responsibilities.map((r: string) => <span key={r} className="wf-chip">{r}</span>)}</div>
-            <div className="wf-lab" style={{ marginTop: 12 }}>KPIs</div><div>{office.employee.kpis.map((k: string) => <span key={k} className="wf-chip">{k}</span>)}</div>
-            <div className="wf-lab" style={{ marginTop: 14 }}>Performance review</div>
-            <div className="wf-hp"><b>{office.review.overall}</b><span>/100 · {office.review.completion_pct}% tasks done</span></div>
-            <div className="wf-scores">{Object.entries(office.review.scores).map(([k, v]: any) => <div className="s" key={k}><b>{v}</b><span>{k}</span></div>)}</div>
-            <div className="wf-lab" style={{ marginTop: 12 }}>Tasks · {office.tasks.length}</div>
-            {office.tasks.length === 0 ? <div className="wf-muted">No tasks yet.</div> : office.tasks.slice(0, 8).map((t: any) => <div className="wf-otask" key={t.id}><span>{t.title}</span><span className="wf-muted">{t.status}</span></div>)}
-            <div className="wf-lab" style={{ marginTop: 12 }}>Memory · {office.memory.length}</div>
-            {office.memory.slice(0, 5).map((m: any) => <div key={m.id} style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderTop: '1px solid var(--line-soft)' }}><b style={{ fontFamily: 'var(--mono)', fontSize: 9.5, textTransform: 'uppercase' }}>{m.kind}</b> {m.content}</div>)}
-          </aside>
-        </div>
-      )}
     </div>
   );
 };

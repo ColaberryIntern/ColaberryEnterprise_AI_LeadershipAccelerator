@@ -69,6 +69,12 @@ const DETAIL: AgentDetail = {
     undocumented_tools: [],
     produced_ticket_types: ['reese_autonomous_outreach', 'student_support'],
   },
+  // Org-chart hierarchy build (2026-08-19) — Reese's real shape: AI Staff
+  // reporting through workforce_intelligence_engine to Kes.
+  reports_to: {
+    trail: ['Reese (agent)', 'workforce_intelligence_engine (agent) -> [human]'],
+    resolved_human: { id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', name: 'Kes', email: 'kesetebirhan@gmail.com' },
+  },
 };
 
 let container: HTMLDivElement;
@@ -273,5 +279,52 @@ describe('AgentDetailPage — title prefers identity.display_name over raw agent
     await renderAgentPage();
 
     expect(container.textContent).toContain('Reese');
+  });
+});
+
+// Org-chart hierarchy build (2026-08-19) — "Reports to" section: this agent's
+// real accountability chain, reused from AgentDetailResult.reports_to rather
+// than re-derived client-side.
+describe('AgentDetailPage — "Reports to" section', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('renders the real trail and the resolved human name/email when the chain resolves', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL);
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Reports to');
+    expect(container.textContent).toContain('workforce_intelligence_engine (agent) -> [human]');
+    expect(container.textContent).toContain('Kes');
+    expect(container.textContent).toContain('kesetebirhan@gmail.com');
+  });
+
+  it('boundary: reports_to is null -> renders an honest "no chain configured" message, never a blank or fabricated section', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, reports_to: null });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('No reports-to chain configured');
+  });
+
+  it('boundary: the chain trail exists but resolved_human is null -> discloses the break honestly, never fabricates a human', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      reports_to: { trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('does not currently resolve to a real human');
   });
 });
