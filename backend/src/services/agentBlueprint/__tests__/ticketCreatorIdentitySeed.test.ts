@@ -16,7 +16,7 @@
  * automatically, so a future 17th/22nd entry only needs this one constant
  * updated, not a rewrite of every test.
  */
-const EXPECTED_COUNT = 21;
+const EXPECTED_COUNT = 22;
 jest.mock('../agentIdentitySeed', () => ({
   seedAgentIdentity: jest.fn(),
   getAgentAdminUserId: jest.fn(),
@@ -43,7 +43,7 @@ beforeEach(() => {
 });
 
 describe('TICKET_CREATOR_IDENTITIES', () => {
-  it('has exactly the 5 original high-volume processes plus the 16 department Strategy Architects', () => {
+  it('has exactly the 5 original high-volume processes, the 16 department Strategy Architects, and AgentBehaviorMonitorAgent', () => {
     const names = TICKET_CREATOR_IDENTITIES.map((c) => c.agentName).sort();
     expect(names).toHaveLength(EXPECTED_COUNT);
     expect(names).toEqual(
@@ -53,6 +53,7 @@ describe('TICKET_CREATOR_IDENTITIES', () => {
         'bpos_orchestrator',
         'cory-engine',
         'workforce_intelligence_engine',
+        'AgentBehaviorMonitorAgent',
         'AdmissionsConversionArchitect',
         'AlumniNetworkArchitect',
         'ExecutiveStrategyArchitect',
@@ -109,66 +110,71 @@ describe('TICKET_CREATOR_IDENTITIES', () => {
     }
   });
 
-  it('every entry carries its own real, verified legacyCreatorIds equal to its own agentName (matches production tickets.created_by_id exactly)', () => {
+  it('every entry carries its own real, verified legacyCreatorIds equal to its own agentName (matches production tickets.created_by_id exactly) — except AgentBehaviorMonitorAgent, whose historical created_by_id was its own raw AiAgent UUID (the bug fixed in agentBehaviorMonitorAgent.ts), not its agentName', () => {
     for (const config of TICKET_CREATOR_IDENTITIES) {
+      if (config.agentName === 'AgentBehaviorMonitorAgent') {
+        expect(config.legacyCreatorIds).toEqual(['b95d1700-1a2d-49d0-a8d0-a5859afd360a']);
+        continue;
+      }
       expect(config.legacyCreatorIds).toEqual([config.agentName]);
     }
   });
 
-  // Agent Ticket Standard (2026-08-18, session CC-20260818-x4nk) — the exact,
-  // founder-given agent -> human mapping (request.md). Every one of the 21
-  // entries here (Reese, the 22nd agent, is seeded separately via
-  // reeseIdentitySeed.ts — see its own test file) must carry the real
-  // org_members.id the founder assigned, at the right per-human counts.
-  it('every entry has a non-empty reportsToOrgMemberId (the structural requirement itself)', () => {
+  // AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19). Every entry
+  // must carry EXACTLY ONE of reportsToOrgMemberId (AI Leadership, direct to
+  // a human) or reportsToAgentName (AI Staff, through a leadership agent) —
+  // never both, never neither. Reese (the 23rd agent) is seeded separately
+  // via reeseIdentitySeed.ts — see its own test file.
+  it('every entry has exactly one of reportsToOrgMemberId or reportsToAgentName, never both or neither', () => {
     for (const config of TICKET_CREATOR_IDENTITIES) {
-      expect(config.reportsToOrgMemberId).toBeTruthy();
+      const hasHuman = !!config.reportsToOrgMemberId;
+      const hasAgent = !!config.reportsToAgentName;
+      expect(hasHuman).not.toBe(hasAgent);
     }
   });
 
-  it('matches the founder-given mapping exactly, at the right per-human counts (Ali x9, Kes x5, Taiwo x4 [Reese is the 5th, seeded separately], Jackie x1, Swati x1, Sohail x1)', () => {
+  it('exactly 2 entries are AI Leadership (report directly to a human): CoryBrain -> Ali, workforce_intelligence_engine -> Kes', () => {
     const ORG_MEMBER = {
       ALI: 'f179c222-284e-4180-a335-cca9e4918b2e',
       KES: '3df017df-affa-49ab-884f-a99a4bd2ef4e',
-      TAIWO: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f',
-      JACKIE: 'a6db5276-2993-4e0b-ace9-0052ba841c80',
-      SWATI: '5db87b51-4554-4e52-93d7-c61f9887352c',
-      SOHAIL: '4e255894-ac0b-4367-ae06-27459ea05f66',
     };
-    const byAgentName = Object.fromEntries(
-      TICKET_CREATOR_IDENTITIES.map((c) => [c.agentName, c.reportsToOrgMemberId]),
-    );
+    const leadership = TICKET_CREATOR_IDENTITIES.filter((c) => !!c.reportsToOrgMemberId);
+    const byAgentName = Object.fromEntries(leadership.map((c) => [c.agentName, c.reportsToOrgMemberId]));
 
-    expect(byAgentName).toMatchObject({
-      // Ali (9 in this array; CoryBrain/InboxCaseEngine/bpos_orchestrator are hand-written)
+    expect(leadership).toHaveLength(2);
+    expect(byAgentName).toEqual({
       CoryBrain: ORG_MEMBER.ALI,
-      InboxCaseEngine: ORG_MEMBER.ALI,
-      bpos_orchestrator: ORG_MEMBER.ALI,
-      ExecutiveStrategyArchitect: ORG_MEMBER.ALI,
-      GovernanceStrategyArchitect: ORG_MEMBER.ALI,
-      GrowthExperimentArchitect: ORG_MEMBER.ALI,
-      InsightArchitect: ORG_MEMBER.ALI,
-      PartnershipExpansionArchitect: ORG_MEMBER.ALI,
-      StrategyFuturesArchitect: ORG_MEMBER.ALI,
-      // Kes (5)
-      'cory-engine': ORG_MEMBER.KES,
       workforce_intelligence_engine: ORG_MEMBER.KES,
-      InfrastructureEvolutionArchitect: ORG_MEMBER.KES,
-      OrchestrationEcosystemArchitect: ORG_MEMBER.KES,
-      PlatformInnovationArchitect: ORG_MEMBER.KES,
-      // Taiwo (4 here; Reese is the 5th, seeded separately)
-      AdmissionsConversionArchitect: ORG_MEMBER.TAIWO,
-      FinanceIntelligenceArchitect: ORG_MEMBER.TAIWO,
-      OperationsOptimizationArchitect: ORG_MEMBER.TAIWO,
-      StudentSuccessArchitect: ORG_MEMBER.TAIWO,
-      // Jackie (1)
-      AlumniNetworkArchitect: ORG_MEMBER.JACKIE,
-      // Swati (1)
-      LearningInnovationArchitect: ORG_MEMBER.SWATI,
-      // Sohail (1)
-      MarketingAutomationArchitect: ORG_MEMBER.SOHAIL,
     });
-    expect(Object.keys(byAgentName)).toHaveLength(EXPECTED_COUNT);
+  });
+
+  it('the remaining 20 entries are AI Staff, reporting through CoryBrain (all 16 Architects) or workforce_intelligence_engine (cory-engine, InboxCaseEngine, bpos_orchestrator, AgentBehaviorMonitorAgent)', () => {
+    const staff = TICKET_CREATOR_IDENTITIES.filter((c) => !!c.reportsToAgentName);
+    const byAgentName = Object.fromEntries(staff.map((c) => [c.agentName, c.reportsToAgentName]));
+
+    expect(staff).toHaveLength(EXPECTED_COUNT - 2);
+    expect(byAgentName).toMatchObject({
+      'cory-engine': 'workforce_intelligence_engine',
+      InboxCaseEngine: 'workforce_intelligence_engine',
+      bpos_orchestrator: 'workforce_intelligence_engine',
+      AgentBehaviorMonitorAgent: 'workforce_intelligence_engine',
+      AdmissionsConversionArchitect: 'CoryBrain',
+      AlumniNetworkArchitect: 'CoryBrain',
+      ExecutiveStrategyArchitect: 'CoryBrain',
+      FinanceIntelligenceArchitect: 'CoryBrain',
+      GovernanceStrategyArchitect: 'CoryBrain',
+      GrowthExperimentArchitect: 'CoryBrain',
+      InfrastructureEvolutionArchitect: 'CoryBrain',
+      InsightArchitect: 'CoryBrain',
+      LearningInnovationArchitect: 'CoryBrain',
+      MarketingAutomationArchitect: 'CoryBrain',
+      OperationsOptimizationArchitect: 'CoryBrain',
+      OrchestrationEcosystemArchitect: 'CoryBrain',
+      PartnershipExpansionArchitect: 'CoryBrain',
+      PlatformInnovationArchitect: 'CoryBrain',
+      StrategyFuturesArchitect: 'CoryBrain',
+      StudentSuccessArchitect: 'CoryBrain',
+    });
   });
 });
 

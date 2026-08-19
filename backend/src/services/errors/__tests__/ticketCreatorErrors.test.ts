@@ -27,6 +27,11 @@ describe('TicketCreatorNotReportableError', () => {
     });
 
     expect(err.context.reason).toBe('no_reports_to');
-    expect(err.message).toMatch(/has no reports_to_org_member_id set/);
+    // AI Leadership / AI Staff hierarchy (2026-08-19) — the message now
+    // describes chain resolution (reports_to_type/reports_to_id), not the
+    // superseded flat reports_to_org_member_id field. See
+    // ticketCreatorErrors.ts's own updated no_reports_to message.
+    expect(err.message).toMatch(/reports_to chain/);
+    expect(err.message).toMatch(/unset, broken, or too deep/);
   });
 });

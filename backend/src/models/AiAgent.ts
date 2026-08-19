@@ -237,7 +237,17 @@ interface AiAgentAttributes {
   // db/ensureAiAgentReportsToSchema.ts); ticketService.createTicket() rejects
   // ticket creation from any non-human creator whose resolved AiAgent row has this
   // null. See directives/register-ticket-creating-agent.md.
+  // Superseded by reports_to_type/reports_to_id below (2026-08-19) — left in place
+  // for historical/audit value only, no longer read by the resolver.
   reports_to_org_member_id?: string | null;
+  // AI Leadership / AI Staff hierarchy (2026-08-19). 'human': reports_to_id is an
+  // org_members.id (this agent IS AI Leadership). 'agent': reports_to_id is
+  // another ai_agents.id (this agent is AI Staff, reporting through a leadership
+  // agent). See services/ticketCreatorReportsToResolver.ts's chain-walking
+  // resolveReportsToHuman() for how a ticket's real human assignee gets derived
+  // from this — it always resolves to a human at the end, however many hops.
+  reports_to_type?: 'human' | 'agent' | null;
+  reports_to_id?: string | null;
 }
 
 class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
@@ -270,6 +280,8 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare tools_granted: string[] | null;
   declare persona_version: string | null;
   declare reports_to_org_member_id: string | null;
+  declare reports_to_type: 'human' | 'agent' | null;
+  declare reports_to_id: string | null;
 }
 
 AiAgent.init(
@@ -402,8 +414,22 @@ AiAgent.init(
       allowNull: true,
       // No DB-level FK constraint — matches this table's own convention of not
       // foreign-key-constraining actor-ref/ownership columns (see the header
-      // comment in db/ensureAiAgentReportsToSchema.ts for why).
+      // comment in db/ensureAiAgentReportsToSchema.ts for why). Superseded by
+      // reports_to_type/reports_to_id below (2026-08-19) — no longer read by
+      // the resolver, kept for historical/audit value only.
       references: { model: 'org_members', key: 'id' },
+    },
+    reports_to_type: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    reports_to_id: {
+      // Deliberately no `references` — unlike reports_to_org_member_id, this
+      // column's target table depends on reports_to_type ('org_members' or
+      // 'ai_agents'), which a single static FK/reference declaration can't
+      // express. Same no-DB-FK convention either way; see above.
+      type: DataTypes.UUID,
+      allowNull: true,
     },
   },
   {
@@ -416,6 +442,7 @@ AiAgent.init(
       { fields: ['trigger_type'] },
       { fields: ['agent_group'] },
       { fields: ['reports_to_org_member_id'] },
+      { fields: ['reports_to_id'] },
     ],
   }
 );
