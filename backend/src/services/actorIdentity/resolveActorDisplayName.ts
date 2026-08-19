@@ -1,5 +1,6 @@
 import AdminUser from '../../models/AdminUser';
 import AiAgent from '../../models/AiAgent';
+import OrgMember from '../../models/OrgMember';
 import { sequelize } from '../../config/database';
 import { resolveStudentDisplayName } from '../reese/resolveStudentDisplayName';
 
@@ -94,6 +95,33 @@ async function resolveViaAdminUser(actorId: string): Promise<string | null> {
     // activity rows. Unlike resolveStudentDisplayName.ts (used in one narrow,
     // already-try/catch-wrapped call site), this function owns its own failure
     // handling end-to-end.
+    return null;
+  }
+}
+
+/**
+ * Resolves a 'org_member' actor_id (an org_members.id UUID — the real human a
+ * ticket was assigned to via the Agent Ticket Standard's reports_to resolution) to
+ * a display name. Tries a same-email AdminUser.display_name first (several of the
+ * 6 real humans this resolves for today — Ali, Jackie, Swati, Sohail — are
+ * Colaberry staff with a real AdminUser row), else falls back to the org_member's
+ * own email — a real, non-generic, distinguishing identifier (OrgMember has no
+ * display_name column of its own), never a raw UUID. Same never-throw,
+ * null-on-miss contract as this file's other internal resolveVia* helpers.
+ */
+async function resolveViaOrgMember(actorId: string): Promise<string | null> {
+  try {
+    const member = await OrgMember.findByPk(actorId, { attributes: ['email'] });
+    if (!member) return null;
+
+    const linkedAdmin = await AdminUser.findOne({
+      where: { email: member.email },
+      attributes: ['display_name', 'email'],
+    });
+    if (linkedAdmin?.display_name) return linkedAdmin.display_name;
+
+    return member.email;
+  } catch {
     return null;
   }
 }
@@ -263,6 +291,13 @@ export async function resolveActorDisplayName(actorType: string, actorId: string
   if (type === 'ai_staff' || type === 'human') {
     const adminName = await resolveViaAdminUser(actorId);
     if (adminName) return adminName;
+  }
+
+  // Agent Ticket Standard — org_members.id assignee, resolved to a real human
+  // display name (AdminUser display_name, else the org_member's own email).
+  if (type === 'org_member') {
+    const orgMemberName = await resolveViaOrgMember(actorId);
+    if (orgMemberName) return orgMemberName;
   }
 
   if (type === 'human' || type === 'enrollment' || type === 'student') {

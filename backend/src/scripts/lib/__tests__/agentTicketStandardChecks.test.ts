@@ -4,9 +4,50 @@ import {
   stripComments,
   scanForTimeBasedClosurePatterns,
   findResolverMapping,
+  evaluateReportsTo,
   AGENT_TICKET_RESOLVER_REGISTRY,
   KNOWN_GENERIC_COLLAPSE_LABELS,
 } from '../agentTicketStandardChecks';
+
+describe('evaluateReportsTo', () => {
+  it('happy path: a real org_members row on Colaberry passes', () => {
+    const result = evaluateReportsTo(
+      { reports_to_org_member_id: 'f179c222-284e-4180-a335-cca9e4918b2e' },
+      { org_id: 'colaberry-org-id' },
+      'Colaberry',
+    );
+    expect(result.pass).toBe(true);
+    expect(result.reason).toContain('f179c222-284e-4180-a335-cca9e4918b2e');
+  });
+
+  it('failure path: reports_to_org_member_id not set at all', () => {
+    const result = evaluateReportsTo({ reports_to_org_member_id: null }, null, null);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toMatch(/is not set/);
+    expect(result.reason).toMatch(/structurally rejected/);
+  });
+
+  it('failure path: reports_to_org_member_id set but the org_members row does not exist (dangling FK)', () => {
+    const result = evaluateReportsTo(
+      { reports_to_org_member_id: 'deleted-org-member-id' },
+      null,
+      null,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.reason).toMatch(/dangling reference/);
+  });
+
+  it("boundary: resolves to a real org_members row, but on the wrong org (not 'Colaberry')", () => {
+    const result = evaluateReportsTo(
+      { reports_to_org_member_id: 'some-id' },
+      { org_id: 'other-org-id' },
+      'SomeOtherCompany',
+    );
+    expect(result.pass).toBe(false);
+    expect(result.reason).toMatch(/SomeOtherCompany/);
+    expect(result.reason).toMatch(/not 'Colaberry'/);
+  });
+});
 
 describe('evaluateToolsGranted', () => {
   it('happy path: a populated string array passes', () => {

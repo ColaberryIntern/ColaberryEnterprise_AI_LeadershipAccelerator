@@ -1,6 +1,22 @@
 import { seedAgentIdentity, getAgentAdminUserId, type AgentIdentityConfig } from './agentIdentitySeed';
 import { STRATEGY_CONFIGS } from '../agents/strategy/departmentStrategyConfigs';
 
+// Agent Ticket Standard — the real, founder-given, one-hop agent -> human mapping
+// (Ali, live, 2026-08-18, session CC-20260818-x4nk). "Human" here is a real
+// `org_members.id` on the "Colaberry" org (the Business Account "Employee" roster
+// feature — confirmed live: all 6 rows exist, on org "Colaberry", at these exact
+// ids, this session). This mapping is given, not derived — do not recompute it
+// from department semantics; the founder assigned it agent-by-agent in
+// conversation.
+const ORG_MEMBER = {
+  ALI: 'f179c222-284e-4180-a335-cca9e4918b2e',
+  KES: '3df017df-affa-49ab-884f-a99a4bd2ef4e',
+  TAIWO: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f',
+  JACKIE: 'a6db5276-2993-4e0b-ace9-0052ba841c80',
+  SWATI: '5db87b51-4554-4e52-93d7-c61f9887352c',
+  SOHAIL: '4e255894-ac0b-4367-ae06-27459ea05f66',
+} as const;
+
 // Agent Registration Stage 1 — thin wrapper supplying identity config for the
 // 5 real, high-volume ticket-creator processes registered in
 // agentRegistrySeed.ts's AGENT_REGISTRY (cory-engine, CoryBrain,
@@ -56,6 +72,7 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['cory-engine'],
+    reportsToOrgMemberId: ORG_MEMBER.KES,
   },
   {
     agentName: 'CoryBrain',
@@ -66,6 +83,7 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['CoryBrain'],
+    reportsToOrgMemberId: ORG_MEMBER.ALI,
   },
   {
     agentName: 'InboxCaseEngine',
@@ -76,6 +94,7 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['InboxCaseEngine'],
+    reportsToOrgMemberId: ORG_MEMBER.ALI,
   },
   {
     agentName: 'workforce_intelligence_engine',
@@ -86,6 +105,7 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['workforce_intelligence_engine'],
+    reportsToOrgMemberId: ORG_MEMBER.KES,
   },
   {
     agentName: 'bpos_orchestrator',
@@ -96,6 +116,7 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
     enrollmentDefaults: ENROLLMENT_DEFAULTS,
     pilotCohortGate: false,
     legacyCreatorIds: ['bpos_orchestrator'],
+    reportsToOrgMemberId: ORG_MEMBER.ALI,
   },
 
   // --- Department Strategy Architect agents (16) — Agent Ticket Standard audit, 2026-08-18,
@@ -125,6 +146,28 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
       alumni: 'AlumniNetworkArchitect',
     };
     const agentName = agentNameBySlug[slug];
+    // Founder-given mapping (request.md), by agent name — not derivable from
+    // department semantics, deliberately hardcoded here rather than a slug-based
+    // formula so it stays a single, auditable source of truth matching the table
+    // Ali gave in conversation.
+    const reportsToBySlug: Record<string, string> = {
+      executive: ORG_MEMBER.ALI,
+      governance: ORG_MEMBER.ALI,
+      strategy: ORG_MEMBER.ALI,
+      finance: ORG_MEMBER.TAIWO,
+      operations: ORG_MEMBER.TAIWO,
+      orchestration: ORG_MEMBER.KES,
+      intelligence: ORG_MEMBER.ALI,
+      partnerships: ORG_MEMBER.ALI,
+      growth: ORG_MEMBER.ALI,
+      marketing: ORG_MEMBER.SOHAIL,
+      admissions: ORG_MEMBER.TAIWO,
+      infrastructure: ORG_MEMBER.KES,
+      platform: ORG_MEMBER.KES,
+      education: ORG_MEMBER.SWATI,
+      student_success: ORG_MEMBER.TAIWO,
+      alumni: ORG_MEMBER.JACKIE,
+    };
     return {
       agentName,
       email: `${agentName.toLowerCase()}@colaberry.com`,
@@ -134,6 +177,7 @@ export const TICKET_CREATOR_IDENTITIES: AgentIdentityConfig[] = [
       enrollmentDefaults: ENROLLMENT_DEFAULTS,
       pilotCohortGate: false,
       legacyCreatorIds: [agentName],
+      reportsToOrgMemberId: reportsToBySlug[slug],
     };
   })),
 ];

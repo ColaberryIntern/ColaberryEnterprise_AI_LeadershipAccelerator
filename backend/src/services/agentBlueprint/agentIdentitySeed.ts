@@ -65,6 +65,19 @@ export interface AgentIdentityConfig {
    * human may have added by hand. See legacyCreatorAliases.ts for the read side.
    */
   legacyCreatorIds?: string[];
+  /**
+   * Agent Ticket Standard — "every ticket must have a home" (Ali, live,
+   * 2026-08-18). The real human (an `org_members.id` on the "Colaberry" org —
+   * the Business Account "Employee" roster feature) this agent is accountable
+   * to. REQUIRED, not optional — this is the structural enforcement the
+   * founder asked for: any future call to seedAgentIdentity() (any new
+   * ticket-creating agent registered through this module) fails to compile
+   * without one, rather than silently registering an agent nobody can
+   * escalate to. `ticketService.createTicket()` rejects ticket creation
+   * outright when the resolved `AiAgent.reports_to_org_member_id` is null —
+   * see `directives/register-ticket-creating-agent.md`.
+   */
+  reportsToOrgMemberId: string;
 }
 
 export interface AgentIdentityIds {
@@ -194,6 +207,20 @@ export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<Ag
         } as any);
       }
     }
+  }
+
+  // Agent Ticket Standard — self-heal only when null, same shape as the
+  // pilot-cohort/legacy-alias blocks above: fills reports_to_org_member_id the
+  // first time it's missing, never overwrites a value already set (whether by
+  // an earlier boot of this same seed or a deliberate manual change afterward
+  // — matches the `enabled`-flag precedent this file's own header comment
+  // documents: "findOrCreate() only honors a field at first-row creation").
+  // This is what actually populates the field in a database that already has
+  // this agent's AiAgent row from before this change shipped — no separate
+  // one-off data-migration script needed, since seedTicketCreatorIdentities()
+  // (and reeseIdentitySeed.ts's own seed call) already run every boot.
+  if (config.reportsToOrgMemberId && !aiAgent.reports_to_org_member_id) {
+    await aiAgent.update({ reports_to_org_member_id: config.reportsToOrgMemberId } as any);
   }
 
   if (config.legacyCreatorIds && config.legacyCreatorIds.length > 0) {
