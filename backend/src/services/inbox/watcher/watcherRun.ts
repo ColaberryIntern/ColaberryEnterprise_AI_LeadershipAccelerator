@@ -168,7 +168,7 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
     // not a window running its course, it is corruption someone has to look at,
     // and silencing THAT after one line would hide it.
     const elapsed = window.reason === 'window_elapsed';
-    if (!elapsed || shouldLogExpiry(opts.stateDir)) {
+    if (!elapsed || shouldLogExpiry(opts.stateDir, window.state?.expires_at)) {
       const log = WatcherLog.open(opts.stateDir);
       try {
         log.append({

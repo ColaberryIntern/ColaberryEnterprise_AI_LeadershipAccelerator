@@ -125,25 +125,47 @@ function writeRetirement(stateDir: string, record: RetirementRecord): void {
 }
 
 /**
- * Should this cycle write a `window_expired` line?
+ * Does this sentinel belong to the window currently being judged?
  *
- * True exactly once per run directory. This is what turns 288 log lines a day
- * into one.
+ * Reopening the watch in the same run directory leaves the previous window's
+ * sentinel on disk. Counting it would hand the new window a `retired` status it
+ * never earned: its own expiry would log nothing, and `retireWatcherCron` would
+ * see a terminal status and never remove the NEW cron entry. The mechanism
+ * would look like it worked and would quietly stop working from the second
+ * window onward — the same shape of bug it exists to fix.
+ *
+ * An unknown expiry (the caller did not say) matches anything, so callers that
+ * genuinely have no window in hand keep the old single-window behaviour.
  */
-export function shouldLogExpiry(stateDir: string): boolean {
-  return readRetirement(stateDir) === null;
+function isForWindow(record: RetirementRecord, windowExpiresAt?: string): boolean {
+  if (windowExpiresAt === undefined) return true;
+  return record.window_expires_at === windowExpiresAt;
 }
 
 /**
- * Record that the window has been observed to be over. Idempotent: a second
- * call leaves `first_observed_at` alone, because that instant is evidence.
+ * Should this cycle write a `window_expired` line?
+ *
+ * True exactly once per WINDOW. This is what turns 288 log lines a day into
+ * one, without silencing the next window that opens in the same directory.
+ */
+export function shouldLogExpiry(stateDir: string, windowExpiresAt?: string): boolean {
+  const record = readRetirement(stateDir);
+  if (record === null) return true;
+  return !isForWindow(record, windowExpiresAt);
+}
+
+/**
+ * Record that the window has been observed to be over. Idempotent WITHIN a
+ * window: a second call for the same deadline leaves `first_observed_at` alone,
+ * because that instant is evidence. A call for a DIFFERENT deadline replaces
+ * the record, because it is a different window's evidence.
  */
 export function noteExpiryObserved(
   stateDir: string,
   opts: { runId: string; now: Date; windowExpiresAt: string },
 ): RetirementRecord {
   const existing = readRetirement(stateDir);
-  if (existing) return existing;
+  if (existing && isForWindow(existing, opts.windowExpiresAt)) return existing;
 
   const record: RetirementRecord = {
     run_id: opts.runId,
@@ -181,13 +203,14 @@ export function retireWatcherCron(
   const maxAttempts = opts.maxAttempts ?? MAX_RETIREMENT_ATTEMPTS;
 
   // The sentinel may not exist yet if this is called without a prior cycle.
-  let record =
-    readRetirement(stateDir) ??
-    noteExpiryObserved(stateDir, {
-      runId: opts.runId ?? 'unknown',
-      now: opts.now,
-      windowExpiresAt: opts.windowExpiresAt ?? 'unknown',
-    });
+  // `noteExpiryObserved` also replaces a sentinel left behind by a PREVIOUS
+  // window, so a reopened watch does not inherit that window's terminal status
+  // and skip retiring its own, freshly installed cron entry.
+  let record = noteExpiryObserved(stateDir, {
+    runId: opts.runId ?? 'unknown',
+    now: opts.now,
+    windowExpiresAt: opts.windowExpiresAt ?? 'unknown',
+  });
 
   if (TERMINAL_STATUSES.has(record.cron_status)) return record;
 

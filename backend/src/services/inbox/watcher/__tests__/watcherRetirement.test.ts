@@ -117,6 +117,95 @@ describe('the expiry is logged once, not on every tick', () => {
   });
 });
 
+/**
+ * A sentinel belongs to ONE window.
+ *
+ * Reopening the watch in the same run directory leaves the previous window's
+ * sentinel on disk. If that counted, the new window would inherit a
+ * `cron_status: retired` it never earned — so its own expiry would log nothing
+ * and, far worse, `retireWatcherCron` would see a terminal status and never
+ * remove the NEW cron entry. The mechanism would appear to work and would
+ * silently stop working from the second window onward, which is the same class
+ * of bug as the one it was written to fix.
+ *
+ * So the sentinel is keyed to the deadline it was written for.
+ */
+describe('a sentinel from a previous window does not silence the current one', () => {
+  const OLD_EXPIRES = '2026-08-18T16:57:00.289Z';
+  const NEW_EXPIRES = '2026-08-22T00:00:00.000Z';
+
+  const observeOld = () =>
+    noteExpiryObserved(dir, { runId: RUN_ID, now: T1, windowExpiresAt: OLD_EXPIRES });
+
+  it('wants the new window\'s expiry logged despite the old sentinel', () => {
+    observeOld();
+
+    expect(shouldLogExpiry(dir, NEW_EXPIRES)).toBe(true);
+  });
+
+  it('still stays quiet for the window the sentinel actually belongs to', () => {
+    observeOld();
+
+    expect(shouldLogExpiry(dir, OLD_EXPIRES)).toBe(false);
+  });
+
+  it('rewrites the sentinel for the new window', () => {
+    observeOld();
+
+    noteExpiryObserved(dir, { runId: RUN_ID, now: T2, windowExpiresAt: NEW_EXPIRES });
+
+    expect(readRetirement(dir)?.window_expires_at).toBe(NEW_EXPIRES);
+  });
+
+  it('resets the observation instant to the new window\'s first expired tick', () => {
+    observeOld();
+
+    noteExpiryObserved(dir, { runId: RUN_ID, now: T2, windowExpiresAt: NEW_EXPIRES });
+
+    expect(readRetirement(dir)?.first_observed_at).toBe(T2.toISOString());
+  });
+
+  it('RETIRES the new cron entry even though the old window reported retired', () => {
+    observeOld();
+    const stale = fakeIo(`${KEEPER}\n${WATCHER_LINE}\n`);
+    retireWatcherCron(dir, { io: stale.io, markers: MARKERS, now: T1, windowExpiresAt: OLD_EXPIRES });
+    // A brand new window, a freshly installed cron line, same run directory.
+    const fresh = fakeIo(`${KEEPER}\n${WATCHER_LINE}\n`);
+
+    const record = retireWatcherCron(dir, {
+      io: fresh.io, markers: MARKERS, now: T2, windowExpiresAt: NEW_EXPIRES,
+    });
+
+    expect(record.cron_status).toBe('retired');
+  });
+
+  it('actually removes the new line from the new crontab', () => {
+    observeOld();
+    const stale = fakeIo(`${KEEPER}\n${WATCHER_LINE}\n`);
+    retireWatcherCron(dir, { io: stale.io, markers: MARKERS, now: T1, windowExpiresAt: OLD_EXPIRES });
+    const fresh = fakeIo(`${KEEPER}\n${WATCHER_LINE}\n`);
+
+    retireWatcherCron(dir, {
+      io: fresh.io, markers: MARKERS, now: T2, windowExpiresAt: NEW_EXPIRES,
+    });
+
+    expect(fresh.state.content).toBe(`${KEEPER}\n`);
+  });
+
+  it('starts the new window\'s attempt count from zero', () => {
+    observeOld();
+    const failing = failingIo(`${KEEPER}\n${WATCHER_LINE}\n`);
+    retireWatcherCron(dir, { io: failing.io, markers: MARKERS, now: T1, windowExpiresAt: OLD_EXPIRES });
+    const fresh = fakeIo(`${KEEPER}\n${WATCHER_LINE}\n`);
+
+    const record = retireWatcherCron(dir, {
+      io: fresh.io, markers: MARKERS, now: T2, windowExpiresAt: NEW_EXPIRES,
+    });
+
+    expect(record.attempts).toBe(1);
+  });
+});
+
 describe('retireWatcherCron removes the entry and records what it did', () => {
   it('reports the cron line retired', () => {
     observe();
