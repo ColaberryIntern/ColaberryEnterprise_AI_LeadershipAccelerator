@@ -1,0 +1,290 @@
+/* ============================================================================
+   engineModel.css -- the operating model.
+
+   Two lanes joined by numbered handoff gates. The spine between them is the
+   point: the gates are where one engine hands to the other, so they get the
+   only nodes on the page that sit ON the centre line.
+
+   Namespaced cbv2-eg* for the same reason the hero is cbv2-h7*: this page has
+   already been broken once by two files claiming the same class name.
+   ========================================================================== */
+
+.cbv2-eg {
+  /*
+   * The official palette, from the Colaberry design system: berry blue
+   * (--blue-500 #367895, trust) carries the system engine, leaf green
+   * (--green-500 #77BB4A, growth) carries the people engine, and cherry
+   * (--red-500 #FB2832) is reserved for the run control and the completed
+   * state -- the brand rule is that the cherry accent never changes.
+   *
+   * The two --eg-*-lit values are lighter tints of those same hues, used ONLY
+   * for hairline strokes and the flowing rail. At 1-2px on a #0F2C3B ground the
+   * base blue all but disappears, so the tint is a legibility fix on thin
+   * marks, not a second palette: every filled surface uses the official value.
+   */
+  --eg-sys: #367895;
+  --eg-ppl: #77bb4a;
+  --eg-sys-lit: #5fb6da;
+  --eg-ppl-lit: #8fd455;
+  --eg-spine: 74px;
+  --eg-ground: #0f2c3b;
+  --eg-hair: rgba(255, 255, 255, 0.14);
+  --eg-ink-dim: #a9bfd0;
+  background: var(--eg-ground);
+  border-radius: 12px;
+  padding: 26px 24px 24px;
+}
+
+/* ------------------------------------------------------------- control bar */
+
+.cbv2-eg__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.cbv2-eg__pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5c7688;
+  flex: none;
+}
+.cbv2-eg.is-on .cbv2-eg__pip { background: var(--eg-sys-lit); }
+.cbv2-eg.is-done .cbv2-eg__pip { background: var(--cherry, #fb2832); }
+
+.cbv2-eg__read {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #9fb6c8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cbv2-eg__read b { color: #eaf2f8; font-weight: 500; }
+
+.cbv2-eg__btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--cherry, #fb2832);
+  background: var(--cherry, #fb2832);
+  color: #fff;
+  cursor: pointer;
+  min-height: var(--target-min, 32px);
+}
+.cbv2-eg__btn:hover { filter: brightness(1.08); }
+
+/* ---------------------------------------------------------------- headings */
+
+.cbv2-eg__heads {
+  display: grid;
+  grid-template-columns: 1fr var(--eg-spine) 1fr;
+  margin-bottom: 9px;
+}
+.cbv2-eg__h {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  padding-bottom: 7px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.16);
+  font-size: 14px;
+  color: #fff;
+}
+.cbv2-eg__h--s { border-bottom-color: rgba(95, 182, 218, 0.6); }
+.cbv2-eg__h--p { border-bottom-color: rgba(143, 212, 85, 0.6); justify-content: flex-end; }
+.cbv2-eg__h span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #9fb6c8;
+}
+
+/* ------------------------------------------------------------- lanes + rail */
+
+.cbv2-eg__rows { position: relative; }
+
+.cbv2-eg__rail {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.13);
+  overflow: hidden;
+}
+.cbv2-eg__rail i {
+  position: absolute;
+  inset: -40% 0;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.cbv2-eg__rail--s { left: calc(50% - var(--eg-spine) / 2); }
+.cbv2-eg__rail--p { left: calc(50% + var(--eg-spine) / 2 - 2px); }
+.cbv2-eg__rail--s i { background: repeating-linear-gradient(180deg, var(--eg-sys-lit) 0 10px, transparent 10px 40px); }
+.cbv2-eg__rail--p i { background: repeating-linear-gradient(180deg, var(--eg-ppl-lit) 0 10px, transparent 10px 40px); }
+.cbv2-eg.is-on .cbv2-eg__rail i,
+.cbv2-eg.is-done .cbv2-eg__rail i { opacity: 0.85; animation: cbv2-egflow 2s linear infinite; }
+@keyframes cbv2-egflow { to { transform: translateY(50px); } }
+
+.cbv2-eg__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr var(--eg-spine) 1fr;
+  margin-bottom: 7px;
+}
+
+.cbv2-eg__st {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 9px 11px;
+  border: 1px solid var(--eg-hair);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.3s, background 0.3s;
+}
+.cbv2-eg__st--p { flex-direction: row-reverse; text-align: right; }
+.cbv2-eg__st:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.cbv2-eg__n {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transition: background 0.3s, color 0.3s;
+}
+.cbv2-eg__t { display: block; font-size: 13px; font-weight: 500; color: #fff; }
+.cbv2-eg__d { display: block; font-size: 11px; line-height: 1.4; color: var(--eg-ink-dim); margin-top: 1px; }
+
+.cbv2-eg__st.is-hit { background: rgba(255, 255, 255, 0.09); }
+.cbv2-eg__st--s.is-hit { border-color: rgba(95, 182, 218, 0.5); }
+.cbv2-eg__st--p.is-hit { border-color: rgba(143, 212, 85, 0.5); }
+.cbv2-eg__st--s.is-hit .cbv2-eg__n { background: var(--eg-sys); color: #06212d; }
+.cbv2-eg__st--p.is-hit .cbv2-eg__n { background: var(--eg-ppl); color: #12290a; }
+.cbv2-eg__st--s.is-live { border-color: var(--eg-sys-lit); }
+.cbv2-eg__st--p.is-live { border-color: var(--eg-ppl-lit); }
+
+/* ------------------------------------------------------------------- gates */
+
+.cbv2-eg__gate { position: relative; display: grid; place-items: center; }
+.cbv2-eg__gate::before,
+.cbv2-eg__gate::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  width: calc(var(--eg-spine) / 2 - 17px);
+  background: var(--eg-hair);
+  transition: background 0.3s;
+}
+.cbv2-eg__gate::before { left: 0; }
+.cbv2-eg__gate::after { right: 0; }
+.cbv2-eg__gate.is-hit::before { background: rgba(95, 182, 218, 0.7); }
+.cbv2-eg__gate.is-hit::after { background: rgba(143, 212, 85, 0.7); }
+
+.cbv2-eg__node {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #8fa9bc;
+  background: var(--eg-ground);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  transition: color 0.3s, border-color 0.3s, transform 0.3s;
+}
+.cbv2-eg__gate.is-hit .cbv2-eg__node { color: #fff; border-color: rgba(255, 255, 255, 0.55); }
+.cbv2-eg__gate.is-live .cbv2-eg__node { transform: scale(1.14); border-color: #fff; }
+
+/* ------------------------------------------------------------- the outcome */
+
+.cbv2-eg__out {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.5s, border-color 0.5s;
+}
+.cbv2-eg.is-done .cbv2-eg__out {
+  background: rgba(251, 40, 50, 0.16);
+  border-color: rgba(251, 40, 50, 0.5);
+}
+
+.cbv2-eg__meter { display: flex; gap: 4px; margin-bottom: 11px; }
+.cbv2-eg__seg {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.cbv2-eg__seg i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--eg-sys), var(--eg-ppl));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.55s;
+}
+.cbv2-eg__seg.is-hit i { transform: scaleX(1); }
+
+.cbv2-eg__outrow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cbv2-eg__outrow strong { font-size: 16px; font-weight: 500; color: #fff; }
+.cbv2-eg__outrow p { margin: 0; font-size: 12px; color: #c7d8e6; flex: 1 1 240px; }
+.cbv2-eg__chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #a8bed2;
+}
+.cbv2-eg.is-done .cbv2-eg__chip { color: #fff; border-color: #fff; }
+
+/*
+ * Narrow screens: the spine collapses. Two 1fr columns either side of a 74px
+ * gutter stop being readable well before phone width, so the lanes stack and
+ * the people card gives up its mirrored alignment -- a right-aligned card with
+ * a reversed row makes no sense once it is full width.
+ */
+@media (max-width: 760px) {
+  .cbv2-eg { --eg-spine: 34px; padding: 20px 14px 16px; }
+  .cbv2-eg__heads { display: none; }
+  .cbv2-eg__row { grid-template-columns: 1fr; gap: 6px; }
+  .cbv2-eg__rail { display: none; }
+  .cbv2-eg__gate { display: none; }
+  .cbv2-eg__st--p { flex-direction: row; text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-eg__rail i { animation: none !important; }
+  .cbv2-eg__seg i,
+  .cbv2-eg__node,
+  .cbv2-eg__st { transition: none; }
+}
