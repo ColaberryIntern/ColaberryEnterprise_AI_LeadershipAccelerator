@@ -54,7 +54,7 @@ function main(): void {
     process.exit(2);
   }
 
-  const { filesScanned, findings } = scanCodeForVulnerabilities(backendSrc, projectRoot);
+  const { filesScanned, filesExcluded, findings } = scanCodeForVulnerabilities(backendSrc, projectRoot);
 
   const byCategory = findings.reduce((acc, f) => {
     acc[f.category] = (acc[f.category] || 0) + 1;
@@ -66,6 +66,13 @@ function main(): void {
   }, {} as Record<string, number>);
 
   console.log(`[SecurityScan] Scanned ${filesScanned} files — ${findings.length} potential finding(s)`);
+
+  // Always print what was skipped. A silent exclusion list is how a scanner
+  // quietly stops covering real code while still reporting a clean run.
+  if (filesExcluded.length > 0) {
+    console.log(`[SecurityScan] Excluded ${filesExcluded.length} file(s) from the scan:`);
+    for (const e of filesExcluded) console.log(`  - ${e.path}  (${e.reason})`);
+  }
   if (findings.length > 0) {
     console.log(`[SecurityScan] By severity: ${JSON.stringify(bySeverity)}`);
     console.log(`[SecurityScan] By category: ${JSON.stringify(byCategory)}`);
