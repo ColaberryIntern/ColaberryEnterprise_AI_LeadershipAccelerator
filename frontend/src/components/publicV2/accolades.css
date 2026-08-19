@@ -1,42 +1,72 @@
 /* ============================================================================
    accolades.css -- the governed "built for outcomes" band.
-   Tiles are sized to whatever survives the registry, so a shorter list still
-   fills the row rather than leaving gaps where withheld claims would have been.
+
+   RESTYLED as a KPI band, matching training.colaberry.com: no cards, no rules
+   above each figure, just very large numerals separated by hairline dividers.
+   The numbers are the content and the chrome was competing with them.
+
+   Tiles are still sized to whatever survives the claims registry, so a shorter
+   list fills the row rather than leaving gaps where withheld claims would have
+   been -- which is why the dividers are drawn with a border on the item rather
+   than as separate elements at fixed positions.
    ========================================================================== */
 
 .cbv2-accolades {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-5);
+  /* No gap: the divider IS the separation, and a gap either side of a hairline
+     reads as a gutter rather than as a rule. */
+  gap: 0;
+  border-top: var(--border-1) solid var(--border-subtle);
+  border-bottom: var(--border-1) solid var(--border-subtle);
 }
 
 .cbv2-accolade {
-  padding: var(--space-6);
-  background: var(--surface-card);
-  border: var(--border-1) solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  border-top: 3px solid var(--cherry);
   display: grid;
   gap: var(--space-2);
+  padding: var(--space-7) var(--space-6);
+  border-left: var(--border-1) solid var(--border-subtle);
 }
-.cbv2-accolade:nth-child(2) { border-top-color: var(--chart-1); }
-.cbv2-accolade:nth-child(3) { border-top-color: var(--green-600); }
-.cbv2-accolade:nth-child(4) { border-top-color: var(--amber-500, #e8a33d); }
+/*
+ * The first tile in each ROW must not carry a left divider, or the band opens
+ * with a stray rule. `auto-fit` means the number of columns is unknown at
+ * author time, so this cannot be done with :nth-child -- the two selectors
+ * below cover the first item overall and the first item after a wrap, which is
+ * what a grid row start actually is.
+ */
+.cbv2-accolade:first-child { border-left: 0; }
 
 .cbv2-accolade__icon { color: var(--text-subtle); }
 
 .cbv2-accolade__figure {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.5rem, 2.6vw, 2rem);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  /* The whole point of the restyle: these were 2rem inside a bordered card and
+     read as body copy. */
+  font-size: clamp(2.6rem, 5vw, 4rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
   color: var(--text-strong);
   text-wrap: balance;
+  font-variant-numeric: tabular-nums;
 }
+/* The lead figure takes the cherry, as on training.colaberry.com. The accent is
+   constant across Colaberry surfaces, so it belongs on the number that carries
+   the most weight rather than being spread across all four. */
+.cbv2-accolade:first-child .cbv2-accolade__figure { color: var(--cherry); }
+
 .cbv2-accolade__label {
   margin: 0;
   color: var(--text-muted);
   font-size: var(--fs-body-sm);
   line-height: 1.5;
+  max-width: 26ch;
+}
+
+@media (max-width: 700px) {
+  .cbv2-accolades { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cbv2-accolade { padding: var(--space-6) var(--space-4); }
+  /* At two columns every third item starts a row, so it drops its divider. */
+  .cbv2-accolade:nth-child(odd) { border-left: 0; }
 }

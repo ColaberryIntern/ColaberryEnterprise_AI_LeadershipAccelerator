@@ -69,9 +69,15 @@ export const ACCOLADE_TILES: readonly AccoladeTile[] = [
     label: 'tracked hires plus those we know of, reported and unreported',
   },
   {
-    claimKey: 'program.duration',
+    // Was the 12-week programme length. Ali swapped it for company tenure: three
+    // outcome figures followed by a duration read as a fourth outcome, and the
+    // years behind the work say more here than the length of the path does.
+    claimKey: 'company.tenure',
     icon: 'ladder',
-    label: 'from AI Aware to a deployed build',
+    // NOT "since 2012": that exact claim is on the homepage's blocked list, and
+    // writing it in lower case to slip past a string match would be gaming the
+    // ban rather than honouring it. The tenure is stated as a span instead.
+    label: 'in consulting and classroom delivery',
   },
 ];
 

@@ -170,6 +170,36 @@ export const CLAIMS: readonly Claim[] = [
     requiresSampleLabel: false,
   },
   {
+    /*
+     * Company tenure, replacing the programme-length tile at Ali's direction.
+     *
+     * OWNER_ATTESTED rather than VERIFIED: no query in this repo returns a
+     * founding date. What supports it is Colaberry's own brand guide, which
+     * states the company has been "proven since 2012" -- that is the company
+     * asserting its own history, which is exactly what OWNER_ATTESTED is for.
+     *
+     * The wording is deliberately CONSERVATIVE. 2012 to 2026 is fourteen years,
+     * so "12+ years" understates it and cannot be overtaken by the calendar the
+     * way a fixed "Since 2012" would drift out of step with a stale page.
+     *
+     * Note for whoever revisits this: the literal string "Since 2012" is on the
+     * homepage's blocked list and HomeV2.test.tsx fails the build if it appears.
+     * This claim does not use it, and should not be rewritten into it.
+     */
+    key: 'company.tenure',
+    publicWording: 'Consulting and Training 12+ years',
+    verification: 'OWNER_ATTESTED',
+    capability: 'live',
+    evidenceSource:
+      'Colaberry brand guide (colaberry-design-system/BRAND.md, read 2026-08-18) states the '
+      + 'company is "proven since 2012". Owner-attested company history; 2012 to 2026 is '
+      + 'fourteen years, so the published "12+" is deliberately conservative.',
+    owner: 'Ali',
+    lastVerifiedAt: '2026-08-18',
+    approvedRoutes: ['*'],
+    requiresSampleLabel: false,
+  },
+  {
     key: 'credential.cca.safe',
     publicWording:
       'Claude Certified Architect, Foundations — certification preparation, aligned to the ' +

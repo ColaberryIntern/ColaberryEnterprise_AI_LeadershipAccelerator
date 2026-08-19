@@ -367,6 +367,56 @@ function HomeV2(): React.ReactElement {
               </article>
             </div>
 
+            {/*
+              WHAT THE PLAN ACTUALLY LOOKS LIKE, and then the window onto it.
+
+              Both captures are of a REAL build in Colaberry's own public repo,
+              shown in the Command Center's Sample mode -- the page carries its
+              own "sample data" banner, and a SampleBadge sits in each caption
+              regardless, so the labelling survives the image failing to load.
+
+              The Command Center is deliberately described as something the team
+              BUILDS, not something we generate. `commandCenterStory.ts` opens
+              "STORY-000 -- the Command Center every student builds first": the
+              platform injects the story and writes its prompt out of their own
+              plan, and their people build it with Claude Code. Saying we
+              generate it would be false and disprovable by opening the repo.
+            */}
+            <div className="cbv2-buildshots">
+              <figure className="cbv2-shot-frame">
+                <img
+                  className="cbv2-shot"
+                  src="/site-v2/shot-build-schedule.png"
+                  alt="A generated build schedule: five releases from Initial Property Analysis through Trust and Monetization, fifteen stories plotted against dates, with markers for today, the end of the build and demo day."
+                  loading="lazy"
+                  decoding="async"
+                />
+                <figcaption className="cbv2-shot-caption">
+                  <SampleBadge />
+                  <span>The schedule, written from the interview. Every bar opens its own detail.</span>
+                </figcaption>
+              </figure>
+
+              <figure className="cbv2-shot-frame">
+                <img
+                  className="cbv2-shot"
+                  src="/site-v2/shot-command-center.png"
+                  alt="The Command Center overview: nine numbered tabs from Overview through Data model, and a live-status list showing source systems, AI agents, stories shipped, guardrails enforced and outcome measures, each with a checked date."
+                  loading="lazy"
+                  decoding="async"
+                />
+                <figcaption className="cbv2-shot-caption">
+                  <SampleBadge />
+                  <span>
+                    The Command Center: nine sections &mdash; Overview, Outcomes, Users,
+                    Guardrails, Systems, Project, AI agents, Knowledge and Data model. It is
+                    STORY-000, the first thing your team builds, from a brief written out of
+                    your own plan. Nothing turns green until something real reports in.
+                  </span>
+                </figcaption>
+              </figure>
+            </div>
+
             <div className="cbv2-buildrepo">
               <div>
                 <p className="cbv2-eyebrow cbv2-eyebrow--info">And it lands in your own repo</p>
