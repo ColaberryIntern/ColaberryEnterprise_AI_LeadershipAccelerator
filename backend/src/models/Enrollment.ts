@@ -30,6 +30,19 @@ export interface EnrollmentAttributes {
   assignment_score?: number;
   maturity_level?: number;
   intake_completed?: boolean;
+  /**
+   * Free-form intake answers.
+   *
+   * DO NOT read `intake_data_json.credit_applied`. It is a dead mirror of the account
+   * credit ledger, stamped at checkout by an out-of-repo operational script and never
+   * updated when the credit is actually consumed. On 2026-08-19 all 24 rows carrying
+   * the key read `false`, including Marcus Zeno's — whose $50 credit had been applied
+   * on 2026-07-31 — and that stale `false` nearly drove a duplicate credit grant.
+   * A mirror that is right sometimes is worse than no mirror, so it is retired rather
+   * than repaired: nothing in this repo writes it, nothing may read it, and
+   * `account_credits` (accountCreditService) is the only authority on credit state.
+   * Enforced by appPaymentReconcileService.test.ts's tripwire, not by convention.
+   */
   intake_data_json?: any;
   notes?: string;
   created_at?: Date;

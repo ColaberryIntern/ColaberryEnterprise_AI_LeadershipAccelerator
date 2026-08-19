@@ -3,6 +3,7 @@ import { sequelize } from '../config/database';
 import { env } from '../config/env';
 import { listRecentPayments, getCustomerById } from './paysimpleService';
 import { isCollected, normalizeStatus } from './paymentSyncService';
+import { activateByRef } from './subscriptionService';
 
 /* ------------------------------------------------------------------ */
 /*  App payment reconcile — heal missed-webhook membership payments     */
@@ -34,6 +35,22 @@ import { isCollected, normalizeStatus } from './paymentSyncService';
 /*  belongs to; it never pulls a payment into scope by itself. Bootcamp   */
 /*  tuition and direct/manual charges on the shared gateway have no       */
 /*  matching pending checkout, so they can never leak into revenue.      */
+/*                                                                     */
+/*  That guard was DOCUMENTED for both paths but only ever IMPLEMENTED   */
+/*  for path B (fixed 2026-08-19). Path A matched on customer id alone —  */
+/*  no amount, no time window — so any collected charge >= $100 that      */
+/*  happened to land on a stored customer id was linked, including one    */
+/*  that predated the checkout entirely. Path A now runs the same origin  */
+/*  test as path B, minus the email equality: path A exists precisely for */
+/*  payers whose PaySimple record carries a different address (confirmed  */
+/*  live for three students), so an email check there would silently stop */
+/*  reconciling them and shift revenue attribution.                       */
+/*                                                                     */
+/*  INVARIANT: no PaySimple customer id may be claimed by two             */
+/*  enrollments. A shared id is how a stranger's charge reaches the wrong */
+/*  person, and it is detectable as a duplicate long before it is         */
+/*  detectable as a mis-charge. Enforced here, at the point of the money  */
+/*  decision, and reported every run — see sharedCustomerIds().          */
 /*                                                                     */
 /*  Idempotent (never reuses a payment id already linked anywhere) and   */
 /*  failure-first.                                                      */
@@ -88,14 +105,44 @@ export function selectLinkableMembershipPayments(
 
 export interface PendingCheckout {
   startedMs: number;
+  /** Full plan price on the pending row (subscriptions.amount_cents). */
   amountCents: number;
+  /** What PaySimple was actually asked to charge = amount_cents − applied_credit_cents.
+   *  A student with the $50 Open House credit is charged $149 against a $199 pending
+   *  row, so matching on amountCents ALONE rejects every credit-discounted payment.
+   *  Optional: absent (older rows, callers that never applied a credit) means it equals
+   *  amountCents. */
+  chargeCents?: number;
 }
 
 /**
- * Pure scope guard for path B (the hosted-customer case). True only when the payer is
- * this exact person AND our app opened a pending checkout for that same amount just
- * before the charge. All three must agree — email alone never qualifies a payment,
- * which is what keeps direct/bootcamp charges on the shared gateway out of revenue.
+ * The ORIGIN guard, shared by both paths: our app opened a pending checkout for this
+ * amount, shortly before the charge landed. This is what keeps bootcamp tuition and
+ * direct/manual charges on the shared PaySimple gateway out of Accelerator revenue.
+ *
+ * The amount may match either the checkout's full plan price or the credit-discounted
+ * amount actually requested — both are amounts WE asked for on that checkout. Nothing
+ * else qualifies. Pure; exported for testing.
+ */
+export function matchesCheckoutOrigin(
+  pay: { amountCents: number; paidMs: number },
+  checkouts: PendingCheckout[],
+  windowMs: number = CHECKOUT_MATCH_WINDOW_MS
+): boolean {
+  if (!Number.isFinite(pay.paidMs)) return false;
+  return checkouts.some(
+    (c) =>
+      // must be an amount WE asked for — list price, or list less the applied credit
+      (c.amountCents === pay.amountCents || (c.chargeCents ?? c.amountCents) === pay.amountCents) &&
+      pay.paidMs >= c.startedMs - CHECKOUT_CLOCK_SKEW_MS &&  // must follow OUR checkout
+      pay.paidMs <= c.startedMs + windowMs
+  );
+}
+
+/**
+ * Pure scope guard for path B (the hosted-customer case). Path B has no customer-id
+ * link at all, so on top of the shared origin guard it must also prove the payer IS
+ * this person. All three must agree — email alone never qualifies a payment.
  * Exported for testing.
  */
 export function matchesAppCheckout(
@@ -107,13 +154,29 @@ export function matchesAppCheckout(
   const payer = (pay.payerEmail || '').trim().toLowerCase();
   const want = (enrollmentEmail || '').trim().toLowerCase();
   if (!payer || !want || payer !== want) return false;      // must be the same person
-  if (!Number.isFinite(pay.paidMs)) return false;
-  return checkouts.some(
-    (c) =>
-      c.amountCents === pay.amountCents &&                   // must be the amount WE asked for
-      pay.paidMs >= c.startedMs - CHECKOUT_CLOCK_SKEW_MS &&  // must follow OUR checkout
-      pay.paidMs <= c.startedMs + windowMs
-  );
+  return matchesCheckoutOrigin(pay, checkouts, windowMs);
+}
+
+/**
+ * The duplicate-customer-id invariant, as a pure function over (enrollment, cid) claims:
+ * every PaySimple customer id claimed by more than one enrollment, mapped to the
+ * enrollments claiming it. A non-empty result means the gateway cache is contaminated
+ * and path A cannot safely attribute a charge on those ids to anybody.
+ * Exported for testing.
+ */
+export function sharedCustomerIds(claims: Array<{ enrollmentId: string; cid: string }>): Map<string, string[]> {
+  const byCid = new Map<string, Set<string>>();
+  for (const { enrollmentId, cid } of claims) {
+    if (!cid || !enrollmentId) continue;
+    const set = byCid.get(cid) || new Set<string>();
+    set.add(enrollmentId);
+    byCid.set(cid, set);
+  }
+  const shared = new Map<string, string[]>();
+  for (const [cid, owners] of byCid) {
+    if (owners.size > 1) shared.set(cid, [...owners].sort());
+  }
+  return shared;
 }
 
 export interface AppReconcileSummary {
@@ -128,6 +191,14 @@ export interface AppReconcileSummary {
   duplicateSubsCanceled: number;
   noPaymentFound: number;
   linkedTotalCents: number;
+  /** Payments dropped by path A's origin guard: on one of our customer ids, but for an
+   *  amount we never asked for on that checkout, or landing outside its window. */
+  rejectedByOriginGuard: number;
+  /** INVARIANT BREACH monitor: PaySimple customer ids claimed by more than one
+   *  enrollment. Non-empty means path A skipped those ids rather than guess. */
+  sharedCustomerIds: Array<{ cid: string; enrollmentIds: string[] }>;
+  /** A candidate whose writes threw. Left fully re-runnable for the next pass. */
+  linkFailures: number;
   details: Array<{ email: string; amountCents: number; pid: string; via: 'customer_id' | 'checkout_window' }>;
 }
 
@@ -158,7 +229,8 @@ async function loadCandidates(): Promise<Candidate[]> {
               JSONB_AGG(
                 JSONB_BUILD_OBJECT(
                   'startedMs', (EXTRACT(EPOCH FROM s.created_at) * 1000)::bigint,
-                  'amountCents', s.amount_cents
+                  'amountCents', s.amount_cents,
+                  'chargeCents', s.amount_cents - COALESCE(s.applied_credit_cents, 0)
                 )
               ) FILTER (WHERE s.status = 'pending'),
               '[]'::jsonb
@@ -179,16 +251,39 @@ async function loadCandidates(): Promise<Candidate[]> {
     email: r.email,
     cids: (r.cids || []).map(String),
     checkouts: (typeof r.checkouts === 'string' ? JSON.parse(r.checkouts) : r.checkouts || []).map(
-      (c: any) => ({ startedMs: Number(c.startedMs), amountCents: Number(c.amountCents) })
+      (c: any) => ({
+        startedMs: Number(c.startedMs),
+        amountCents: Number(c.amountCents),
+        chargeCents: Number(c.chargeCents ?? c.amountCents),
+      })
     ),
   }));
+}
+
+/**
+ * Every (enrollment, PaySimple customer id) claim we hold, across BOTH the enrollment
+ * row and its subscription rows — the full contamination surface. A single-table UNIQUE
+ * index cannot express this, which is one reason the invariant is enforced here rather
+ * than in the schema (see the header note).
+ */
+async function loadCustomerIdClaims(): Promise<Array<{ enrollmentId: string; cid: string }>> {
+  const rows = (await sequelize.query(
+    `SELECT id AS "enrollmentId", paysimple_customer_id::text AS cid
+       FROM enrollments WHERE paysimple_customer_id IS NOT NULL
+      UNION
+     SELECT enrollment_id AS "enrollmentId", paysimple_customer_id::text AS cid
+       FROM subscriptions WHERE paysimple_customer_id IS NOT NULL AND enrollment_id IS NOT NULL`,
+    { type: QueryTypes.SELECT }
+  )) as Array<{ enrollmentId: string; cid: string }>;
+  return rows.map((r) => ({ enrollmentId: String(r.enrollmentId), cid: String(r.cid) }));
 }
 
 export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise<AppReconcileSummary> {
   const dryRun = opts?.dryRun ?? false;
   const s: AppReconcileSummary = {
     dryRun, candidates: 0, linked: 0, linkedByCustomerId: 0, linkedByCheckoutWindow: 0,
-    subscriptionsActivated: 0, duplicateSubsCanceled: 0, noPaymentFound: 0, linkedTotalCents: 0, details: [],
+    subscriptionsActivated: 0, duplicateSubsCanceled: 0, noPaymentFound: 0, linkedTotalCents: 0,
+    rejectedByOriginGuard: 0, sharedCustomerIds: [], linkFailures: 0, details: [],
   };
 
   if (!env.paysimpleApiUser || !env.paysimpleApiKey) {
@@ -200,7 +295,20 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
   s.candidates = candidates.length;
   if (candidates.length === 0) return s;
 
-  const ourCids = new Set(candidates.flatMap((c) => c.cids));
+  // INVARIANT: a PaySimple customer id belongs to exactly one enrollment. When one is
+  // shared, we cannot tell whose money a charge on it is — so path A refuses to use it
+  // (fail closed) and the breach is reported on every run, not once at boot.
+  const shared = sharedCustomerIds(await loadCustomerIdClaims());
+  s.sharedCustomerIds = [...shared].map(([cid, enrollmentIds]) => ({ cid, enrollmentIds }));
+  if (shared.size > 0) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'app-payment-reconcile', event: 'shared_paysimple_customer_id',
+      error_class: 'ContractViolation', outcome: 'partial',
+      context: { count: shared.size, shared: s.sharedCustomerIds },
+    }));
+  }
+
+  const ourCids = new Set(candidates.flatMap((c) => c.cids).filter((cid) => !shared.has(cid)));
 
   // Never reuse a payment id already linked to any enrollment/subscription.
   const usedPids = new Set<string>(
@@ -243,25 +351,32 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
   };
 
   for (const c of candidates) {
-    // Path A — the charge landed on a customer id we stored.
-    const byCid = c.cids
+    // Path A — the charge landed on a customer id we stored AND it originated from one
+    // of this enrollment's own pending checkouts. Customer id alone is not enough: it
+    // linked charges for amounts we never asked for, and charges that predated the
+    // checkout entirely. Deliberately no email test here — path A is the alias case,
+    // where the PaySimple record carries a different address than the enrollment.
+    const byCidAll = c.cids
       .flatMap((cid) => liveByCid.get(cid) || [])
       .filter((p) => !usedPids.has(p.pid))
       .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
+
+    const byCid = byCidAll.filter((p) =>
+      matchesCheckoutOrigin({ amountCents: p.amountCents, paidMs: Date.parse(p.date || '') }, c.checkouts)
+    );
+    s.rejectedByOriginGuard += byCidAll.length - byCid.length;
 
     let membership: { amountCents: number; pid: string } | undefined = byCid[0];
     let via: 'customer_id' | 'checkout_window' = 'customer_id';
 
     // Path B — hosted page minted its own customer; fall back to the checkout window.
     if (!membership && c.checkouts.length > 0) {
-      const amounts = new Set(c.checkouts.map((k) => k.amountCents));
       for (const p of unlinkedPool) {
         if (usedPids.has(p.pid)) continue;
-        if (!amounts.has(p.amountCents)) continue; // cheap filter before any API call
-        const plausible = c.checkouts.some(
-          (k) => p.paidMs >= k.startedMs - CHECKOUT_CLOCK_SKEW_MS && p.paidMs <= k.startedMs + CHECKOUT_MATCH_WINDOW_MS
-        );
-        if (!plausible) continue;
+        // Same origin guard as path A — run first, so the payer-email lookup (one
+        // PaySimple API call per customer) only happens for a charge that already lines
+        // up with one of our checkouts.
+        if (!matchesCheckoutOrigin({ amountCents: p.amountCents, paidMs: p.paidMs }, c.checkouts)) continue;
         if (!matchesAppCheckout({ amountCents: p.amountCents, paidMs: p.paidMs, payerEmail: await payerEmail(p.cid) }, c.email, c.checkouts)) continue;
         membership = { amountCents: p.amountCents, pid: p.pid };
         via = 'checkout_window';
@@ -272,50 +387,77 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
     if (!membership) { s.noPaymentFound++; continue; }
 
     usedPids.add(membership.pid); // don't double-assign within this run
-    s.linked++;
-    if (via === 'customer_id') s.linkedByCustomerId++; else s.linkedByCheckoutWindow++;
-    s.linkedTotalCents += membership.amountCents;
-    s.details.push({ email: c.email, amountCents: membership.amountCents, pid: membership.pid, via });
+    const countLinked = () => {
+      s.linked++;
+      if (via === 'customer_id') s.linkedByCustomerId++; else s.linkedByCheckoutWindow++;
+      s.linkedTotalCents += membership!.amountCents;
+      s.details.push({ email: c.email, amountCents: membership!.amountCents, pid: membership!.pid, via });
+    };
 
-    if (dryRun) continue;
+    if (dryRun) { countLinked(); continue; }
 
-    // Mark the enrollment paid + link the payment.
-    await sequelize.query(
-      `UPDATE enrollments
-          SET payment_status = 'paid',
-              amount_paid = :amt,
-              paysimple_payment_id = COALESCE(paysimple_payment_id, :pid),
-              enrolled_at = COALESCE(enrolled_at, NOW())
-        WHERE id = :id`,
-      { replacements: { amt: membership.amountCents / 100, pid: membership.pid, id: c.id }, type: QueryTypes.UPDATE }
-    );
+    try {
+      // Activate the most-recent pending subscription through activateByRef — the SAME
+      // shared activation the payment webhook uses. This job used to activate with its
+      // own raw UPDATE, which flipped the status but skipped everything else activation
+      // means: consuming the account credit that discounted the checkout, converting
+      // Explorer → paying member, and anchoring the billing period on the class start
+      // date. Five students reconciled this way kept an 'available' $50 credit they had
+      // already spent ($250 of exposure, found 2026-08-19). Two implementations of
+      // "activate a subscription" that disagree is how that happened, so there is now
+      // one. Cancel any sibling duplicates (a student who re-tried checkout because the
+      // app never acknowledged payment) — that part is not activation and stays here.
+      const pend = (await sequelize.query(
+        `SELECT id, payment_ref, paysimple_payment_id FROM subscriptions
+          WHERE enrollment_id = :id AND status = 'pending' ORDER BY created_at DESC`,
+        { replacements: { id: c.id }, type: QueryTypes.SELECT }
+      )) as Array<{ id: string; payment_ref: string; paysimple_payment_id: string | null }>;
 
-    // Activate the most-recent pending subscription; cancel any sibling duplicates
-    // (a student who re-tried checkout because the app never acknowledged payment).
-    const pend = (await sequelize.query(
-      `SELECT id FROM subscriptions WHERE enrollment_id = :id AND status = 'pending' ORDER BY created_at DESC`,
-      { replacements: { id: c.id }, type: QueryTypes.SELECT }
-    )) as Array<{ id: string }>;
-    if (pend.length > 0) {
-      const [keep, ...dupes] = pend;
-      const [, activated] = await sequelize.query(
-        `UPDATE subscriptions
-            SET status = 'active', paysimple_payment_id = COALESCE(paysimple_payment_id, :pid),
-                started_at = COALESCE(started_at, NOW()),
-                current_period_end = COALESCE(current_period_end, NOW() + interval '1 month')
-          WHERE id = :sid AND status = 'pending'`,
-        { replacements: { pid: membership.pid, sid: keep.id }, type: QueryTypes.UPDATE }
-      );
-      if (activated) s.subscriptionsActivated++;
-      for (const d of dupes) {
-        const [, canceled] = await sequelize.query(
-          `UPDATE subscriptions SET status = 'canceled', canceled_at = NOW(),
-                  cancel_reason = 'duplicate checkout submission (reconcile)'
-            WHERE id = :sid AND status = 'pending'`,
-          { replacements: { sid: d.id }, type: QueryTypes.UPDATE }
-        );
-        if (canceled) s.duplicateSubsCanceled++;
+      if (pend.length > 0) {
+        const [keep, ...dupes] = pend;
+        // COALESCE semantics preserved: never overwrite a payment id already on the row.
+        const activated = await activateByRef(keep.payment_ref, {
+          paymentId: keep.paysimple_payment_id ?? membership.pid,
+          amount: membership.amountCents / 100,
+        });
+        if (activated && activated.status === 'active') s.subscriptionsActivated++;
+
+        for (const d of dupes) {
+          const [, canceled] = await sequelize.query(
+            `UPDATE subscriptions SET status = 'canceled', canceled_at = NOW(),
+                    cancel_reason = 'duplicate checkout submission (reconcile)'
+              WHERE id = :sid AND status = 'pending'`,
+            { replacements: { sid: d.id }, type: QueryTypes.UPDATE }
+          );
+          if (canceled) s.duplicateSubsCanceled++;
+        }
       }
+
+      // Link the payment onto the enrollment. activateByRef marks the enrollment paid,
+      // but the payment id is this job's own idempotency anchor (loadCandidates keys off
+      // it) and no activation path writes it. Written LAST on purpose: it is what takes
+      // this candidate out of the next run, so if anything above throws the whole
+      // candidate is still picked up and retried rather than half-finished.
+      await sequelize.query(
+        `UPDATE enrollments
+            SET payment_status = 'paid',
+                amount_paid = :amt,
+                paysimple_payment_id = COALESCE(paysimple_payment_id, :pid),
+                enrolled_at = COALESCE(enrolled_at, NOW())
+          WHERE id = :id`,
+        { replacements: { amt: membership.amountCents / 100, pid: membership.pid, id: c.id }, type: QueryTypes.UPDATE }
+      );
+
+      countLinked();
+    } catch (err: any) {
+      // One bad candidate must never abort the run for everyone else. The payment id is
+      // still held in usedPids for this pass, and the candidate is left re-runnable.
+      s.linkFailures++;
+      console.error(JSON.stringify({
+        level: 'error', service: 'app-payment-reconcile', event: 'link_failed',
+        error_class: err?.error_class || err?.name || 'Error', outcome: 'failure',
+        context: { enrollmentId: c.id, pid: membership.pid, via, message: err?.message },
+      }));
     }
   }
 
@@ -323,7 +465,9 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
     `[AppReconcile] ${dryRun ? '(dry-run) ' : ''}done: candidates=${s.candidates} linked=${s.linked} ` +
     `(byCustomerId=${s.linkedByCustomerId} byCheckoutWindow=${s.linkedByCheckoutWindow}) ` +
     `($${(s.linkedTotalCents / 100).toFixed(2)}) subsActivated=${s.subscriptionsActivated} ` +
-    `dupSubsCanceled=${s.duplicateSubsCanceled} noPaymentFound=${s.noPaymentFound}`
+    `dupSubsCanceled=${s.duplicateSubsCanceled} noPaymentFound=${s.noPaymentFound} ` +
+    `rejectedByOriginGuard=${s.rejectedByOriginGuard} sharedCustomerIds=${s.sharedCustomerIds.length} ` +
+    `linkFailures=${s.linkFailures}`
   );
   return s;
 }

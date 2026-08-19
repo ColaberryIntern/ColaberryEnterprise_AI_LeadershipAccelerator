@@ -1,4 +1,9 @@
-import { selectLinkableMembershipPayments, matchesAppCheckout } from '../appPaymentReconcileService';
+import fs from 'fs';
+import path from 'path';
+import { execFileSync } from 'child_process';
+import {
+  selectLinkableMembershipPayments, matchesAppCheckout, matchesCheckoutOrigin, sharedCustomerIds,
+} from '../appPaymentReconcileService';
 
 /**
  * The scope guard is the safety-critical part: a payment is linkable ONLY if its
@@ -148,5 +153,149 @@ describe('appPaymentReconcileService.matchesAppCheckout', () => {
     expect(
       matchesAppCheckout({ amountCents: 19900, paidMs: T0 + 60_000, payerEmail: '' }, EMAIL, checkouts)
     ).toBe(false);
+  });
+});
+
+/**
+ * DEFECT 2 — path A used to match on customer id alone: no amount, no time window.
+ * These lock the ORIGIN guard that path B always had and path A never did. There is
+ * deliberately NO email test here: path A is the alias case, where the PaySimple
+ * customer record carries a different address than the enrollment (confirmed live for
+ * Britiana Akhile, Jude Mofunanya and Marione Nkerbu). An equality check would stop
+ * reconciling them and move revenue attribution.
+ */
+describe('appPaymentReconcileService.matchesCheckoutOrigin (path A origin guard)', () => {
+  const T0 = Date.parse('2026-07-31T00:45:57Z');
+  const checkouts = [{ startedMs: T0, amountCents: 19900, chargeCents: 14900 }];
+
+  it('matches a charge for the checkout amount, just after the checkout opened', () => {
+    expect(matchesCheckoutOrigin({ amountCents: 19900, paidMs: T0 + 5 * 60_000 }, checkouts)).toBe(true);
+  });
+
+  it('matches the CREDIT-DISCOUNTED charge — $149 paid against a $199 pending row', () => {
+    // The $50 Open House credit is taken off the charge but the pending row keeps the
+    // full plan price. Matching on amount_cents alone would reject every credited
+    // student and lock a paying member out of the portal.
+    expect(matchesCheckoutOrigin({ amountCents: 14900, paidMs: T0 + 5 * 60_000 }, checkouts)).toBe(true);
+  });
+
+  it('REJECTS an amount we never asked for on this checkout (the defect: id alone was enough)', () => {
+    expect(matchesCheckoutOrigin({ amountCents: 25000, paidMs: T0 + 5 * 60_000 }, checkouts)).toBe(false);
+  });
+
+  it('REJECTS a charge that PREDATES the checkout — it cannot have originated from it', () => {
+    expect(matchesCheckoutOrigin({ amountCents: 19900, paidMs: T0 - 48 * 3600 * 1000 }, checkouts)).toBe(false);
+  });
+
+  it('REJECTS a charge long after the window closed (a later direct/manual charge)', () => {
+    expect(matchesCheckoutOrigin({ amountCents: 19900, paidMs: T0 + 30 * 3600 * 1000 }, checkouts)).toBe(false);
+  });
+
+  it('REJECTS everything when this enrollment opened no checkout at all', () => {
+    expect(matchesCheckoutOrigin({ amountCents: 19900, paidMs: T0 + 60_000 }, [])).toBe(false);
+  });
+
+  it('allows the same small clock skew path B allows', () => {
+    expect(matchesCheckoutOrigin({ amountCents: 19900, paidMs: T0 - 60_000 }, checkouts)).toBe(true);
+  });
+
+  it('REJECTS an unparseable payment date rather than guessing', () => {
+    expect(matchesCheckoutOrigin({ amountCents: 19900, paidMs: NaN }, checkouts)).toBe(false);
+  });
+
+  it('treats a checkout with no recorded credit as charging its list price', () => {
+    expect(matchesCheckoutOrigin({ amountCents: 19900, paidMs: T0 + 60_000 }, [{ startedMs: T0, amountCents: 19900 }])).toBe(true);
+  });
+});
+
+/**
+ * DEFECT 2 (invariant) — a PaySimple customer id belongs to exactly one enrollment.
+ * The 2026-08 contamination (customer 7095991 written onto three enrollments) was
+ * visible as a duplicate long before it was visible as a mis-charge.
+ */
+describe('appPaymentReconcileService.sharedCustomerIds', () => {
+  it('reports a customer id claimed by two enrollments, with both claimants', () => {
+    const shared = sharedCustomerIds([
+      { enrollmentId: 'e1', cid: '7095991' },
+      { enrollmentId: 'e2', cid: '7095991' },
+      { enrollmentId: 'e3', cid: '43540435' },
+    ]);
+    expect([...shared.keys()]).toEqual(['7095991']);
+    expect(shared.get('7095991')).toEqual(['e1', 'e2']);
+  });
+
+  it('is silent when every customer id has exactly one owner', () => {
+    expect(sharedCustomerIds([
+      { enrollmentId: 'e1', cid: '1' },
+      { enrollmentId: 'e2', cid: '2' },
+    ]).size).toBe(0);
+  });
+
+  it('does not flag one enrollment claiming the same id on its enrollment AND its subscriptions', () => {
+    // The claim set is a UNION across both tables; the same person holding the same id
+    // twice is normal and must never trip the invariant.
+    expect(sharedCustomerIds([
+      { enrollmentId: 'e1', cid: '43540435' },
+      { enrollmentId: 'e1', cid: '43540435' },
+    ]).size).toBe(0);
+  });
+
+  it('ignores blank ids rather than grouping them together', () => {
+    expect(sharedCustomerIds([
+      { enrollmentId: 'e1', cid: '' },
+      { enrollmentId: 'e2', cid: '' },
+    ]).size).toBe(0);
+  });
+});
+
+/**
+ * DEFECT 3 — `enrollments.intake_data_json.credit_applied` is a dead mirror of the
+ * account-credit ledger: stamped at checkout, never updated on consumption. On
+ * 2026-08-19 all 24 rows carrying it read `false`, including Marcus Zeno's, whose $50
+ * credit had actually been applied on 2026-07-31 — and that stale `false` nearly caused
+ * a duplicate credit. The mirror is retired rather than repaired, and `account_credits`
+ * is the sole authority. This is the tripwire that keeps it retired: a comment asking
+ * people not to read it is not a contract, because it can be violated silently.
+ */
+describe('credit_applied mirror stays retired', () => {
+  it('no backend source file reads or writes intake_data_json.credit_applied', () => {
+    const root = path.resolve(__dirname, '../..');
+    // The only files allowed to name the key are the ones documenting that it is dead:
+    // the Enrollment model's warning, and this tripwire.
+    const documentationOnly = new Set(
+      ['models/Enrollment.ts', 'services/__tests__/appPaymentReconcileService.test.ts'].map((p) => path.normalize(p))
+    );
+    const isOffender = (rel: string): boolean => !documentationOnly.has(path.normalize(rel));
+
+    // `git grep` over tracked + untracked sources is ~15x cheaper than reading all 3,400
+    // backend files (2.5s vs 42s), and this runs on every suite. Fall back to the walk
+    // wherever git is unavailable, so the guard can never silently stop guarding.
+    let hits: string[] | null = null;
+    try {
+      const out = execFileSync('git', ['grep', '-l', '-I', '--untracked', '-e', 'credit_applied', '--', '*.ts', '*.js'],
+        { cwd: root, encoding: 'utf8' });
+      hits = out.split('\n').filter(Boolean);
+    } catch (err: any) {
+      if (err?.status === 1 && !err?.stderr?.length) hits = []; // exit 1 = no matches
+    }
+
+    if (hits === null) {
+      hits = [];
+      const walk = (dir: string): void => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+            walk(full);
+            continue;
+          }
+          if (!/\.(ts|js)$/.test(entry.name)) continue;
+          if (/\bcredit_applied\b/.test(fs.readFileSync(full, 'utf8'))) hits!.push(path.relative(root, full));
+        }
+      };
+      walk(root);
+    }
+
+    expect(hits.filter(isOffender)).toEqual([]);
   });
 });
