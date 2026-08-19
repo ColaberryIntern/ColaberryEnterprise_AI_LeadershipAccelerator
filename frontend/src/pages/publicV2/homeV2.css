@@ -810,3 +810,16 @@
   font-size: var(--fs-caption);
   color: var(--text-muted);
 }
+
+/* The two build captures sit side by side above the repo evidence: the plan the
+   interview produced, then the window your team builds onto it. They stack
+   before the captions get too narrow to read. */
+.cbv2-buildshots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+@media (max-width: 860px) {
+  .cbv2-buildshots { grid-template-columns: minmax(0, 1fr); }
+}

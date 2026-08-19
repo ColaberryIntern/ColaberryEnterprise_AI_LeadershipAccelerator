@@ -1,6 +1,11 @@
 /* ============================================================================
    engineModel.css -- the operating model.
 
+   TYPE SIZES RAISED after review: the stage titles and descriptions were 13px
+   and 11px, which is fine for a caption and too small for the thing the section
+   is actually about. Titles are 15px and details 12.5px, and the number chip
+   grew with them so the digit is not cramped.
+
    Two lanes joined by numbered handoff gates. The spine between them is the
    point: the gates are where one engine hands to the other, so they get the
    only nodes on the page that sit ON the centre line.
@@ -61,7 +66,7 @@
   flex: 1;
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: #9fb6c8;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -98,7 +103,7 @@
   margin: 0;
   padding-bottom: 7px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.16);
-  font-size: 14px;
+  font-size: 16px;
   color: #fff;
 }
 .cbv2-eg__h--s { border-bottom-color: rgba(95, 182, 218, 0.6); }
@@ -161,9 +166,9 @@
 
 .cbv2-eg__n {
   flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
+  width: 23px;
+  height: 23px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
   font-family: var(--font-mono);
@@ -172,8 +177,8 @@
   color: #fff;
   transition: background 0.3s, color 0.3s;
 }
-.cbv2-eg__t { display: block; font-size: 13px; font-weight: 500; color: #fff; }
-.cbv2-eg__d { display: block; font-size: 11px; line-height: 1.4; color: var(--eg-ink-dim); margin-top: 1px; }
+.cbv2-eg__t { display: block; font-size: 15px; font-weight: 500; color: #fff; }
+.cbv2-eg__d { display: block; font-size: 12.5px; line-height: 1.45; color: var(--eg-ink-dim); margin-top: 2px; }
 
 .cbv2-eg__st.is-hit { background: rgba(255, 255, 255, 0.09); }
 .cbv2-eg__st--s.is-hit { border-color: rgba(95, 182, 218, 0.5); }
@@ -253,8 +258,8 @@
 .cbv2-eg__seg.is-hit i { transform: scaleX(1); }
 
 .cbv2-eg__outrow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.cbv2-eg__outrow strong { font-size: 16px; font-weight: 500; color: #fff; }
-.cbv2-eg__outrow p { margin: 0; font-size: 12px; color: #c7d8e6; flex: 1 1 240px; }
+.cbv2-eg__outrow strong { font-size: 18px; font-weight: 500; color: #fff; }
+.cbv2-eg__outrow p { margin: 0; font-size: 13.5px; color: #c7d8e6; flex: 1 1 240px; }
 .cbv2-eg__chip {
   font-family: var(--font-mono);
   font-size: 11px;
