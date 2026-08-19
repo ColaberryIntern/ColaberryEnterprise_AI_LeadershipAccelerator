@@ -118,15 +118,38 @@ export default function useCountUp(text: string, durationMs = 1100): CountUp {
     );
     io.observe(el);
 
-    // Backstop: if the observer never fires (element already past, tab
-    // restored, layout quirk) the figure must still end up correct rather than
-    // sitting at zero.
-    const timer = window.setTimeout(() => {
-      if (!started) {
-        io.disconnect();
-        finish();
-      }
-    }, 2500);
+    /*
+     * Backstop, and the reason it re-checks instead of just firing.
+     *
+     * THE DEFECT THIS FIXES. The first version finished the count 2.5s after
+     * MOUNT, unconditionally. These figures sit ~3,200px below the fold, so the
+     * timer always won the race against a human scrolling down: by the time the
+     * band came into view the numbers had long since settled, and the animation
+     * effectively never existed. A backstop that cannot tell "the observer is
+     * broken" from "the reader has not got here yet" will always resolve that
+     * ambiguity the wrong way.
+     *
+     * So it now only rescues a figure that is ACTUALLY ON SCREEN and still at
+     * zero. If the element is off screen it re-arms and waits, which keeps the
+     * original guarantee -- a visible figure never sits at zero -- without
+     * spending the animation before anyone can see it.
+     */
+    let timer = 0;
+    const armBackstop = (): void => {
+      timer = window.setTimeout(() => {
+        if (started) return;
+        const r = el.getBoundingClientRect();
+        const onScreen = r.top < window.innerHeight && r.bottom > 0;
+        if (onScreen) {
+          started = true;
+          io.disconnect();
+          finish();
+          return;
+        }
+        armBackstop();
+      }, 2500);
+    };
+    armBackstop();
 
     return () => {
       io.disconnect();

@@ -22,11 +22,18 @@
 }
 
 .cbv2-accolade {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-7) var(--space-6);
   border-left: var(--border-1) solid var(--border-subtle);
 }
+/* The figures wrap to different line counts -- "Consulting and Training 12+
+   years" runs to three lines where "2,500+ certified" runs to two -- so without
+   this the labels sit at four different heights and the row looks broken. The
+   label is pushed to the bottom of its tile instead, giving the band one
+   baseline across all four. */
+.cbv2-accolade__label { margin-top: auto; }
 /*
  * The first tile in each ROW must not carry a left divider, or the band opens
  * with a stray rule. `auto-fit` means the number of columns is unknown at
