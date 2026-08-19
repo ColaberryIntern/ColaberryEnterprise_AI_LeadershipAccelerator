@@ -34,6 +34,9 @@ function makeFakeAgent(config: Record<string, any> = {}) {
     // explicitly overrides these two fields to exercise the self-heal itself.
     reports_to_type: 'agent',
     reports_to_id: 'workforce-intelligence-engine-id',
+    // Registration-time hardening (2026-08-19) — same pre-satisfied-by-default
+    // posture as the reports_to fields above.
+    tools_granted: ['reese_fixture_tool'],
     update: jest.fn().mockResolvedValue(undefined),
   };
 }
