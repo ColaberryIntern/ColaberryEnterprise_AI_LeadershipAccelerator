@@ -129,6 +129,34 @@ export default function AgentDetailPage() {
         )}
       </SectionCard>
 
+      <SectionCard
+        title="Reports to"
+        icon="git-branch-line"
+        subtitle="This agent's real accountability chain — AI Leadership if direct, or through one or more AI Leadership agents to a real human (org-chart hierarchy)."
+      >
+        {detail.reports_to ? (
+          <>
+            <ol className="mb-3" style={{ paddingLeft: '1.1rem' }}>
+              {detail.reports_to.trail.map((hop, i) => (
+                <li key={i} className="mb-1"><code>{hop}</code></li>
+              ))}
+            </ol>
+            {detail.reports_to.resolved_human ? (
+              <p className="mb-0">
+                Ultimately accountable to <strong>{detail.reports_to.resolved_human.name}</strong>
+                {' '}({detail.reports_to.resolved_human.email}).
+              </p>
+            ) : (
+              <p className="text-muted mb-0">
+                <i className="ri-error-warning-line" aria-hidden="true" /> This chain does not currently resolve to a real human — disclosed honestly rather than guessed.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-muted mb-0">No reports-to chain configured for this agent.</p>
+        )}
+      </SectionCard>
+
       <SectionCard title="Tools & capabilities" icon="tools-line" subtitle="What this agent is actually permitted to do today — not an aspirational list.">
         {agent.tools_granted && agent.tools_granted.length > 0 ? (
           <ul className="list-unstyled mb-0">

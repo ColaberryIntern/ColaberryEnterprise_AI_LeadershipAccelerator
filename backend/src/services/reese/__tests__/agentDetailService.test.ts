@@ -6,26 +6,33 @@
  */
 jest.mock('../../../models/AiAgent', () => ({ findByPk: jest.fn() }));
 jest.mock('../../../models/AdminUser', () => ({ findOne: jest.fn() }));
-jest.mock('../../../models/Enrollment', () => ({ findOne: jest.fn() }));
+jest.mock('../../../models/Enrollment', () => ({ findOne: jest.fn(), findByPk: jest.fn() }));
 jest.mock('../../../models/CommunityMember', () => ({ findOne: jest.fn() }));
+jest.mock('../../../models/OrgMember', () => ({ findByPk: jest.fn() }));
 jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn() } }));
 jest.mock('../../communityService', () => ({ derivePresence: jest.fn() }));
+jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChainWithTrail: jest.fn() }));
 
 import { Op } from 'sequelize';
 import AiAgent from '../../../models/AiAgent';
 import AdminUser from '../../../models/AdminUser';
 import Enrollment from '../../../models/Enrollment';
 import CommunityMember from '../../../models/CommunityMember';
+import OrgMember from '../../../models/OrgMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
+import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
 const mockAdminFindOne = AdminUser.findOne as unknown as jest.Mock;
 const mockEnrollmentFindOne = Enrollment.findOne as unknown as jest.Mock;
+const mockEnrollmentFindByPk = Enrollment.findByPk as unknown as jest.Mock;
 const mockMemberFindOne = CommunityMember.findOne as unknown as jest.Mock;
+const mockOrgMemberFindByPk = OrgMember.findByPk as unknown as jest.Mock;
 const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
+const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 
 const reeseAgent = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success',
@@ -159,5 +166,60 @@ describe('getAgentDetail', () => {
     // independent), but produced_ticket_types is honestly empty — no admin
     // identity means no match list to query tickets by at all.
     expect(result!.capabilities.produced_ticket_types).toEqual([]);
+  });
+
+  // Org-chart hierarchy build (2026-08-19) — the "Reports to" section on
+  // AgentDetailPage. reeseAgent's fixture has no reports_to_type set, so all
+  // 8 tests above never touch resolveReportsToChainWithTrail/OrgMember at
+  // all — this new describe block covers the field itself in isolation.
+  describe('reports_to', () => {
+    it('happy path: an agent with reports_to_type set resolves a trail and a real human identity', async () => {
+      const staffAgent = { ...reeseAgent, reports_to_type: 'agent', reports_to_id: 'corybrain-id' };
+      mockAgentFindByPk.mockResolvedValue(staffAgent);
+      mockResolveChain.mockResolvedValue({
+        resolvedHumanId: 'kes-org-member-id',
+        trail: ['Reese (agent)', 'workforce_intelligence_engine (agent) -> [human]'],
+      });
+      mockOrgMemberFindByPk.mockResolvedValue({ id: 'kes-org-member-id', email: 'kesetebirhan@gmail.com', enrollment_id: null });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.reports_to).not.toBeNull();
+      expect(result!.reports_to!.trail).toEqual(['Reese (agent)', 'workforce_intelligence_engine (agent) -> [human]']);
+      expect(result!.reports_to!.resolved_human).toEqual({ id: 'kes-org-member-id', name: 'kesetebirhan@gmail.com', email: 'kesetebirhan@gmail.com' });
+    });
+
+    it('prefers the resolved human\'s real Enrollment.full_name over their bare email, same pattern as orgService.ts::getRoster()', async () => {
+      const leadershipAgent = { ...reeseAgent, reports_to_type: 'human', reports_to_id: 'ali-org-member-id' };
+      mockAgentFindByPk.mockResolvedValue(leadershipAgent);
+      mockResolveChain.mockResolvedValue({ resolvedHumanId: 'ali-org-member-id', trail: ['Reese (agent) -> [human]'] });
+      mockOrgMemberFindByPk.mockResolvedValue({ id: 'ali-org-member-id', email: 'ali@colaberry.com', enrollment_id: 'enr-ali' });
+      mockEnrollmentFindByPk.mockResolvedValue({ id: 'enr-ali', full_name: 'Ali Muwwakkil' });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.reports_to!.resolved_human!.name).toBe('Ali Muwwakkil');
+    });
+
+    it('failure/boundary: reports_to_type is null (the common case for non-ticket-creating agents) -> reports_to: null, never an empty object or a thrown error', async () => {
+      mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, reports_to_type: null, reports_to_id: null });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.reports_to).toBeNull();
+      expect(mockResolveChain).not.toHaveBeenCalled();
+      expect(mockOrgMemberFindByPk).not.toHaveBeenCalled();
+    });
+
+    it('boundary: the chain fails to resolve (dangling) -> reports_to.trail is populated but resolved_human is null, never fabricated', async () => {
+      const orphanAgent = { ...reeseAgent, agent_name: 'OrphanedAgent', reports_to_type: 'agent', reports_to_id: 'nonexistent-id' };
+      mockAgentFindByPk.mockResolvedValue(orphanAgent);
+      mockResolveChain.mockResolvedValue({ resolvedHumanId: null, trail: ['OrphanedAgent (agent) -> [dangling]'] });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.reports_to).toEqual({ trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null });
+      expect(mockOrgMemberFindByPk).not.toHaveBeenCalled();
+    });
   });
 });

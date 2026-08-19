@@ -66,29 +66,64 @@ export async function resolveCreatorAiAgent(
 // null) rather than looping forever or guessing.
 const MAX_CHAIN_DEPTH = 5;
 
+/** Result of a full reports_to chain walk: the resolved human (if any) plus a
+ * human-readable trail of every hop taken, ending in '[human]', '[dangling]',
+ * '[unset]', or being truncated by the depth guard (see MAX_CHAIN_DEPTH). Used
+ * by AgentDetailPage's "Reports to" section (org-chart hierarchy build,
+ * 2026-08-19) to show an agent's own real chain, not just the resolved id. */
+export interface ReportsToChainResult {
+  resolvedHumanId: string | null;
+  trail: string[];
+}
+
+/**
+ * Walks an AiAgent's reports_to chain to the real human at the end of it,
+ * returning both the resolved id AND the human-readable trail of hops taken.
+ * This is the ONE canonical recursive implementation of the walk —
+ * resolveReportsToHuman() below is a thin wrapper over this, so there is
+ * exactly one place this recursion is written (org-chart hierarchy build,
+ * 2026-08-19 — previously `resolveReportsToHuman()` had the only copy of this
+ * logic and `validateAgentTicketStandard.ts` had a separate, parallel
+ * `walkReportsToChain()` duplicate for trail output; unifying THAT second
+ * duplicate into this one is a logged follow-up, not done in this change —
+ * see the org-chart run's execution-contract.md Out-of-scope section).
+ */
+export async function resolveReportsToChainWithTrail(
+  agent: AiAgent,
+  trail: string[] = [],
+  depth = 0,
+): Promise<ReportsToChainResult> {
+  if (depth >= MAX_CHAIN_DEPTH) return { resolvedHumanId: null, trail };
+
+  if (agent.reports_to_type === 'human' && agent.reports_to_id) {
+    return { resolvedHumanId: agent.reports_to_id, trail: [...trail, `${agent.agent_name} (agent) -> [human]`] };
+  }
+
+  if (agent.reports_to_type === 'agent' && agent.reports_to_id) {
+    const nextAgent = await AiAgent.findByPk(agent.reports_to_id);
+    if (!nextAgent) {
+      return { resolvedHumanId: null, trail: [...trail, `${agent.agent_name} (agent) -> [dangling]`] };
+    }
+    return resolveReportsToChainWithTrail(nextAgent, [...trail, `${agent.agent_name} (agent)`], depth + 1);
+  }
+
+  return { resolvedHumanId: null, trail: [...trail, `${agent.agent_name} (agent) -> [unset]`] };
+}
+
 /**
  * Walks an AiAgent's reports_to chain to the real human at the end of it.
  * Returns the resolved org_members.id, or null if the chain is broken,
  * unset, or exceeds MAX_CHAIN_DEPTH (treated the same as "no reports_to" by
  * the caller — see enforceReportsToGate() below, which rejects either way).
+ * Thin wrapper over resolveReportsToChainWithTrail() — see its comment for
+ * why the trail-returning version is the one canonical implementation.
  */
 export async function resolveReportsToHuman(
   agent: AiAgent,
   depth = 0,
 ): Promise<string | null> {
-  if (depth >= MAX_CHAIN_DEPTH) return null;
-
-  if (agent.reports_to_type === 'human' && agent.reports_to_id) {
-    return agent.reports_to_id;
-  }
-
-  if (agent.reports_to_type === 'agent' && agent.reports_to_id) {
-    const nextAgent = await AiAgent.findByPk(agent.reports_to_id);
-    if (!nextAgent) return null;
-    return resolveReportsToHuman(nextAgent, depth + 1);
-  }
-
-  return null;
+  const { resolvedHumanId } = await resolveReportsToChainWithTrail(agent, [], depth);
+  return resolvedHumanId;
 }
 
 /**
