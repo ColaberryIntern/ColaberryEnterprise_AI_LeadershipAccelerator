@@ -112,7 +112,11 @@ describe('HomeV2 — structure', () => {
     const line = h1.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
     expect(line).toContain('Build the system.');
     expect(line).toContain('Build the people.');
-    expect(line).toContain('Your team owns it.');
+    // "Your team owns it." left the h1 with the v8 hero and is now the deck
+    // paragraph beneath it. That is the better structure -- the h1 is the
+    // positioning statement, the deck supports it -- so the line is asserted on
+    // the page rather than inside the heading.
+    expect(textOf(h)).toContain('Your team owns it.');
   });
 
   it('has exactly one h1', () => {
