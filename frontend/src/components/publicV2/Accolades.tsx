@@ -74,10 +74,11 @@ export const ACCOLADE_TILES: readonly AccoladeTile[] = [
     // years behind the work say more here than the length of the path does.
     claimKey: 'company.tenure',
     icon: 'ladder',
-    // NOT "since 2012": that exact claim is on the homepage's blocked list, and
-    // writing it in lower case to slip past a string match would be gaming the
-    // ban rather than honouring it. The tenure is stated as a span instead.
-    label: 'in consulting and classroom delivery',
+    // Carries the words the figure gave up so the pair still reads as the whole
+    // claim. NOT "since 2012": that exact claim is on the homepage's blocked
+    // list, and writing it in lower case to slip past a string match would be
+    // gaming the ban rather than honouring it.
+    label: 'of consulting and training delivery',
   },
 ];
 
