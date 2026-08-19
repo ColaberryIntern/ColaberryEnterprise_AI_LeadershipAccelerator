@@ -55,6 +55,7 @@ import {
   storedConnect, writeAccessOf,
   ConnectStateName, ConnectMethod, RepoWriteAccess, StoredConnect,
 } from './connectionAccess';
+import { acceptInvitationFor, InvitationOutcome } from './repoInvitations';
 
 /**
  * The row-shape predicates live in `connectionAccess` — pure, model-free, and
@@ -321,6 +322,15 @@ export async function startConnect(
   await assertNotClaimedElsewhere(ref, projectId);
   await assertRebindAllowed(existing, ref, Boolean(opts.confirmReplace), opts);
 
+  // A student who "added ColaberryIntern as a collaborator" has created an
+  // INVITATION, and an unaccepted invitation grants nothing at all. Accept it
+  // here, BEFORE the repo is read: on a private repo the unaccepted invitation
+  // is the whole difference between a 404 that tells the student their real repo
+  // is imaginary and a clean connect. Never throws — a housekeeping call must
+  // not be able to fail a connect, and `fetchRepoFacts` below reports the access
+  // we actually ended up with either way.
+  await acceptInvitationFor(ref.owner, ref.repo, opts);
+
   const facts = await fetchRepoFacts(ref.owner, ref.repo, opts);
 
   if (facts.archived) {
@@ -511,6 +521,96 @@ export async function markPushObserved(projectId: string): Promise<void> {
   if (storedConnect(connection).state !== 'awaiting_push') return;
   writeConnect(connection, { state: 'connected', connected_at: new Date().toISOString() });
   await connection.save();
+}
+
+// ── access, recorded rather than assumed ─────────────────────────────────────
+
+/**
+ * Record what the platform can actually do with this repo.
+ *
+ * Separate from the connect flow because the answer CHANGES after connect, in
+ * both directions: a student accepts our presence late, or revokes it, or
+ * invited us as a reader. `platform_can_push` was written at exactly one moment
+ * — `startConnect` — and never revisited, which is why it is absent on every one
+ * of the 26 live rows and `writeAccessOf` answers `null` for all of them. A
+ * `null` there is not harmless: it is what makes the read-only warning shipped
+ * on 2026-08-17 render for nobody.
+ *
+ * Returns whether anything actually changed, so callers can log a transition
+ * rather than a heartbeat.
+ */
+export async function recordWriteAccess(projectId: string, canPush: boolean): Promise<boolean> {
+  const connection = await loadConnection(projectId);
+  if (!connection) return false;
+  const before = storedConnect(connection).platform_can_push;
+  if (before === canPush) return false;
+  writeConnect(connection, { platform_can_push: canPush });
+  await connection.save();
+  return true;
+}
+
+export interface ReconcileAccessResult {
+  invitation: InvitationOutcome;
+  write_access: RepoWriteAccess | null;
+  /** True when this run changed the recorded permission. */
+  changed: boolean;
+}
+
+/**
+ * Bring the recorded access back in line with reality, and take any invitation
+ * the student has left waiting.
+ *
+ * ── WHY THIS CANNOT BE CONNECT-TIME ONLY ─────────────────────────────────────
+ *
+ * The realistic sequence is the reverse of the tidy one. A student connects
+ * their repo first, because that is what the portal asks for; the instruction to
+ * add `ColaberryIntern` as a collaborator comes later, from their agent, during
+ * Story 000. So the invitation almost always arrives AFTER connect, and a
+ * connect-time-only acceptance would miss nearly every one of them — which is
+ * exactly what happened to Quincy Ninying, whose grant sat unaccepted until a
+ * human noticed.
+ *
+ * Sync is the right recurring moment: the student is already there, it is
+ * already the "go and look again" trigger for verification and for the Pages
+ * probe, and it costs one GET when there is nothing to do.
+ *
+ * ── NEVER THROWS ─────────────────────────────────────────────────────────────
+ *
+ * Same posture as `refreshRepoDocuments`. The student asked for a sync; a
+ * housekeeping call that could not reach GitHub must not turn a successful pull
+ * into an error. An unreadable repo records NOTHING rather than recording a
+ * guess — writing `pull_only` because a request timed out would demote a working
+ * build over a network blip.
+ */
+export async function reconcileRepoAccess(
+  projectId: string, opts: GitHubReadOptions = {},
+): Promise<ReconcileAccessResult> {
+  const idle: ReconcileAccessResult = { invitation: 'none', write_access: null, changed: false };
+  const connection = await loadConnection(projectId);
+  const owner = connection?.repo_owner;
+  const repo = connection?.repo_name;
+  if (!owner || !repo) return idle;
+
+  const invitation = await acceptInvitationFor(owner, repo, opts);
+
+  // Re-read rather than trusting the acceptance result: this also catches the
+  // student who revoked access, and the one who was never invited at all but
+  // whose permission we simply never recorded.
+  let canPush: boolean;
+  try {
+    const facts = await fetchRepoFacts(owner, repo, opts);
+    canPush = facts.platform_can_push;
+  } catch {
+    // Ignorance, not a refusal. Record nothing.
+    return { invitation: invitation.outcome, write_access: writeAccessOf(connection), changed: false };
+  }
+
+  const changed = await recordWriteAccess(projectId, canPush);
+  return {
+    invitation: invitation.outcome,
+    write_access: canPush ? 'push' : 'pull_only',
+    changed,
+  };
 }
 
 export { CONNECT_FILE_PATH };

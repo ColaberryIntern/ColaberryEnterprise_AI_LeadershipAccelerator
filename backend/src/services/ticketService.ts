@@ -1,3 +1,16 @@
+// CLAUDE.md size-ceiling disclosure: this file was already over the 500-line hard
+// ceiling (515) before the Agent Ticket Standard change (2026-08-18) touched it.
+// That change extracted its own new gate logic in full (enforceReportsToGate(),
+// ~30 lines) into ticketCreatorReportsToResolver.ts rather than adding it inline —
+// the file's net growth from this change is ~21 lines, not the ~40 the gate would
+// have cost inline. Closing the REMAINING pre-existing overage would mean
+// extracting getTicketById()/getTicketsForBoard() (the two largest functions
+// here, both carrying careful, recent, unrelated fixes — see their own header
+// comments) into a query-service module, mirroring getTicketStats()'s own past
+// extraction into ticketStatsService.ts. Deliberately NOT done as part of this
+// change (CLAUDE.md Scope Lock: logged here as a real, actionable follow-up
+// proposal, not silently expanded into this change's already-large diff, and not
+// silently left unacknowledged either).
 import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { Ticket, TicketActivity } from '../models';
@@ -11,6 +24,7 @@ import {
   actorRefKey,
 } from './actorIdentity/resolveActorDisplayName';
 import { buildTicketAutoCheckResolver } from './ticketAutoCheckService';
+import { enforceReportsToGate } from './ticketCreatorReportsToResolver';
 
 // ── State Machine ────────────────────────────────────────────────────────
 
@@ -69,6 +83,16 @@ export interface TicketFilters {
 // ── Create ───────────────────────────────────────────────────────────────
 
 export async function createTicket(data: CreateTicketData) {
+  // Agent Ticket Standard — "every ticket must have a home" (Ali, live,
+  // 2026-08-18). Every non-human creator must resolve to a real human it
+  // reports to, BEFORE any DB write — a hard, structural rejection (throws
+  // TicketCreatorNotReportableError), never a silent no-op or a warning. See
+  // ticketCreatorReportsToResolver.ts's enforceReportsToGate() for the full
+  // resolution logic (including plan-audit cycle 1's ai_staff-vs-agent_name
+  // finding) — extracted out of this already-oversize file per CLAUDE.md's
+  // size-ceiling rule.
+  const reportsToOrgMemberId = await enforceReportsToGate(data.created_by_type, data.created_by_id);
+
   // "One ticket per person per hour" (Ali, live feedback) — the student_support
   // reuse/reopen rule lives in ticketStudentSupportReuse.ts (extracted so this
   // function stays under CLAUDE.md's size ceiling); every other ticket type
@@ -91,8 +115,19 @@ export async function createTicket(data: CreateTicketData) {
     if (existing) return existing;
   }
 
+  // Agent Ticket Standard — stamp the resolved human as the real assignee, but
+  // only when the caller didn't already pass an explicit assigned_to_* (e.g.
+  // ensureAgentTicketForRoom()'s own `assigned_to_type:'ai_staff'` for Reese's
+  // room tickets) — this resolver adds a real assignee where none was specified,
+  // it never overrides a caller's deliberate explicit choice.
+  const assignedToFromReportsTo =
+    reportsToOrgMemberId && !data.assigned_to_type && !data.assigned_to_id
+      ? { assigned_to_type: 'org_member' as const, assigned_to_id: reportsToOrgMemberId }
+      : {};
+
   const ticket = await Ticket.create({
     ...data,
+    ...assignedToFromReportsTo,
     status: data.status || 'backlog',
     priority: data.priority || 'medium',
     type: data.type || 'task',

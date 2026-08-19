@@ -12,7 +12,7 @@
  * Every NEGATIVE case below is a REAL line from this codebase that the old
  * pattern flagged as a critical SQL injection.
  */
-import { VULN_PATTERNS } from '../codeSecurityScan';
+import { VULN_PATTERNS, isExcludedFile } from '../codeSecurityScan';
 
 const sqlPattern = VULN_PATTERNS.find((p) => p.name === 'SQL String Interpolation')!.pattern;
 
@@ -84,5 +84,29 @@ describe('SQL String Interpolation heuristic', () => {
     it('is case-sensitive: lowercase sql keywords in prose do not match', () => {
       expect(flags('  console.log(`select ${a} from ${b}`);')).toBe(false);
     });
+  });
+});
+
+describe('file exclusions', () => {
+  it('excludes the scanner pattern file, which always matches itself', () => {
+    expect(isExcludedFile('backend/src/services/agents/security/scanners/codeSecurityScan.ts')).toBe(true);
+  });
+
+  it('excludes curriculum content whose code samples are lesson data', () => {
+    expect(isExcludedFile('backend/src/data/classTeachWeeks.ts')).toBe(true);
+  });
+
+  it('does NOT exclude ordinary application code', () => {
+    expect(isExcludedFile('backend/src/services/inbox/graphMailService.ts')).toBe(false);
+    expect(isExcludedFile('backend/src/intelligence/services/localQueryEngine.ts')).toBe(false);
+  });
+
+  it('matches on exact path, not a loose substring — a lookalike is still scanned', () => {
+    expect(isExcludedFile('backend/src/data/classTeachWeeksHelper.ts')).toBe(false);
+    expect(isExcludedFile('other/classTeachWeeks.ts')).toBe(false);
+  });
+
+  it('normalises Windows separators so the list works on either platform', () => {
+    expect(isExcludedFile('backend' + String.fromCharCode(92) + 'src' + String.fromCharCode(92) + 'data' + String.fromCharCode(92) + 'classTeachWeeks.ts')).toBe(true);
   });
 });

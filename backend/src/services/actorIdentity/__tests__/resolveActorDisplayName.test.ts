@@ -8,6 +8,7 @@
  */
 jest.mock('../../../models/AdminUser', () => ({ findByPk: jest.fn(), findOne: jest.fn() }));
 jest.mock('../../../models/AiAgent', () => ({ findByPk: jest.fn(), findOne: jest.fn() }));
+jest.mock('../../../models/OrgMember', () => ({ findByPk: jest.fn() }));
 jest.mock('../../reese/resolveStudentDisplayName', () => ({
   resolveStudentDisplayName: jest.fn(),
 }));
@@ -25,6 +26,7 @@ jest.mock('../../../config/database', () => ({
 
 import AdminUser from '../../../models/AdminUser';
 import AiAgent from '../../../models/AiAgent';
+import OrgMember from '../../../models/OrgMember';
 import { resolveStudentDisplayName } from '../../reese/resolveStudentDisplayName';
 import { resolveActorDisplayName, resolveActorDisplayNamesBatch, actorRefKey } from '../resolveActorDisplayName';
 
@@ -32,6 +34,7 @@ const mockAdminFindByPk = AdminUser.findByPk as unknown as jest.Mock;
 const mockAdminFindOne = AdminUser.findOne as unknown as jest.Mock;
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
 const mockAgentFindOne = AiAgent.findOne as unknown as jest.Mock;
+const mockOrgMemberFindByPk = OrgMember.findByPk as unknown as jest.Mock;
 const mockResolveStudent = resolveStudentDisplayName as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = '82c2dfd2-369e-4545-8d2f-22d1ae3451ff';
@@ -240,6 +243,53 @@ describe('resolveActorDisplayName', () => {
     const name = await resolveActorDisplayName('', '');
 
     expect(name).toBe('System');
+  });
+
+  // Agent Ticket Standard — the new 'org_member' actor type (the real human a
+  // ticket's resolved-from-agent assignee is). OrgMember has no display_name
+  // column of its own, so this resolves via a same-email AdminUser first, else
+  // the org_member's own email.
+  it("org_member: resolves via a same-email AdminUser's display_name when one exists", async () => {
+    mockOrgMemberFindByPk.mockResolvedValue({ email: 'ali@colaberry.com' });
+    mockAdminFindOne.mockResolvedValue({ display_name: 'Ali Muwwakkil', email: 'ali@colaberry.com' });
+
+    const name = await resolveActorDisplayName('org_member', 'f179c222-284e-4180-a335-cca9e4918b2e');
+
+    expect(name).toBe('Ali Muwwakkil');
+    expect(mockOrgMemberFindByPk).toHaveBeenCalledWith('f179c222-284e-4180-a335-cca9e4918b2e', { attributes: ['email'] });
+  });
+
+  it('org_member: falls back to the org_member\'s own email when no linked AdminUser exists — real, non-generic, never a raw UUID', async () => {
+    mockOrgMemberFindByPk.mockResolvedValue({ email: 'taiwooludimimu@gmail.com' });
+    mockAdminFindOne.mockResolvedValue(null);
+
+    const name = await resolveActorDisplayName('org_member', '1fbb5316-1381-4b8a-81a8-3a7325b39d5f');
+
+    expect(name).toBe('taiwooludimimu@gmail.com');
+    expect(name).not.toMatch(UUID_PATTERN);
+  });
+
+  it('org_member: a nonexistent (but real-UUID-shaped, matching org_members.id\'s actual type) id fails closed to the humanized type label, never the raw id, never throws', async () => {
+    // Non-UUID-shaped ids ('nonexistent-id') hit the dispatcher's EARLIER
+    // "already-a-stable-readable-identifier" passthrough (see
+    // resolveActorDisplayName's own header comment) before ever reaching the
+    // org_member branch — not a realistic case for this actor_type, since
+    // org_members.id is a real DB UUID column. A UUID-shaped miss is the
+    // actual, realistic "id doesn't exist" case this branch exists for.
+    mockOrgMemberFindByPk.mockResolvedValue(null);
+
+    const name = await resolveActorDisplayName('org_member', '00000000-0000-0000-0000-000000000000');
+
+    expect(name).toBe('Org Member');
+    expect(name).not.toBe('00000000-0000-0000-0000-000000000000');
+  });
+
+  it('org_member: a DB error resolving the org member fails closed rather than throwing', async () => {
+    mockOrgMemberFindByPk.mockRejectedValue(new Error('connection reset'));
+
+    const name = await resolveActorDisplayName('org_member', 'f179c222-284e-4180-a335-cca9e4918b2e');
+
+    expect(name).toBe('Org Member');
   });
 });
 

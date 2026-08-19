@@ -191,6 +191,67 @@ describe('failure behaviour', () => {
       .rejects.toMatchObject({ error_class: 'UpstreamTimeout' });
   });
 
+  /**
+   * A PERMISSION REFUSAL IS ITS OWN CLASS, and it has to be.
+   *
+   * Every other failure here is transient or ours. This one is neither: the
+   * platform holds read access and no amount of retrying will change that. It
+   * came back as a generic `UpstreamError`, so the caller could not tell
+   * "GitHub had a bad minute" from "we will never be able to write to this repo
+   * again" — and so the connection went on claiming writability while every
+   * sync queued the same doomed commit, silently, forever.
+   */
+  it('classifies a permission refusal as NoPushAccess, not as a generic upstream fault', async () => {
+    const impl = jest.fn(async () => ({
+      ok: false,
+      status: 403,
+      text: async () => 'Resource not accessible by personal access token',
+      json: async () => ({}),
+      headers: new Headers(),
+    }));
+    await expect(writeDocsToRepo(TARGET, files, null, { fetchImpl: impl as any }))
+      .rejects.toMatchObject({ error_class: 'NoPushAccess' });
+  });
+
+  it('does not retry a permission refusal — it is terminal, and retrying burns quota', async () => {
+    const impl = jest.fn(async () => ({
+      ok: false, status: 403, text: async () => 'Must have admin rights to Repository.',
+      json: async () => ({}), headers: new Headers(),
+    }));
+    await expect(writeDocsToRepo(TARGET, files, null, { fetchImpl: impl as any }))
+      .rejects.toBeInstanceOf(RepoWriteError);
+    expect(repoCalls(impl)).toBe(1);
+  });
+
+  /**
+   * GitHub overloads 403 for throttling as well as for refusal, and the caller
+   * DEMOTES A CONNECTION on NoPushAccess. Mistaking a rate limit for a refusal
+   * would mark a perfectly good repo read-only and stop the platform writing to
+   * it until somebody noticed.
+   */
+  it('does not mistake a rate limit for a permission refusal', async () => {
+    const impl = jest.fn(async () => ({
+      ok: false, status: 403,
+      text: async () => 'API rate limit exceeded for installation.',
+      json: async () => ({}), headers: new Headers(),
+    }));
+    await expect(writeDocsToRepo(TARGET, files, null, { fetchImpl: impl as any }))
+      .rejects.toMatchObject({ error_class: 'UpstreamError' });
+  });
+
+  /**
+   * 404 is what a freshly provisioned repo returns before the student's first
+   * push, because the branch does not exist yet. Reading that as "no push
+   * access" would demote every repo in the adopt flow.
+   */
+  it('leaves a 404 as an upstream fault, since a missing branch looks the same', async () => {
+    const impl = jest.fn(async () => ({
+      ok: false, status: 404, text: async () => 'Not Found', json: async () => ({}), headers: new Headers(),
+    }));
+    await expect(writeDocsToRepo(TARGET, files, null, { fetchImpl: impl as any }))
+      .rejects.toMatchObject({ error_class: 'UpstreamError' });
+  });
+
   it('NEVER writes the platform token to a log line', async () => {
     const spy = jest.spyOn(console, 'log');
     process.env.GITHUB_TOKEN = 'ghp_SUPERSECRET_TOKEN_VALUE';

@@ -8,6 +8,8 @@ import {
   evaluateWindow,
   windowPath,
   WATCH_WINDOW_HOURS,
+  resolveWindowHours,
+  MAX_WINDOW_HOURS,
   WatchWindowState,
 } from '../watchWindow';
 
@@ -125,5 +127,60 @@ describe('every unreadable clock resolves to expired, never to active', () => {
   it('refuses to overwrite a corrupt window file rather than silently restarting the clock', () => {
     fs.writeFileSync(windowPath(dir), '{ corrupt');
     expect(() => openWindow(dir, { now: START, runId: 'r1' })).toThrow(/Refusing to overwrite/);
+  });
+});
+
+/**
+ * Sizing a NEW window from the environment.
+ *
+ * The module already reasoned that the stored `expires_at` is the contract and
+ * the constant "only decides where a NEW window's instant lands". This makes
+ * that constant settable, so reopening a watch for a different span is a
+ * visible value in the crontab line rather than a hand-edited state file.
+ *
+ * The invariant that matters is the one the original comment was protecting:
+ * changing the variable must not lengthen a window that is already running.
+ */
+describe('resolveWindowHours sizes a new window without touching a live one', () => {
+  it('defaults to the 30 hours the constant declares', () => {
+    expect(resolveWindowHours({})).toBe(WATCH_WINDOW_HOURS);
+  });
+
+  it('treats an empty string as unset', () => {
+    expect(resolveWindowHours({ WATCH_WINDOW_HOURS: '' })).toBe(WATCH_WINDOW_HOURS);
+  });
+
+  it('reads the span it was given', () => {
+    expect(resolveWindowHours({ WATCH_WINDOW_HOURS: '72' })).toBe(72);
+  });
+
+  it('rejects a non-numeric span rather than silently falling back to 30', () => {
+    expect(() => resolveWindowHours({ WATCH_WINDOW_HOURS: 'three days' })).toThrow(
+      /WATCH_WINDOW_HOURS/,
+    );
+  });
+
+  it('rejects a zero-length window, which would expire before its first tick', () => {
+    expect(() => resolveWindowHours({ WATCH_WINDOW_HOURS: '0' })).toThrow(/0/);
+  });
+
+  it('rejects a span beyond the ceiling, so a typo cannot arm it for a year', () => {
+    expect(() => resolveWindowHours({ WATCH_WINDOW_HOURS: String(MAX_WINDOW_HOURS + 1) })).toThrow(
+      String(MAX_WINDOW_HOURS),
+    );
+  });
+
+  it('opens a new window at the span it was asked for', () => {
+    const state = openWindow(dir, { now: START, runId: 'r1', hours: 72 });
+    expect(state.expires_at).toBe(new Date(START.getTime() + 72 * H).toISOString());
+  });
+
+  it('does NOT lengthen a window that is already open', () => {
+    openWindow(dir, { now: START, runId: 'r1', hours: 30 });
+
+    const reopened = openWindow(dir, { now: START, runId: 'r1', hours: 72 });
+
+    // The stored instant is the contract. A longer constant must not extend it.
+    expect(reopened.expires_at).toBe(new Date(START.getTime() + 30 * H).toISOString());
   });
 });

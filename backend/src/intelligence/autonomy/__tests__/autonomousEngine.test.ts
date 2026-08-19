@@ -118,6 +118,15 @@ jest.mock('../../../models', () => ({
   TicketActivity: { create: jest.fn() },
 }));
 jest.mock('../../../services/workLedger/workLedgerService', () => ({ emitEvent: jest.fn() }));
+// Agent Ticket Standard (2026-08-18) — createTicket() now also calls
+// enforceReportsToGate(), which queries the REAL AiAgent/AdminUser models
+// directly (not through the '../../../models' barrel mocked above), so it
+// needs its own mock here too or this integration test would hit a real,
+// unreachable database. cory-engine is a real, registered agent (reports to
+// Kes) so every fixture below resolves successfully by default.
+jest.mock('../../../services/ticketCreatorReportsToResolver', () => ({
+  enforceReportsToGate: jest.fn().mockResolvedValue('kes-org-member-id'),
+}));
 
 describe('cory-engine ticket dedup — real createTicket() integration', () => {
   const { Ticket, TicketActivity } = require('../../../models');

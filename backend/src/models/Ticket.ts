@@ -20,7 +20,14 @@ export type TicketActorType = 'human' | 'cory' | 'agent'
   // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
   // autonomous background agents ('agent') so ticket activity attributed to Reese
   // reads as a first-class staff actor.
-  | 'ai_staff';
+  | 'ai_staff'
+  // Agent Ticket Standard — "every ticket must have a home" (2026-08-18). The real
+  // human (an org_members row) a ticket's resolved-from-agent assignee actually is.
+  // Distinct from the existing, already-ambiguous 'human' type (which
+  // resolveActorDisplayName.ts's own header comment documents as meaning EITHER an
+  // AdminUser id (staff creating a ticket via the admin UI) OR an Enrollment id (a
+  // student's own DM message) — never overload that further with a third meaning).
+  | 'org_member';
 
 interface TicketAttributes {
   id?: string;

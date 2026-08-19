@@ -115,24 +115,71 @@ describe('webhook registered — the ping landed', () => {
 
   it('says plainly that it is waiting for a first push, rather than claiming one', async () => {
     await mount();
-    expect(container.textContent).toContain('waiting for your first push');
-    // It must not invent a push that has not happened.
-    expect(container.textContent).not.toContain('last push');
+    expect(container.querySelector('.rt-hook-when')!.textContent)
+      .toBe('webhook registered, waiting for your first push');
   });
 
-  it('stops showing the command and the secret once they are not needed', async () => {
-    await mount();
-    expect(container.textContent).not.toContain('Copy command');
-    expect(container.textContent).not.toContain('s3cr3t');
-  });
-
-  it('offers "Change", not "Hide" — nothing is being hidden', async () => {
+  /**
+   * THE MILLION ABATE CASE.
+   *
+   * Their agent asked them to paste the command; the ping had already landed, so
+   * the panel had collapsed and the command was gone from the page. The only
+   * control was labelled "Change", which is not what a student looks for when
+   * they have been told to find a command.
+   *
+   * A ping means the hook EXISTS. It does not mean the student will never need
+   * the command again — re-running it is the documented fix for a hook pointing
+   * at a stale URL, and the agent asks for it by name.
+   */
+  it('names the command on the collapsed line, so a student told to paste it can find it', async () => {
     await mount();
     const btn = container.querySelector('.rt-hook.settled .rt-btn')!;
-    expect(btn.textContent).toBe('Change');
+    expect(btn.textContent).toBe('Show command');
   });
 
-  it('expands again on Change, and closes with Done', async () => {
+  it('expands to the command itself, not to a panel that has tidied it away', async () => {
+    await mount();
+    await act(async () => {
+      (container.querySelector('.rt-hook.settled .rt-btn') as HTMLButtonElement).click();
+    });
+    expect(container.querySelectorAll('.rt-hook-cmd')).toHaveLength(1);
+    expect(container.querySelector('.rt-hook-cmd')!.textContent).toBe('HOOK_ID=$(gh api ...); fi');
+  });
+
+  it('keeps the do-not-commit warning attached to the command it is about', async () => {
+    await mount();
+    await act(async () => {
+      (container.querySelector('.rt-hook.settled .rt-btn') as HTMLButtonElement).click();
+    });
+    // The command carries a signing secret whenever it is on screen — so the
+    // warning travels with it, not with the first-run state it used to sit in.
+    expect(container.querySelectorAll('.rt-hook-warn')).toHaveLength(1);
+  });
+
+  /**
+   * A ping is GitHub saying "I can reach you", nothing more. Ticking "Pushes
+   * arriving" off the back of one would tell a student their work was flowing
+   * through the loop before any of it had.
+   */
+  it('does not tick "pushes arriving" on the strength of a ping', async () => {
+    await mount();
+    await act(async () => {
+      (container.querySelector('.rt-hook.settled .rt-btn') as HTMLButtonElement).click();
+    });
+    expect(stepState(1)).toBe('done');            // the hook exists
+    expect(stepState(2)).toBe('waiting_github');  // nothing has been pushed
+    expect(container.querySelector('.rt-hook-count')!.textContent).toBe('2 of 3');
+  });
+
+  it('withholds the finished check until pushes actually arrive', async () => {
+    await mount();
+    // The collapsed tick is the page's "this is done" mark. On a ping alone the
+    // student's part is done but the loop is not yet closed, and the summary
+    // must not claim otherwise.
+    expect(container.querySelectorAll('.rt-hook.settled .rt-hook-check.on')).toHaveLength(0);
+  });
+
+  it('closes again with Done', async () => {
     await mount();
     await act(async () => {
       (container.querySelector('.rt-hook.settled .rt-btn') as HTMLButtonElement).click();
@@ -151,8 +198,17 @@ describe('pushes arriving — fully set up', () => {
 
   it('reduces to one quiet line with a TRUE relative timestamp', async () => {
     await mount();
-    const settled = container.querySelector('.rt-hook.settled')!;
-    expect(settled.textContent).toContain('last push 2 minutes ago');
+    expect(container.querySelector('.rt-hook-when')!.textContent).toBe('last push 2 minutes ago');
+  });
+
+  it('earns the finished check, which only a real push can turn on', async () => {
+    await mount();
+    expect(container.querySelectorAll('.rt-hook.settled .rt-hook-check.on')).toHaveLength(1);
+  });
+
+  it('still offers the command — a working hook is not a reason to hide it', async () => {
+    await mount();
+    expect(container.querySelector('.rt-hook.settled .rt-btn')!.textContent).toBe('Show command');
   });
 
   it('marks all three steps done once expanded', async () => {

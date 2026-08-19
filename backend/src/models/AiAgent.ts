@@ -232,6 +232,12 @@ interface AiAgentAttributes {
   system_prompt?: string | null;
   tools_granted?: string[] | null;
   persona_version?: string | null;
+  // Agent Ticket Standard — the real human (org_members.id, org "Colaberry") this
+  // agent is accountable to. Nullable at the DB level (see
+  // db/ensureAiAgentReportsToSchema.ts); ticketService.createTicket() rejects
+  // ticket creation from any non-human creator whose resolved AiAgent row has this
+  // null. See directives/register-ticket-creating-agent.md.
+  reports_to_org_member_id?: string | null;
 }
 
 class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
@@ -263,6 +269,7 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare system_prompt: string | null;
   declare tools_granted: string[] | null;
   declare persona_version: string | null;
+  declare reports_to_org_member_id: string | null;
 }
 
 AiAgent.init(
@@ -390,6 +397,14 @@ AiAgent.init(
       type: DataTypes.STRING(50),
       allowNull: true,
     },
+    reports_to_org_member_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      // No DB-level FK constraint — matches this table's own convention of not
+      // foreign-key-constraining actor-ref/ownership columns (see the header
+      // comment in db/ensureAiAgentReportsToSchema.ts for why).
+      references: { model: 'org_members', key: 'id' },
+    },
   },
   {
     sequelize,
@@ -400,6 +415,7 @@ AiAgent.init(
       { fields: ['enabled'] },
       { fields: ['trigger_type'] },
       { fields: ['agent_group'] },
+      { fields: ['reports_to_org_member_id'] },
     ],
   }
 );

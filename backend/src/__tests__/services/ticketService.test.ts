@@ -4,7 +4,9 @@ import { emitEvent } from '../../services/workLedger/workLedgerService';
 import { scheduleOutcomeMeasurement } from '../../services/outcomes/outcomeMeasurementService';
 import { resolveActorDisplayName, resolveActorDisplayNamesBatch, actorRefKey } from '../../services/actorIdentity/resolveActorDisplayName';
 import { buildTicketAutoCheckResolver } from '../../services/ticketAutoCheckService';
+import { enforceReportsToGate } from '../../services/ticketCreatorReportsToResolver';
 import { createTicket, updateTicketStatus, addAgentOutput, getTicketById, getTicketsForBoard, getTicketStats } from '../../services/ticketService';
+import { TicketCreatorNotReportableError } from '../../services/errors/ticketCreatorErrors';
 
 /** Dynamic import() hooks (cory + outcome-measurement) run in a `.then()` chain that
  * is deliberately NOT awaited by updateTicketStatus (non-blocking by design) — flush
@@ -45,6 +47,15 @@ jest.mock('../../services/actorIdentity/resolveActorDisplayName', () => ({
 jest.mock('../../services/ticketAutoCheckService', () => ({
   buildTicketAutoCheckResolver: jest.fn(),
 }));
+// Agent Ticket Standard — createTicket()'s reports_to gate delegates entirely to
+// enforceReportsToGate() (its own unit tests, including the agent/cory-vs-ai_staff
+// resolution split and the thrown-error cases, live in
+// ticketCreatorReportsToResolver.test.ts). Mocked here so this file tests
+// createTicket()'s WIRING of the gate (stamp assigned_to_* when resolved, bypass
+// for 'human') rather than re-testing the resolver's own DB lookups/error-throwing.
+jest.mock('../../services/ticketCreatorReportsToResolver', () => ({
+  enforceReportsToGate: jest.fn(),
+}));
 
 const ticketFindOne = Ticket.findOne as unknown as jest.Mock;
 const ticketCreate = Ticket.create as unknown as jest.Mock;
@@ -58,6 +69,7 @@ const mockScheduleOutcome = scheduleOutcomeMeasurement as unknown as jest.Mock;
 const mockResolveActorDisplayName = resolveActorDisplayName as unknown as jest.Mock;
 const mockResolveActorDisplayNamesBatch = resolveActorDisplayNamesBatch as unknown as jest.Mock;
 const mockBuildTicketAutoCheckResolver = buildTicketAutoCheckResolver as unknown as jest.Mock;
+const mockEnforceReportsToGate = enforceReportsToGate as unknown as jest.Mock;
 
 const NO_AUTO_CHECK = {
   hasAutoCheck: false,
@@ -74,6 +86,13 @@ beforeEach(() => {
   mockResolveActorDisplayName.mockImplementation(async (_type: string, id: string) => id);
   mockResolveActorDisplayNamesBatch.mockResolvedValue(new Map());
   mockBuildTicketAutoCheckResolver.mockResolvedValue(jest.fn(() => NO_AUTO_CHECK));
+  // Agent Ticket Standard's reports_to gate: sane default so every pre-existing
+  // test (written before this gate existed, e.g. the student_support
+  // reuse/reopen suite below, which creates tickets as created_by_type:'ai_staff')
+  // resolves successfully unless a specific test deliberately overrides this to
+  // exercise the gate's own rejection paths (see the dedicated 'reports_to gate'
+  // describe block).
+  mockEnforceReportsToGate.mockResolvedValue('default-org-member-id');
 });
 
 /** Minimal Sequelize-instance-shaped mock: real getTicketById() calls .toJSON() on
@@ -123,6 +142,99 @@ describe('createTicket', () => {
     expect(ticketCreate).not.toHaveBeenCalled();
     expect(activityCreate).not.toHaveBeenCalled();
     expect(mockEmit).not.toHaveBeenCalled();
+  });
+
+  // Agent Ticket Standard — "every ticket must have a home" (2026-08-18). The
+  // gate's own resolution logic (agent/cory vs ai_staff, the thrown-error cases)
+  // has its own dedicated unit tests in ticketCreatorReportsToResolver.test.ts;
+  // this describe block covers only createTicket()'s WIRING of the gate's result.
+  describe('reports_to gate', () => {
+    it('happy path: a resolved reports_to id is stamped as the real assignee', async () => {
+      mockEnforceReportsToGate.mockResolvedValue('ali-org-member-id');
+      ticketFindOne.mockResolvedValue(null);
+      const createdTicket = { id: 't2', status: 'backlog' };
+      ticketCreate.mockResolvedValue(createdTicket);
+      activityCreate.mockResolvedValue({ id: 'a2' });
+
+      const result = await createTicket({
+        title: 'Agent ticket',
+        created_by_type: 'agent',
+        created_by_id: 'AlumniNetworkArchitect',
+      });
+
+      expect(result).toBe(createdTicket);
+      expect(mockEnforceReportsToGate).toHaveBeenCalledWith('agent', 'AlumniNetworkArchitect');
+      expect(ticketCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ assigned_to_type: 'org_member', assigned_to_id: 'ali-org-member-id' }),
+      );
+    });
+
+    it("a caller's own explicit assigned_to_* (e.g. ensureAgentTicketForRoom()'s ai_staff shape) is preserved, never overridden by the resolved reports_to value", async () => {
+      mockEnforceReportsToGate.mockResolvedValue('taiwo-org-member-id');
+      ticketFindOne.mockResolvedValue(null);
+      ticketCreate.mockResolvedValue({ id: 't3' });
+      activityCreate.mockResolvedValue({ id: 'a3' });
+
+      const result = await createTicket({
+        title: 'Reese room ticket',
+        created_by_type: 'ai_staff',
+        created_by_id: '82c2dfd2-369e-4545-8d2f-22d1ae3451ff',
+        assigned_to_type: 'ai_staff',
+        assigned_to_id: '82c2dfd2-369e-4545-8d2f-22d1ae3451ff',
+      });
+
+      expect(result).toEqual({ id: 't3' });
+      expect(ticketCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ assigned_to_type: 'ai_staff', assigned_to_id: '82c2dfd2-369e-4545-8d2f-22d1ae3451ff' }),
+      );
+    });
+
+    it('failure path: the gate throwing TicketCreatorNotReportableError propagates BEFORE any write', async () => {
+      const { TicketCreatorNotReportableError } = require('../../services/errors/ticketCreatorErrors');
+      mockEnforceReportsToGate.mockRejectedValue(
+        new TicketCreatorNotReportableError({
+          createdByType: 'agent',
+          createdById: 'CoryAgenticEngine',
+          reason: 'unregistered',
+        }),
+      );
+
+      await expect(
+        createTicket({
+          title: 'Should be rejected',
+          created_by_type: 'agent',
+          created_by_id: 'CoryAgenticEngine',
+        }),
+      ).rejects.toMatchObject({
+        error_class: 'TicketCreatorNotReportableError',
+        context: { createdByType: 'agent', createdById: 'CoryAgenticEngine', reason: 'unregistered' },
+      });
+
+      expect(ticketCreate).not.toHaveBeenCalled();
+      expect(activityCreate).not.toHaveBeenCalled();
+      expect(mockEmit).not.toHaveBeenCalled();
+      expect(ticketFindOne).not.toHaveBeenCalled(); // rejected before even the dedup lookup
+    });
+
+    it('boundary: created_by_type "human" — createTicket() still calls the gate (which itself no-ops for human, per its own tests), never rejected', async () => {
+      mockEnforceReportsToGate.mockResolvedValue(null);
+      ticketFindOne.mockResolvedValue(null);
+      ticketCreate.mockResolvedValue({ id: 't4' });
+      activityCreate.mockResolvedValue({ id: 'a4' });
+
+      const result = await createTicket({
+        title: 'Human-filed ticket',
+        created_by_type: 'human',
+        created_by_id: 'any-admin-uuid-or-string',
+      });
+
+      expect(result).toEqual({ id: 't4' });
+      expect(mockEnforceReportsToGate).toHaveBeenCalledWith('human', 'any-admin-uuid-or-string');
+      // null resolution (human bypass) must never itself become an assignee stamp.
+      expect(ticketCreate).toHaveBeenCalledWith(
+        expect.not.objectContaining({ assigned_to_type: 'org_member' }),
+      );
+    });
   });
 });
 

@@ -154,6 +154,37 @@ export async function refreshRepoDocuments(
     log('sbp_doc_refresh_failed', opts.correlationId, 'failure', {
       projectId, error_class: errorClass, message: err?.message,
     });
+
+    /**
+     * A REFUSAL IS EVIDENCE, AND IT MUST BE RECORDED.
+     *
+     * This is the moment the platform learns, from GitHub itself, that it cannot
+     * write to this repo — and until now it threw that away. The connection went
+     * on claiming writability, the next sync queued the same doomed commit, and
+     * the student's side of it was total silence: no documents, no warning, no
+     * reason given. Meanwhile `writeAccessOf` kept answering `null`, so the
+     * read-only warning shipped on 2026-08-17 rendered for nobody.
+     *
+     * Only `NoPushAccess` is recorded. A timeout, a rate limit or a 5xx says
+     * nothing about permissions, and demoting a working build on one of those
+     * would break it to fix a reporting problem.
+     *
+     * Recording is best-effort and swallowed: this function's contract is that
+     * it NEVER throws, and a bookkeeping write must not be the thing that
+     * finally breaks that.
+     */
+    if (errorClass === 'NoPushAccess') {
+      try {
+        const { recordWriteAccess } = await import('./repoConnect/repoConnectService');
+        const changed = await recordWriteAccess(projectId, false);
+        log('sbp_doc_refresh_recorded_pull_only', opts.correlationId, 'partial', { projectId, changed });
+      } catch (recordErr: any) {
+        log('sbp_doc_refresh_record_failed', opts.correlationId, 'failure', {
+          projectId, error_class: recordErr?.name ?? 'Error',
+        });
+      }
+    }
+
     return result('write_failed', { error_class: errorClass });
   }
 }
