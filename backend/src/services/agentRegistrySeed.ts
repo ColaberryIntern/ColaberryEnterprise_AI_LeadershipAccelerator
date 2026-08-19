@@ -2012,6 +2012,22 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     schedule: '5,15,25,35,45,55 * * * *',
     category: 'security_ops',
     description: 'Monitors agent fleet for anomalies: stuck agents (running >15min), error spikes (>5/hr), and execution duration outliers (>3x average). Every 10 minutes.',
+    // Registration-time hardening (2026-08-19) — added retroactively: this was
+    // the one real registered ticket-creating agent found missing
+    // tools_granted entirely during the Agent Ticket Standard hardening pass
+    // (Step 4). Matches its real, current behavior in
+    // agentBehaviorMonitorAgent.ts exactly — the 3 detect_* capabilities are
+    // its 3 anomaly checks, create_security_alerts is its DepartmentEvent
+    // writes, create_tickets is its stuck-agent ticket creation. Never
+    // boilerplate/aspirational (directive Step 4) — verified against the
+    // function body, not assumed.
+    tools_granted: [
+      'detect_stuck_agents',
+      'detect_agent_error_spikes',
+      'detect_agent_duration_anomalies',
+      'create_security_alerts',
+      'create_tickets',
+    ],
   },
   {
     agent_name: 'AdmissionsKnowledgeSyncAgent',
