@@ -41,6 +41,7 @@ import { scopeAgents, agentScopingEnabledFor } from './scopeAgents';
 import { env } from '../../config/env';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
+import { repoWriteAccessForProject } from './repoWriteAccess';
 import { writeDocsToRepo, readRepoManifest } from './repoWriter';
 import { loadBuildProgress } from './buildProgressSnapshot';
 import { materializePlanAsTasks } from './materializeTasks';
@@ -492,6 +493,12 @@ export async function publishBuild(
   // a static page can render verified/points/commit without an API call.
   const snapshot = await loadBuildProgress(projectId, opts.enrollmentId);
 
+  // What GitHub says we may do here, asked before the render rather than
+  // assumed from `opts.repo` being set. STORY-000's doc claims the student's
+  // criteria are seeded into `.colaberry/progress.json`, and that claim is only
+  // true where we hold push — one repo in thirteen on 2026-08-19.
+  const repoWriteAccess = await repoWriteAccessForProject(projectId, correlationId ?? null);
+
   const files = renderDocs(published.plan as BuildPlan, {
     repoUrl: opts.repo.url,
     generatedAt: new Date().toISOString(),
@@ -501,6 +508,7 @@ export async function publishBuild(
     schedule,
     progress: snapshot.progress,
     baselineByStory: snapshot.baselineByStory,
+    repoWriteAccess,
   });
 
   // Read the manifest that is already in the repo, so the content-hash check in

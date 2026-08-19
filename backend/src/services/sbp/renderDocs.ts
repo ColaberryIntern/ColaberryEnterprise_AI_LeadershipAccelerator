@@ -27,6 +27,7 @@ import {
   commandCenterStoryDoc,
   commandCenterStorySeed,
 } from './commandCenterStory';
+import type { RepoWriteAccess } from './repoConnect/connectionAccess';
 
 export interface RenderedFile {
   /** Repo-relative, forward slashes, inside the allowlist. */
@@ -62,6 +63,21 @@ export interface RenderContext {
   baselineByStory?: Record<string, string | null> | null;
   /** Where the student's Command Center is published, when it is. */
   commandCenterUrl?: string | null;
+  /**
+   * What the PLATFORM can do with this student's repo — `writeAccessOf(connection)`.
+   *
+   * Read by STORY-000's doc and by nothing else, because STORY-000's doc is the
+   * only document that makes a claim about what is in the repo: it told every
+   * student their criteria were "already seeded" in `.colaberry/progress.json`,
+   * which is true only where we hold `push` — one repo in thirteen.
+   *
+   * OMITTED MEANS "NOT ESTABLISHED", and the renderer treats that as not-seeded.
+   * That is the safe direction: the not-seeded text is true either way, the
+   * seeded text is false the moment we are wrong, and the cost of being wrong is
+   * an agent that invents criteria no verifier can match. Callers that know the
+   * answer pass it; callers that do not, do not have to.
+   */
+  repoWriteAccess?: RepoWriteAccess | null;
 }
 
 /**
@@ -376,7 +392,12 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       // Ordered plan, so array order cannot reach the bytes. No schedule:
       // renderDocs is pure and has no access to one, and the due dates it would
       // add live on the portal task row anyway. The build brief is the same.
-      content: commandCenterStoryDoc(orderedPlan, null),
+      //
+      // `repoWriteAccess` is what decides whether this doc may claim the
+      // criteria are seeded. Threaded rather than assumed: this same renderer
+      // produces the repo write AND the downloadable bundle, and the bundle goes
+      // to students whose repos the platform cannot touch.
+      content: commandCenterStoryDoc(orderedPlan, null, { writeAccess: ctx.repoWriteAccess ?? null }),
     });
   }
 
