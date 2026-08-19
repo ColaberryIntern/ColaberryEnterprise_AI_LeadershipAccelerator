@@ -60,3 +60,66 @@ export function youtubeId(url: string): string | null {
 export function youtubeThumb(id: string): string {
   return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
 }
+
+// Post and comment bodies are stored and rendered as plain text, so an
+// Eventbrite link in an event announcement — or the inbox on an AI Internship
+// post — arrived as inert characters a student had to select and copy by hand.
+// `linkify` splits a body into typed segments so the renderer can emit real
+// anchors. It stays pure (no JSX) to keep this module dependency-free and
+// unit-testable.
+export type BodySegment =
+  | { kind: 'text'; value: string }
+  | { kind: 'url'; value: string; href: string }
+  | { kind: 'email'; value: string; href: string };
+
+// Leftmost-first alternation: an explicit http(s) URL wins over a bare `www.`
+// host, which wins over an email. Whitespace, angle brackets and parentheses
+// all terminate a match, so "(details at https://evt.br/x)" cannot swallow the
+// closing paren, and every href built below is structurally http(s)/mailto —
+// a `javascript:` payload cannot survive this shape.
+const LINK_RE = /(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+
+// Sentence punctuation trails a link far more often than it belongs to one:
+// "register at https://evt.br/x." must not put the full stop inside the href.
+const TRAILING_PUNCT = /[.,;:!?"'\]}]+$/;
+
+function toLinkSegment(token: string): BodySegment | null {
+  if (/^https?:\/\//i.test(token)) return { kind: 'url', value: token, href: token };
+  if (/^www\./i.test(token)) return { kind: 'url', value: token, href: `https://${token}` };
+  if (token.includes('@')) return { kind: 'email', value: token, href: `mailto:${token}` };
+  return null;
+}
+
+export function linkify(body: string): BodySegment[] {
+  const segments: BodySegment[] = [];
+  if (!body) return segments;
+
+  // Adjacent text runs are merged so a body with no links yields exactly one
+  // segment and the renderer emits a single text node, as it did before.
+  const pushText = (value: string) => {
+    if (!value) return;
+    const prev = segments[segments.length - 1];
+    if (prev && prev.kind === 'text') prev.value += value;
+    else segments.push({ kind: 'text', value });
+  };
+
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  LINK_RE.lastIndex = 0;
+  while ((match = LINK_RE.exec(body)) !== null) {
+    const raw = match[0];
+    const tail = raw.match(TRAILING_PUNCT)?.[0] ?? '';
+    const token = tail ? raw.slice(0, raw.length - tail.length) : raw;
+
+    pushText(body.slice(cursor, match.index));
+    cursor = match.index + raw.length;
+
+    const segment = token ? toLinkSegment(token) : null;
+    if (segment) segments.push(segment);
+    else pushText(token);
+    pushText(tail);
+  }
+  pushText(body.slice(cursor));
+
+  return segments;
+}

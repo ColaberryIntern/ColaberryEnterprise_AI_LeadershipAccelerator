@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Avatar from './Avatar';
 import LevelBadge from './LevelBadge';
+import RichText from './RichText';
 import { timeAgo, isVideoUrl, youtubeId, youtubeThumb } from './communityUtils';
 import {
   fetchComments, createComment, togglePin as apiTogglePin,
@@ -23,7 +24,7 @@ const CommentRow: React.FC<{
     <div className="cm-comment-body">
       <div className="cm-comment-bubble">
         <div className="cm-comment-name">{comment.member.display_name}</div>
-        <div className="cm-comment-text">{comment.body}</div>
+        <div className="cm-comment-text"><RichText text={comment.body} /></div>
       </div>
       <div className="cm-comment-meta">
         <span>{timeAgo(comment.created_at)}</span>
@@ -205,7 +206,7 @@ const PostCard: React.FC<{
         <div className="fc-body"><LockedPostBody minLevel={post.min_level} /></div>
       ) : (
         <>
-          {post.body && <div className="fc-body"><p className="cm-post-body">{post.body}</p></div>}
+          {post.body && <div className="fc-body"><p className="cm-post-body"><RichText text={post.body} /></p></div>}
           <MediaGrid urls={post.media_urls} />
         </>
       )}
