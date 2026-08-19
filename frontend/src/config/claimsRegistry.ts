@@ -187,7 +187,16 @@ export const CLAIMS: readonly Claim[] = [
      * This claim does not use it, and should not be rewritten into it.
      */
     key: 'company.tenure',
-    publicWording: 'Consulting and Training 12+ years',
+    /*
+     * The FIGURE only. "Consulting and Training 12+ years" was measured at 33
+     * characters and wrapped to two lines in a quarter-width column at every
+     * size down to 17px, so it could never sit on one line the way the other
+     * three tiles do. The words move to the tile label, which is how the other
+     * three are already built -- "1,000+ hires" over "tracked hires plus those
+     * we know of". Same claim on screen, read as one sentence, and the figure
+     * can now be set at a size that matches the band.
+     */
+    publicWording: '12+ years',
     verification: 'OWNER_ATTESTED',
     capability: 'live',
     evidenceSource:
