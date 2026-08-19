@@ -190,23 +190,6 @@ function HomeV2(): React.ReactElement {
         </section>
       ) : null}
 
-      {/* 2b ──────────────────────────────────────────────────── accolades ── */}
-      {/*
-        The live site's "built for outcomes" band, governed. Tiles render only
-        while their claim is publishable, so the three currently-unevidenced
-        accolades (careers launched, since-2012, the credential wording) appear
-        the moment someone records the evidence, and stay absent until then.
-      */}
-      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-accolades-title">
-        <div className="cbv2-wrap">
-          <div className="cbv2-section__head">
-            <p className="cbv2-eyebrow">Built for outcomes</p>
-            <h2 id="cbv2-accolades-title">What we can put our name to</h2>
-          </div>
-          <Accolades />
-        </div>
-      </section>
-
       {/* 3 ─────────────────────────────────────────────────── goal chooser ── */}
       <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-goal-title">
         <div className="cbv2-wrap">
@@ -319,6 +302,34 @@ function HomeV2(): React.ReactElement {
               </Link>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/*
+        MOVED BELOW THE GOAL CHOOSER, and onto the sunken surface.
+
+        Two white sections ran back to back here, so "Built for outcomes" and
+        "Start where you are" bled into one another with nothing dividing them.
+        The page alternates surfaces everywhere else; this restores that rhythm
+        and gives the figures a ground of their own.
+      */}
+      {/* 3b ──────────────────────────────────────────────────── accolades ── */}
+      {/*
+        The live site's "built for outcomes" band, governed. Tiles render only
+        while their claim is publishable, so the three currently-unevidenced
+        accolades (careers launched, since-2012, the credential wording) appear
+        the moment someone records the evidence, and stay absent until then.
+      */}
+      <section
+        className="cbv2-rv cbv2-section cbv2-section--sunken"
+        aria-labelledby="cbv2-accolades-title"
+      >
+        <div className="cbv2-wrap">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">Built for outcomes</p>
+            <h2 id="cbv2-accolades-title">What we can put our name to</h2>
+          </div>
+          <Accolades />
         </div>
       </section>
 
