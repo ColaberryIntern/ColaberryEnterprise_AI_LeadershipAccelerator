@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
+import RouteLoading from './components/ui/RouteLoading';
 import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
 import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
@@ -34,55 +35,57 @@ function App() {
     <AuthProvider>
       <ToastProvider>
       <ScrollToTop />
-      <Routes>
-        <Route path="/alumni-ai-champion" element={<AlumniChampionPage />} />
-        <Route path="/utility-ai" element={<UtilityCoopLandingPage />} />
-        <Route path="/utility-iou" element={<UtilityIOULandingPage />} />
-        <Route path="/iou-demo" element={<UtilityIOULandingPage forcePresenter defaultRole="ceo" />} />
-        <Route path="/freight-ai" element={<FreightBrokerageLandingPage />} />
-        <Route path="/aixcelerator" element={<AIXceleratorLandingPage />} />
-        <Route path="/ai-pilot" element={<AIPilotLandingPage />} />
-        <Route path="/ai-pilot/transport" element={<AIPilotVerticalPage variantKey="transport" />} />
-        <Route path="/ai-pilot/construction" element={<AIPilotVerticalPage variantKey="construction" />} />
-        <Route path="/ai-pilot/care" element={<AIPilotVerticalPage variantKey="care" />} />
-        <Route path="/portfolio/share/:token" element={<PublicPortfolioPage />} />
-        <Route path="/try" element={<ManagementPreviewPage />} />
-        {adminRoutes}
-        {portalRoutes}
-        {referralRoutes}
-        {/*
-            CUTOVER, 2026-08-13: V2 IS the public site. It was mounted at /v2 as a
-            preview; it now owns "/".
+      <Suspense fallback={<RouteLoading />}>
+        <Routes>
+          <Route path="/alumni-ai-champion" element={<AlumniChampionPage />} />
+          <Route path="/utility-ai" element={<UtilityCoopLandingPage />} />
+          <Route path="/utility-iou" element={<UtilityIOULandingPage />} />
+          <Route path="/iou-demo" element={<UtilityIOULandingPage forcePresenter defaultRole="ceo" />} />
+          <Route path="/freight-ai" element={<FreightBrokerageLandingPage />} />
+          <Route path="/aixcelerator" element={<AIXceleratorLandingPage />} />
+          <Route path="/ai-pilot" element={<AIPilotLandingPage />} />
+          <Route path="/ai-pilot/transport" element={<AIPilotVerticalPage variantKey="transport" />} />
+          <Route path="/ai-pilot/construction" element={<AIPilotVerticalPage variantKey="construction" />} />
+          <Route path="/ai-pilot/care" element={<AIPilotVerticalPage variantKey="care" />} />
+          <Route path="/portfolio/share/:token" element={<PublicPortfolioPage />} />
+          <Route path="/try" element={<ManagementPreviewPage />} />
+          {adminRoutes}
+          {portalRoutes}
+          {referralRoutes}
+          {/*
+              CUTOVER, 2026-08-13: V2 IS the public site. It was mounted at /v2 as a
+              preview; it now owns "/".
 
-            The old marketing pages are retired in routes/publicRoutes.tsx, where
-            their paths redirect to the nearest V2 equivalent rather than 404 --
-            inbound links and search results still point at them. The functional
-            public routes (enrolment and payment, sponsor dashboard, challenge,
-            leaderboard, pilot and membership pages) are untouched.
+              The old marketing pages are retired in routes/publicRoutes.tsx, where
+              their paths redirect to the nearest V2 equivalent rather than 404 --
+              inbound links and search results still point at them. The functional
+              public routes (enrolment and payment, sponsor dashboard, challenge,
+              leaderboard, pilot and membership pages) are untouched.
 
-            This block must stay ABOVE the PublicLayout block below, so that "/"
-            resolves to V2 rather than to the old home page.
-        */}
-        <Route path="/" element={<PublicLayoutV2 />}>
-          <Route index element={<HomeV2 />} />
-          <Route path="services" element={<ServicesV2 />} />
-          <Route path="services/:slug" element={<ServiceDetailV2 />} />
-          <Route path="platform" element={<PlatformV2 />} />
-          <Route path="proof" element={<ProofV2 />} />
-          <Route path="lab" element={<OpportunityLabV2 />} />
-          {/* NOT "try": /try is the real product workspace
-              (ManagementPreviewPage, declared above). Mounting the V2 explainer
-              there post-cutover would shadow the product itself. */}
-          <Route path="free-workspace" element={<TryV2 />} />
-          <Route path="privacy" element={<PrivacyV2 />} />
-          <Route path="start" element={<SignupV2 />} />
-          <Route path="pricing" element={<PricingV2 />} />
-          <Route path="stories" element={<StoriesV2 />} />
-        </Route>
-        <Route element={<PublicLayout />}>
-          {publicRoutes}
-        </Route>
-      </Routes>
+              This block must stay ABOVE the PublicLayout block below, so that "/"
+              resolves to V2 rather than to the old home page.
+          */}
+          <Route path="/" element={<PublicLayoutV2 />}>
+            <Route index element={<HomeV2 />} />
+            <Route path="services" element={<ServicesV2 />} />
+            <Route path="services/:slug" element={<ServiceDetailV2 />} />
+            <Route path="platform" element={<PlatformV2 />} />
+            <Route path="proof" element={<ProofV2 />} />
+            <Route path="lab" element={<OpportunityLabV2 />} />
+            {/* NOT "try": /try is the real product workspace
+                (ManagementPreviewPage, declared above). Mounting the V2 explainer
+                there post-cutover would shadow the product itself. */}
+            <Route path="free-workspace" element={<TryV2 />} />
+            <Route path="privacy" element={<PrivacyV2 />} />
+            <Route path="start" element={<SignupV2 />} />
+            <Route path="pricing" element={<PricingV2 />} />
+            <Route path="stories" element={<StoriesV2 />} />
+          </Route>
+          <Route element={<PublicLayout />}>
+            {publicRoutes}
+          </Route>
+        </Routes>
+      </Suspense>
       {/* GlobalCoryWidget removed — replaced by ArchitectChat on portal pages */}
       </ToastProvider>
     </AuthProvider>
