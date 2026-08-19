@@ -38,6 +38,48 @@ import path from 'path';
 
 export const WATCH_WINDOW_HOURS = 30;
 
+/**
+ * Ceiling on a NEW window. A week is already a long time for something that
+ * answers students without anybody watching; the cap exists so that a stray
+ * `720` reads as an error rather than arming it until next month.
+ */
+export const MAX_WINDOW_HOURS = 168;
+
+/**
+ * How long a NEW window should run.
+ *
+ * The constant above is the default; this makes it settable so that reopening a
+ * watch for a different span is a visible value in the crontab line rather than
+ * a hand-edited state file.
+ *
+ * This changes only where a new window's `expires_at` LANDS. It cannot touch a
+ * window that is already open: `openWindow` returns an existing file unchanged,
+ * so raising this and restarting does not extend a live watch. That separation
+ * is the whole reason `expires_at` is persisted rather than recomputed.
+ *
+ * Rejects rather than defaults, for the reason every other resolver in this
+ * subsystem does: silently falling back to 30 after a typo produces a window of
+ * a length nobody chose.
+ */
+export function resolveWindowHours(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.WATCH_WINDOW_HOURS;
+  if (raw === undefined || raw === '') return WATCH_WINDOW_HOURS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(
+      `WATCH_WINDOW_HOURS="${raw}" must be a positive number of hours. A zero or negative ` +
+      'window expires before its first tick, which looks identical to a watcher that never ran.',
+    );
+  }
+  if (n > MAX_WINDOW_HOURS) {
+    throw new Error(
+      `WATCH_WINDOW_HOURS="${raw}" exceeds the ${MAX_WINDOW_HOURS}-hour ceiling. A watch longer ` +
+      'than a week is a standing service, and should be built as one rather than opened as a window.',
+    );
+  }
+  return n;
+}
+
 export const WATCH_WINDOW_FILENAME = 'watch-window.json';
 
 export interface WatchWindowState {

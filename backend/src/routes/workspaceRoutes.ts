@@ -277,6 +277,25 @@ router.post('/api/portal/workspace/repo/sync', requireParticipant, async (req, r
     const svc = await import('../services/studentWorkspaceService');
     const view = await svc.syncWorkspaceRepo(req.participant!.sub, projectId);
 
+    // Take any collaborator invitation the student has left waiting, and record
+    // what we can actually do with the repo.
+    //
+    // FIRST, before verification and before the document write, because those
+    // are precisely what a newly accepted invitation unblocks — a student who
+    // added us five minutes ago should get their documents on THIS sync, not the
+    // next one. Adding a collaborator on GitHub only creates an invitation, and
+    // nothing in this platform ever accepted one, so every such grant silently
+    // did nothing until a human intervened.
+    //
+    // Never throws and never fails the sync: `reconcileRepoAccess` classifies
+    // everything internally, so reaching the catch is a defect, not a state.
+    try {
+      const { reconcileRepoAccess } = await import('../services/sbp/repoConnect/repoConnectService');
+      await reconcileRepoAccess(projectId, { correlationId });
+    } catch (accessErr: any) {
+      logError('workspace_repo_access_reconcile_failed', req, accessErr);
+    }
+
     // Ownership was already proven by syncWorkspaceRepo above; reaching here
     // means this project is the caller's. Verification NEVER fails the sync: the
     // repo pull is the thing the student asked for, and a rate-limited or

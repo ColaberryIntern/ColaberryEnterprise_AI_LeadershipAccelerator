@@ -62,11 +62,23 @@ const Conn = GitHubConnection as any;
 const ENR = 'enr-1';
 const PRJ = 'prj-1';
 
+/**
+ * The invitation queue, empty unless a test says otherwise.
+ *
+ * Connect now asks for this before it reads the repo, because "add
+ * ColaberryIntern as a collaborator" creates an INVITATION and grants nothing
+ * until it is accepted. Defaulted here so every existing test keeps describing
+ * only what it cares about, and so the common case — nobody has invited us —
+ * stays one cheap read rather than three failed retries.
+ */
+const noInvitations = { match: /\/user\/repository_invitations$|\/user\/repository_invitations\?/, status: 200, body: [] };
+
 /** A scriptable GitHub. Each key is a URL fragment; the value is the response. */
 function github(routes: Array<{ match: RegExp; status: number; body?: any; headers?: Record<string, string> }>): typeof fetch {
+  const all = [...routes, noInvitations];
   return (async (url: string) => {
     const u = String(url);
-    const route = routes.find((r) => r.match.test(u));
+    const route = all.find((r) => r.match.test(u));
     if (!route) throw new Error(`unscripted GitHub call: ${u}`);
     return {
       ok: route.status >= 200 && route.status < 300,
@@ -612,5 +624,183 @@ describe('connecting a repo the platform cannot push to', () => {
     });
     expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(true);
     expect((await connect.getConnectState(ENR, PRJ)).write_access).toBeNull();
+  });
+});
+
+/**
+ * Taking the access students have already offered.
+ *
+ * Adding a collaborator on GitHub creates an INVITATION and grants nothing until
+ * somebody accepts it. Nothing here ever did, so every student who followed the
+ * instruction gave the platform access it never took — and with no push access
+ * the platform never delivered plan.json, progress.json or manifest.json to
+ * anyone, while STORY-000 told them those files arrive on their own.
+ */
+const invitationFor = (full: string, over: Record<string, unknown> = {}) => ({
+  match: /\/user\/repository_invitations\?/,
+  status: 200,
+  body: [{
+    id: 329491655,
+    permissions: 'write',
+    created_at: '2026-08-18T03:14:47Z',
+    expired: false,
+    repository: { full_name: full, name: full.split('/')[1], owner: { login: full.split('/')[0] } },
+    ...over,
+  }],
+});
+
+/** GitHub answers a successful acceptance with 204 and an empty body. */
+const acceptOk = { match: /\/user\/repository_invitations\/\d+$/, status: 204, body: '' };
+
+/** Every acceptance PATCH this fetch saw, so a test can prove one happened. */
+const acceptCalls = (impl: jest.Mock) => impl.mock.calls.filter(
+  (c) => /\/user\/repository_invitations\/\d+$/.test(String(c[0])) && c[1]?.method === 'PATCH',
+);
+
+describe('startConnect accepts an invitation the student has left waiting', () => {
+  it('actually accepts it, rather than reading past it', async () => {
+    const impl = jest.fn(github([invitationFor('a-student/nightshift'), acceptOk, repoOk()]));
+
+    await connect.startConnect(ENR, PRJ, 'a-student/nightshift', { fetchImpl: impl as any });
+
+    expect(acceptCalls(impl)).toHaveLength(1);
+    expect(String(acceptCalls(impl)[0][0])).toContain('/user/repository_invitations/329491655');
+  });
+
+  it('accepts BEFORE reading the repo, so a private repo stops 404ing', async () => {
+    // An unaccepted invitation on a private repo is the whole difference between
+    // a 404 that tells a student their real repo is imaginary and a clean
+    // connect. Ordering is the fix, not an optimisation.
+    const seen: string[] = [];
+    const inner = github([invitationFor('a-student/nightshift'), acceptOk, repoOk()]);
+    const impl = jest.fn(async (url: any, init: any) => {
+      seen.push(`${init?.method ?? 'GET'} ${String(url).replace(/^https:\/\/api\.github\.com/, '')}`);
+      return (inner as any)(url, init);
+    });
+
+    await connect.startConnect(ENR, PRJ, 'a-student/nightshift', { fetchImpl: impl as any });
+
+    const acceptedAt = seen.findIndex((s) => s.startsWith('PATCH /user/repository_invitations/'));
+    const readRepoAt = seen.findIndex((s) => /^GET \/repos\/[^/]+\/[^/]+$/.test(s));
+    expect(acceptedAt).toBeGreaterThanOrEqual(0);
+    expect(readRepoAt).toBeGreaterThan(acceptedAt);
+  });
+
+  it('leaves the queue alone when nobody has invited us', async () => {
+    const impl = jest.fn(github([repoOk()]));
+
+    await connect.startConnect(ENR, PRJ, 'a-student/nightshift', { fetchImpl: impl as any });
+
+    expect(acceptCalls(impl)).toHaveLength(0);
+    expect(Conn._rows[PRJ].status_json.connect.platform_can_push).toBe(true);
+  });
+
+  it('does not let a failed acceptance fail the connect', async () => {
+    // Housekeeping. The student asked to connect a repo; a GitHub blip on a call
+    // they never made must not be what stops them.
+    const fetchImpl = github([
+      { match: /\/user\/repository_invitations\?/, status: 500, body: 'boom' },
+      repoOk(),
+    ]);
+    const view = await connect.startConnect(ENR, PRJ, 'a-student/nightshift', { fetchImpl });
+    expect(view.state).toBe('awaiting_proof');
+  });
+});
+
+describe('reconcileRepoAccess — the invitation that arrives AFTER connect', () => {
+  const connected = (over: Record<string, unknown> = {}) => Conn._seed(PRJ, {
+    repo_owner: 'a-student',
+    repo_name: 'nightshift',
+    status_json: { provisioned: true, connect: { state: 'connected', method: 'byo', ...over } },
+  });
+
+  /**
+   * THE QUINCY NINYING CASE, and the realistic ordering for everybody.
+   *
+   * The portal asks for the repo first; the instruction to add ColaberryIntern
+   * comes later, from their agent, during Story 000. So the invitation almost
+   * always lands AFTER connect, and a connect-time-only acceptance would miss
+   * nearly all of them. Quincy's sat unaccepted until a human noticed.
+   */
+  it('accepts it on a later sync and records the push it gained', async () => {
+    connected({ platform_can_push: false });
+    const fetchImpl = github([invitationFor('a-student/nightshift'), acceptOk, repoOk()]);
+
+    const out = await connect.reconcileRepoAccess(PRJ, { fetchImpl });
+
+    expect(out.invitation).toBe('accepted');
+    expect(out.write_access).toBe('push');
+    expect(out.changed).toBe(true);
+    expect(Conn._rows[PRJ].status_json.connect.platform_can_push).toBe(true);
+  });
+
+  /**
+   * The 26 live rows. `platform_can_push` was written at exactly one moment and
+   * never revisited, so `writeAccessOf` answers null for every one of them —
+   * which is why the read-only warning shipped on 2026-08-17 has never rendered
+   * for a single student.
+   */
+  it('fills in a permission that was never recorded, so the warning can finally render', async () => {
+    connected();   // no platform_can_push at all, like every live row
+    expect(connect.writeAccessOf(Conn._rows[PRJ])).toBeNull();
+
+    const out = await connect.reconcileRepoAccess(PRJ, {
+      fetchImpl: github([repoPullOnly()]),
+    });
+
+    expect(out.write_access).toBe('pull_only');
+    expect(connect.writeAccessOf(Conn._rows[PRJ])).toBe('pull_only');
+  });
+
+  it('notices access that has been revoked', async () => {
+    connected({ platform_can_push: true });
+
+    await connect.reconcileRepoAccess(PRJ, { fetchImpl: github([repoPullOnly()]) });
+
+    expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(false);
+  });
+
+  it('records NOTHING when GitHub cannot be read — ignorance is not a refusal', async () => {
+    // Demoting a live build because a request timed out would break a working
+    // repo to fix a reporting problem.
+    connected({ platform_can_push: true });
+
+    const out = await connect.reconcileRepoAccess(PRJ, {
+      fetchImpl: github([{ match: /\/repos\//, status: 500, body: 'boom' }]),
+    });
+
+    expect(out.changed).toBe(false);
+    expect(Conn._rows[PRJ].status_json.connect.platform_can_push).toBe(true);
+  });
+
+  it('reports an expired invitation without consuming it', async () => {
+    connected();
+    const fetchImpl = github([
+      invitationFor('a-student/nightshift', { expired: true }),
+      repoPullOnly(),
+    ]);
+
+    const out = await connect.reconcileRepoAccess(PRJ, { fetchImpl });
+
+    // `acceptOk` is deliberately NOT scripted: a PATCH here would be an
+    // unscripted call and would fail this test loudly. GitHub answers 204 to a
+    // PATCH on an expired invitation while granting nothing and dropping the
+    // record, so accepting one destroys the evidence the student ever invited us.
+    expect(out.invitation).toBe('expired');
+    expect(out.write_access).toBe('pull_only');
+  });
+
+  it('is a no-op for a project with no repo bound yet', async () => {
+    const out = await connect.reconcileRepoAccess(PRJ, { fetchImpl: github([]) });
+    expect(out).toEqual({ invitation: 'none', write_access: null, changed: false });
+  });
+
+  it('is idempotent — a second run with the same answer changes nothing', async () => {
+    connected({ platform_can_push: true });
+
+    const out = await connect.reconcileRepoAccess(PRJ, { fetchImpl: github([repoOk()]) });
+
+    expect(out.write_access).toBe('push');
+    expect(out.changed).toBe(false);
   });
 });
