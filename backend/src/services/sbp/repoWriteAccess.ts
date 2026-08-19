@@ -43,16 +43,20 @@ import { writeAccessOf } from './repoConnect/connectionAccess';
  * lookup that has started failing every run would otherwise present as every
  * student silently losing their seeded-file claim, with nothing to explain it.
  *
- * The model import is dynamic for the same reason `workspaceRepo` does it: these
- * callers are otherwise pure renderers, and a static import would drag the whole
- * Sequelize barrel into their test setup.
+ * The model import is dynamic, and it names ONE MODEL rather than the barrel.
+ * `workspaceRepo` reaches for `../../models`, which pulls every model in the
+ * application into whatever imported it — and this function is called from
+ * `docsBundle`, a download path that had no model dependency at all before.
+ * `../../models/GitHubConnection` is the same pattern `refreshRepoDocuments`
+ * already uses for `Project`, and it keeps the blast radius to the one table
+ * this question is about.
  */
 export async function repoWriteAccessForProject(
   projectId: string,
   correlationId?: string | null,
 ): Promise<RepoWriteAccess | null> {
   try {
-    const { GitHubConnection } = await import('../../models');
+    const { default: GitHubConnection } = await import('../../models/GitHubConnection');
     const conn = await GitHubConnection.findOne({ where: { project_id: projectId } });
     if (!conn) return null;
     return writeAccessOf(conn);
