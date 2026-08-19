@@ -56,7 +56,10 @@
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  /* The diagram now takes the LARGER share. It was 1.1fr/0.9fr, which put the
+     drawing in the narrower column next to a 74px headline and made it look
+     incidental. */
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   gap: 60px;
   align-items: center;
 }
@@ -339,83 +342,93 @@
 /* --------------------------------------------------- the staffed-system diagram */
 
 /*
- * Ali's drawing, animated on entry. It replaces the photograph in the right
- * column.
+ * REBUILT after review. The first version was wrong in two ways worth naming.
  *
- * The SVG arrives from SVGR with inline styles on every node and no classes of
- * its own, so the animation is applied by ELEMENT TYPE from the outside. That is
- * a little blunt, but it survives the drawing being re-exported: nothing here
- * depends on an id or a class the export tool might rename.
+ * It was CAPPED at 460px inside the narrower of the two hero columns, so the
+ * drawing sat in a small box beside a very large headline and read as an
+ * afterthought. And its animation was a ONE-PASS reveal on entry -- for a hero
+ * that is above the fold, that means it finishes before anyone has focused on
+ * it, so in practice the thing never appeared to move at all.
  *
- * Order of the reveal is the page's argument: the system pipeline builds, the
- * connectors run, then the people arrive. One pass, no loop -- a hero that keeps
- * moving competes with the copy beside it forever.
+ * So: no height cap, a wider column, and motion that keeps running. The
+ * connectors flow continuously because the claim is a system that is LIVE, and
+ * the stages and people light in sequence so the eye is walked along the same
+ * path the headline argues -- pipeline, platform, people.
+ *
+ * Every override below carries !important because the export writes its own
+ * `style` attribute onto every node, and an inline style beats a stylesheet.
+ * Notably it draws the connectors at stroke-width .75 and stroke-opacity .3 --
+ * hairlines at a third opacity, which is most of why the drawing looked faint.
  */
 .cbv2-h7dia { width: 100%; }
 .cbv2-h7dia svg {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 460px;
   overflow: visible;
+  filter: drop-shadow(0 18px 46px rgba(0, 0, 0, 0.55));
 }
 
-/* Boxes and labels rise in. */
-.cbv2-h7dia svg rect,
-.cbv2-h7dia svg text,
-.cbv2-h7dia svg circle {
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-/* Connectors draw themselves, then keep a slow flow so the system reads as live
-   rather than as a finished still. */
+/* ---- the connectors carry the flow ---- */
 .cbv2-h7dia svg line,
-.cbv2-h7dia svg path {
-  opacity: 0;
-  transition: opacity 0.6s ease;
+.cbv2-h7dia svg path:not([fill]) {
+  stroke-width: 1.6 !important;
+  stroke-opacity: 0.85 !important;
+  stroke-dasharray: 5 7 !important;
+  animation: cbv2-h7flow 1.25s linear infinite;
+}
+@keyframes cbv2-h7flow { to { stroke-dashoffset: -24; } }
+
+/* ---- the pipeline stages light in sequence ---- */
+.cbv2-h7dia svg rect {
+  animation: cbv2-h7stage 5.5s ease-in-out infinite;
+}
+.cbv2-h7dia svg rect:nth-of-type(1) { animation-delay: 0s; }
+.cbv2-h7dia svg rect:nth-of-type(2) { animation-delay: 0.45s; }
+.cbv2-h7dia svg rect:nth-of-type(3) { animation-delay: 0.9s; }
+.cbv2-h7dia svg rect:nth-of-type(4) { animation-delay: 1.35s; }
+.cbv2-h7dia svg rect:nth-of-type(5) { animation-delay: 1.8s; }
+.cbv2-h7dia svg rect:nth-of-type(n + 6) { animation-delay: 2.25s; }
+@keyframes cbv2-h7stage {
+  0%, 100% { opacity: 0.72; }
+  12% { opacity: 1; }
+  30% { opacity: 0.86; }
 }
 
-.cbv2-h7dia.is-in svg rect,
-.cbv2-h7dia.is-in svg text,
-.cbv2-h7dia.is-in svg circle,
-.cbv2-h7dia.is-in svg line,
-.cbv2-h7dia.is-in svg path { opacity: 1; transform: none; }
-
-/*
- * The stagger. nth-of-type walks the drawing roughly in source order, which for
- * this export runs top-to-bottom -- system row, connectors, platform, people --
- * so a plain incremental delay lands close to the intended order without
- * hard-coding a single element's identity.
- */
-.cbv2-h7dia.is-in svg rect:nth-of-type(1) { transition-delay: 0.05s; }
-.cbv2-h7dia.is-in svg rect:nth-of-type(2) { transition-delay: 0.13s; }
-.cbv2-h7dia.is-in svg rect:nth-of-type(3) { transition-delay: 0.21s; }
-.cbv2-h7dia.is-in svg rect:nth-of-type(4) { transition-delay: 0.29s; }
-.cbv2-h7dia.is-in svg rect:nth-of-type(5) { transition-delay: 0.37s; }
-.cbv2-h7dia.is-in svg rect:nth-of-type(n + 6) { transition-delay: 0.45s; }
-.cbv2-h7dia.is-in svg line { transition-delay: 0.5s; }
-.cbv2-h7dia.is-in svg path { transition-delay: 0.55s; }
-.cbv2-h7dia.is-in svg circle:nth-of-type(n) { transition-delay: 0.7s; }
-.cbv2-h7dia.is-in svg text { transition-delay: 0.62s; }
+/* ---- the people arrive last and keep breathing ---- */
+.cbv2-h7dia svg circle {
+  animation: cbv2-h7node 5.5s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.cbv2-h7dia svg circle:nth-of-type(1) { animation-delay: 2.6s; }
+.cbv2-h7dia svg circle:nth-of-type(2) { animation-delay: 2.8s; }
+.cbv2-h7dia svg circle:nth-of-type(3) { animation-delay: 3.0s; }
+.cbv2-h7dia svg circle:nth-of-type(4) { animation-delay: 3.2s; }
+.cbv2-h7dia svg circle:nth-of-type(5) { animation-delay: 3.4s; }
+.cbv2-h7dia svg circle:nth-of-type(n + 6) { animation-delay: 3.6s; }
+@keyframes cbv2-h7node {
+  0%, 100% { opacity: 0.78; transform: scale(1); }
+  10% { opacity: 1; transform: scale(1.13); }
+  26% { opacity: 0.92; transform: scale(1); }
+}
 
 @media (max-width: 980px) {
-  .cbv2-h7dia svg { max-height: 300px; }
+  .cbv2-h7dia svg { max-height: 320px; }
 }
 
 /*
- * Reduced motion: the component sets `is-in` immediately and never observes, so
- * the drawing is simply present. These rules make sure nothing transitions into
- * place on the way there.
+ * Reduced motion: everything stops at full strength. The drawing is complete and
+ * legible as a still -- the animation adds life, it does not carry information
+ * that would be lost.
  */
 @media (prefers-reduced-motion: reduce) {
-  .cbv2-h7dia svg rect,
-  .cbv2-h7dia svg text,
-  .cbv2-h7dia svg circle,
   .cbv2-h7dia svg line,
-  .cbv2-h7dia svg path {
+  .cbv2-h7dia svg path,
+  .cbv2-h7dia svg rect,
+  .cbv2-h7dia svg circle {
+    animation: none !important;
     opacity: 1;
-    transform: none;
-    transition: none;
+    stroke-dasharray: none !important;
   }
 }
