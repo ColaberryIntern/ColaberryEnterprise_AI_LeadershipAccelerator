@@ -4,7 +4,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleRoster, handleOffice, handleBriefing, handleDailyMeeting, handleMeetings,
   handleListTasks, handleCreateTask, handleUpdateTask, handleMessages, handleReview, handleAnalytics,
-  handleListLiveAgents, handleListLiveAgentActivity,
+  handleListLiveAgents, handleListLiveAgentActivity, handleOrgChart,
 } from '../../controllers/workforceController';
 
 const router = Router();
@@ -26,5 +26,10 @@ router.get('/api/admin/workforce/employee/:slug', requireAdmin, handleOffice);
 // director roster the routes above are keyed to.
 router.get('/api/admin/workforce/live-agents', requireAdmin, handleListLiveAgents);
 router.get('/api/admin/workforce/live-agents/activity', requireAdmin, handleListLiveAgentActivity);
+
+// Org-chart hierarchy build (2026-08-19) — real Human Employees -> AI
+// Leadership -> AI Staff tree, replacing the static AI_ORG roster's "who's in
+// this org" answer with the real one. See services/workforce/orgChartService.ts.
+router.get('/api/admin/workforce/org-chart', requireAdmin, handleOrgChart);
 
 export default router;

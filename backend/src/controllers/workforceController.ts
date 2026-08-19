@@ -9,6 +9,8 @@ import {
   listTasks, createTask, updateTask, listMessages, review, analytics,
 } from '../services/workforce/workforceService';
 import { listLiveAgents, listLiveAgentActivity } from '../services/workforce/liveAgentsService';
+import { getOrgChart } from '../services/workforce/orgChartService';
+import { workforceOrgChartResponseSchema } from '../schemas/workforceOrgChartSchema';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -61,4 +63,49 @@ export async function handleListLiveAgentActivity(req: Request, res: Response, n
     const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
     res.json({ activity: await listLiveAgentActivity(Number.isFinite(limit) ? limit : undefined) });
   } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * Org-chart hierarchy build (2026-08-19) — GET /api/admin/workforce/org-chart.
+ * Real 3-tier tree (Human Employees -> AI Leadership -> AI Staff), no request
+ * body/query to validate. Response shape checked against
+ * workforceOrgChartResponseSchema before sending: fail loud (console.warn,
+ * structured) in dev, log-and-continue in production — same pattern as
+ * capePortalController.ts::handleGetSkillProfile().
+ */
+export async function handleOrgChart(_req: Request, res: Response, _next: NextFunction) {
+  try {
+    const chart = await getOrgChart();
+    if (process.env.NODE_ENV !== 'production') {
+      // Validate the actual WIRE shape (post-JSON-serialization — Dates become
+      // ISO strings), not the raw service object, since that's what the
+      // frontend contract actually promises to consume.
+      const wirePayload = JSON.parse(JSON.stringify(chart));
+      const parsed = workforceOrgChartResponseSchema.safeParse(wirePayload);
+      if (!parsed.success) {
+        console.warn(JSON.stringify({
+          timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+          event: 'workforce_org_chart_contract_violation', outcome: 'partial',
+          context: { issues: parsed.error.issues.map((i) => i.message) },
+        }));
+      }
+    }
+    res.json(chart);
+  } catch (e: any) {
+    // Deliberately does NOT fall through to fail()'s next(err) path for an
+    // unclassified error (real BREAK-phase finding, org-chart hierarchy build,
+    // 2026-08-19): Express's own default error handler renders a full HTML
+    // page WITH the stack trace whenever NODE_ENV isn't 'production', which
+    // is exactly the "leaks the API response into user-facing surfaces" case
+    // CLAUDE.md's Security Enforcement Layer forbids. This route always
+    // returns a clean, generic, non-leaking JSON 500 itself, logging the real
+    // error server-side with a stable error_class.
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'workforce_org_chart_error', outcome: 'failure',
+      error_class: e?.error_class || e?.name || 'Error',
+      context: { message: e?.message },
+    }));
+    res.status(500).json({ error: 'Could not build the org chart.' });
+  }
 }

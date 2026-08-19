@@ -3,11 +3,13 @@ import AiAgent from '../../models/AiAgent';
 import AdminUser from '../../models/AdminUser';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
+import OrgMember from '../../models/OrgMember';
 import { Ticket } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
+import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 
 // Agent Detail — the transparency page Ali asked for: real identity, real
 // system prompt, real tools, live status, real linked ticket activity. Written
@@ -59,9 +61,34 @@ export interface AgentDetailResult {
     undocumented_tools: string[];
     produced_ticket_types: string[];
   };
+  /** This agent's own real reports_to chain (org-chart hierarchy build,
+   * 2026-08-19) — the "Reports to" section on AgentDetailPage. `null` only
+   * when the agent has no `reports_to_type` configured at all (the common
+   * case for the many non-ticket-creating AiAgent rows this endpoint can
+   * still be called on); never fabricated. Reuses
+   * ticketCreatorReportsToResolver.ts's resolveReportsToChainWithTrail() —
+   * the SAME chain-walk ticketService.createTicket() gates on. */
+  reports_to: {
+    trail: string[];
+    resolved_human: { id: string; name: string; email: string } | null;
+  } | null;
 }
 
 const MAX_TICKETS = 50;
+
+/** Real human display name for a resolved org_members.id — Enrollment.full_name
+ * falling back to email, the same pattern orgService.ts::getRoster() and
+ * orgChartService.ts already use for this exact data. */
+async function resolveHumanIdentity(orgMemberId: string): Promise<{ id: string; name: string; email: string } | null> {
+  const member = await OrgMember.findByPk(orgMemberId);
+  if (!member) return null;
+  let name = member.email;
+  if (member.enrollment_id) {
+    const enrollment = await Enrollment.findByPk(member.enrollment_id);
+    if (enrollment?.full_name) name = enrollment.full_name;
+  }
+  return { id: member.id, name, email: member.email };
+}
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetailResult | null> {
   const agent = await AiAgent.findByPk(agentId);
@@ -118,6 +145,15 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     : [];
   const capabilities = deriveAgentCapabilities(agent.tools_granted);
 
+  // reports_to (org-chart hierarchy build, 2026-08-19) — null when this agent
+  // has no reports_to_type configured at all, never a fabricated empty shape.
+  let reportsTo: AgentDetailResult['reports_to'] = null;
+  if (agent.reports_to_type) {
+    const { resolvedHumanId, trail } = await resolveReportsToChainWithTrail(agent);
+    const resolvedHuman = resolvedHumanId ? await resolveHumanIdentity(resolvedHumanId) : null;
+    reportsTo = { trail, resolved_human: resolvedHuman };
+  }
+
   return {
     agent: {
       id: agent.id,
@@ -156,5 +192,6 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       undocumented_tools: capabilities.undocumentedTools,
       produced_ticket_types: producedTicketTypeRows.map((t: any) => t.type),
     },
+    reports_to: reportsTo,
   };
 }

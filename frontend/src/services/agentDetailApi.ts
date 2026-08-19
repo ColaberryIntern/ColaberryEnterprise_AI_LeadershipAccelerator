@@ -33,6 +33,15 @@ export interface AgentDetailCapabilities {
   produced_ticket_types: string[];
 }
 
+/** This agent's own real reports_to chain (org-chart hierarchy build,
+ * 2026-08-19) — `null` only when the agent has no reports_to_type configured
+ * at all (the common case for many non-ticket-creating agents); never a
+ * fabricated empty shape when it is set. */
+export interface AgentDetailReportsTo {
+  trail: string[];
+  resolved_human: { id: string; name: string; email: string } | null;
+}
+
 export interface AgentDetail {
   agent: {
     id: string;
@@ -50,6 +59,7 @@ export interface AgentDetail {
   live_status: 'online' | 'away' | 'offline' | 'unknown';
   tickets: AgentDetailTicket[];
   capabilities: AgentDetailCapabilities;
+  reports_to: AgentDetailReportsTo | null;
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
