@@ -18,7 +18,13 @@
  * and the reply ceilings are replayed from the log: a thread already dealt with
  * stays dealt with across a restart.
  */
-import { resolveLookbackHours, resolveInboundSince, MAX_LOOKBACK_HOURS } from '../watcherConfig';
+import {
+  resolveLookbackHours,
+  resolveInboundSince,
+  MAX_LOOKBACK_HOURS,
+  newestFirstToChronological,
+  INBOUND_FETCH_LIMIT,
+} from '../watcherConfig';
 
 const WINDOW_START = new Date('2026-08-19T02:00:00.000Z');
 const NOW = new Date('2026-08-19T02:30:00.000Z');
@@ -81,5 +87,56 @@ describe('resolveInboundSince', () => {
     const later = new Date(WINDOW_START.getTime() + 20 * H);
     expect(resolveInboundSince(WINDOW_START, later, 2).toISOString())
       .toBe(WINDOW_START.toISOString());
+  });
+});
+
+/**
+ * Which 500 messages, when there are more than 500.
+ *
+ * `fetchRecentInbound` caps its read at INBOUND_FETCH_LIMIT rows. That cap was
+ * harmless while the floor was the window start and the window had just opened,
+ * because there were never 500 messages to choose between. Widening the floor
+ * made the choice matter, and the original `ORDER BY received_at ASC LIMIT 500`
+ * made it the wrong way round: the mailbox takes ~1900 messages in 48 hours, so
+ * an ascending fetch returned the OLDEST 500 and the watcher could not see
+ * today's mail at all. It would have run every five minutes, reported 500 seen,
+ * and never reached a single new student reply.
+ *
+ * So the fetch takes the NEWEST rows, and this puts them back in the order the
+ * cycle reasons about — oldest first, so a thread reads as a conversation.
+ */
+describe('newestFirstToChronological', () => {
+  const msg = (id: string, receivedAt: string) => ({ providerMessageId: id, receivedAt });
+
+  it('reverses a newest-first page into chronological order', () => {
+    const page = [
+      msg('c', '2026-08-19T03:00:00.000Z'),
+      msg('b', '2026-08-19T02:00:00.000Z'),
+      msg('a', '2026-08-19T01:00:00.000Z'),
+    ];
+
+    expect(newestFirstToChronological(page).map((m) => m.providerMessageId)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps the newest message, which is the one an ascending fetch dropped', () => {
+    const page = [msg('newest', '2026-08-19T03:00:00.000Z'), msg('older', '2026-08-19T01:00:00.000Z')];
+
+    expect(newestFirstToChronological(page).map((m) => m.providerMessageId)).toContain('newest');
+  });
+
+  it('does not mutate the array it was handed', () => {
+    const page = [msg('c', '2026-08-19T03:00:00.000Z'), msg('a', '2026-08-19T01:00:00.000Z')];
+
+    newestFirstToChronological(page);
+
+    expect(page.map((m) => m.providerMessageId)).toEqual(['c', 'a']);
+  });
+
+  it('handles an empty page', () => {
+    expect(newestFirstToChronological([])).toEqual([]);
+  });
+
+  it('caps the fetch at a limit that comfortably exceeds one poll interval of mail', () => {
+    expect(INBOUND_FETCH_LIMIT).toBe(500);
   });
 });

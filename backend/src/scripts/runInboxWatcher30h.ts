@@ -78,7 +78,7 @@ import { runCycle, InboundMessage, WatcherPorts, EscalationInput } from '../serv
 import { openWindow, checkWindow, WATCH_WINDOW_HOURS, resolveWindowHours } from '../services/inbox/watcher/watchWindow';
 import {
   resolveWatcherDryRun, resolvePollIntervalMs, checkHalt, killCommand,
-  resolveLookbackHours, resolveInboundSince,
+  resolveLookbackHours, resolveInboundSince, newestFirstToChronological, INBOUND_FETCH_LIMIT,
 } from '../services/inbox/watcher/watcherConfig';
 import { retireWatcherCron } from '../services/inbox/watcher/watcherRetirement';
 import { systemCronIo } from '../services/inbox/watcher/cronRetirement';
@@ -221,12 +221,16 @@ function buildPorts(stateDir: string, windowStart: Date): WatcherPorts {
   return {
     async fetchRecentInbound(): Promise<InboundMessage[]> {
       const { default: InboxEmail } = await import('../models/InboxEmail');
+      // DESC, not ASC. The limit is a runaway guard, but with a widened floor
+      // it decides WHICH messages are read: ~1900 land in 48 hours, so an
+      // ascending fetch returns the oldest 500 and never reaches today's mail.
+      // Newest off the database, chronological into the cycle.
       const rows = await InboxEmail.findAll({
         where: { provider: PROVIDER, received_at: { [Op.gte]: windowStart } },
-        order: [['received_at', 'ASC']],
-        limit: 500,
+        order: [['received_at', 'DESC']],
+        limit: INBOUND_FETCH_LIMIT,
       });
-      return rows.map(toInbound);
+      return newestFirstToChronological(rows.map(toInbound));
     },
 
     async fetchThreadMessages(threadId, fallback): Promise<InboundMessage[]> {

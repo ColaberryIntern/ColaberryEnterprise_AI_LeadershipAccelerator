@@ -120,6 +120,35 @@ export function resolveInboundSince(windowStart: Date, now: Date, hours: number)
   return floor.getTime() < windowStart.getTime() ? floor : windowStart;
 }
 
+/**
+ * Rows one cycle will read from `inbox_emails`.
+ *
+ * The mailbox takes roughly 1900 messages in 48 hours, the overwhelming
+ * majority of them nothing to do with a student — Basecamp notifications and
+ * the rest. 500 is far more than one five-minute poll can accumulate, so this
+ * is a runaway guard rather than a working limit.
+ */
+export const INBOUND_FETCH_LIMIT = 500;
+
+/**
+ * Put a newest-first page back into the order the cycle reasons about.
+ *
+ * The fetch has to be `ORDER BY received_at DESC LIMIT n` and not `ASC`, and
+ * the difference is not cosmetic. With the floor at the window start of a
+ * freshly-opened window there were never n messages to choose between, so the
+ * direction never mattered. Widening the floor made it decisive: an ascending
+ * fetch returns the OLDEST n of ~1900, which is a watcher that reports 500 seen
+ * every five minutes and never reaches a single message written today.
+ *
+ * The cycle still wants oldest-first, so a thread reads as a conversation and
+ * the guards see a student's reply after the message it answers. Hence: newest
+ * n off the database, chronological into the loop.
+ */
+export function newestFirstToChronological<T>(newestFirst: T[]): T[] {
+  // Copy rather than reverse in place: the caller's array is not ours to flip.
+  return [...newestFirst].reverse();
+}
+
 export function checkHalt(stateDir: string): HaltVerdict {
   const watcherHalt = path.join(stateDir, WATCHER_HALT_FILENAME);
   const campaignHalt = path.join(stateDir, CAMPAIGN_HALT_FILENAME);
