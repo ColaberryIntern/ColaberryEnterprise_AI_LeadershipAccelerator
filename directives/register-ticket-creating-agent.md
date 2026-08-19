@@ -121,6 +121,19 @@ a real `display_name` distinct from generic labels (`"Cory"`, `"Agent"`,
 `"System"`, `"Human"`); `resolveActorDisplayName(actorType, agentName)` returns
 that real name, not a passthrough or a collapse.
 
+**Hardened to a real registration-time gate (Ali, live, 2026-08-19 — "harden
+the agent building process"):** `seedAgentIdentity()`
+(`agentBlueprint/agentIdentitySeed.ts`) now throws BEFORE any row is written
+if `config.displayName` is `isGenericFallbackLabel()`-flagged (empty,
+whitespace-only, or one of the known collapse labels). This is not just
+`validateAgentTicketStandard.ts` reporting the problem after the fact anymore
+- a new agent with a collapsed/generic display name literally cannot
+register. The throw is caught per-entry by `seedTicketCreatorIdentities()`'s
+own try/catch (logged loudly, does not block other agents or crash boot -
+same fail-open-per-entry, fail-loud-per-error posture as every other seed
+failure in this codebase), so one bad registration is visible in the boot
+log immediately rather than surfacing only on a manually-run audit.
+
 ### 3. Evidence-gated resolution per distinct condition-type - **hard ban on any time-based fallback closure**
 
 For every distinct kind of condition the agent opens a ticket for, there must be
@@ -216,6 +229,21 @@ copy-paste from a template.
 you can point to in the agent's own source; nothing is aspirational
 ("will eventually be able to..."); nothing is a leftover from a copy-pasted
 sibling entry.
+
+**Hardened to a real registration-time gate (2026-08-19, same pass as Step 2
+above):** `seedAgentIdentity()` now throws if the agent's already-seeded
+`AiAgent.tools_granted` is missing or an empty array at identity-seed time
+(`seedAgentRegistry()`'s own `AGENT_REGISTRY` findOrCreate loop always runs
+before `seedTicketCreatorIdentities()`/`seedReeseIdentity()`, so the field is
+already populated by the time this check runs, if it was declared at all).
+This hardening pass itself found exactly the gap it exists to catch:
+`AgentBehaviorMonitorAgent` (registered 2026-08-19 alongside the AI
+Leadership/Staff hierarchy) had NO `tools_granted` on its `AGENT_REGISTRY`
+entry at all - fixed in the same change by adding a real, traced array
+(`detect_stuck_agents`, `detect_agent_error_spikes`,
+`detect_agent_duration_anomalies`, `create_security_alerts`,
+`create_tickets`), each verified against a real literal/import in
+`agentBehaviorMonitorAgent.ts`, not invented.
 
 ### 5. Ticket detail tabs show real evidence or an honest N/A/missing state
 

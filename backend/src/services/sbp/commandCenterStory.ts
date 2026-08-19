@@ -36,6 +36,9 @@ import {
   COMMAND_CENTER_ENTRY_PATH,
   COMMAND_CENTER_ENTRY_RULE,
 } from './commandCenterLocation';
+// Type-only, so this module stays pure and pulls in no Sequelize model barrel.
+// `connectionAccess` is itself model-free for the same reason.
+import type { RepoWriteAccess } from './repoConnect/connectionAccess';
 
 const MANIFEST_FILE_PATH = '.colaberry/manifest.json';
 
@@ -1020,6 +1023,158 @@ export function commandCenterStorySeed(): { id: string; release: null; acceptanc
 }
 
 /**
+ * What the platform WOULD have seeded, rendered so a student can paste it.
+ *
+ * ── WHY A DOCUMENT HAS TO CARRY THIS AT ALL ─────────────────────────────────
+ *
+ * `Colaberry Build Bot` holds `push` on exactly one repository in the cohort. On
+ * the other twelve the platform is pull-only, so nothing it renders — not
+ * `plan.json`, not `progress.json`, not this story doc — was ever committed for
+ * it. Those students reach the doc through the download bundle and the portal
+ * instead, and the doc told them their criteria were "already seeded" in a file
+ * that does not exist in their repo.
+ *
+ * The consequence was not a missing file, it was a WRONG one. An agent told not
+ * to retype, that then finds nothing to copy, does not stop — it writes the
+ * criteria out from the prose around it. Across the cohort that produced
+ * paraphrases no verifier can match, `acceptance_criteria` where the schema says
+ * `criteria`, and `criteria: []`. So the instruction did not merely fail to
+ * prevent drift; it was the most reliable cause of it.
+ *
+ * Anything told "do not retype" needs something to copy. This is that thing.
+ *
+ * ── WHY IT IS BUILT AND NOT WRITTEN OUT ─────────────────────────────────────
+ *
+ * Generated from `COMMAND_CENTER_ACCEPTANCE`, the same constant `renderDocs`
+ * seeds the real file from, so the sentences here cannot drift from the
+ * sentences `decideStory` matches against — which is the entire failure this
+ * function exists to stop, and it would be an embarrassing one to reintroduce by
+ * pasting the criteria into a template literal.
+ *
+ * ALL `false`, always. A pre-ticked block is a nudge, and a copyable pre-ticked
+ * block is an instruction: the student's agent would paste five passing claims
+ * for a Command Center that does not exist yet. `false` is the correct starting
+ * state and the file is correct rather than unfinished while it says so.
+ *
+ * Minimal by design — `schema_version`, `stories`, `id`, `criteria` and nothing
+ * else. Every other field `renderProgressFile` writes is optional at the read
+ * boundary, and the shorter the block the likelier it is pasted intact. A test
+ * pushes this exact string through `parseProgressFile` and `decideStory` and
+ * asserts it produces zero unrecognised criteria, so "minimal" can never quietly
+ * become "invalid".
+ *
+ * PURE.
+ */
+export function commandCenterProgressSeedBlock(): string {
+  return JSON.stringify(
+    {
+      schema_version: PROGRESS_SCHEMA_VERSION,
+      stories: [
+        {
+          id: COMMAND_CENTER_STORY_ID,
+          criteria: COMMAND_CENTER_ACCEPTANCE.map((text) => ({ text, passed: false })),
+        },
+      ],
+    },
+    null,
+    2,
+  );
+}
+
+/**
+ * Options for `commandCenterStoryDoc`.
+ *
+ * One field, and it is the difference between a true document and a false one.
+ */
+export interface CommandCenterDocOptions {
+  /**
+   * What the PLATFORM can do with this student's repo, as GitHub reported it —
+   * `writeAccessOf(connection)` from `repoConnect/connectionAccess`.
+   *
+   * `'push'`      we seed `.colaberry/progress.json`, so "already seeded" is TRUE.
+   * `'pull_only'` we cannot write to this repo at all. Nothing is seeded.
+   * `null`        nobody ever asked GitHub. We do not know, so we may not claim.
+   *
+   * Omitted behaves as `null`. That default is deliberate and is the safe
+   * direction: the not-seeded text is true whether or not the file happens to be
+   * there ("if it is already in your repo, flip the booleans; if it is not, here
+   * it is"), whereas the seeded text is false the moment we are wrong. Only a
+   * caller that has positively established `push` may claim the file exists.
+   *
+   * Typed against `writeAccessOf`'s return rather than a boolean so that PR
+   * #1618's `writeBlockReason` — which turns `null` from "assume writable" into
+   * a refusal — changes nothing here: this function already refuses to make the
+   * claim on an unrecorded permission.
+   */
+  writeAccess?: RepoWriteAccess | null;
+}
+
+/**
+ * The "opening this file cold" section, told truthfully for THIS student.
+ *
+ * The two branches differ in what they claim about the repo, never in what they
+ * ask of the agent: tick only what genuinely passes, use the platform's exact
+ * wording, do not paraphrase. The pull-only branch just has to hand over the
+ * wording instead of pointing at it.
+ */
+function coldOpenSection(writeAccess: RepoWriteAccess | null): string[] {
+  if (writeAccess === 'push') {
+    return [
+      'Everything you need is here. The full build brief is below, and your',
+      'acceptance criteria are **already seeded** in `.colaberry/progress.json` under',
+      `\`${COMMAND_CENTER_STORY_ID}\` with \`"passed": false\` — the platform has push access to`,
+      'this repo and writes that file on every sync.',
+      '',
+      '**Do not retype the criteria.** Find the story by its `id`, flip `passed` to `true`',
+      'on each line that is genuinely true, and leave the rest `false`. Retyping is how the',
+      'text drifts — a rewritten dash or a changed full stop makes a claim the platform',
+      'cannot match, and the story stays unverified with your work already done. Step 3',
+      'below has the exact procedure.',
+    ];
+  }
+
+  // Everything that is not a confirmed `push`. The lead sentence names which of
+  // the two it is, because "we cannot" and "we never checked" are different
+  // facts and a student is entitled to the accurate one.
+  const lead = writeAccess === 'pull_only'
+    ? [
+      'Everything you need is here, including the criteria themselves — which matters,',
+      'because **the platform cannot write to this repo.** It has read access only, which is',
+      `a perfectly good choice; it just means nothing seeded \`${PROGRESS_FILE_PATH}\` for you.`,
+    ]
+    : [
+      'Everything you need is here, including the criteria themselves. **The platform has not',
+      'confirmed it can write to this repo**, so do not assume anything put',
+      `\`${PROGRESS_FILE_PATH}\` there for you — check, and if it is missing, create it.`,
+    ];
+
+  return [
+    ...lead,
+    '',
+    `**Do not retype the criteria — copy them.** If \`${PROGRESS_FILE_PATH}\` is already in`,
+    `your repo with a \`${COMMAND_CENTER_STORY_ID}\` entry, leave its \`text\` values exactly as`,
+    'they are and flip `passed` to `true` only on the lines that are genuinely true. Otherwise',
+    'use the block below **verbatim**: it is generated from the same constant the platform',
+    'grades against, so a character-for-character copy matches and anything you reword does not.',
+    '',
+    `If the file exists but has no \`${COMMAND_CENTER_STORY_ID}\` entry, paste only the object`,
+    'from the `stories` array into the `stories` array already there. **Do not overwrite a',
+    'progress file that has your other stories in it.**',
+    '',
+    '```json',
+    commandCenterProgressSeedBlock(),
+    '```',
+    '',
+    'Every line starts `false`, which is correct rather than unfinished. Flip one to `true`',
+    'only when it is genuinely true in this repo today. Step 3 below has the exact procedure.',
+    '',
+    '**A paraphrase is not a claim.** The platform matches your `text` against the plan\'s',
+    'wording and ignores anything that does not match, so a criterion you rewrote in your own',
+    'words counts for nothing however true it is — and until now it did that silently.',
+  ];
+}
+
+/**
  * `docs/stories/STORY-000.md` — the story doc that was missing from every
  * student repo.
  *
@@ -1040,10 +1195,30 @@ export function commandCenterStorySeed(): { id: string; release: null; acceptanc
  * whole picture on its own. It is the same text the portal shows, from the same
  * function, so the two cannot drift.
  *
- * PURE — same plan and schedule in, byte-identical markdown out, which is what
- * lets repoWriter's content-hash idempotency hold.
+ * ── IT MUST BE TRUE FOR THE STUDENT READING IT ──────────────────────────────
+ *
+ * The cold-open section used to state flatly that the criteria were "already
+ * seeded" in `.colaberry/progress.json`. That was true for one student in
+ * thirteen — the only repo the platform holds `push` on. For the other twelve it
+ * described a file that had never been written, and an agent that is told not to
+ * retype and then finds nothing to copy writes the criteria out itself. It is
+ * the sentence that caused the drift it warned about.
+ *
+ * `opts.writeAccess` is therefore not decoration. Callers pass what GitHub
+ * actually reported; the seeded claim is made only on a confirmed `push` and the
+ * criteria are handed over in full otherwise. See `CommandCenterDocOptions`.
+ *
+ * PURE — same plan, schedule and options in, byte-identical markdown out, which
+ * is what lets repoWriter's content-hash idempotency hold. Note that the output
+ * now varies with `writeAccess`: two students on different access levels get
+ * different bytes, which is the point, and each student's own bytes are stable
+ * for as long as their access is.
  */
-export function commandCenterStoryDoc(plan: BuildPlan, schedule?: Schedule | null): string {
+export function commandCenterStoryDoc(
+  plan: BuildPlan,
+  schedule?: Schedule | null,
+  opts: CommandCenterDocOptions = {},
+): string {
   return [
     `# ${COMMAND_CENTER_STORY_ID} — Build your Command Center`,
     '',
@@ -1062,19 +1237,15 @@ export function commandCenterStoryDoc(plan: BuildPlan, schedule?: Schedule | nul
     '',
     '## If you are Claude Code opening this file cold',
     '',
-    'Everything you need is here. The full build brief is below, and your',
-    'acceptance criteria are **already seeded** in `.colaberry/progress.json` under',
-    `\`${COMMAND_CENTER_STORY_ID}\` with \`"passed": false\`.`,
-    '',
-    '**Do not retype the criteria.** Find the story by its `id`, flip `passed` to `true`',
-    'on each line that is genuinely true, and leave the rest `false`. Retyping is how the',
-    'text drifts — a rewritten dash or a changed full stop makes a claim the platform',
-    'cannot match, and the story stays unverified with your work already done. Step 3',
-    'below has the exact procedure.',
+    ...coldOpenSection(opts.writeAccess ?? null),
     '',
     '**If this repo already has some of the Command Center in it, do not start over.**',
     'Step 2a below takes stock before anything is written and Step 2b repairs in place;',
-    'work that is already right is kept, not replaced. And if the seeded story carries',
+    // "the seeded story" was the old wording, and it asserted the seeding this
+    // change exists to stop asserting. `commandCenterStory.repair.test.ts` reads
+    // the "fewer lines"/"predates" sentence as ONE line, so the rewording stays
+    // on the line above it rather than reflowing the pair apart.
+    `work that is already right is kept, not replaced. And if this story's entry in \`${PROGRESS_FILE_PATH}\` carries`,
     'fewer lines than the acceptance list at the foot of this file, this build predates a',
     `criterion that has since been added — there are ${COMMAND_CENTER_ACCEPTANCE.length} now.`,
     'Copy the missing line in with `"passed": false` and earn it; do not tick it to make',
@@ -1086,10 +1257,17 @@ export function commandCenterStoryDoc(plan: BuildPlan, schedule?: Schedule | nul
     '',
     '## Acceptance — your stop condition',
     '',
-    'These are the exact lines the platform checks. They are already in',
-    '`.colaberry/progress.json` word for word. Tick a box here as it genuinely passes,',
-    'and set the matching `passed` flag in that file — the JSON is what the platform',
-    'reads, this list is for you.',
+    // The old copy asserted these lines were "already in .colaberry/progress.json
+    // word for word", which is the same false claim as the cold open and had the
+    // same effect one section lower. What is actually true of every student is
+    // that THIS list is the graded wording — so that is what it now says, and it
+    // points at the file rather than vouching for its contents.
+    'These are the exact lines the platform checks, character for character. Tick a box',
+    'here as it genuinely passes, and set the matching `passed` flag in',
+    `\`${PROGRESS_FILE_PATH}\` — the JSON is what the platform reads, this list is for you.`,
+    'If a `text` value in that file does not match its line here, the platform ignores it',
+    'and the story cannot verify; make the JSON match this list rather than the other way',
+    'round.',
     '',
     ...COMMAND_CENTER_ACCEPTANCE.map((a) => `- [ ] ${a}`),
     '',

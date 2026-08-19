@@ -127,8 +127,23 @@ describe('a fresh session with no chat history can act on the doc alone', () => 
     expect(doc()).toMatch(/commit/i);
   });
 
-  it('tells the agent the criteria are already seeded, so it flips rather than authors', () => {
-    expect(doc()).toMatch(/already/i);
+  it('gives the agent something to copy rather than telling it a file exists', () => {
+    // THIS TEST USED TO ASSERT THE BUG. It read:
+    //
+    //   it('tells the agent the criteria are already seeded, so it flips rather
+    //      than authors', () => expect(doc()).toMatch(/already/i));
+    //
+    // `render()` passes no `repoWriteAccess`, which is the state twelve of
+    // thirteen student repos are actually in — pull-only, nothing seeded. So the
+    // assertion pinned a sentence that was false for almost the whole cohort,
+    // and the agents that believed it authored criteria no verifier could match.
+    //
+    // What must be true in THIS state is the opposite: no claim about the file,
+    // and the criteria supplied in full. The seeded wording is pinned where it
+    // is true, in commandCenterStory.writeAccess.test.ts.
+    expect(doc()).not.toContain('already seeded');
+    expect(doc()).toContain('```json');
+    for (const a of COMMAND_CENTER_ACCEPTANCE) expect(doc()).toContain(a);
   });
 
   it('lands the checkpoint on the finish, so a cold reader does not stop at nine tabs', () => {

@@ -34,6 +34,7 @@
 import { BuildPlan } from './planContract';
 import { getPublishedPlan } from './planStore';
 import { repoForProject } from './workspaceRepo';
+import { repoWriteAccessForProject } from './repoWriteAccess';
 import { renderDocs } from './renderDocs';
 import { writeDocsToRepo, readRepoManifest, RepoWriteError } from './repoWriter';
 import { loadBuildProgress } from './buildProgressSnapshot';
@@ -114,6 +115,13 @@ export async function refreshRepoDocuments(
       : null;
     const snapshot = await loadBuildProgress(projectId, enrollmentId || null);
 
+    // Asked explicitly rather than inferred from `repoForProject` having
+    // returned a repo. That predicate answers "worth attempting a write", and on
+    // an unrecorded permission it currently answers yes — so inferring `push`
+    // from it would put the "your criteria are already seeded" claim back into
+    // the doc for exactly the students it was wrong for. See repoWriteAccess.ts.
+    const writeAccess = await repoWriteAccessForProject(projectId, opts.correlationId ?? null);
+
     const files = renderDocs(plan, {
       repoUrl: repo.url,
       generatedAt: new Date().toISOString(),
@@ -123,6 +131,7 @@ export async function refreshRepoDocuments(
       schedule,
       progress: snapshot.progress,
       baselineByStory: snapshot.baselineByStory,
+      repoWriteAccess: writeAccess,
     });
 
     const existingManifest = await readRepoManifest(

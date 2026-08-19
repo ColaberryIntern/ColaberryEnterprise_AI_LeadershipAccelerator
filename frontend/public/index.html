@@ -31,6 +31,12 @@
          engines that every page of THIS site was a duplicate of another domain. -->
     <link rel="canonical" href="https://enterprise.colaberry.ai/" />
     <title>Colaberry Enterprise AI Leadership Accelerator</title>
+    <!-- RemixIcon: preconnect + <link> so it downloads in parallel with main.css.
+         It used to be an @import inside colaberry/tokens/fonts.css, which put it
+         behind main.css in the request chain and cost a serial round-trip on
+         first paint. Keep the version here in sync with the brand icon set. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css">
     <script src="https://d3js.org/d3.v7.min.js" defer></script>
     <!--
       Fonts are self-hosted in src/fonts/. They used to load from

@@ -14,6 +14,16 @@ jest.mock('../planStore', () => ({
   getPublishedPlan: (...a: unknown[]) => mockPublished(...a),
   getPlan: (...a: unknown[]) => mockLatest(...a),
 }));
+// The bundle now asks what write access the platform holds on this project's
+// repo, because STORY-000's doc may only claim the criteria were seeded into a
+// repo we can actually write to — and this download IS the delivery channel for
+// the students whose repos we cannot. Mocked here for the same reason
+// `sbpOrchestrator.test.ts` mocks the database: the real lookup reaches Sequelize
+// through a dynamic import, and this suite is a pure-renderer parity check.
+const mockWriteAccess = jest.fn(async () => null);
+jest.mock('../repoWriteAccess', () => ({
+  repoWriteAccessForProject: (...a: unknown[]) => mockWriteAccess(...(a as [])),
+}));
 
 import { buildDocsBundle, renderBundleNotice, BUNDLE_NOTICE_PATH } from '../docsBundle';
 import { renderDocs } from '../renderDocs';

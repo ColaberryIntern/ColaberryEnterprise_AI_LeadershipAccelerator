@@ -140,3 +140,55 @@ describe('AGENT_REGISTRY — tools_granted populated for the 5 ticket-creator ag
     );
   });
 });
+
+// Registration-time hardening (Ali, live, 2026-08-19 — "harden the agent
+// building process"): seedAgentIdentity() now throws if a ticket-creating
+// agent's tools_granted is missing/empty. AgentBehaviorMonitorAgent was
+// found with NO tools_granted at all on its AGENT_REGISTRY entry during this
+// hardening pass — the exact gap this hardening exists to catch. Fixed by
+// adding a real, traced tools_granted array (not boilerplate/aspirational —
+// directive Step 4). Unlike the 5 agents above, this agent has ONE exported
+// function with inline logic, not separate named exports per capability —
+// traceability here means each tool name's real underlying signal (an
+// anomaly_type/event_type literal, or an imported real function actually
+// called) is grep-able in the source, not that the tool name itself is an
+// export.
+describe('AGENT_REGISTRY — AgentBehaviorMonitorAgent tools_granted (added 2026-08-19)', () => {
+  const AGENT_FILE = 'backend/src/services/agents/security/agentBehaviorMonitorAgent.ts';
+
+  it("registry entry carries a non-empty, deduplicated tools_granted array, traceable to real code in agentBehaviorMonitorAgent.ts", async () => {
+    await seedAgentRegistry();
+
+    const call = findCreateCallFor('AgentBehaviorMonitorAgent');
+    expect(call).toBeDefined();
+    const toolsGranted = call![0].defaults.tools_granted;
+    expect(Array.isArray(toolsGranted)).toBe(true);
+    expect(toolsGranted.length).toBeGreaterThan(0);
+    expect(new Set(toolsGranted).size).toBe(toolsGranted.length); // no duplicates
+    expect(toolsGranted).toEqual([
+      'detect_stuck_agents',
+      'detect_agent_error_spikes',
+      'detect_agent_duration_anomalies',
+      'create_security_alerts',
+      'create_tickets',
+    ]);
+  });
+
+  it('every declared tool traces to a real, grep-able signal in the agent\'s own source file — not an invented label', () => {
+    const absolutePath = path.join(REPO_ROOT, AGENT_FILE);
+    expect(fs.existsSync(absolutePath)).toBe(true);
+    const content = fs.readFileSync(absolutePath, 'utf8');
+
+    // detect_stuck_agents -> the real 'stuck' anomaly_type literal
+    expect(content).toContain("anomaly_type: 'stuck'");
+    // detect_agent_error_spikes -> the real 'error_spike' anomaly_type literal
+    expect(content).toContain("anomaly_type: 'error_spike'");
+    // detect_agent_duration_anomalies -> the real 'duration_anomaly' anomaly_type literal
+    expect(content).toContain("anomaly_type: 'duration_anomaly'");
+    // create_security_alerts -> the real DepartmentEvent event_type literal it writes
+    expect(content).toContain("event_type: 'security_alert'");
+    // create_tickets -> the real, imported ticketService function it actually calls
+    expect(content).toContain('createTicket(');
+    expect(content).toContain("from '../../ticketService'");
+  });
+});

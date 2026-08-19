@@ -28,6 +28,7 @@
  */
 import { getPublishedPlan, getPlan } from './planStore';
 import { renderDocs, RenderedFile } from './renderDocs';
+import { repoWriteAccessForProject } from './repoWriteAccess';
 import { createZip } from './zipArchive';
 import { BuildPlan } from './planContract';
 import { RepoConnectError } from './repoConnect/connectErrors';
@@ -125,6 +126,16 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
   const plan = stored.plan as BuildPlan;
   const generatedAt = opts.generatedAt ?? new Date();
 
+  // The write access still matters HERE, even though this path writes nothing.
+  //
+  // This bundle is how a pull-only student receives their documents at all — the
+  // platform cannot commit them, so the zip is the delivery mechanism. Rendering
+  // it with no access answer would hand precisely those students the version of
+  // STORY-000 that tells them their progress file is already seeded, which is
+  // the false sentence the whole fix is about, delivered down the one channel
+  // that reaches the people it is false for.
+  const repoWriteAccess = await repoWriteAccessForProject(projectId, stored.correlation_id ?? null);
+
   // Same renderer, same context shape as a repo write. `repoUrl` is null on
   // purpose: with no repo, prompts must not cite a clone URL that does not
   // exist (FR-031).
@@ -134,6 +145,7 @@ export async function buildDocsBundle(projectId: string, opts: { generatedAt?: D
     planVersion: stored.version,
     planSha256: stored.plan_sha256,
     correlationId: stored.correlation_id ?? undefined,
+    repoWriteAccess,
   });
 
   const notice = { path: BUNDLE_NOTICE_PATH, content: renderBundleNotice(plan.project_name, projectId) };

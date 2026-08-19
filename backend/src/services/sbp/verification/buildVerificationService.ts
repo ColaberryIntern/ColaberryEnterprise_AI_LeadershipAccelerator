@@ -41,6 +41,7 @@ import { getBudgetPerUnitXp } from '../../progression/pointsConfigService';
 import { parseProgressFile, ProgressParseErrorClass } from './progressContract';
 import {
   decideBuild,
+  summariseUnrecognisedCriteria,
   BuildRollup,
   PlanStorySpec,
   StoryVerdict,
@@ -408,6 +409,27 @@ export async function verifyBuildFromRepo(
     window_truncated: inputs.window_truncated,
   };
 
+  /**
+   * THE DRIFT SIGNAL, ON THE LINE SOMEBODY ACTUALLY READS.
+   *
+   * `sbp_verification_completed` is the one event emitted on every run, and it
+   * carried eight fields, none of which was the rejection list. So a build whose
+   * progress file was full of criteria the plan has never heard of logged
+   * identically to a build that was simply early: `verified: 0`, and nothing
+   * else to look at. Across 493 task rows there was not one non-empty
+   * `rejected_claims` in the database, and no log line would have shown one
+   * either.
+   *
+   * Flattened onto the completion event rather than raised as its own alert,
+   * because this is wording drift, not an incident — see
+   * `summariseUnrecognisedCriteria` for the proportionality argument and for why
+   * `asserted` and `unasserted` are counted apart rather than summed.
+   *
+   * `null` when there is no drift, so a clean run logs `drift: null` and stays
+   * one line instead of growing an empty object on every sync.
+   */
+  const drift = summariseUnrecognisedCriteria(decision.verdicts);
+
   log('sbp_verification_completed', opts.correlationId, 'success', {
     projectId,
     duration_ms: Date.now() - startedAt,
@@ -418,6 +440,10 @@ export async function verifyBuildFromRepo(
     xp_awarded: xpAwarded,
     unknown_stories: decision.unknown_stories,
     commits_scanned: inputs.commits_scanned,
+    // The asserted subset, verbatim — this is the field the event was missing.
+    rejected_claims: decision.verdicts.flatMap((v) => v.rejected_claims),
+    // And the whole signal, including the unticked half that produced nothing at all.
+    unrecognised_criteria: drift,
   });
 
   return summary;

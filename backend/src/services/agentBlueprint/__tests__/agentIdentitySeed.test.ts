@@ -85,6 +85,11 @@ function makeFakeAgent(config: Record<string, any> = {}) {
     // itself explicitly override these two fields.
     reports_to_type: 'human',
     reports_to_id: CONFIG.reportsToOrgMemberId,
+    // Registration-time hardening (2026-08-19) — pre-satisfied by default, same
+    // posture as the reports_to fields above, so the new tools_granted gate
+    // doesn't throw incidentally in every other test in this file. Tests
+    // exercising the gate itself explicitly override this field.
+    tools_granted: ['seed_fixture_tool'],
     update: jest.fn().mockResolvedValue(undefined),
   };
 }
@@ -274,6 +279,57 @@ describe('seedAgentIdentity', () => {
       /exactly one of reportsToOrgMemberId or reportsToAgentName/,
     );
     expect(mockAiAgentFindOne).not.toHaveBeenCalled();
+  });
+
+  // Registration-time hardening (Ali, live, 2026-08-19 — "harden the agent
+  // building process"): the Agent Ticket Standard's display-identity (Step 2)
+  // and tools_granted (Step 4) checks are now enforced as real throws at
+  // registration time, not just reported after the fact by
+  // validateAgentTicketStandard.ts.
+  describe('registration-time hardening: display identity + tools_granted', () => {
+    it('throws before any AiAgent lookup if displayName is a known generic/collapsed fallback label', async () => {
+      await expect(
+        seedAgentIdentity({ ...CONFIG, displayName: 'Cory' }),
+      ).rejects.toThrow(/generic\/collapsed fallback label/);
+      expect(mockAiAgentFindOne).not.toHaveBeenCalled();
+    });
+
+    it('throws if displayName is empty/whitespace-only (also a generic-fallback case)', async () => {
+      await expect(seedAgentIdentity({ ...CONFIG, displayName: '   ' })).rejects.toThrow(
+        /generic\/collapsed fallback label/,
+      );
+    });
+
+    it('happy path: a real, distinguishing displayName passes straight through to the AiAgent lookup', async () => {
+      await seedAgentIdentity(CONFIG);
+      expect(mockAiAgentFindOne).toHaveBeenCalledWith({ where: { agent_name: CONFIG.agentName } });
+    });
+
+    it('throws if the AiAgent row has no tools_granted declared (undefined)', async () => {
+      fakeAgent = makeFakeAgent();
+      (fakeAgent as any).tools_granted = undefined;
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(CONFIG)).rejects.toThrow(/tools_granted is missing or empty/);
+      // Fails before any writes — no Enrollment/CommunityMember/AdminUser row touched.
+      expect(mockEnrollmentFindOrCreate).not.toHaveBeenCalled();
+    });
+
+    it('throws if the AiAgent row has an empty tools_granted array', async () => {
+      fakeAgent = makeFakeAgent();
+      (fakeAgent as any).tools_granted = [];
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(CONFIG)).rejects.toThrow(/tools_granted is missing or empty/);
+    });
+
+    it('happy path: a non-empty tools_granted array passes', async () => {
+      fakeAgent = makeFakeAgent();
+      (fakeAgent as any).tools_granted = ['create_tickets', 'query_agent_fleet_stats'];
+      mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+      await expect(seedAgentIdentity(CONFIG)).resolves.toBeDefined();
+    });
   });
 
   it('reports_to_type/reports_to_id (AI Leadership): populates the human target directly on a row where both are currently null, no extra AiAgent lookup', async () => {

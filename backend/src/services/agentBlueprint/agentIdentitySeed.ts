@@ -5,6 +5,7 @@ import CommunityMember, { type CommunityMemberRole } from '../../models/Communit
 import AiAgent from '../../models/AiAgent';
 import Cohort from '../../models/Cohort';
 import { getLegacyCreatorIds } from './legacyCreatorAliases';
+import { isGenericFallbackLabel } from '../../scripts/lib/agentTicketStandardChecks';
 
 // Reese Phase 3 (Agent Blueprint) — the AdminUser/Enrollment/CommunityMember/AiAgent
 // identity-linkage core, extracted from Reese Phase 1's reeseIdentitySeed.ts so the
@@ -137,6 +138,19 @@ export function __resetAgentIdentityCacheForTests(email: string): void {
 }
 
 export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<AgentIdentityIds> {
+  // Agent Ticket Standard, hardened to a real registration-time gate
+  // (Ali, live, 2026-08-19 — "harden the agent building process"). Every
+  // check below throws BEFORE any row is written, and every throw here is
+  // caught per-entry by seedTicketCreatorIdentities()'s own try/catch (see
+  // its own header comment) — one bad agent's registration fails loudly and
+  // visibly in the boot log without blocking every other agent's identity
+  // seed or crashing boot itself, matching this file's existing fail-open-
+  // per-entry, fail-loud-per-error posture. A mis-registered agent that
+  // fails here never gets its reports_to chain set, so it is separately,
+  // independently blocked from creating tickets at all by
+  // enforceReportsToGate() in ticketCreatorReportsToResolver.ts — two
+  // enforcement layers, not one.
+
   // Structural enforcement, not just documentation: exactly one of
   // reportsToOrgMemberId (AI Leadership, direct-to-human) or
   // reportsToAgentName (AI Staff, through another agent) must be provided —
@@ -151,6 +165,20 @@ export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<Ag
     );
   }
 
+  // Agent Ticket Standard Step 2 (display identity) — hardened here, not just
+  // checked after the fact by validateAgentTicketStandard.ts. A generic/
+  // collapsed displayName ('Cory', 'Agent', 'System', ...) is exactly the bug
+  // class PR #1559 fixed for cory-engine/CoryBrain; refusing it at
+  // registration time means it can never ship again, not just get caught on
+  // a manually-run audit later.
+  if (isGenericFallbackLabel(config.displayName)) {
+    throw new Error(
+      `[${config.agentName}] displayName '${config.displayName}' is a generic/collapsed fallback label ` +
+        `(one of: ${['Cory', 'Agent', 'System', 'Human', 'Ai Staff', 'On Demand'].join(', ')}, or empty) — ` +
+        'a real, distinguishing display identity is required (Agent Ticket Standard Step 2).',
+    );
+  }
+
   const aiAgent = await AiAgent.findOne({ where: { agent_name: config.agentName } });
   if (!aiAgent) {
     // Should not happen in normal boot order (the AGENT_REGISTRY entry is expected to
@@ -159,6 +187,23 @@ export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<Ag
     throw new Error(
       `[${config.agentName}] seedAgentIdentity() ran before the '${config.agentName}' AiAgent registry row existed. ` +
       'Call this after the AGENT_REGISTRY findOrCreate loop in seedAgentRegistry().'
+    );
+  }
+
+  // Agent Ticket Standard Step 4 (tools_granted) — hardened here too. By the
+  // time seedAgentIdentity() runs, seedAgentRegistry()'s own AGENT_REGISTRY
+  // findOrCreate loop has already set AiAgent.tools_granted for every entry
+  // that declares it (seedAgentRegistry() calls seedReeseIdentity()/
+  // seedTicketCreatorIdentities() AFTER that loop — see its own function
+  // body). A ticket-creating agent with no declared tools_granted is exactly
+  // the "boilerplate/aspirational capability list" gap Step 4 exists to
+  // catch — refuse registration rather than let it ship silently.
+  const declaredTools = aiAgent.tools_granted;
+  if (!Array.isArray(declaredTools) || declaredTools.length === 0) {
+    throw new Error(
+      `[${config.agentName}] AiAgent.tools_granted is missing or empty — every ticket-creating agent must ` +
+        'declare its real capabilities in AGENT_REGISTRY before seedAgentIdentity() will register it ' +
+        '(Agent Ticket Standard Step 4).',
     );
   }
 

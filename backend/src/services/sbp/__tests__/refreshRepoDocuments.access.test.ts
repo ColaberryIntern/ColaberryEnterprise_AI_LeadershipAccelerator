@@ -34,6 +34,15 @@ jest.mock('../../../models/Project', () => ({
   default: { findByPk: jest.fn(async () => ({ id: 'prj-1', enrollment_id: 'enr-1' })) },
 }));
 
+// The refresh now asks GitHub's reported write access before rendering, so
+// STORY-000's doc can only claim a seeded progress file on a repo we can
+// actually write to. `pull_only` is the honest answer for the repo this suite
+// describes — a refused write is the whole subject of the file.
+jest.mock('../repoWriteAccess', () => ({
+  __esModule: true,
+  repoWriteAccessForProject: jest.fn(async () => 'pull_only'),
+}));
+
 jest.mock('../renderDocs', () => ({
   __esModule: true,
   renderDocs: jest.fn(() => [{ path: 'docs/PLAN.md', content: '# Plan' }]),

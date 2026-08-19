@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { runtimeApi, WeekReview, WrActivity, WrSignalsInput } from '../../pages/portal/runtime/runtimeApi';
+// timeline.css first, deliberately. These styles are scoped under
+// timeline.css's .tl-de ancestor, and with route-level code splitting the
+// two files can land in different chunks -- importing it here pins the
+// cascade order so mini-css-extract-plugin cannot emit a conflicting-order
+// build failure. Webpack dedupes, so this costs nothing at runtime.
+import './timeline.css';
 import './ReflectionReview.css';
 
 /**
