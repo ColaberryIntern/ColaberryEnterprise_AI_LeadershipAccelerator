@@ -1241,8 +1241,11 @@ export function commandCenterStoryDoc(
     '',
     '**If this repo already has some of the Command Center in it, do not start over.**',
     'Step 2a below takes stock before anything is written and Step 2b repairs in place;',
-    'work that is already right is kept, not replaced. And if the story entry in',
-    `\`${PROGRESS_FILE_PATH}\` carries`,
+    // "the seeded story" was the old wording, and it asserted the seeding this
+    // change exists to stop asserting. `commandCenterStory.repair.test.ts` reads
+    // the "fewer lines"/"predates" sentence as ONE line, so the rewording stays
+    // on the line above it rather than reflowing the pair apart.
+    `work that is already right is kept, not replaced. And if this story's entry in \`${PROGRESS_FILE_PATH}\` carries`,
     'fewer lines than the acceptance list at the foot of this file, this build predates a',
     `criterion that has since been added — there are ${COMMAND_CENTER_ACCEPTANCE.length} now.`,
     'Copy the missing line in with `"passed": false` and earn it; do not tick it to make',
