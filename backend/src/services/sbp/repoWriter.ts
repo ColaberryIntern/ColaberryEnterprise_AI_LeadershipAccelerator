@@ -37,7 +37,15 @@ export const BOT_EMAIL = 'build-bot@colaberry.ai';
 export const BOT_COMMIT_PREFIX = 'chore(colaberry):';
 
 export type RepoWriteErrorClass =
-  | 'ConfigError' | 'AllowlistViolation' | 'UpstreamError' | 'UpstreamTimeout' | 'ConflictRetriesExhausted';
+  | 'ConfigError' | 'AllowlistViolation' | 'UpstreamError' | 'UpstreamTimeout' | 'ConflictRetriesExhausted'
+  /**
+   * GitHub refused the write because the platform does not have push on this
+   * repo. Distinct from `UpstreamError` because it is the ONE failure class that
+   * is not transient and not ours: retrying will never fix it, and the caller
+   * must record the loss of access so the student is told, rather than dropping
+   * a silent commit on every sync forever. See connectionAccess.RepoWriteAccess.
+   */
+  | 'NoPushAccess';
 
 export class RepoWriteError extends Error {
   constructor(public readonly error_class: RepoWriteErrorClass, message: string) {
@@ -167,7 +175,33 @@ async function gh(
     if (res.status !== 429 && res.status < 500) break;
     if (attempt < MAX_RETRIES) await new Promise((r) => setTimeout(r, 300 * attempt));
   }
+  if (isPermissionRefusal(lastStatus, lastBody)) {
+    throw new RepoWriteError(
+      'NoPushAccess',
+      `GitHub refused the write to ${path} — the platform does not have push access on this repo.`,
+    );
+  }
   throw new RepoWriteError('UpstreamError', `GitHub ${path} failed (${lastStatus}): ${lastBody.slice(0, 300)}`);
+}
+
+/**
+ * Is this 403 "you may not write here", as opposed to "slow down"?
+ *
+ * GitHub overloads 403 for permission refusals AND for rate limiting, and the
+ * two must not be confused: recording `pull_only` because we were briefly
+ * throttled would demote a perfectly good connection and stop the platform
+ * writing to it. Rate-limit responses are recognised by their own vocabulary and
+ * excluded here; anything else 403 is a genuine refusal.
+ *
+ * 404 is deliberately NOT treated as a refusal even though GitHub returns it for
+ * some write attempts on repos we can only read. It is also what a missing
+ * branch returns — the documented state of a freshly provisioned repo before the
+ * student's first push — and demoting those would break the adopt flow.
+ */
+function isPermissionRefusal(status: number, body: string): boolean {
+  if (status !== 403) return false;
+  if (/rate limit|secondary rate|abuse detection/i.test(body)) return false;
+  return true;
 }
 
 /** Parse the manifest already in the repo, if any. Absent/corrupt ⇒ treat as first write. */

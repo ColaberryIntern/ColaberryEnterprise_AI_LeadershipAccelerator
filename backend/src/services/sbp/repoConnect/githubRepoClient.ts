@@ -78,15 +78,28 @@ function isRateLimited(status: number, headers: Headers | undefined, body: strin
   return /rate limit|secondary rate|abuse detection/i.test(body);
 }
 
-interface RawResult {
+export interface RawResult {
   status: number;
   ok: boolean;
   body: string;
   headers?: Headers;
 }
 
-/** One bounded GET. Retries 429/5xx only — a 4xx is terminal and retrying burns quota. */
-async function get(path: string, token: string, opts: GitHubReadOptions): Promise<RawResult> {
+/**
+ * One bounded request. Retries 429/5xx only — a 4xx is terminal and retrying
+ * burns quota.
+ *
+ * The METHOD is a parameter, which is the one crack in this file's read-only
+ * posture and is deliberately narrow. Accepting a repository invitation is a
+ * PATCH on `/user/repository_invitations/{id}` — an action on the PLATFORM's own
+ * account membership, not a write to anybody's repo — and it has to share this
+ * function's timeout, retry cap and rate-limit handling rather than grow a
+ * second, subtly different copy of them next door. Nothing here may be used to
+ * mutate repository CONTENT; that remains repoWriter's sole job.
+ */
+async function request(
+  method: 'GET' | 'PATCH', path: string, token: string, opts: GitHubReadOptions,
+): Promise<RawResult> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const url = `${apiBase()}${path}`;
   let last: RawResult = { status: 0, ok: false, body: '' };
@@ -98,7 +111,7 @@ async function get(path: string, token: string, opts: GitHubReadOptions): Promis
     let res: Response;
     try {
       res = await fetchImpl(url, {
-        method: 'GET',
+        method,
         signal: controller.signal,
         headers: {
           Accept: 'application/vnd.github+json',
@@ -136,6 +149,26 @@ async function get(path: string, token: string, opts: GitHubReadOptions): Promis
     if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 300 * attempt));
   }
   return last;
+}
+
+/** The read path, which is everything else in this file. */
+const get = (path: string, token: string, opts: GitHubReadOptions): Promise<RawResult> =>
+  request('GET', path, token, opts);
+
+/**
+ * The same bounded, retry-capped request, for the ONE sibling that needs a verb
+ * other than GET. See `request` above for why the exception is drawn here and
+ * nowhere wider. Reads the platform token itself so no caller has to hold it.
+ */
+export function githubApiRequest(
+  method: 'GET' | 'PATCH', path: string, opts: GitHubReadOptions = {},
+): Promise<RawResult> {
+  return request(method, path, requireToken(), opts);
+}
+
+/** Exposed so a sibling can tell "rate limited" from "genuinely forbidden". */
+export function isRateLimitedResult(result: RawResult): boolean {
+  return isRateLimited(result.status, result.headers, result.body);
 }
 
 /** Turn a non-ok result into the class that tells the student the right thing. */
