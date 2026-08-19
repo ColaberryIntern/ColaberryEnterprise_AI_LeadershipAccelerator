@@ -127,12 +127,41 @@
   margin: 30px 0 0;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(3.4rem, 6.6vw, 7.4rem);
-  line-height: 0.88;
-  letter-spacing: -0.045em;
+  /* Eased down from 7.4rem: at that size the trailing "m." of "system." ran
+     into the rail beside it on wide viewports. */
+  font-size: clamp(3rem, 5.4vw, 6.1rem);
+  line-height: 0.92;
+  letter-spacing: -0.04em;
 }
 .cbv2-h8__line { display: flex; align-items: center; position: relative; overflow: visible; }
-.cbv2-h8__word { position: relative; display: inline-block; white-space: nowrap; flex: 0 0 auto; }
+/*
+ * The word is lit BY its own underline.
+ *
+ * Grey while the rail is retracted, bright white for exactly the span the rail
+ * is drawn -- so the headline reads as the thing the machine is currently
+ * doing, rather than as two lines that happen to have colour under them. The
+ * keyframe percentages are the same as cbv2-h8draw and the delays match each
+ * word's rail, so the two can only ever move together.
+ */
+.cbv2-h8__word {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  /* A hair of trailing space so the full stop never touches the rail. */
+  padding-right: 0.06em;
+  color: #3f4658;
+  animation: cbv2-h8lit var(--h8-cycle) linear infinite;
+}
+.cbv2-h8__word--sys { animation-delay: 0.1s; }
+.cbv2-h8__word--ppl { animation-delay: 3.2s; }
+@keyframes cbv2-h8lit {
+  0% { color: #3f4658; }
+  6% { color: var(--h8-ink); }
+  58% { color: var(--h8-ink); }
+  63% { color: #3f4658; }
+  100% { color: #3f4658; }
+}
 .cbv2-h8__word::after {
   content: '';
   position: absolute;
@@ -434,6 +463,7 @@
   .cbv2-h8 *::before,
   .cbv2-h8 *::after { animation: none !important; transition: none !important; }
   .cbv2-h8__word::after { transform: scaleX(1); }
+  .cbv2-h8__word { color: var(--h8-ink); }
   .cbv2-h8spine-hot, .cbv2-h8stamp { opacity: 1; }
   .cbv2-h8person .cbv2-h8halo { opacity: 0.3; r: 44; }
   .cbv2-h8__chip { color: #9aa4b8; border-color: #2a3345; }
