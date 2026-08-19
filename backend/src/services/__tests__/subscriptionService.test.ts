@@ -4,7 +4,7 @@ import {
   grantFreeAccess, revokeFreeAccess, activeCompEnrollmentIds,
 } from '../subscriptionService';
 import { Enrollment, Cohort, Subscription, AccountCredit } from '../../models';
-import { findOrCreateCustomer, createPaymentLink } from '../paysimpleService';
+import { findOrCreateCustomer, createPaymentLink, getCustomerById } from '../paysimpleService';
 import { retireRedundantExplorerAccounts } from '../enrollmentService';
 import { env } from '../../config/env';
 
@@ -15,7 +15,7 @@ jest.mock('../../models', () => ({
   Subscription: { findAll: jest.fn(), findOne: jest.fn(), create: jest.fn() },
   AccountCredit: { findAll: jest.fn(), update: jest.fn() },
 }));
-jest.mock('../paysimpleService', () => ({ findOrCreateCustomer: jest.fn(), createPaymentLink: jest.fn() }));
+jest.mock('../paysimpleService', () => ({ findOrCreateCustomer: jest.fn(), createPaymentLink: jest.fn(), getCustomerById: jest.fn() }));
 jest.mock('../openHouseService', () => ({ isDemoCohortName: (n: string) => /demo|test|sandbox/i.test(n || '') }));
 jest.mock('../enrollmentService', () => ({ retireRedundantExplorerAccounts: jest.fn() }));
 
@@ -368,6 +368,7 @@ describe('subscriptionService', () => {
     it('reuses the customer id already on the enrollment instead of minting another', async () => {
       const update = jest.fn();
       (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X', paysimple_customer_id: '777', update });
+      (getCustomerById as jest.Mock).mockResolvedValue({ Id: 777, Email: 'ada@x.io' }); // verified hers
       (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
       (Subscription.create as jest.Mock).mockResolvedValue({});
 
@@ -383,6 +384,7 @@ describe('subscriptionService', () => {
       const update = jest.fn();
       (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X', update });
       (Subscription.findOne as jest.Mock).mockResolvedValue({ paysimple_customer_id: '888' });
+      (getCustomerById as jest.Mock).mockResolvedValue({ Id: 888, Email: 'ada@x.io' }); // verified hers
       (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
       (Subscription.create as jest.Mock).mockResolvedValue({});
 
@@ -393,6 +395,62 @@ describe('subscriptionService', () => {
       expect((Subscription.create as jest.Mock).mock.calls[0][0].paysimple_customer_id).toBe('888');
       // Mirrored onto the enrollment so the reconciler's candidate scan can find it.
       expect(update).toHaveBeenCalledWith({ paysimple_customer_id: '888' });
+    });
+
+    /*
+     * The contamination case, reproduced. Before the findCustomerByEmail guard landed,
+     * customer 7095991 (Victor Oragwu, a 2016 bootcamp customer) was stored on four
+     * different people's rows. Fixing the upstream lookup does not drain a cache that
+     * is already poisoned, so a stored id must prove it belongs to this enrollment
+     * before it is allowed anywhere near a payment link.
+     */
+    it('refuses a stored enrollment customer id that belongs to somebody else', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Shefat Rahman', email: 'shefatrahman03@gmail.com', company: 'X', paysimple_customer_id: '7095991', update });
+      (getCustomerById as jest.Mock).mockResolvedValue({ Id: 7095991, Email: 'voragwu@gmail.com' }); // a stranger
+      (Subscription.findOne as jest.Mock).mockResolvedValue(null);
+      (findOrCreateCustomer as jest.Mock).mockResolvedValue({ Id: 43540425 });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+
+      const r = await startCheckout('e1', 'monthly', NOW);
+
+      expect(r).toMatchObject({ ok: true });
+      expect(findOrCreateCustomer).toHaveBeenCalled();
+      expect((Subscription.create as jest.Mock).mock.calls[0][0].paysimple_customer_id).toBe('43540425');
+      expect((Subscription.create as jest.Mock).mock.calls[0][0].paysimple_customer_id).not.toBe('7095991');
+    });
+
+    it('refuses a poisoned customer id inherited from a prior subscription row', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ikenna Nzeribe', email: 'nzeribeikenna@gmail.com', company: 'X', update });
+      (Subscription.findOne as jest.Mock).mockResolvedValue({ paysimple_customer_id: '7095991' });
+      (getCustomerById as jest.Mock).mockResolvedValue({ Id: 7095991, Email: 'voragwu@gmail.com' });
+      (findOrCreateCustomer as jest.Mock).mockResolvedValue({ Id: 43540415 });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+
+      await startCheckout('e1', 'monthly', NOW);
+
+      expect((Subscription.create as jest.Mock).mock.calls[0][0].paysimple_customer_id).toBe('43540415');
+      expect(update).toHaveBeenCalledWith({ paysimple_customer_id: '43540415' });
+    });
+
+    // Fail closed: an unverifiable id is not a usable id. A duplicate customer is a
+    // bookkeeping annoyance; billing the wrong human is not.
+    it('mints a fresh customer when the stored id cannot be verified against PaySimple', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X', paysimple_customer_id: '777', update });
+      (getCustomerById as jest.Mock).mockResolvedValue(null); // lookup failed
+      (Subscription.findOne as jest.Mock).mockResolvedValue(null);
+      (findOrCreateCustomer as jest.Mock).mockResolvedValue({ Id: 42 });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+
+      const r = await startCheckout('e1', 'monthly', NOW);
+
+      expect(r).toMatchObject({ ok: true });
+      expect((Subscription.create as jest.Mock).mock.calls[0][0].paysimple_customer_id).toBe('42');
     });
 
     it('mirrors a NEWLY created customer id onto the enrollment', async () => {

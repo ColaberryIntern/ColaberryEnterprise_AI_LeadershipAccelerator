@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { Enrollment, Cohort, Subscription } from '../models';
 import { env } from '../config/env';
-import { findOrCreateCustomer, createPaymentLink } from './paysimpleService';
+import { findOrCreateCustomer, createPaymentLink, getCustomerById } from './paysimpleService';
 import { isDemoCohortName } from './openHouseService';
 import {
   availableCreditRows, getAvailableCreditCents, selectCreditsUpTo, creditApplyTarget,
@@ -260,9 +260,34 @@ export type CheckoutResult =
  * create-every-time: Arinze Ohagwu's four checkout attempts on 2026-08-10 minted four
  * duplicate customers. Checking what WE already stored fixes the repeat-attempt case
  * without depending on a broken upstream filter.
+ *
+ * But a stored id is only a cache, and this cache was poisoned. Before the guard landed,
+ * findCustomerByEmail returned page-1-row-0 of the whole account for every lookup, so
+ * customer 7095991 (Victor Oragwu, a 2016 bootcamp customer) was written onto four
+ * different people's subscription rows and three enrollments. Reading that cache back
+ * unchecked would re-serve a stranger's customer id into a live checkout forever - the
+ * upstream fix alone does not drain contamination that is already stored. So every
+ * cached id is verified against PaySimple and rejected unless the customer record it
+ * points at carries this enrollment's email. Unverifiable id => mint a fresh customer;
+ * billing the wrong person is far worse than creating a duplicate.
  */
+async function ownedByEnrollment(customerId: string, enrollment: Enrollment): Promise<boolean> {
+  const want = (enrollment.email || '').trim().toLowerCase();
+  if (!want) return false;
+  const customer = await getCustomerById(customerId);
+  // A lookup failure is not proof of ownership. Fail closed.
+  if (!customer) return false;
+  return (customer.Email || '').trim().toLowerCase() === want;
+}
+
 async function resolveCheckoutCustomerId(enrollment: Enrollment): Promise<string> {
-  if (enrollment.paysimple_customer_id) return String(enrollment.paysimple_customer_id);
+  if (enrollment.paysimple_customer_id) {
+    const stored = String(enrollment.paysimple_customer_id);
+    if (await ownedByEnrollment(stored, enrollment)) return stored;
+    console.warn(
+      `[Subscription] enrollment ${enrollment.id} carries paysimple_customer_id ${stored} that does not belong to it - ignoring and minting a fresh customer`
+    );
+  }
 
   // Best-effort: a failed lookup just means we mint a fresh customer, never that the
   // student can't check out.
@@ -272,7 +297,13 @@ async function resolveCheckoutCustomerId(enrollment: Enrollment): Promise<string
       order: [['created_at', 'DESC']],
       attributes: ['paysimple_customer_id'],
     });
-    if (prior?.paysimple_customer_id) return String(prior.paysimple_customer_id);
+    if (prior?.paysimple_customer_id) {
+      const priorId = String(prior.paysimple_customer_id);
+      if (await ownedByEnrollment(priorId, enrollment)) return priorId;
+      console.warn(
+        `[Subscription] prior subscription for enrollment ${enrollment.id} carries paysimple_customer_id ${priorId} that does not belong to it - ignoring`
+      );
+    }
   } catch (err: any) {
     console.error('[Subscription] prior customer lookup failed (non-fatal):', err?.message);
   }
