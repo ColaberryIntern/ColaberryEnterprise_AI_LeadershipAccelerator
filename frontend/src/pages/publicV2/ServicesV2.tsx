@@ -2,9 +2,11 @@ import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import Icon from '../../components/publicV2/Icon';
+import HeroServicesV8 from '../../components/publicV2/HeroServicesV8';
 import { Claim } from '../../components/publicV2/Claim';
 import { SERVICE_DETAILS, getServiceBySlug } from '../../config/v2Services';
 import './servicesV2.css';
+import '../../components/publicV2/heroV8.css';
 
 /**
  * ServicesV2 / ServiceDetailV2 — the five productized engagements.
@@ -33,33 +35,7 @@ export function ServicesV2(): React.ReactElement {
         }
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-svc-title">
-        <div className="cbv2-wrap cbv2-pagehero__split"><div>
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Services</p>
-          <h1 id="cbv2-svc-title">What outcome do you need next?</h1>
-          <p className="cbv2-pagehero__lede">
-            Five productized engagements. Pick by the outcome you need, not by what the
-            industry calls it.
-          </p>
-        </div>
-          {/* Was shot-readiness.png, which is ALSO the Platform page's first
-              showroom surface -- the same picture doing two different jobs on
-              two pages. This is the twelve-week path instead: the spine an
-              engagement runs along, with the project, internship and
-              certification lanes beside it. It answers "what outcome do you
-              need next" far better than a readiness gauge does, and it is not
-              used anywhere else. */}
-          <figure className="cbv2-shot-frame">
-            <img
-              className="cbv2-shot"
-              src="/site-v2/shot-services-hero.png"
-              alt="The twelve-week path to AI Systems Architect: four intensives along a spine, with the project, internship and certification lanes running in parallel and progress bars for each."
-              loading="eager"
-              decoding="async"
-            />
-          </figure>
-        </div>
-      </section>
+      <HeroServicesV8 />
 
       <section className="cbv2-section" aria-label="All services">
         <div className="cbv2-wrap cbv2-svc-list">

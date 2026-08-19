@@ -468,3 +468,49 @@
   .cbv2-h8person .cbv2-h8halo { opacity: 0.3; r: 44; }
   .cbv2-h8__chip { color: #9aa4b8; border-color: #2a3345; }
 }
+
+/* ------------------------------------------------ the Services variant ---- */
+
+/*
+ * The Services hero reuses this entire shell -- grid, blooms, rails, chips,
+ * cycle, reduced-motion -- and changes only what it must. Keeping one
+ * implementation is the point: two near-identical heroes would drift apart the
+ * first time either is touched.
+ *
+ * Three differences, each with a reason:
+ */
+
+/* 1. The page is not the front door, so it does not claim the whole viewport. */
+.cbv2-h8--svc { min-height: 0; padding: 104px 0 84px; }
+
+/* 2. Node labels are service names, which are longer than "Ingest". The label
+      sits at 12px on the home page; here it needs to survive "Production
+      pilot" inside a 200px box. */
+.cbv2-h8--svc .cbv2-h8lbl { font-size: 13px; letter-spacing: 0.01em; }
+
+/* 3. The bottom row is outcomes, not people, so the glyph is a tick rather than
+      a figure -- and it lights on the same schedule the person glyph did. */
+.cbv2-h8tickglyph {
+  fill: none;
+  stroke: #48536b;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: cbv2-h8ptick var(--h8-cycle) linear infinite;
+  animation-delay: inherit;
+}
+@keyframes cbv2-h8ptick {
+  0% { stroke: #48536b; }
+  2% { stroke: var(--h8-cyan); }
+  58% { stroke: var(--h8-cyan); }
+  63% { stroke: #48536b; }
+  100% { stroke: #48536b; }
+}
+
+/* Outcome labels are phrases, so they need room the single-word people labels
+   did not. */
+.cbv2-h8lbl--wrap { font-size: 11.5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-h8 .cbv2-h8tickglyph { stroke: var(--h8-cyan); }
+}
