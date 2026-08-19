@@ -117,6 +117,33 @@ async function groupActiveEnrollmentsByEmail(): Promise<Map<string, EnrollmentWi
     if (!byEmail.has(key)) byEmail.set(key, []);
     byEmail.get(key)!.push(row);
   }
+
+  // AI Internship: an internship row is NOT a duplicate of a class row.
+  //
+  // Both detectors below treat "two active rows for one email" as duplication to
+  // be merged, and `findCrossCohortDuplicates` flags any email spanning more than
+  // one cohort. An internship enrollment is by definition in a different cohort
+  // from the student's class, so WITHOUT this filter every single intern is
+  // flagged, and a non-dry sweep withdraws one of their two legitimate
+  // enrollments, moves their points events and unapplied credits, and rewrites
+  // their attendance. That is data loss, not a false positive.
+  //
+  // The rule: an internship row never pairs with a non-internship row. Two
+  // internship rows for one email ARE still a real duplicate and stay detectable.
+  //
+  // Filtering here rather than in each detector keeps the existing shadowed-account
+  // behaviour exactly intact — a stray `explorer` row shadowing a paid `standard`
+  // row is the canonical case this service was built for and must keep working.
+  // A mixed group collapses to its non-internship rows, so a plain
+  // class + internship pair falls below the `rows.length >= 2` threshold and is
+  // never considered, while class + explorer + internship still flags the explorer.
+  for (const [key, rows] of byEmail) {
+    const nonInternship = rows.filter((r: any) => r.enrollment_type !== 'internship');
+    if (nonInternship.length > 0 && nonInternship.length !== rows.length) {
+      byEmail.set(key, nonInternship);
+    }
+  }
+
   return byEmail;
 }
 
