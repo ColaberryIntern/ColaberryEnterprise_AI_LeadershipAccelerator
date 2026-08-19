@@ -82,25 +82,22 @@ describe('HeroV7', () => {
   });
 
   /**
-   * UPDATED: the hero now carries a PHOTOGRAPH, and the distinction is the whole
-   * point of this test.
+   * UPDATED AGAIN: the right column now holds Ali's staffed-system DIAGRAM,
+   * replacing the photograph.
    *
-   * What must never come back here is a product SCREENSHOT: an unlabelled
-   * depiction of a product surface in the most prominent slot on the site is
-   * exactly what the claims registry exists to prevent, and the dashboard that
-   * used to sit here now lives in the free-workspace section behind its gate.
+   * What must never come back is a product SCREENSHOT -- an unlabelled depiction
+   * of a live product surface in the most prominent slot on the site is what the
+   * claims registry exists to prevent, and the dashboard that once sat here
+   * lives in the free-workspace section behind its gate.
    *
-   * A photograph of people working is not a claim about the product, so it needs
-   * no sample label -- and it is decorative, since every claim beside it is
-   * already made in the text, which is why it is aria-hidden with empty alt
-   * rather than described twice.
+   * The diagram needs no sample label: it draws the operating model, not data.
+   * It is aria-hidden because every label in it restates a word already in the
+   * headline and body text beside it.
    */
-  it('carries a decorative photograph and no product screenshot', () => {
+  it('carries the system diagram and no product screenshot', () => {
     const h = html();
-    expect(h).toContain('/site-v2/photos/');
-    expect(h).toContain('alt=""');
+    expect(h).toContain('cbv2-h7dia');
     expect(h).toContain('aria-hidden="true"');
-    // No captured product surface, and therefore nothing needing a sample badge.
     expect(h).not.toContain('/site-v2/shot-');
     expect(h).not.toContain('data-sample');
   });
