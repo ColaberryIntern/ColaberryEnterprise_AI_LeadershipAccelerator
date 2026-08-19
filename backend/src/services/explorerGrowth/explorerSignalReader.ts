@@ -46,6 +46,15 @@ interface RawOccurrence {
  * model import graph and no safety. `sequelize.query` with `replacements` is
  * parameterised; nothing is interpolated.
  */
+/**
+ * Recency window for `recentIntentTier`, in days.
+ *
+ * 14 because §8.2 line 772 states HIGH_INTENT's entry as a tier-3/4 signal
+ * "in 14d". Exported so the state machine asserts against this constant rather
+ * than re-declaring 14 and silently drifting from it.
+ */
+export const RECENT_INTENT_WINDOW_DAYS = 14;
+
 const LEARNER_SOURCES: Record<string, string> = {
   // EPIC 2's own stream.
   student_navigation_events: `
@@ -182,12 +191,23 @@ export async function readLearnerSignals(
   }
 
   // Decay each occurrence, sum per signal, then apply the per-signal cap.
-  const perSignal = new Map<string, { occurrences: number; raw: number }>();
+  //
+  // lastOccurredAt is tracked alongside the sum because the sum destroys it: a
+  // decayed, capped total cannot be inverted back to a date, and every §8
+  // time-window rule needs one. Rows arrive in no guaranteed order, so this
+  // takes the max rather than the last seen.
+  const perSignal = new Map<
+    string,
+    { occurrences: number; raw: number; lastOccurredAt: Date }
+  >();
   for (const o of occurrences) {
     if (!getSignalDefinition(o.signal)) continue; // unmapped row — ignored, not counted at 0
-    const entry = perSignal.get(o.signal) ?? { occurrences: 0, raw: 0 };
+    const occurredAt = new Date(o.occurred_at);
+    const entry =
+      perSignal.get(o.signal) ?? { occurrences: 0, raw: 0, lastOccurredAt: occurredAt };
     entry.occurrences += 1;
-    entry.raw += decayedWeight(o.signal, new Date(o.occurred_at), asOf);
+    entry.raw += decayedWeight(o.signal, occurredAt, asOf);
+    if (occurredAt > entry.lastOccurredAt) entry.lastOccurredAt = occurredAt;
     perSignal.set(o.signal, entry);
   }
 
@@ -201,7 +221,12 @@ export async function readLearnerSignals(
     const def = EXPLORER_SIGNAL_DEFINITIONS[signal];
     const contribution = Math.min(entry.raw, def.cap);
     const band = bands[def.band];
-    band.signals.push({ signal, occurrences: entry.occurrences, contribution });
+    band.signals.push({
+      signal,
+      occurrences: entry.occurrences,
+      contribution,
+      lastOccurredAt: entry.lastOccurredAt,
+    });
     band.total += contribution;
   }
 
@@ -209,13 +234,35 @@ export async function readLearnerSignals(
     band.signals.sort((a, b) => b.contribution - a.contribution);
   }
 
+  // Signals seen within the recency window. §8.2 line 772 gates HIGH_INTENT on a
+  // tier-3/4 signal "in 14d" — the unwindowed tier below would grant the overlay
+  // permanently once earned, since a tier-4 signal from a year ago never expires
+  // out of a lifetime maximum.
+  const recentSignals = [...perSignal.entries()]
+    .filter(
+      ([, e]) =>
+        asOf.getTime() - e.lastOccurredAt.getTime() <=
+        RECENT_INTENT_WINDOW_DAYS * 86_400_000,
+    )
+    .map(([signal]) => signal);
+
+  // Most recent engagement-band occurrence, for the DORMANT clock. Null when the
+  // learner has never engaged — distinguishable from "engaged in 1970".
+  const engagementTimes = bands.engagement.signals.map((s) => s.lastOccurredAt.getTime());
+  const lastEngagementAt =
+    engagementTimes.length > 0 ? new Date(Math.max(...engagementTimes)) : null;
+
   return {
     enrollment_id: enrollmentId,
     lead_id: leadId,
     asOf,
     bands,
-    // Drives the HIGH_INTENT gate: readiness needs a tier-3+ signal, never an
-    // accumulation of tier-1 views.
+    // Lifetime maximum, unwindowed. Kept for callers that want it; NOT the
+    // HIGH_INTENT gate.
     highestIntentTier: highestTier([...perSignal.keys()]),
+    // What §8's HIGH_INTENT actually requires: readiness needs a recent tier-3+
+    // signal, never an accumulation of tier-1 views nor a stale commitment.
+    recentIntentTier: highestTier(recentSignals),
+    lastEngagementAt,
   };
 }
