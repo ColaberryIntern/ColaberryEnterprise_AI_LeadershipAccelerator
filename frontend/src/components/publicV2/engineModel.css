@@ -1,10 +1,12 @@
 /* ============================================================================
    engineModel.css -- the operating model.
 
-   TYPE SIZES RAISED after review: the stage titles and descriptions were 13px
-   and 11px, which is fine for a caption and too small for the thing the section
-   is actually about. Titles are 15px and details 12.5px, and the number chip
-   grew with them so the digit is not cramped.
+   TYPE SIZES RAISED TWICE. They began at 13px/11px, went to 15px/12.5px after
+   the first review, and Ali still could not read the thing -- rightly: the
+   panel is over 1000px wide and caption-sized type inside it just disappears.
+   Titles are now 18px and details 14.5px, the dim body colour was lifted from
+   #a9bfd0 to #c3d4e2, and the chips and gate nodes grew with the type so the
+   digits are not cramped. A diagram nobody reads is decoration.
 
    Two lanes joined by numbered handoff gates. The spine between them is the
    point: the gates are where one engine hands to the other, so they get the
@@ -66,8 +68,8 @@
   flex: 1;
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 12px;
-  color: #9fb6c8;
+  font-size: 13.5px;
+  color: #b6c8d8;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -103,7 +105,8 @@
   margin: 0;
   padding-bottom: 7px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.16);
-  font-size: 16px;
+  font-size: 18px;
+  font-weight: 600;
   color: #fff;
 }
 .cbv2-eg__h--s { border-bottom-color: rgba(95, 182, 218, 0.6); }
@@ -166,19 +169,19 @@
 
 .cbv2-eg__n {
   flex: none;
-  width: 23px;
-  height: 23px;
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   display: grid;
   place-items: center;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12.5px;
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   transition: background 0.3s, color 0.3s;
 }
-.cbv2-eg__t { display: block; font-size: 15px; font-weight: 500; color: #fff; }
-.cbv2-eg__d { display: block; font-size: 12.5px; line-height: 1.45; color: var(--eg-ink-dim); margin-top: 2px; }
+.cbv2-eg__t { display: block; font-size: 18px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
+.cbv2-eg__d { display: block; font-size: 14.5px; line-height: 1.5; color: #c3d4e2; margin-top: 4px; }
 
 .cbv2-eg__st.is-hit { background: rgba(255, 255, 255, 0.09); }
 .cbv2-eg__st--s.is-hit { border-color: rgba(95, 182, 218, 0.5); }
@@ -258,8 +261,8 @@
 .cbv2-eg__seg.is-hit i { transform: scaleX(1); }
 
 .cbv2-eg__outrow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.cbv2-eg__outrow strong { font-size: 18px; font-weight: 500; color: #fff; }
-.cbv2-eg__outrow p { margin: 0; font-size: 13.5px; color: #c7d8e6; flex: 1 1 240px; }
+.cbv2-eg__outrow strong { font-size: 21px; font-weight: 600; color: #fff; }
+.cbv2-eg__outrow p { margin: 0; font-size: 15px; color: #cfdfeb; flex: 1 1 240px; }
 .cbv2-eg__chip {
   font-family: var(--font-mono);
   font-size: 11px;

@@ -389,89 +389,155 @@ function HomeV2(): React.ReactElement {
             </div>
 
             {/*
-              WHAT THE PLAN ACTUALLY LOOKS LIKE, and then the window onto it.
+              THE FOUR BEATS, each with the picture that proves it.
 
-              Both captures are of a REAL build in Colaberry's own public repo,
-              shown in the Command Center's Sample mode -- the page carries its
-              own "sample data" banner, and a SampleBadge sits in each caption
-              regardless, so the labelling survives the image failing to load.
+              Order is deliberate and was set by Ali: the Command Center comes
+              FIRST and on the left, because it is the thing a buyer should see
+              before anything else -- the window onto their own build.
 
-              The Command Center is deliberately described as something the team
-              BUILDS, not something we generate. `commandCenterStory.ts` opens
-              "STORY-000 -- the Command Center every student builds first": the
-              platform injects the story and writes its prompt out of their own
-              plan, and their people build it with Claude Code. Saying we
-              generate it would be false and disprovable by opening the repo.
+              Every capture is of a REAL build in Colaberry's own public repo,
+              shown in the Command Center's Sample mode. Each page carries its own
+              "sample data" banner and a SampleBadge sits in every caption
+              regardless, so the labelling survives an image failing to load.
+
+              The Command Center is described as something the team BUILDS, not
+              something we generate. `commandCenterStory.ts` opens "STORY-000 --
+              the Command Center every student builds first": the platform injects
+              the story and writes its prompt out of their own plan, and their
+              people build it with Claude Code. Claiming we generate it would be
+              false and disprovable by opening the repo.
             */}
-            <div className="cbv2-buildshots">
-              <figure className="cbv2-shot-frame">
-                <img
-                  className="cbv2-shot"
-                  src="/site-v2/shot-build-schedule.png"
-                  alt="A generated build schedule: five releases from Initial Property Analysis through Trust and Monetization, fifteen stories plotted against dates, with markers for today, the end of the build and demo day."
-                  loading="lazy"
-                  decoding="async"
-                />
-                <figcaption className="cbv2-shot-caption">
-                  <SampleBadge />
-                  <span>The schedule, written from the interview. Every bar opens its own detail.</span>
-                </figcaption>
-              </figure>
+            <div className="cbv2-bstack">
 
-              <figure className="cbv2-shot-frame">
-                <img
-                  className="cbv2-shot"
-                  src="/site-v2/shot-command-center.png"
-                  alt="The Command Center overview: nine numbered tabs from Overview through Data model, and a live-status list showing source systems, AI agents, stories shipped, guardrails enforced and outcome measures, each with a checked date."
-                  loading="lazy"
-                  decoding="async"
-                />
-                <figcaption className="cbv2-shot-caption">
-                  <SampleBadge />
-                  <span>
-                    The Command Center: nine sections &mdash; Overview, Outcomes, Users,
-                    Guardrails, Systems, Project, AI agents, Knowledge and Data model. It is
-                    STORY-000, the first thing your team builds, from a brief written out of
-                    your own plan. Nothing turns green until something real reports in.
-                  </span>
-                </figcaption>
-              </figure>
-            </div>
+              <article className="cbv2-brow">
+                <figure className="cbv2-brow__shot">
+                  <img
+                    className="cbv2-shot"
+                    src="/site-v2/shot-command-center.png"
+                    alt="The Command Center overview: nine numbered tabs from Overview through Data model, and a live-status list showing source systems, AI agents, stories shipped, guardrails enforced and outcome measures, each with a checked date."
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption className="cbv2-shot-caption">
+                    <SampleBadge />
+                    <span>Nine sections, one window onto the build.</span>
+                  </figcaption>
+                </figure>
+                <div className="cbv2-brow__say">
+                  <p className="cbv2-eyebrow cbv2-eyebrow--info">One window on the whole build</p>
+                  <h3>Your Command Center is the first thing your team ships</h3>
+                  <p>
+                    Overview, Outcomes, Users, Guardrails, Systems, Project, AI agents,
+                    Knowledge and Data model &mdash; wired to your plan, not a template. It is
+                    STORY-000: we write the brief from your own requirements and your people
+                    build it with Claude Code, which is why they can maintain it afterwards.
+                    Nothing on it turns green until something real reports in.
+                  </p>
+                </div>
+              </article>
 
-            <div className="cbv2-buildrepo">
-              <div>
-                <p className="cbv2-eyebrow cbv2-eyebrow--info">And it lands in your own repo</p>
-                <p className="cbv2-buildrepo__body">
-                  The plan is written into the repository <strong>you</strong> connect &mdash;
-                  requirements, stories and a traceability matrix, committed alongside your
-                  code. We keep a pointer to it and the record of what was finished. We never
-                  write your code, and the evidence lives in the platform, so deleting the repo
-                  never costs anyone their credit.
-                </p>
-              </div>
+              <article className="cbv2-brow cbv2-brow--flip">
+                <figure className="cbv2-brow__shot">
+                  <img
+                    className="cbv2-shot"
+                    src="/site-v2/shot-agents.png"
+                    alt="The agent roster: eight cards including Opportunity Scorer, AI Assessment Generator, Research Agent and Negotiation Agent, each stating what event fires it, what it produces and which skills it uses, with a connected or needs-attention state."
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption className="cbv2-shot-caption">
+                    <SampleBadge />
+                    <span>Every agent, what fires it, and what it owes you.</span>
+                  </figcaption>
+                </figure>
+                <div className="cbv2-brow__say">
+                  <p className="cbv2-eyebrow cbv2-eyebrow--info">The work, split by who does it</p>
+                  <h3>We do not stop at the software. We staff the operation</h3>
+                  <p>
+                    The same interview that produces the plan also inventories the work of
+                    actually running it, and separates what an agent should do from what a
+                    person should. Each agent position becomes a defined role: the event that
+                    fires it, what it produces, the skills it needs, and whether it is
+                    connected or wants attention right now.
+                  </p>
+                </div>
+              </article>
+
+              <article className="cbv2-brow">
+                <figure className="cbv2-brow__shot">
+                  <img
+                    className="cbv2-shot"
+                    src="/site-v2/shot-build-schedule.png"
+                    alt="A generated build schedule: five releases from Initial Property Analysis through Trust and Monetization, fifteen stories plotted against dates, with markers for today, the end of the build and demo day."
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption className="cbv2-shot-caption">
+                    <SampleBadge />
+                    <span>Releases, stories, and the day it is due.</span>
+                  </figcaption>
+                </figure>
+                <div className="cbv2-brow__say">
+                  <p className="cbv2-eyebrow cbv2-eyebrow--info">Project management, built in</p>
+                  <h3>You are never waiting on a status report</h3>
+                  <p>
+                    The schedule is part of the platform, not a spreadsheet somebody keeps
+                    beside it. Releases, stories and due dates come out of the same plan the
+                    build runs on, so progress is something you watch rather than something you
+                    ask for &mdash; and a slipped date is visible the day it slips, not at the
+                    end of the month.
+                  </p>
+                </div>
+              </article>
+
               {/*
-                EXTERNAL evidence, not a product screenshot. This is a real
-                public GitHub repository showing the files the pipeline commits
-                and the `chore(colaberry):` bot commit that put them there. A
-                reader can open it themselves, which is the whole point -- it is
-                the most checkable claim on the page.
+                BUILT, NOT CAPTURED. The obvious screenshot here is the repo panel
+                inside the workspace -- but that panel prints a per-repo webhook
+                SIGNING SECRET, and these repos are public. Shipping a crop of it
+                on a marketing page is a credential leak waiting to happen, and no
+                crop stays safe from a later re-capture that includes it.
 
-                Colaberry's OWN repo, deliberately: a student's personal repo is
-                theirs, and publishing it is not ours to do.
+                So it is drawn in markup instead: the connected repo and the mentor
+                beside it, which is the part that matters anyway.
               */}
-              <figure className="cbv2-buildrepo__shot cbv2-buildrepo__shot--repo">
-                <img
-                  src="/site-v2/shot-repo-evidence.png"
-                  alt="A GitHub repository listing showing REQUIREMENTS.md, STORIES.md, TRACEABILITY.md and a stories folder, each last touched by a commit reading chore(colaberry): sync build plan."
-                  width={943}
-                  height={426}
-                  loading="lazy"
-                  decoding="async"
-                />
-                <figcaption className="cbv2-buildrepo__cap">
-                  A real repository, committed by the pipeline. Open it and check.
-                </figcaption>
-              </figure>
+              <article className="cbv2-brow cbv2-brow--flip">
+                <div className="cbv2-brow__shot cbv2-repocard" aria-hidden="true">
+                  <div className="cbv2-repocard__bar">
+                    <span className="cbv2-repocard__dot" />
+                    <span className="cbv2-repocard__path">Your repo</span>
+                    <span className="cbv2-repocard__ok">Connected</span>
+                  </div>
+                  <div className="cbv2-repocard__body">
+                    <p className="cbv2-repocard__name">ColaberryIntern/AcceleratorTesting</p>
+                    <ul className="cbv2-repocard__checks">
+                      <li><i />Repo connected</li>
+                      <li><i />Webhook registered</li>
+                      <li><i />Pushes arriving</li>
+                    </ul>
+                    <div className="cbv2-repocard__cory">
+                      <span className="cbv2-repocard__avatar">C</span>
+                      <p>
+                        <b>Cory</b>
+                        <span>
+                          I am here to help on this build. Architecture, a decision you want a
+                          second opinion on, or a push that will not go through.
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="cbv2-brow__say">
+                  <p className="cbv2-eyebrow cbv2-eyebrow--info">And it lands in your own repo</p>
+                  <h3>The plan is written into the repository you connect</h3>
+                  <p>
+                    Requirements, stories and a traceability matrix, committed alongside your
+                    code, with an architect alongside the work when someone gets stuck. We
+                    never write your code, and the evidence lives in the platform &mdash; so
+                    deleting the repo never costs anyone their credit.
+                  </p>
+                </div>
+              </article>
+
             </div>
           </div>
         </section>
