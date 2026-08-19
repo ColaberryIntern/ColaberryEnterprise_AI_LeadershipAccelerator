@@ -45,6 +45,15 @@
  * 5. NOTHING HERE CAN BREAK A LOGIN. Every path returns a result object;
  *    nothing throws. A person must reach the portal even if Reese's identity
  *    is unseeded, the DM room fails to open, or the database is unwell.
+ *
+ * 6. AN EMPTY LEDGER DOES NOT MEAN EVERYONE IS NEW. This is the bug that
+ *    reached production on 2026-08-18: "first login" was defined as "no row in
+ *    reese_welcomes", which is true of a genuinely new person AND of every
+ *    existing student on the day the table is created. Six students of 7-62
+ *    days' standing were introduced to a mentor they had already been talking
+ *    to, and 340 more were queued to get the same on their next login.
+ *    REESE_WELCOME_EPOCH is the guard: nobody whose enrollment predates the
+ *    feature is ever greeted, however empty the ledger looks.
  */
 import ReeseWelcome, { type ReeseWelcomeKind } from '../../models/ReeseWelcome';
 import Enrollment from '../../models/Enrollment';
@@ -56,6 +65,7 @@ export type WelcomeOutcome =
   | 'superseded'
   | 'already_sent'
   | 'not_applicable'
+  | 'predates_feature'
   | 'disabled'
   | 'reese_not_seeded'
   | 'is_reese'
@@ -72,6 +82,34 @@ export interface WelcomeResult {
 /** Kill switch. Read per call, so flipping it takes effect without a restart. */
 function enabled(): boolean {
   return String(process.env.REESE_WELCOME_ENABLED ?? 'true').toLowerCase() !== 'false';
+}
+
+/**
+ * Nobody enrolled before this instant is ever greeted.
+ *
+ * Without it, the day this feature reaches a new environment every existing
+ * member looks "new" — the ledger is empty for all of them — and each gets
+ * introduced to a mentor they may have been working with for weeks. That is
+ * not a hypothetical: it happened on production on 2026-08-18 (see the header).
+ *
+ * Default is the production go-live instant, so any environment that deploys
+ * this without setting the variable is still safe rather than still broken.
+ * Set REESE_WELCOME_EPOCH to that environment's own go-live time.
+ */
+function epoch(): Date {
+  const raw = process.env.REESE_WELCOME_EPOCH || '2026-08-18T21:47:00Z';
+  const d = new Date(raw);
+  // An unparseable override must fail CLOSED — greeting nobody is a far
+  // cheaper mistake than greeting an entire existing cohort.
+  return isNaN(d.getTime()) ? new Date('2026-08-18T21:47:00Z') : d;
+}
+
+/** PURE — is this enrollment new enough to be greeted at all? */
+export function isGreetable(createdAt: Date | string | null | undefined, cutoff: Date): boolean {
+  if (!createdAt) return false; // unknown age fails closed
+  const t = new Date(createdAt).getTime();
+  if (isNaN(t)) return false;
+  return t >= cutoff.getTime();
 }
 
 /** PURE — first name from a full name, or '' when unknown. */
@@ -224,9 +262,16 @@ export async function maybeSendWelcomes(enrollmentId: string): Promise<WelcomeRe
     if (reeseEnrollmentId === enrollmentId) return [{ kind: 'account', outcome: 'is_reese' }];
 
     const enrollment: any = await Enrollment.findByPk(enrollmentId, {
-      attributes: ['full_name', 'tier', 'cohort_id'],
+      attributes: ['full_name', 'tier', 'cohort_id', 'created_at'],
     });
     if (!enrollment) return [{ kind: 'account', outcome: 'enrollment_not_found' }];
+
+    // Predates the feature: they are not new, the ledger is. Return before any
+    // write — this path must stay silent AND leave no rows, so an operator can
+    // still tell a backfilled account from one that was genuinely evaluated.
+    if (!isGreetable(enrollment.created_at, epoch())) {
+      return [{ kind: 'account', outcome: 'predates_feature' }];
+    }
 
     const firstName = firstNameOf(enrollment.full_name);
 

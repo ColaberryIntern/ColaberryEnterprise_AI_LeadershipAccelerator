@@ -28,6 +28,7 @@ import { getReeseEnrollmentId } from '../reeseIdentitySeed';
 import { initiateDm } from '../reeseInitiateDmService';
 import {
   maybeSendWelcomes,
+  isGreetable,
   accountWelcomeMessage,
   studentWelcomeMessage,
   isRealClassCohort,
@@ -44,6 +45,12 @@ const mockInitiate = initiateDm as unknown as jest.Mock;
 const PERSON = '11111111-1111-4111-8111-111111111111';
 const REESE = '99999999-9999-4999-8999-999999999999';
 const ORIGINAL_FLAG = process.env.REESE_WELCOME_ENABLED;
+const ORIGINAL_EPOCH = process.env.REESE_WELCOME_EPOCH;
+// Every test runs against a fixed epoch, so "new" and "pre-existing" are
+// explicit rather than dependent on when the suite happens to run.
+const EPOCH = '2026-08-18T21:47:00Z';
+const NEW = new Date('2026-08-19T00:00:00Z');   // enrolled after go-live
+const OLD = new Date('2026-07-07T00:00:00Z');   // an existing student
 
 const claimRow = () => ({ update: jest.fn().mockResolvedValue(undefined) });
 const outcomes = (rs: Array<{ kind: string; outcome: string }>) =>
@@ -52,9 +59,10 @@ const outcomes = (rs: Array<{ kind: string; outcome: string }>) =>
 beforeEach(() => {
   jest.clearAllMocks();
   delete process.env.REESE_WELCOME_ENABLED;
+  process.env.REESE_WELCOME_EPOCH = EPOCH;
   mockReeseId.mockResolvedValue(REESE);
   mockFindOne.mockResolvedValue(null);
-  mockEnrollment.mockResolvedValue({ full_name: 'Ali Muwwakkil', tier: 'guest', cohort_id: null });
+  mockEnrollment.mockResolvedValue({ full_name: 'Ali Muwwakkil', tier: 'guest', cohort_id: null, created_at: NEW });
   mockCohort.mockResolvedValue(null);
   mockCreate.mockImplementation(async () => claimRow());
   mockInitiate.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-1' });
@@ -63,6 +71,66 @@ beforeEach(() => {
 afterEach(() => {
   if (ORIGINAL_FLAG === undefined) delete process.env.REESE_WELCOME_ENABLED;
   else process.env.REESE_WELCOME_ENABLED = ORIGINAL_FLAG;
+  if (ORIGINAL_EPOCH === undefined) delete process.env.REESE_WELCOME_EPOCH;
+  else process.env.REESE_WELCOME_EPOCH = ORIGINAL_EPOCH;
+});
+
+/**
+ * The bug that reached production on 2026-08-18: "first login" was defined as
+ * "no row in the ledger", which is equally true of a genuinely new person and
+ * of every existing student on the day the table is created. Six students of
+ * 7-62 days' standing were introduced to a mentor they had already been
+ * talking to, and 340 more were queued behind them.
+ */
+describe('an empty ledger does not mean everyone is new', () => {
+  it('never greets someone who enrolled before the feature existed', async () => {
+    mockEnrollment.mockResolvedValue({ full_name: 'Million A', tier: 'member', cohort_id: null, created_at: OLD });
+
+    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'predates_feature' });
+    expect(mockInitiate).not.toHaveBeenCalled();
+  });
+
+  it('writes NO rows for them, so a backfill stays distinguishable', async () => {
+    mockEnrollment.mockResolvedValue({ full_name: 'Million A', tier: 'member', cohort_id: null, created_at: OLD });
+
+    await maybeSendWelcomes(PERSON);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('still greets someone who enrolled after go-live', async () => {
+    mockEnrollment.mockResolvedValue({ full_name: 'New Person', tier: 'guest', cohort_id: null, created_at: NEW });
+
+    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'sent', student: 'not_applicable' });
+  });
+
+  it('fails CLOSED on an unknown enrollment age', async () => {
+    mockEnrollment.mockResolvedValue({ full_name: 'No Date', tier: 'guest', cohort_id: null, created_at: null });
+
+    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'predates_feature' });
+    expect(mockInitiate).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED on an unparseable epoch override rather than greeting everyone', async () => {
+    process.env.REESE_WELCOME_EPOCH = 'not-a-date';
+    // Falls back to the production go-live default, so an old enrollment is
+    // still refused — a typo in config must not open the floodgates.
+    mockEnrollment.mockResolvedValue({ full_name: 'Million A', tier: 'member', cohort_id: null, created_at: OLD });
+
+    expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'predates_feature' });
+  });
+});
+
+describe('isGreetable', () => {
+  const cutoff = new Date(EPOCH);
+  it('accepts an enrollment at or after the cutoff', () => {
+    expect(isGreetable(NEW, cutoff)).toBe(true);
+    expect(isGreetable(cutoff, cutoff)).toBe(true);
+  });
+  it('refuses one before it, and anything unknown', () => {
+    expect(isGreetable(OLD, cutoff)).toBe(false);
+    expect(isGreetable(null, cutoff)).toBe(false);
+    expect(isGreetable('nonsense', cutoff)).toBe(false);
+  });
 });
 
 describe('the two messages', () => {
@@ -138,7 +206,7 @@ describe('a fresh account, not yet a student', () => {
 
 describe('joining a class', () => {
   beforeEach(() => {
-    mockEnrollment.mockResolvedValue({ full_name: 'Ali Muwwakkil', tier: 'member', cohort_id: 'c1' });
+    mockEnrollment.mockResolvedValue({ full_name: 'Ali Muwwakkil', tier: 'member', cohort_id: 'c1', created_at: NEW });
     mockCohort.mockResolvedValue({ name: 'July 2026', cohort_type: 'standard' });
   });
 
@@ -174,14 +242,14 @@ describe('joining a class', () => {
   });
 
   it('counts a member with no cohort as a student', async () => {
-    mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'member', cohort_id: null });
+    mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'member', cohort_id: null, created_at: NEW });
     mockCohort.mockResolvedValue(null);
 
     expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'superseded', student: 'sent' });
   });
 
   it('does NOT count an Explorer-cohort guest as a student', async () => {
-    mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'guest', cohort_id: 'c9' });
+    mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'guest', cohort_id: 'c9', created_at: NEW });
     mockCohort.mockResolvedValue({ name: 'Explorer', cohort_type: 'standard' });
 
     expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'sent', student: 'not_applicable' });
@@ -191,7 +259,7 @@ describe('joining a class', () => {
 describe('each intro exactly once, ever', () => {
   it('sends nothing when both are already on file', async () => {
     mockFindOne.mockResolvedValue({ id: 'existing' });
-    mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'member', cohort_id: null });
+    mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'member', cohort_id: null, created_at: NEW });
 
     expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'already_sent', student: 'already_sent' });
     expect(mockCreate).not.toHaveBeenCalled();
@@ -276,7 +344,7 @@ describe('never breaks a login', () => {
     // The guest-then-enrol path: the account intro was attempted and failed on
     // an earlier login, so its row exists. Joining a class must still produce
     // the student intro — one intro failing cannot suppress the other.
-    mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'member', cohort_id: null });
+    mockEnrollment.mockResolvedValue({ full_name: 'Ali M', tier: 'member', cohort_id: null, created_at: NEW });
     mockFindOne.mockImplementation(async ({ where }: any) =>
       where.kind === 'account' ? { id: 'failed-claim', outcome: 'failed' } : null);
 
