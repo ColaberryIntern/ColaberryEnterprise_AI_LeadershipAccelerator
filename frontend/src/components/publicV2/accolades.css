@@ -25,7 +25,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-7) var(--space-6);
+  padding: var(--space-6) var(--space-5);
   border-left: var(--border-1) solid var(--border-subtle);
 }
 /* The figures wrap to different line counts -- "Consulting and Training 12+
@@ -48,12 +48,23 @@
 .cbv2-accolade__figure {
   margin: 0;
   font-family: var(--font-display);
-  /* The whole point of the restyle: these were 2rem inside a bordered card and
-     read as body copy. */
-  font-size: clamp(2.6rem, 5vw, 4rem);
+  /*
+   * SIZED TO FIT ON ONE LINE, which is the constraint that decides this number.
+   *
+   * These tiles carry the whole registry wording ("8k+ data students"), not a
+   * bare numeral with a caption under it, so they are far longer than the
+   * figures on training.colaberry.com. At 4rem the longest ran to three lines
+   * and the band looked broken. The longest string is "Consulting and Training
+   * 12+ years" at 33 characters, and a quarter-width column is about 280px of
+   * usable text, so the type has to come down to roughly 1.5rem before that
+   * fits on a single line -- which also lets it sit with the page instead of
+   * shouting over it.
+   */
+  font-size: clamp(1.05rem, 1.55vw, 1.5rem);
   font-weight: 700;
-  line-height: 1.02;
-  letter-spacing: -0.035em;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
   color: var(--text-strong);
   text-wrap: balance;
   font-variant-numeric: tabular-nums;
