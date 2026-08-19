@@ -80,9 +80,55 @@ function sectionFingerprint(roster: { items: Array<{ type: string; title: string
 }
 
 /**
+ * The ONLY stop reason that means the model finished its own sentence. A card is a
+ * unit of curriculum a student reads end to end, so anything else on the way out —
+ * the token ceiling ('length'), a filtered completion ('content_filter'), or a
+ * response that never says how it stopped — means what we are holding is a
+ * fragment, not a card.
+ */
+const COMPLETE_STOP_REASON = 'stop';
+
+/**
+ * Sentinel for a response that reports no stop reason at all. An ABSENT stop
+ * reason must never read as success: that is the same defect as ignoring a length
+ * stop, one level up. Fail closed.
+ */
+const NO_STOP_REASON = 'missing';
+
+/**
+ * Token ceilings. The first attempt runs at the normal budget; a generation that
+ * dies at the ceiling gets exactly ONE retry with double the headroom. Bounded on
+ * purpose — an unbounded retry loop is prohibited (CLAUDE.md, Stall Detection).
+ */
+const CARD_MAX_TOKENS = 3200;
+const CARD_MAX_TOKENS_RETRY = 6400;
+
+/**
+ * Stop reasons a single retry with more headroom can plausibly fix. A
+ * 'content_filter' stop cannot be fixed by a bigger budget, so it fails
+ * immediately rather than burning a second call.
+ */
+const RETRYABLE_STOP_REASONS = new Set<string>(['length', NO_STOP_REASON]);
+
+/** The response's stop reason, normalised — absent/blank/non-string all collapse to NO_STOP_REASON. */
+function stopReasonOf(res: { choices?: Array<{ finish_reason?: string | null }> } | null | undefined): string {
+  const reason = res?.choices?.[0]?.finish_reason;
+  return typeof reason === 'string' && reason ? reason : NO_STOP_REASON;
+}
+
+/**
  * Generate the student-facing content for one card using its type's generation
  * prompt (or a generic instruction if the type has none), and persist it to
  * card.metadata.content. Idempotent — re-running overwrites with a fresh render.
+ *
+ * THROWS on an incomplete generation (see stop-reason gate below) and persists
+ * nothing, rather than saving half a card. That matches how this service already
+ * handles failure: `generateCardContent` throws, `ensureFreshContent` swallows the
+ * throw and returns the card's existing copy, and because nothing was written
+ * (`content_at` is untouched) the next student to open the card retries the
+ * generation. Failing closed here therefore self-heals, where the alternative —
+ * persisting a draft/unpublished card — would flip a `visibility` that a human has
+ * to flip back, on the hot student-view path.
  */
 export async function generateCardContent(cardId: string, model = DEFAULT_MODEL): Promise<{ content: CardContent; resolved_prompt: string; cost_usd: number }> {
   const card = await TimelineCard.findByPk(cardId);
@@ -103,13 +149,50 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
     : `Write the student-facing content for a "${card.type.replace(/_/g, ' ')}" titled "${card.title}".${card.description ? ` Context: ${card.description}` : ''}`;
 
   const client = getInstrumentedOpenAI({ workflow_id: 'timeline_card_generate' });
-  const res = await client.chat.completions.create({
-    model, temperature: 0.6, max_tokens: 3200, response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: `${bp ? bp.prompt_text + '\n\n' : ''}${roster ? roster.prompt_text + '\n\n' : ''}You render the "${def?.student_label || card.type}" activity into the exact content a student sees on this card. Return STRICT json.` },
-      { role: 'user', content: `Produce the student content as json with keys: title, summary, body_html (clean self-contained HTML, no scripts), questions (string[]), reflection (string).\n\nInstruction:\n${resolved}` },
-    ],
+  const messages = [
+    { role: 'system' as const, content: `${bp ? bp.prompt_text + '\n\n' : ''}${roster ? roster.prompt_text + '\n\n' : ''}You render the "${def?.student_label || card.type}" activity into the exact content a student sees on this card. Return STRICT json.` },
+    { role: 'user' as const, content: `Produce the student content as json with keys: title, summary, body_html (clean self-contained HTML, no scripts), questions (string[]), reflection (string).\n\nInstruction:\n${resolved}` },
+  ];
+  const callModel = (max_tokens: number) => client.chat.completions.create({
+    model, temperature: 0.6, max_tokens, response_format: { type: 'json_object' }, messages,
   });
+
+  // --- Generation completeness gate -------------------------------------------
+  // A length-stopped generation is a FAILED generation, not a card. Before this
+  // gate existed the half-written JSON was parsed anyway (a truncated body makes
+  // JSON.parse throw, which the catch below turns into `{}`), and the resulting
+  // EMPTY content object was saved with a fresh content_at — publishing a blank or
+  // mid-sentence card to the whole cohort and pinning it there for the 30-day TTL.
+  // That is how Week 4 Prompt Lab, Week 8 Setup Lab and Build Breakdown shipped
+  // broken, and how Week 4 re-truncated itself after being hand-repaired.
+  let res = await callModel(CARD_MAX_TOKENS);
+  let stop = stopReasonOf(res);
+  let cost_usd = cost(model, res);
+
+  if (stop !== COMPLETE_STOP_REASON && RETRYABLE_STOP_REASONS.has(stop)) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'timeline-card-content', event: 'card_generation_incomplete_retrying',
+      outcome: 'partial', error_class: 'IncompleteGeneration',
+      context: { card_id: card.id, card_type: card.type, week: card.week, stop_reason: stop, max_tokens: CARD_MAX_TOKENS, retry_max_tokens: CARD_MAX_TOKENS_RETRY },
+    }));
+    res = await callModel(CARD_MAX_TOKENS_RETRY);
+    stop = stopReasonOf(res);
+    cost_usd += cost(model, res);
+  }
+
+  if (stop !== COMPLETE_STOP_REASON) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'timeline-card-content', event: 'card_generation_incomplete',
+      outcome: 'failure', error_class: 'IncompleteGeneration',
+      context: { card_id: card.id, card_type: card.type, week: card.week, stop_reason: stop, retried: RETRYABLE_STOP_REASONS.has(stop) },
+    }));
+    throw Object.assign(
+      new Error(`Card generation incomplete: the model stopped with "${stop}" instead of "${COMPLETE_STOP_REASON}". Refusing to save a partial card.`),
+      { status: 502, error_class: 'IncompleteGeneration', stop_reason: stop },
+    );
+  }
+  // --- end gate ----------------------------------------------------------------
+
   let parsed: any = {};
   try { parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }
   const content: CardContent = {
@@ -156,7 +239,9 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
   const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
   await card.update({ metadata: { ...meta, content, content_at: new Date().toISOString(), section_fingerprint: sectionFingerprint(roster) } });
 
-  return { content, resolved_prompt: resolved, cost_usd: cost(model, res) };
+  // cost_usd is the ACCUMULATED spend: a card that needed the headroom retry cost
+  // two calls, and the caller should see both.
+  return { content, resolved_prompt: resolved, cost_usd: Number(cost_usd.toFixed(6)) };
 }
 
 /** Student-facing content expires after 30 days; the first student past that
