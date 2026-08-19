@@ -28,4 +28,7 @@
    Names: ri-{name}-line (default, matches our soft 2px style) or
    ri-{name}-fill. Browse at remixicon.com.
    ============================================================ */
-@import url('https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css');
+/* Loaded via a <link> in public/index.html instead of @import. An external
+   @import here sits behind main.css in the request chain: the browser cannot
+   discover it until main.css has fully downloaded, adding a serial round-trip
+   to first paint. The <link> downloads in parallel. */
