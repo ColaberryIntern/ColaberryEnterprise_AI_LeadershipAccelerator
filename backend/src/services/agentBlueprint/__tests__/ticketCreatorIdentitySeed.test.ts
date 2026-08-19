@@ -114,6 +114,62 @@ describe('TICKET_CREATOR_IDENTITIES', () => {
       expect(config.legacyCreatorIds).toEqual([config.agentName]);
     }
   });
+
+  // Agent Ticket Standard (2026-08-18, session CC-20260818-x4nk) — the exact,
+  // founder-given agent -> human mapping (request.md). Every one of the 21
+  // entries here (Reese, the 22nd agent, is seeded separately via
+  // reeseIdentitySeed.ts — see its own test file) must carry the real
+  // org_members.id the founder assigned, at the right per-human counts.
+  it('every entry has a non-empty reportsToOrgMemberId (the structural requirement itself)', () => {
+    for (const config of TICKET_CREATOR_IDENTITIES) {
+      expect(config.reportsToOrgMemberId).toBeTruthy();
+    }
+  });
+
+  it('matches the founder-given mapping exactly, at the right per-human counts (Ali x9, Kes x5, Taiwo x4 [Reese is the 5th, seeded separately], Jackie x1, Swati x1, Sohail x1)', () => {
+    const ORG_MEMBER = {
+      ALI: 'f179c222-284e-4180-a335-cca9e4918b2e',
+      KES: '3df017df-affa-49ab-884f-a99a4bd2ef4e',
+      TAIWO: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f',
+      JACKIE: 'a6db5276-2993-4e0b-ace9-0052ba841c80',
+      SWATI: '5db87b51-4554-4e52-93d7-c61f9887352c',
+      SOHAIL: '4e255894-ac0b-4367-ae06-27459ea05f66',
+    };
+    const byAgentName = Object.fromEntries(
+      TICKET_CREATOR_IDENTITIES.map((c) => [c.agentName, c.reportsToOrgMemberId]),
+    );
+
+    expect(byAgentName).toMatchObject({
+      // Ali (9 in this array; CoryBrain/InboxCaseEngine/bpos_orchestrator are hand-written)
+      CoryBrain: ORG_MEMBER.ALI,
+      InboxCaseEngine: ORG_MEMBER.ALI,
+      bpos_orchestrator: ORG_MEMBER.ALI,
+      ExecutiveStrategyArchitect: ORG_MEMBER.ALI,
+      GovernanceStrategyArchitect: ORG_MEMBER.ALI,
+      GrowthExperimentArchitect: ORG_MEMBER.ALI,
+      InsightArchitect: ORG_MEMBER.ALI,
+      PartnershipExpansionArchitect: ORG_MEMBER.ALI,
+      StrategyFuturesArchitect: ORG_MEMBER.ALI,
+      // Kes (5)
+      'cory-engine': ORG_MEMBER.KES,
+      workforce_intelligence_engine: ORG_MEMBER.KES,
+      InfrastructureEvolutionArchitect: ORG_MEMBER.KES,
+      OrchestrationEcosystemArchitect: ORG_MEMBER.KES,
+      PlatformInnovationArchitect: ORG_MEMBER.KES,
+      // Taiwo (4 here; Reese is the 5th, seeded separately)
+      AdmissionsConversionArchitect: ORG_MEMBER.TAIWO,
+      FinanceIntelligenceArchitect: ORG_MEMBER.TAIWO,
+      OperationsOptimizationArchitect: ORG_MEMBER.TAIWO,
+      StudentSuccessArchitect: ORG_MEMBER.TAIWO,
+      // Jackie (1)
+      AlumniNetworkArchitect: ORG_MEMBER.JACKIE,
+      // Swati (1)
+      LearningInnovationArchitect: ORG_MEMBER.SWATI,
+      // Sohail (1)
+      MarketingAutomationArchitect: ORG_MEMBER.SOHAIL,
+    });
+    expect(Object.keys(byAgentName)).toHaveLength(EXPECTED_COUNT);
+  });
 });
 
 describe('getTicketCreatorAdminUserId', () => {

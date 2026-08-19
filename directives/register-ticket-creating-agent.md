@@ -352,6 +352,49 @@ never "looks right" or "should work").
 **Verify:** the entry exists, is tagged with the session's real ID, and every
 `[x]` claim has a concrete artifact attached on the same line.
 
+### 10. Every registered ticket-creating agent MUST have `reports_to_org_member_id` set — ticket creation is structurally blocked without one
+
+Every agent that creates tickets must resolve to a real human it is
+accountable to: a real `org_members` row (the Business Account "Employee"
+roster feature) on the "Colaberry" org. This is not a recommendation — as of
+2026-08-18 (session CC-20260818-x4nk), `ticketService.createTicket()`
+rejects ticket creation outright (throws `TicketCreatorNotReportableError`,
+never a silent no-op or a warning) for any non-`human` creator whose
+resolved `AiAgent` row has no `reports_to_org_member_id`, or that doesn't
+resolve to a registered `AiAgent` row at all. "Even if there are no human
+approvals" (Ali, live) — an agent that never needs sign-off from its human
+still needs a real human it reports to, for accountability.
+
+**Proof:** PR (this run) added `reports_to_org_member_id` (nullable UUID) to
+`AiAgent`, gated `ticketService.createTicket()` on it, backfilled the
+then-current open-ticket backlog's assignee, and made
+`agentBlueprint/agentIdentitySeed.ts`'s `AgentIdentityConfig.reportsToOrgMemberId`
+a REQUIRED (not optional) TypeScript field — so registering a new
+ticket-creating agent without specifying who it reports to fails to compile,
+not just fails a lint/doc check. All 22 previously-registered agents were
+mapped to a real human by the founder directly (6 humans: Ali, Kes, Taiwo,
+Jackie, Swati, Sohail — see `ticketCreatorIdentitySeed.ts` and
+`reese/reeseIdentitySeed.ts` for the real ids).
+
+**Known structural gap, disclosed not fixed here:** `ticketService.createTicket()`
+is the gate, but at least two call paths bypass it entirely via a direct
+`Ticket.create()` (`services/company/ticketOrchestrator.ts`'s
+`createTrackedTicket()` family and `routes/projectRoutes.ts`'s fallback) —
+the same disclosed gap Step 5's `afterCreate` hook (ledger events) already
+documents for a different purpose. A ticket created through either bypass is
+NOT rejected by this new gate. Closing that gap (e.g. a model-level
+`beforeCreate` hook enforcing the same check) is a real, separate, logged
+follow-up proposal — out of scope for this run per CLAUDE.md's Scope Lock,
+not silently expanded into it.
+
+**Verify:** `reports_to_org_member_id` is set on the agent's real `AiAgent`
+row and resolves to a real `org_members` row on "Colaberry" —
+`validateAgentTicketStandard.ts`'s `reports_to_org_member_id set` check
+covers this mechanically (see Verification below). Attempt creating a
+ticket as the agent locally/in dev with the field temporarily null and
+confirm `createTicket()` throws `TicketCreatorNotReportableError` before any
+row is written.
+
 ## Outputs
 
 - A real `AiAgent` row (creator identity) and, if applicable, a real `AiAgent`
@@ -381,9 +424,11 @@ not a merge gate - it reports PASS/FAIL/INFO per check and never blocks anything
 on its own (wiring it into CI as a hard gate is a deliberately separate,
 escalation-tier decision, not something this directive authorizes). It checks:
 `AiAgent` registration, `tools_granted` population, display-identity
-registration, recurring-resolver registration (or an explicit logged reason for
-none), and a static scan of the resolver's rules file for the specific
-time-based-closure anti-pattern tokens proven this week. It does **not** check
+registration, `reports_to_org_member_id` set and resolving to a real
+`org_members` row on "Colaberry" (Step 10), recurring-resolver registration
+(or an explicit logged reason for none), and a static scan of the resolver's
+rules file for the specific time-based-closure anti-pattern tokens proven
+this week. It does **not** check
 idempotency live (structural presence of an undo-log module only, never
 re-executes a resolver) or production-verification history (a one-time,
 per-change process requirement, not perpetually re-checkable state) - those stay

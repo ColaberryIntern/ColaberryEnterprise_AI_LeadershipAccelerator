@@ -300,3 +300,68 @@ export const AGENT_TICKET_RESOLVER_REGISTRY: readonly ResolverMapping[] = [
 export function findResolverMapping(creatorAgentName: string): ResolverMapping | undefined {
   return AGENT_TICKET_RESOLVER_REGISTRY.find((m) => m.creatorAgentName === creatorAgentName);
 }
+
+// ---------------------------------------------------------------------------
+// reports_to_org_member_id check (Agent Ticket Standard, Step 10 — "every
+// ticket must have a home", 2026-08-18)
+// ---------------------------------------------------------------------------
+
+export interface ReportsToCheckResult {
+  pass: boolean;
+  reason: string;
+}
+
+/** Minimal shape this pure check needs from an AiAgent row — callers pass the
+ * real Sequelize instance, this function only reads these two fields. */
+export interface AiAgentReportsToShape {
+  reports_to_org_member_id: string | null;
+}
+
+/** Minimal shape this pure check needs from the resolved org_members row, or
+ * null if none was found for the id (dangling/never-existed FK). */
+export interface OrgMemberShape {
+  org_id: string;
+}
+
+/**
+ * `AiAgent.reports_to_org_member_id` must be set, AND the row it points to must
+ * actually exist (a dangling id — the org_member was deleted after the agent was
+ * registered — is reported as a FAIL, not a silent PASS). Belonging to org
+ * "Colaberry" specifically is checked by the caller (which already has the real
+ * org row and its name) rather than this pure function, keeping this function
+ * free of any DB access per this module's own no-I/O contract.
+ */
+export function evaluateReportsTo(
+  agent: AiAgentReportsToShape,
+  resolvedOrgMember: OrgMemberShape | null,
+  orgName: string | null,
+): ReportsToCheckResult {
+  if (!agent.reports_to_org_member_id) {
+    return {
+      pass: false,
+      reason:
+        'reports_to_org_member_id is not set — ticket creation for this agent is ' +
+        'structurally rejected by ticketService.createTicket() until it is.',
+    };
+  }
+  if (!resolvedOrgMember) {
+    return {
+      pass: false,
+      reason:
+        `reports_to_org_member_id='${agent.reports_to_org_member_id}' does not resolve to ` +
+        'any real org_members row (dangling reference).',
+    };
+  }
+  if (orgName !== 'Colaberry') {
+    return {
+      pass: false,
+      reason:
+        `reports_to_org_member_id resolves to a real org_members row, but on org ` +
+        `'${orgName ?? 'unknown'}', not 'Colaberry'.`,
+    };
+  }
+  return {
+    pass: true,
+    reason: `reports_to_org_member_id='${agent.reports_to_org_member_id}' resolves to a real org_members row on 'Colaberry'.`,
+  };
+}

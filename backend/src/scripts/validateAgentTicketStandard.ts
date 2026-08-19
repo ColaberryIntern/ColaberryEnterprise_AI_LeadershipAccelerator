@@ -28,12 +28,15 @@ import path from 'path';
 import { sequelize } from '../config/database';
 import AiAgent from '../models/AiAgent';
 import AdminUser from '../models/AdminUser';
+import OrgMember from '../models/OrgMember';
+import Organization from '../models/Organization';
 import { resolveActorDisplayName } from '../services/actorIdentity/resolveActorDisplayName';
 import {
   evaluateToolsGranted,
   isGenericFallbackLabel,
   scanForTimeBasedClosurePatterns,
   findResolverMapping,
+  evaluateReportsTo,
   AGENT_TICKET_RESOLVER_REGISTRY,
   type AntiPatternMatch,
 } from './lib/agentTicketStandardChecks';
@@ -143,6 +146,29 @@ async function checkDisplayIdentity(agentName: string, row: AiAgent): Promise<Ch
       `No linked AdminUser with a real display_name, and resolveActorDisplayName() ` +
       `resolves to a generic/collapsed label ('${resolved}') rather than a distinguishing ` +
       `identity - this is the exact bug class PR #1559 fixed for cory-engine/CoryBrain.`,
+  };
+}
+
+async function checkReportsTo(row: AiAgent): Promise<CheckResult> {
+  let resolvedOrgMember: { org_id: string } | null = null;
+  let orgName: string | null = null;
+
+  if (row.reports_to_org_member_id) {
+    const memberRow = await OrgMember.findByPk(row.reports_to_org_member_id, {
+      attributes: ['org_id'],
+    });
+    resolvedOrgMember = memberRow ? { org_id: memberRow.org_id } : null;
+    if (memberRow) {
+      const org = await Organization.findByPk(memberRow.org_id, { attributes: ['name'] });
+      orgName = org?.name ?? null;
+    }
+  }
+
+  const result = evaluateReportsTo(row, resolvedOrgMember, orgName);
+  return {
+    name: 'reports_to_org_member_id set (Agent Ticket Standard, Step 10)',
+    status: result.pass ? 'PASS' : 'FAIL',
+    message: result.reason,
   };
 }
 
@@ -303,9 +329,15 @@ async function validateAgent(agentName: string): Promise<AgentValidationResult> 
       status: 'FAIL',
       message: 'Skipped - no AiAgent row to resolve an identity for.',
     });
+    checks.push({
+      name: 'reports_to_org_member_id set (Agent Ticket Standard, Step 10)',
+      status: 'FAIL',
+      message: 'Skipped - no AiAgent row to read reports_to_org_member_id from.',
+    });
   } else {
     checks.push(checkToolsGranted(row));
     checks.push(await checkDisplayIdentity(agentName, row));
+    checks.push(await checkReportsTo(row));
   }
 
   checks.push(...(await checkRecurringResolver(agentName)));

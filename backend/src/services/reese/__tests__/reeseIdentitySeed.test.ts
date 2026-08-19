@@ -128,6 +128,11 @@ describe('seedReeseIdentity — pilot-cohort allowlist (T013)', () => {
 
   it('idempotency/boundary: never overwrites an already-set allowlist (e.g. an admin\'s deliberate later choice)', async () => {
     fakeAgent = makeFakeAgent({ pilot_cohort_ids: ['admin-chosen-cohort'] });
+    // Agent Ticket Standard's own self-heal (reports_to_org_member_id) would
+    // otherwise also fire and call update() here, unrelated to what this test is
+    // proving — give the fixture an already-set value so ONLY the pilot-cohort
+    // behavior under test determines whether update() is called.
+    (fakeAgent as any).reports_to_org_member_id = '1fbb5316-1381-4b8a-81a8-3a7325b39d5f';
     mockAiAgentFindOne.mockResolvedValue(fakeAgent);
     mockCohortFindOne.mockResolvedValue({ id: 'some-other-open-cohort' });
 
@@ -137,8 +142,29 @@ describe('seedReeseIdentity — pilot-cohort allowlist (T013)', () => {
   });
 
   it('boundary: no real open cohort exists yet — leaves config untouched rather than writing a fabricated id', async () => {
+    (fakeAgent as any).reports_to_org_member_id = '1fbb5316-1381-4b8a-81a8-3a7325b39d5f';
     mockCohortFindOne.mockResolvedValue(null);
     await seedReeseIdentity();
     expect(fakeAgent.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('seedReeseIdentity — Agent Ticket Standard reports_to_org_member_id (2026-08-18)', () => {
+  it("populates Reese's reports_to_org_member_id (Taiwo) on first run when the row is currently null", async () => {
+    await seedReeseIdentity();
+
+    expect(fakeAgent.update).toHaveBeenCalledWith(
+      expect.objectContaining({ reports_to_org_member_id: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f' }),
+    );
+  });
+
+  it('never overwrites an already-set reports_to_org_member_id', async () => {
+    (fakeAgent as any).reports_to_org_member_id = 'already-set-id';
+    mockCohortFindOne.mockResolvedValue(null); // keep the pilot-cohort block a no-op too
+
+    await seedReeseIdentity();
+
+    expect(fakeAgent.update).not.toHaveBeenCalled();
+    expect((fakeAgent as any).reports_to_org_member_id).toBe('already-set-id');
   });
 });

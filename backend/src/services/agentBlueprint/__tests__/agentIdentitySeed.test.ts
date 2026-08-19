@@ -47,10 +47,26 @@ const CONFIG: AgentIdentityConfig = {
     enrollment_type: 'standard',
     portal_enabled: false,
   },
+  // Agent Ticket Standard — required as of 2026-08-18; this constant not compiling
+  // without it IS the structural-enforcement proof (see
+  // ticketCreatorReportsToResolver's sibling task, T004's acceptance criteria).
+  reportsToOrgMemberId: 'org-member-fixture-id',
 };
 
 function makeFakeAgent(config: Record<string, any> = {}) {
-  return { id: 'agent-cqa-1', config, update: jest.fn().mockResolvedValue(undefined) };
+  return {
+    id: 'agent-cqa-1',
+    config,
+    // Agent Ticket Standard's self-heal only writes when this is currently null
+    // (see CONFIG's own reportsToOrgMemberId + the dedicated describe block below).
+    // Pre-set here to CONFIG's own value so every OTHER test in this file (pilot-
+    // cohort, legacy-creator-ids, happy path, idempotency) exercises a fresh agent
+    // that already satisfies the new requirement and never triggers an update()
+    // call incidental to what that test is actually proving. Tests that need to
+    // exercise the reports_to self-heal itself explicitly override this field.
+    reports_to_org_member_id: CONFIG.reportsToOrgMemberId,
+    update: jest.fn().mockResolvedValue(undefined),
+  };
 }
 let fakeAgent = makeFakeAgent();
 const fakeEnrollment = { id: 'enrollment-cqa-1' };
@@ -192,6 +208,34 @@ describe('seedAgentIdentity', () => {
     );
     const call = fakeAgent.update.mock.calls[0][0];
     expect(call.config.legacy_creator_ids).toHaveLength(2);
+  });
+
+  // Agent Ticket Standard (2026-08-18) — same self-heal-only-when-null shape as
+  // the legacy-creator-ids block above.
+  it('reports_to_org_member_id: populates it on an existing row where it is currently null', async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_org_member_id = null;
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+    await seedAgentIdentity(CONFIG);
+
+    expect(fakeAgent.update).toHaveBeenCalledWith(
+      expect.objectContaining({ reports_to_org_member_id: CONFIG.reportsToOrgMemberId }),
+    );
+  });
+
+  it('reports_to_org_member_id: never overwrites an already-set value, even a different one (self-heal only when null — matches the enabled-flag precedent)', async () => {
+    fakeAgent = makeFakeAgent();
+    (fakeAgent as any).reports_to_org_member_id = 'already-set-org-member-id';
+    mockAiAgentFindOne.mockResolvedValue(fakeAgent);
+
+    await seedAgentIdentity({ ...CONFIG, reportsToOrgMemberId: 'a-different-id' });
+
+    // Nothing else in CONFIG (no legacyCreatorIds/pilotCohortGate) should trigger a
+    // write either, so the strongest, clearest assertion is that update() is never
+    // called at all — proving the value on the row was left completely untouched.
+    expect(fakeAgent.update).not.toHaveBeenCalled();
+    expect((fakeAgent as any).reports_to_org_member_id).toBe('already-set-org-member-id');
   });
 });
 

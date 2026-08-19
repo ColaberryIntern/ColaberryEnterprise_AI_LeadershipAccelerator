@@ -67,5 +67,8 @@ export async function seedReeseIdentity(): Promise<ReeseIdentityIds> {
     // Reese Phase 1 — pilot-cohort allowlist DATA ONLY (T013). Phase 2's
     // reeseEligibilityService.ts is what actually reads/enforces this.
     pilotCohortGate: true,
+    // Agent Ticket Standard — founder-given mapping (request.md, session
+    // CC-20260818-x4nk): Reese reports to Taiwo.
+    reportsToOrgMemberId: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f',
   });
 }
