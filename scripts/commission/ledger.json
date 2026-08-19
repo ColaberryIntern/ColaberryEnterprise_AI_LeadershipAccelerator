@@ -10,43 +10,90 @@
     "ali_emailed is what the outbound email actually said, when it differed."
   ],
   "tiers": [
-    { "upTo": 20000, "rate": 0.15, "effective": 0.1125 },
-    { "upTo": 51000, "rate": 0.17, "effective": 0.1275 },
-    { "upTo": null, "rate": 0.20, "effective": 0.15 }
+    {
+      "upTo": 20000,
+      "rate": 0.15,
+      "effective": 0.1125
+    },
+    {
+      "upTo": 51000,
+      "rate": 0.17,
+      "effective": 0.1275
+    },
+    {
+      "upTo": null,
+      "rate": 0.2,
+      "effective": 0.15
+    }
   ],
   "sends": [
     {
-      "year": 2025, "month": 11, "subject": "Nov 2025 Commission (Mentor/Instructor/SMI)",
-      "staff_commission": 13000.00, "ali_comm": 1177.93, "ali_emailed": "$1.177.93",
-      "company_paid": null, "sent_utc": "2026-03-23T23:58:45Z",
+      "year": 2025,
+      "month": 11,
+      "subject": "Nov 2025 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 13000.0,
+      "ali_comm": 1177.93,
+      "ali_emailed": "$1.177.93",
+      "company_paid": null,
+      "sent_utc": "2026-03-23T23:58:45Z",
       "note": "email carried a typo in Ali's figure (period for comma)"
     },
     {
-      "year": 2025, "month": 12, "subject": "Dec 2025 Commission (Mentor/Instructor/SMI)",
-      "staff_commission": 11275.00, "ali_comm": 3768.11,
-      "company_paid": null, "sent_utc": "2026-04-23T11:48:11Z"
+      "year": 2025,
+      "month": 12,
+      "subject": "Dec 2025 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 11275.0,
+      "ali_comm": 3768.11,
+      "company_paid": null,
+      "sent_utc": "2026-04-23T11:48:11Z"
     },
     {
-      "year": 2026, "month": 1, "subject": "Jan 2026 Commission (Mentor/Instructor/SMI)",
-      "staff_commission": 7750.00, "ali_comm": 2116.22, "ali_emailed": "$2116.21",
-      "company_paid": 18810.80, "sent_utc": "2026-05-19T14:57:01Z",
+      "year": 2026,
+      "month": 1,
+      "subject": "Jan 2026 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 7750.0,
+      "ali_comm": 2116.22,
+      "ali_emailed": "$2116.21",
+      "company_paid": 18810.8,
+      "sent_utc": "2026-05-19T14:57:01Z",
       "note": "email was one cent under the workbook figure"
     },
     {
-      "year": 2026, "month": 2, "subject": "Feb 2026 Commission (Mentor/Instructor/SMI)",
-      "staff_commission": 11325.00, "ali_comm": 1907.19,
-      "company_paid": 16952.80, "sent_utc": "2026-06-06T15:59:27Z"
+      "year": 2026,
+      "month": 2,
+      "subject": "Feb 2026 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 11325.0,
+      "ali_comm": 1907.19,
+      "company_paid": 16952.8,
+      "sent_utc": "2026-06-06T15:59:27Z"
     },
     {
-      "year": 2026, "month": 3, "subject": "Mar 2026 Commission (Mentor/Instructor/SMI)",
-      "staff_commission": 10000.00, "ali_comm": 2143.44,
-      "company_paid": 19052.83, "sent_utc": "2026-07-09T23:07:44Z"
+      "year": 2026,
+      "month": 3,
+      "subject": "Mar 2026 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 10000.0,
+      "ali_comm": 2143.44,
+      "company_paid": 19052.83,
+      "sent_utc": "2026-07-09T23:07:44Z"
     },
     {
-      "year": 2026, "month": 4, "subject": "Apr 2026 Commission (Mentor/Instructor/SMI)",
-      "staff_commission": 11950.00, "ali_comm": 2077.45,
-      "company_paid": 18466.26, "sent_utc": "2026-08-12T21:09:38Z",
+      "year": 2026,
+      "month": 4,
+      "subject": "Apr 2026 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 11950.0,
+      "ali_comm": 2077.45,
+      "company_paid": 18466.26,
+      "sent_utc": "2026-08-12T21:09:38Z",
       "note": "first run through the monthly-commission skill"
+    },
+    {
+      "year": 2026,
+      "month": 5,
+      "subject": "May 2026 Commission (Mentor/Instructor/SMI)",
+      "staff_commission": 9425.0,
+      "ali_comm": 1699.25,
+      "company_paid": 15104.44,
+      "sent_utc": "2026-08-19T20:53:46Z"
     }
   ]
 }

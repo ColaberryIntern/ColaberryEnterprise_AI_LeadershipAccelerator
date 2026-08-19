@@ -10,27 +10,51 @@ description: Process the monthly Mentor/Instructor/SMI commission — starts fro
 Set these two and the rest follows. Everything lands in one folder per month.
 
 ```bash
-YM=2026-05; MON=May; YR=2026                     # the commission month
+YR=2026; MM=05; MON=May                          # the commission month
+YM="$YR-$MM"
 DIR="/c/Users/ali_m/Downloads/$MON $YR Commission"
 REPO="/c/Users/ali_m/OneDrive/Business/Colaberry Novedea/AI Projects/Colaberry Enterprise AI Leadership Accelerator"
 ARCHIVE="/c/Users/ali_m/OneDrive/Business/Colaberry Novedea/Stats/Commissions/SMI Comm"
-mkdir -p "$DIR"
+WORK="$REPO/tmp/commission-$YM"                  # scratch for the pipeline JSON
+mkdir -p "$DIR" "$WORK"
 
 # 1. Jackie's LATEST workbook -> $DIR/<YYYY>_<MM>_ColaberryTrainingCommissions_Original.xlsx
 #    (find the newest message first - she re-sends corrections under changed subjects)
+#    Download with gmail_dl.js inside accelerator-backend, then md5sum both sides:
+#    the rename must not change a single byte.
 # 2. staff total + table image
 python "$REPO/scripts/commission/build_staff_png.py" \
-       "$DIR/${YR}_05_ColaberryTrainingCommissions_Original.xlsx" \
+       "$DIR/${YR}_${MM}_ColaberryTrainingCommissions_Original.xlsx" \
        "$DIR/$MON $YR Staff Commission.png" "$MON"
-# 3-4. pipeline -> json   5. build the month tabs   (see the numbered table below)
+# 3. cut the reusable pipeline out of Ali's SMI Commission.sql
+python "$REPO/scripts/commission/extract_pipeline.py" \
+       "$ARCHIVE/SMI Commission.sql" "$WORK/smi_pipeline.sql"
+# 4. run it against CCPP from inside accelerator-backend (see "Running queries against CCPP").
+#    CM_YEAR / CM_MONTH are REQUIRED - the script exits 2 rather than guess a month.
+#    Ship smi_pipeline.sql + run_smi_pipeline.js to /app, then:
+#      docker exec -w /app -e CM_YEAR=$YR -e CM_MONTH=${MM#0} accelerator-backend \
+#        node run_smi_pipeline.js
+#    It prints COMPANY_PAID= and ALI_COMM=. Copy smi_detail/smi_summary/ipbc_<mon>.json
+#    back into $WORK, then delete them and the scripts from the container.
+# 5. build the month tabs (same CM_YEAR / CM_MONTH contract; reads the prior month
+#    from $ARCHIVE and refuses if the JSON's newest month is not the reporting month)
+CM_YEAR=$YR CM_MONTH=${MM#0} CM_DIR="$DIR" CM_DATA_DIR="$WORK" \
+  python "$REPO/scripts/commission/build_month_tabs.py"
 # 6. THE GATE - nothing sends unless this exits 0
 python "$REPO/scripts/commission/preflight.py" --month $YM --dir "$DIR"
 # 7. dry run, read the body, then send from inside accelerator-backend
 node "$REPO/scripts/commission/send_commission_email.js" --dir "$DIR"
 # 8. close the loop, then archive
 python "$REPO/scripts/commission/preflight.py" --month $YM --dir "$DIR" --record
-cp "$DIR/${YR}_05_SMI Commisions.xlsx" "$DIR/IPBC Group $MON $YR.xlsx" "$ARCHIVE/"
+cp "$DIR/${YR}_${MM}_SMI Commisions.xlsx" "$DIR/IPBC Group $MON $YR.xlsx" "$ARCHIVE/"
 ```
+
+`run_smi_pipeline.js` and `build_month_tabs.py` take the reporting month from
+`CM_YEAR` / `CM_MONTH` and **have no defaults**. That is deliberate: both were
+previously hardcoded to the month last run, so an unchanged re-run would have
+silently rebuilt the prior month's numbers under the new month's filename. They
+now exit rather than guess, and `build_month_tabs.py` additionally asserts that
+the newest month in `smi_detail.json` is the month you asked for.
 
 Keep the month folder path short. Windows still enforces a 260-character path limit and
 `openpyxl` fails on longer ones; `~/Downloads/<Mon> <Year> Commission` is well inside it.
@@ -76,6 +100,9 @@ Sends to date:
 - `Mar 2026 Commission (Mentor/Instructor/SMI)` — 2026-07-09 — Staff $10,000 / Ali $2,143.44
 - `Apr 2026 Commission (Mentor/Instructor/SMI)` — 2026-08-12 — Staff $11,950.00 / Ali $2,077.45
   (first run of this skill end to end)
+- `May 2026 Commission (Mentor/Instructor/SMI)` — 2026-08-19 — Staff $9,425.00 / Ali $1,699.25
+  (CompanyPaid $15,104.44, tier 0.15; no IPBC rows, so both the IPBC tab and the
+  SMI `IPBC - Enrollment` line are absent, as in April)
 
 ---
 

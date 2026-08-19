@@ -1,23 +1,62 @@
 """Add the new month's tab to the running SMI Commissions workbook and to the
-IPBC Group workbook, following the established layout exactly."""
-import json, shutil, openpyxl
+IPBC Group workbook, following the established layout exactly.
 
-SRC_DIR = "C:/Users/ali_m/OneDrive/Business/Colaberry Novedea/Stats/Commissions/SMI Comm"
-OUT_DIR = "c:/Users/ali_m/Downloads/April 2026 Commission"
-TAB = "Apr 2026"
-MM, YY = 4, 2026
+The month is supplied by the caller - there is deliberately no default, because
+silently inheriting last month's tab is the exact failure this must never have.
 
-detail = json.load(open("smi_detail.json"))
-summary = json.load(open("smi_summary.json"))
-ipbc = json.load(open("ipbc_apr.json"))
+    CM_YEAR=2026 CM_MONTH=5 \
+    CM_DIR="c:/Users/ali_m/Downloads/May 2026 Commission" \
+    python build_month_tabs.py
+
+The prior month's two workbooks are read from the archive (SRC_DIR) and copied
+forward; the new tab is prepended to each and saved under the new month's name.
+"""
+import json, os, shutil, sys, calendar
+import openpyxl
+
+SRC_DIR = os.environ.get(
+    "CM_ARCHIVE",
+    "C:/Users/ali_m/OneDrive/Business/Colaberry Novedea/Stats/Commissions/SMI Comm")
+
+try:
+    YY = int(os.environ["CM_YEAR"])
+    MM = int(os.environ["CM_MONTH"])
+except (KeyError, ValueError):
+    raise SystemExit("FATAL: set CM_YEAR (4-digit) and CM_MONTH (1-12)")
+if not 1 <= MM <= 12:
+    raise SystemExit("FATAL: CM_MONTH must be 1-12, got %r" % MM)
+
+MON = calendar.month_abbr[MM]                    # "May"
+PMM, PYY = (12, YY - 1) if MM == 1 else (MM - 1, YY)
+PMON = calendar.month_abbr[PMM]                  # "Apr"
+
+OUT_DIR = os.environ.get("CM_DIR", "c:/Users/ali_m/Downloads/%s %d Commission" % (MON, YY))
+DATA_DIR = os.environ.get("CM_DATA_DIR", ".")
+TAB = "%s %d" % (MON, YY)
+
+def data(name):
+    return os.path.join(DATA_DIR, name)
+
+detail = json.load(open(data("smi_detail.json")))
+summary = json.load(open(data("smi_summary.json")))
+ipbc = json.load(open(data("ipbc_%s.json" % MON.lower())))
+
+# The pipeline is capped at the reporting month, so its newest rows must BE the
+# reporting month. If they are not, the wrong extract is on disk.
+newest = max((r["OrderYear"], r["OrderMonth"]) for r in detail)
+if newest != (YY, MM):
+    raise SystemExit("FATAL: smi_detail.json newest month is %d-%02d, expected %d-%02d"
+                     % (newest[0], newest[1], YY, MM))
 
 HDR = ["SMIC_SalesRep", "SMIC_Name", "OrderMonth", "OrderYear", "TotalPaid",
        "AliComm", "SalesRepComm", "MonthlyPaid", "MonthlyPaidMinus25per",
        None, "Name", "OrderMonth", "OrderYear", "Comm"]
 
 # ---------- 1. SMI Commissions ----------
-src = SRC_DIR + "/2026_03_SMI Commisions.xlsx"
-dst = OUT_DIR + "/2026_04_SMI Commisions.xlsx"
+src = "%s/%d_%02d_SMI Commisions.xlsx" % (SRC_DIR, PYY, PMM)
+dst = "%s/%d_%02d_SMI Commisions.xlsx" % (OUT_DIR, YY, MM)
+if not os.path.exists(src):
+    raise SystemExit("FATAL: prior month workbook not in the archive: %s" % src)
 shutil.copyfile(src, dst)
 
 wb = openpyxl.load_workbook(dst)
@@ -50,11 +89,14 @@ for i, r in enumerate(summary, start=2):
 
 wb.save(dst)
 print("SMI workbook -> %s" % dst)
+print("  copied forward from: %s" % os.path.basename(src))
 print("  sheets before: %d   after: %d   new tab first: %s" % (len(before), len(wb.sheetnames), wb.sheetnames[0]))
 
 # ---------- 2. IPBC Group ----------
-isrc = SRC_DIR + "/IPBC Group Mar 2026.xlsx"
-idst = OUT_DIR + "/IPBC Group Apr 2026.xlsx"
+isrc = "%s/IPBC Group %s %d.xlsx" % (SRC_DIR, PMON, PYY)
+idst = "%s/IPBC Group %s %d.xlsx" % (OUT_DIR, MON, YY)
+if not os.path.exists(isrc):
+    raise SystemExit("FATAL: prior month IPBC workbook not in the archive: %s" % isrc)
 shutil.copyfile(isrc, idst)
 
 iwb = openpyxl.load_workbook(idst)
@@ -77,4 +119,5 @@ else:
 
 iwb.save(idst)
 print("IPBC workbook -> %s" % idst)
+print("  copied forward from: %s" % os.path.basename(isrc))
 print("  sheets: %d   new tab first: %s   rows: %d" % (len(iwb.sheetnames), iwb.sheetnames[0], len(ipbc)))

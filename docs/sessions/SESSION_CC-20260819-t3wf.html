@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260819-t3wf — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, August 19, 2026 at 3:59 PM</div>
+    <div><span class="sid">CC-20260819-t3wf</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**`run_smi_pipeline.js` and `build_month_tabs.py` take the reporting month as a required input instead of carrying the previous run&#39;s month in a source literal.**</h2>
+          <span class="badge">2026-08-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Both scripts were hardcoded to April 2026 from the prior run - `run_smi_pipeline.js` carried `OrderMonth &lt;= 4`, `Month(...) = 4 AND Year(...) = 2026` and wrote `ipbc_apr.json`; `build_month_tabs.py` carried `TAB = &quot;Apr 2026&quot;`, `MM, YY = 4, 2026`, an `OUT_DIR` pinned to the April folder and both source workbook names spelled out literally. Run unchanged for May, they would have rebuilt **April&#39;s** numbers and saved them under May&#39;s filenames - a wrong payroll figure that no downstream gate would have caught, because preflight re-derives Ali&#39;s figure from whatever tab the builder wrote. Both now read `CM_YEAR` / `CM_MONTH` and **exit non-zero when either is absent or out of range** rather than defaulting: `run_smi_pipeline.js` exits 2, `build_month_tabs.py` raises. `build_month_tabs.py` additionally derives the prior month itself (with a January year-rollback), resolves the two carry-forward workbooks out of the archive by computed name, fails loudly if either is missing, and asserts that the newest month present in `smi_detail.json` **is** the month requested - so a stale extract on disk aborts instead of silently shipping. `run_smi_pipeline.js` now also prints `COMPANY_PAID=` and `ALI_COMM=` so the two figures are readable straight off the run. `.claude/skills/monthly-commission/SKILL.md`: runbook rewritten to spell out steps 3-5 with the new env-var contract (previously a one-line &quot;see the numbered table below&quot; placeholder), the `${YR}_05_` literal in the copy-paste block generalized to `${YR}_${MM}_`, a paragraph added explaining why the scripts have no defaults, and May added to &quot;Sends to date&quot;.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Exercised end to end on the real May 2026 close. Pipeline run with `CM_YEAR=2026 CM_MONTH=5` returned `COMPANY_PAID=15104.44` / `ALI_COMM=1699.25`, both matching Ali&#39;s independently-held May figures to the cent; 52 detail rows with `MonthlyPaid` uniform at 15,104.44 across every row and `sum(AliComm)` reconciling to the K:N summary figure. Regression gate re-derived all six previously-emailed months unchanged (Nov 2025 $1,177.93, Dec $3,768.11, Jan $2,116.22, Feb $1,907.19, Mar $2,143.44, Apr $2,077.45), so the basis has not been restated. `build_staff_png.py` self-check against February printed exactly $11,325.00 before May was trusted. `preflight.py` passed all six gates; after `--record`, a deliberate re-run **failed gate 1** as designed (`PREFLIGHT FAILED - May 2026 was ALREADY SENT`), confirming accounting cannot be double-sent.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The failure mode being closed here is specifically a *silent* one - the scripts ran fine with last month&#39;s constants and produced a plausible workbook, so the only signal would have been someone noticing the numbers had not moved. Fixing it was in scope because Ali asked for May, June and July to be runnable off the same process. Ali&#39;s own May/June/July reference table is reproduced in the skill and is point-in-time; July at $28,053.24 crosses into the 0.17 band (12.75% effective) and must not inherit the 11.25% the first six months of 2026 all sat in. The outbound email itself is deliberately **not** logged here - per CLAUDE.md and the skill, mail sent on Ali&#39;s behalf is out of PROGRESS.md scope; the send is recorded in `scripts/commission/ledger.json` and in `send_receipt.json` in the month folder.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260819-t3wf</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
