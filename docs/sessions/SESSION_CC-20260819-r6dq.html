@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260819-r6dq — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, August 19, 2026 at 4:46 PM</div>
+    <div><span class="sid">CC-20260819-r6dq</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Eventbrite URLs in event announcements and inboxes on AI Internship announcements render as real anchors instead of inert text students had to copy by hand.**</h2>
+          <span class="badge">2026-08-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Reported by Jackie Chalk (Community Organizer) by email on 2026-08-18. Community post and comment bodies were rendered as raw escaped text — `&lt;p className=&quot;cm-post-body&quot;&gt;{post.body}&lt;/p&gt;` and `&lt;div className=&quot;cm-comment-text&quot;&gt;{comment.body}&lt;/div&gt;` in `PostCard.tsx` — so every URL and email address in an announcement arrived as characters a student had to select and copy. Added `linkify()` to `communityUtils.ts`: a pure function returning a typed `BodySegment[]` (`text` | `url` | `email`), kept JSX-free so it stays in the module&#39;s existing dependency-free, unit-testable shape. New `RichText.tsx` maps those segments to React elements. Wired into **both** render sites, so comments get the same treatment as posts. Deliberately **not** `dangerouslySetInnerHTML`: bodies are member-authored input, so the only markup that can reach the DOM is the anchor the component constructs. External links carry `target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot;`; email links are `mailto:` in the same tab so the mail-client hand-off does not orphan a blank tab. Styling in `community.css`: `.cm-link` uses the file&#39;s existing `--berry` accent (#367895, 4.9:1 on the card surface, clears AA for normal text) and `.cm-link-email` adds a tinted chip so an internship inbox reads as an action rather than as prose — that chip is the &quot;highlighted&quot; half of Jackie&#39;s second request. Files: `communityUtils.ts`, `RichText.tsx` (new), `PostCard.tsx`, `community.css`, `communityUtils.test.ts`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc` 5.9.3 clean (exit 0, zero errors) over all three changed TS/TSX files with real `@types/react` resolved. Jest: **22/22 passing, 12 of them new**, the 10 pre-existing formatter tests unchanged. The emitted DOM was verified rather than assumed — the real `RichText` component was rendered through `react-dom/server`, confirming `&lt;a class=&quot;cm-link&quot; href=&quot;https://www.eventbrite.com/e/...&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot;&gt;` for Jackie&#39;s Eventbrite case and `&lt;a class=&quot;cm-link cm-link-email&quot; href=&quot;mailto:internships@colaberry.com&quot;&gt;` for her AI Internship case. BREAK pass over 20 hostile/awkward bodies (bare scheme, `data:` URI, `&lt;script&gt;` payload, CRLF, unicode host, plus-alias email, 4,000-word body, whitespace-only) asserting three invariants: segments always reconstruct the original body exactly (no content can be dropped), every href is structurally `http(s):`/`mailto:` and nothing else, and no input takes over 250ms. All held.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Not merged, not deployed** — PR opened off `origin/main` for review. Naked domains (`colaberry.com` with neither scheme nor `www.`) are deliberately left unlinked: linkifying them would false-positive on ordinary prose like &quot;Node.js&quot; and on filenames. Jackie&#39;s workflow pastes full Eventbrite URLs, so this does not affect her cases. Trailing sentence punctuation is split off the href, so &quot;register at https://evt.br/x.&quot; does not link the full stop, and a wrapping `)` is excluded by the matcher&#39;s character class rather than by post-hoc trimming. The matcher is a module-level `/g` regex whose `lastIndex` is reset per call, with a regression test pinning stability across repeated calls — without it the second render of the same body would silently drop links. The work was done in an external worktree because the OneDrive checkout is 2,453 commits behind `origin/main` and contains no Community code at all, and because three other sessions have uncommitted work in that shared tree.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260819-r6dq</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
