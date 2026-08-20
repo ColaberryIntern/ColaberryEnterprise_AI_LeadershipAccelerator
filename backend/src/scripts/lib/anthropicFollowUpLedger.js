@@ -205,10 +205,36 @@ function halt(ledger, reason, detail = null, now = new Date()) {
   return ledger;
 }
 
+// --reset starts the whole campaign over from letter 1. That is almost never
+// what someone un-pausing a campaign wants: letter 1 has already been sent, and
+// re-sending it means the same words arriving at a partner twice.
 function reset(ledger) {
   const fresh = emptyLedger();
   fresh.previousRun = { haltedAt: ledger.halt ? ledger.halt.at : null, sent: sentEntries(ledger).length };
   return fresh;
+}
+
+// resume() is the un-pause: it clears the halt and KEEPS every sent entry, so
+// the sequence picks up at the next unsent letter instead of the first one.
+//
+// It refuses to resume a 'replied' halt. That halt means a human at Anthropic
+// wrote to us, and quietly resuming would put another chasing letter in front
+// of someone who already answered. Undoing that needs the deliberate,
+// differently-named --reset, not the gentle-sounding --resume.
+function resume(ledger) {
+  if (!ledger.halt) return ledger;               // already running; no-op
+  if (ledger.halt.reason !== 'stopped') {
+    const e = new Error(
+      `refusing to resume a "${ledger.halt.reason}" halt. `
+      + (ledger.halt.reason === 'replied'
+        ? 'Anthropic replied, so resuming would chase someone who already answered. Use --reset only if you truly mean to start over.'
+        : 'Only an operator --stop can be undone with --resume.'),
+    );
+    e.error_class = 'IllegalStateTransition';
+    throw e;
+  }
+  ledger.halt = null;
+  return ledger;
 }
 
 module.exports = {
@@ -226,5 +252,6 @@ module.exports = {
   commit,
   release,
   halt,
+  resume,
   reset,
 };
