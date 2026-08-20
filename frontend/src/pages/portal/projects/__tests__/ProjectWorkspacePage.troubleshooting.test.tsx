@@ -193,11 +193,27 @@ describe('two clearly labelled troubleshooting doors', () => {
     expect(text).toMatch(/Claude Code[^.]*code on your computer/i);
   });
 
-  it('tells the student a portal question sent to Claude Code gets a confident wrong answer', async () => {
+  it('offers either Cory or Claude, and names Claude Code the more direct route inside the project', async () => {
     await mount();
-    // The Million Abate failure: Claude Code will answer a portal question
-    // rather than decline, and it will be wrong.
-    expect(textOf()).toMatch(/confident/i);
+    const text = textOf();
+    // Swati Raman reviewed the earlier, stricter routing copy and asked for
+    // this framing instead: help is available from either helper, and Claude
+    // Code is the more direct one when the student is troubleshooting inside
+    // the project they are actively building.
+    expect(text).toMatch(/either Cory or Claude/i);
+    expect(text).toMatch(/Claude Code[^.]*more direct/i);
+  });
+
+  it('keeps the portal caveat as a short note, without the confident-wrong-answer warning', async () => {
+    await mount();
+    const text = textOf();
+    // The caveat still earns its place: a portal question belongs with Cory.
+    expect(text).toMatch(/cannot see the portal/i);
+    expect(text).toContain('Cory');
+    // But it must not read as a reason to avoid Claude Code, which is what the
+    // previous wording did.
+    expect(text).not.toMatch(/confidently/i);
+    expect(text).not.toMatch(/will be wrong/i);
   });
 
   it('says a screenshot can be pasted instead of typing the problem out', async () => {
