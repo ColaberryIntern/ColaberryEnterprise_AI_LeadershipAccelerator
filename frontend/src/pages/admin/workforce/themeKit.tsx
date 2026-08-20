@@ -77,4 +77,26 @@ export const workforceCss = `
 .wf-chip{font-family:var(--mono);font-size:10.5px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--ink);margin:0 5px 5px 0;display:inline-block}
 .wf-otask{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:7px 0;border-top:1px solid var(--line-soft)}
 .wf-close{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);cursor:pointer;color:var(--muted)}
+/* Activity Timeline — Org Chart v4 (2026-08-20). Ali: "needs pizzazz and
+   coloring... look like an active timeline." Dots + a connecting line down
+   the left, one color per event kind, reusing this page's own existing
+   semantic tokens (never a new invented palette). */
+.wf-tl{display:flex;flex-direction:column}
+.wf-tl-item{display:flex;gap:12px;position:relative;padding-bottom:16px}
+.wf-tl-item:last-child{padding-bottom:0}
+.wf-tl-rail{display:flex;flex-direction:column;align-items:center;flex:none}
+.wf-tl-dot{width:11px;height:11px;border-radius:999px;flex:none;margin-top:3px;box-shadow:0 0 0 3px var(--panel2)}
+.wf-tl-dot.created{background:var(--berry)}
+.wf-tl-dot.status_change{background:var(--amber)}
+.wf-tl-dot.closed{background:var(--leaf)}
+.wf-tl-line{flex:1;width:2px;background:var(--line);margin-top:4px;min-height:16px}
+.wf-tl-item:last-child .wf-tl-line{display:none}
+.wf-tl-body{flex:1;min-width:0;display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.wf-tl-rt{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.wf-tl-label{font-weight:700;font-size:12.5px;margin:2px 0}
+.wf-tl-label.created{color:var(--berry)}
+.wf-tl-label.status_change{color:var(--amber)}
+.wf-tl-label.closed{color:var(--leaf)}
+.wf-tl-open{flex:none;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--panel);cursor:pointer;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.wf-tl-open:hover{border-color:var(--berry);color:var(--berry)}
 `;

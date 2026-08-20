@@ -4,12 +4,14 @@ import {
   getOrgChart,
   OrgChartResponse,
   OrgChartHuman,
+  OrgChartLeadershipAgent,
   NAMED_DEPARTMENTS,
   OTHER_DEPARTMENT,
 } from '../../../../services/workforceOrgChartApi';
 import { assignDistinctAvatarColors } from '../../../../utils/agentAvatarColor';
 import OrgChartMermaid from './OrgChartMermaid';
 import OrgChartHumanDrawer from './OrgChartHumanDrawer';
+import OrgChartLeadershipDrawer from './OrgChartLeadershipDrawer';
 import OrgChartDepartmentGroup from './OrgChartDepartmentGroup';
 
 /**
@@ -44,12 +46,37 @@ const FULLSCREEN_EXIT_ICON = (
     <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+const TICKET_ICON = (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width={15} height={15}>
+    <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V8Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+  </svg>
+);
+
+/**
+ * Org Chart v4 (2026-08-20) — every AI Leadership/AI Staff card's
+ * ticket-filter button. Opens the ticket board filtered to exactly this
+ * agent's tickets in a NEW TAB — `noopener,noreferrer` is a real security
+ * requirement (the opened page must never get a `window.opener` reference
+ * back into this admin session), not a style choice. `e.preventDefault()` +
+ * `e.stopPropagation()` because this button renders NESTED inside a Staff
+ * card's own `<Link>` (and inside a Leadership card's own onClick button) —
+ * without both, the click would also trigger the parent card's own
+ * navigation/drawer-open behavior.
+ */
+function openAgentTickets(agentName: string, e: React.MouseEvent): void {
+  e.preventDefault();
+  e.stopPropagation();
+  window.open(`/admin/tickets?creator=${encodeURIComponent(agentName)}`, '_blank', 'noopener,noreferrer');
+}
 
 const OrgChartSection: React.FC = () => {
   const [data, setData] = useState<OrgChartResponse | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
   const [selectedHuman, setSelectedHuman] = useState<OrgChartHuman | null>(null);
+  // Org Chart v4 (2026-08-20) — AI Leadership drawer. Staff cards are
+  // deliberately NOT tracked here (they keep real <Link> navigation).
+  const [selectedLeadership, setSelectedLeadership] = useState<OrgChartLeadershipAgent | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const chartCardRef = useRef<HTMLElement>(null);
 
@@ -94,21 +121,44 @@ const OrgChartSection: React.FC = () => {
   // for anyone with no hierarchy branch — same page-wide consistency the
   // drawer applies, so the main chart and the drawer never disagree on a
   // given branch's color.
+  //
+  // Org Chart v4 color-collision fix (2026-08-20, session CC-20260818-x4nk
+  // continued) — Ali, live: JJ and Ali both rendered green. Root cause: the
+  // fallback pass below used to run over EVERY id first (zero knowledge of
+  // which colors the override loop was about to reserve), then the override
+  // loop clobbered only the ids with a real hierarchy_color — so a no-agent
+  // id's hash fallback could coincidentally land on a color a
+  // human-with-agents was about to be assigned. Fixed by computing the FULL
+  // reserved-color set (every real hierarchy_color across ALL THREE tiers,
+  // not just this tier — a no-agent human's fallback must never collide with
+  // a Leadership/Staff card's color either) BEFORE the fallback pass runs,
+  // and only hash-assigning the ids that don't already have a server color
+  // (no reason to compute a fallback for an id that gets overwritten anyway).
+  const reservedHierarchyColors = useMemo(() => {
+    const set = new Set<string>();
+    for (const h of data?.humans ?? []) if (h.hierarchy_color) set.add(h.hierarchy_color);
+    for (const l of data?.leadership ?? []) if (l.hierarchy_color) set.add(l.hierarchy_color);
+    for (const s of data?.staff ?? []) if (s.hierarchy_color) set.add(s.hierarchy_color);
+    return Array.from(set);
+  }, [data]);
   const humanColors = useMemo(() => {
-    const base = assignDistinctAvatarColors((data?.humans ?? []).map((h) => h.id));
+    const noColorIds = (data?.humans ?? []).filter((h) => !h.hierarchy_color).map((h) => h.id);
+    const base = assignDistinctAvatarColors(noColorIds, reservedHierarchyColors);
     for (const h of data?.humans ?? []) if (h.hierarchy_color) base[h.id] = h.hierarchy_color;
     return base;
-  }, [data]);
+  }, [data, reservedHierarchyColors]);
   const leadershipColors = useMemo(() => {
-    const base = assignDistinctAvatarColors((data?.leadership ?? []).map((l) => l.id));
+    const noColorIds = (data?.leadership ?? []).filter((l) => !l.hierarchy_color).map((l) => l.id);
+    const base = assignDistinctAvatarColors(noColorIds, reservedHierarchyColors);
     for (const l of data?.leadership ?? []) if (l.hierarchy_color) base[l.id] = l.hierarchy_color;
     return base;
-  }, [data]);
+  }, [data, reservedHierarchyColors]);
   const staffColors = useMemo(() => {
-    const base = assignDistinctAvatarColors((data?.staff ?? []).map((s) => s.id));
+    const noColorIds = (data?.staff ?? []).filter((s) => !s.hierarchy_color).map((s) => s.id);
+    const base = assignDistinctAvatarColors(noColorIds, reservedHierarchyColors);
     for (const s of data?.staff ?? []) if (s.hierarchy_color) base[s.id] = s.hierarchy_color;
     return base;
-  }, [data]);
+  }, [data, reservedHierarchyColors]);
 
   // Department order: Ali's 6 named departments, in the order he gave them,
   // then a trailing "Other" bucket — never drops a real human even if their
@@ -164,7 +214,19 @@ const OrgChartSection: React.FC = () => {
       ) : (
         <div className="wf-dirs">
           {data.leadership.map((l) => (
-            <Link key={l.id} to={`/admin/agents/${l.id}`} className="wf-emp" style={{ display: 'flex', textDecoration: 'none', color: 'inherit' }}>
+            // Org Chart v4 (2026-08-20) — AI Leadership cards open the new
+            // drawer (human above / AI Staff below) instead of navigating
+            // away. A real <button>, not a <Link>: this is a DELIBERATE
+            // behavior change from AI Staff cards below, which keep
+            // real navigation — see OrgChartLeadershipDrawer.tsx's header
+            // comment and this run's execution-contract.md.
+            <button
+              key={l.id}
+              type="button"
+              className="wf-emp"
+              style={{ display: 'flex', textAlign: 'left', border: undefined }}
+              onClick={() => setSelectedLeadership(l)}
+            >
               <span className="wf-av" style={{ background: leadershipColors[l.id] }}>{initials(l.display_name)}</span>
               <div style={{ minWidth: 0 }}>
                 <div className="nm">{l.display_name}</div>
@@ -172,7 +234,18 @@ const OrgChartSection: React.FC = () => {
                 <span className="wf-chip" style={{ marginTop: 4 }}>{l.reports_to_summary}</span>
               </div>
               <div className="wl"><b>{l.open_ticket_count}</b><br />open tickets</div>
-            </Link>
+              <span
+                role="button"
+                tabIndex={0}
+                className="wf-toggle"
+                title={`View ${l.display_name}'s tickets`}
+                aria-label={`View ${l.display_name}'s tickets`}
+                style={{ marginLeft: 8, flex: 'none' }}
+                onClick={(e) => openAgentTickets(l.agent_name, e)}
+              >
+                {TICKET_ICON}
+              </span>
+            </button>
           ))}
         </div>
       )}
@@ -191,6 +264,17 @@ const OrgChartSection: React.FC = () => {
                 <span className="wf-chip" style={{ marginTop: 4 }}>{s.reports_to_summary}</span>
               </div>
               <div className="wl"><b>{s.open_ticket_count}</b><br />open tickets</div>
+              <span
+                role="button"
+                tabIndex={0}
+                className="wf-toggle"
+                title={`View ${s.display_name}'s tickets`}
+                aria-label={`View ${s.display_name}'s tickets`}
+                style={{ marginLeft: 8, flex: 'none' }}
+                onClick={(e) => openAgentTickets(s.agent_name, e)}
+              >
+                {TICKET_ICON}
+              </span>
             </Link>
           ))}
         </div>
@@ -227,6 +311,15 @@ const OrgChartSection: React.FC = () => {
           staff={data.staff}
           onClose={() => setSelectedHuman(null)}
           onTeamChanged={load}
+        />
+      )}
+
+      {selectedLeadership && (
+        <OrgChartLeadershipDrawer
+          leadershipAgent={selectedLeadership}
+          human={data.humans.find((h) => h.id === selectedLeadership.reports_to_human_id)}
+          staff={data.staff.filter((s) => s.reports_to_agent_id === selectedLeadership.id)}
+          onClose={() => setSelectedLeadership(null)}
         />
       )}
     </>

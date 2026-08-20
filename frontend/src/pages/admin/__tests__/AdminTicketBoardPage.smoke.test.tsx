@@ -427,3 +427,68 @@ describe('AdminTicketBoardPage — last-7-days default view', () => {
     expect(container.textContent).not.toContain('older ticket');
   });
 });
+
+// Org Chart v4 (2026-08-20, session CC-20260818-x4nk continued) — the org
+// chart's per-card ticket-filter button deep-links here as
+// ?creator=<agent_name> in a new tab. This page reads that param and forwards
+// it to the board fetch as `creator`.
+describe('AdminTicketBoardPage — creator filter (org chart deep link)', () => {
+  function boardFetchCalls(): string[] {
+    return ((global as any).fetch as jest.Mock).mock.calls
+      .map((c: any[]) => c[0])
+      .filter((url: string) => url.startsWith('/api/admin/tickets/board'));
+  }
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/'); // reset the deep-link URL between tests
+  });
+
+  it('happy path: ?creator=<agent_name> on load populates the filter and the board fetch includes creator=<agent_name>', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=cory-engine');
+    mockFetch({ backlog: [makeTicket({ id: 'x-1' })] });
+    await renderBoard();
+
+    const calls = boardFetchCalls();
+    expect(calls[calls.length - 1]).toMatch(/creator=cory-engine/);
+    expect(container.textContent).toContain('Creator: cory-engine');
+  });
+
+  it('boundary: no ?creator= param -> the fetch omits it entirely, byte-for-byte unchanged from today, and no chip renders', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'x-2' })] });
+    await renderBoard();
+
+    const calls = boardFetchCalls();
+    expect(calls[calls.length - 1]).not.toMatch(/creator=/);
+    expect(container.textContent).not.toContain('Creator:');
+  });
+
+  it('clicking the chip\'s clear (×) button removes the filter and re-fetches without creator=', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=cory-engine');
+    mockFetch({ backlog: [makeTicket({ id: 'x-3' })] });
+    await renderBoard();
+
+    expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/creator=cory-engine/);
+
+    const clearChipBtn = container.querySelector('.btn-close') as HTMLButtonElement;
+    expect(clearChipBtn).toBeTruthy();
+    await act(async () => {
+      clearChipBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(boardFetchCalls()[boardFetchCalls().length - 1]).not.toMatch(/creator=/);
+    expect(container.textContent).not.toContain('Creator:');
+  });
+
+  it('"Clear" (the existing filter-clear button) also clears the creator filter, same as every other dropdown filter', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=cory-engine');
+    mockFetch({ backlog: [makeTicket({ id: 'x-4' })] });
+    await renderBoard();
+
+    const clearBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Clear') as HTMLButtonElement;
+    await act(async () => {
+      clearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(boardFetchCalls()[boardFetchCalls().length - 1]).not.toMatch(/creator=/);
+  });
+});
