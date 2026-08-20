@@ -21,7 +21,19 @@ import { importTaskToAttributes, isTaskStatus, type ImportTaskInput } from './pr
 import type { ProjectTreeDto } from './projectTreeDto';
 
 export interface ImportListInput { cluster: string; title?: string; position?: number; tasks: ImportTaskInput[]; }
-export interface ImportProjectInput { name?: string; lists: ImportListInput[]; }
+export interface ImportProjectInput { project_id?: string; name?: string; lists: ImportListInput[]; }
+
+/**
+ * The caller's own LIVE project with this id, or null.
+ *
+ * Null covers every failure the same way — no id supplied, not a project,
+ * someone else's project, an archived one — because the caller's response to all
+ * four is identical: fall back rather than write somewhere unintended.
+ */
+async function ownedLiveProject(enrollmentId: string, projectId?: string): Promise<Project | null> {
+  if (!projectId) return null;
+  return Project.findOne({ where: { id: projectId, enrollment_id: enrollmentId, archived_at: null } });
+}
 
 /** Structured note for a write this service refused, downgraded, or granted. */
 function log(
@@ -246,7 +258,21 @@ export async function markTaskVerifiedComplete(
 export async function importProject(enrollmentId: string, payload: ImportProjectInput): Promise<ProjectTreeDto | null> {
   // Outside the transaction: the project is a get-or-create that must survive a
   // rolled-back import (the student still owns the project, just not this plan).
-  const project = await createProjectForEnrollment(enrollmentId);
+  //
+  // TARGETED BY ID when the client says which project it is mirroring. Without
+  // that, this function had the same defect as the build wizard: it wrote
+  // whatever snapshot it was handed into "the active project", so the browser's
+  // copy of build A could land on build B's rows the moment the active pointer
+  // moved between the page load and the mirror. The client picks its payload
+  // with `loadProjects().find((p) => !p.sample)` — position 0 — which is not
+  // necessarily the active project at all.
+  //
+  // Ownership is re-checked here rather than trusted: a project_id that is not
+  // this student's LIVE project falls back to the active project instead of
+  // being honoured, so a forged id can only ever reach rows the caller already
+  // had access to.
+  const project = (await ownedLiveProject(enrollmentId, payload.project_id))
+    ?? await createProjectForEnrollment(enrollmentId);
 
   // MEASURED, 2026-08-13, production. `createProjectForEnrollment` returns the
   // ACTIVE project, and the portal mirrors localStorage on load. A build was

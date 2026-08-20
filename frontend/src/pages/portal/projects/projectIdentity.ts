@@ -78,12 +78,26 @@ export function adoptServerIds<T extends ProjectIdentity>(list: T[]): AdoptResul
 
     const existing = indexById.get(targetId);
     if (existing !== undefined) {
-      // Same project seen twice. Keep the row already keyed by the server id and
-      // fold in the placeholder's alias so its old URLs keep resolving.
+      const keep = out[existing];
       if (adopt) {
-        const keep = out[existing];
+        // A placeholder arriving AFTER the row already keyed by the server id.
+        // The server-keyed row wins; fold in the placeholder's alias so its old
+        // URLs keep resolving.
         out[existing] = { ...keep, legacyIds: mergeAliases(keep.legacyIds, project.id) };
         remapped.push({ from: project.id, to: targetId });
+      } else {
+        // The reverse order, and the case that lost a student their build.
+        // `createProjectFromAnswers` UNSHIFTS the new placeholder, so it is
+        // visited first and claims the id before the real server-keyed row is
+        // reached — at which point the old code hit `continue` and DROPPED the
+        // server row, taking its lists, completions and command-centre URL with
+        // it. The placeholder is an empty stand-in by definition; the row that
+        // is genuinely keyed by the server id carries the work. So it wins here
+        // too, and inherits the aliases the placeholder had accumulated.
+        out[existing] = {
+          ...project,
+          legacyIds: mergeAliasList(project.legacyIds, keep.legacyIds),
+        };
       }
       continue;
     }
@@ -103,4 +117,13 @@ export function adoptServerIds<T extends ProjectIdentity>(list: T[]): AdoptResul
 function mergeAliases(existing: string[] | undefined, alias: string): string[] {
   const aliases = Array.isArray(existing) ? existing.filter((a) => typeof a === 'string' && a) : [];
   return aliases.includes(alias) ? aliases : [...aliases, alias];
+}
+
+/** Union of two alias lists, order-stable and duplicate-free. */
+function mergeAliasList(existing: string[] | undefined, incoming: string[] | undefined): string[] {
+  const out = Array.isArray(existing) ? existing.filter((a) => typeof a === 'string' && a) : [];
+  for (const alias of Array.isArray(incoming) ? incoming : []) {
+    if (typeof alias === 'string' && alias && !out.includes(alias)) out.push(alias);
+  }
+  return out;
 }

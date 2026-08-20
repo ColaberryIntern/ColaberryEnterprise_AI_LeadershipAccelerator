@@ -72,6 +72,45 @@ describe('adoptServerIds', () => {
     expect(list[0].legacyIds).toEqual(['p1755012345678']);
   });
 
+  /**
+   * The same collapse, in the order it actually happens.
+   *
+   * `createProjectFromAnswers` UNSHIFTS the new placeholder, so when
+   * `claimBackendProject` runs the placeholder is at index 0 and the row already
+   * keyed by the server id is behind it. The old code indexed the placeholder
+   * first and then hit `continue` on the real row — dropping it, and with it the
+   * student's lists, completions and command-centre URL. The doc comment
+   * promised "the server-keyed row wins"; it only did when that row happened to
+   * come first.
+   */
+  it('keeps the server-keyed row when the placeholder is visited first', () => {
+    const { list } = adoptServerIds([
+      proj({ id: 'p1755012345678', pipelineProjectId: UUID_A }),
+      proj({ id: UUID_A, name: 'CoreOps', lists: ['r0', 'r1'] } as Partial<ProjectIdentity> & { id: string }),
+    ]);
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe(UUID_A);
+    // The real row's content survived rather than the empty placeholder's.
+    expect(list[0].name).toBe('CoreOps');
+    expect(list[0].lists).toEqual(['r0', 'r1']);
+    // and the placeholder's old id still resolves.
+    expect(list[0].legacyIds).toEqual(['p1755012345678']);
+  });
+
+  it('is order-independent: both arrangements yield the same surviving row', () => {
+    const placeholder = proj({ id: 'p1755012345678', pipelineProjectId: UUID_A });
+    const server = proj({ id: UUID_A, name: 'CoreOps' } as Partial<ProjectIdentity> & { id: string });
+
+    const placeholderFirst = adoptServerIds([placeholder, server]).list;
+    const serverFirst = adoptServerIds([server, placeholder]).list;
+
+    expect(placeholderFirst).toHaveLength(1);
+    expect(serverFirst).toHaveLength(1);
+    expect(placeholderFirst[0].name).toBe(serverFirst[0].name);
+    expect(placeholderFirst[0].id).toBe(serverFirst[0].id);
+    expect(placeholderFirst[0].legacyIds).toEqual(serverFirst[0].legacyIds);
+  });
+
   it('heals several stale projects in one pass', () => {
     const { list, remapped } = adoptServerIds([
       proj({ id: 'pA', pipelineProjectId: UUID_A }),

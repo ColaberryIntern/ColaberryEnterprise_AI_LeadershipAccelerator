@@ -1,4 +1,4 @@
-import { Op } from 'sequelize';
+import { Op, QueryTypes, Transaction } from 'sequelize';
 import Project, { ProjectStage } from '../models/Project';
 import ProjectArtifact from '../models/ProjectArtifact';
 import { Enrollment, Cohort, UserCurriculumProfile, ArtifactDefinition, AssignmentSubmission } from '../models';
@@ -55,7 +55,10 @@ async function loadEnrollmentForProject(enrollmentId: string): Promise<Enrollmen
 }
 
 /** Create a fresh project row + mark it the enrollment's active project. */
-async function buildAndActivateProject(enrollment: Enrollment): Promise<Project> {
+async function buildAndActivateProject(
+  enrollment: Enrollment,
+  opts: { transaction?: Transaction; claimedForBuild?: boolean } = {},
+): Promise<Project> {
   const cohort = (enrollment as any).cohort as Cohort | null;
   if (!cohort?.program_id) {
     throw new Error(`Enrollment ${enrollment.id} has no associated program via cohort`);
@@ -68,10 +71,19 @@ async function buildAndActivateProject(enrollment: Enrollment): Promise<Project>
     industry: profile?.industry || undefined,
     project_stage: 'discovery',
     project_variables: {},
-    setup_status: { requirements_loaded: false, claude_md_loaded: false, github_connected: false, activated: false },
-  } as any);
+    setup_status: {
+      requirements_loaded: false,
+      claude_md_loaded: false,
+      github_connected: false,
+      activated: false,
+      // Stamped at creation on the new-build path so the row is never a
+      // reuse candidate for a second, concurrent resolve. See
+      // resolveProjectForNewBuild.
+      ...(opts.claimedForBuild ? { build_claimed_at: new Date().toISOString() } : {}),
+    },
+  } as any, { transaction: opts.transaction });
   (enrollment as any).active_project_id = project.id;
-  await enrollment.save();
+  await enrollment.save({ transaction: opts.transaction });
   return project;
 }
 
@@ -109,6 +121,108 @@ export async function createProjectForEnrollment(enrollmentId: string): Promise<
 export async function createNewProjectForEnrollment(enrollmentId: string): Promise<Project> {
   const enrollment = await loadEnrollmentForProject(enrollmentId);
   return buildAndActivateProject(enrollment);
+}
+
+/**
+ * Has anything ever been BUILT into this project? Intake answers, a generated
+ * plan, or materialized tasks all count.
+ *
+ * `build_intake` and `build_plans` are raw SQL because they have no model (they
+ * are created by db/ensureSbpSchema.ts) — backend/CLAUDE.md allows this where no
+ * model exists, and the result is typed at the call site.
+ */
+async function hasBuildContent(projectId: string, transaction?: Transaction): Promise<boolean> {
+  const { StudentTask } = await import('../models');
+  const [counts, taskCount] = await Promise.all([
+    sequelize.query<{ intake: string; plans: string }>(
+      `SELECT
+         (SELECT count(*) FROM build_intake WHERE project_id = :projectId) AS intake,
+         (SELECT count(*) FROM build_plans  WHERE project_id = :projectId) AS plans`,
+      { type: QueryTypes.SELECT, replacements: { projectId }, transaction },
+    ),
+    StudentTask.count({ where: { project_id: projectId }, transaction }),
+  ]);
+  const row = counts[0];
+  return Number(row?.intake ?? 0) > 0 || Number(row?.plans ?? 0) > 0 || taskCount > 0;
+}
+
+/**
+ * The project a NEW build should be generated into.
+ *
+ * THE DEFECT THIS CLOSES. The browser used to answer this question itself, by
+ * calling `GET /api/portal/projects/active` and building into whatever came
+ * back (frontend sbpApi.resolveBackendProjectId). So a student who already had
+ * a build and pressed "Start a new build" ran the entire pipeline against their
+ * FIRST project's row: `saveIntake` overwrote the first build's answers
+ * (ON CONFLICT (project_id) DO UPDATE), `publishPlan` marked its plan
+ * `superseded`, and `materializePlanAsTasks` rewrote its `student_tasks` in
+ * place — both plans number their stories STORY-001 upward and (project_id,
+ * story_id) is the identity key, so the second plan's stories landed on the
+ * first plan's rows, keeping their status, verification and baseline dates.
+ * `setProjectNameIfEmpty` then declined to rename it, so the card kept the
+ * FIRST build's name while every task under it described the SECOND build.
+ * Reported by a student on 2026-08-19 as a new build that "merged with" the old
+ * one, and hit independently by the DRI days earlier.
+ *
+ * Deciding this SERVER-side is the point: the client cannot be trusted to pick
+ * the row a build lands in, and a stale bundle must not be able to reintroduce
+ * the merge.
+ *
+ * Reuse is allowed in exactly one case — the active project exists and nothing
+ * has ever been built into it. That keeps the common "brand new student whose
+ * project row was auto-created by an earlier flow" case from leaving an empty
+ * card behind, which is the legitimate concern the old client-side reuse was
+ * reaching for. Anything with intake, a plan or tasks gets a fresh row.
+ *
+ * CONCURRENCY. Two builds started within the same instant would both find the
+ * same pristine project and both build into it — the original bug, reached by a
+ * different door. So the whole decision runs inside one transaction that takes a
+ * row lock on the enrollment (serialising every concurrent resolve for this
+ * student), and reuse STAMPS `setup_status.build_claimed_at` before returning,
+ * which makes the row ineligible for the next resolve. The second caller
+ * therefore always gets its own project.
+ */
+export async function resolveProjectForNewBuild(
+  enrollmentId: string,
+): Promise<{ project: Project; reused: boolean }> {
+  const enrollment = await loadEnrollmentForProject(enrollmentId);
+
+  return sequelize.transaction(async (transaction) => {
+    // Serialise concurrent resolves for this student. Without it, two clicks a
+    // few milliseconds apart both see a pristine project and both claim it.
+    await sequelize.query(`SELECT id FROM enrollments WHERE id = :enrollmentId FOR UPDATE`, {
+      type: QueryTypes.SELECT,
+      replacements: { enrollmentId },
+      transaction,
+    });
+
+    const activeId = (enrollment as any).active_project_id;
+    const active = activeId
+      ? await Project.findOne({
+        where: { id: activeId, enrollment_id: enrollmentId, ...LIVE },
+        transaction,
+      })
+      : null;
+
+    const claimable =
+      active
+      && !PROTECTED_PROJECT_IDS.has(String(active.id).trim().toLowerCase())
+      && !((active as any).setup_status || {}).build_claimed_at
+      && !(await hasBuildContent(active.id, transaction));
+
+    if (claimable && active) {
+      await active.update(
+        { setup_status: { ...((active as any).setup_status || {}), build_claimed_at: new Date().toISOString() } },
+        { transaction },
+      );
+      return { project: active, reused: true };
+    }
+
+    return {
+      project: await buildAndActivateProject(enrollment, { transaction, claimedForBuild: true }),
+      reused: false,
+    };
+  });
 }
 
 /** The enrollment's CURRENT (active) project, or null. */
