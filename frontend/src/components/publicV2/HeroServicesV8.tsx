@@ -78,6 +78,10 @@ export default function HeroServicesV8(): React.ReactElement {
               <span className="cbv2-h8__word cbv2-h8__word--sys">What outcome</span>
               <span className="cbv2-h8__rail" aria-hidden="true" />
             </span>
+            {/* A real space between the lines: they are separate spans, so the
+                accessible name concatenated to "systemBuild" without it. The
+                lines are block-level, so this changes nothing visually. */}
+            {' '}
             <span className="cbv2-h8__line">
               <span className="cbv2-h8__word cbv2-h8__word--ppl">do you need next?</span>
               <span className="cbv2-h8__rail cbv2-h8__rail--cyan" aria-hidden="true" />
