@@ -16,9 +16,17 @@
  * (the real, live-confirmed reason a `(org_id, email)` unique index doesn't
  * already prevent the duplicate — the two rows are distinct byte strings).
  *
- * Explicitly NOT touched (Ali did not name them in the department brief):
- * swati@colaberry.com, ali+10@colaberry.com, balakrishna.k@colaberry.com,
- * channocatshhr@yahoo.com. Also not touched: reese@colaberry.com
+ * Org Chart v3 update (session CC-20260818-x4nk continued, 2026-08-19 — see
+ * .loop-architect/runs/20260819-org-chart-colors-tasks/): Ali named 2 more
+ * people directly ("Put both bala's in Customer Support - swati is is in
+ * operations") — `balakrishna.k@colaberry.com` (the SECOND real Bala account,
+ * `balamurali@colaberry.com` above was already Customer Support) and
+ * `swati@colaberry.com`, both added to DEPARTMENT_ASSIGNMENTS below.
+ *
+ * Explicitly NOT touched (Ali did not name them): ali+10@colaberry.com
+ * (deliberately excluded from the org chart's human roster entirely — see
+ * orgChartService.ts's EXCLUDED_HUMAN_EMAILS — "the red Ali should be
+ * removed"), channocatshhr@yahoo.com. Also not touched: reese@colaberry.com
  * (AI-operated, already excluded from the human roster by orgChartService.ts
  * elsewhere).
  *
@@ -92,6 +100,11 @@ export const DEPARTMENT_ASSIGNMENTS: { email: string; team: string }[] = [
   { email: 'sohail@colaberry.com', team: 'Marketing' },
   { email: 'aleem@colaberry.com', team: 'Marketing' },
   { email: 'saitejesh@colaberry.com', team: 'Marketing' },
+  // Org Chart v3 (2026-08-19): Ali named both real Bala accounts explicitly
+  // ("Put both bala's in Customer Support") and named Swati for the first
+  // time ("swati is is in operations").
+  { email: 'balakrishna.k@colaberry.com', team: 'Customer Support' },
+  { email: 'swati@colaberry.com', team: 'Operations' },
 ];
 
 export const FARHAT_EMAIL = 'farhat@colaberry.com';

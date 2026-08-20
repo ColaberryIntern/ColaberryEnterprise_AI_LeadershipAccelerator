@@ -26,6 +26,8 @@ const orgChartHumanSchema = z.object({
   leadership_agent_ids: z.array(z.string()),
   staff_count: z.number().int().nonnegative(),
   task: orgChartTaskSchema.nullable(),
+  // Org Chart v3 (2026-08-19) — see orgChartColorAssignment.ts.
+  hierarchy_color: z.string().nullable(),
 });
 
 const orgChartLeadershipAgentSchema = z.object({
@@ -36,6 +38,7 @@ const orgChartLeadershipAgentSchema = z.object({
   reports_to_summary: z.string().min(1),
   staff_ids: z.array(z.string()),
   open_ticket_count: z.number().int().nonnegative(),
+  hierarchy_color: z.string().nullable(),
 });
 
 const orgChartStaffAgentSchema = z.object({
@@ -45,6 +48,7 @@ const orgChartStaffAgentSchema = z.object({
   reports_to_agent_id: z.string(),
   reports_to_summary: z.string().min(1),
   open_ticket_count: z.number().int().nonnegative(),
+  hierarchy_color: z.string().nullable(),
 });
 
 const orgChartUnresolvedAgentSchema = z.object({

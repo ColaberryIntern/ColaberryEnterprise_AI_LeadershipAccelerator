@@ -4,7 +4,8 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleRoster, handleOffice, handleBriefing, handleDailyMeeting, handleMeetings,
   handleListTasks, handleCreateTask, handleUpdateTask, handleMessages, handleReview, handleAnalytics,
-  handleListLiveAgents, handleListLiveAgentActivity, handleOrgChart,
+  handleListLiveAgents, handleListLiveAgentActivity, handleOrgChart, handleUpdateOrgMemberTeam,
+  handleAssignHierarchyTask,
 } from '../../controllers/workforceController';
 
 const router = Router();
@@ -31,5 +32,17 @@ router.get('/api/admin/workforce/live-agents/activity', requireAdmin, handleList
 // Leadership -> AI Staff tree, replacing the static AI_ORG roster's "who's in
 // this org" answer with the real one. See services/workforce/orgChartService.ts.
 router.get('/api/admin/workforce/org-chart', requireAdmin, handleOrgChart);
+
+// Org Chart v3 (2026-08-19) — Ali: "Give me the ability to switch the people
+// between teams." Grouped under the org-chart namespace since it's an
+// org-chart-page-specific action, distinct from the generic employee_slug-
+// keyed /tasks endpoints above (a different, older data model).
+router.patch('/api/admin/workforce/org-chart/members/:id/team', requireAdmin, handleUpdateOrgMemberTeam);
+
+// Org Chart v3 (2026-08-19) — Ali: "The human has the ability to create and
+// assign tasks to any agent in it's hierarchy even if they report to
+// another AI Agent." Server-side authorization re-validated inside
+// assignTaskToAgent() — never trusts req.params/req.body alone.
+router.post('/api/admin/workforce/org-chart/members/:id/tasks', requireAdmin, handleAssignHierarchyTask);
 
 export default router;

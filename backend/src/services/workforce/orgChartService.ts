@@ -8,6 +8,7 @@ import { Ticket } from '../../models';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
 import { OPEN_TICKET_STATUS_FILTER } from './liveAgentsService';
+import { assignHierarchyColors } from './orgChartColorAssignment';
 
 /**
  * orgChartService — the real, drill-down org chart Ali asked for: Human
@@ -37,6 +38,18 @@ const COLABERRY_ORG_NAME = 'Colaberry';
  * buckets into `OTHER_DEPARTMENT` — never silently dropped from the chart. */
 export const NAMED_DEPARTMENTS = ['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing'] as const;
 export const OTHER_DEPARTMENT = 'Other';
+
+/** Org Chart v3 (2026-08-19, session CC-20260818-x4nk continued) — Ali,
+ * live: "the red Ali should be removed." `ali+10@colaberry.com` is a real,
+ * deliberate `org_members` row (used for something else Ali has going on)
+ * that should never render as a human employee on this chart. Excluded
+ * HERE, at display time, rather than deleted — the row itself is untouched
+ * in the DB. Named after the specific complaint it fixes (its old hash-based
+ * avatar color happened to land on `--chart-2`, "cherry red") so a future
+ * reader knows exactly why this one address is special-cased instead of
+ * wondering if it's a stale TODO. A `Set`, not a single constant, so a
+ * future similar exclusion doesn't need a second parallel mechanism. */
+export const EXCLUDED_HUMAN_EMAILS = new Set(['ali+10@colaberry.com']);
 
 function resolveDepartment(team: string | null): string {
   if (team && (NAMED_DEPARTMENTS as readonly string[]).includes(team)) return team;
@@ -86,6 +99,13 @@ export interface OrgChartHuman {
    * null when they genuinely have none yet — never a fabricated placeholder
    * (Ali, live: "start them off with just one task a piece for right now"). */
   task: OrgChartTask | null;
+  /** Org Chart v3 (2026-08-19) — this human's distinct "main" color from the
+   * --chart-1..8 palette, present ONLY when they have >=1 AI Leadership
+   * agent reporting to them (see orgChartColorAssignment.ts). `null` for
+   * everyone else — Ali, live: "use the main colors for the people that
+   * have AI Agent staff" implies everyone else needs no meaningful color;
+   * the frontend decides that fallback, not this API. */
+  hierarchy_color: string | null;
 }
 
 export interface OrgChartLeadershipAgent {
@@ -101,6 +121,10 @@ export interface OrgChartLeadershipAgent {
   reports_to_summary: string;
   staff_ids: string[];
   open_ticket_count: number;
+  /** Org Chart v3 (2026-08-19) — always equal to the resolving human's
+   * `hierarchy_color` (every leadership agent resolves to SOME human, so
+   * this is never null in practice — see orgChartColorAssignment.ts). */
+  hierarchy_color: string | null;
 }
 
 export interface OrgChartStaffAgent {
@@ -112,6 +136,9 @@ export interface OrgChartStaffAgent {
    * pre-click visibility requirement as OrgChartLeadershipAgent's. */
   reports_to_summary: string;
   open_ticket_count: number;
+  /** Org Chart v3 (2026-08-19) — the SAME color as the leadership agent this
+   * staff agent reports through (propagated down the branch). */
+  hierarchy_color: string | null;
 }
 
 export interface OrgChartUnresolvedAgent {
@@ -257,7 +284,9 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
   if (!org) throw new ColaberryOrgNotFoundError();
 
   const allMembers = await OrgMember.findAll({ where: { org_id: org.id }, order: [['created_at', 'ASC']] });
-  const humanMembers = await excludeAiOperatedMembers(allMembers);
+  const aiExcludedMembers = await excludeAiOperatedMembers(allMembers);
+  // Org Chart v3 — see EXCLUDED_HUMAN_EMAILS's own comment above.
+  const humanMembers = aiExcludedMembers.filter((m) => !EXCLUDED_HUMAN_EMAILS.has(m.email.toLowerCase()));
   const nameByEnrollmentId = await fetchHumanNames(humanMembers);
   const humanIds = humanMembers.map((m) => m.id);
   const taskByHuman = await fetchThrottledTaskByHuman(humanIds);
@@ -313,6 +342,7 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
         reports_to_summary: `Reports to: ${reportsToName}`,
         staff_ids: [],
         open_ticket_count: openTicketCount,
+        hierarchy_color: null, // filled in below, once `humans` exists — see assignHierarchyColors() call
       });
       bumpRollup(resolvedHumanId, true, agent.id);
     } else {
@@ -325,6 +355,7 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
         reports_to_agent_id: reportsToAgentId,
         reports_to_summary: `Reports to: ${reportsToName}`,
         open_ticket_count: openTicketCount,
+        hierarchy_color: null, // filled in below, once `humans` exists — see assignHierarchyColors() call
       });
       bumpRollup(resolvedHumanId, false, agent.id);
     }
@@ -358,8 +389,19 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
             created_at: task.created_at ?? null,
           }
         : null,
+      hierarchy_color: null, // filled in below, once every human's leadership_agent_ids is known
     };
   });
+
+  // Org Chart v3 (2026-08-19) — hierarchy-anchored colors. Computed AFTER
+  // humans/leadership/staff are fully built (assignHierarchyColors() needs
+  // each human's real leadership_agent_ids and each agent's real
+  // reports_to_* to do the branch propagation) — a final merge pass, not a
+  // re-derivation of anything the loop above already computed.
+  const { humanColors, leadershipColors, staffColors } = assignHierarchyColors(humans, leadership, staff);
+  for (const h of humans) h.hierarchy_color = humanColors.get(h.id) ?? null;
+  for (const l of leadership) l.hierarchy_color = leadershipColors.get(l.id) ?? null;
+  for (const s of staff) s.hierarchy_color = staffColors.get(s.id) ?? null;
 
   return {
     organization: { id: org.id, name: org.name },
