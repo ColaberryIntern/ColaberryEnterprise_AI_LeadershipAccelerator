@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import HeroPricingV8 from '../../components/publicV2/HeroPricingV8';
 import Icon from '../../components/publicV2/Icon';
 import { Claim, canShow } from '../../components/publicV2/Claim';
 import { PRICING_TIERS, PRICING_FAQ, SERVICES_PRICING_NOTE } from '../../config/v2Pricing';
 import './pricingV2.css';
+import '../../components/publicV2/heroV8.css';
 
 /**
  * PricingV2 -- the one surface where the full price ladder may render.
@@ -31,16 +33,7 @@ function PricingV2(): React.ReactElement {
         }
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-pricing-title">
-        <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Pricing</p>
-          <h1 id="cbv2-pricing-title">Free to start. Licenses only when you are ready.</h1>
-          <p className="cbv2-pagehero__lede">
-            The whole platform is free to explore, and free for your team to try. You pay when
-            someone is ready to progress rather than evaluate.
-          </p>
-        </div>
-      </section>
+      <HeroPricingV8 />
 
       <section className="cbv2-rv cbv2-section" aria-label="Pricing tiers">
         <div className="cbv2-wrap">
