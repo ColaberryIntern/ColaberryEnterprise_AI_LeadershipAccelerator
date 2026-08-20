@@ -178,7 +178,7 @@ describe('processDueOutcomeMeasurements', () => {
     );
   });
 
-  test('boundary (reinterpreted per execution-contract.md, since no M2 evidence gate exists): a due row whose ticket has neither entity_type/entity_id nor a matching child resolves to insufficient_data, never a fabricated stable, and never crashes', async () => {
+  test('boundary (reinterpreted per execution-contract.md — M2 does have a real evidence gate, but it only covers the automatic 7-day auto-close cron in ticketManagementAgent.ts, not updateTicketStatus() itself, which this hook is attached to): a due row whose ticket has neither entity_type/entity_id nor a matching child resolves to insufficient_data, never a fabricated stable, and never crashes', async () => {
     const row = makeDueRow({
       baseline: {
         ticket_status: 'done',
