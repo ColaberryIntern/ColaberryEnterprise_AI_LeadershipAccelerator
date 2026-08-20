@@ -1,6 +1,28 @@
-# Append-only logs: union-merge keeps BOTH sides instead of producing a conflict.
-# Eliminates the recurring PROGRESS.md merge conflicts across concurrent Claude sessions
-# (which were blocking ~6 of 9 open PRs). "union" is a built-in git merge driver — no config needed.
+# Append-only log: union-merge keeps BOTH sides instead of producing a conflict.
+# "union" is a built-in git merge driver, so no local config is needed.
+#
+# READ THIS BEFORE TRUSTING IT. Git honours merge drivers LOCALLY ONLY. GitHub
+# does not run them server-side: it computes mergeability with a plain
+# three-way merge and reports CONFLICTING for any PR whose PROGRESS.md region
+# also moved on main. A PR can therefore merge perfectly cleanly in a worktree
+# and still be blocked in the UI.
+#
+# An earlier version of this comment claimed this attribute "eliminates the
+# recurring PROGRESS.md merge conflicts across concurrent Claude sessions
+# (which were blocking ~6 of 9 open PRs)". It does not. It hides them locally,
+# which is worse than not having it, because the branch looks healthy right up
+# until GitHub refuses to merge it.
+#
+# What this attribute actually buys: local merges of PROGRESS.md resolve
+# without hand-editing. That is real and worth keeping.
+#
+# What it cannot buy: a green Merge button. To clear a CONFLICTING PR you must
+# merge main INTO the branch locally (the driver resolves PROGRESS.md) and then
+# push, which makes main's tip an ancestor and leaves GitHub nothing to merge.
+# On this repo that push is expensive: branch protection sets
+# dismiss_stale_reviews AND require_last_push_approval, so it permanently
+# destroys any approval the PR already carried. See MERGE_WORKFLOW.md, section
+# "PROGRESS.md conflicts, and why GitHub still says CONFLICTING".
 PROGRESS.md merge=union
 
 # Git hooks are executed by /bin/sh. With core.autocrlf=true (the default on
