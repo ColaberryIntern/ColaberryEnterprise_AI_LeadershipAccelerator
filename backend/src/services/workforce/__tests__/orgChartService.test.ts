@@ -30,7 +30,8 @@ import AiAgent from '../../../models/AiAgent';
 import { Ticket } from '../../../models';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
 import { buildCreatorIdMatchList } from '../../agentBlueprint/legacyCreatorAliases';
-import { getOrgChart, ColaberryOrgNotFoundError } from '../orgChartService';
+import { getOrgChart, ColaberryOrgNotFoundError, NAMED_DEPARTMENTS, OTHER_DEPARTMENT } from '../orgChartService';
+import { workforceOrgChartResponseSchema } from '../../../schemas/workforceOrgChartSchema';
 
 const mockOrgFindOne = Organization.findOne as unknown as jest.Mock;
 const mockMemberFindAll = OrgMember.findAll as unknown as jest.Mock;
@@ -169,5 +170,121 @@ describe('getOrgChart — idempotency', () => {
     expect(secondRest).toEqual(firstRest);
     expect(firstGeneratedAt).toBeInstanceOf(Date);
     expect(secondGeneratedAt).toBeInstanceOf(Date);
+  });
+});
+
+// Department grouping + reports-to summary (Ali, live, 2026-08-19, session
+// CC-20260818-x4nk continued: "divide them up into dept" + "Each AI staff
+// should have a tag on them to show who they report to on their cards before
+// even clicking").
+describe('getOrgChart — department grouping', () => {
+  it('a human whose team is a named department gets that exact department', async () => {
+    mockMemberFindAll.mockResolvedValue([{ ...ALI, team: 'Exec' }, KES]);
+
+    const result = await getOrgChart();
+
+    const ali = result.humans.find((h) => h.id === 'ali-id')!;
+    expect(ali.department).toBe('Exec');
+  });
+
+  it('a human with a null team, or a team outside the 6 named departments, buckets into "Other" — never dropped', async () => {
+    mockMemberFindAll.mockResolvedValue([ALI, { ...KES, team: 'Staff' }]);
+
+    const result = await getOrgChart();
+
+    const ali = result.humans.find((h) => h.id === 'ali-id')!; // team: null
+    const kes = result.humans.find((h) => h.id === 'kes-id')!; // team: 'Staff', not a named department
+    expect(ali.department).toBe(OTHER_DEPARTMENT);
+    expect(kes.department).toBe(OTHER_DEPARTMENT);
+    expect(result.humans).toHaveLength(2); // both still present
+  });
+
+  it('NAMED_DEPARTMENTS is exactly Ali\'s 6 departments in the order he gave them', () => {
+    expect(NAMED_DEPARTMENTS).toEqual(['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing']);
+  });
+});
+
+describe('getOrgChart — reports_to_summary', () => {
+  it('a resolved leadership entry carries "Reports to: <human name>"', async () => {
+    const result = await getOrgChart();
+
+    const leadershipEntry = result.leadership.find((l) => l.id === 'corybrain-id')!;
+    expect(leadershipEntry.reports_to_summary).toBe('Reports to: Ali Muwwakkil');
+  });
+
+  it('a resolved staff entry carries "Reports to: <leadership agent display name>"', async () => {
+    mockAdminFindAll.mockImplementation(async (query: any) => {
+      if (query?.where?.agent_id) return [{ agent_id: 'corybrain-id', display_name: 'Cory Brain — Strategic Initiatives' }];
+      return [];
+    });
+
+    const result = await getOrgChart();
+
+    const staffEntry = result.staff.find((s) => s.id === 'staff-1-id')!;
+    expect(staffEntry.reports_to_summary).toBe('Reports to: Cory Brain — Strategic Initiatives');
+  });
+
+  it('an unresolved agent never carries a reports_to_summary (nothing to summarize)', async () => {
+    mockAgentFindAll.mockResolvedValue([CORYBRAIN, ORPHAN_AGENT]);
+
+    const result = await getOrgChart();
+
+    expect(result.unresolved).toEqual([{ id: 'orphan-id', agent_name: 'OrphanedAgent', reason: 'OrphanedAgent (agent) -> [dangling]' }]);
+    expect((result.unresolved[0] as any).reports_to_summary).toBeUndefined();
+  });
+});
+
+describe('getOrgChart — Taiwo rollup with reassigned AI Staff (fixture-based, deploy-order-independent)', () => {
+  const TAIWO = { id: 'taiwo-id', org_id: 'org-colaberry', email: 'taiwooludimimu@gmail.com', team: 'Operations', role: 'member', enrollment_id: 'enr-taiwo' };
+  const FINANCE_ARCHITECT = { id: 'finance-architect-id', agent_name: 'FinanceIntelligenceArchitect', reports_to_type: 'human', reports_to_id: 'taiwo-id' };
+  const STUDENT_SUCCESS_ARCHITECT = { id: 'student-success-architect-id', agent_name: 'StudentSuccessArchitect', reports_to_type: 'human', reports_to_id: 'taiwo-id' };
+
+  it("Taiwo's leadership_agent_ids includes every agent whose reports_to_type='human'/reports_to_id resolves to her — proves the rollup logic works for the post-T2 shape without depending on T2's actual deploy having happened", async () => {
+    mockMemberFindAll.mockResolvedValue([ALI, KES, TAIWO]);
+    mockEnrollmentFindAll.mockResolvedValue([{ id: 'enr-ali', full_name: 'Ali Muwwakkil' }, { id: 'enr-taiwo', full_name: 'Taiwo Oludimimu' }]);
+    mockAgentFindAll.mockResolvedValue([CORYBRAIN, FINANCE_ARCHITECT, STUDENT_SUCCESS_ARCHITECT]);
+    mockResolveChain.mockImplementation(async (agent: any) => {
+      if (agent.id === CORYBRAIN.id) return { resolvedHumanId: 'ali-id', trail: ['CoryBrain (agent) -> [human]'] };
+      if (agent.reports_to_type === 'human') return { resolvedHumanId: agent.reports_to_id, trail: [`${agent.agent_name} (agent) -> [human]`] };
+      return { resolvedHumanId: null, trail: [`${agent.agent_name} (agent) -> [dangling]`] };
+    });
+
+    const result = await getOrgChart();
+
+    const taiwo = result.humans.find((h) => h.id === 'taiwo-id')!;
+    expect(taiwo.leadership_agent_ids.sort()).toEqual(['finance-architect-id', 'student-success-architect-id'].sort());
+    expect(taiwo.department).toBe('Operations');
+
+    const financeEntry = result.leadership.find((l) => l.id === 'finance-architect-id')!;
+    expect(financeEntry.reports_to_summary).toBe('Reports to: Taiwo Oludimimu');
+  });
+});
+
+describe('workforceOrgChartResponseSchema — boundary', () => {
+  const VALID_HUMAN = { id: 'h1', name: 'Ali', email: 'ali@colaberry.com', team: 'Exec', department: 'Exec', role: 'manager', leadership_agent_ids: [], staff_count: 0, task: null };
+  const VALID_LEADERSHIP = { id: 'l1', agent_name: 'CoryBrain', display_name: 'Cory Brain', reports_to_human_id: 'h1', reports_to_summary: 'Reports to: Ali', staff_ids: [], open_ticket_count: 0 };
+  const VALID_RESPONSE = {
+    organization: { id: 'org1', name: 'Colaberry' },
+    humans: [VALID_HUMAN],
+    leadership: [VALID_LEADERSHIP],
+    staff: [],
+    unresolved: [],
+    generated_at: '2026-08-19T00:00:00.000Z',
+  };
+
+  it('a fully-populated response (including department + reports_to_summary) passes', () => {
+    expect(workforceOrgChartResponseSchema.safeParse(VALID_RESPONSE).success).toBe(true);
+  });
+
+  it('a human missing `department` fails safeParse', () => {
+    const { department, ...humanWithoutDepartment } = VALID_HUMAN;
+    const result = workforceOrgChartResponseSchema.safeParse({ ...VALID_RESPONSE, humans: [humanWithoutDepartment] });
+    expect(result.success).toBe(false);
+  });
+
+  it('a leadership entry missing `reports_to_summary` fails safeParse', () => {
+    const { reports_to_summary, ...leadershipWithoutSummary } = VALID_LEADERSHIP;
+    const result = workforceOrgChartResponseSchema.safeParse({ ...VALID_RESPONSE, leadership: [leadershipWithoutSummary] });
+    expect(result.success).toBe(false);
   });
 });

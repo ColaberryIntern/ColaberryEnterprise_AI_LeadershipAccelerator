@@ -403,9 +403,18 @@ type) supersede the flat `reports_to_org_member_id` column from 2026-08-18
 `ticketCreatorReportsToResolver.ts`'s `resolveReportsToHuman()` walks the
 chain (bounded by a `MAX_CHAIN_DEPTH` cycle guard, currently 5 — not a
 hardcoded "exactly 2 hops" assumption, so a future 3rd tier needs no code
-change) until it lands on a real human. Of the 23 currently-registered
-agents, 2 are AI Leadership (`CoryBrain` → Ali, `workforce_intelligence_engine`
-→ Kes) and the other 21 are AI Staff, reporting through one of those two.
+change) until it lands on a real human. **Updated 2026-08-19 (same session,
+continued — "Taiwo should have some AI staff but doesn't show here"):** of
+the 23 currently-registered agents, 6 report directly to a human (AI
+Leadership) — `CoryBrain` → Ali, `workforce_intelligence_engine` → Kes, and
+`FinanceIntelligenceArchitect`/`OperationsOptimizationArchitect`/
+`AdmissionsConversionArchitect`/`StudentSuccessArchitect` → Taiwo (a
+deliberate, explicit partial reversal of this same day's earlier 2-tier
+consolidation for these 4 agents specifically, not a bug) — giving **3 AI
+Leadership humans** (Ali, Kes, Taiwo), up from 2. The other 17 (12 remaining
+Department Strategy Architects + `cory-engine`/`InboxCaseEngine`/
+`bpos_orchestrator`/`AgentBehaviorMonitorAgent` + Reese) are AI Staff,
+reporting through one of the 6.
 
 **Proof:** the 2026-08-18 PR added `reports_to_org_member_id` (nullable
 UUID) to `AiAgent` and gated `createTicket()` on it — flat, one hop only.
@@ -430,6 +439,38 @@ watchdog that was stamping `created_by_id` as its own raw `AiAgent.id` UUID
 instead of its `agent_name` — a genuine bug, fixed in the same change,
 alongside giving it a real identity and an AI Staff report to
 `workforce_intelligence_engine`).
+
+**Proof (2026-08-19, continued):** `ticketCreatorIdentitySeed.ts`'s
+`TICKET_CREATOR_IDENTITIES` array changed the 4 named Architects'
+`reportsToAgentName: AGENT_LEADERSHIP.CORY_BRAIN` to
+`reportsToOrgMemberId: ORG_MEMBER.TAIWO` (the same `AgentIdentityConfig`
+"exactly one of the two" contract from the paragraph above, unchanged
+structurally — this is a data/policy choice within that existing contract,
+not a schema change). `ticketCreatorIdentitySeed.test.ts` updated for the new
+6-leadership/16-staff split.
+
+**Real gap this config change alone does NOT close, found by this same
+change's own independent task-verifier (not assumed working):**
+`agentIdentitySeed.ts::seedAgentIdentity()`'s boot-time self-heal only
+writes `reports_to_type`/`reports_to_id` when they are currently **null**
+(`if (!aiAgent.reports_to_type || !aiAgent.reports_to_id)`) — it never
+overwrites an already-set value. These 4 agents already carry
+`reports_to_type='agent'`/`reports_to_id=<CoryBrain>` from the earlier
+20-agent move the same day, so redeploying the config change alone would
+silently no-op at boot and never actually move them to Taiwo. The required
+companion write is a new, explicit, idempotent script,
+`backend/src/scripts/reassignArchitectsToTaiwo20260819.ts` (`--plan` /
+`--commit` / `--revert`, undo-logged before any write, scoped to exactly
+these 4 agents via `ticketCreatorIdentitySeed.ts`'s own exported
+`REASSIGNED_TO_TAIWO_AGENT_NAMES`) — this must be run in production
+(`--plan` reviewed, then `--commit`) as part of this change's deploy
+sequence, same discipline as every other bulk operation this week. Once
+that has run, `resolveTicketReportsToChain.ts --plan`/`--apply` is the
+follow-up step (same pattern as the earlier 20-agent move) that reassigns
+each of these 4 agents' currently-open tickets from their prior resolved
+human (Ali, via `CoryBrain`) to Taiwo — this directive states the intended
+sequence; the run's own `PROGRESS.md`/`deployment-log.md` entries are the
+source of truth for whether it has actually executed, not this file.
 
 **Known structural gap, disclosed not fixed here:** `ticketService.createTicket()`
 is the gate, but at least two call paths bypass it entirely via a direct

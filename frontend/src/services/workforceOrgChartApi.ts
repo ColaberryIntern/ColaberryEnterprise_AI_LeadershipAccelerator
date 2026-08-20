@@ -6,6 +6,14 @@ import api from '../utils/api';
 // (and its Zod contract, backend/src/schemas/workforceOrgChartSchema.ts) field
 // for field.
 
+// Mirrors backend/src/services/workforce/orgChartService.ts's
+// NAMED_DEPARTMENTS/OTHER_DEPARTMENT exactly (order matters — this is the
+// section render order) — a frontend type-only module can't import the
+// backend service directly, so this is a deliberate, documented mirror, same
+// as the interfaces below.
+export const NAMED_DEPARTMENTS = ['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing'] as const;
+export const OTHER_DEPARTMENT = 'Other';
+
 export interface OrgChartTask {
   id: string;
   ticket_number: number | null;
@@ -21,6 +29,8 @@ export interface OrgChartHuman {
   name: string;
   email: string;
   team: string | null;
+  /** One of the 6 named departments, or "Other" — always present. */
+  department: string;
   role: 'manager' | 'member';
   leadership_agent_ids: string[];
   staff_count: number;
@@ -34,6 +44,8 @@ export interface OrgChartLeadershipAgent {
   agent_name: string;
   display_name: string;
   reports_to_human_id: string;
+  /** "Reports to: <human name>" — real, present before any click. */
+  reports_to_summary: string;
   staff_ids: string[];
   open_ticket_count: number;
 }
@@ -43,6 +55,8 @@ export interface OrgChartStaffAgent {
   agent_name: string;
   display_name: string;
   reports_to_agent_id: string;
+  /** "Reports to: <leadership agent name>" — real, present before any click. */
+  reports_to_summary: string;
   open_ticket_count: number;
 }
 

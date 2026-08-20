@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
@@ -270,6 +270,10 @@ const PipelineBanner: React.FC<{ pipeline: PipelineState }> = ({ pipeline }) => 
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
   const projects = useProjectsList();
+  // The builds that are actually the STUDENT'S. `projects` always carries the
+  // seeded training example alongside them, so anything that counts, totals, or
+  // says "you have N" must read this list and not `projects`.
+  const ownBuilds = useMemo(() => projects.filter((p) => !p.sample), [projects]);
   // Backend-source flip: pull the student's persisted build (completions from
   // other devices, or a build this browser has never seen) then mirror back up.
   // Once per page session, flag-gated + best-effort (see projectSync).
@@ -671,14 +675,30 @@ const ProjectsPage: React.FC = () => {
         <aside className="te-side">
           <div className="te-card te-scard">
             <h3><svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Your builds</h3>
-            <div className="te-stat"><span className="lab">Active builds</span><span className="num">{projects.length}</span></div>
+            {/*
+              COUNT THE STUDENT'S BUILDS, NOT THE FIXTURE. `projects` always
+              carries the seeded training example — `read()` re-seeds
+              `sample-salon` whenever it is missing — so `projects.length` read
+              one too high at every value: 0 real builds showed "1", 1 showed
+              "2", 2 showed "3". That is the "Active builds: 2 while the API
+              returned 1" report; it was never a stale cache, it was a training
+              fixture being counted as a build the student owns.
+            */}
+            <div className="te-stat"><span className="lab">Active builds</span><span className="num">{ownBuilds.length}</span></div>
             {projects.map((p) => {
               const prog = projectProgress(p);
               return (
                 <button key={p.id} className="pj-sidebuild" onClick={() => openInterior(p.id)}>
                   <span className="pj-sb-ic" style={{ background: p.accent }}><svg viewBox="0 0 24 24" fill="none"><path d={p.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></span>
                   <span className="pj-sb-t">
-                    <span className="nm">{p.name}</span>
+                    {/*
+                      The example still shows — it is a worked build a student
+                      can open and learn the shape from, which is its whole job —
+                      but it is named as one. Sitting unlabelled in "Your builds"
+                      it read as the student's own work, which is the other half
+                      of the same miscount.
+                    */}
+                    <span className="nm">{p.name}{p.sample && <span className="pj-sb-tag">example</span>}</span>
                     <span className="bar"><i style={{ width: `${prog.pct}%`, background: p.status === 'creating' ? '#367895' : '#5BA63C' }} /></span>
                   </span>
                   <span className="pj-sb-pct">{p.status === 'creating' ? '…' : `${prog.pct}%`}</span>
