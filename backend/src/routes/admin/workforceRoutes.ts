@@ -4,8 +4,8 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleRoster, handleOffice, handleBriefing, handleDailyMeeting, handleMeetings,
   handleListTasks, handleCreateTask, handleUpdateTask, handleMessages, handleReview, handleAnalytics,
-  handleListLiveAgents, handleListLiveAgentActivity, handleOrgChart, handleUpdateOrgMemberTeam,
-  handleAssignHierarchyTask,
+  handleListLiveAgents, handleListLiveAgentActivity, handleListLiveAgentTimeline, handleOrgChart,
+  handleUpdateOrgMemberTeam, handleAssignHierarchyTask,
 } from '../../controllers/workforceController';
 
 const router = Router();
@@ -27,6 +27,13 @@ router.get('/api/admin/workforce/employee/:slug', requireAdmin, handleOffice);
 // director roster the routes above are keyed to.
 router.get('/api/admin/workforce/live-agents', requireAdmin, handleListLiveAgents);
 router.get('/api/admin/workforce/live-agents/activity', requireAdmin, handleListLiveAgentActivity);
+
+// Org Chart v4 (2026-08-20) — real ticket-lifecycle Activity Timeline
+// (created/status-changed/closed), not just a ticket's current status. See
+// liveAgentsTimelineService.ts. Additive alongside /activity above, not a
+// replacement — that route stays available/tested even though the frontend
+// switches to this one.
+router.get('/api/admin/workforce/live-agents/timeline', requireAdmin, handleListLiveAgentTimeline);
 
 // Org-chart hierarchy build (2026-08-19) — real Human Employees -> AI
 // Leadership -> AI Staff tree, replacing the static AI_ORG roster's "who's in

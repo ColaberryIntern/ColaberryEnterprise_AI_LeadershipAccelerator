@@ -9,6 +9,7 @@ import {
   listTasks, createTask, updateTask, listMessages, review, analytics,
 } from '../services/workforce/workforceService';
 import { listLiveAgents, listLiveAgentActivity } from '../services/workforce/liveAgentsService';
+import { listLiveAgentTimeline } from '../services/workforce/liveAgentsTimelineService';
 import { getOrgChart, NAMED_DEPARTMENTS } from '../services/workforce/orgChartService';
 import { workforceOrgChartResponseSchema } from '../schemas/workforceOrgChartSchema';
 import { updateOrgMemberTeam } from '../services/workforce/orgChartHierarchyService';
@@ -64,6 +65,25 @@ export async function handleListLiveAgentActivity(req: Request, res: Response, n
   try {
     const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
     res.json({ activity: await listLiveAgentActivity(Number.isFinite(limit) ? limit : undefined) });
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * Org Chart v4 (2026-08-20) — GET /api/admin/workforce/live-agents/timeline.
+ * Real ticket-lifecycle events (created/status-changed/closed), replacing
+ * WorkforceOSPage's old flat one-row-per-ticket Activity Timeline list. Zod-
+ * validated `limit` (this IS a new route boundary — CLAUDE.md Contract
+ * Enforcement Layer) rather than the manual parseInt() the sibling
+ * `/live-agents/activity` route above still uses (pre-existing, out of scope
+ * to retrofit here).
+ */
+const timelineQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(200).optional(),
+});
+export async function handleListLiveAgentTimeline(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { limit } = timelineQuerySchema.parse(req.query);
+    res.json({ timeline: await listLiveAgentTimeline(limit) });
   } catch (e) { fail(res, e, next); }
 }
 

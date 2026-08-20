@@ -1,11 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../../../utils/api';
 import { workforceCss, readTheme, writeTheme } from './themeKit';
-import StatusBadge from '../../../components/admin/shell/StatusBadge';
-import { getTicketTypeTone, getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
-import { fmtCentralDateTime } from '../../../utils/centralTime';
 import OrgChartSection from './orgchart/OrgChartSection';
+import ActivityTimeline, { LiveAgentTimelineEvent } from './ActivityTimeline';
 
 /**
  * WorkforceOSPage — the AI Workforce Operating System. An executive opens one
@@ -29,10 +26,13 @@ import OrgChartSection from './orgchart/OrgChartSection';
 interface Employee { slug: string; name: string; role: string; department: string; avatar: string; supervisor: string | null; mission: string; ops_domain: string | null; workload: number; status: string }
 interface Meeting { meeting_date: string; agenda: any; contributions: Array<{ slug: string; name: string; role: string; line: string }>; action_items: Array<{ owner: string; title: string; severity: string; rec_key: string }>; participants: string[] }
 
-interface LiveAgentActivityEvent { agent_id: string; agent_name: string; agent_display_name: string; ticket_id: string; ticket_number: number | null; title: string; type: string; status: string; priority: string; occurred_at: string | null }
-
 const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 const av = (color: string, name: string, cls = '') => <span className={`wf-av ${cls}`} style={{ background: color }}>{initials(name)}</span>;
+
+// Org Chart v4 (2026-08-20) — "real time" for the Activity Timeline, per this
+// run's execution-contract.md Assumption 5: a client-side poll, not a new
+// WebSocket/SSE push mechanism (none exists anywhere on this page today).
+const TIMELINE_POLL_MS = 45_000;
 
 const WorkforceOSPage: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(readTheme);
@@ -41,26 +41,46 @@ const WorkforceOSPage: React.FC = () => {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
-  const [liveAgentActivity, setLiveAgentActivity] = useState<LiveAgentActivityEvent[]>([]);
+  const [timeline, setTimeline] = useState<LiveAgentTimelineEvent[]>([]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+
+  // Isolated from load() below on purpose: load() also convenes a full daily
+  // standup meeting (a real, non-idempotent side effect) — polling should
+  // only ever refetch the timeline's read-only data, never repeat that.
+  const loadTimeline = useCallback(async () => {
+    try {
+      const t = await api.get('/api/admin/workforce/live-agents/timeline');
+      setTimeline(t.data.timeline || []);
+    } catch {
+      // A failed poll leaves the last-known-good timeline on screen rather
+      // than clearing it or surfacing a page-level error for a background
+      // refresh — the same "degrade gracefully, don't erase good data on a
+      // transient failure" posture this page already takes with `error`
+      // only being set from the primary load() below, never from a poll.
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setBusy('load'); setError('');
     try {
-      const [r, b, m, msg, an, lt] = await Promise.all([
+      const [r, b, m, msg, an] = await Promise.all([
         api.get('/api/admin/workforce/roster'),
         api.get('/api/admin/workforce/briefing'),
         api.post('/api/admin/workforce/meeting/daily'),
         api.get('/api/admin/workforce/messages'),
         api.get('/api/admin/workforce/analytics'),
-        api.get('/api/admin/workforce/live-agents/activity'),
       ]);
       setEmps(r.data.employees); setBrief(b.data); setMeeting(m.data.meeting); setMessages(msg.data.messages); setAnalytics(an.data);
-      setLiveAgentActivity(lt.data.activity || []);
+      await loadTimeline();
     } catch (e: any) { setError(e?.response?.data?.error || 'Could not load the AI Workforce.'); } finally { setBusy(''); }
-  }, []);
+  }, [loadTimeline]);
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const interval = setInterval(() => { void loadTimeline(); }, TIMELINE_POLL_MS);
+    return () => clearInterval(interval);
+  }, [loadTimeline]);
 
   const toggleTheme = () => { const t = theme === 'dark' ? 'light' : 'dark'; setTheme(t); writeTheme(t); };
   const byslug = (slug: string) => emps.find((e) => e.slug === slug);
@@ -142,36 +162,16 @@ const WorkforceOSPage: React.FC = () => {
             call) — see orgchart/OrgChartSection.tsx. */}
         <OrgChartSection />
 
-        {/* Activity Timeline — real, chronological ProofDesk ticket events across
-            every AI Leadership/AI Staff agent in the org chart above. Driven
-            ONLY by real ticket data (see liveAgentsService.ts) — an
-            independent fetch from OrgChartSection's own data, unaffected by
-            the org-chart hierarchy build. */}
+        {/* Activity Timeline — Org Chart v4 (2026-08-20). Real, colored,
+            lifecycle-driven vertical timeline (created/status-changed/
+            closed), replacing the old flat one-row-per-ticket "current
+            status only" list. See ActivityTimeline.tsx +
+            liveAgentsTimelineService.ts. Polls every 45s independently of
+            OrgChartSection's own data — see loadTimeline()/TIMELINE_POLL_MS
+            above. */}
         <section className="wf-card" style={{ marginTop: 16 }}>
           <div className="wf-lab">Activity Timeline</div>
-          {liveAgentActivity.length === 0 ? (
-            <div className="wf-muted">No activity yet.</div>
-          ) : (
-            liveAgentActivity.map((ev) => (
-              // Clickable through to the ticket — reuses the exact same route
-              // pattern AgentDetailPage.tsx's Ticket activity table already
-              // uses (`/admin/tickets?open=<id>`) rather than inventing a
-              // second navigation pattern.
-              <Link
-                to={`/admin/tickets?open=${ev.ticket_id}`}
-                className="wf-msg"
-                key={ev.ticket_id}
-                style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
-              >
-                <div className="rt">{ev.agent_display_name} · TK-{ev.ticket_number ?? '—'} · {ev.occurred_at ? fmtCentralDateTime(ev.occurred_at) : ''}</div>
-                <div className="sb" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {ev.title}
-                  <StatusBadge label={getTicketTypeLabel(ev.type)} tone={getTicketTypeTone(ev.type)} />
-                </div>
-                <div className="wf-muted">{ev.status}</div>
-              </Link>
-            ))
-          )}
+          <ActivityTimeline events={timeline} />
         </section>
 
         {/* Communication + analytics */}

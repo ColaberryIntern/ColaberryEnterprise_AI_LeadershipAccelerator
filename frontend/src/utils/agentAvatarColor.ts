@@ -70,10 +70,35 @@ export function agentAvatarColor(seed: string): string {
  * actually sharing a page with, not in isolation. Each id's PREFERRED color is still
  * its own agentAvatarColor(id) hash — collisions only walk forward to the next free
  * palette slot, they never reassign an id an unrelated color for no reason.
+ *
+ * Org Chart v4 color-collision fix (2026-08-20, session CC-20260818-x4nk
+ * continued) — `reservedColors` lets a caller exclude palette slots ALREADY
+ * spoken for by something outside this roster (e.g. `OrgChartSection.tsx`'s
+ * server-assigned `hierarchy_color` values) BEFORE the hash/de-collision walk
+ * runs, not after. This is the actual root-cause fix for the live bug Ali
+ * reported (JJ and Ali both rendering green): the old call site ran this
+ * function over EVERY human first (no knowledge of which colors a later pass
+ * would reserve), then overwrote only the humans with a server color in a
+ * SEPARATE loop — so a no-agent human's hash fallback could coincidentally
+ * land on a color a human-with-agents was about to be assigned. Passing the
+ * full reserved set here closes that gap at the source. Unknown/invalid hex
+ * strings in `reservedColors` are silently ignored (never throw — this
+ * function's existing "never crash the roster render" contract extends to a
+ * malformed reserved value the same way it already does to an unmatched id).
+ * Backward compatible: omitting the argument (today's every other call site,
+ * until wired) reproduces today's exact behavior byte-for-byte — reserving
+ * nothing changes nothing.
  */
-export function assignDistinctAvatarColors(ids: string[]): Record<string, string> {
+export function assignDistinctAvatarColors(
+  ids: string[],
+  reservedColors: readonly string[] = [],
+): Record<string, string> {
   const sortedIds = [...ids].sort();
   const takenSlots = new Set<number>();
+  for (const color of reservedColors) {
+    const reservedSlot = AGENT_AVATAR_PALETTE.indexOf(color);
+    if (reservedSlot !== -1) takenSlots.add(reservedSlot);
+  }
   const colorById: Record<string, string> = {};
 
   for (const id of sortedIds) {
