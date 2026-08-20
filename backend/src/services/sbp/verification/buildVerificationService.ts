@@ -45,12 +45,16 @@ import {
   BuildRollup,
   PlanStorySpec,
   StoryVerdict,
+  RepoTreeContext,
 } from './verifyDecision';
+import { summariseRejectedClaims } from './rejectedClaimsSignal';
+import { writeAccessOf } from '../repoConnect/connectionAccess';
 import {
   readVerificationInputs,
   RepoReadError,
   RepoReadErrorClass,
 } from './repoProgressReader';
+import { storedConnect } from '../repoConnect/connectionAccess';
 import {
   annotateReadError,
   applyVerificationLatch,
@@ -125,6 +129,23 @@ export interface BuildVerificationSummary {
   unknown_stories: string[];
   /** True when older commits exist beyond the read window. */
   window_truncated: boolean;
+  /**
+   * The branch the verdict was reached on. Null only when nothing could be read.
+   *
+   * Previously unanswerable: the reader passed no ref and GitHub silently chose,
+   * so a student reporting "the portal cannot see my work" left no record of
+   * where we had looked.
+   */
+  branch_read: string | null;
+  /**
+   * Non-default branches carrying commits that name a story, when the default
+   * branch carried none.
+   *
+   * Non-empty means the student HAS done the work and it is not on the branch we
+   * verify. That is a merge instruction, not a failure, and it is the difference
+   * between "you have done nothing" and "your work is on `feature/x`".
+   */
+  unmerged_branches: string[];
 }
 
 export interface VerifyOptions {
@@ -167,6 +188,8 @@ function failure(
     stories: [],
     unknown_stories: [],
     window_truncated: false,
+    branch_read: null,
+    unmerged_branches: [],
   };
 }
 
@@ -236,8 +259,21 @@ export async function verifyBuildFromRepo(
 
   let inputs;
   try {
+    /**
+     * NAME THE BRANCH. The connect flow recorded the repo's default branch on
+     * this row; passing it means verification reads a branch we can state and log
+     * rather than one GitHub chose for us silently.
+     *
+     * Not defaulted to `main` when absent — `Pamy77/colaberry-architect-workspace`
+     * is on `master`, and a hardcoded default would have broken her build to fix
+     * a diagnostic gap. Absent simply falls through to the previous behaviour.
+     */
     inputs = await readVerificationInputs(
-      { owner: connection.repo_owner, repo: connection.repo_name },
+      {
+        owner: connection.repo_owner,
+        repo: connection.repo_name,
+        branch: storedConnect(connection).default_branch ?? null,
+      },
       { correlationId: opts.correlationId, fetchImpl: opts.fetchImpl, storyIds: specs.map((s) => s.id) },
     );
   } catch (err: unknown) {
@@ -272,8 +308,56 @@ export async function verifyBuildFromRepo(
     return failure(projectId, parsed.error_class, parsed.reason);
   }
 
-  const decision = decideBuild(specs, parsed.ok ? parsed.file : null, inputs.commits);
+  /**
+   * The repo as it stands, for the criterion path check.
+   *
+   * `writeAccessOf` returns null on every connection made before the permission
+   * was captured — which is all 10 live rows today — and `criterionPaths` reads
+   * that null as "enforce nothing against this student". That is deliberate
+   * sequencing, not an oversight: until PR #1618 populates the field we cannot
+   * tell a file we owed a student from a file they never added, and the cautious
+   * direction is theirs. See criterionPaths.blameForMissing.
+   *
+   * Null `treePaths` (a tree we could not read) disables the check outright.
+   */
+  const tree: RepoTreeContext | null = inputs.treePaths
+    ? { paths: inputs.treePaths, writeAccess: writeAccessOf(connection) }
+    : null;
+
+  const decision = decideBuild(specs, parsed.ok ? parsed.file : null, inputs.commits, tree);
   const checkedAt = new Date().toISOString();
+
+  /**
+   * FIX 4 — the mismatch signal reaches a human.
+   *
+   * `rejected_claims` has been recorded since this loop shipped and read by
+   * nothing. One line per run, not per claim, at `warn`, on the stream that
+   * already carries this service's events. Emitted BEFORE the per-story loop so
+   * a database failure partway through the writes cannot swallow the diagnosis.
+   *
+   * No student name, no email, no repo contents beyond the unmatched sentences
+   * themselves — the project id is enough to find the row, and this is wording
+   * drift, not fraud.
+   */
+  // MERGE NOTE: named `claimsDrift`, not `drift`. `summariseUnrecognisedCriteria`
+  // (main, commit 509320a4) already binds `drift` further down this same
+  // function for the separate unrecognised-criteria signal. Both signals are
+  // kept: this one is the asserted-only `rejected_claims` warn line, that one is
+  // the summary flattened onto `sbp_verification_completed`.
+  const claimsDrift = summariseRejectedClaims(decision.verdicts);
+  if (claimsDrift) {
+    log('sbp_verification_claims_unmatched', opts.correlationId, 'partial', {
+      projectId,
+      plan_version: stored.version,
+      claims_total: claimsDrift.claims_total,
+      stories_affected: claimsDrift.stories_affected,
+      samples: claimsDrift.samples,
+      likely_wording_drift: claimsDrift.likely_wording_drift,
+      note: claimsDrift.likely_wording_drift
+        ? 'a story is held back by claims that match no criterion — check the plan wording against the repo'
+        : 'unmatched claims on stories that are otherwise fine; informational',
+    });
+  }
 
   // The per-story rate for THIS build: the capstone budget split across the
   // stories in the published plan. Resolved once per run, before any award, so
@@ -407,6 +491,8 @@ export async function verifyBuildFromRepo(
     stories,
     unknown_stories: decision.unknown_stories,
     window_truncated: inputs.window_truncated,
+    branch_read: inputs.branch_read,
+    unmerged_branches: inputs.unmerged_branches,
   };
 
   /**
@@ -429,6 +515,18 @@ export async function verifyBuildFromRepo(
    * one line instead of growing an empty object on every sync.
    */
   const drift = summariseUnrecognisedCriteria(decision.verdicts);
+
+  // A student whose work exists but sits off the verified branch is the one case
+  // where "nothing is passing" is actively misleading. Logged at warn so it is
+  // greppable when they open a ticket saying the portal cannot see their work.
+  if (inputs.unmerged_branches.length > 0) {
+    log('sbp_verification_evidence_off_branch', opts.correlationId, 'partial', {
+      projectId,
+      branch_read: inputs.branch_read,
+      unmerged_branches: inputs.unmerged_branches,
+      note: 'story commits exist on other branches; verdict is default-branch only',
+    });
+  }
 
   log('sbp_verification_completed', opts.correlationId, 'success', {
     projectId,

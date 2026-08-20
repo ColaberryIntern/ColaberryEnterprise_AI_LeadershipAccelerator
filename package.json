@@ -17,7 +17,11 @@
     "dev:setup": "bash scripts/dev-setup.sh",
     "seed:admin": "npm run seed:admin --workspace=backend",
     "seed:students": "npm run seed:students --workspace=backend",
-    "seed:github": "npm run seed:github --workspace=backend"
+    "seed:github": "npm run seed:github --workspace=backend",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "secrets:scan": "node scripts/secret-scan-run.js staged",
+    "secrets:scan:tree": "node scripts/secret-scan-run.js tree",
+    "secrets:history": "node scripts/secret-scan-run.js history"
   },
   "engines": {
     "node": ">=20.0.0"

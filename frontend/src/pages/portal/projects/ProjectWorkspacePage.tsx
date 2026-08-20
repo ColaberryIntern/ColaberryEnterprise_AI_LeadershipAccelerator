@@ -18,6 +18,8 @@ import {
   useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
   type SentAttachment,
 } from '../../../components/portal/AgentAttachments';
+import { copyText } from '../../../utils/clipboard';
+import { troubleshootingPrompt } from './troubleshootingPrompt';
 
 /**
  * ProjectWorkspacePage — the build-side twin of the classroom's RuntimeWorkspace.
@@ -68,6 +70,8 @@ const ProjectWorkspacePage: React.FC = () => {
   const [project, setProject] = useState<StudentProject | null>(null);
   const [tick, setTick] = useState(0);          // bumped after a store mutation
   const [copied, setCopied] = useState(false);
+  const [helpCopied, setHelpCopied] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [mentorInput, setMentorInput] = useState('');
@@ -291,6 +295,18 @@ const ProjectWorkspacePage: React.FC = () => {
     window.setTimeout(() => setCopied(false), 1600);
   };
 
+  // The troubleshooting prompt names the open story so the student does not have
+  // to explain which piece of work they are on.
+  const helpPrompt = troubleshootingPrompt(task.title);
+  const copyTroubleshooting = () => {
+    // `copyText`, not `navigator.clipboard` directly: the latter is undefined on
+    // a plain-http origin and would no-op silently, which for a stuck student
+    // reads as one more thing that does not work.
+    copyText(helpPrompt).catch(() => { /* the prompt is on screen to select by hand */ });
+    setHelpCopied(true);
+    window.setTimeout(() => setHelpCopied(false), 1600);
+  };
+
   return (
     <div className="rt" data-theme={theme}>
       <style>{runtimeCss}</style>
@@ -424,6 +440,85 @@ const ProjectWorkspacePage: React.FC = () => {
                 </p>
               )}
             </div>
+          </section>
+
+          {/* Two doors, named by the KIND OF PROBLEM rather than by the tool,
+              because a student who knew which tool to pick was never stuck in
+              the first place. Rendered even on a blocked story: being blocked is
+              one of the things people need to ask about. */}
+          <section className="rt-step" aria-labelledby="rt-help-h">
+            <div className="rt-step-h">
+              <span className="rt-step-t" id="rt-help-h">If you get stuck</span>
+            </div>
+
+            <p className="rt-help-lead">
+              Two helpers, and neither one can see the other&apos;s side. <strong>Cory</strong> can
+              see this page — your story, your steps, and what the portal has recorded — but cannot
+              touch your files. <strong>Claude Code</strong> can read and change the code on your
+              computer, but cannot see this page at all.
+            </p>
+
+            <div className="rt-doors">
+              <div className="rt-door">
+                <div className="rt-door-h">Something on this page looks wrong</div>
+                <p className="rt-door-p">Ask Cory, in the chat box on this page.</p>
+                <ul className="rt-door-eg">
+                  <li>The page says 0 of 3 finished, but you think you are done.</li>
+                  <li>A step is locked and you do not know why.</li>
+                  <li>You cannot work out what the story is asking you for.</li>
+                  <li>A button does not seem to do anything.</li>
+                </ul>
+                <p className="rt-door-p">
+                  You do not have to type the problem out. Take a screenshot and paste it straight
+                  into Cory&apos;s box, or drag the image onto it, and Cory will read it.
+                </p>
+              </div>
+
+              <div className="rt-door">
+                <div className="rt-door-h">Your own code is not working</div>
+                <p className="rt-door-p">Ask Claude Code, in the terminal where you build.</p>
+                <ul className="rt-door-eg">
+                  <li>You get an error when you run your project.</li>
+                  <li>A test will not pass.</li>
+                  <li>Something you wrote does not do what you expected.</li>
+                </ul>
+                <p className="rt-door-p">
+                  Copy the prompt below, paste it into Claude Code, and fill in the two lines it
+                  asks you for.
+                </p>
+                {/* Collapsed on arrival for the same reason the build prompt is:
+                    at half screen a tall slab of text IS the column. Copy stays
+                    visible, so collapsing costs the student nothing. */}
+                {helpOpen && (
+                  <pre id="rt-troubleshoot-prompt" className="rt-in mono rt-troubleshoot">
+                    {helpPrompt}
+                  </pre>
+                )}
+                <div className="rt-door-acts">
+                  <button
+                    className={`rt-btn${helpCopied ? ' pri' : ''}`}
+                    onClick={copyTroubleshooting}
+                  >
+                    {helpCopied ? 'Copied' : 'Copy the troubleshooting prompt'}
+                  </button>
+                  <button
+                    className="rt-btn"
+                    onClick={() => setHelpOpen((o) => !o)}
+                    aria-expanded={helpOpen}
+                    aria-controls="rt-troubleshoot-prompt"
+                  >
+                    {helpOpen ? 'Hide the prompt' : 'Show the prompt'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* The expensive mistake, stated where the choice is made. */}
+            <p className="rt-door-warn">
+              Ask Claude Code about the portal and it will still answer you, confidently, and it
+              will be wrong — it is guessing about a page it cannot see. If your question is about
+              what the portal is showing you, it belongs with Cory.
+            </p>
           </section>
 
           {!blocked.blocked && (

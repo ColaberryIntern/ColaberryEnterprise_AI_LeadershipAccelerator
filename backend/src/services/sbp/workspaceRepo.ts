@@ -18,6 +18,32 @@ export interface WorkspaceRepo {
 }
 
 /**
+ * One structured line per refusal, so a skipped write stops being invisible.
+ *
+ * Returning `null` is a supported outcome and always has been — but it is also
+ * how the read-only cohort hid. Eleven students' repos refused every commit the
+ * platform queued for nine months and the only trace was a `no_repo` outcome
+ * downstream, identical to a student who had simply not connected one yet. The
+ * reason is the whole value: `access_unknown` is a bug in our bookkeeping,
+ * `pull_only` is the student's deliberate choice, and they need different
+ * responses.
+ *
+ * Same shape as the sibling loggers in `refreshRepoDocuments` and
+ * `scheduleForEnrollment`: JSON to stdout, captured by the container runtime.
+ */
+function logRefusal(projectId: string, reason: string): void {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: reason === 'access_unknown' ? 'warn' : 'info',
+    service: 'sbp-workspace-repo',
+    event: 'sbp_repo_write_refused',
+    correlation_id: null,
+    outcome: 'partial',
+    context: { projectId, reason },
+  }));
+}
+
+/**
  * The student's workspace repo for this project, or null when there is not one
  * the platform can write to yet.
  *
@@ -40,11 +66,21 @@ export interface WorkspaceRepo {
 export async function repoForProject(projectId: string): Promise<WorkspaceRepo | null> {
   const { GitHubConnection } = await import('../../models');
   const conn = await GitHubConnection.findOne({ where: { project_id: projectId } });
-  const { isWritableConnection } = await import('./repoConnect/repoConnectService');
-  if (!isWritableConnection(conn)) return null;
+  const { writeBlockReason } = await import('./repoConnect/repoConnectService');
+
+  // Asked as a REASON rather than a boolean. Same decision — `isWritableConnection`
+  // is now exactly `writeBlockReason(...) === null` — but the refusal arrives
+  // with its cause attached, which is the difference between a silent skip and
+  // an operable signal.
+  const blocked = writeBlockReason(conn);
+  if (blocked) {
+    logRefusal(projectId, blocked);
+    return null;
+  }
+
   const owner = conn?.repo_owner;
   const repo = conn?.repo_name;
-  // isWritableConnection already rejects a missing owner/name; this keeps the
+  // writeBlockReason already rejects a missing owner/name; this keeps the
   // types honest and the function total if that ever changes.
   if (!owner || !repo) return null;
   return { owner, repo, url: conn?.repo_url || `https://github.com/${owner}/${repo}` };

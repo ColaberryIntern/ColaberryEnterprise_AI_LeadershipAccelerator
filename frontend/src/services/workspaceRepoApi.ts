@@ -139,7 +139,7 @@ export async function confirmRepoConnect(projectId: string): Promise<ConnectStat
 }
 
 /**
- * DOOR B — create an EMPTY private repo and get the commands that point the
+ * DOOR B — create an EMPTY public repo and get the commands that point the
  * student's existing folder at it. Idempotent.
  */
 export async function provisionWorkspaceRepo(

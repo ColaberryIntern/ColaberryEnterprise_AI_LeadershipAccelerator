@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
@@ -17,7 +17,7 @@ import {
   removeProjectLocally,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
-import { syncProjectsWithBackend, refreshProjectsFromBackend, hydrateProjectById } from './projectSync';
+import { syncProjectsWithBackend, refreshProjectsFromBackend, hydrateProjectById, pushActiveProject } from './projectSync';
 import ArchiveProjectDialog from './ArchiveProjectDialog';
 import {
   fetchArchivedProjects, restoreProject as callRestore,
@@ -283,6 +283,8 @@ const ProjectsPage: React.FC = () => {
   // Which path produced the student's plan, and why. Surfaced rather than
   // hidden: a student is entitled to know whether they got the real thing.
   const [pipeline, setPipeline] = useState<PipelineState>({ state: 'idle' });
+  /** True while a build is being created, so a second confirm cannot start one. */
+  const creatingRef = useRef(false);
 
   // ── remove / restore a build ──────────────────────────────────────────────
   const [removing, setRemoving] = useState<StudentProject | null>(null);
@@ -358,6 +360,14 @@ const ProjectsPage: React.FC = () => {
   const openInterior = (id: string, taskId?: string | null) => {
     setView({ kind: 'interior', id, taskId: taskId ?? null });
     window.scrollTo(0, 0);
+    // Make the switch durable. Opening a build is the only signal the student
+    // gives about which one they are working on, and until this call existed it
+    // went nowhere: `enrollments.active_project_id` stayed on the previous
+    // build, so the "Your next step" hero on the overview kept naming it and a
+    // reload dropped them back onto it. Fire-and-forget by design — the view has
+    // already changed and a failed preference write must not undo that.
+    const target = projects.find((p) => p.id === id);
+    if (target && !target.sample) void pushActiveProject(target.pipelineProjectId || target.id);
   };
   /**
    * Open a task in the project WORKSPACE — the full page with the mentor on the
@@ -404,9 +414,7 @@ const ProjectsPage: React.FC = () => {
    * student can actually see, and success is defined as `delivered` — the plan
    * is in `student_tasks` — not merely as "the poll stopped".
    */
-  const handleCreate = useCallback(async (raw: NewBuildAnswers) => {
-    if (demo) return;   // demo — the wizard's create button is disabled; guard the store too
-
+  const runCreate = useCallback(async (raw: NewBuildAnswers) => {
     // The interview is generated now, so the three legacy scoping fields are
     // derived from it rather than asked directly. Both the local fallback and
     // the server read them, so derive once and use the same object for both.
@@ -478,7 +486,33 @@ const ProjectsPage: React.FC = () => {
     // The placeholder has been superseded by the real project, which carries
     // the backend id. Point the view at it so the student lands on their plan.
     setView({ kind: 'preview', id: resolved.projectId });
-  }, [demo]);
+  }, []);
+
+  /**
+   * One build per confirm.
+   *
+   * Every confirm now genuinely creates a project (that is the fix — the wizard
+   * used to build into whatever project was already active). So the double
+   * press a student makes when the first one appears to do nothing is no longer
+   * harmless: it would leave them with two builds from one intent. The guard is
+   * a ref rather than state because it has to take effect within the same tick
+   * as the first press, before any re-render.
+   *
+   * The banner is also cleared on entry: `pipeline` is set on every exit path
+   * of `runCreate` but was never reset, so a previous attempt's `gate_failed`
+   * or `stalled` message rendered over the new project's preview.
+   */
+  const handleCreate = useCallback(async (raw: NewBuildAnswers) => {
+    if (demo) return;   // demo — the wizard's create button is disabled; guard the store too
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    setPipeline({ state: 'idle' });
+    try {
+      await runCreate(raw);
+    } finally {
+      creatingRef.current = false;
+    }
+  }, [demo, runCreate]);
 
   // primary build + hero next-step
   const primary = projects[0] || null;

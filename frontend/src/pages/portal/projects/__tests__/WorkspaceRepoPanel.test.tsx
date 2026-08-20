@@ -458,3 +458,39 @@ describe('a connected student who needs the data files the platform could not wr
     expect(text()).toContain('.colaberry/manifest.json');
   });
 });
+
+/**
+ * THE TRAP THIS COPY USED TO SET.
+ *
+ * The pull-only paragraph told the student to hand-write
+ * `.colaberry/progress.json` from STORY-000, and then — in the very next
+ * sentence — to take the other two files from the download and "unzip them
+ * into your repo". The download contained a blank `progress.json`, so
+ * following the instruction destroyed the file the same paragraph had just
+ * asked them to write.
+ *
+ * The archive no longer carries that file (see docsBundle.studentFiles.test).
+ * The copy has to SAY so, because a student who has already been bitten will
+ * not believe the button otherwise.
+ */
+describe('the pull-only instruction cannot be followed into losing progress', () => {
+  const pullOnly = () => view({
+    connected: true, provisioned: false,
+    repo_owner: 'me', repo_name: 'nightshift', repo_url: 'https://github.com/me/nightshift',
+    connect: connectState({
+      state: 'connected', method: 'byo', owner: 'me', repo: 'nightshift',
+      url: 'https://github.com/me/nightshift', write_access: 'pull_only',
+    }),
+  });
+
+  it('promises that the download leaves the progress file alone', async () => {
+    await mount(pullOnly());
+    expect(text()).toContain('will not touch your');
+    expect(text()).toContain('carries no file at that path');
+  });
+
+  it('says the extraction cannot cost ticks already earned', async () => {
+    await mount(pullOnly());
+    expect(text()).toMatch(/cannot cost you ticks you have already earned/i);
+  });
+});

@@ -33,12 +33,20 @@ Every file lives under the platform write allowlist (`CLAUDE.md`, `docs/**`, `.c
 
 | File | Owner | Write rule | Changes when |
 |---|---|---|---|
-| `.colaberry/plan.json` | Platform | Replaced wholesale | The plan is republished |
+| `.colaberry/plan.json` | Platform-seeded | Replaced wholesale | The plan is republished |
 | `.colaberry/progress.json` | **Co-owned** | Merged field by field | A story's verification state moves |
 | `.colaberry/profile.json` | **Student** | Seeded once, never overwritten | Only when the student edits it |
-| `.colaberry/manifest.json` | Platform | Rides along with any change | Any of the above changes |
+| `.colaberry/manifest.json` | Platform-seeded | Rides along with any change | Any of the above changes |
 
 Three files because there are exactly three ownership rules, and one file cannot have three.
+
+### "Platform-seeded" is not "platform-guaranteed"
+
+The first and last rows used to read **Platform**, flatly. That was true of the intent and false of the outcome, and the gap mattered: STORY-000's acceptance criteria ask the student to attest that `plan.json` and `manifest.json` are in their repo, while this table told them those files were ours and none of their business. 8 of 9 students created `manifest.json` themselves anyway; one read this sentence the way it was written and did not.
+
+The platform writes all three **only where it holds push access**. On a bring-your-own repo where `permissions.push` is false — a legitimate choice, not an error — `writeDocsToRepo` fails at the GitHub boundary and the files never arrive. There, they are the student's to obtain from the docs bundle (`GET /api/portal/workspace/docs/bundle`, surfaced as "Download the documents" in the workspace panel) and commit like any other file.
+
+So: **platform-seeded where we can write, student-supplied where we cannot, and required in the repo either way.** `criterionPaths.ts` enforces the second half of that sentence and is careful never to charge a student for a file we could have written and did not — see its `blameForMissing`.
 
 ### Why `progress.json` is co-owned
 
@@ -56,6 +64,8 @@ The platform owns the story list and the exact text of each acceptance criterion
 | `stories[].verification` | Platform | Replaced |
 
 `verification` is deliberately on the platform side. It is our conclusion about the student's evidence — if merge read it back out of the repo, the file could assert its own verification, and a student could type `"state": "verified"` and have it stick. Criteria are matched by **normalised text**, so an agent that reorders or rewraps them still lands on the right criterion, and a criterion the plan has since **reworded** is intentionally not carried over: the sentence they ticked is not the sentence now being asked for.
+
+**With exactly one exception, and it is a hand-audited list rather than a rule.** When the PLATFORM rewrites one of its own criteria — as it did to STORY-000's C3 and C4 on 2026-08-19 — the students who ticked the old sentence did nothing wrong, and their files sit in repos we frequently cannot push to and can therefore never correct. `SUPERSEDED_CRITERIA` in `backend/src/services/sbp/verification/criterionIdentity.ts` maps each exact historical sentence to the criterion it became, and `resolveCriterionKey` consults it in **both** `decideStory` and `mergeProgressFile` — both, because closing only the matcher would still let the next sync write `false` over a student's real work. An entry can only ever resolve onto a criterion the plan already asks for, so it can never invent one; a criterion reworded *without* an entry still fails, which is what keeps the paragraph above true in general. The table is append-only and permanent.
 
 ### Why `profile.json` is seeded once
 

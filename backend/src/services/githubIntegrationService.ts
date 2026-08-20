@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { GitHubConnection, StudentGithubActivity, Enrollment } from '../models';
+import { isWritableConnection, writeAccessOf } from './sbp/repoConnect/connectionAccess';
 
 const GITHUB_API = 'https://api.github.com';
 const OAUTH_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
@@ -69,9 +70,39 @@ export async function handleOAuthCallback(code: string, enrollmentId: string): P
 
 // ─── Webhook Registration ─────────────────────────────────────────────────────
 
+/**
+ * Register the push webhook on the student's repo.
+ *
+ * A webhook is a REPOSITORY MUTATION, not a read: `POST /hooks` requires admin
+ * on the repo, and asking for one on a repo we only have pull access to is a
+ * request GitHub was always going to refuse. Left unguarded it threw on every
+ * connect for the read-only cohort, and the caller in `participantRoutes`
+ * swallows the rejection into a warn line — so the failure was invisible and
+ * repeated on every retry.
+ *
+ * `isWritableConnection` is the same predicate the document writers ask. Sharing
+ * it is the point: one answer to "may the platform mutate this repo", asked in
+ * every place that mutates one.
+ */
 export async function registerWebhook(enrollmentId: string): Promise<void> {
   const connection = await GitHubConnection.findOne({ where: { enrollment_id: enrollmentId } });
   if (!connection?.access_token_encrypted || !connection.repo_owner || !connection.repo_name) return;
+
+  if (!isWritableConnection(connection)) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      service: 'github-integration',
+      event: 'github_webhook_register_skipped',
+      outcome: 'success',
+      context: {
+        enrollment_id: enrollmentId,
+        write_access: writeAccessOf(connection) ?? 'unrecorded',
+        note: 'no push access on this repo — webhook not attempted',
+      },
+    }));
+    return;
+  }
 
   const webhookUrl = process.env.GITHUB_WEBHOOK_URL;
   if (!webhookUrl) throw new Error('GITHUB_WEBHOOK_URL env var not set');

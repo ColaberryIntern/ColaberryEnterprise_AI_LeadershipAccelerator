@@ -242,8 +242,8 @@ export function buildStoryPrompt(
 
   // ── 10. Repo / notes ──────────────────────────────────────────────────────
   sections.push(hasRepo
-    ? ['## Your workspace repo', 'Point Claude Code at this repo — it is your private workspace for this build:', ctx.repoUrl!, 'Clone it, commit your work, and push.'].join('\n')
-    : ['## Your workspace repo', 'Not provisioned yet. Finish repo setup in the portal to get a private repo, your requirements on disk, and progress tracking.'].join('\n'));
+    ? ['## Your workspace repo', 'Point Claude Code at this repo — it is your workspace for this build. It is PUBLIC, so never commit a secret, an API key or a .env file to it:', ctx.repoUrl!, 'Clone it, commit your work, and push.'].join('\n')
+    : ['## Your workspace repo', 'Not provisioned yet. Finish repo setup in the portal to get a repo, your requirements on disk, and progress tracking. That repo is public, so keep secrets out of it.'].join('\n'));
 
   if (ctx.notes?.trim()) sections.push(asData('My context', ctx.notes));
 
