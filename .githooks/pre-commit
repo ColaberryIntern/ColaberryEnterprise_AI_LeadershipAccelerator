@@ -1,0 +1,76 @@
+#!/bin/sh
+#
+# Pre-commit secret gate.
+#
+# Scans ONLY what is staged, so it stays fast enough to run on every commit
+# (typical run: well under a second after the first, when gitleaks is cached).
+#
+# This hook fails CLOSED. If gitleaks cannot be resolved, the commit is refused
+# rather than allowed through unscanned — a gate that silently passes when the
+# scanner is missing is worse than no gate, because it manufactures confidence.
+#
+# ---------------------------------------------------------------------------
+# IF THIS HOOK BLOCKS YOU
+# ---------------------------------------------------------------------------
+# It printed the rule, file and line. Three legitimate resolutions, in order of
+# preference (full detail in docs/SECRET_SCANNING.md):
+#
+#   1. It is a real secret. Do not commit it. Move it to an env var, then
+#      ROTATE it — if it reached your working tree it may have reached elsewhere.
+#
+#   2. It is a false positive on one line. Append a trailing comment:
+#         const example = "AKIAIOSFODNN7EXAMPLE"; // gitleaks:allow
+#
+#   3. It is a false positive you cannot annotate (a fixture, a vendored blob).
+#      Add its fingerprint to .gitleaksignore. That file is committed and
+#      code-reviewed, so exceptions stay visible instead of accumulating silently.
+#
+# Emergency bypass:  git commit --no-verify
+# That skips this hook but NOT the CI check, which scans the same rules against
+# the pushed branch. Nothing reaches main unscanned. Use it to unblock yourself
+# locally, not to land a secret.
+# ---------------------------------------------------------------------------
+
+set -e
+
+# Allow an explicit, loud, opt-out for the rare case where the hook itself is
+# broken (bad config, corrupt cache) and someone needs to commit the fix.
+if [ "${SKIP_SECRET_SCAN}" = "1" ]; then
+  echo "[pre-commit] SKIP_SECRET_SCAN=1 set — secret scan SKIPPED for this commit."
+  echo "[pre-commit] CI will still scan this branch. Unset it as soon as you can."
+  exit 0
+fi
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "[pre-commit] node is required to run the secret scan but was not found on PATH." >&2
+  echo "[pre-commit] Install Node 20+, or set SKIP_SECRET_SCAN=1 to bypass (CI still enforces)." >&2
+  exit 1
+fi
+
+# Resolves (and on first run, downloads + checksum-verifies) the pinned binary.
+GITLEAKS=$(node "${REPO_ROOT}/scripts/ensure-gitleaks.js") || exit 1
+
+# --staged scans the index, which is exactly what is about to be committed.
+# --redact ensures a caught secret is never echoed into a terminal, CI log, or
+# screen recording. The whole point is to not spread it further.
+"${GITLEAKS}" git --staged \
+  --config "${REPO_ROOT}/.gitleaks.toml" \
+  --gitleaks-ignore-path "${REPO_ROOT}" \
+  --redact=100 \
+  --no-banner \
+  --exit-code 1 || {
+    echo "" >&2
+    echo "  COMMIT BLOCKED: a possible secret is staged (value redacted above)." >&2
+    echo "" >&2
+    echo "  Real secret?      Remove it, use an env var, and ROTATE the credential." >&2
+    echo "  False positive?   Add 'gitleaks:allow' on the line, or a fingerprint" >&2
+    echo "                    entry in .gitleaksignore (both are code-reviewed)." >&2
+    echo "  Need to bypass?   git commit --no-verify   (CI will still catch it)" >&2
+    echo "" >&2
+    echo "  Details: docs/SECRET_SCANNING.md" >&2
+    exit 1
+  }
+
+exit 0

@@ -2,3 +2,8 @@
 # Eliminates the recurring PROGRESS.md merge conflicts across concurrent Claude sessions
 # (which were blocking ~6 of 9 open PRs). "union" is a built-in git merge driver — no config needed.
 PROGRESS.md merge=union
+
+# Git hooks are executed by /bin/sh. With core.autocrlf=true (the default on
+# Windows here) a checkout would rewrite these to CRLF, and a CRLF shebang
+# fails with "bad interpreter". Pin them to LF so the hook survives a clone.
+.githooks/** text eol=lf
