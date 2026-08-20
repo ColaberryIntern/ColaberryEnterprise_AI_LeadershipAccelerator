@@ -29,6 +29,17 @@ interface AgentSeedEntry {
 const AGENT_REGISTRY: AgentSeedEntry[] = [
   // --- schedulerService.ts cron jobs ---
   {
+    agent_name: 'ExplorerProfileRecompute',
+    agent_type: 'scheduled_processor',
+    module: 'explorerProfileService',
+    source_file: 'backend/src/services/explorerGrowth/explorerProfileService.ts',
+    trigger_type: 'cron',
+    schedule: '20 3 * * *',
+    category: 'intelligence',
+    description:
+      'Explorer Growth OS journey intelligence. Recomputes E/I/F scores, affinities, contactability and journey state for every Explorer, writing explorer_journey_profiles plus one explorer_score_snapshots row per learner per day. SCORES AND CLASSIFIES ONLY - decides nothing and sends nothing; the Journey Governor is a separate agent. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on. Recompute is idempotent: two runs with the same as-of time produce identical scores.',
+  },
+  {
     agent_name: 'ScheduledActionsProcessor',
     agent_type: 'scheduled_processor',
     module: 'schedulerService',
