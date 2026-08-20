@@ -250,11 +250,15 @@ export async function getProjectByEnrollment(enrollmentId: string): Promise<Proj
  * List all LIVE projects owned by an enrollment, newest first.
  *
  * Archived projects are excluded here rather than at each call site, because
- * this one function is the choke point for both `GET /api/portal/projects`
- * handlers (`projectRoutes.ts` wins the route; `projectsPortalRoutes.ts` is
- * shadowed behind it) plus `listEnrollmentProjectsSummary`. Filtering here is
- * what makes an archived project disappear from every listing at once instead of
- * from whichever one someone remembered to patch.
+ * this one function is the choke point for `GET /api/portal/projects` (served by
+ * `projectsPortalRoutes.ts`) plus `listEnrollmentProjectsSummary`. Filtering here
+ * is what makes an archived project disappear from every listing at once instead
+ * of from whichever one someone remembered to patch.
+ *
+ * `projectRoutes.ts` used to declare a SECOND handler for that same path and,
+ * being mounted first, won every request — which is what kept
+ * `requireContentEntitlement('projects')` and the `projectApiEnabled` flag from
+ * ever running on it. That duplicate is gone; see the note at its old site.
  *
  * The platform record is deliberately NOT excluded here: this function also
  * backs staff/inventory reads, and hiding infrastructure from every consumer of

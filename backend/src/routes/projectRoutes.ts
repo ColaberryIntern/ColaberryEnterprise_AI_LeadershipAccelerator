@@ -354,43 +354,22 @@ router.get('/api/portal/project', requireParticipant, async (req: Request, res: 
 
 // ─── Multi-project: list / create / switch ─────────────────────────────────
 
-/** GET /api/portal/projects — all projects for the enrollment, with summary + which is active. */
-router.get('/api/portal/projects', requireParticipant, async (req: Request, res: Response) => {
-  try {
-    const enrollmentId = req.participant!.sub;
-    const { listProjectsForEnrollment } = await import('../services/projectService');
-    const { Enrollment, Capability, RequirementsMap } = await import('../models');
-    const [projects, enrollment] = await Promise.all([
-      listProjectsForEnrollment(enrollmentId),
-      Enrollment.findByPk(enrollmentId),
-    ]);
-    const activeId = (enrollment as any)?.active_project_id || (projects[0] && projects[0].id);
-    const summaries = await Promise.all(projects.map(async (p: any) => {
-      const [capCount, reqCount] = await Promise.all([
-        Capability.count({ where: { project_id: p.id, applicability_status: 'active' } }),
-        RequirementsMap.count({ where: { project_id: p.id } }),
-      ]);
-      const ss = p.setup_status || {};
-      const stage = !(p.requirements_document && String(p.requirements_document).trim()) && reqCount === 0
-        ? 'needs_requirements'
-        : (ss.activated ? 'built_out' : (ss.architect_slug && !ss.requirements_loaded ? 'building' : 'has_requirements'));
-      return {
-        id: p.id,
-        name: p.name || p.organization_name || 'Untitled project',
-        project_stage: p.project_stage,
-        stage,
-        capability_count: capCount,
-        requirements_count: reqCount,
-        is_active: p.id === activeId,
-        created_at: p.created_at,
-      };
-    }));
-    res.json({ projects: summaries, active_project_id: activeId });
-  } catch (err: any) {
-    console.error('[ProjectRoutes] GET /projects error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+// GET /api/portal/projects is deliberately NOT declared here.
+//
+// It lives in `projectsPortalRoutes.ts`, which participantRoutes mounts AFTER
+// this router. A copy here won every request and silently disabled the two
+// guards written for that path: the `projectApiEnabled` dark-ship flag checked
+// by that module's `gate()`, and `requireContentEntitlement('projects')`,
+// which participantRoutes registers between the two mounts and so could only
+// ever fire for a request this router did not already answer.
+//
+// The DTO handler is also the safer list: its active-project fallback goes
+// through `adoptableWhere`, which excludes the platform record — the copy that
+// used to be here fell back to `projects[0]` and could name that row as a
+// student's active build.
+//
+// Re-adding it re-breaks both guards. `__tests__/projectsList.entitlement.ts`
+// asserts this router declares no such route.
 
 /**
  * POST /api/portal/projects — the project a NEW build should be generated into,
