@@ -187,3 +187,112 @@ describe('robustness', () => {
     expect(r.highestIntentTier).toBe(0);
   });
 });
+
+describe('T000: the timestamps the state machine needs', () => {
+  // A decayed, capped sum cannot be inverted back to a date. Without these
+  // fields every §8 time-window rule is uncomputable — DORMANT (14d),
+  // IN_CONVERSATION (7d), HIGH_INTENT's 21d exit, every 72h/30d/90d clock.
+
+  it('reports the MOST RECENT occurrence per signal, not the last row read', async () => {
+    // Source rows arrive in no guaranteed order, so this must take the max.
+    mockSources([
+      {
+        match: /FROM timeline_card_progress/,
+        rows: [
+          { signal: 'card_completed', occurred_at: daysAgo(10) },
+          { signal: 'card_completed', occurred_at: daysAgo(2) },
+          { signal: 'card_completed', occurred_at: daysAgo(30) },
+        ],
+      },
+    ]);
+    const r = await readLearnerSignals(ENR, { asOf: NOW });
+    const card = r.bands.engagement.signals.find((s) => s.signal === 'card_completed')!;
+    expect(card.lastOccurredAt.getTime()).toBe(daysAgo(2).getTime());
+    expect(card.occurrences).toBe(3);
+  });
+
+  describe('recentIntentTier vs highestIntentTier', () => {
+    it('EXCLUDES a stale tier-3 signal that highestIntentTier still counts', async () => {
+      // The divergence is the entire reason recentIntentTier exists. §8.2 line
+      // 772 gates HIGH_INTENT on a tier-3/4 signal "in 14d"; the lifetime
+      // maximum would grant that overlay permanently once earned.
+      mockSources([
+        { match: /FROM page_events/, rows: [{ signal: 'enrollment_form_started', occurred_at: daysAgo(200) }] },
+      ]);
+      const r = await readLearnerSignals(ENR, { asOf: NOW });
+      expect(r.highestIntentTier).toBe(3);
+      expect(r.recentIntentTier).toBe(0);
+    });
+
+    it('counts a tier-3 signal inside the window in both', async () => {
+      mockSources([
+        { match: /FROM page_events/, rows: [{ signal: 'enrollment_form_started', occurred_at: daysAgo(3) }] },
+      ]);
+      const r = await readLearnerSignals(ENR, { asOf: NOW });
+      expect(r.highestIntentTier).toBe(3);
+      expect(r.recentIntentTier).toBe(3);
+    });
+
+    it('holds the boundary: 14 days in, 15 days out', async () => {
+      mockSources([
+        { match: /FROM page_events/, rows: [{ signal: 'enrollment_form_started', occurred_at: daysAgo(14) }] },
+      ]);
+      expect((await readLearnerSignals(ENR, { asOf: NOW })).recentIntentTier).toBe(3);
+
+      mockSources([
+        { match: /FROM page_events/, rows: [{ signal: 'enrollment_form_started', occurred_at: daysAgo(15) }] },
+      ]);
+      expect((await readLearnerSignals(ENR, { asOf: NOW })).recentIntentTier).toBe(0);
+    });
+
+    it('reports the RECENT tier even when an older signal ranks higher', async () => {
+      mockSources([
+        {
+          match: /FROM page_events/,
+          rows: [
+            { signal: 'enrollment_form_started', occurred_at: daysAgo(90) },
+            { signal: 'pricing_page_view', occurred_at: NOW },
+          ],
+        },
+      ]);
+      const r = await readLearnerSignals(ENR, { asOf: NOW });
+      expect(r.highestIntentTier).toBe(3); // lifetime
+      expect(r.recentIntentTier).toBe(1); // only the view is recent
+    });
+  });
+
+  describe('lastEngagementAt drives the DORMANT clock', () => {
+    it('is NULL for a learner who has never engaged, not epoch-zero', async () => {
+      // Null keeps "never active" distinguishable from "active in 1970" — a
+      // date of 0 would make every never-engaged learner look 56 years dormant.
+      const r = await readLearnerSignals(ENR, { asOf: NOW });
+      expect(r.lastEngagementAt).toBeNull();
+    });
+
+    it('reports the most recent engagement across DIFFERENT signals', async () => {
+      mockSources([
+        {
+          match: /FROM timeline_card_progress/,
+          rows: [{ signal: 'card_completed', occurred_at: daysAgo(9) }],
+        },
+        {
+          match: /FROM student_navigation_events/,
+          rows: [{ signal: 'portal_session', occurred_at: daysAgo(4) }],
+        },
+      ]);
+      const r = await readLearnerSignals(ENR, { asOf: NOW });
+      expect(r.lastEngagementAt!.getTime()).toBe(daysAgo(4).getTime());
+    });
+
+    it('ignores intent and friction signals — engagement band only', async () => {
+      // A learner who clicks a pricing page but never opens a lesson is not
+      // "engaged" for the purposes of the dormancy clock.
+      mockSources([
+        { match: /FROM page_events/, rows: [{ signal: 'pricing_page_view', occurred_at: NOW }] },
+        { match: /FROM interaction_outcomes/, rows: [{ signal: 'email_hard_bounce', occurred_at: NOW }] },
+      ]);
+      const r = await readLearnerSignals(ENR, { asOf: NOW });
+      expect(r.lastEngagementAt).toBeNull();
+    });
+  });
+});
