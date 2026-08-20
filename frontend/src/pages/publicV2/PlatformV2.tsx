@@ -5,6 +5,7 @@ import MaturityLadder from '../../components/publicV2/MaturityLadder';
 import HeroPlatformV8 from '../../components/publicV2/HeroPlatformV8';
 import BuildPipeline from '../../components/publicV2/BuildPipeline';
 import CapabilityEarned from '../../components/publicV2/CapabilityEarned';
+import GovernanceReal from '../../components/publicV2/GovernanceReal';
 import Roadmap12 from '../../components/publicV2/Roadmap12';
 import { Claim, canShow, Metric, SampleBadge, CapabilityNotice } from '../../components/publicV2/Claim';
 import {
@@ -128,6 +129,7 @@ function PlatformV2(): React.ReactElement {
 
       <BuildPipeline />
       <CapabilityEarned />
+      <GovernanceReal />
 
       {active ? (
         <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-surfaces-title">
