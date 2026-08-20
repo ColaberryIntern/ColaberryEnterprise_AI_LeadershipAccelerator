@@ -126,3 +126,58 @@
   max-width: 1100px;
 }
 .cbv2-earned__shot .cbv2-shot-caption { padding: var(--space-3) var(--space-4); }
+
+/* ------------------------------------------------------------- the thesis -- */
+
+/*
+ * The page's argument, before the tour of surfaces. Three numbered cards rather
+ * than prose: the claim has three parts and they are load-bearing in order --
+ * they learn on the real thing, the prompt comes from their own requirements,
+ * and done is proven against a commit.
+ */
+.cbv2-thesis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+@media (max-width: 900px) { .cbv2-thesis { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-thesiscard {
+  padding: var(--space-6);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+.cbv2-thesiscard__n {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  background: var(--cherry);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--fs-body-sm);
+}
+.cbv2-thesiscard h3 {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.25;
+  color: var(--text-strong);
+  text-wrap: balance;
+}
+.cbv2-thesiscard p { margin: 0; color: var(--text-muted); line-height: var(--lh-relaxed, 1.65); }
+
+.cbv2-thesis__foot {
+  margin: var(--space-7) 0 0;
+  padding-top: var(--space-5);
+  border-top: var(--border-1) solid var(--border-subtle);
+  max-width: 76ch;
+  color: var(--text-muted);
+  line-height: var(--lh-relaxed, 1.65);
+}
