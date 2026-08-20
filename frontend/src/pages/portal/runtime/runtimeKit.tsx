@@ -273,6 +273,42 @@ a.rt-btn{text-decoration:none}
    falls below AA, so the requirement pill gets a lifted ink of its own. */
 .rt[data-theme="dark"] .rt-req{color:#8FC3D6}
 
+/* ── the stacked mentor rail (≤900px) ──────────────────────────────────────
+   NOTE: this whole sheet is a template literal, so no backticks below.
+
+   Below 900px .rt-body turns into a column and the rail stacks under the story.
+   It must be a BOUNDED band, and that has to be said HERE rather than in the
+   max-width:900px block near the top of this sheet: that block sits ABOVE the
+   base .rt-mentor rule, so at equal specificity the base rule wins every
+   property it also sets. That is why it needs !important for width, and why a
+   min-height written up there would lose to the base rule's min-height:0 and
+   silently do nothing.
+
+   Why it must be bounded at all: .rt is position:fixed;inset:0, so the page
+   itself cannot scroll. .rt-mentor is flex:none, so with no cap its height is
+   its CONTENT height, and .rt-thread grows with the conversation. The rail
+   therefore expands without bound, squeezes .rt-mid toward zero (it is
+   overflow-y:auto, so its automatic minimum size is zero and it will shrink
+   away), and pushes Cory's ask box off a viewport with no scrollbar to chase it
+   with. The cap used to live only in the 760px block below, leaving 761-900px
+   unguarded — which is where a student on a laptop lost the paste box entirely
+   and concluded we had never built one. overflow:hidden on .rt-body is the
+   backstop: nothing may escape a container the viewport cannot scroll. */
+@media(max-width:900px){.rt-body{overflow:hidden}.rt-mentor{min-height:250px;max-height:48vh}}
+
+/* ── two troubleshooting doors ─────────────────────────────────────────────
+   Tokens only, so the dark theme's redefinitions above carry these for free. */
+.rt-help-lead{margin:0;font-size:14px;line-height:1.6;color:var(--ink)}
+.rt-doors{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.rt-door{background:var(--paper);border:1px solid var(--line);border-radius:13px;padding:15px 16px;display:flex;flex-direction:column;gap:9px}
+.rt-door-h{font-size:14px;font-weight:700;line-height:1.35;letter-spacing:-.005em}
+.rt-door-p{margin:0;font-size:13.5px;line-height:1.55;color:var(--ink)}
+.rt-door-eg{margin:0;padding-left:18px;font-size:13px;line-height:1.55;color:var(--muted)}
+.rt-door-eg li{margin:3px 0}
+.rt-door-acts{margin-top:auto;display:flex;gap:7px;flex-wrap:wrap;padding-top:2px}
+.rt-door-warn{margin:12px 0 0;padding:11px 13px;border-radius:11px;background:var(--amber-soft);font-size:13.5px;line-height:1.55;color:var(--ink)}
+.rt-troubleshoot{margin:0;max-height:230px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+
 /* ── half screen (≈700px, VS Code in the other half) ───────────────────────
    This is the posture the workspace is actually USED in: a student reads the
    story here and types in the editor beside it. It is not a phone — it is a
@@ -294,9 +330,9 @@ a.rt-btn{text-decoration:none}
   .rt-acc label{padding:8px 0}
   /* A short prompt preview beats a tall one when the whole column is 700px. */
   .rt-prompt-full{max-height:240px}
-  /* Stacked, the rail has no column to fill, so give it a usable band that
-     still leaves the story as the majority of the screen. */
-  .rt-mentor{min-height:250px;max-height:48vh}
+  /* The rail's stacked height band is set for the WHOLE stacked range in the
+     900px block above, not here — see the note there. */
+  .rt-doors{grid-template-columns:1fr}
   .rt-thread{padding:11px}
   .rt-bar{gap:14px;padding:9px 12px}
   .rt-stat .v{font-size:14px}
