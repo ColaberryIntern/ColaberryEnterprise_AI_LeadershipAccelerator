@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { z } from 'zod';
 import {
   createTicket,
   updateTicketStatus,
@@ -10,6 +11,7 @@ import {
   getTicketStats,
   updateTicket,
 } from '../../services/ticketService';
+import { resolveCreatorMatchIds } from '../../services/ticketCreatorFilterResolver';
 import { dispatchTicketToAgent } from '../../services/ticketAgentDispatcher';
 import type { TicketStatus, TicketPriority, TicketType } from '../../models/Ticket';
 import { getEvidenceForTicket } from '../../services/evidence/evidenceService';
@@ -41,6 +43,17 @@ function parseCreatedAfter(value: unknown): Date | undefined {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
+
+// Org Chart v4 (2026-08-20) — the ticket-filter-by-agent button's `?creator=`
+// query param. This IS a changed route boundary (CLAUDE.md Contract
+// Enforcement Layer: query params validated with Zod), unlike the
+// pre-existing params on this route which predate that requirement and are
+// out of scope for this run to retrofit (see execution-contract.md). A
+// malformed value (an array via `?creator=a&creator=b`, or anything non-
+// string) is rejected with 400 before it ever reaches resolveCreatorMatchIds().
+const boardQuerySchema = z.object({
+  creator: z.string().min(1).max(200).optional(),
+});
 
 // SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
 // endpoints publicly callable. Require an authenticated admin for every route below.
@@ -87,6 +100,19 @@ router.get('/api/admin/tickets', async (req: Request, res: Response) => {
 router.get('/api/admin/tickets/board', async (req: Request, res: Response) => {
   try {
     const { status, priority, type, source, assigned_to_id, created_after } = req.query;
+
+    // Org Chart v4 (2026-08-20) — validated separately from the destructure
+    // above (which stays untouched for the pre-existing params, out of
+    // scope for this run to retrofit) so a malformed `creator` value 400s
+    // before ever reaching resolveCreatorMatchIds()/getTicketsForBoard().
+    let creator: string | undefined;
+    try {
+      creator = boardQuerySchema.parse(req.query).creator;
+    } catch (zodErr: any) {
+      return res.status(400).json({ error: 'Invalid input', issues: zodErr.issues });
+    }
+    const creatorMatchIds = creator ? await resolveCreatorMatchIds(creator) : undefined;
+
     const board = await getTicketsForBoard({
       status: status as TicketStatus | undefined,
       priority: priority as TicketPriority | undefined,
@@ -94,6 +120,7 @@ router.get('/api/admin/tickets/board', async (req: Request, res: Response) => {
       source: source as string | undefined,
       assigned_to_id: assigned_to_id as string | undefined,
       createdAfter: parseCreatedAfter(created_after),
+      creatorMatchIds,
     });
     res.json({ board });
   } catch (err: any) {

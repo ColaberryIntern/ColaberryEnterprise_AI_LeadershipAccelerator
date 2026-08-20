@@ -64,8 +64,11 @@ export interface LiveAgentActivityEvent {
 
 const DEFAULT_ACTIVITY_LIMIT = 30;
 
-/** Every real AdminUser row built via the blueprint pattern (see header comment). */
-async function findBlueprintAdminUsers() {
+/** Every real AdminUser row built via the blueprint pattern (see header comment).
+ * Exported (Org Chart v4, 2026-08-20) so liveAgentsTimelineService.ts reuses this
+ * IDENTICAL "who counts as a live AI agent" definition instead of re-deriving it
+ * a second time and risking the two drifting apart. */
+export async function findBlueprintAdminUsers() {
   return AdminUser.findAll({ where: { is_ai_operated: true, agent_id: { [Op.ne]: null } } });
 }
 
