@@ -1,4 +1,5 @@
 import type {
+  ExplorerEngagementSubBand,
   ExplorerSignalBand,
   ExplorerSignalDefinition,
   ExplorerIntentTier,
@@ -22,26 +23,26 @@ import type {
 
 export const EXPLORER_SIGNAL_DEFINITIONS: Record<string, ExplorerSignalDefinition> = {
   // --- ENGAGEMENT (§6.1) — do they actually use the learning environment? ---
-  account_created: { band: 'engagement', weight: 5, halfLifeDays: null, cap: 5, source: 'enrollments' },
-  first_card_served: { band: 'engagement', weight: 5, halfLifeDays: 21, cap: 5, source: 'today_feed_impressions' },
-  first_card_interacted: { band: 'engagement', weight: 12, halfLifeDays: 21, cap: 12, source: 'today_feed_impressions' },
-  first_card_completed: { band: 'engagement', weight: 15, halfLifeDays: 21, cap: 15, source: 'timeline_card_progress' },
-  card_completed: { band: 'engagement', weight: 6, halfLifeDays: 21, cap: 24, source: 'timeline_card_progress' },
-  quiz_passed: { band: 'engagement', weight: 5, halfLifeDays: 21, cap: 5, source: 'timeline_card_progress' },
-  points_earned: { band: 'engagement', weight: 3, halfLifeDays: 14, cap: 12, source: 'student_points_events' },
-  streak_day: { band: 'engagement', weight: 4, halfLifeDays: 7, cap: 16, source: 'student_points_events' },
-  assignment_submitted: { band: 'engagement', weight: 10, halfLifeDays: 30, cap: 20, source: 'assignment_submissions' },
-  reflection_completed: { band: 'engagement', weight: 6, halfLifeDays: 30, cap: 12, source: 'reflection_entries' },
-  architecture_skill_evidence: { band: 'engagement', weight: 8, halfLifeDays: 30, cap: 16, source: 'student_architecture_skill' },
-  project_build_activity: { band: 'engagement', weight: 10, halfLifeDays: 14, cap: 20, source: 'projects' },
-  community_contribution: { band: 'engagement', weight: 8, halfLifeDays: 21, cap: 16, source: 'community_contributions' },
-  community_presence: { band: 'engagement', weight: 3, halfLifeDays: 7, cap: 6, source: 'community_members' },
-  live_session_attended: { band: 'engagement', weight: 12, halfLifeDays: 30, cap: 24, source: 'attendance_records' },
-  media_watched: { band: 'engagement', weight: 4, halfLifeDays: 14, cap: 8, source: 'network_video_views' },
+  account_created: { band: 'engagement', subBand: 'achievement', weight: 5, halfLifeDays: null, cap: 5, source: 'enrollments' },
+  first_card_served: { band: 'engagement', subBand: 'recency', weight: 5, halfLifeDays: 21, cap: 5, source: 'today_feed_impressions' },
+  first_card_interacted: { band: 'engagement', subBand: 'recency', weight: 12, halfLifeDays: 21, cap: 12, source: 'today_feed_impressions' },
+  first_card_completed: { band: 'engagement', subBand: 'progress', weight: 15, halfLifeDays: 21, cap: 15, source: 'timeline_card_progress' },
+  card_completed: { band: 'engagement', subBand: 'progress', weight: 6, halfLifeDays: 21, cap: 24, source: 'timeline_card_progress' },
+  quiz_passed: { band: 'engagement', subBand: 'progress', weight: 5, halfLifeDays: 21, cap: 5, source: 'timeline_card_progress' },
+  points_earned: { band: 'engagement', subBand: 'achievement', weight: 3, halfLifeDays: 14, cap: 12, source: 'student_points_events' },
+  streak_day: { band: 'engagement', subBand: 'achievement', weight: 4, halfLifeDays: 7, cap: 16, source: 'student_points_events' },
+  assignment_submitted: { band: 'engagement', subBand: 'progress', weight: 10, halfLifeDays: 30, cap: 20, source: 'assignment_submissions' },
+  reflection_completed: { band: 'engagement', subBand: 'progress', weight: 6, halfLifeDays: 30, cap: 12, source: 'reflection_entries' },
+  architecture_skill_evidence: { band: 'engagement', subBand: 'achievement', weight: 8, halfLifeDays: 30, cap: 16, source: 'student_architecture_skill' },
+  project_build_activity: { band: 'engagement', subBand: 'progress', weight: 10, halfLifeDays: 14, cap: 20, source: 'projects' },
+  community_contribution: { band: 'engagement', subBand: 'recency', weight: 8, halfLifeDays: 21, cap: 16, source: 'community_contributions' },
+  community_presence: { band: 'engagement', subBand: 'recency', weight: 3, halfLifeDays: 7, cap: 6, source: 'community_members' },
+  live_session_attended: { band: 'engagement', subBand: 'recency', weight: 12, halfLifeDays: 30, cap: 24, source: 'attendance_records' },
+  media_watched: { band: 'engagement', subBand: 'progress', weight: 4, halfLifeDays: 14, cap: 8, source: 'network_video_views' },
   // EPIC 2's own output: the first signal ever written to student_navigation_events.
   // T002 is its writer, T003 its ingest. Without this entry the writer would have
   // no legal event type at all (it rejects anything absent from this table).
-  portal_session: { band: 'engagement', weight: 2, halfLifeDays: 7, cap: 10, source: 'student_navigation_events' },
+  portal_session: { band: 'engagement', subBand: 'recency', weight: 2, halfLifeDays: 7, cap: 10, source: 'student_navigation_events' },
 
   // --- INTENT (§6.2) — tiered, because a page view is not readiness ---
   // T1 · view

@@ -18,6 +18,7 @@
 /** A capability that can be independently gated. */
 export type ExplorerGrowthFeature =
   | 'signalIngest'
+  | 'journeyIntelligence'
   | 'journeyGovernor'
   | 'commercial'
   | 'aliOutreach'
@@ -31,6 +32,12 @@ export interface ExplorerGrowthFlags {
   readonly growthOsEnabled: boolean;
   /** Write learner behavioural signals. Safe to enable first, on its own. */
   readonly signalIngestEnabled: boolean;
+  /**
+   * EPIC 3. Gates scoring, affinity, contactability, journey state and the
+   * recompute cron. Scoring only — this flag never sends anything; the
+   * Governor that acts on a state is gated separately by journeyGovernor.
+   */
+  readonly journeyIntelligenceEnabled: boolean;
   /** Run the Journey Governor decision engine. */
   readonly journeyGovernorEnabled: boolean;
   /** Accelerator / subscription / referral messaging. */
@@ -51,6 +58,7 @@ export interface ExplorerGrowthFlags {
 export const EXPLORER_GROWTH_ENV_KEYS = {
   growthOsEnabled: 'EXPLORER_GROWTH_OS_ENABLED',
   signalIngestEnabled: 'EXPLORER_SIGNAL_INGEST_ENABLED',
+  journeyIntelligenceEnabled: 'EXPLORER_JOURNEY_INTELLIGENCE_ENABLED',
   journeyGovernorEnabled: 'EXPLORER_JOURNEY_GOVERNOR_ENABLED',
   commercialEnabled: 'EXPLORER_COMMERCIAL_ENABLED',
   aliOutreachEnabled: 'EXPLORER_ALI_OUTREACH_ENABLED',
@@ -63,6 +71,7 @@ export const EXPLORER_GROWTH_ENV_KEYS = {
 /** Maps a feature to the flag that gates it. */
 const FEATURE_FLAG: Record<ExplorerGrowthFeature, keyof ExplorerGrowthFlags> = {
   signalIngest: 'signalIngestEnabled',
+  journeyIntelligence: 'journeyIntelligenceEnabled',
   journeyGovernor: 'journeyGovernorEnabled',
   commercial: 'commercialEnabled',
   aliOutreach: 'aliOutreachEnabled',
@@ -88,6 +97,7 @@ export function resolveExplorerGrowthFlags(
   return Object.freeze({
     growthOsEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.growthOsEnabled]),
     signalIngestEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.signalIngestEnabled]),
+    journeyIntelligenceEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.journeyIntelligenceEnabled]),
     journeyGovernorEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.journeyGovernorEnabled]),
     commercialEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.commercialEnabled]),
     aliOutreachEnabled: isOn(source[EXPLORER_GROWTH_ENV_KEYS.aliOutreachEnabled]),
