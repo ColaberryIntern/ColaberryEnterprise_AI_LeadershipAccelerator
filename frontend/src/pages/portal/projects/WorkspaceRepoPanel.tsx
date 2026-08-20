@@ -336,9 +336,18 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
       ) : (
         <>
           <p className="rt-muted" style={{ margin: '0 0 8px' }}>
-            The platform will create an <strong>empty</strong> private repo and add you to it, then give you the
+            The platform will create an <strong>empty public repo</strong> and add you to it, then give you the
             two commands that push your existing folder into it. Empty on purpose: your history arrives intact,
             with nothing to merge and nothing to force.
+          </p>
+          {/* Said before the button, not after it. A student who reads this
+              AFTER pushing has already published whatever was in the folder. */}
+          <p className="rt-hook-warn">
+            <strong>This repo will be public. Anyone on the internet can read it.</strong> That is on
+            purpose: it is your portfolio, and it is what lets GitHub Pages put your Command Center
+            online for free at the end of Story 000. It also means everything you push is visible, so
+            never commit a password, an API key, or a <code>.env</code> file. If something has to stay
+            secret, keep it out of the folder.
           </p>
           <div className="rt-row">
             <input

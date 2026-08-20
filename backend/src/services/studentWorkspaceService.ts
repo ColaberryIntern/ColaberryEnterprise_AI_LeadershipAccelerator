@@ -194,9 +194,26 @@ export async function githubUserExists(login: string): Promise<boolean> {
 // ── provision ────────────────────────────────────────────────────────────────
 
 /**
- * Idempotently provision a private workspace repo for the student and add them
+ * Idempotently provision a PUBLIC workspace repo for the student and add them
  * as a push collaborator. Safe to call twice: a 422 "name already exists" on
  * repo create is treated as success (the repo is reused).
+ *
+ * PUBLIC, decided by Ali Muwwakkil on 2026-08-19, and the reason is that the
+ * rest of the product had already assumed it. Students who make their own repo
+ * make it public (docs/COMMAND_CENTER_HOSTING.md is the standing decision, and
+ * it says public); the webhook panel warns in bold that "your repo is public";
+ * STORY-000's prompt asserts "This repo is public" and, on its final step,
+ * publishes the Command Center to GitHub Pages, which on a free account only
+ * serves from a public repo. Provisioning private meant a provisioned student
+ * was told their work was public, was warned about secrets on that basis, and
+ * then hit a paywall on the last step of the first story. The cohort was split
+ * down the middle and behaving differently on identical instructions.
+ *
+ * The consequence to keep in mind when editing anything that writes into this
+ * repo: everything committed here is world-readable from the moment it lands.
+ * That is what makes the per-repo webhook secret (webhookSecretService.ts) and
+ * the "no secrets in the story text" rule (commandCenterStory.ts) load-bearing
+ * rather than merely tidy.
  */
 export async function provisionWorkspaceRepo(
   enrollmentId: string,
@@ -236,13 +253,15 @@ export async function provisionWorkspaceRepo(
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) throw new Error(`Enrollment not found: ${enrollmentId}`);
 
-  // 1) Create the private repo (idempotent on 422 name-exists).
+  // 1) Create the PUBLIC repo (idempotent on 422 name-exists). See the
+  //    function docstring: public is what every other surface already tells
+  //    the student, and what GitHub Pages needs on a free account.
   const createRes = await fetchWithTimeout(`${apiBase()}/orgs/${owner}/repos`, {
     method: 'POST',
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: repo,
-      private: true,
+      private: false,
       auto_init: opts.seedInitialCommit === true,
       description: `Colaberry Accelerator workspace for ${enrollment.full_name || login}`,
     }),
@@ -304,7 +323,7 @@ export async function provisionWorkspaceRepo(
  * Sync the student's repo: read the default branch → recursive tree → recent
  * commits, and persist file_tree_json / file_count / repo_language /
  * commit_summary_json / last_sync_at on the connection. Read-only — the portal
- * never commits. Uses the platform token (org owner reads the private repo).
+ * never commits. Uses the platform token (org owner reads the repo).
  */
 export async function syncWorkspaceRepo(enrollmentId: string, projectId: string): Promise<WorkspaceRepoView> {
   await requireOwnedProject(enrollmentId, projectId);

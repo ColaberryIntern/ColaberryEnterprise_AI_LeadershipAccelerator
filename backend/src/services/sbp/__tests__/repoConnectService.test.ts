@@ -405,6 +405,10 @@ describe('adoptProvisionedRepo', () => {
 
     expect(view.state).toBe('awaiting_push');
     expect(view.method).toBe('provisioned');
+    // The stored mirror must agree with what we actually asked GitHub for.
+    // These drifted apart once already and the student-facing copy followed
+    // the mirror, not the request.
+    expect(view.private).toBe(false);
     expect(view.adopt_commands?.join('\n')).toContain('git remote add origin');
     expect(view.adopt_commands?.join('\n')).toContain('git push -u origin main');
 
@@ -412,7 +416,8 @@ describe('adoptProvisionedRepo', () => {
     // a rejected non-fast-forward they would try to fix with --force.
     const createCall = impl.mock.calls.find((c: any[]) => /\/repos$/.test(String(c[0])));
     expect(JSON.parse(String(createCall![1].body)).auto_init).toBe(false);
-    expect(JSON.parse(String(createCall![1].body)).private).toBe(true);
+    // Public since 2026-08-19 - see studentWorkspaceService.test.ts for why.
+    expect(JSON.parse(String(createCall![1].body)).private).toBe(false);
 
     // Not writable until they push — publish must take the no-repo path.
     expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(false);

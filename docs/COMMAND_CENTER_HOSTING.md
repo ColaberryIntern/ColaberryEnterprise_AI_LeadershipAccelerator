@@ -183,22 +183,25 @@ That is the actual curriculum gap behind "students have nowhere to point the but
 
 ---
 
-## Open recommendation: the platform provisioning path
+## The platform provisioning path
 
-**No change made. This is a recommendation awaiting a decision.**
+**Visibility: DECIDED and SHIPPED — Ali Muwwakkil, 2026-08-19.** Provisioned repos
+are now created **public**, matching what the rest of the product already told the
+student. The custody half of this section (repos under Colaberry's org rather than
+the student's account) is **still an open recommendation** and is unchanged.
 
 `POST /api/portal/workspace/repo/provision` (`backend/src/routes/workspaceRoutes.ts:171`) creates the student's repo by calling:
 
 ```
 POST /orgs/${GITHUB_WORKSPACE_ORG}/repos     # defaults to 'ColaberryIntern'
-     body: { private: true, ... }
+     body: { private: false, ... }   # public since 2026-08-19
 ```
 `backend/src/services/studentWorkspaceService.ts:240`
 
-This is **doubly wrong under the new decision**:
+This was **doubly wrong under the 2026-08-14 decision**. One half is now fixed:
 
 1. It creates the repo **under Colaberry's org**, not the student's account — the exact custody shape Ali just rejected. `docs/REPO_CONNECT_CONTRACT.md` §5 already flags this as the one place the implementation violates its own ruling.
-2. It creates the repo **private**, which makes GitHub Pages unavailable on a free account — so a repo provisioned this way *cannot* host a Command Center on the chosen path.
+2. ~~It creates the repo **private**, which makes GitHub Pages unavailable on a free account — so a repo provisioned this way *cannot* host a Command Center on the chosen path.~~ **FIXED 2026-08-19:** `private: false`. This was the contradiction that mattered most to a student: the webhook panel warned in bold that "your repo is public", STORY-000's prompt asserted "This repo is public", and then STORY-000's final step — publishing the Command Center to Pages — hit a paywall that only provisioned students ever saw. Most students create their own repo and make it public, so the cohort was split and behaving differently on identical instructions.
 
 **It is also already broken.** The org create call returns 404 (GitHub returns 404 rather than 403 when a token lacks org visibility or repo-create permission, so as not to leak org existence).
 
@@ -213,7 +216,7 @@ No cause, no next step, no way to self-serve. They are stuck, and nothing tells 
 Ranked against the alternatives:
 
 - **Remove it entirely** — rejected for now. It is a working implementation of collaborator-adding and connection-upsert that the connect flow shares; ripping it out is a larger diff than the decision requires, and the decision is one day old.
-- **Leave it as is** — rejected. It is a live button that 500s, and if the token were ever fixed it would silently start creating private repos under our org, re-introducing custody by accident. A broken path that heals into the wrong behaviour is worse than one that stays broken.
+- **Leave it as is** — rejected. It is a live button that 500s, and if the token were ever fixed it would silently start creating repos under our org, re-introducing custody by accident. A broken path that heals into the wrong behaviour is worse than one that stays broken. (As of 2026-08-19 those repos would at least be public, so the Pages dead end is gone; the custody problem is not.)
 - **Hide + disable + keep** — **recommended.** Three small changes:
   1. **Remove the provision affordance from the UI** so no student can reach a dead end.
   2. **Return a deliberate 410 Gone** from the route with a real `student_message` pointing at the connect flow ("Create a free repo on your own GitHub account and connect it here"), so any cached client or direct call gets a truthful answer instead of a 500.
@@ -222,6 +225,46 @@ Ranked against the alternatives:
 This makes the failure honest immediately, removes the wrong-shape path from the product, and leaves the shared helpers intact for the connect flow — without a large refactor made in the same week as the decision.
 
 **One thing to confirm before wiring anything automated:** whether the platform token holds `admin` on a student-owned repo. If it does not — and on a Door-A repo where we are at most a push collaborator, it will not — then `POST /repos/{owner}/{repo}/pages` is a **student action, not an automated one**. Pages *can* be enabled entirely over the REST API, so automation is possible in principle; it is permission, not API surface, that decides. Worth checking against a real connected repo before anyone designs the flow.
+
+---
+
+## Already-provisioned private repos: what happens to them
+
+**Recommendation: the flip is forward-only. Do NOT mass-convert existing private
+repos, and do not convert any of them silently.**
+
+The change above affects repos created from 2026-08-19 onward. Repos already
+provisioned private stay private until someone decides otherwise, deliberately.
+
+Why not just flip them:
+
+- **Flipping publishes their work.** A student was told, by this platform, that the
+  repo was private on the provisioning screen. Some will have taken that at face
+  value and committed things they would not publish — a `.env`, a key, a client
+  name. Making the repo public retroactively publishes all of it, including the
+  entire git history, where a later `git rm` does not remove it.
+- **A secret in git history is not fixed by deleting the file.** Anyone flipping a
+  repo must rotate what leaked, not just delete it.
+- **No code path exists to do it.** There is no `PATCH /repos/{owner}/{repo}` and no
+  `visibility` payload anywhere in this codebase; it would be net-new. It is also
+  not certain the platform token holds `admin` on these repos, which such a call
+  requires.
+
+**If Ali decides to convert them, the order is: tell them first, then convert.**
+
+1. Identify the affected students (`github_connections` rows with
+   `status_json.connect.method = 'provisioned'`).
+2. Email each one, before anything changes, saying plainly: your build repo is
+   currently private, we are making it public on <date>, here is why, here is the
+   URL, and **check it for passwords, API keys and `.env` files first — if you
+   find one, rotate the key, because deleting the file does not remove it from the
+   history.**
+3. Give a real window to act, and a way to say no.
+4. Only then convert, and only for those who did not opt out.
+
+A student who opts out keeps a private repo and loses only the free Pages hosting
+of their Command Center, which STORY-000 already treats as optional and never
+gates the story on.
 
 ---
 
