@@ -628,7 +628,8 @@ Claude may assume:
 - VS Code / VSCodium / Cursor may be used
 - Git is present
 - CI runs automated tests where they exist (manual testing is the current default for most surfaces)
-- Production VPS access is via `ssh root@95.216.199.47` to the stack at `/opt/colaberry-accelerator`. Deploys are `git pull origin main && docker compose -f docker-compose.production.yml up -d --build [service]`.
+- Production VPS access over SSH is available to the operator. **This repository is public: the host address, SSH account, and stack directory are deliberately NOT recorded here.** Read them from the operator's private ops notes or the deployment vault, never from a tracked file.
+- Deploy procedure (run from the stack directory on the production host): `git pull origin main`, then `docker compose -f docker-compose.production.yml up -d --build [service]`. Confirm `HEAD` matches `origin/main` before building; a dirty tree rebuilds stale code.
 
 Claude must NOT assume:
 - Moltbot exists
