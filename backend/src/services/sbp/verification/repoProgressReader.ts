@@ -21,8 +21,29 @@ import { PROGRESS_FILE_PATH } from './progressContract';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 3;
-/** How far back we look. A student who has not touched a story in 100 commits has moved on. */
+/** Commits per page. GitHub's own maximum for the commits list. */
 export const COMMIT_WINDOW = 100;
+/**
+ * How many pages of history we will walk.
+ *
+ * One page used to be the whole window, so a student past their 100th commit
+ * silently lost every commit before it — the story they finished in week two
+ * stopped being provable in week six, and the verdict moved BACKWARDS through no
+ * fault of theirs. Five pages is 500 commits, comfortably past the busiest repo
+ * on the platform (the largest today is 20), and the walk stops early on the
+ * first short page so a small repo still costs exactly one call.
+ *
+ * Bounded rather than unbounded on purpose: a fork of a large upstream would
+ * otherwise turn one Sync into hundreds of API calls against a shared rate limit.
+ * `window_truncated` still reports honestly when we stopped early.
+ */
+export const MAX_COMMIT_PAGES = 5;
+/**
+ * How many non-default branches we will probe when the default branch shows no
+ * evidence at all. Bounded because a repo with 50 dependabot branches must not
+ * turn a "you have not started yet" verdict into 50 API calls.
+ */
+export const MAX_BRANCH_PROBES = 10;
 /**
  * Cap on per-commit detail fetches. The list endpoint gives us messages but no
  * file counts, so each candidate costs one more call. Only commits whose
@@ -77,6 +98,27 @@ export interface VerificationInputs {
   treePaths: Set<string> | null;
   /** True when GitHub told us it truncated the tree — see readTreePaths. */
   tree_truncated: boolean;
+  /**
+   * The branch this verdict was reached on, or null when the caller did not name
+   * one and GitHub's own default was used.
+   *
+   * Recorded because "which branch did you read?" was previously unanswerable
+   * from the logs, and it is the first question worth asking when a student says
+   * the portal cannot see work they have certainly done. Null is reported
+   * faithfully rather than guessed at — naming a branch we did not pin would be
+   * worse than admitting we did not pin one.
+   */
+  branch_read: string | null;
+  /**
+   * Non-default branches carrying commits that name a story, when the default
+   * branch carried none. Empty on the normal path — this is only populated when
+   * the student would otherwise be told they have done nothing.
+   *
+   * NOT evidence. The verdict is still reached on the default branch alone (see
+   * `readVerificationInputs`); this exists so the student can be told WHERE their
+   * work is instead of being told it does not exist.
+   */
+  unmerged_branches: string[];
 }
 
 /**
@@ -216,17 +258,35 @@ export async function readVerificationInputs(
   const { owner, repo } = target;
   const started = Date.now();
 
-  const ref = target.branch ? `?ref=${encodeURIComponent(target.branch)}` : '';
+  /**
+   * WHICH BRANCH. Named by the caller, never assumed to be `main`.
+   *
+   * `buildVerificationService` passes the `default_branch` the connect flow
+   * recorded on the connection row, so the branch is stated rather than left to
+   * GitHub to guess — which is what makes it loggable, and "which branch did you
+   * read?" is the first question worth asking when a student says the portal
+   * cannot see work they have certainly done.
+   *
+   * DELIBERATELY NOT resolved with an extra `GET /repos/{owner}/{repo}` call.
+   * The row already holds this fact; spending a request per sync to re-derive it
+   * would add an API call to every verification on the platform to learn
+   * something we wrote down at connect time.
+   *
+   * DELIBERATELY NOT defaulted to `main` when unrecorded.
+   * `Pamy77/colaberry-architect-workspace` has a default branch of `master`, so
+   * a hardcoded `main` would have broken a live student. Unrecorded falls back to
+   * the pre-existing behaviour — omit the ref and let GitHub use the repo default
+   * — which is correct, just not self-describing. `branch_read` is null there,
+   * and says so honestly rather than naming a branch we did not actually pin.
+   */
+  const branch = target.branch?.trim() || null;
+
+  const ref = branch ? `?ref=${encodeURIComponent(branch)}` : '';
   const contentsPath = `/repos/${owner}/${repo}/contents/${PROGRESS_FILE_PATH.split('/').map(encodeURIComponent).join('/')}${ref}`;
   const fileRes = await gh(contentsPath, token, fetchImpl);
   const progressRaw = decodeContents(fileRes.body);
 
-  const listPath = `/repos/${owner}/${repo}/commits?per_page=${COMMIT_WINDOW}${target.branch ? `&sha=${encodeURIComponent(target.branch)}` : ''}`;
-  const listRes = await gh(listPath, token, fetchImpl);
-  if (listRes.status === 404) {
-    throw new RepoReadError('RepoNotFound', `GitHub has no repo ${owner}/${repo}, or the platform token cannot see it`);
-  }
-  const rawCommits = Array.isArray(listRes.body) ? (listRes.body as Array<Record<string, any>>) : [];
+  const { commits: rawCommits, truncated } = await listCommits(owner, repo, branch, token, fetchImpl);
 
   // Cheap filter first: only commits whose message already mentions one of the
   // plan's story ids can possibly be evidence, and only those are worth a
@@ -235,8 +295,31 @@ export async function readVerificationInputs(
   // for a caller that did not say what it was looking for.
   const ids = opts.storyIds ?? [];
   const candidates = rawCommits
-    .filter((c) => ids.some((id) => new RegExp(`\\b${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(String(c?.commit?.message ?? ''))))
+    .filter((c) => mentionsAnyStory(String(c?.commit?.message ?? ''), ids))
     .slice(0, MAX_DETAIL_FETCHES);
+
+  /**
+   * NOTHING ON THE DEFAULT BRANCH. Before telling a student they have done no
+   * work, find out whether they have simply done it somewhere else.
+   *
+   * WHY THE VERDICT IS STILL DEFAULT-BRANCH ONLY. Verifying "any branch" is the
+   * more forgiving rule and the wrong one: it lets an abandoned experiment
+   * satisfy a story permanently, it awards Builder XP for work that never
+   * reached the mainline, and it makes the verdict depend on which branch
+   * happened to be scanned first. Story completion should mean the work is in the
+   * branch the project actually ships from.
+   *
+   * So this does not change the verdict. It changes the MESSAGE: instead of
+   * "none of your criteria are passing", the student can be told their commits
+   * are sitting on `feature/x` and need merging. That is the difference between
+   * a dead end and an instruction.
+   *
+   * Costs nothing on the happy path — only reached when the default branch
+   * yielded no candidate at all.
+   */
+  const unmerged_branches = candidates.length === 0 && ids.length > 0 && branch !== null
+    ? await findStoryBranches(owner, repo, branch, ids, token, fetchImpl)
+    : [];
 
   const commits: CommitFact[] = [];
   for (const c of candidates) {
@@ -262,22 +345,26 @@ export async function readVerificationInputs(
   const tree = await readTreePaths(target, token, fetchImpl, opts.correlationId);
 
   log('sbp_verification_repo_read', opts.correlationId, 'success', {
-    owner, repo,
+    owner, repo, branch,
     duration_ms: Date.now() - started,
     progress_present: progressRaw !== null,
     commits_scanned: rawCommits.length,
     detail_fetched: commits.length,
     tree_paths: tree.paths?.size ?? null,
     tree_truncated: tree.truncated,
+    window_truncated: truncated,
+    unmerged_branches,
   });
 
   return {
     progressRaw,
     commits,
     commits_scanned: rawCommits.length,
-    window_truncated: rawCommits.length >= COMMIT_WINDOW,
+    window_truncated: truncated,
     treePaths: tree.paths,
     tree_truncated: tree.truncated,
+    branch_read: branch,
+    unmerged_branches,
   };
 }
 
@@ -350,6 +437,85 @@ async function readTreePaths(
       note: 'path checks skipped for this run; no criterion was failed for a file we could not look for',
     });
     return { paths: null, truncated: false };
+  }
+}
+
+/** Does this commit message name one of the plan's stories? */
+function mentionsAnyStory(message: string, ids: string[]): boolean {
+  return ids.some((id) =>
+    new RegExp(`\\b${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(message));
+}
+
+/**
+ * Walk up to `MAX_COMMIT_PAGES` pages of history, oldest page last.
+ *
+ * `truncated` means "there is more we did not read", which is now only true at
+ * the page cap rather than at the first 100 commits.
+ *
+ * A null branch omits `sha` entirely, which is what the reader did before any of
+ * this and leaves GitHub to use the repo default.
+ */
+async function listCommits(
+  owner: string, repo: string, branch: string | null, token: string, fetchImpl: typeof fetch,
+): Promise<{ commits: Array<Record<string, any>>; truncated: boolean }> {
+  const all: Array<Record<string, any>> = [];
+
+  for (let page = 1; page <= MAX_COMMIT_PAGES; page++) {
+    const path = `/repos/${owner}/${repo}/commits`
+      + `?per_page=${COMMIT_WINDOW}&page=${page}`
+      + (branch ? `&sha=${encodeURIComponent(branch)}` : '');
+    const res = await gh(path, token, fetchImpl);
+    if (res.status === 404) {
+      // Page 1 means the repo (or branch) is not there. A later page 404 is just
+      // the end of history on some GitHub responses, and is not an error.
+      if (page === 1) {
+        throw new RepoReadError('RepoNotFound', `GitHub has no repo ${owner}/${repo}, or the platform token cannot see it`);
+      }
+      return { commits: all, truncated: false };
+    }
+    const batch = Array.isArray(res.body) ? (res.body as Array<Record<string, any>>) : [];
+    all.push(...batch);
+    // A short page is the end of history — stop rather than paying for a page we
+    // already know is empty.
+    if (batch.length < COMMIT_WINDOW) return { commits: all, truncated: false };
+  }
+
+  return { commits: all, truncated: true };
+}
+
+/**
+ * Which non-default branches carry commits naming one of these stories.
+ *
+ * Deliberately shallow: one page of commits per branch, a bounded number of
+ * branches, and no per-commit detail fetch. This answers "where is their work",
+ * not "does it count" — the second question is only ever asked of the default
+ * branch.
+ */
+async function findStoryBranches(
+  owner: string, repo: string, defaultBranch: string, ids: string[],
+  token: string, fetchImpl: typeof fetch,
+): Promise<string[]> {
+  try {
+    const res = await gh(`/repos/${owner}/${repo}/branches?per_page=100`, token, fetchImpl);
+    const branches = (Array.isArray(res.body) ? res.body : [])
+      .map((b: Record<string, any>) => String(b?.name ?? ''))
+      .filter((n: string) => n && n !== defaultBranch)
+      .slice(0, MAX_BRANCH_PROBES);
+
+    const found: string[] = [];
+    for (const name of branches) {
+      const commits = await gh(
+        `/repos/${owner}/${repo}/commits?per_page=${COMMIT_WINDOW}&sha=${encodeURIComponent(name)}`,
+        token, fetchImpl,
+      );
+      const list = Array.isArray(commits.body) ? (commits.body as Array<Record<string, any>>) : [];
+      if (list.some((c) => mentionsAnyStory(String(c?.commit?.message ?? ''), ids))) found.push(name);
+    }
+    return found;
+  } catch {
+    // Best-effort diagnosis only. Failing to enumerate branches must never turn a
+    // readable build into a failed verification.
+    return [];
   }
 }
 

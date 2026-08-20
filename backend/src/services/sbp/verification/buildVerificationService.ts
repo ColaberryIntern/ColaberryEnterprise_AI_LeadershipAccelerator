@@ -54,6 +54,7 @@ import {
   RepoReadError,
   RepoReadErrorClass,
 } from './repoProgressReader';
+import { storedConnect } from '../repoConnect/connectionAccess';
 import {
   annotateReadError,
   applyVerificationLatch,
@@ -128,6 +129,23 @@ export interface BuildVerificationSummary {
   unknown_stories: string[];
   /** True when older commits exist beyond the read window. */
   window_truncated: boolean;
+  /**
+   * The branch the verdict was reached on. Null only when nothing could be read.
+   *
+   * Previously unanswerable: the reader passed no ref and GitHub silently chose,
+   * so a student reporting "the portal cannot see my work" left no record of
+   * where we had looked.
+   */
+  branch_read: string | null;
+  /**
+   * Non-default branches carrying commits that name a story, when the default
+   * branch carried none.
+   *
+   * Non-empty means the student HAS done the work and it is not on the branch we
+   * verify. That is a merge instruction, not a failure, and it is the difference
+   * between "you have done nothing" and "your work is on `feature/x`".
+   */
+  unmerged_branches: string[];
 }
 
 export interface VerifyOptions {
@@ -170,6 +188,8 @@ function failure(
     stories: [],
     unknown_stories: [],
     window_truncated: false,
+    branch_read: null,
+    unmerged_branches: [],
   };
 }
 
@@ -239,8 +259,21 @@ export async function verifyBuildFromRepo(
 
   let inputs;
   try {
+    /**
+     * NAME THE BRANCH. The connect flow recorded the repo's default branch on
+     * this row; passing it means verification reads a branch we can state and log
+     * rather than one GitHub chose for us silently.
+     *
+     * Not defaulted to `main` when absent — `Pamy77/colaberry-architect-workspace`
+     * is on `master`, and a hardcoded default would have broken her build to fix
+     * a diagnostic gap. Absent simply falls through to the previous behaviour.
+     */
     inputs = await readVerificationInputs(
-      { owner: connection.repo_owner, repo: connection.repo_name },
+      {
+        owner: connection.repo_owner,
+        repo: connection.repo_name,
+        branch: storedConnect(connection).default_branch ?? null,
+      },
       { correlationId: opts.correlationId, fetchImpl: opts.fetchImpl, storyIds: specs.map((s) => s.id) },
     );
   } catch (err: unknown) {
@@ -453,6 +486,8 @@ export async function verifyBuildFromRepo(
     stories,
     unknown_stories: decision.unknown_stories,
     window_truncated: inputs.window_truncated,
+    branch_read: inputs.branch_read,
+    unmerged_branches: inputs.unmerged_branches,
   };
 
   /**
@@ -475,6 +510,18 @@ export async function verifyBuildFromRepo(
    * one line instead of growing an empty object on every sync.
    */
   const drift = summariseUnrecognisedCriteria(decision.verdicts);
+
+  // A student whose work exists but sits off the verified branch is the one case
+  // where "nothing is passing" is actively misleading. Logged at warn so it is
+  // greppable when they open a ticket saying the portal cannot see their work.
+  if (inputs.unmerged_branches.length > 0) {
+    log('sbp_verification_evidence_off_branch', opts.correlationId, 'partial', {
+      projectId,
+      branch_read: inputs.branch_read,
+      unmerged_branches: inputs.unmerged_branches,
+      note: 'story commits exist on other branches; verdict is default-branch only',
+    });
+  }
 
   log('sbp_verification_completed', opts.correlationId, 'success', {
     projectId,
