@@ -163,3 +163,33 @@
 /* The featured top bar is replaced by the full outline, so it goes. */
 .cbv2-tier--featured::before { content: none; }
 .cbv2-tier--featured { box-shadow: var(--shadow-xl); }
+
+/* ------------------------------------------------ the price is a figure ---- */
+
+/*
+ * The headline slot was rendering sentences -- "Free to start — no credit card"
+ * and "$149/month, billed annually" -- at display size, so each wrapped to three
+ * lines and the three cards no longer scanned as three prices.
+ *
+ * The figure is now just the figure; the commercial terms moved to the unit line
+ * beneath it, which is where a buyer expects to read them. This cap stops a
+ * longer figure re-creating the problem.
+ */
+.cbv2-tier__price {
+  font-size: clamp(2.2rem, 3.4vw, 3.1rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-wrap: nowrap;
+}
+.cbv2-tier__unit {
+  /* It is a <span> inside the price <p>, so it has to be made block for the
+     spacing and the measure below to apply at all. */
+  display: block;
+  margin-top: var(--space-2);
+  font-family: var(--font-body, inherit);
+  letter-spacing: normal;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.45;
+  max-width: 30ch;
+}

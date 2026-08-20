@@ -27,7 +27,9 @@ const textOf = (h: string): string => h.replace(/<[^>]*>/g, ' ').replace(/\s+/g,
 describe('TryV2 — route scoping is enforced, not decorative', () => {
   it('renders the free-tier claim, which IS approved for this route', () => {
     expect(publicClaim('pricing.free', '/try')).not.toBeNull();
-    expect(textOf(html())).toContain('Free to start');
+    // The figure is now just "Free"; "to start" and the terms moved to the
+    // unit line, so the card scans as a price rather than a sentence.
+    expect(textOf(html())).toContain('Free');
   });
 
   it('shows no subscription figure, because it is not approved for this route', () => {
