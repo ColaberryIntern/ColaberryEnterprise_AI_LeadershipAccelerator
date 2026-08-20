@@ -21,6 +21,7 @@ import {
   isConsumerEmail,
 } from '../../config/v2Signup';
 import './signupV2.css';
+import '../../components/publicV2/heroV8.css';
 
 /**
  * SignupV2 -- create the free business account.
@@ -140,7 +141,22 @@ function SignupV2(): React.ReactElement {
         }
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-signup-title">
+      {/*
+        THE HERO FAMILY'S GROUND, WITHOUT ITS MACHINE.
+
+        Home, Services, Platform and Pricing each carry an animated diagram. This
+        page carries a FORM, and it is the page most likely to convert -- a
+        full-viewport machine above the fields would push them off the first
+        screen to win a visual argument that is already made everywhere else.
+
+        So it takes the atmosphere only: the same masked grid and the same two
+        breathing blooms, which is enough to read as one site. Nothing about the
+        form moves.
+      */}
+      <section className="cbv2-pagehero cbv2-pagehero--v8" aria-labelledby="cbv2-signup-title">
+        <div className="cbv2-h8__field" aria-hidden="true" />
+        <div className="cbv2-h8__bloom cbv2-h8__bloom--red" aria-hidden="true" />
+        <div className="cbv2-h8__bloom cbv2-h8__bloom--cyan" aria-hidden="true" />
         <div className="cbv2-wrap cbv2-pagehero__split">
           <div>
             <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Create your account</p>
