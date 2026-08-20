@@ -32,8 +32,8 @@ import IntelItem from '../../models/IntelItem';
 import TimelineCard from '../../models/TimelineCard';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolvePrompt } from '../components/promptTesterService';
-import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
+import { generateIntelCardContent } from './intelCardContent';
 import { rankImportance } from './rssParser';
 import { videoMetadataForUrl } from '../../utils/videoUrl';
 import { decideBootAction } from './aiNewsBootDecision';
@@ -109,8 +109,16 @@ export async function ingestIntelItems(
  *   - not summarized → run the LLM once, store summary_json, then create the card
  * The pipeline slug is the curriculum-type slug used to resolve the generation
  * prompt and stamp timeline_cards.type. Returns the card id, or null if it could
- * not be materialized (no prompt / LLM failed) — the item stays un-carded for the
- * next run (no partial commit, so a retry is safe and duplicate-free).
+ * not be materialized (no prompt / LLM failed / the generation was INCOMPLETE) —
+ * the item stays un-carded for the next run (no partial commit, so a retry is
+ * safe and duplicate-free).
+ *
+ * COMPLETENESS: generation runs behind both gates in intelCardContent.ts (stop
+ * reason + structure) with one bounded headroom retry. Nothing is persisted for
+ * an incomplete generation — not the summary_json, not the card. That matters
+ * because this row is created `visibility: 'published'` with a fresh content_at,
+ * so a fragment saved here is a broken card in the live feed for 30 days, while
+ * an absent card simply regenerates on the next run.
  */
 export async function materializeIntelCard(item: IntelItem, model = DEFAULT_MODEL): Promise<string | null> {
   if (item.card_id) return item.card_id;
@@ -134,29 +142,17 @@ export async function materializeIntelCard(item: IntelItem, model = DEFAULT_MODE
       item_excerpt: item.excerpt || '',
       item_date: item.published_at ? new Date(item.published_at).toISOString().slice(0, 10) : '',
     });
-    let parsed: any = {}; // any: untyped LLM JSON, validated key-by-key below.
-    try {
-      const client = getInstrumentedOpenAI({ workflow_id: `${slug}_generate` });
-      const res = await client.chat.completions.create({
-        model, temperature: 0.4, max_tokens: 1600, response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: `You render the "${label}" intelligence card into the exact content a reader sees. Return STRICT json.` },
-          { role: 'user', content: `Produce the card as json with keys: title, summary, body_html (clean self-contained HTML, no scripts, no style), questions (string[]), reflection (string), discussion_prompt (string), github_task (string|null), evaluation_criteria (string[]), completion (string).\n\nInstruction:\n${resolved}` },
-        ],
-      });
-      parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}');
-    } catch (err: any) {
-      console.warn(`[intel] ${slug} LLM summarize failed for`, item.guid, '-', err?.message?.split('\n')[0]);
-      return null; // leave un-carded; the next run retries. No partial commit.
-    }
-    content = {
-      title: typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title.trim() : item.title,
-      summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
-      body_html: typeof parsed.body_html === 'string' ? parsed.body_html : undefined,
-      questions: Array.isArray(parsed.questions) ? parsed.questions.map(String) : [],
-      reflection: typeof parsed.reflection === 'string' ? parsed.reflection : undefined,
-      discussion_prompt: typeof parsed.discussion_prompt === 'string' ? parsed.discussion_prompt : undefined,
-    };
+    // Generated behind BOTH completeness gates (stop reason + structure), with one
+    // bounded headroom retry. A null here means the generation was incomplete, so
+    // we persist NOTHING — no summary_json, no card — and the item stays un-carded
+    // for the next run. Saving the fragment instead would pin a blank or
+    // mid-sentence card in the feed for its full 30-day cache life.
+    const generated = await generateIntelCardContent({
+      slug, label, resolvedPrompt: resolved, fallbackTitle: item.title,
+      workflowId: `${slug}_generate`, model, guid: item.guid,
+    });
+    if (!generated) return null;
+    content = generated;
     await item.update({ summary_json: content });
   }
 

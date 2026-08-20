@@ -15,6 +15,7 @@ import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL, MODEL_PRICING } from '../components/costEstimationService';
 import { createHash } from 'crypto';
 import { repairMalformedBlockOpenTags, findMalformedBlockOpenTags } from './cardBodyHtmlSanitizer';
+import { checkCardCompleteness } from './cardCompletenessGate';
 
 export interface CardContent {
   title?: string;
@@ -224,6 +225,41 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
       }));
     }
   }
+
+  // --- Structural completeness gate -------------------------------------------
+  // A clean stop reason is necessary and NOT sufficient. The same derail that
+  // burns the token ceiling on one call ("<li>Click on the \"" then a loop of
+  // whitespace) will on another call close the JSON tidily and report
+  // finish_reason 'stop' with the prose plainly unfinished. The three cards that
+  // shipped truncated all had PARSEABLE content — they were the clean-stop
+  // variant. So check the SHAPE before persisting, not just how the model said
+  // it stopped.
+  //
+  // Deliberately no retry here. `ensureFreshContent` swallows this throw and
+  // returns the card's existing copy, and because nothing is written
+  // (content_at untouched) the next student to open the card regenerates — so
+  // failing closed self-heals without doubling latency and spend on the hot
+  // student-view path. A batch path with nobody waiting (intelPipeline,
+  // aiNewsIngestionService) does retry with headroom before giving up.
+  const structural = checkCardCompleteness(content, { type: card.type });
+  if (structural.warnings.length) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'timeline-card-content', event: 'card_structure_warnings',
+      outcome: 'success', context: { card_id: card.id, card_type: card.type, week: card.week, warnings: structural.warnings },
+    }));
+  }
+  if (!structural.ok) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'timeline-card-content', event: 'card_structurally_incomplete',
+      outcome: 'failure', error_class: 'IncompleteGeneration',
+      context: { card_id: card.id, card_type: card.type, week: card.week, failures: structural.failures },
+    }));
+    throw Object.assign(
+      new Error(`Card generation structurally incomplete: ${structural.failures.join(', ')}. Refusing to save a partial card.`),
+      { status: 502, error_class: 'IncompleteGeneration', failures: structural.failures },
+    );
+  }
+  // --- end structural gate ------------------------------------------------------
 
   // Roster-summary titles are DETERMINISTIC — no model paraphrase, so the name never
   // drifts (this also kills the "random title" bug, e.g. "Build Your AI Foundation").
