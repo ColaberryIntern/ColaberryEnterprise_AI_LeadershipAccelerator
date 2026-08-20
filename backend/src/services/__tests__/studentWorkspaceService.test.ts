@@ -126,7 +126,12 @@ describe('provisionWorkspaceRepo', () => {
     expect(createUrl).toBe('https://api.github.com/orgs/ColaberryIntern/repos');
     expect(createInit.method).toBe('POST');
     const body = JSON.parse(createInit.body);
-    expect(body.private).toBe(true);
+    // PUBLIC (Ali Muwwakkil, 2026-08-19). Every other surface already told
+    // the student their repo was public - the webhook panel's bold warning,
+    // STORY-000's prompt - and GitHub Pages will not serve STORY-000's final
+    // step from a private repo on a free account. Provisioning private made a
+    // provisioned student the only one for whom all of that was false.
+    expect(body.private).toBe(false);
     // EMPTY by default (2026-08-14). The premise of provisioning is that the
     // student already has a folder with history in it, and an auto-initialised
     // repo turns their first `git push -u origin main` into a rejected

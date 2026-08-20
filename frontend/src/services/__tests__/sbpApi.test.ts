@@ -51,7 +51,16 @@ describe('startBuild', () => {
   it('surfaces a failure instead of swallowing it', async () => {
     api.post.mockRejectedValue(httpError(500, 'Generation service unavailable'));
     const result = await startBuild({ project_id: PROJECT, idea: 'x'.repeat(40) });
-    expect(result).toEqual({ ok: false, error: { status: 500, message: 'Generation service unavailable' } });
+    // PRE-EXISTING FAILURE, repaired in passing rather than left red in a file
+    // this change already edits. `toError` gained a `kind` discriminant (the
+    // caller branches on it to decide between "retry" and "fall back"), and this
+    // exact-equality assertion was never updated — it has been failing on main
+    // independently of anything here. Asserting the whole object is right; the
+    // expected object just has to be the whole object.
+    expect(result).toEqual({
+      ok: false,
+      error: { status: 500, kind: 'server_error', message: 'Generation service unavailable' },
+    });
   });
 
   it('explains a 404 as "not enabled" rather than "not found"', async () => {
@@ -187,44 +196,73 @@ describe('pollBuild', () => {
 });
 
 // ── resolving the backend project id ────────────────────────────────────────
+/**
+ * THIS BLOCK USED TO ASSERT THE BUG.
+ *
+ * It held that `resolveBackendProjectId` "uses the active project when there is
+ * one" and "does not create a second project when one is already active". Both
+ * passed, and both were wrong: this function is called by `handleCreate`, which
+ * only ever runs when a student has just confirmed a NEW build. Returning the
+ * project they already had meant the pipeline generated the second plan into the
+ * first plan's row — overwriting its intake, superseding its plan and rewriting
+ * its tasks in place, because both plans number their stories STORY-001 upward
+ * and (project_id, story_id) is the task identity key.
+ *
+ * A student reported it on 2026-08-19 as a second build that "merged with" the
+ * first; the DRI hit the same thing days earlier and it looked like the new
+ * project had deleted the old one. The tests below are the inverse contract.
+ */
 describe('resolveBackendProjectId', () => {
-  it('uses the active project when there is one', async () => {
-    api.get.mockResolvedValue({ data: { id: PROJECT, lists: [] } });
+  it('asks the server for a project to build into', async () => {
+    api.post.mockResolvedValue({ data: { id: PROJECT, reused: false } });
     const result = await resolveBackendProjectId();
-    expect(result).toEqual({ ok: true, projectId: PROJECT, created: false });
-    expect(api.post).not.toHaveBeenCalled();
-  });
-
-  it('creates one ONLY when there is no active project', async () => {
-    api.get.mockResolvedValue({ data: { project: null } });
-    api.post.mockResolvedValue({ data: { id: PROJECT } });
-    const result = await resolveBackendProjectId();
-    expect(result).toEqual({ ok: true, projectId: PROJECT, created: true });
+    expect(result).toEqual({ ok: true, projectId: PROJECT, created: true, reused: false });
     expect(api.post).toHaveBeenCalledWith('/api/portal/projects', {});
   });
 
-  // createNewProjectForEnrollment ALWAYS creates, so a spurious call leaves an
-  // empty project behind on every build attempt.
-  it('does not create a second project when one is already active', async () => {
-    api.get.mockResolvedValue({ data: { id: PROJECT } });
+  // The regression itself. Reading /active is the door the merge came through,
+  // so the call must not be there at all — not merely be ignored afterwards.
+  it('never reads the active project, which is what made builds merge', async () => {
+    api.post.mockResolvedValue({ data: { id: PROJECT } });
     await resolveBackendProjectId();
-    await resolveBackendProjectId();
-    expect(api.post).toHaveBeenCalledTimes(0);
+    expect(api.get).not.toHaveBeenCalled();
+    const paths = api.get.mock.calls.map((c) => String(c[0]));
+    expect(paths).not.toContain('/api/portal/projects/active');
+  });
+
+  it('resolves a DIFFERENT project for a second build', async () => {
+    const second = '22222222-2222-2222-2222-222222222222';
+    api.post
+      .mockResolvedValueOnce({ data: { id: PROJECT } })
+      .mockResolvedValueOnce({ data: { id: second } });
+
+    const first = await resolveBackendProjectId();
+    const next = await resolveBackendProjectId();
+
+    expect(api.post).toHaveBeenCalledTimes(2);
+    expect(first.ok && first.projectId).toBe(PROJECT);
+    expect(next.ok && next.projectId).toBe(second);
+  });
+
+  // The server may recycle a never-built-into row. That is its decision to make
+  // and it is reported, but the client must not branch on it.
+  it('passes the server "reused" flag through without acting on it', async () => {
+    api.post.mockResolvedValue({ data: { id: PROJECT, reused: true } });
+    const result = await resolveBackendProjectId();
+    expect(result).toEqual({ ok: true, projectId: PROJECT, created: true, reused: true });
   });
 
   it('surfaces a create failure rather than returning a bogus id', async () => {
-    api.get.mockResolvedValue({ data: {} });
     api.post.mockResolvedValue({ data: {} });
     const result = await resolveBackendProjectId();
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.message).toMatch(/Could not create a project/);
   });
 
-  it('reports the pipeline being disabled instead of silently creating', async () => {
-    api.get.mockRejectedValue(httpError(404));
+  it('reports the pipeline being disabled instead of inventing an id', async () => {
+    api.post.mockRejectedValue(httpError(404));
     const result = await resolveBackendProjectId();
     expect(result.ok).toBe(false);
-    expect(api.post).not.toHaveBeenCalled();
   });
 });
 

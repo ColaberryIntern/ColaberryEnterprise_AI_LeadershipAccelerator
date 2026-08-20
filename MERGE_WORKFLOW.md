@@ -92,3 +92,70 @@ approval. `staging` is intentionally unprotected so Kes can merge into it freely
 > Note: this repo is owned by a personal account, not a GitHub Organization, so the
 > hard "restrict who can push to `main`" control is not available. The review gate
 > above is the enforcement: Ali is the approver, therefore Ali is the gate.
+
+## PROGRESS.md conflicts, and why GitHub still says CONFLICTING
+
+`CLAUDE.md` makes a PROGRESS.md entry a hard gate on every change, so nearly every PR
+touches the same append region of the same file. With several Claude sessions open at
+once those regions collide constantly.
+
+`.gitattributes` sets `PROGRESS.md merge=union` to deal with that. **It only works
+locally.** Git runs merge drivers on your machine; GitHub does not run them
+server-side. GitHub decides mergeability with a plain three-way merge, so a PR whose
+PROGRESS.md region also moved on `main` is reported `CONFLICTING` in the UI even
+though `git merge` resolves it cleanly in a worktree.
+
+This is not a theoretical gap. It is the single most common reason a PR in this repo
+is un-mergeable, and it is invisible from the command line.
+
+### How to tell this is what you are looking at
+
+- `gh pr view <n> --json mergeable` returns `CONFLICTING`.
+- **The PR reports no checks at all.** GitHub does not run checks on a PR it cannot
+  merge, and "no checks" renders almost identically to "checks still pending". Do not
+  read one as the other.
+- Merging the branch locally succeeds with no conflict.
+
+### How to clear it
+
+Merge `main` **into** the branch locally and push:
+
+```bash
+git checkout <branch>
+git merge origin/main --no-edit    # the union driver resolves PROGRESS.md
+git push origin <branch>
+```
+
+This makes `main`'s tip an ancestor of the branch, which leaves GitHub's three-way
+merge nothing to do on main's side, and the PR flips to `MERGEABLE`.
+
+### The cost, and why it matters
+
+Branch protection on `main` sets both `dismiss_stale_reviews` and
+`require_last_push_approval`. **That push permanently destroys any approval the PR
+already had**, and force-pushing back to the previously approved SHA does not restore
+it. Only a human re-approval does.
+
+So for an already-approved PR the situation is a genuine deadlock: it cannot merge
+while `CONFLICTING`, and the only way to clear the conflict costs the approval that
+made it mergeable. In August 2026 this stranded thirteen individually approved PRs at
+once; the resolution was to compose all thirteen onto one integration branch and take
+a single new approval, rather than pay the approval cost thirteen times.
+
+### Practical guidance
+
+- **Do not sit on an approval.** The window between approval and merge is exactly when
+  a PROGRESS-touching PR on `main` can strand yours. Merge promptly after approval.
+- **Merge `main` in before requesting review**, not after. Pay the conflict cost while
+  the PR is still unapproved and the push is free.
+- If several approved PRs are already stranded, compose them onto one integration
+  branch and request one approval. Do not re-push the individual branches.
+
+### The deeper fix, not taken here
+
+The structural cure is to stop routing every session's progress log through one shared
+append region — for example one file per session under `docs/sessions/`, with
+`PROGRESS.md` reduced to an index. That changes a `CLAUDE.md` hard gate and the
+end-of-session audit protocol, which is a governance decision for the DRI rather than
+something to slip into a merge-plumbing PR. Recorded here so the next person hitting
+this does not have to rediscover it.

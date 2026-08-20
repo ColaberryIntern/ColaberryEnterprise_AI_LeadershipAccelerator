@@ -1,0 +1,103 @@
+# Gitleaks configuration — Colaberry Enterprise AI Accelerator
+#
+# This repository is PUBLIC. Anything committed here is world-readable forever,
+# including content later "deleted" — git history keeps the blob. This config is
+# the single source of truth shared by three consumers:
+#
+#   1. .githooks/pre-commit          -> blocks a secret before it becomes a commit
+#   2. .github/workflows/secret-scan.yml -> blocks a secret before it reaches main
+#   3. `npm run secrets:history`     -> sweeps the entire history on demand
+#
+# Keeping one config for all three means a finding cannot pass CI but fail locally
+# (or the reverse). Change rules here, never in one consumer only.
+#
+# Escape hatches (documented in docs/SECRET_SCANNING.md):
+#   - inline `gitleaks:allow` comment on the offending line
+#   - a fingerprint entry in .gitleaksignore (reviewable, committed)
+# Both are deliberate and auditable. `git commit --no-verify` bypasses the hook
+# but NOT CI, which is the point: local speed-bumps are skippable, main is not.
+
+title = "Colaberry secret scanning"
+
+# Inherit the ~180 upstream rules (AWS, GCP, OpenAI, Slack, Stripe, GitHub, JWT,
+# private keys, ...) and extend rather than replace them. Replacing the default
+# set is the most common way a gitleaks config silently stops catching things.
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Repository-specific rules
+# ---------------------------------------------------------------------------
+# These cover credential shapes the upstream default set does not flag, and that
+# this codebase demonstrably produces. The database-URI rule exists because a
+# live Postgres URI with an inline password was committed to a compose file —
+# the upstream rules do not catch that shape, and neither did the previous
+# hand-rolled scanner.
+
+[[rules]]
+id = "colaberry-db-connection-uri"
+description = "Database/broker connection URI with an inline password"
+# postgres|postgresql|mysql|mongodb(+srv)|redis|amqp :// user : SECRET @ host
+regex = '''(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss|amqps?)://[a-z0-9._%+-]+:([^\s:@/'"]{6,})@[a-z0-9.-]+'''
+secretGroup = 1
+keywords = ["postgres://", "postgresql://", "mysql://", "mongodb://", "mongodb+srv://", "redis://", "rediss://", "amqp://", "amqps://"]
+entropy = 2.5
+[rules.allowlist]
+regexTarget = "match"
+# Placeholders, local development, and docs examples are not credentials.
+regexes = [
+  '''(?i):(?:password|pass|pwd|secret|changeme|placeholder|your[_-]?password|xxx+|\*+|<[^>]+>|\$\{[^}]+\}|%[a-z_]+%)@''',
+  '''(?i)@(?:localhost|127\.0\.0\.1|host\.docker\.internal|db|postgres|mysql|mongo|redis)[:/ ]''',
+]
+
+[[rules]]
+id = "colaberry-mandrill-api-key"
+description = "Mandrill / Mailchimp Transactional API key"
+regex = '''(?i)\b(?:mandrill|mailchimp)[_-]?(?:api)?[_-]?key['"\s:=]{1,10}([a-zA-Z0-9_-]{20,25})\b'''
+secretGroup = 1
+keywords = ["mandrill", "mailchimp"]
+
+[[rules]]
+id = "colaberry-basecamp-token"
+description = "Basecamp OAuth access/refresh token"
+regex = '''(?i)\bbc[_-]?(?:access|refresh)?[_-]?token['"\s:=]{1,10}(BAh[a-zA-Z0-9+/=_-]{20,}|[a-f0-9]{40,})\b'''
+secretGroup = 1
+keywords = ["bc_token", "bc-token", "bcaccesstoken", "basecamp"]
+
+[[rules]]
+id = "colaberry-generic-assigned-secret"
+description = "High-entropy value assigned to a credential-named variable"
+regex = '''(?i)\b(?:api[_-]?key|apikey|secret[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret|private[_-]?key|passwd|password)\s*[:=]\s*['"]([a-zA-Z0-9/+_=-]{24,})['"]'''
+secretGroup = 1
+entropy = 3.5
+keywords = ["api_key", "apikey", "secret_key", "auth_token", "access_token", "client_secret", "password", "passwd"]
+
+# ---------------------------------------------------------------------------
+# Global allowlist
+# ---------------------------------------------------------------------------
+[allowlist]
+description = "Paths and values that cannot contain a real credential"
+
+# NOTE ON SCOPE: docs/, *.md and test files are deliberately NOT excluded here.
+# The previous scanner skipped them, which is precisely where a pasted
+# credential goes unnoticed. Only machine-generated, vendored, or binary
+# content is excluded — none of which a human ever pastes a secret into.
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)(dist|build|coverage|\.next|out)/''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)yarn\.lock$''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''\.(png|jpe?g|gif|svg|ico|pdf|woff2?|ttf|eot|mp4|mov|zip|gz|tgz|webp|avif)$''',
+  '''(^|/)docs/screenshots/''',
+]
+
+regexes = [
+  # Documentation placeholders and obvious fakes.
+  '''(?i)\b(?:EXAMPLE|SAMPLE|PLACEHOLDER|CHANGEME|REDACTED|DUMMY|FAKE|TODO|XXXXX)\b''',
+  '''(?i)your[_-]?(?:api[_-]?key|secret|token|password)[_-]?here''',
+  # Env-var indirection is a reference, not a value.
+  '''process\.env\.[A-Z0-9_]+''',
+  '''\$\{[A-Z0-9_]+\}''',
+  '''<[A-Z0-9_ -]+>''',
+]

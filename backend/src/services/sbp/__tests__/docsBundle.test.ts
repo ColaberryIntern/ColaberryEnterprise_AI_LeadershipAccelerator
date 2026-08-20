@@ -27,6 +27,7 @@ jest.mock('../repoWriteAccess', () => ({
 
 import { buildDocsBundle, renderBundleNotice, BUNDLE_NOTICE_PATH } from '../docsBundle';
 import { renderDocs } from '../renderDocs';
+import { isSafeToOverwrite, seedPathFor } from '../fileOwnership';
 import { RepoConnectError } from '../repoConnect/connectErrors';
 import { BuildPlan } from '../planContract';
 import raw from './fixtures/pilot-dryrun-plan.json';
@@ -79,11 +80,19 @@ describe('buildDocsBundle', () => {
     });
 
     const entries = readZip(bundle.bytes);
-    expect(Object.keys(entries).sort()).toEqual([BUNDLE_NOTICE_PATH, ...inRepo.map((f) => f.path)].sort());
+    // The student's two files travel as `.seed.json` siblings so extraction can
+    // never land on them — see fileOwnership and docsBundle.studentFiles.test.
+    const expected = inRepo.map((f) => (isSafeToOverwrite(f.path) ? f.path : seedPathFor(f.path)));
+    expect(Object.keys(entries).sort()).toEqual([BUNDLE_NOTICE_PATH, ...expected].sort());
 
     // PARITY, byte for byte. This is the assertion that stops the download and
-    // the repo from drifting into two different products.
-    for (const file of inRepo) expect(entries[file.path]).toBe(file.content);
+    // the repo from drifting into two different products. Contents are
+    // identical to the repo render; only the two student-owned PATHS differ,
+    // and they differ on purpose.
+    for (const file of inRepo) {
+      const at = isSafeToOverwrite(file.path) ? file.path : seedPathFor(file.path);
+      expect(entries[at]).toBe(file.content);
+    }
   });
 
   it('cites no clone URL, because there is no repo to clone', async () => {

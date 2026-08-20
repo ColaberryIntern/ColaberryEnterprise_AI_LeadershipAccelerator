@@ -20,6 +20,7 @@ import {
   reconcileProjects, UNKNOWN_INVENTORY,
   type BackendProjectTree, type ServerInventory,
 } from './projectHydrate';
+import { isUuid } from './projectIdentity';
 
 function toBackendStatus(state: TaskState): string {
   if (state === 'done') return 'complete';
@@ -28,6 +29,12 @@ function toBackendStatus(state: TaskState): string {
 
 function toImportPayload(p: StudentProject) {
   return {
+    // Name the project this snapshot IS. Without it the server wrote the
+    // snapshot into whatever project happened to be active, which is a
+    // different build as soon as the student has two. Undefined for a build
+    // that has never reached the server — there is no row to target yet, and
+    // the server's fallback is correct for exactly that case.
+    project_id: p.pipelineProjectId || (isUuid(p.id) ? p.id : undefined),
     name: p.name,
     lists: p.lists.map((l, li) => ({
       cluster: String(l.id).slice(0, 50),
@@ -69,7 +76,7 @@ function statusOf(err: unknown): number | undefined {
   return (err as { response?: { status?: number } })?.response?.status;
 }
 
-export type SyncFailure = { op: 'pull' | 'push' | 'task-status' | 'inventory'; status?: number; message: string };
+export type SyncFailure = { op: 'pull' | 'push' | 'task-status' | 'inventory' | 'active-project'; status?: number; message: string };
 
 type SyncFailureListener = (failure: SyncFailure) => void;
 const failureListeners = new Set<SyncFailureListener>();
@@ -121,6 +128,31 @@ export async function pushTaskStatusByStory(storyKey: string, state: TaskState):
     // API off (404) / task not yet imported — expected, stays quiet. Anything
     // else is a real failure: the mirror will retry it, but it must be visible.
     reportFailure('task-status', err);
+  }
+}
+
+/**
+ * Tell the server which build the student is now looking at.
+ *
+ * The selection used to live only in React state (`view.id` in ProjectsPage),
+ * so it did not survive a reload and — worse — never moved
+ * `enrollments.active_project_id`. Everything that scopes itself to "the
+ * student's build" reads that pointer: `GET /api/portal/projects/active`
+ * returns its tree, `orderProjects` ranks it first, and `projects[0]` is what
+ * the "Your next step" hero renders. A student who opened their second build
+ * therefore kept being shown the FIRST build's next step, and the next
+ * reconcile pulled them back to it. That is the half of the reported symptom
+ * that was not data corruption.
+ *
+ * Best-effort and silent on a disabled API: this is a preference write, and
+ * failing it must never block opening a build. The UI has already switched.
+ */
+export async function pushActiveProject(projectId: string): Promise<void> {
+  if (!isUuid(projectId)) return;   // local-only build; the server has no such row
+  try {
+    await portalApi.put('/api/portal/projects/active', { project_id: projectId });
+  } catch (err) {
+    if (!isApiDisabled(err)) reportFailure('active-project', err);
   }
 }
 

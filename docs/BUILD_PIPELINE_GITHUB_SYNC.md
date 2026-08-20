@@ -23,7 +23,7 @@ The prompts now generated for a student's story open with:
 
 `docs/BUILD_PIPELINE_REQUIREMENTS.md` FR-021 already says these files must be materialized into the student's workspace repo. The prompts were written as though FR-021 were done. It is not. This document specifies how it gets done.
 
-**Current state of the GitHub layer:** `studentWorkspaceService.ts` provisions a private repo per student under `ColaberryIntern`, adds them as a push collaborator, and syncs *read-only* (file tree + recent commits). It has never been used for a real student — every `github_connections` row in production is test data (`octocat/Hello-World`). Nothing has ever written to a student repo. That makes this greenfield rather than a retrofit, so it can be designed correctly the first time.
+**Current state of the GitHub layer:** `studentWorkspaceService.ts` provisions a public repo per student under `ColaberryIntern` (public since the 2026-08-19 decision; it created private repos before that), adds them as a push collaborator, and syncs *read-only* (file tree + recent commits). It has never been used for a real student — every `github_connections` row in production is test data (`octocat/Hello-World`). Nothing has ever written to a student repo. That makes this greenfield rather than a retrofit, so it can be designed correctly the first time.
 
 ---
 
