@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import MaturityLadder from '../../components/publicV2/MaturityLadder';
+import HeroPlatformV8 from '../../components/publicV2/HeroPlatformV8';
 import Roadmap12 from '../../components/publicV2/Roadmap12';
 import { Claim, canShow, Metric, SampleBadge, CapabilityNotice } from '../../components/publicV2/Claim';
 import {
@@ -12,6 +13,7 @@ import {
 /** Management first: it is the buying question, and the page is sold upward. */
 const AUDIENCES: SurfaceAudience[] = ['management', 'team'];
 import './platformV2.css';
+import '../../components/publicV2/heroV8.css';
 
 /**
  * PlatformV2 — the Platform Showroom.
@@ -43,27 +45,7 @@ function PlatformV2(): React.ReactElement {
         }
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-plat-title">
-        <div className="cbv2-wrap cbv2-pagehero__split">
-          <div>
-            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Platform</p>
-            <h1 id="cbv2-plat-title">The platform your team logs into</h1>
-            <p className="cbv2-pagehero__lede">
-              Every figure below is sample data, shaped to the metrics the product actually
-              captures. Nothing here is a customer&rsquo;s data.
-            </p>
-          </div>
-          <figure className="cbv2-shot-frame">
-            <img
-              className="cbv2-shot"
-              src="/site-v2/shot-hero-dashboard.png"
-              alt="The company view a manager logs into: readiness, builder XP, evidence shipped and evaluations passed for a sample organization."
-              loading="eager"
-              decoding="async"
-            />
-          </figure>
-        </div>
-      </section>
+      <HeroPlatformV8 />
 
       {active ? (
         <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-surfaces-title">
