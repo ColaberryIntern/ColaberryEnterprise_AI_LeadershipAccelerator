@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import MaturityLadder from '../../components/publicV2/MaturityLadder';
 import HeroPlatformV8 from '../../components/publicV2/HeroPlatformV8';
+import CapabilityOS from '../../components/publicV2/CapabilityOS';
 import BuildPipeline from '../../components/publicV2/BuildPipeline';
 import CapabilityEarned from '../../components/publicV2/CapabilityEarned';
+import ArchitectExperience from '../../components/publicV2/ArchitectExperience';
 import GovernanceReal from '../../components/publicV2/GovernanceReal';
+import OpenPlatform from '../../components/publicV2/OpenPlatform';
 import Roadmap12 from '../../components/publicV2/Roadmap12';
 import { Claim, canShow, Metric, SampleBadge, CapabilityNotice } from '../../components/publicV2/Claim';
 import {
@@ -127,7 +130,9 @@ function PlatformV2(): React.ReactElement {
         </div>
       </section>
 
+      <CapabilityOS />
       <BuildPipeline />
+      <ArchitectExperience />
       <CapabilityEarned />
       <GovernanceReal />
 
@@ -339,22 +344,8 @@ function PlatformV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-rv cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-plat-cta">
-        <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
-          <h2 id="cbv2-plat-cta">See where your team would start.</h2>
-          <p className="cbv2-lede" style={{ marginInline: 'auto' }}>
-            <Claim claimKey="surface.free.workspace" route={ROUTE} />
-          </p>
-          <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/start">
-              Open the free workspace
-            </Link>
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/services">
-              Compare services
-            </Link>
-          </div>
-        </div>
-      </section>
+      <OpenPlatform />
+
     </>
   );
 }

@@ -364,3 +364,174 @@
 }
 .cbv2-gov__note p { margin: 0; max-width: 84ch; font-size: var(--fs-body-sm); line-height: 1.65; color: #c9cfda; }
 .cbv2-gov__note b { color: #e8920c; }
+
+/* ------------------------------------------------- 1. capability OS diagram -- */
+
+.cbv2-os {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: var(--space-5);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
+}
+.cbv2-os__cap {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cbv2-os__live { display: inline-flex; align-items: center; gap: 6px; color: #468a2e; }
+.cbv2-os__live i { width: 7px; height: 7px; border-radius: 50%; background: #5ba63c; flex: none; }
+
+.cbv2-os__core {
+  display: grid; gap: 2px; justify-items: center; text-align: center;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  border: 1px dashed var(--border-default, #d8d8d8);
+}
+.cbv2-os__core b { font-family: var(--font-display); font-size: clamp(1.05rem, 2vw, 1.3rem); color: var(--text-strong); }
+.cbv2-os__core i { font-style: normal; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--text-muted); }
+
+.cbv2-os__cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-4); }
+@media (max-width: 720px) { .cbv2-os__cols { grid-template-columns: 1fr; } }
+.cbv2-os__col h3 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono); font-size: var(--fs-caption); font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-subtle);
+}
+.cbv2-os__row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3);
+  margin: 0 0 6px;
+  padding: 9px var(--space-3);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-xs, 4px);
+  background: var(--surface-page, #fff);
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  transition: border-color 0.4s ease, background 0.4s ease, color 0.4s ease;
+}
+.cbv2-os__row i { font-style: normal; font-family: var(--font-mono); font-size: 0.78rem; font-weight: 700; color: var(--text-subtle); white-space: nowrap; }
+/* The pulse walks the flow: build/commit/verify light the team column, then
+   evidence/skill/readiness light management. Same fact, two ends. */
+.cbv2-os__row.is-hot { border-color: var(--cherry); background: rgba(251, 40, 50, 0.05); color: var(--text-strong); }
+.cbv2-os__row.is-hot i { color: #c20e1e; }
+
+.cbv2-os__spine { margin-top: var(--space-5); padding-top: var(--space-4); border-top: var(--border-1) solid var(--border-subtle); }
+.cbv2-os__spinelbl {
+  margin: 0 0 var(--space-3); text-align: center;
+  font-family: var(--font-mono); font-size: var(--fs-caption);
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-subtle);
+}
+.cbv2-os__flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; }
+.cbv2-os__step {
+  padding: 6px 13px; border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default, #d8d8d8);
+  font-family: var(--font-mono); font-size: 0.76rem; font-weight: 700;
+  color: var(--text-muted); white-space: nowrap;
+  transition: all 0.4s ease;
+}
+.cbv2-os__step.is-hot { border-color: var(--cherry); background: var(--cherry); color: #fff; }
+.cbv2-os__arrow { color: var(--text-subtle); font-weight: 700; }
+.cbv2-os__out {
+  margin: var(--space-4) 0 0; text-align: center;
+  font-family: var(--font-display); font-size: clamp(1rem, 1.8vw, 1.15rem);
+  color: var(--text-strong);
+}
+.cbv2-os__foot {
+  display: flex; align-items: flex-start; gap: var(--space-3); flex-wrap: wrap;
+  margin: var(--space-5) 0 0; padding-top: var(--space-4);
+  border-top: var(--border-1) solid var(--border-subtle);
+  font-size: var(--fs-body-sm); line-height: 1.55; color: var(--text-muted);
+}
+.cbv2-os__foot > span { flex: 1 1 320px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-os__row, .cbv2-os__step { transition: none; }
+}
+
+/* ------------------------------------------ 5. the architect experience ------ */
+
+.cbv2-ax { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+@media (max-width: 900px) { .cbv2-ax { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-ax__card {
+  padding: var(--space-5);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
+}
+.cbv2-ax__hd { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.cbv2-ax__hd h3 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; color: var(--text-strong); }
+.cbv2-ax__pct { font-family: var(--font-mono); font-size: 0.82rem; font-weight: 700; color: #468a2e; }
+.cbv2-ax__who { margin: 4px 0 var(--space-3); font-size: var(--fs-body-sm); color: var(--text-muted); }
+
+.cbv2-ax__radar { display: block; width: 100%; height: auto; color: var(--border-default, #d8d8d8); }
+.cbv2-ax__lbl { font-family: var(--font-mono); font-size: 10.5px; fill: var(--text-muted); }
+.cbv2-ax__val { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; fill: var(--text-strong); }
+/* The polygon draws itself once on entry -- it is a shape being computed, and
+   showing it arrive says that better than a static outline does. */
+.cbv2-ax__poly { animation: cbv2-ax-draw 1.1s cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: 232px 196px; }
+@keyframes cbv2-ax-draw { from { opacity: 0; transform: scale(0.72); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cbv2-ax__poly { animation: none; } }
+
+.cbv2-ax__legend {
+  display: flex; align-items: center; gap: 7px;
+  margin: var(--space-3) 0 0; padding-top: var(--space-3);
+  border-top: var(--border-1) solid var(--border-subtle);
+  font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--text-muted);
+}
+.cbv2-ax__legend i { width: 11px; height: 11px; border-radius: 3px; background: #fb2832; flex: none; }
+
+.cbv2-ax__outs { display: grid; gap: var(--space-3); }
+.cbv2-ax__out {
+  display: flex; gap: var(--space-4); align-items: flex-start;
+  padding: var(--space-4);
+  border-left: 3px solid var(--border-default, #d8d8d8);
+  background: var(--surface-sunken);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.cbv2-ax__out:first-child { border-left-color: var(--cherry); }
+.cbv2-ax__v {
+  flex: none; min-width: 62px;
+  font-family: var(--font-mono); font-size: 1.35rem; font-weight: 700;
+  line-height: 1.1; color: var(--text-strong); font-variant-numeric: tabular-nums;
+}
+.cbv2-ax__out > span:last-child { display: grid; gap: 3px; font-size: var(--fs-body-sm); line-height: 1.55; color: var(--text-muted); }
+.cbv2-ax__out b { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--text-strong); }
+
+/* --------------------------------------------------------- 9. closing CTA ---- */
+
+.cbv2-cta9__in { max-width: 780px; text-align: center; }
+.cbv2-cta9__in .cbv2-lede { margin-inline: auto; }
+.cbv2-cta9__steps {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4);
+  margin: var(--space-6) 0 0; padding: 0; list-style: none; text-align: left;
+}
+@media (max-width: 760px) { .cbv2-cta9__steps { grid-template-columns: minmax(0, 1fr); } }
+.cbv2-cta9__steps li {
+  display: grid; gap: 5px;
+  padding: var(--space-4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+.cbv2-cta9__n {
+  font-family: var(--font-mono); font-size: var(--fs-caption); font-weight: 700;
+  letter-spacing: 0.1em; color: #fd5760;
+}
+.cbv2-cta9__steps b { font-family: var(--font-display); font-size: 1.05rem; color: #f8f8f7; }
+.cbv2-cta9__steps li > span:last-child { font-size: var(--fs-body-sm); line-height: 1.55; color: #a8b2c4; }
+
+.cbv2-cta9__btns { display: flex; gap: var(--space-3); flex-wrap: wrap; justify-content: center; margin-top: var(--space-6); }
+.cbv2-cta9__fine { margin: var(--space-5) auto 0; max-width: 62ch; font-size: var(--fs-body-sm); line-height: 1.6; color: #98a2b4; }
