@@ -339,16 +339,21 @@ export async function verifyBuildFromRepo(
    * themselves — the project id is enough to find the row, and this is wording
    * drift, not fraud.
    */
-  const drift = summariseRejectedClaims(decision.verdicts);
-  if (drift) {
+  // MERGE NOTE: named `claimsDrift`, not `drift`. `summariseUnrecognisedCriteria`
+  // (main, commit 509320a4) already binds `drift` further down this same
+  // function for the separate unrecognised-criteria signal. Both signals are
+  // kept: this one is the asserted-only `rejected_claims` warn line, that one is
+  // the summary flattened onto `sbp_verification_completed`.
+  const claimsDrift = summariseRejectedClaims(decision.verdicts);
+  if (claimsDrift) {
     log('sbp_verification_claims_unmatched', opts.correlationId, 'partial', {
       projectId,
       plan_version: stored.version,
-      claims_total: drift.claims_total,
-      stories_affected: drift.stories_affected,
-      samples: drift.samples,
-      likely_wording_drift: drift.likely_wording_drift,
-      note: drift.likely_wording_drift
+      claims_total: claimsDrift.claims_total,
+      stories_affected: claimsDrift.stories_affected,
+      samples: claimsDrift.samples,
+      likely_wording_drift: claimsDrift.likely_wording_drift,
+      note: claimsDrift.likely_wording_drift
         ? 'a story is held back by claims that match no criterion — check the plan wording against the repo'
         : 'unmatched claims on stories that are otherwise fine; informational',
     });
