@@ -60,8 +60,17 @@ export interface ExplorerSignalDefinition {
   cap: number;
   /** Intent signals only. Present iff band === 'intent'. */
   tier?: ExplorerIntentTier;
+  /**
+   * Engagement signals only. Present iff band === 'engagement'.
+   * §7.2 splits E into achievement 35 / progress 35 / recency 30, each capped
+   * independently so no single sub-band can carry the score.
+   */
+  subBand?: ExplorerEngagementSubBand;
   source: ExplorerSignalSource;
 }
+
+/** §7.2's engagement split: what they earned, what they finished, how recently. */
+export type ExplorerEngagementSubBand = 'achievement' | 'progress' | 'recency';
 
 /** One occurrence of a signal, as read back from its source table. */
 export interface ExplorerSignalOccurrence {
@@ -75,7 +84,20 @@ export interface ExplorerSignalOccurrence {
 export interface ExplorerSignalBandTotal {
   band: ExplorerSignalBand;
   total: number;
-  signals: Array<{ signal: string; occurrences: number; contribution: number }>;
+  signals: Array<{
+    signal: string;
+    occurrences: number;
+    contribution: number;
+    /**
+     * When this signal most recently occurred.
+     *
+     * REQUIRED by the §8 state machine, and the reason it exists: a decayed,
+     * capped sum CANNOT be inverted back to a date. Without this, every
+     * time-window rule is uncomputable — DORMANT (14d), IN_CONVERSATION (7d),
+     * HIGH_INTENT's 21d exit, and every 72h/30d/90d clock.
+     */
+    lastOccurredAt: Date;
+  }>;
 }
 
 /** The reader's output — the contract EPIC 3's scorer consumes. */
@@ -84,8 +106,27 @@ export interface ExplorerSignalReadout {
   lead_id: number | null;
   asOf: Date;
   bands: Record<ExplorerSignalBand, ExplorerSignalBandTotal>;
-  /** Highest intent tier observed in the window; drives the HIGH_INTENT gate. */
+  /**
+   * Highest intent tier ever observed, unwindowed.
+   *
+   * Kept for callers that want lifetime intent. NOT the HIGH_INTENT gate —
+   * §8.2 line 772 windows that to 14 days, so use `recentIntentTier` there.
+   */
   highestIntentTier: ExplorerIntentTier | 0;
+  /**
+   * Highest intent tier within `RECENT_INTENT_WINDOW_DAYS` of `asOf`.
+   *
+   * This is what §8's HIGH_INTENT actually requires. A tier-4 signal from a
+   * year ago says nothing about readiness today, and the unwindowed tier above
+   * would grant the overlay forever once earned.
+   */
+  recentIntentTier: ExplorerIntentTier | 0;
+  /**
+   * Most recent engagement-band occurrence, or null if the learner has never
+   * engaged. Drives the DORMANT clock. Null rather than epoch-zero, so
+   * "never active" is distinguishable from "active in 1970".
+   */
+  lastEngagementAt: Date | null;
 }
 
 // --- Journey state (§8) -----------------------------------------------------
