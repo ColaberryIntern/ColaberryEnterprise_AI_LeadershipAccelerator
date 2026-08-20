@@ -272,6 +272,26 @@ document set as a zip, for a project with no repo.
 - Same `renderDocs` output, byte for byte, asserted by a test. If the download
   and the repo ever drift, a student who downloads today and connects next week
   sees an inexplicable diff on their first sync.
+- **It carries no file the student owns.** `.colaberry/progress.json` (co-owned)
+  and `.colaberry/profile.json` (student-owned) travel as `progress.seed.json`
+  and `profile.seed.json` instead. Contents are unchanged; only the paths move.
+
+  This is not a stylistic choice. `renderDocs` is pure — it always renders
+  progress with every criterion `passed: false` and profile as a virgin seed.
+  Every repo-write path launders that through `repoWriter`, which merges
+  progress field by field and seeds a profile once and never again. The bundle
+  was the one consumer that shipped the raw render straight to a human, under a
+  UI instruction to "unzip them into your repo". Extracting it destroyed the
+  student's own record of their verified progress.
+
+  The property now held, and asserted directly in
+  `docsBundle.studentFiles.test.ts`: **extracting the entire archive over a
+  working repo changes nothing the student wrote.** Ownership is asked of
+  `fileOwnership.ts` rather than restated per surface, so a new delivery path
+  cannot reintroduce the hazard by forgetting the rule, and a new student-owned
+  file added to the renderer fails `fileOwnership.test.ts` until it is
+  classified. A warning in the copy was explicitly rejected as insufficient:
+  people skim, and this one cost points.
 - `repoUrl` is null, so prompts do not cite a clone URL that does not exist.
 - Deterministic: same plan and timestamp in, byte-identical archive out.
 - The archive leads with `docs/CONNECT-YOUR-REPO.md`, stating that verification
