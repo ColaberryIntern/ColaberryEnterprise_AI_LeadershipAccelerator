@@ -169,5 +169,47 @@ describe('assignDistinctAvatarColors', () => {
         expect(color).not.toBe(reservedColor);
       }
     });
+
+    // PRODUCTION REGRESSION (2026-08-20, loop-production-verifier cycle 1
+    // FAIL) — the exact live-population shape that broke the first version
+    // of this fix: a small reserved set (3 real hierarchy_color values, the
+    // live count) plus a LARGE fallback roster (15 no-agent humans, the live
+    // count) — combined they exceed 8, meaning the old buggy guard
+    // (`takenSlots.size < 8`) went false partway through and stopped
+    // protecting reserved colors for every id processed afterward. This is
+    // the test that should have existed before the first "fix" shipped and
+    // didn't — it fails on the buggy implementation and passes on the real
+    // one. Never a coincidence: checks EVERY fallback id, not a sample.
+    it('PRODUCTION REGRESSION: with 3 reserved colors and 15 fallback ids (18 total, exceeding the 8-slot palette), no fallback id EVER lands on a reserved color, for the full roster', () => {
+      const reserved = [REAL_PALETTE[0], REAL_PALETTE[2], REAL_PALETTE[4]]; // 3 reserved, mirrors live prod count
+      const fallbackIds = Array.from({ length: 15 }, (_, i) => `no-agent-human-${i}-0000-0000-000000000000`);
+
+      const colorById = assignDistinctAvatarColors(fallbackIds, reserved);
+
+      expect(Object.keys(colorById)).toHaveLength(15);
+      for (const [id, color] of Object.entries(colorById)) {
+        expect(reserved).not.toContain(color);
+        expect(REAL_PALETTE).toContain(color);
+      }
+    });
+
+    // Same shape, but proves it holds regardless of HOW the 8-slot boundary
+    // is crossed (reserved-heavy vs fallback-heavy), and that fallback ids
+    // are still allowed to collide with EACH OTHER once genuinely exhausted
+    // (the documented, acceptable graceful degradation) — only reserved
+    // collisions are forbidden.
+    it('boundary: once every slot is genuinely taken, new fallback ids reuse an EARLIER FALLBACK color (never a reserved one) — collision degrades to the lesser defect', () => {
+      const reserved = [REAL_PALETTE[0]]; // 1 reserved, 7 slots left for fallbacks
+      const fallbackIds = Array.from({ length: 10 }, (_, i) => `agent-${i}-0000-0000-0000-00000000000${i}`);
+
+      const colorById = assignDistinctAvatarColors(fallbackIds, reserved);
+
+      const usedColors = new Set(Object.values(colorById));
+      expect(usedColors.has(reserved[0])).toBe(false); // never the reserved color
+      // With 10 ids and only 7 non-reserved slots, at least 2 fallback ids
+      // MUST share a color with another fallback id (pigeonhole) — proves
+      // the degradation actually engaged, not just avoided by chance.
+      expect(usedColors.size).toBeLessThanOrEqual(7);
+    });
   });
 });
