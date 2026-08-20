@@ -13,6 +13,7 @@ const FLAG_KEYS = Object.keys(EXPLORER_GROWTH_ENV_KEYS) as (keyof ExplorerGrowth
 
 const ALL_FEATURES: ExplorerGrowthFeature[] = [
   'signalIngest',
+  'journeyIntelligence',
   'journeyGovernor',
   'commercial',
   'aliOutreach',
@@ -37,15 +38,16 @@ describe('resolveExplorerGrowthFlags — default OFF', () => {
     }
   });
 
-  it('covers all nine documented flags', () => {
-    expect(FLAG_KEYS).toHaveLength(9);
-    expect(Object.keys(resolveExplorerGrowthFlags({}))).toHaveLength(9);
+  it('covers all ten documented flags', () => {
+    // 9 through EPIC 2; journeyIntelligenceEnabled added by EPIC 3 T000.
+    expect(FLAG_KEYS).toHaveLength(10);
+    expect(Object.keys(resolveExplorerGrowthFlags({}))).toHaveLength(10);
   });
 
   // Boundary: the repo convention is a strict `=== 'true'` opt-in. Anything else
   // — including a differently-cased 'TRUE' or a truthy-looking '1' — must stay OFF.
   // A flag that turned on for '1' or 'TRUE' would be an accidental live launch.
-  // Asserted across ALL NINE flags, not just the master: each is read through the
+  // Asserted across ALL TEN flags, not just the master: each is read through the
   // shared isOn() helper today, but that is an implementation detail this test
   // must not depend on — a future per-flag special case has to fail here.
   it.each(['false', 'FALSE', '', '0', '1', 'TRUE', 'True', 'yes', 'on', ' true'])(
@@ -69,6 +71,7 @@ describe('resolveExplorerGrowthFlags — default OFF', () => {
     expect(EXPLORER_GROWTH_ENV_KEYS).toEqual({
       growthOsEnabled: 'EXPLORER_GROWTH_OS_ENABLED',
       signalIngestEnabled: 'EXPLORER_SIGNAL_INGEST_ENABLED',
+      journeyIntelligenceEnabled: 'EXPLORER_JOURNEY_INTELLIGENCE_ENABLED',
       journeyGovernorEnabled: 'EXPLORER_JOURNEY_GOVERNOR_ENABLED',
       commercialEnabled: 'EXPLORER_COMMERCIAL_ENABLED',
       aliOutreachEnabled: 'EXPLORER_ALI_OUTREACH_ENABLED',
