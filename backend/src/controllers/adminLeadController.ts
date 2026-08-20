@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { updateLeadSchema, leadFilterSchema, apolloImportSchema } from '../schemas/leadAdminSchema';
+import {
+  updateLeadSchema,
+  leadFilterSchema,
+  apolloImportSchema,
+  leadViewPreferenceSchema,
+} from '../schemas/leadAdminSchema';
 import { redactForLogs } from '../utils/piiRedaction';
 import {
   listLeads,
@@ -18,6 +23,13 @@ import {
   listApolloLists,
   ApolloImportError,
 } from '../services/leads/apolloContactImportService';
+import {
+  resolveWebsiteFilter,
+  getLeadViewPreference,
+  saveLeadViewPreference,
+  clearLeadViewPreference,
+} from '../services/leads/leadViewPreferenceService';
+import { defaultWebsiteKeysForRole } from '../services/leads/leadSourceGroups';
 import { logStageChange } from '../services/activityService';
 import { getTemperatureHistory, classifyLeadManual } from '../services/leadClassificationService';
 import StrategyCall from '../models/StrategyCall';
@@ -33,8 +45,18 @@ export async function handleAdminListLeads(
 ): Promise<void> {
   try {
     const filters = leadFilterSchema.parse(req.query);
-    const result = await listLeads(filters);
-    res.json(result);
+    // A sales rep opens on business-account sources, or on whatever they locked
+    // for themselves; an explicit ?website= always wins for this one request.
+    const websites = await resolveWebsiteFilter(
+      req.admin?.sub,
+      req.admin?.role,
+      filters.website
+    );
+    const result = await listLeads({
+      ...filters,
+      website: websites && websites.length ? websites.join(',') : undefined,
+    });
+    res.json({ ...result, appliedWebsites: websites ?? [] });
   } catch (error) {
     if (error instanceof ZodError) {
       res.status(400).json({ error: 'Invalid query parameters' });
@@ -108,6 +130,70 @@ export async function handleAdminApolloImport(
     }
     if (error instanceof ApolloImportError) {
       res.status(502).json({ error: error.message, error_class: error.errorClass });
+      return;
+    }
+    next(error);
+  }
+}
+
+/**
+ * The caller's saved lead-list settings, plus the default they would fall back
+ * to. The UI needs both so it can show a rep what "locked" would replace.
+ */
+export async function handleAdminGetLeadViewPreference(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const adminId = req.admin?.sub;
+    if (!adminId) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const saved = await getLeadViewPreference(adminId);
+    res.json({
+      preference: saved ?? { websites: [], locked: false },
+      roleDefault: defaultWebsiteKeysForRole(req.admin?.role) ?? [],
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Save (and optionally lock) the caller's website selection. Writes only the
+ * caller's own row - the identity comes from the verified JWT, never the body.
+ */
+export async function handleAdminSaveLeadViewPreference(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const adminId = req.admin?.sub;
+    if (!adminId) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const data = leadViewPreferenceSchema.parse(req.body ?? {});
+    if (data.locked === false && (!data.websites || data.websites.length === 0)) {
+      await clearLeadViewPreference(adminId);
+      res.json({ preference: { websites: [], locked: false } });
+      return;
+    }
+    const preference = await saveLeadViewPreference(
+      adminId,
+      data.websites ?? [],
+      data.locked ?? false
+    );
+    res.json({ preference });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      res.status(400).json({
+        error: 'Validation failed',
+        details: error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
+      });
       return;
     }
     next(error);

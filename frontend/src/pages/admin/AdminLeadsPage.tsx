@@ -111,7 +111,13 @@ function AdminLeadsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
-  const [websiteFilter, setWebsiteFilter] = useState(() => new URLSearchParams(window.location.search).get('website') || '');
+  const [websiteFilter, setWebsiteFilter] = useState<string[]>(() => {
+    const raw = new URLSearchParams(window.location.search).get('website') || '';
+    return raw ? raw.split(',').filter(Boolean) : [];
+  });
+  const [prefLocked, setPrefLocked] = useState(false);
+  const [prefSaving, setPrefSaving] = useState(false);
+  const [prefLoaded, setPrefLoaded] = useState(false);
   const [sourceGroups, setSourceGroups] = useState<SourceGroup[]>([]);
   const [tempFilter, setTempFilter] = useState(() => new URLSearchParams(window.location.search).get('temperature') || '');
   const [scoreMin, setScoreMin] = useState('');
@@ -129,7 +135,7 @@ function AdminLeadsPage() {
       const params: Record<string, string> = { page: String(page), limit: '25' };
       if (statusFilter) params.status = statusFilter;
       if (sourceFilter) params.source = sourceFilter;
-      if (websiteFilter) params.website = websiteFilter;
+      if (websiteFilter.length) params.website = websiteFilter.join(',');
       // Website signups outrank pulled-list names; see leadSourceGroups.ts.
       params.sort = 'priority';
       if (tempFilter) params.temperature = tempFilter;
@@ -177,10 +183,44 @@ function AdminLeadsPage() {
 
   useEffect(() => { fetchSourceGroups(); }, [fetchSourceGroups]);
 
+  // Load this rep's saved settings. If they locked a selection and the URL did
+  // not already carry one, adopt it so the page opens the way they left it.
+  useEffect(() => {
+    let live = true;
+    api.get('/api/admin/leads/view-preference')
+      .then((res) => {
+        if (!live) return;
+        const pref = res.data.preference || { websites: [], locked: false };
+        setPrefLocked(!!pref.locked);
+        const fromUrl = new URLSearchParams(window.location.search).get('website');
+        if (!fromUrl && pref.locked && pref.websites.length) setWebsiteFilter(pref.websites);
+        setPrefLoaded(true);
+      })
+      .catch(() => { if (live) setPrefLoaded(true); });
+    return () => { live = false; };
+  }, []);
+
+  const toggleWebsite = (key: string) => {
+    setWebsiteFilter((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    setPage(1);
+  };
+
+  const savePreference = async (locked: boolean) => {
+    setPrefSaving(true);
+    try {
+      const res = await api.put('/api/admin/leads/view-preference', { websites: websiteFilter, locked });
+      setPrefLocked(!!res.data.preference?.locked);
+    } catch (err) {
+      console.error('Failed to save lead view preference:', err);
+    } finally {
+      setPrefSaving(false);
+    }
+  };
+
   // Keep ?website= in the address bar so a rep can bookmark "just my sites".
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (websiteFilter) params.set('website', websiteFilter);
+    if (websiteFilter.length) params.set('website', websiteFilter.join(','));
     else params.delete('website');
     const qs = params.toString();
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
@@ -254,7 +294,7 @@ function AdminLeadsPage() {
     fetchStats();
   };
 
-  const hasFilters = search || statusFilter || sourceFilter || websiteFilter || scoreMin || scoreMax || dateFrom || dateTo;
+  const hasFilters = search || statusFilter || sourceFilter || websiteFilter.length || scoreMin || scoreMax || dateFrom || dateTo;
 
   // Per-page trust signal (Basecamp todo 10027085963) derived from live lead pipeline health.
   const trust: TrustSignal = useMemo(() => {
@@ -391,29 +431,69 @@ function AdminLeadsPage() {
                 ))}
               </select>
             </div>
-            <div className="col-md-2">
-              <label className="form-label small text-muted" htmlFor="websiteFilter">Website</label>
-              <select
-                id="websiteFilter"
-                className="form-select"
-                value={websiteFilter}
-                onChange={(e) => { setWebsiteFilter(e.target.value); setPage(1); }}
-              >
-                <option value="">All sites</option>
-                {WEBSITE_GROUP_ORDER.map((kind) => {
-                  const inKind = sourceGroups.filter((g) => g.kind === kind);
-                  if (!inKind.length) return null;
-                  return (
-                    <optgroup key={kind} label={KIND_LABELS[kind]}>
-                      {inKind.map((g) => (
-                        <option key={g.key} value={g.key}>
-                          {g.label} ({g.count.toLocaleString()})
-                        </option>
-                      ))}
-                    </optgroup>
-                  );
-                })}
-              </select>
+            <div className="col-md-3">
+              <label className="form-label small text-muted d-flex align-items-center gap-2">
+                Websites
+                {prefLocked && (
+                  <span className="badge bg-secondary" style={{ fontSize: 10 }} title="These settings are saved and reapplied every visit">
+                    locked
+                  </span>
+                )}
+              </label>
+              <details className="admin-website-picker position-relative">
+                <summary className="form-select d-flex align-items-center" style={{ cursor: 'pointer', listStyle: 'none' }}>
+                  {websiteFilter.length === 0
+                    ? 'All sites'
+                    : websiteFilter.length === 1
+                      ? (sourceGroups.find((g) => g.key === websiteFilter[0])?.label || '1 site')
+                      : `${websiteFilter.length} sites`}
+                </summary>
+                <div
+                  className="position-absolute bg-white border rounded shadow-sm p-2"
+                  style={{ zIndex: 20, minWidth: 260, maxHeight: 320, overflowY: 'auto' }}
+                >
+                  {WEBSITE_GROUP_ORDER.map((kind) => {
+                    const inKind = sourceGroups.filter((g) => g.kind === kind);
+                    if (!inKind.length) return null;
+                    return (
+                      <div key={kind} className="mb-2">
+                        <div className="text-muted" style={{ fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                          {KIND_LABELS[kind]}
+                        </div>
+                        {inKind.map((g) => (
+                          <label key={g.key} className="d-flex align-items-center gap-2 py-1" style={{ fontSize: 13, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={websiteFilter.includes(g.key)}
+                              onChange={() => toggleWebsite(g.key)}
+                            />
+                            <span className="flex-grow-1">{g.label}</span>
+                            <span className="text-muted" style={{ fontSize: 12 }}>{g.count.toLocaleString()}</span>
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  <div className="d-flex gap-2 border-top pt-2 mt-1">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary flex-grow-1"
+                      onClick={() => { setWebsiteFilter([]); setPage(1); }}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary flex-grow-1"
+                      disabled={prefSaving || !prefLoaded}
+                      onClick={() => savePreference(!prefLocked)}
+                      title={prefLocked ? 'Stop reapplying these settings' : 'Reapply these settings every visit'}
+                    >
+                      {prefSaving ? 'Saving...' : prefLocked ? 'Unlock' : 'Lock these'}
+                    </button>
+                  </div>
+                </div>
+              </details>
             </div>
             <div className="col-md-2">
               <label className="form-label small text-muted">Form</label>

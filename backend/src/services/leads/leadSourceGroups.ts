@@ -19,12 +19,27 @@
 
 export type LeadSourceGroupKind = 'website' | 'event' | 'list' | 'internal' | 'test';
 
+/**
+ * Who the lead is for. The sales team sells the enterprise offering, so their
+ * queue defaults to `enterprise` only.
+ *
+ * Ali, 2026-08-20: "Default the Sales team to Business accounts on the
+ * enterprise.ai side. Don't put people signing up for the training on their
+ * list." Open House is classified `training` on that instruction: it is the
+ * Eventbrite session for the bootcamp/Explorer funnel, so despite being the
+ * largest live inbound (458) it is not a business-account lead. It stays
+ * selectable in the filter, it is just not in the default.
+ */
+export type LeadAudience = 'enterprise' | 'training' | 'internal';
+
 export interface LeadSourceGroup {
   key: string;
   label: string;
   /** Shown under the label so "Colaberry" vs "Colaberry alumni" is unambiguous. */
   domain?: string;
   kind: LeadSourceGroupKind;
+  /** Which side of the business this source feeds. Drives the sales default. */
+  audience: LeadAudience;
   /** Raw `leads.source` values that roll up into this group. */
   sources: string[];
 }
@@ -41,6 +56,7 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     label: 'Colaberry',
     domain: 'colaberry.ai',
     kind: 'website',
+    audience: 'enterprise',
     // 'website' carries the enterprise briefing + inquiry forms, which are
     // colaberry.ai surfaces; it predates the per-site source convention.
     sources: ['colaberry', 'website'],
@@ -50,6 +66,7 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     label: 'World of Taxonomy',
     domain: 'worldoftaxonomy.com',
     kind: 'website',
+    audience: 'enterprise',
     sources: ['worldoftaxonomy'],
   },
   {
@@ -57,6 +74,7 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     label: 'Trust Before Intelligence',
     domain: 'trustbeforeintelligence.ai',
     kind: 'website',
+    audience: 'enterprise',
     sources: ['trustbeforeintelligence'],
   },
   {
@@ -64,6 +82,7 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     label: 'Training site',
     domain: 'training.colaberry.com',
     kind: 'website',
+    audience: 'training',
     // Three spellings of the same site, plus the on-page popup form.
     sources: ['training.colaberry.com', 'training.colaberry.com/thank-you', 'popup'],
   },
@@ -72,24 +91,28 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     label: 'AI Workforce Designer',
     domain: 'advisor.colaberry.ai',
     kind: 'website',
+    audience: 'enterprise',
     sources: ['advisory'],
   },
   {
     key: 'open_house',
     label: 'Open House',
     kind: 'event',
+    audience: 'training',
     sources: ['open_house'],
   },
   {
     key: 'ai_pilot',
     label: 'AI Pilot campaign',
     kind: 'list',
+    audience: 'enterprise',
     sources: ['ai-pilot', 'ai-pilot-cold'],
   },
   {
     key: 'apollo',
     label: 'Apollo (cold list)',
     kind: 'list',
+    audience: 'enterprise',
     // 'apollo'          - the 2,102 the scheduled agents imported Mar-Jul 2026
     //                     before they were switched off on 2026-07-10.
     // 'apollo_contacts' - contacts pulled from the saved contacts already in
@@ -102,12 +125,14 @@ export const LEAD_SOURCE_GROUPS: LeadSourceGroup[] = [
     label: 'Colaberry alumni',
     domain: 'from the school database, not a website',
     kind: 'internal',
+    audience: 'training',
     sources: ['ccpp_winback', 'ccpp_alumni', 'alumni'],
   },
   {
     key: 'test',
     label: 'Test data',
     kind: 'test',
+    audience: 'internal',
     sources: ['manual_test', 'campaign_test', 'training.colaberry.com-smoke'],
   },
 ];
@@ -137,6 +162,28 @@ export function groupForSource(source: string | null | undefined): string {
 export function sourcesForGroup(key: string): string[] | null {
   if (key === UNGROUPED_KEY) return null;
   return LEAD_SOURCE_GROUPS.find((g) => g.key === key)?.sources ?? [];
+}
+
+/**
+ * The group keys for one audience, in dropdown order. This is what a sales
+ * login gets when it has expressed no preference of its own.
+ */
+export function groupKeysForAudience(audience: LeadAudience): string[] {
+  return LEAD_SOURCE_GROUPS.filter((g) => g.audience === audience).map((g) => g.key);
+}
+
+/**
+ * The default website selection for an admin_users role.
+ *
+ * Sales sells the enterprise offering, so their queue opens on business-account
+ * sources and leaves the training funnel out. Every other role gets null,
+ * meaning no default filter at all: an admin still sees everything.
+ *
+ * A rep can widen or narrow this at any time, and can save their own choice
+ * (see leadViewPreferenceService), which takes precedence over this.
+ */
+export function defaultWebsiteKeysForRole(role: string | null | undefined): string[] | null {
+  return role === 'sales' ? groupKeysForAudience('enterprise') : null;
 }
 
 /** Every raw source string this module knows about. */

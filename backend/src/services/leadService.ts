@@ -220,6 +220,10 @@ interface ListLeadsParams {
    * Website filter: one or more `leadSourceGroups` keys, comma-separated.
    * Distinct from `source`, which (confusingly, for historical reasons) filters
    * `form_type`. This one filters the real origin.
+   *
+   * The controller resolves this before calling: an explicit request parameter
+   * wins, then the caller's saved+locked preference, then the role default
+   * (sales opens on enterprise sources only). See leadViewPreferenceService.
    */
   website?: string;
   scoreMin?: number;

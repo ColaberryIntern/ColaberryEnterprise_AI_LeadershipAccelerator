@@ -4,6 +4,8 @@ import {
   handleAdminListLeads,
   handleAdminGetLeadStats,
   handleAdminGetLeadSourceGroups,
+  handleAdminGetLeadViewPreference,
+  handleAdminSaveLeadViewPreference,
   handleAdminGetApolloLists,
   handleAdminApolloImport,
   handleAdminGetLead,
@@ -58,6 +60,10 @@ router.get('/api/admin/leads/source-groups', requireSalesOrAdmin, handleAdminGet
 // Apollo pull-in. Sales-callable because it can only read contacts the account
 // already owns (apolloAccountClient's allowlist) — it cannot spend credits.
 // Also above '/:id' for the same route-ordering reason.
+// Saved lead-list settings ("lock my settings"). Own-row only; the identity
+// comes from the verified JWT. Above '/:id' like the rest.
+router.get('/api/admin/leads/view-preference', requireSalesOrAdmin, handleAdminGetLeadViewPreference);
+router.put('/api/admin/leads/view-preference', requireSalesOrAdmin, handleAdminSaveLeadViewPreference);
 router.get('/api/admin/leads/apollo-lists', requireSalesOrAdmin, handleAdminGetApolloLists);
 router.post('/api/admin/leads/apollo-import', requireSalesOrAdmin, handleAdminApolloImport);
 router.get('/api/admin/leads/export', requireAdmin, handleAdminExportLeads);

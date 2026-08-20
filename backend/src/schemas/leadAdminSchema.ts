@@ -40,3 +40,18 @@ export const apolloImportSchema = z.object({
 });
 
 export type ApolloImportInput = z.infer<typeof apolloImportSchema>;
+
+/**
+ * Body for PUT /api/admin/leads/view-preference.
+ *
+ * `locked: false` with no websites is the "forget my settings" case, handled in
+ * the controller. Keys are validated against the real group list in
+ * sanitizeWebsiteKeys, so an unknown key is dropped rather than filtering the
+ * rep's queue down to nothing.
+ */
+export const leadViewPreferenceSchema = z.object({
+  websites: z.array(z.string().max(64)).max(30).optional(),
+  locked: z.boolean().optional(),
+});
+
+export type LeadViewPreferenceInput = z.infer<typeof leadViewPreferenceSchema>;
