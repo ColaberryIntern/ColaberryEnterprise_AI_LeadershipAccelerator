@@ -41,6 +41,16 @@ export interface ArtifactRecord {
   /** ISO-8601. Supplied by the caller — never read from a clock in here. */
   uploadedAt: string;
   sizeBytes: number | null;
+  /**
+   * True when this was built against one of the built-in sample projects rather
+   * than the student's own. It is still their work and still belongs in the
+   * repo — they ran the build — but the index says so, because a portfolio that
+   * silently mixes sample work into a capstone is overstating itself, and the
+   * person reading it cannot tell the difference from the filename.
+   */
+  builtOnSample?: boolean;
+  /** The selector label, for the index. */
+  projectLabel?: string | null;
 }
 
 /**
@@ -145,8 +155,13 @@ export function renderArtifactIndex(artifacts: ArtifactRecord[]): string {
   const rows = ordered(artifacts).map((a) => {
     const week = a.week ? `Week ${a.week}` : '—';
     const held = a.text === null ? ' *(held on platform)*' : '';
-    return `| ${week} | ${escapePipes(a.title)} | [\`${slugifyFilename(a.filename)}\`](./${artifactPath(a).slice(ARTIFACT_ROOT.length + 1)})${held} | ${humanSize(a.sizeBytes)} |`;
+    const builtOn = a.builtOnSample
+      ? 'Sample project'
+      : escapePipes(a.projectLabel || 'Own project');
+    return `| ${week} | ${escapePipes(a.title)} | [\`${slugifyFilename(a.filename)}\`](./${artifactPath(a).slice(ARTIFACT_ROOT.length + 1)})${held} | ${builtOn} | ${humanSize(a.sizeBytes)} |`;
   });
+
+  const sampleCount = artifacts.filter((a) => a.builtOnSample).length;
 
   return [
     '# Build Artifacts',
@@ -154,11 +169,14 @@ export function renderArtifactIndex(artifacts: ArtifactRecord[]): string {
     'Everything built in Claude Code across the AI Systems Architect Accelerator,',
     'week by week. Each row links to the artifact in this repo.',
     '',
-    '| Week | Built for | Artifact | Size |',
-    '|---|---|---|---|',
+    '| Week | Built for | Artifact | Built on | Size |',
+    '|---|---|---|---|---|',
     ...rows,
     '',
     `${artifacts.length} artifact${artifacts.length === 1 ? '' : 's'}.`,
+    ...(sampleCount
+      ? ['', `${sampleCount} of these were built against a sample project rather than this one, and are marked as such.`]
+      : []),
     '',
   ].join('\n');
 }

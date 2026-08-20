@@ -58,7 +58,35 @@ export async function getBuildArtifactStatus(enrollmentId: string, cardId: strin
  * Store the uploaded build artifact as a PortfolioArtifact. Idempotent replace
  * (one per enrollment+card). Throws typed { status } on bad input before any write.
  */
-export async function uploadBuildArtifact(enrollmentId: string, cardId: string, file: UploadFile) {
+/**
+ * What the student picked in the build station's project selector. The renderer
+ * offers their own projects AND three sample projects, because in weeks 1-3
+ * they have no project yet and must still be able to build.
+ *
+ * This has to reach the server. An artifact built against "the Retail Analytics
+ * Dashboard (sample)" is real work and belongs in their portfolio, but it is
+ * NOT work on their own system — and mirroring it into their repo unlabelled
+ * would quietly present sample work as part of their capstone. Recorded here so
+ * the repo index can say what each artifact was built on.
+ */
+export interface BuildArtifactContext {
+  /** The selector's label, e.g. "the Retail Analytics Dashboard (sample)". */
+  project_label?: string;
+  /** True when that label is one of the built-in samples. */
+  is_sample?: boolean;
+}
+
+/** Multipart fields arrive as strings; 'false' must not read as truthy. */
+function parseBool(v: unknown): boolean {
+  return v === true || v === 'true' || v === '1';
+}
+
+export async function uploadBuildArtifact(
+  enrollmentId: string,
+  cardId: string,
+  file: UploadFile,
+  context: BuildArtifactContext = {},
+) {
   const card: any = await TimelineCard.findByPk(cardId);
   if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
   if (!BUILD_STATION_TYPES.has(card.type)) {
@@ -89,6 +117,8 @@ export async function uploadBuildArtifact(enrollmentId: string, cardId: string, 
     mimetype: file.mimetype || null,
     uploaded_at,
     week: card.week ?? null,
+    project_label: (context.project_label || '').slice(0, 200) || null,
+    built_on_sample: parseBool(context.is_sample),
   };
 
   const existing: any = await PortfolioArtifact.findOne({ where: { enrollment_id: enrollmentId, card_id: cardId } });

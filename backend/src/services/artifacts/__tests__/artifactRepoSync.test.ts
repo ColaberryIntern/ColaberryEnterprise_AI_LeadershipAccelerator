@@ -76,6 +76,35 @@ describe('toArtifactRecords', () => {
       text: '# Body',
       uploadedAt: '2026-08-20T10:00:00.000Z',
       sizeBytes: 1024,
+      builtOnSample: false,
+      projectLabel: null,
+    });
+  });
+
+  describe('sample-project provenance', () => {
+    it('carries a recorded sample flag and label through', () => {
+      const [record] = toArtifactRecords(
+        [stored({ content: { filename: 'a.md', week: 2, built_on_sample: true, project_label: 'the Retail Analytics Dashboard (sample)' } })],
+        new Map([['card-1', 'x']]),
+      );
+      expect(record.builtOnSample).toBe(true);
+      expect(record.projectLabel).toBe('the Retail Analytics Dashboard (sample)');
+    });
+
+    it('defaults a row predating the field to their OWN project, not to sample', () => {
+      // All 53 artifacts uploaded before this existed have neither field.
+      // Labelling real capstone work as practice is the worse error.
+      const [record] = toArtifactRecords([stored()], new Map());
+      expect(record.builtOnSample).toBe(false);
+      expect(record.projectLabel).toBeNull();
+    });
+
+    it('treats a non-boolean sample flag as false rather than truthy', () => {
+      const [record] = toArtifactRecords(
+        [stored({ content: { filename: 'a.md', built_on_sample: 'yes' as unknown as boolean } })],
+        new Map(),
+      );
+      expect(record.builtOnSample).toBe(false);
     });
   });
 

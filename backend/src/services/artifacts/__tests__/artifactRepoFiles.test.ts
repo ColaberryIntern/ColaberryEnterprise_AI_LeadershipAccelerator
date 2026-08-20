@@ -191,4 +191,42 @@ describe('renderArtifactIndex', () => {
   it('singularises the count for one artifact', () => {
     expect(renderArtifactIndex([artifact()])).toContain('1 artifact.');
   });
+
+  describe('sample-project honesty', () => {
+    it('labels a sample-built artifact as such', () => {
+      // Weeks 1-3 have no project, so students build against a sample. That is
+      // real work and is kept — but a portfolio that silently mixes sample work
+      // into a capstone overstates itself, and a reader cannot tell from a
+      // filename.
+      const md = renderArtifactIndex([
+        artifact({ builtOnSample: true, projectLabel: 'the Retail Analytics Dashboard (sample)' }),
+      ]);
+      expect(md).toContain('Sample project');
+      expect(md).toContain('1 of these were built against a sample project');
+    });
+
+    it('shows the real project label when it is their own', () => {
+      const md = renderArtifactIndex([artifact({ builtOnSample: false, projectLabel: 'Meridian Intake Agent' })]);
+      expect(md).toContain('Meridian Intake Agent');
+      expect(md).not.toContain('built against a sample project');
+    });
+
+    it('defaults an unlabelled artifact to their own project, not to sample', () => {
+      // All 53 artifacts uploaded before this field existed have no label.
+      // Calling real capstone work a sample is the worse of the two errors.
+      const md = renderArtifactIndex([artifact()]);
+      expect(md).toContain('Own project');
+      expect(md).not.toContain('Sample project');
+    });
+
+    it('omits the footnote entirely when nothing was sample-built', () => {
+      expect(renderArtifactIndex([artifact(), artifact({ cardId: 'c2' })]))
+        .not.toContain('built against a sample project');
+    });
+
+    it('escapes a pipe in a project label so one selection cannot break the table', () => {
+      const md = renderArtifactIndex([artifact({ projectLabel: 'Intake | Invoice' })]);
+      expect(md).toContain('Intake \\| Invoice');
+    });
+  });
 });

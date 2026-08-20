@@ -116,7 +116,16 @@ export async function handleGetFieldGuide(req: Request, res: Response, next: Nex
 // lands in the portfolio + is available for instructor review. The client then
 // completes the card (points on the first build; completion is idempotent).
 export async function handleBuildArtifactUpload(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await uploadBuildArtifact(eid(req), String(req.params.cardId), (req as any).file)); } catch (e) { fail(res, e, next); }
+  try {
+    // Multer puts the non-file multipart fields on req.body. They are the
+    // student's own selection, so they are recorded, never trusted as
+    // instruction, and length-capped in the service.
+    const body = (req.body || {}) as { project_label?: string; is_sample?: string };
+    res.json(await uploadBuildArtifact(eid(req), String(req.params.cardId), (req as any).file, {
+      project_label: body.project_label,
+      is_sample: body.is_sample as unknown as boolean,
+    }));
+  } catch (e) { fail(res, e, next); }
 }
 
 const labSchema = z.object({ prompt: z.string().min(1), output: z.string().optional() });
