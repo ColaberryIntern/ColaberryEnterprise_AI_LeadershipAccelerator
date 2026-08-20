@@ -514,3 +514,30 @@
 @media (prefers-reduced-motion: reduce) {
   .cbv2-h8 .cbv2-h8tickglyph { stroke: var(--h8-cyan); }
 }
+
+/* ---------------------------------------- the bare variant (forms) -------- */
+
+/*
+ * Pages that carry a FORM get the family's ground and none of its machine.
+ *
+ * Start Free is the page most likely to convert; a full-viewport animated
+ * diagram above the fields would push them off the first screen to win a visual
+ * argument that Home, Services, Platform and Pricing already make. So this
+ * variant supplies the atmosphere only -- the same masked grid, the same two
+ * breathing blooms -- and changes nothing about the layout beneath it.
+ *
+ * The token block is repeated here because .cbv2-h8__field and __bloom read
+ * --h8-* values, and this section is not inside a .cbv2-h8.
+ */
+.cbv2-pagehero--v8 {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  --h8-void: #04050a;
+  --h8-line: #1a2030;
+  --h8-red: var(--cherry, #ff2b3e);
+  --h8-cyan: #4fd3ff;
+  --h8-cycle: 11s;
+}
+/* The content has to sit above the atmosphere, which is absolutely positioned. */
+.cbv2-pagehero--v8 > .cbv2-wrap { position: relative; z-index: 2; }
