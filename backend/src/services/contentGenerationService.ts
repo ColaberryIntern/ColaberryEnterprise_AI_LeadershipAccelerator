@@ -10,8 +10,102 @@ import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 import { callLLMWithAudit } from './llmCallWrapper';
 import { validateSectionExecutionReadiness } from './variableFlowService';
 import { captureExecution } from './postExecutionIntelligenceService';
+import { scoreChapterContent, ChapterQualityResult, LessonContext } from './chapterQualityService';
+import { decideRegeneration, pickBetterContent, isOnTopicRegenEnabled } from './chapterOnTopicGuard';
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+
+/** Lesson -> topic context for the quality scorer. */
+function lessonContext(lesson: CurriculumLesson): LessonContext {
+  return { title: lesson.title, learningGoal: lesson.learning_goal, description: lesson.description };
+}
+
+/**
+ * Attach a computed quality score under `_quality` (matching the `_`-prefixed
+ * meta-field convention used above) and emit a structured warning when confidence
+ * is low or the output looks off-topic. Non-blocking: never prevents delivery.
+ */
+function attachQuality(content: any, quality: ChapterQualityResult, lesson: CurriculumLesson): any {
+  if (content && typeof content === 'object') content._quality = quality;
+  if (quality.low_confidence || !quality.on_topic) {
+    console.warn('[ContentGeneration] chapter-output quality below threshold ' + JSON.stringify({
+      lessonId: lesson.id,
+      overall_confidence: quality.overall_confidence,
+      grade: quality.grade,
+      on_topic: quality.on_topic,
+      regenerated: quality.regenerated || false,
+      issues: quality.issues.slice(0, 5),
+    }));
+  }
+  return content;
+}
+
+/** Score generated content and attach the result. Used for degraded/merged paths. */
+function withQuality(content: any, lesson: CurriculumLesson): any {
+  try {
+    return attachQuality(content, scoreChapterContent(content, lessonContext(lesson)), lesson);
+  } catch (e: any) {
+    console.warn('[ContentGeneration] quality scoring failed:', e?.message);
+    return content;
+  }
+}
+
+/**
+ * Score generated content; if it drifted off-topic (or scored very low) AND the
+ * opt-in guard is enabled, do ONE corrective re-prompt and keep the higher-scoring
+ * draft (task #4: keep chapters on-topic). The deterministic decision lives in
+ * chapterOnTopicGuard; this only performs the bounded second LLM call. Never
+ * throws and always returns deliverable content.
+ */
+async function finalizeWithOnTopicGuard(
+  content: any,
+  lesson: CurriculumLesson,
+  systemPrompt: string,
+  userPrompt: string,
+  enrollmentId?: string,
+): Promise<any> {
+  let quality: ChapterQualityResult;
+  try {
+    quality = scoreChapterContent(content, lessonContext(lesson));
+  } catch (e: any) {
+    console.warn('[ContentGeneration] quality scoring failed:', e?.message);
+    return content;
+  }
+
+  const decision = decideRegeneration(quality, lessonContext(lesson), false);
+  if (isOnTopicRegenEnabled() && decision.shouldRegenerate) {
+    console.warn(`[ContentGeneration] regenerating lesson ${lesson.id} to stay on-topic: ${decision.reason}`);
+    try {
+      const retry = await callLLMWithAudit({
+        lessonId: lesson.id,
+        enrollmentId,
+        generationType: 'participant_content',
+        step: 'regenerate_on_topic',
+        systemPrompt,
+        userPrompt: `${userPrompt}\n\n${decision.correctiveInstruction}`,
+        model: MODEL,
+        temperature: 0.5,
+        maxTokens: 12000,
+        responseFormat: { type: 'json_object' },
+      });
+      const retryParsed = JSON.parse(retry.content);
+      if (retryParsed && retryParsed.concept_snapshot) {
+        const retryQuality = scoreChapterContent(retryParsed, lessonContext(lesson));
+        const winner = pickBetterContent(
+          { content, quality },
+          { content: retryParsed, quality: retryQuality },
+        );
+        winner.quality.regenerated = winner.content === retryParsed;
+        return attachQuality(winner.content, winner.quality, lesson);
+      }
+    } catch (e: any) {
+      // Best-effort: a failed/unparseable retry keeps the original scored draft.
+      console.warn('[ContentGeneration] on-topic regeneration failed, keeping original:', e?.message);
+    }
+  }
+
+  return attachQuality(content, quality, lesson);
+}
 
 function buildPersonalizationContext(
   profile: UserCurriculumProfile,
@@ -174,7 +268,7 @@ export async function generateLessonContent(
       if (!merged.knowledge_checks?.length) merged.knowledge_checks = fallback.knowledge_checks;
       if (!merged.reflection_questions?.length) merged.reflection_questions = fallback.reflection_questions;
       merged.content_version = 'v2';
-      return merged;
+      return withQuality(merged, lesson);
     }
 
     // Store output variables if SectionConfig defines variable_output_map
@@ -237,7 +331,7 @@ export async function generateLessonContent(
       } catch (e: any) { console.warn('[ContentGeneration] Post-execution intelligence setup failed:', e?.message); }
     }
 
-    return parsed;
+    return await finalizeWithOnTopicGuard(parsed, lesson, systemPrompt, userPrompt, enrollmentId);
   } catch (err) {
     // Capture failed execution (fire-and-forget)
     if (enrollmentId) {
