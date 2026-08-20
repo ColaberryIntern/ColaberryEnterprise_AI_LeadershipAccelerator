@@ -29,7 +29,7 @@
  * day one will take, so it leads.
  *
  * **B — provision and adopt (FALLBACK).** For a student with no repo yet: we
- * create an EMPTY private one and hand them `git remote add` / `push -u`, so
+ * create an EMPTY public one and hand them `git remote add` / `push -u`, so
  * their existing folder and its whole history moves across untouched. Empty and
  * not auto-initialised is the load-bearing detail — a repo with a README already
  * in it turns their first push into a rejected non-fast-forward, and the fix a
@@ -462,7 +462,7 @@ export async function confirmConnect(
 // ── door B: provision, then adopt ────────────────────────────────────────────
 
 /**
- * Create an empty private repo and hand back the commands that point the
+ * Create an empty PUBLIC repo and hand back the commands that point the
  * student's EXISTING folder at it. Their history and files survive because
  * nothing is pushed by us and the far end starts empty.
  *
@@ -500,7 +500,9 @@ export async function adoptProvisionedRepo(
     owner: connection.repo_owner,
     repo: connection.repo_name,
     url: connection.repo_url,
-    private: true,
+    // Mirrors what provisionWorkspaceRepo actually asks GitHub for. Public
+    // since 2026-08-19; see that function's docstring for why.
+    private: false,
     connected_at: undefined,
   });
   await connection.save();

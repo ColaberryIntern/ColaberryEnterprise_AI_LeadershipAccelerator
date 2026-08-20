@@ -92,7 +92,7 @@ Then three checks, in this order, all before anything is bound:
 ### Door B — provision and adopt (FALLBACK)
 
 For a student whose folder is not on GitHub yet. The platform creates an
-**empty** private repo, adds them as a push collaborator, and hands back the
+**empty public** repo, adds them as a push collaborator, and hands back the
 commands that point their **existing folder** at it:
 
 ```
@@ -170,9 +170,21 @@ student's own account requires a credential belonging to that student:
 token belongs to the platform. With the credentials available today there is no
 API call that produces a repo the student owns.
 
-Mitigations that exist now: the repo is private, the student is a push
-collaborator, and Door A is presented first, so the org-owned path is taken only
-by a student who had no repo at all.
+Mitigations that exist now: the student is a push collaborator, and Door A is
+presented first, so the org-owned path is taken only by a student who had no
+repo at all.
+
+**Repo visibility is NOT one of the mitigations, and used to be listed as one.**
+Door B repos are public as of 2026-08-19 (see `docs/COMMAND_CENTER_HOSTING.md`).
+Privacy was never really protecting the student here — every other surface,
+including the webhook panel's bold warning and STORY-000's own prompt, already
+told them the repo was public, so the protection was invisible to the only
+person it was supposedly for. What protects a student now is that the product
+says plainly, in the provisioning copy and in the docs bundle, that the repo is
+public and that secrets must never be committed to it. The custody concern this
+section is about — the repo being under Colaberry's org rather than the
+student's account — is unchanged by visibility and is still fixed only by a
+GitHub App.
 
 **What actually fixes it: a GitHub App.** Scoped in §8.
 
