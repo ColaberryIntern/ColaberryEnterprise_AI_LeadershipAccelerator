@@ -45,7 +45,10 @@ import {
   BuildRollup,
   PlanStorySpec,
   StoryVerdict,
+  RepoTreeContext,
 } from './verifyDecision';
+import { summariseRejectedClaims } from './rejectedClaimsSignal';
+import { writeAccessOf } from '../repoConnect/connectionAccess';
 import {
   readVerificationInputs,
   RepoReadError,
@@ -272,8 +275,51 @@ export async function verifyBuildFromRepo(
     return failure(projectId, parsed.error_class, parsed.reason);
   }
 
-  const decision = decideBuild(specs, parsed.ok ? parsed.file : null, inputs.commits);
+  /**
+   * The repo as it stands, for the criterion path check.
+   *
+   * `writeAccessOf` returns null on every connection made before the permission
+   * was captured — which is all 10 live rows today — and `criterionPaths` reads
+   * that null as "enforce nothing against this student". That is deliberate
+   * sequencing, not an oversight: until PR #1618 populates the field we cannot
+   * tell a file we owed a student from a file they never added, and the cautious
+   * direction is theirs. See criterionPaths.blameForMissing.
+   *
+   * Null `treePaths` (a tree we could not read) disables the check outright.
+   */
+  const tree: RepoTreeContext | null = inputs.treePaths
+    ? { paths: inputs.treePaths, writeAccess: writeAccessOf(connection) }
+    : null;
+
+  const decision = decideBuild(specs, parsed.ok ? parsed.file : null, inputs.commits, tree);
   const checkedAt = new Date().toISOString();
+
+  /**
+   * FIX 4 — the mismatch signal reaches a human.
+   *
+   * `rejected_claims` has been recorded since this loop shipped and read by
+   * nothing. One line per run, not per claim, at `warn`, on the stream that
+   * already carries this service's events. Emitted BEFORE the per-story loop so
+   * a database failure partway through the writes cannot swallow the diagnosis.
+   *
+   * No student name, no email, no repo contents beyond the unmatched sentences
+   * themselves — the project id is enough to find the row, and this is wording
+   * drift, not fraud.
+   */
+  const drift = summariseRejectedClaims(decision.verdicts);
+  if (drift) {
+    log('sbp_verification_claims_unmatched', opts.correlationId, 'partial', {
+      projectId,
+      plan_version: stored.version,
+      claims_total: drift.claims_total,
+      stories_affected: drift.stories_affected,
+      samples: drift.samples,
+      likely_wording_drift: drift.likely_wording_drift,
+      note: drift.likely_wording_drift
+        ? 'a story is held back by claims that match no criterion — check the plan wording against the repo'
+        : 'unmatched claims on stories that are otherwise fine; informational',
+    });
+  }
 
   // The per-story rate for THIS build: the capstone budget split across the
   // stories in the published plan. Resolved once per run, before any award, so

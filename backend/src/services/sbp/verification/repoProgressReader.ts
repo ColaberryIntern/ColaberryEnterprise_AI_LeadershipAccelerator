@@ -65,7 +65,30 @@ export interface VerificationInputs {
   commits_scanned: number;
   /** True when the window was full, i.e. older commits exist that we did not read. */
   window_truncated: boolean;
+  /**
+   * Every blob path in the default branch's tree, or NULL when the tree could
+   * not be read.
+   *
+   * The null is load-bearing and is not the same as an empty set. An empty set
+   * means "we looked and the repo has no files"; null means "we did not find
+   * out", and the decision must enforce nothing on the strength of it. See
+   * criterionPaths.RepoTreeContext.
+   */
+  treePaths: Set<string> | null;
+  /** True when GitHub told us it truncated the tree — see readTreePaths. */
+  tree_truncated: boolean;
 }
+
+/**
+ * A repo big enough for GitHub to truncate the recursive tree response.
+ *
+ * GitHub caps `git/trees?recursive=1` at 100k entries / 7MB and sets
+ * `truncated: true` rather than paginating. A truncated tree is a tree we
+ * cannot prove a path is ABSENT from, so it is discarded entirely rather than
+ * used partially — "the file is missing" drawn from an incomplete listing is
+ * exactly the false negative that would fail a student for our own limit.
+ */
+const treeIsUsable = (truncated: boolean): boolean => !truncated;
 
 export interface ReadOptions {
   correlationId?: string;
@@ -236,12 +259,16 @@ export async function readVerificationInputs(
     });
   }
 
+  const tree = await readTreePaths(target, token, fetchImpl, opts.correlationId);
+
   log('sbp_verification_repo_read', opts.correlationId, 'success', {
     owner, repo,
     duration_ms: Date.now() - started,
     progress_present: progressRaw !== null,
     commits_scanned: rawCommits.length,
     detail_fetched: commits.length,
+    tree_paths: tree.paths?.size ?? null,
+    tree_truncated: tree.truncated,
   });
 
   return {
@@ -249,7 +276,81 @@ export async function readVerificationInputs(
     commits,
     commits_scanned: rawCommits.length,
     window_truncated: rawCommits.length >= COMMIT_WINDOW,
+    treePaths: tree.paths,
+    tree_truncated: tree.truncated,
   };
+}
+
+/**
+ * The repo's file listing, for the criterion path check.
+ *
+ * ONE extra API call on a run that already makes between two and forty-two, so
+ * the cost is real but marginal. It is made last, after everything the verdict
+ * strictly needs, for the reason below.
+ *
+ * ── IT NEVER THROWS, AND THAT IS THE WHOLE DESIGN ───────────────────────────
+ *
+ * Every other read in this module is load-bearing: without the progress file or
+ * the commits there is no verdict to reach, so a failure there is correctly
+ * fatal and correctly surfaced to the student. The tree is different. It can
+ * only ever WITHHOLD credit — a criterion passes without it and may fail with it
+ * — so a failure to read it must degrade to "we did not check", never to "the
+ * file is missing". A rate limit, a timeout or an empty repo would otherwise
+ * start failing criteria for students whose repos are fine.
+ *
+ * So the whole call is wrapped: any error, any status, returns
+ * `{paths: null}` and the decision enforces nothing. The failure is logged at
+ * `partial` because it is worth knowing the check is not running, but it does
+ * not reach the student and does not fail the sync.
+ *
+ * Only blobs are collected. A tree entry of type `tree` is a directory, and a
+ * criterion naming a directory is not something `repoPathsNamedIn` produces
+ * anyway (it requires a file extension).
+ */
+async function readTreePaths(
+  target: RepoReadTarget,
+  token: string,
+  fetchImpl: typeof fetch,
+  correlationId?: string,
+): Promise<{ paths: Set<string> | null; truncated: boolean }> {
+  const { owner, repo } = target;
+  const ref = target.branch?.trim() || 'HEAD';
+  try {
+    const res = await gh(
+      `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`,
+      token,
+      fetchImpl,
+    );
+    // 404 is a real answer for a repo with no commits on the branch yet. It is
+    // NOT "the repo has no files we should credit" — there is nothing to compare
+    // against, so it degrades like any other unread tree.
+    if (res.status === 404 || !res.body) return { paths: null, truncated: false };
+
+    const body = res.body as { tree?: unknown; truncated?: unknown };
+    const truncated = body.truncated === true;
+    if (!treeIsUsable(truncated)) {
+      log('sbp_verification_tree_truncated', correlationId, 'partial', {
+        owner, repo, note: 'tree too large to prove absence; path checks skipped for this run',
+      });
+      return { paths: null, truncated: true };
+    }
+
+    const entries = Array.isArray(body.tree) ? (body.tree as Array<Record<string, unknown>>) : [];
+    const paths = new Set<string>();
+    for (const e of entries) {
+      if (e?.type !== 'blob') continue;
+      const p = typeof e.path === 'string' ? e.path : '';
+      if (p) paths.add(p);
+    }
+    return { paths, truncated: false };
+  } catch (err: unknown) {
+    log('sbp_verification_tree_read_failed', correlationId, 'partial', {
+      owner, repo,
+      error_class: err instanceof RepoReadError ? err.error_class : 'UpstreamError',
+      note: 'path checks skipped for this run; no criterion was failed for a file we could not look for',
+    });
+    return { paths: null, truncated: false };
+  }
 }
 
 /** GitHub returns file contents base64-encoded (with newlines inside the payload). */
