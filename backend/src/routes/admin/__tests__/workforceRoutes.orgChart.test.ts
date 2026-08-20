@@ -9,7 +9,22 @@ import request from 'supertest';
 
 const getOrgChart = jest.fn();
 
-jest.mock('../../../services/workforce/orgChartService', () => ({ getOrgChart: (...a: unknown[]) => getOrgChart(...a) }));
+jest.mock('../../../services/workforce/orgChartService', () => ({
+  getOrgChart: (...a: unknown[]) => getOrgChart(...a),
+  // Required because handleUpdateOrgMemberTeam's Zod schema
+  // (z.enum([...NAMED_DEPARTMENTS])) executes at controller module-load
+  // time — without this, spreading `undefined` throws immediately and
+  // crashes every test in this file (real regression caught by task
+  // verification: workforceController.ts now imports NAMED_DEPARTMENTS too).
+  NAMED_DEPARTMENTS: ['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing'],
+}));
+// Org Chart v3 (2026-08-19) — workforceController.ts now also imports these
+// two new service modules (the PATCH team route and POST assign-task
+// route, neither exercised by this GET-only suite) — mocked here purely so
+// mounting the real workforceRoutes.ts/workforceController.ts module graph
+// never pulls in real Sequelize models transitively.
+jest.mock('../../../services/workforce/orgChartHierarchyService', () => ({ updateOrgMemberTeam: jest.fn() }));
+jest.mock('../../../services/workforce/orgChartTaskAssignmentService', () => ({ assignTaskToAgent: jest.fn() }));
 jest.mock('../../../services/workforce/workforceService', () => ({
   roster: jest.fn(), office: jest.fn(), briefing: jest.fn(), runDailyMeeting: jest.fn(),
   listMeetings: jest.fn(), listTasks: jest.fn(), createTask: jest.fn(), updateTask: jest.fn(),

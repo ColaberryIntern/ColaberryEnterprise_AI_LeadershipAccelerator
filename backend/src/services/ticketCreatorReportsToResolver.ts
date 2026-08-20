@@ -135,15 +135,32 @@ export async function resolveReportsToHuman(
  * the AI Leadership / AI Staff chain via resolveReportsToHuman() above — this
  * may be the creator's own direct human target, or a human several hops up
  * through one or more leadership agents), or null when createdByType is
- * 'human' (no gate applies — see resolveCreatorAiAgent()'s own header comment
- * for why). Throws TicketCreatorNotReportableError BEFORE any DB write for
- * every other unresolved case — never a silent no-op.
+ * 'human' OR 'org_member' (no gate applies to either — see
+ * resolveCreatorAiAgent()'s own header comment for why 'human' is exempt).
+ * Throws TicketCreatorNotReportableError BEFORE any DB write for every other
+ * unresolved case — never a silent no-op.
+ *
+ * Org Chart v3 (2026-08-19, session CC-20260818-x4nk continued) — 'org_member'
+ * added to the bypass alongside 'human'. `TicketActorType`'s own definition
+ * (Ticket.ts) documents 'org_member' as "the real human (an org_members row)
+ * ... distinct from the already-ambiguous 'human' type" — added specifically
+ * so a real org_members row has its OWN actor-type identity instead of
+ * overloading 'human' further. A human assigning a task to an agent in their
+ * hierarchy (orgChartTaskAssignmentService.ts, Ali: "The human has the
+ * ability to create and assign tasks to any agent in it's hierarchy") is
+ * exactly that case: an org_members row creating its own ticket, which needs
+ * no reports-to gate for the exact same reason 'human' doesn't — they ARE
+ * the human, not an AI agent that needs to resolve up to one. Without this,
+ * 'org_member' was a fully-modeled ASSIGNEE type with no valid CREATOR path
+ * at all — any attempt to create one would hit the `!creatorAgent` throw
+ * below, since resolveCreatorAiAgent() has no case for it and falls through
+ * to its `return null` default (see that function's own header comment).
  */
 export async function enforceReportsToGate(
   createdByType: TicketActorType,
   createdById: string,
 ): Promise<string | null> {
-  if (createdByType === 'human') return null;
+  if (createdByType === 'human' || createdByType === 'org_member') return null;
 
   const creatorAgent = await resolveCreatorAiAgent(createdByType, createdById);
   if (!creatorAgent) {

@@ -34,6 +34,8 @@ export const workforceCss = `
 .wf-btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:9px;cursor:pointer;white-space:nowrap}
 .wf-btn:hover{border-color:var(--berry);color:var(--berry)}.wf-btn.pri{background:var(--berry);color:#fff;border-color:var(--berry)}.wf-btn.pri:hover{filter:brightness(1.08);color:#fff}
 .wf-btn.xs{font-size:11px;padding:5px 9px}.wf-btn:disabled{opacity:.5;cursor:not-allowed}
+.wf-select{border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:12.5px;font-weight:600;padding:8px 11px;border-radius:9px;width:100%;font-family:var(--sans)}
+.wf-select:disabled{opacity:.5;cursor:not-allowed}
 .wf-toggle{width:38px;height:34px;border:1px solid var(--line);background:var(--panel);border-radius:9px;cursor:pointer;color:var(--muted);display:flex;align-items:center;justify-content:center}
 .wf-toggle:hover{border-color:var(--berry);color:var(--berry)}.wf-toggle svg{width:17px;height:17px}
 .wf-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}

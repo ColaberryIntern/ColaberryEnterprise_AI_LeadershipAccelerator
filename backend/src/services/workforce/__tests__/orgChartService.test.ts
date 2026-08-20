@@ -134,6 +134,17 @@ describe('getOrgChart — boundary cases', () => {
     expect(result.humans).toHaveLength(2);
   });
 
+  it('excludes ali+10@colaberry.com from humans (Org Chart v3 — "the red Ali should be removed"), row untouched, sibling rows unaffected', async () => {
+    const RED_ALI = { id: 'red-ali-id', org_id: 'org-colaberry', email: 'ali+10@colaberry.com', team: null, role: 'member', enrollment_id: null };
+    mockMemberFindAll.mockResolvedValue([ALI, KES, RED_ALI]);
+
+    const result = await getOrgChart();
+
+    expect(result.humans.map((h) => h.email)).not.toContain('ali+10@colaberry.com');
+    expect(result.humans).toHaveLength(2);
+    expect(result.humans.map((h) => h.email)).toEqual(expect.arrayContaining(['ali@colaberry.com', 'kesetebirhan@gmail.com']));
+  });
+
   it('an agent whose chain fails to resolve (dangling reports_to_id) lands in `unresolved`, not silently dropped', async () => {
     mockAgentFindAll.mockResolvedValue([CORYBRAIN, ORPHAN_AGENT]);
 
@@ -234,6 +245,27 @@ describe('getOrgChart — reports_to_summary', () => {
   });
 });
 
+// Org Chart v3 (2026-08-19) — Ali, live: "Human, AI Leadership, AI Staff
+// should all have the same colors." Integration-level proof that
+// orgChartColorAssignment.ts's pure-function output (fully unit-tested on
+// its own in orgChartColorAssignment.test.ts) actually reaches the real API
+// response getOrgChart() returns, not just the isolated function.
+describe('getOrgChart — hierarchy colors', () => {
+  it("Ali (has CoryBrain -> AdmissionsConversionArchitect under him) gets a real hierarchy_color, propagated to both agents; Kes (zero agents) gets null", async () => {
+    const result = await getOrgChart();
+
+    const ali = result.humans.find((h) => h.id === 'ali-id')!;
+    const kes = result.humans.find((h) => h.id === 'kes-id')!;
+    const corybrain = result.leadership.find((l) => l.id === 'corybrain-id')!;
+    const staffAgent = result.staff.find((s) => s.id === 'staff-1-id')!;
+
+    expect(ali.hierarchy_color).not.toBeNull();
+    expect(corybrain.hierarchy_color).toBe(ali.hierarchy_color);
+    expect(staffAgent.hierarchy_color).toBe(ali.hierarchy_color);
+    expect(kes.hierarchy_color).toBeNull();
+  });
+});
+
 describe('getOrgChart — Taiwo rollup with reassigned AI Staff (fixture-based, deploy-order-independent)', () => {
   const TAIWO = { id: 'taiwo-id', org_id: 'org-colaberry', email: 'taiwooludimimu@gmail.com', team: 'Operations', role: 'member', enrollment_id: 'enr-taiwo' };
   const FINANCE_ARCHITECT = { id: 'finance-architect-id', agent_name: 'FinanceIntelligenceArchitect', reports_to_type: 'human', reports_to_id: 'taiwo-id' };
@@ -261,8 +293,14 @@ describe('getOrgChart — Taiwo rollup with reassigned AI Staff (fixture-based, 
 });
 
 describe('workforceOrgChartResponseSchema — boundary', () => {
-  const VALID_HUMAN = { id: 'h1', name: 'Ali', email: 'ali@colaberry.com', team: 'Exec', department: 'Exec', role: 'manager', leadership_agent_ids: [], staff_count: 0, task: null };
-  const VALID_LEADERSHIP = { id: 'l1', agent_name: 'CoryBrain', display_name: 'Cory Brain', reports_to_human_id: 'h1', reports_to_summary: 'Reports to: Ali', staff_ids: [], open_ticket_count: 0 };
+  // Org Chart v3 (2026-08-19) — hierarchy_color is present-but-nullable
+  // (z.string().nullable(), not .optional()), so these fixtures must
+  // include it explicitly or safeParse legitimately fails — a real
+  // regression a T002-verifier's full-file jest run caught (this describe
+  // block isn't in T007's own diff hunks, so it's easy to miss scoping to
+  // just the new lines).
+  const VALID_HUMAN = { id: 'h1', name: 'Ali', email: 'ali@colaberry.com', team: 'Exec', department: 'Exec', role: 'manager', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null };
+  const VALID_LEADERSHIP = { id: 'l1', agent_name: 'CoryBrain', display_name: 'Cory Brain', reports_to_human_id: 'h1', reports_to_summary: 'Reports to: Ali', staff_ids: [], open_ticket_count: 0, hierarchy_color: null };
   const VALID_RESPONSE = {
     organization: { id: 'org1', name: 'Colaberry' },
     humans: [VALID_HUMAN],

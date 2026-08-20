@@ -87,18 +87,28 @@ const OrgChartSection: React.FC = () => {
     }
   }, []);
 
-  const humanColors = useMemo(
-    () => assignDistinctAvatarColors((data?.humans ?? []).map((h) => h.id)),
-    [data],
-  );
-  const leadershipColors = useMemo(
-    () => assignDistinctAvatarColors((data?.leadership ?? []).map((l) => l.id)),
-    [data],
-  );
-  const staffColors = useMemo(
-    () => assignDistinctAvatarColors((data?.staff ?? []).map((s) => s.id)),
-    [data],
-  );
+  // Org Chart v3 (2026-08-19) — Ali: "Human, AI Leadership, AI Staff should
+  // all have the same colors." hierarchy_color (server-computed, see
+  // orgChartColorAssignment.ts) wins per-id wherever present; the existing
+  // identity-hash assignDistinctAvatarColors() stays as the fallback ONLY
+  // for anyone with no hierarchy branch — same page-wide consistency the
+  // drawer applies, so the main chart and the drawer never disagree on a
+  // given branch's color.
+  const humanColors = useMemo(() => {
+    const base = assignDistinctAvatarColors((data?.humans ?? []).map((h) => h.id));
+    for (const h of data?.humans ?? []) if (h.hierarchy_color) base[h.id] = h.hierarchy_color;
+    return base;
+  }, [data]);
+  const leadershipColors = useMemo(() => {
+    const base = assignDistinctAvatarColors((data?.leadership ?? []).map((l) => l.id));
+    for (const l of data?.leadership ?? []) if (l.hierarchy_color) base[l.id] = l.hierarchy_color;
+    return base;
+  }, [data]);
+  const staffColors = useMemo(() => {
+    const base = assignDistinctAvatarColors((data?.staff ?? []).map((s) => s.id));
+    for (const s of data?.staff ?? []) if (s.hierarchy_color) base[s.id] = s.hierarchy_color;
+    return base;
+  }, [data]);
 
   // Department order: Ali's 6 named departments, in the order he gave them,
   // then a trailing "Other" bucket — never drops a real human even if their
@@ -216,6 +226,7 @@ const OrgChartSection: React.FC = () => {
           leadership={data.leadership}
           staff={data.staff}
           onClose={() => setSelectedHuman(null)}
+          onTeamChanged={load}
         />
       )}
     </>

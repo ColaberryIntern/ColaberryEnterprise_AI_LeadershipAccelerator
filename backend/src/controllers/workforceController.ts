@@ -9,8 +9,10 @@ import {
   listTasks, createTask, updateTask, listMessages, review, analytics,
 } from '../services/workforce/workforceService';
 import { listLiveAgents, listLiveAgentActivity } from '../services/workforce/liveAgentsService';
-import { getOrgChart } from '../services/workforce/orgChartService';
+import { getOrgChart, NAMED_DEPARTMENTS } from '../services/workforce/orgChartService';
 import { workforceOrgChartResponseSchema } from '../schemas/workforceOrgChartSchema';
+import { updateOrgMemberTeam } from '../services/workforce/orgChartHierarchyService';
+import { assignTaskToAgent } from '../services/workforce/orgChartTaskAssignmentService';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -108,4 +110,53 @@ export async function handleOrgChart(_req: Request, res: Response, _next: NextFu
     }));
     res.status(500).json({ error: 'Could not build the org chart.' });
   }
+}
+
+/**
+ * Org Chart v3 (2026-08-19) — PATCH /api/admin/workforce/org-chart/members/:id/team.
+ * Ali, live: "Give me the ability to switch the people between teams." Zod
+ * enforces the value is one of the 6 real named departments (or `null`, to
+ * clear it — buckets into "Other" on next read) BEFORE it ever reaches the
+ * service layer; the service (orgChartHierarchyService.ts) validates again
+ * independently as a second, reusable-beyond-HTTP guard. Named errors
+ * (`InvalidDepartmentError`/`OrgMemberNotFoundError`) both carry a `status`
+ * property the existing `fail()` helper already knows how to read — zero
+ * changes needed to `fail()` itself.
+ */
+const updateTeamSchema = z.object({ team: z.enum([...NAMED_DEPARTMENTS]).nullable() });
+export async function handleUpdateOrgMemberTeam(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { team } = updateTeamSchema.parse(req.body || {});
+    const member = await updateOrgMemberTeam(String(req.params.id), team);
+    res.json(member);
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * Org Chart v3 (2026-08-19) — POST /api/admin/workforce/org-chart/members/:id/tasks.
+ * Ali, live: "The human has the ability to create and assign tasks to any
+ * agent in it's hierarchy even if they report to another AI Agent."
+ * `idempotency_key` is required (not optional) per CLAUDE.md's Idempotency &
+ * Replayability section — see orgChartTaskAssignmentService.ts for the real
+ * dedup mechanism this enables. `AgentNotInHierarchyError` carries
+ * `status = 403`, picked up by the existing `fail()` helper unchanged.
+ */
+const assignTaskSchema = z.object({
+  agent_id: z.string().min(1),
+  title: z.string().min(1).max(500),
+  description: z.string().max(5000).optional(),
+  idempotency_key: z.string().min(1).max(200),
+});
+export async function handleAssignHierarchyTask(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = assignTaskSchema.parse(req.body || {});
+    const ticket = await assignTaskToAgent({
+      orgMemberId: String(req.params.id),
+      agentId: parsed.agent_id,
+      title: parsed.title,
+      description: parsed.description,
+      idempotencyKey: parsed.idempotency_key,
+    });
+    res.status(201).json(ticket);
+  } catch (e) { fail(res, e, next); }
 }
