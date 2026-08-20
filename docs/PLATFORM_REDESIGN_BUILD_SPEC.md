@@ -84,7 +84,43 @@ Confirmed by Ali, option 1.
   competency → evidence. This decides whether "five clicks from the executive
   dashboard to the line of code" is publishable at all. It is section 4's entire
   argument.
-- **Promotion requiring human approval from Engineer upward** (section 4).
+- ~~Promotion requiring human approval from Engineer upward~~ — **RESOLVED, AND
+  THE PROTOTYPE IS WRONG. See below.**
+
+---
+
+## CORRECTED (2) — the approval gate is AI, not human
+
+`services/progression/promotionService.ts` implements the gate as
+**`requires_ai_approval`**, called through an `aiApprover(enrollmentId, slug)`
+hook. Its own header comment reads:
+
+> "AI approval hook. Phase 2 default is permissive"
+
+So the gate is (a) an **AI** approval, not a human one, and (b) **permissive by
+default** until an approver is wired.
+
+The prototype claims, in section 4, that every level above Senior Developer
+"also needs a human-reviewed approval", and section 7 is built on
+*"humans remain accountable."*
+
+**Neither can ship as written.** What IS true and worth saying: promotion never
+passes on points alone — there is a separate approval step beyond the evidence
+minimums. Whether a human sits in it is a product decision, not something the
+marketing page gets to assert.
+
+**This needs Ali's answer before section 7 is written**, because section 7's
+entire headline is the human-accountability claim.
+
+### The competency list, corrected twice
+
+Ships as: prompt_engineering, context_engineering, architecture, testing,
+**debugging**, deployment, github, communication, leadership, security,
+documentation — from `services/progression/seeders.ts`, which seeds exactly 11.
+
+The first shipped version ended with "Claude Code", picked up from a different
+source in the search. It is not a promotion competency. Corrected in the follow
+-up commit.
 
 ---
 
