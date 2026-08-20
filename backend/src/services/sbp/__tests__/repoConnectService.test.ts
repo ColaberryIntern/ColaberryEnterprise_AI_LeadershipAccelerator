@@ -53,6 +53,8 @@ jest.mock('../../../models', () => {
   };
 });
 
+import * as fs from 'fs';
+import * as path from 'path';
 import * as connect from '../repoConnect/repoConnectService';
 import { RepoConnectError } from '../repoConnect/connectErrors';
 import { CONNECT_FILE_PATH, renderChallengeFile, CHALLENGE_TTL_MS } from '../repoConnect/connectChallenge';
@@ -403,6 +405,10 @@ describe('adoptProvisionedRepo', () => {
 
     expect(view.state).toBe('awaiting_push');
     expect(view.method).toBe('provisioned');
+    // The stored mirror must agree with what we actually asked GitHub for.
+    // These drifted apart once already and the student-facing copy followed
+    // the mirror, not the request.
+    expect(view.private).toBe(false);
     expect(view.adopt_commands?.join('\n')).toContain('git remote add origin');
     expect(view.adopt_commands?.join('\n')).toContain('git push -u origin main');
 
@@ -410,7 +416,8 @@ describe('adoptProvisionedRepo', () => {
     // a rejected non-fast-forward they would try to fix with --force.
     const createCall = impl.mock.calls.find((c: any[]) => /\/repos$/.test(String(c[0])));
     expect(JSON.parse(String(createCall![1].body)).auto_init).toBe(false);
-    expect(JSON.parse(String(createCall![1].body)).private).toBe(true);
+    // Public since 2026-08-19 - see studentWorkspaceService.test.ts for why.
+    expect(JSON.parse(String(createCall![1].body)).private).toBe(false);
 
     // Not writable until they push — publish must take the no-repo path.
     expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(false);
@@ -431,7 +438,11 @@ describe('markPushObserved', () => {
   it('moves awaiting_push to connected', async () => {
     Conn._seed(PRJ, {
       repo_owner: 'ColaberryIntern', repo_name: 'nightshift-abc12345',
-      status_json: { connect: { state: 'awaiting_push', method: 'provisioned' } },
+      // `platform_can_push: true` is what `adoptProvisionedRepo` records: the
+      // platform created this repo under its own org, so push is a demonstrated
+      // fact rather than a reading of GitHub's answer. Without it on the row,
+      // the inverted default correctly refuses the write.
+      status_json: { provisioned: true, connect: { state: 'awaiting_push', method: 'provisioned', platform_can_push: true } },
     });
     await connect.markPushObserved(PRJ);
     expect(Conn._rows[PRJ].status_json.connect.state).toBe('connected');
@@ -464,15 +475,30 @@ describe('project ownership', () => {
   });
 });
 
+// The predicate's own behaviour is exercised exhaustively, and without models,
+// in `repoConnect/__tests__/connectionAccess.test.ts`. What is asserted here is
+// only that the re-export this service publishes stays wired to it.
 describe('isWritableConnection', () => {
-  it('treats a legacy row with no connect key as writable, exactly as before', () => {
+  /**
+   * INVERTED 2026-08-19. This row — a legacy one with no `connect` key — used to
+   * be declared writable on back-compat grounds. Eleven of twelve student
+   * repositories turned out to be read-only to the platform, every one of them
+   * answering "writable" off exactly this absent key, so the back-compat reading
+   * was not protecting working repos; it was hiding refusals.
+   */
+  it('refuses a legacy row with no recorded permission', () => {
     expect(connect.isWritableConnection({
       repo_owner: 'ColaberryIntern', repo_name: 'old-one', status_json: { provisioned: true },
-    })).toBe(true);
+    })).toBe(false);
   });
   it('is false with no repo bound', () => {
     expect(connect.isWritableConnection({ status_json: {} })).toBe(false);
     expect(connect.isWritableConnection(null)).toBe(false);
+  });
+  it('re-exports the reason predicate alongside it', () => {
+    expect(connect.writeBlockReason({
+      repo_owner: 'ColaberryIntern', repo_name: 'old-one', status_json: { provisioned: true },
+    })).toBe('access_unknown');
   });
 });
 
@@ -615,15 +641,148 @@ describe('connecting a repo the platform cannot push to', () => {
     expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(true);
   });
 
-  it('leaves a connection that predates permission capture exactly as it was', async () => {
-    // Every row connected before this shipped. Withdrawing write access on a
-    // guess would break working builds to fix a reporting problem.
+  /**
+   * A connection that predates permission capture. The old contract kept these
+   * writable and reported `write_access: null`; the audit showed the first half
+   * of that was wrong and the second half was right.
+   *
+   * REPORTING stays `null` — the panel renders its read-only explanation off
+   * `write_access === 'pull_only'`, and telling a student their repo is
+   * read-only when nobody ever asked GitHub would be a lie with a to-do list
+   * attached. ACTING becomes a refusal, because a write we cannot make is not
+   * improved by attempting it.
+   */
+  it('reports an unrecorded permission as unknown but no longer writes on it', async () => {
     Conn._seed(PRJ, {
       repo_owner: 'a-student', repo_name: 'nightshift',
       status_json: { provisioned: true, connect: { state: 'connected', method: 'byo' } },
     });
-    expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(true);
+    expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(false);
+    expect(connect.writeBlockReason(Conn._rows[PRJ])).toBe('access_unknown');
     expect((await connect.getConnectState(ENR, PRJ)).write_access).toBeNull();
+  });
+});
+
+/**
+ * ── `provisioned` AND `platform_can_push` DESCRIBE ONE FACT ──────────────────
+ *
+ * `platform_can_push` lives under `status_json.connect`. `provisioned` sits
+ * beside `connect` at the top of `status_json` and is the legacy marker the rest
+ * of the platform reads to mean "there is a usable repo here". Two keys, two
+ * nesting levels, one fact.
+ *
+ * `confirmConnect` derived the second from the first. `recordWriteAccess` wrote
+ * only the first. So the moment access was re-recorded after connect — which is
+ * every sync — the two came apart, and the 2026-08-19 audit left TEN production
+ * rows reading `platform_can_push: false` next to `provisioned: true`: correctly
+ * refused by the writer, still reported as usable by everything reading the
+ * legacy flag.
+ *
+ * A backfill would have closed those ten and left the next ten to open. These
+ * tests hold the repair at the point of truth instead.
+ */
+describe('the two access keys move together', () => {
+  const connectedRow = (over: Record<string, unknown> = {}, top: Record<string, unknown> = {}) => Conn._seed(PRJ, {
+    repo_owner: 'a-student', repo_name: 'nightshift',
+    status_json: { ...top, connect: { state: 'connected', method: 'byo', ...over } },
+  });
+  const keys = () => ({
+    can_push: Conn._rows[PRJ].status_json.connect.platform_can_push,
+    provisioned: Conn._rows[PRJ].status_json.provisioned,
+  });
+
+  it('recordWriteAccess writes provisioned alongside the permission', async () => {
+    connectedRow({ platform_can_push: true }, { provisioned: true });
+
+    await connect.recordWriteAccess(PRJ, false);
+
+    expect(keys()).toEqual({ can_push: false, provisioned: false });
+  });
+
+  it('records both when access is gained, not just the permission', async () => {
+    connectedRow({ platform_can_push: false }, { provisioned: false });
+
+    await connect.recordWriteAccess(PRJ, true);
+
+    expect(keys()).toEqual({ can_push: true, provisioned: true });
+  });
+
+  /**
+   * THE TEN DRIFTED ROWS, EXACTLY.
+   *
+   * Their permission was already `false`, so the old `before === canPush` early
+   * return fired and `provisioned: true` was never corrected — on every sync,
+   * forever. Widening the comparison to both keys is what makes the next sync
+   * heal them without anybody running a second backfill.
+   */
+  it('heals a row whose permission is already right but whose provisioned flag is not', async () => {
+    connectedRow({ platform_can_push: false }, { provisioned: true });
+
+    const changed = await connect.recordWriteAccess(PRJ, false);
+
+    expect(changed).toBe(true);
+    expect(keys()).toEqual({ can_push: false, provisioned: false });
+  });
+
+  it('is still a no-op when both keys already agree', async () => {
+    connectedRow({ platform_can_push: true }, { provisioned: true });
+
+    expect(await connect.recordWriteAccess(PRJ, true)).toBe(false);
+  });
+
+  it('never disturbs the rest of status_json', async () => {
+    connectedRow({ platform_can_push: true }, {
+      provisioned: true,
+      student_github_login: 'a-student',
+      access: { ok: true, error_class: null, checked_at: '2026-08-01T00:00:00.000Z' },
+    });
+
+    await connect.recordWriteAccess(PRJ, false);
+
+    expect(Conn._rows[PRJ].status_json.student_github_login).toBe('a-student');
+    expect(Conn._rows[PRJ].status_json.access.ok).toBe(true);
+    expect(Conn._rows[PRJ].status_json.connect.method).toBe('byo');
+  });
+
+  /**
+   * DOOR B never passes through `startConnect`, so it was the one live path that
+   * could reach `state: 'connected'` — via `markPushObserved` — with no
+   * permission recorded at all. Under the old permissive default that was
+   * invisible; under the inverted one it would have stopped every
+   * platform-provisioned repo receiving documents the moment the student pushed.
+   *
+   * The platform created this repo under its own org with its own token, so
+   * `true` here is a demonstrated fact, not a reading of GitHub's answer.
+   */
+  it('a repo the platform provisioned records the push it demonstrably has', async () => {
+    await connect.adoptProvisionedRepo(ENR, PRJ, 'a-student');
+
+    expect(keys()).toEqual({ can_push: true, provisioned: true });
+    // Still not writable until they push — there is no branch to commit onto.
+    expect(connect.writeBlockReason(Conn._rows[PRJ])).toBe('not_connected');
+
+    await connect.markPushObserved(PRJ);
+    expect(connect.isWritableConnection(Conn._rows[PRJ])).toBe(true);
+  });
+
+  /**
+   * DRIFT GUARD, in the spirit of the one in `workspaceRepo.test.ts`.
+   *
+   * Every test above passes just as well against a second copy of the derivation
+   * written out by hand at a third call site — which is precisely how these two
+   * keys came apart the first time. So the structure is asserted, not assumed:
+   * neither key may be assigned anywhere except through `writeAccessPatch`.
+   */
+  it('no writer sets either key outside the shared patch', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../repoConnect/repoConnectService.ts'), 'utf8');
+    const code = src.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
+
+    // `status.provisioned = ...` / `provisioned: <literal>` anywhere in the service.
+    expect(code).not.toMatch(/\bprovisioned\s*[=:]\s*(true|false)/);
+    // A hand-written `platform_can_push: <literal>`. `facts.platform_can_push`
+    // (the capture at startConnect) and the destructure of the patch are fine.
+    expect(code).not.toMatch(/platform_can_push\s*:\s*(true|false)/);
+    expect(code).toContain('writeAccessPatch(canPush)');
   });
 });
 

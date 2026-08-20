@@ -85,7 +85,7 @@ export function buildProjectTaskPrompt(
       block(
         'Your workspace repo',
         [
-          `Point Claude Code at this repo — it is your private workspace for this build:`,
+          `Point Claude Code at this repo — it is your workspace for this build. It is PUBLIC, so never commit a secret, an API key or a .env file to it:`,
           repo.repo_url,
           repo.repo_owner && repo.repo_name
             ? `Clone it, commit your work, and push. Then use "Commit & sync" in the portal to pull your latest state.`

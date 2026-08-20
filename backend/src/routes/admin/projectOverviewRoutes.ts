@@ -3,6 +3,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import { Cohort, Enrollment } from '../../models';
 import Project from '../../models/Project';
 import ProjectArtifact from '../../models/ProjectArtifact';
+import { resolveProjectRepos } from '../../services/projectRepoResolver';
 import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 
@@ -151,6 +152,22 @@ router.get('/api/admin/projects/cohort/:cohortId/students', requireAdmin, async 
         readiness_pct: readiness,
         created_at: (e as any).created_at,
       });
+    }
+
+    // Repo comes from the GitHubConnection, not the project column — the SBP
+    // writes `github_connections.project_id` and has never written
+    // `projects.github_repo_url`, so reading the column reported every
+    // connected student as unconnected. Resolved in ONE batched query after
+    // the loop rather than per student; this list renders a whole cohort.
+    const repoByProject = await resolveProjectRepos(
+      students
+        .filter((s) => s.project_id)
+        .map((s) => ({ id: s.project_id as string, github_repo_url: s.github_repo_url })),
+    );
+    for (const s of students) {
+      const pointer = s.project_id ? repoByProject.get(s.project_id) : undefined;
+      s.github_repo_url = pointer?.url ?? null;
+      s.github_connected = !!pointer?.url;
     }
 
     res.json({ students });

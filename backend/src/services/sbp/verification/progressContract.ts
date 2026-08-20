@@ -25,6 +25,24 @@
  * docs/BUILD_VERIFICATION_CONTRACT.md for the actual defences and their limits.
  */
 import { z } from 'zod';
+import { normaliseCriterion, resolveCriterionKey } from './criterionIdentity';
+
+/**
+ * Re-exported, not moved away.
+ *
+ * `normaliseCriterion` and the supersession table now live in
+ * `./criterionIdentity` — this file had reached 547 lines against CLAUDE.md's
+ * 500-line hard ceiling, which requires a split before new code goes in, and
+ * "criterion identity" was the section that wanted to grow.
+ *
+ * The re-export keeps the public contract exactly as it was: every existing
+ * importer of `normaliseCriterion` from `progressContract` still compiles and
+ * still gets the same function. Renaming a public symbol would have been a
+ * breaking contract change needing every consumer updated in the same diff, and
+ * there is no reason to spend that here.
+ */
+export { normaliseCriterion, resolveCriterionKey, SUPERSEDED_CRITERIA } from './criterionIdentity';
+export type { SupersededWording } from './criterionIdentity';
 
 /**
  * Bumped only for a BREAKING shape change. Additive fields do NOT bump it — see
@@ -428,7 +446,36 @@ export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | 
       const prior = priorByStory.get(story.id);
       if (!prior) return story;
 
-      const priorByText = new Map(prior.criteria.map((c) => [normaliseCriterion(c.text), c]));
+      /**
+       * The student's prior claims, keyed by the criterion of the CURRENT plan
+       * they are about.
+       *
+       * Resolution runs on the PRIOR side, not the rendered side, and that
+       * direction is load-bearing. A file written before a rewording carries the
+       * old sentence; keying it by `resolveCriterionKey` files it under the new
+       * one, so the lookup below — which asks with today's text — finds it. Key
+       * the rendered side instead and a superseded claim is never consulted at
+       * all, which is the bug this is here to prevent.
+       *
+       * A prior claim whose text resolves to nothing is dropped, exactly as
+       * before: a criterion the plan genuinely reworded without an entry in the
+       * supersession table is not the sentence being asked for now, and a claim
+       * the student invented was never counted.
+       *
+       * Ties go to the pessimistic answer, matching `decideStory`. Two prior
+       * lines can now land on one key (the old wording and the new one both
+       * present, which is exactly what a half-repaired file looks like), and a
+       * file asserting both `true` and `false` for one criterion is not evidence
+       * of a pass.
+       */
+      const planKeys = new Set(story.criteria.map((c) => normaliseCriterion(c.text)));
+      const priorByText = new Map<string, ProgressCriterion>();
+      for (const c of prior.criteria) {
+        const key = resolveCriterionKey(c.text, planKeys);
+        if (!key) continue;
+        const already = priorByText.get(key);
+        priorByText.set(key, already ? { ...already, passed: already.passed && c.passed } : c);
+      }
       return {
         ...story,
         criteria: story.criteria.map((c) => {
@@ -445,100 +492,6 @@ export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | 
       };
     }),
   };
-}
-
-// ── criterion identity ──────────────────────────────────────────────────────
-
-/**
- * Dash-like codepoints, unified to ASCII `-`. Em, en, figure, horizontal bar,
- * non-breaking hyphen, the true hyphen, the minus SIGN (which is not the same
- * character as the hyphen a keyboard produces), and the small/fullwidth forms
- * an IME emits. `--` and `---` are runs of the ASCII form and collapse too.
- */
-const DASH_RUN = /\s*[-‐‑‒–—―−﹘﹣－]+\s*/g;
-
-/**
- * Apostrophe-like codepoints, unified to ASCII `'`. This is the set an editor
- * or keyboard substitutes FOR the straight apostrophe: Word's curly pair, the
- * prime, the modifier letter, and the acute-accent dead key people hit by
- * mistake. The BACKTICK is deliberately absent — see the note below.
- */
-const APOSTROPHE = /[‘’‛′ʼ´]/g;
-
-/** Double-quote-like codepoints, unified to ASCII `"`. Same rule as above. */
-const DOUBLE_QUOTE = /[“”„‟″]/g;
-
-/**
- * Characters with no glyph at all: BOM, zero-width space, soft hyphen, word
- * joiner, and the bidi marks. They ride along on copy-paste out of a browser
- * or a PDF and are invisible in every diff, which is exactly what makes them
- * worth removing — nobody can SEE why the match failed.
- *
- * ZWNJ/ZWJ (U+200C/U+200D) are NOT here: inside an emoji sequence the joiner
- * is load-bearing, and stripping it would fuse distinct sequences.
- */
-const INVISIBLE = /[­​‎‏⁠﻿]/g;
-
-/**
- * Criterion identity — forgiving about how a sentence was TYPED, never about
- * what it SAYS.
- *
- * WHY THIS EXISTS AT ALL. STORY-000's third acceptance line is `Trust — no tab
- * shows a number...` with a real U+2014 em dash, and STORY-000 is the story
- * every student in the cohort builds. Before this, a student whose editor,
- * agent or copy-paste turned that dash into `-`, `--` or an en dash had their
- * claim land in `rejected_claims`: story stuck at `submitted`, no points, and
- * the message "does not match any acceptance criterion" — accurate and
- * useless. Confirmed live in production on 2026-08-15.
- *
- * THE LINE THIS HOLDS. Every step below is a transformation an EDITOR or a
- * KEYBOARD performs on text that means the same thing. None of them changes
- * meaning, and none can fuse two criteria a plan genuinely distinguishes:
- *
- *   - NFC only, never NFKC. NFC is canonical equivalence — `é` typed as one
- *     codepoint and `é` typed as `e` + combining acute ARE the same character
- *     by Unicode's own definition. NFKC is COMPATIBILITY equivalence and would
- *     fold `x²` onto `x2`, `½` onto `1/2`, `Ⅻ` onto `XII`. Those are different
- *     claims about a system, so NFKC is refused.
- *   - Dashes are UNIFIED, never deleted. `read-only` normalises to
- *     `read-only`, not to `readonly` and not to `read only` — so it stays
- *     distinct from the criterion that says `read only`.
- *   - Quotes are UNIFIED, never deleted. `the label is "sample"` stays
- *     distinct from `the label is sample`.
- *   - ONE trailing period is dropped, because a list rendered with terminal
- *     punctuation and one without are the same sentence. `?` and `!` are NOT
- *     dropped: "the API returns 200" and "the API returns 200?" are a claim
- *     and a question, and the difference is the point. A run of periods is
- *     left alone so an ellipsis survives.
- *
- * DELIBERATELY NOT NORMALISED, each because it would forgive CONTENT:
- *   - Backticks. No keyboard or editor substitutes `` ` `` for `'`; a markdown
- *     code span is an authoring choice, not a typo.
- *   - Guillemets « ». A different quoting convention, not a keyboard variant.
- *   - Commas, colons, semicolons, slashes, parentheses. Each separates clauses
- *     whose arrangement carries meaning (`10:00` vs `1000`).
- *   - Stop words, plurals, stemming, or any similarity score. A REWORDED
- *     criterion must keep failing — that is the whole gating model.
- *   - A leading `- ` list bullet. Out of scope, and refusing it is the safe
- *     direction: it can only withhold a match, never invent one.
- *
- * Callers MUST run both sides of any comparison through this function.
- * Normalising only the claim would leave the mirror-image bug in place.
- * Idempotent: normalise(normalise(x)) === normalise(x).
- */
-export function normaliseCriterion(text: string): string {
-  return text
-    .normalize('NFC')
-    .replace(INVISIBLE, '')
-    .replace(APOSTROPHE, "'")
-    .replace(DOUBLE_QUOTE, '"')
-    .replace(/…/g, '...')
-    .replace(/\s+/g, ' ')       // NBSP and friends are already \s in JS
-    .replace(DASH_RUN, '-')     // after the space collapse, so ` — ` folds too
-    .trim()
-    .toLowerCase()
-    .replace(/(?<!\.)\.$/, '')  // one terminal period, never an ellipsis
-    .trim();
 }
 
 /** Serialise for the repo: stable key order via the schema, trailing newline. */

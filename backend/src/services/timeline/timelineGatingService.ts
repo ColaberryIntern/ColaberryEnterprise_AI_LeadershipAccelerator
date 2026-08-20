@@ -27,6 +27,7 @@ import TimelineSectionRule from '../../models/TimelineSectionRule';
 import { resolve as resolveType } from './typeRegistry';
 import { isFreePreviewTier } from '../access/contentEntitlement';
 import { env } from '../../config/env';
+import { globalCurriculumWhere } from './curriculumScope';
 
 // ── predicate model ──────────────────────────────────────────────────────────
 export type UnlockScope = 'week' | 'all';
@@ -224,10 +225,14 @@ export async function buildGateContext(
 }
 
 /** The published, active, shared-curriculum cards (kept local to avoid a cycle
- *  with timelineService, which imports this module). */
+ *  with timelineService, which imports this module). The WHERE itself lives in
+ *  `curriculumScope` — a leaf module both readers can import — so this copy and
+ *  `timelineService.getGlobalCards` cannot drift apart on what "the curriculum"
+ *  means. They already had, which is how a second program's cards reached the
+ *  Classroom while the lock context was computed over a different set. */
 async function loadGlobalCards(): Promise<TimelineCard[]> {
   return TimelineCard.findAll({
-    where: { cohort_id: null, status: 'active', visibility: 'published' },
+    where: globalCurriculumWhere(),
     order: [['week', 'ASC'], ['order', 'ASC']],
   });
 }

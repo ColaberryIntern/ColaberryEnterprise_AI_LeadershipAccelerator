@@ -92,7 +92,7 @@ Then three checks, in this order, all before anything is bound:
 ### Door B — provision and adopt (FALLBACK)
 
 For a student whose folder is not on GitHub yet. The platform creates an
-**empty** private repo, adds them as a push collaborator, and hands back the
+**empty public** repo, adds them as a push collaborator, and hands back the
 commands that point their **existing folder** at it:
 
 ```
@@ -170,9 +170,21 @@ student's own account requires a credential belonging to that student:
 token belongs to the platform. With the credentials available today there is no
 API call that produces a repo the student owns.
 
-Mitigations that exist now: the repo is private, the student is a push
-collaborator, and Door A is presented first, so the org-owned path is taken only
-by a student who had no repo at all.
+Mitigations that exist now: the student is a push collaborator, and Door A is
+presented first, so the org-owned path is taken only by a student who had no
+repo at all.
+
+**Repo visibility is NOT one of the mitigations, and used to be listed as one.**
+Door B repos are public as of 2026-08-19 (see `docs/COMMAND_CENTER_HOSTING.md`).
+Privacy was never really protecting the student here — every other surface,
+including the webhook panel's bold warning and STORY-000's own prompt, already
+told them the repo was public, so the protection was invisible to the only
+person it was supposedly for. What protects a student now is that the product
+says plainly, in the provisioning copy and in the docs bundle, that the repo is
+public and that secrets must never be committed to it. The custody concern this
+section is about — the repo being under Colaberry's org rather than the
+student's account — is unchanged by visibility and is still fixed only by a
+GitHub App.
 
 **What actually fixes it: a GitHub App.** Scoped in §8.
 
@@ -272,6 +284,26 @@ document set as a zip, for a project with no repo.
 - Same `renderDocs` output, byte for byte, asserted by a test. If the download
   and the repo ever drift, a student who downloads today and connects next week
   sees an inexplicable diff on their first sync.
+- **It carries no file the student owns.** `.colaberry/progress.json` (co-owned)
+  and `.colaberry/profile.json` (student-owned) travel as `progress.seed.json`
+  and `profile.seed.json` instead. Contents are unchanged; only the paths move.
+
+  This is not a stylistic choice. `renderDocs` is pure — it always renders
+  progress with every criterion `passed: false` and profile as a virgin seed.
+  Every repo-write path launders that through `repoWriter`, which merges
+  progress field by field and seeds a profile once and never again. The bundle
+  was the one consumer that shipped the raw render straight to a human, under a
+  UI instruction to "unzip them into your repo". Extracting it destroyed the
+  student's own record of their verified progress.
+
+  The property now held, and asserted directly in
+  `docsBundle.studentFiles.test.ts`: **extracting the entire archive over a
+  working repo changes nothing the student wrote.** Ownership is asked of
+  `fileOwnership.ts` rather than restated per surface, so a new delivery path
+  cannot reintroduce the hazard by forgetting the rule, and a new student-owned
+  file added to the renderer fails `fileOwnership.test.ts` until it is
+  classified. A warning in the copy was explicitly rejected as insufficient:
+  people skim, and this one cost points.
 - `repoUrl` is null, so prompts do not cite a clone URL that does not exist.
 - Deterministic: same plan and timestamp in, byte-identical archive out.
 - The archive leads with `docs/CONNECT-YOUR-REPO.md`, stating that verification
