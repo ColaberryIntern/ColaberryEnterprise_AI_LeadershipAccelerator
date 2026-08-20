@@ -1,0 +1,26 @@
+# Gitleaks fingerprint allowlist.
+#
+# This is the reviewable escape hatch. Each line silences ONE specific finding,
+# identified by a fingerprint that gitleaks prints when it blocks you:
+#
+#   <commit-sha>:<file-path>:<rule-id>:<line-number>
+#
+# For a finding in the working tree (pre-commit, not yet committed) the
+# fingerprint has no commit component:
+#
+#   <file-path>:<rule-id>:<line-number>
+#
+# Copy the fingerprint exactly as printed, add it below, and — this is the part
+# that makes the hatch safe — write a comment above it saying WHY it is not a
+# secret. Because this file is committed, every exception goes through code
+# review. That is the difference between an escape hatch and a hole.
+#
+# Do NOT add a fingerprint to silence a real credential. If it is real, the fix
+# is to remove it, move it to an env var, and rotate it. A fingerprint here just
+# hides it from the scanner while it stays readable to the whole internet.
+#
+# Prefer an inline `gitleaks:allow` comment when you can edit the offending line
+# — it keeps the justification next to the code. Use this file when you cannot
+# (generated files, fixtures, binary-ish content, historical commits).
+#
+# --- entries below this line ---
