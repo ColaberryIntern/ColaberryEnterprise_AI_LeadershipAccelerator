@@ -30,6 +30,9 @@ jest.mock('../../../services/workforce/workforceService', () => ({
 jest.mock('../../../services/workforce/liveAgentsService', () => ({
   listLiveAgents: jest.fn(), listLiveAgentActivity: jest.fn(),
 }));
+// Org Chart v4 (2026-08-20) — see workforceRoutes.orgChart.authMissing.test.ts's
+// identical addition/comment.
+jest.mock('../../../services/workforce/liveAgentsTimelineService', () => ({ listLiveAgentTimeline: jest.fn() }));
 
 describe('PATCH /api/admin/workforce/org-chart/members/:id/team — happy/failure path (requireAdmin mocked through)', () => {
   let app: express.Express;

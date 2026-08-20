@@ -7,7 +7,9 @@
  * STORY VERIFICATION MUST NEVER DEPEND ON ANY OF THIS.
  *
  * A first Pages build takes a minute or more. Custom domains exist. Students
- * decline hosting. Pages on a private repo needs a paid plan. If any of those
+ * decline hosting. Pages on a private repo needs a paid plan, which since
+ * 2026-08-19 is only reachable on a repo the STUDENT chose to make private:
+ * platform-provisioned repos are public. If any of those
  * could block the latch, we would have rebuilt the permanently-stuck story that
  * the STORY-000 spec fix just removed — same bug, different hat.
  *

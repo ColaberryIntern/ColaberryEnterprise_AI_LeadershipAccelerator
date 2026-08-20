@@ -31,6 +31,12 @@ jest.mock('../../../services/workforce/workforceService', () => ({
 jest.mock('../../../services/workforce/liveAgentsService', () => ({
   listLiveAgents: jest.fn(), listLiveAgentActivity: jest.fn(),
 }));
+// Org Chart v4 (2026-08-20) — workforceController.ts now also imports this
+// new service module (the timeline route, not exercised by this suite) —
+// mocked here for the same reason liveAgentsService above is: mounting the
+// real workforceRoutes.ts/workforceController.ts module graph must never
+// pull in real Sequelize models transitively.
+jest.mock('../../../services/workforce/liveAgentsTimelineService', () => ({ listLiveAgentTimeline: jest.fn() }));
 // authMiddleware is NEVER mocked in this file — the real requireAdmin runs.
 
 let app: express.Express;

@@ -261,37 +261,41 @@ export async function pollBuild(
 }
 
 /**
- * Resolve the backend project UUID to build against.
+ * Resolve the backend project UUID a NEW build should be generated into.
  *
  * The localStorage store keys projects by a client id (`p1786…`), but every SBP
- * endpoint is scoped to a real `projects.id`. This bridges the two: use the
- * student's active project if they have one, otherwise create one.
+ * endpoint is scoped to a real `projects.id`. This bridges the two.
  *
- * `POST /api/portal/projects` calls `createNewProjectForEnrollment`, which
- * ALWAYS creates — so it is only called when there is genuinely no active
- * project, or a student would accumulate an empty project per build attempt.
+ * IT NO LONGER READS THE ACTIVE PROJECT. It used to: `GET /api/portal/projects/
+ * active` first, and build into whatever came back. That is what made a second
+ * build land inside the first one — the whole pipeline ran against the existing
+ * row, overwriting its intake, superseding its plan and rewriting its tasks in
+ * place (both plans number their stories STORY-001 upward, and (project_id,
+ * story_id) is the identity key). A student reported it on 2026-08-19 as a new
+ * build that "merged with" their old one; the DRI hit the same thing days
+ * earlier and it looked like the new project had deleted the old.
+ *
+ * The decision now belongs to the server, which is the only place that can see
+ * whether a project has ever been built into and the only place that can make
+ * the check atomic against a second, concurrent click. See
+ * `resolveProjectForNewBuild` in backend/src/services/projectService.ts. This
+ * function's job is reduced to asking for one and reporting failure honestly.
+ *
+ * `created` is now always true from the caller's point of view — a project id
+ * came back that is safe to build into. The server may have recycled an empty
+ * row underneath, which it reports as `reused` for telemetry; the client must
+ * not branch on it.
  */
 export async function resolveBackendProjectId(): Promise<
-  { ok: true; projectId: string; created: boolean } | { ok: false; error: SbpError }
+  { ok: true; projectId: string; created: boolean; reused: boolean } | { ok: false; error: SbpError }
 > {
-  try {
-    const active = await portalApi.get('/api/portal/projects/active');
-    const id = active?.data?.id;
-    if (typeof id === 'string' && id) return { ok: true, projectId: id, created: false };
-  } catch (err: any) {
-    // 404 = the API is flag-gated off; anything else is a real failure worth
-    // surfacing rather than papering over with a fresh project.
-    if (err?.response?.status !== 404) return { ok: false, error: toError(err) };
-    return { ok: false, error: toError(err) };
-  }
-
   try {
     const created = await portalApi.post('/api/portal/projects', {});
     const id = created?.data?.id;
     if (typeof id !== 'string' || !id) {
       return { ok: false, error: { status: null, kind: 'server_error', message: 'Could not create a project for this build.' } };
     }
-    return { ok: true, projectId: id, created: true };
+    return { ok: true, projectId: id, created: true, reused: created?.data?.reused === true };
   } catch (err) {
     return { ok: false, error: toError(err) };
   }

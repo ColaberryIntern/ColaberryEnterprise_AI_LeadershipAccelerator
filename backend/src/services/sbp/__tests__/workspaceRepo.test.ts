@@ -48,11 +48,16 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+/** The one shape that is writable: connected, and recorded as pushable. */
+const WRITABLE = { connect: { state: 'connected', platform_can_push: true } };
+
 describe('repoForProject — writability, not merely existence', () => {
   it('returns null for a provisioned repo the student has not pushed to yet', async () => {
     // The regression this guard exists to prevent. Owner and name are set, so
     // an existence-only check says "writable" and publish 404s on a missing ref.
-    mockFindOne.mockResolvedValue(connection({ status_json: { connect: { state: 'awaiting_push' } } }));
+    mockFindOne.mockResolvedValue(connection({
+      status_json: { connect: { state: 'awaiting_push', platform_can_push: true } },
+    }));
 
     await expect(repoForProject(PROJECT)).resolves.toBeNull();
   });
@@ -67,8 +72,8 @@ describe('repoForProject — writability, not merely existence', () => {
     await expect(repoForProject(PROJECT)).resolves.toBeNull();
   });
 
-  it('resolves a fully connected repo', async () => {
-    mockFindOne.mockResolvedValue(connection({ status_json: { connect: { state: 'connected' } } }));
+  it('resolves a fully connected repo the platform can push', async () => {
+    mockFindOne.mockResolvedValue(connection({ status_json: WRITABLE }));
 
     await expect(repoForProject(PROJECT)).resolves.toEqual({
       owner: 'ColaberryIntern',
@@ -77,18 +82,40 @@ describe('repoForProject — writability, not merely existence', () => {
     });
   });
 
-  it('resolves a legacy row that predates the connect step', async () => {
-    // No `connect` key at all. These were writable before this step existed and
-    // must stay writable, or the change silently breaks every repo already in
-    // production. Back-compat is the reason isWritableConnection treats
-    // `undefined` as writable rather than defaulting to "not yet".
+  /**
+   * INVERTED ON 2026-08-19, and this is the case that inverted it.
+   *
+   * No `connect` key at all. These were treated as writable on back-compat
+   * grounds — the permission was never recorded, and refusing on a guess would
+   * break repos that work. Then the audit counted the repos: ELEVEN OF TWELVE
+   * student repositories were read-only to the platform, and every one of them
+   * had been answering "writable" off exactly this absent key. There were no
+   * working repos being protected; there were doomed commits being queued in
+   * silence.
+   *
+   * Refusing is safe because it is not permanent. `reconcileRepoAccess` runs on
+   * every sync and records the real answer, so an unknown row becomes a known
+   * one the first time the student presses Sync — and until then publish takes
+   * the already-supported `awaiting_repo` path rather than failing at GitHub.
+   */
+  it('refuses a legacy row that predates the connect step, rather than guessing', async () => {
     mockFindOne.mockResolvedValue(connection({ status_json: {} }));
 
-    await expect(repoForProject(PROJECT)).resolves.toEqual({
-      owner: 'ColaberryIntern',
-      repo: 'roster-1111',
-      url: 'https://github.com/ColaberryIntern/roster-1111',
-    });
+    await expect(repoForProject(PROJECT)).resolves.toBeNull();
+  });
+
+  it('refuses a connected repo whose permission was never recorded', async () => {
+    mockFindOne.mockResolvedValue(connection({ status_json: { connect: { state: 'connected' } } }));
+
+    await expect(repoForProject(PROJECT)).resolves.toBeNull();
+  });
+
+  it('refuses a repo GitHub reported as pull-only', async () => {
+    mockFindOne.mockResolvedValue(connection({
+      status_json: { connect: { state: 'connected', platform_can_push: false } },
+    }));
+
+    await expect(repoForProject(PROJECT)).resolves.toBeNull();
   });
 
   it('returns null when the project has no connection row at all', async () => {
@@ -98,7 +125,7 @@ describe('repoForProject — writability, not merely existence', () => {
   });
 
   it('falls back to a derived URL when repo_url is empty', async () => {
-    mockFindOne.mockResolvedValue(connection({ repo_url: null, status_json: { connect: { state: 'connected' } } }));
+    mockFindOne.mockResolvedValue(connection({ repo_url: null, status_json: WRITABLE }));
 
     await expect(repoForProject(PROJECT)).resolves.toEqual({
       owner: 'ColaberryIntern',
@@ -124,6 +151,77 @@ describe('repoForProject — writability, not merely existence', () => {
       mockFindOne.mockResolvedValue(row);
       await expect(repoForProject(PROJECT)).resolves.toBeNull();
     }
+  });
+});
+
+/**
+ * ── A SKIPPED WRITE MUST LEAVE A TRACE ───────────────────────────────────────
+ *
+ * Returning `null` is a supported outcome and always has been. It is also how
+ * the read-only cohort stayed hidden for nine months: eleven students' repos
+ * refused every commit the platform queued, and the only downstream trace was a
+ * `no_repo` outcome — byte-identical to a student who had simply never connected
+ * a repo at all. Nobody could have found this in the logs, because the logs did
+ * not distinguish the two.
+ *
+ * The reason is the entire value. `access_unknown` is our bookkeeping failing
+ * and warrants a warn; `pull_only` is the student's deliberate choice and is
+ * merely information.
+ */
+describe('the refusal is legible', () => {
+  const logged = (): Array<Record<string, any>> =>
+    (console.log as jest.Mock).mock.calls
+      .map(([line]) => { try { return JSON.parse(String(line)); } catch { return null; } })
+      .filter((e): e is Record<string, any> => Boolean(e) && e.event === 'sbp_repo_write_refused');
+
+  beforeEach(() => { jest.spyOn(console, 'log').mockImplementation(() => undefined); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('says WHY when the permission was never recorded, and says it loudly', async () => {
+    mockFindOne.mockResolvedValue(connection({ status_json: { connect: { state: 'connected' } } }));
+
+    await repoForProject(PROJECT);
+
+    expect(logged()).toEqual([expect.objectContaining({
+      service: 'sbp-workspace-repo',
+      event: 'sbp_repo_write_refused',
+      level: 'warn',
+      context: { projectId: PROJECT, reason: 'access_unknown' },
+    })]);
+  });
+
+  it('distinguishes the student\'s choice from our ignorance', async () => {
+    mockFindOne.mockResolvedValue(connection({
+      status_json: { connect: { state: 'connected', platform_can_push: false } },
+    }));
+
+    await repoForProject(PROJECT);
+
+    // Not a warning: a repo the platform only reads is a legitimate choice, and
+    // verification, points and the whole build work exactly the same on one.
+    expect(logged()).toEqual([expect.objectContaining({
+      level: 'info',
+      context: { projectId: PROJECT, reason: 'pull_only' },
+    })]);
+  });
+
+  it.each([
+    ['no_repo', null],
+    ['not_connected', { connect: { state: 'awaiting_push', platform_can_push: true } }],
+  ])('names %s too', async (reason, status_json) => {
+    mockFindOne.mockResolvedValue(status_json === null ? null : connection({ status_json }));
+
+    await repoForProject(PROJECT);
+
+    expect(logged()).toEqual([expect.objectContaining({ context: { projectId: PROJECT, reason } })]);
+  });
+
+  it('stays quiet when the write is allowed — this is a refusal log, not a heartbeat', async () => {
+    mockFindOne.mockResolvedValue(connection({ status_json: WRITABLE }));
+
+    await repoForProject(PROJECT);
+
+    expect(logged()).toEqual([]);
   });
 });
 

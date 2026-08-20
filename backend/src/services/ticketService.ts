@@ -78,6 +78,11 @@ export interface TicketFilters {
   // for the supporting idx_tickets_created_at index this filter relies on to stay
   // fast as the table grows.
   createdAfter?: Date;
+  // Org Chart v4 (2026-08-20) — the ticket-filter-by-agent button. Pre-resolved
+  // by the route (ticketCreatorFilterResolver.ts) BEFORE reaching this
+  // function — this file stays a pure query builder, the identity-resolution
+  // logic lives in its own module (see that file's header comment for why).
+  creatorMatchIds?: string[];
 }
 
 // ── Create ───────────────────────────────────────────────────────────────
@@ -427,6 +432,17 @@ export async function getTicketsForBoard(filters?: TicketFilters) {
   }
   if (filters?.createdAfter) {
     where.created_at = { [Op.gte]: filters.createdAfter };
+  }
+  // Org Chart v4 (2026-08-20) — ticket-filter-by-agent button. `where` is
+  // typed `Record<string, any>` (declared above), so indexing it with the
+  // `Op.or` symbol key needs an explicit cast under this repo's strict
+  // tsconfig — same convention already used at this exact shape elsewhere in
+  // this codebase (openclawRoutes.ts, communityService.ts, notebookService.ts).
+  if (filters?.creatorMatchIds && filters.creatorMatchIds.length > 0) {
+    (where as any)[Op.or] = [
+      { created_by_id: { [Op.in]: filters.creatorMatchIds } },
+      { assigned_to_id: { [Op.in]: filters.creatorMatchIds } },
+    ];
   }
 
   const tickets = await Ticket.findAll({
