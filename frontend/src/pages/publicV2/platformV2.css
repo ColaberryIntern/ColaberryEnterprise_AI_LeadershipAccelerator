@@ -315,3 +315,52 @@
   .cbv2-bp__art { opacity: 1; transform: none; transition: none; }
   .cbv2-bp__fill, .cbv2-bp__n { transition: none; }
 }
+
+/* ---------------------------------------------------- governance (real) ---- */
+
+/*
+ * Five controls the system actually enforces, on the inverse surface so the
+ * section reads as the serious one. Deliberately NOT a two-column
+ * "AI does / humans decide" split -- that layout asserts a human authority the
+ * promotion gate does not currently have.
+ */
+.cbv2-gov { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+@media (max-width: 1000px) { .cbv2-gov { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .cbv2-gov { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-gov__c {
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+.cbv2-gov__k {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fd5760;
+}
+.cbv2-gov__c h3 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  line-height: 1.25;
+  color: #f8f8f7;
+  text-wrap: balance;
+}
+.cbv2-gov__c p { margin: 0; font-size: var(--fs-body-sm); line-height: 1.6; color: #a8b2c4; }
+
+/* The boundary note is amber-edged, the same visual language the site already
+   uses for "read this before you believe the rest". */
+.cbv2-gov__note {
+  margin-top: var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  border: 1px dashed #e8920c;
+  border-radius: var(--radius-md);
+  background: rgba(232, 146, 12, 0.08);
+}
+.cbv2-gov__note p { margin: 0; max-width: 84ch; font-size: var(--fs-body-sm); line-height: 1.65; color: #c9cfda; }
+.cbv2-gov__note b { color: #e8920c; }
