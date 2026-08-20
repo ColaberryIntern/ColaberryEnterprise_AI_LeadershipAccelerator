@@ -634,6 +634,46 @@ const hasCompletedWork = (p: StudentProject): boolean =>
   p.lists.some((l) => l.tasks.some((t) => t.state === 'done'));
 
 /**
+ * Does this local project hold NOTHING the tree also holds?
+ *
+ * The one honest question left once ids stop discriminating. A cached copy of a
+ * plan — even a stale one missing a story, even one carrying tasks from an older
+ * generation — still shares story keys with it. The browser's starter template
+ * shares none: `generateSkeleton` never sets `storyId`, so its keys are
+ * `<localId>-t1..t10` while the plan's are `STORY-NNN`.
+ *
+ * Empty lists count as sharing nothing, which is correct: a card still in the
+ * `creating` state is a placeholder by definition and the plan replaces it.
+ */
+function sharesNoTaskIdentity(p: StudentProject, tree: BackendProjectTree): boolean {
+  const localKeys = new Set(p.lists.flatMap((l) => l.tasks.map((t) => taskKey(t))));
+  for (const l of tree.lists) {
+    for (const t of (Array.isArray(l.tasks) ? l.tasks : [])) {
+      if (localKeys.has(serverTaskKey(t))) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * The server's plan, replacing a local placeholder, KEEPING THE PLACEHOLDER'S
+ * ALIASES.
+ *
+ * `backendTreeToProject` builds a project from the tree alone, so it has no
+ * `legacyIds`. Superseding with it bare would drop every id this card has ever
+ * answered to — the `p<epoch>` the wizard minted, and any alias `adoptServerIds`
+ * folded in — and `canonicalProjectId` resolves bookmarked `/workspace/:id`
+ * URLs through exactly that list. A student who bookmarked their build while it
+ * was still generating would get a dead route the moment their real plan landed.
+ */
+function supersededBy(placeholder: StudentProject, tree: BackendProjectTree): StudentProject {
+  const aliases = new Set<string>(placeholder.legacyIds ?? []);
+  if (placeholder.id !== tree.id) aliases.add(placeholder.id);
+  const next = backendTreeToProject(tree);
+  return aliases.size ? { ...next, legacyIds: [...aliases] } : next;
+}
+
+/**
  * Merge the backend `tree` into the local project list, then make the list agree
  * with the server about what exists and what leads.
  *
@@ -730,13 +770,52 @@ export function reconcileProjects(
   // A local placeholder that CLAIMED this backend project — and whose tasks are
   // NOT the tree's — is a stand-in for a different, server-authored plan, so the
   // real plan supersedes it.
-  if (matchIdx < 0 && mirrorIdx < 0) {
-    const claimIdx = local.findIndex((p) => !p.sample && p.pipelineProjectId === tree!.id);
-    if (claimIdx >= 0 && !hasCompletedWork(local[claimIdx])) {
-      const next = local.slice();
-      next[claimIdx] = backendTreeToProject(tree!);   // in place: keeps its rank position
-      return settle(next, true, 'supersede');
-    }
+  //
+  // WHICH ROW IS THE PLACEHOLDER IS NOT AN ID QUESTION. This branch used to be
+  // guarded by `matchIdx < 0 && mirrorIdx < 0`, i.e. "nothing local matches this
+  // tree by id". That guard was written when a placeholder kept its `p<epoch>`
+  // id until the plan arrived. It no longer holds: `claimBackendProject` calls
+  // `adoptServerIds`, which re-keys the placeholder's `id` TO the server UUID at
+  // CLAIM time — minutes before the plan exists. From that moment `matchIdx`
+  // matches, so the guard was false in exactly the case the branch was written
+  // for, and reconcile fell through to `overlay`.
+  //
+  // WHAT OVERLAY THEN DID, MEASURED. `adoptServerTasks` adds every story the
+  // browser lacks, and the browser template's tasks carry NO `storyId` at all
+  // (`generateSkeleton` mints `id: '<localId>-t<n>'` and nothing else), so the
+  // template's keys and the plan's `STORY-NNN` keys are wholly DISJOINT. Nothing
+  // was replaced; the plan was ADDED. The card became the union — the ten
+  // generic template tasks plus the student's real stories — still chipped
+  // "⚠ starter template" because `origin` stayed `'local'`. That is precisely
+  // the 27 and 29 seen in the browser: 10 + 17 and 10 + 19, against published
+  // plans of 17 and 19. The plan was on the card, buried and mislabelled, and
+  // every count on the page was ten too high.
+  //
+  // SO THE QUESTION IS WHETHER THIS ROW IS THIS PLAN AT ALL, and task identity
+  // answers it where ids no longer can:
+  //   - shares at least one task key with the tree  → it IS this plan (possibly
+  //     stale, possibly missing a story) → ADOPT/OVERLAY, never supersede. This
+  //     is the qninying case: he held STORY-001..004 of a five-story plan, and
+  //     adopting the missing STORY-000 while keeping his ten hand-ticked
+  //     completions is the whole point of `adoptServerTasks`.
+  //   - shares NOTHING with the tree → it is not this plan. It is the browser
+  //     placeholder standing in for it, and the plan supersedes it.
+  const claimIdx = local.findIndex((p) => !p.sample && p.pipelineProjectId === tree!.id);
+  const boundIdx = matchIdx >= 0 ? matchIdx : (mirrorIdx >= 0 ? mirrorIdx : claimIdx);
+
+  // Guarded on completed work, unchanged: if the student ticked something off
+  // the placeholder while waiting, we do not supersede. That keeps this repair
+  // LOSSLESS BY CONSTRUCTION — the only rows it replaces are rows that share no
+  // task with the plan AND have nothing ticked on them to lose. A student who
+  // did tick something keeps today's behaviour exactly, because the two task
+  // sets are disjoint and there is therefore no honest way to carry a
+  // completion across: nothing on the plan corresponds to what they ticked.
+  if (boundIdx >= 0
+    && sharesNoTaskIdentity(local[boundIdx], tree!)
+    && !hasCompletedWork(local[boundIdx])) {
+    const next = local.slice();
+    next[boundIdx] = supersededBy(local[boundIdx], tree!);   // in place: keeps its rank position
+    return settle(next, true, 'supersede');
   }
 
   const targetIdx = matchIdx >= 0 ? matchIdx : mirrorIdx;
