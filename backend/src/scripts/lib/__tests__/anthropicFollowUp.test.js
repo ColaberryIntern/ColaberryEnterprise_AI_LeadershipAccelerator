@@ -82,6 +82,25 @@ describe('message sequence content', () => {
     });
   });
 
+  // The campaign was stopped 2026-08-13 after one letter and resumed a week
+// later. Any copy that asserts an unbroken cadence ("closing out the week",
+  // "each weekday for three weeks") became false the moment that happened, and
+  // would land on a reader who can see the actual dates.
+  test('no note claims a weekday, a week boundary, or an unbroken run', () => {
+    const forbidden = [
+      /closing out the week|end of week|each weekday for|for three weeks/i,
+      /\b(today is|this friday|yesterday|tomorrow)\b/i,
+      /\bevery (single )?day (since|for)\b/i,
+    ];
+    SEQUENCE.forEach((m, i) => {
+      const body = renderMessage(m, i + 1).text;
+      forbidden.forEach((rx) => {
+        expect({ note: i + 1, angle: m.angle, match: body.match(rx) })
+          .toEqual({ note: i + 1, angle: m.angle, match: null });
+      });
+    });
+  });
+
   test('the final note stands down gracefully rather than just stopping', () => {
     const last = renderMessage(SEQUENCE[SEQUENCE_LENGTH - 1], SEQUENCE_LENGTH);
     expect(last.angle).toBe('graceful-pause');
@@ -182,6 +201,59 @@ describe('idempotency', () => {
     L.commit(ledger, { occurrenceKey: '2026-08-19', messageId: '<x>' });
     L.release(ledger, '2026-08-19');
     expect(L.sentEntries(ledger)).toHaveLength(1);
+  });
+});
+
+// ------------------------------------------------------------ stop / resume
+
+describe('stopping and resuming', () => {
+  function stoppedAfterOne() {
+    const ledger = L.emptyLedger();
+    L.claim(ledger, { occurrenceKey: '2026-08-13', dayNumber: 1, angle: 'reintroduction', subject: 's' });
+    L.commit(ledger, { occurrenceKey: '2026-08-13', messageId: '<one>' });
+    return L.halt(ledger, 'stopped', 'operator ran --stop');
+  }
+
+  test('resume clears the halt and KEEPS the sent history', () => {
+    const ledger = L.resume(stoppedAfterOne());
+    expect(ledger.halt).toBeNull();
+    expect(L.sentEntries(ledger)).toHaveLength(1);
+  });
+
+  // The whole reason --resume exists. --reset would send letter 1 to Anthropic
+  // for a second time, which is the one outcome a pause must never cause.
+  test('resume continues at note 2, where reset would restart at note 1', () => {
+    expect(L.nextDayNumber(L.resume(stoppedAfterOne()))).toBe(2);
+    expect(L.nextDayNumber(L.reset(stoppedAfterOne()))).toBe(1);
+  });
+
+  test('a resumed campaign actually sends again', () => {
+    const ledger = L.resume(stoppedAfterOne());
+    expect(decide({ ledger })).toMatchObject({ send: true, dayNumber: 2 });
+  });
+
+  test('resume REFUSES to undo a reply halt', () => {
+    const ledger = L.halt(stoppedAfterOne(), 'replied', { from: 'someone@anthropic.com' });
+    expect(() => L.resume(ledger)).toThrow(/refusing to resume a "replied" halt/);
+    try { L.resume(ledger); } catch (e) { expect(e.error_class).toBe('IllegalStateTransition'); }
+  });
+
+  test('resume refuses a sequence-complete halt too', () => {
+    const ledger = L.halt(stoppedAfterOne(), 'sequence-complete');
+    expect(() => L.resume(ledger)).toThrow(/refusing to resume/);
+  });
+
+  test('resuming an already-running campaign is a harmless no-op', () => {
+    const ledger = L.emptyLedger();
+    expect(L.resume(ledger).halt).toBeNull();
+  });
+
+  test('stop then resume then stop again still works', () => {
+    let ledger = L.resume(stoppedAfterOne());
+    ledger = L.halt(ledger, 'stopped', 'second stop');
+    expect(decide({ ledger })).toMatchObject({ send: false, terminal: true });
+    ledger = L.resume(ledger);
+    expect(decide({ ledger })).toMatchObject({ send: true, dayNumber: 2 });
   });
 });
 

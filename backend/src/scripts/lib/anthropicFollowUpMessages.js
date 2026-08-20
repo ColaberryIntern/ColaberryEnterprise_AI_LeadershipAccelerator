@@ -68,10 +68,10 @@ const SEQUENCE = [
     ask: 'If anything is missing, tell us what and we will turn it around the same day.',
   },
   {
-    angle: 'week-one-close',
+    angle: 'first-pause',
     subject: 'Claude Partner Network: a good week to you',
     paragraphs: [
-      'Closing out the week with a short note rather than a long one.',
+      'A short note today rather than a long one.',
       'We know a partner queue in a company growing at your pace is not a quiet place to work, and we are not trying to jump it. We would simply like to be in the network, and we would like you to know there is a team here that is ready when you are.',
       'Thank you for the care that clearly went into the Academy curriculum. It shows.',
     ],
@@ -118,12 +118,12 @@ const SEQUENCE = [
     ask: 'If admission is close, we would love to know so we can line them up.',
   },
   {
-    angle: 'week-two-close',
+    angle: 'second-pause',
     subject: 'Claude Partner Network: still glad to be in your queue',
     paragraphs: [
-      'A brief end of week note.',
+      'A brief note, with nothing new to report from our side.',
       'Nothing has changed on our side. Eleven people trained, a company that wants to build on Claude, and an application from June 24 waiting patiently. We are not going anywhere and we are not upset. We are just interested, and we would rather say so than go quiet.',
-      'We hope the week treated your team well.',
+      'We hope things are going well for your team.',
     ],
     ask: 'Any update on our submission would be welcome whenever it is convenient.',
   },
@@ -172,7 +172,7 @@ const SEQUENCE = [
     subject: 'Claude Partner Network: our last daily note, and an open door',
     paragraphs: [
       'This is the last of our daily notes, and we want to end it well.',
-      'We have written each weekday for three weeks because we are genuinely enthusiastic about joining the Claude Partner Network, not because we felt owed a reply. Enthusiasm past a certain point becomes noise, and we would rather stop short of that line than cross it.',
+      'We have written to you a number of times now because we are genuinely enthusiastic about joining the Claude Partner Network, not because we felt owed a reply. Enthusiasm past a certain point becomes noise, and we would rather stop short of that line than cross it.',
       'So we will step back. Our June 24 submission stands, our eleven trained people are still here, and our interest has not cooled at all. If a reply comes next week or next quarter, it will find a very willing partner on this end.',
       'Thank you for the Academy curriculum, and for the work your team is doing. It has been worth the wait either way.',
     ],
