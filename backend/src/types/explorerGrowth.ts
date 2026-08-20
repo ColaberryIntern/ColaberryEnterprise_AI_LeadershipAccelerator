@@ -60,8 +60,17 @@ export interface ExplorerSignalDefinition {
   cap: number;
   /** Intent signals only. Present iff band === 'intent'. */
   tier?: ExplorerIntentTier;
+  /**
+   * Engagement signals only. Present iff band === 'engagement'.
+   * §7.2 splits E into achievement 35 / progress 35 / recency 30, each capped
+   * independently so no single sub-band can carry the score.
+   */
+  subBand?: ExplorerEngagementSubBand;
   source: ExplorerSignalSource;
 }
+
+/** §7.2's engagement split: what they earned, what they finished, how recently. */
+export type ExplorerEngagementSubBand = 'achievement' | 'progress' | 'recency';
 
 /** One occurrence of a signal, as read back from its source table. */
 export interface ExplorerSignalOccurrence {
