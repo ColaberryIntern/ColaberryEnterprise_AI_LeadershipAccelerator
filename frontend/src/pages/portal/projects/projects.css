@@ -512,6 +512,13 @@
 .pj-sb-ic svg{width:16px;height:16px}
 .pj-sb-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
 .pj-sb-t .nm{font-size:13px;font-weight:700;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Names the seeded training example in a panel headed "Your builds". Quiet on
+   purpose: it is a label, not a warning — the example is a legitimate thing to
+   open, it just is not the student's own work. */
+.pj-sb-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:var(--r-pill);
+  background:var(--surface-sunken);border:1px solid var(--border-subtle);
+  font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.02em;
+  color:var(--text-muted);text-transform:lowercase;vertical-align:1px}
 .pj-sb-t .bar{height:5px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;border:1px solid var(--border-subtle)}
 .pj-sb-t .bar>i{display:block;height:100%;border-radius:var(--r-pill)}
 .pj-sb-pct{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text-muted);flex:none}

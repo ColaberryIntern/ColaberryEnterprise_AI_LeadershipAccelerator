@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-build display review</title>
+<style>
+  :root{
+    --bg:#F7F7F5; --surface:#FFFFFF; --sunken:#F0F0EE; --border:#DFDFDA; --border-soft:#ECECE8;
+    --text:#1A1A1A; --muted:#5F5F5A; --berry:#367895; --cherry:#C8102E; --green:#5BA63C; --amber:#B26A00;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --r:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 24px 96px}
+  header.doc{border-bottom:2px solid var(--text);padding-bottom:22px;margin-bottom:14px}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--cherry);margin-bottom:12px}
+  h1{font-size:34px;line-height:1.2;margin:0 0 12px;letter-spacing:-.02em}
+  .lede{font-size:18px;color:var(--muted);margin:0;max-width:70ch}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 40px}
+  .meta span{font:600 12px/1 var(--mono);background:var(--sunken);border:1px solid var(--border);
+    border-radius:999px;padding:6px 11px;color:var(--muted)}
+  h2{font-size:24px;margin:56px 0 6px;letter-spacing:-.01em;padding-top:20px;border-top:1px solid var(--border)}
+  h2 .num{font:700 13px/1 var(--mono);color:var(--cherry);display:block;margin-bottom:10px;letter-spacing:.08em}
+  h3{font-size:17px;margin:32px 0 8px}
+  p{max-width:74ch}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:22px 24px;margin:20px 0}
+  .card.verdict{border-left:4px solid var(--green)}
+  .card.defect{border-left:4px solid var(--cherry)}
+  .card.note{border-left:4px solid var(--berry)}
+  .card.scope{border-left:4px solid var(--amber)}
+  .card h3{margin-top:0}
+  figure{margin:22px 0}
+  figure img{width:100%;height:auto;display:block;border:1px solid var(--border);border-radius:var(--r);background:#fff}
+  figcaption{font-size:14px;color:var(--muted);margin-top:10px}
+  .ba{display:grid;grid-template-columns:1fr;gap:22px}
+  @media(min-width:860px){.ba{grid-template-columns:1fr 1fr}}
+  .ba .lab{font:700 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;
+    display:inline-block;padding:4px 9px;border-radius:999px}
+  .lab.before{background:rgba(200,16,46,.10);color:var(--cherry)}
+  .lab.after{background:rgba(91,166,60,.14);color:#3D7A25}
+  .tblwrap{overflow-x:auto;margin:18px 0}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:14.5px;background:var(--surface)}
+  th,td{border:1px solid var(--border-soft);padding:10px 12px;text-align:left;vertical-align:top}
+  th{background:var(--sunken);font-weight:700;font-size:13px}
+  td.n{font-family:var(--mono);white-space:nowrap}
+  .bad{color:var(--cherry);font-weight:700}
+  .good{color:#3D7A25;font-weight:700}
+  pre{background:#1A1A1A;color:#F2F2EF;border-radius:var(--r);padding:16px 18px;overflow-x:auto;
+    font:13px/1.65 var(--mono);margin:16px 0}
+  pre .c{color:#8FA3AD}
+  code{font-family:var(--mono);font-size:.92em;background:var(--sunken);border:1px solid var(--border-soft);
+    border-radius:5px;padding:1px 5px}
+  pre code{background:none;border:none;padding:0;color:inherit}
+  ul,ol{max-width:74ch}
+  li{margin:7px 0}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14.5px;margin:12px 0}
+  .kv dt{font:700 12px/1.6 var(--mono);color:var(--muted)}
+  .kv dd{margin:0}
+  footer{margin-top:72px;padding-top:22px;border-top:1px solid var(--border);color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <div class="eyebrow">Portal · Projects · dev verification</div>
+  <h1>Multi-build display: a published plan renders as the plan, not the starter template</h1>
+  <p class="lede">Three display defects on the student Projects page, all pre-existing on <code>main</code>, none
+  caused by PR&nbsp;#1635. Reproduced in a real browser on the dev instance, fixed, and re-walked.</p>
+</header>
+
+<div class="meta">
+  <span>Session CC-20260819-w7nq</span>
+  <span>2026-08-19</span>
+  <span>dev only · never production</span>
+  <span>accelerator_dev1</span>
+  <span>nginx :9999 / :9998</span>
+</div>
+
+<div class="card verdict">
+  <h3>What changed, in one line each</h3>
+  <ul style="margin-bottom:0">
+    <li><strong>D2 (headline).</strong> A build whose plan the server published rendered permanently as the
+      browser's starter template. It now renders as the student's own plan.</li>
+    <li><strong>D1.</strong> "Active builds" counted the seeded training example. It now counts the student's builds.</li>
+    <li><strong>D4.</strong> The archive dialog and the card behind it disagreed about the same build.
+      <em>No separate fix</em> — it fell out of D2, and a test now pins the agreement.</li>
+    <li><strong>D3.</strong> Scoped and deliberately <em>not</em> built. Recommendation at the bottom.</li>
+  </ul>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────── -->
+<h2><span class="num">STOP 01 — D2, THE HEADLINE</span>The Projects page, before and after</h2>
+
+<p>Same throwaway account, same seeded plan — 17 stories across 2 releases — same page, same account state.
+The only difference is the bundle: <code>main</code> on the left, this branch on the right.</p>
+
+<div class="ba">
+  <figure>
+    <span class="lab before">Before · main</span>
+    <img src="screenshots/2026-08-19-multibuild-display/before-01-projects-overview.png"
+         alt="Projects page on main: Active builds reads 2, the hero release is the template's Project DNA and Requirements, and the next step is a generic template task.">
+    <figcaption><strong>Active builds: 2</strong> for one build. The hero release is
+    <strong>“Project DNA &amp; Requirements”</strong> — a list the browser invented — and the student's
+    next step is <strong>“Lock the core requirements with acceptance criteria”</strong>, a generic template
+    task, not their first story.</figcaption>
+  </figure>
+  <figure>
+    <span class="lab after">After · this branch</span>
+    <img src="screenshots/2026-08-19-multibuild-display/after-01-projects-overview.png"
+         alt="Projects page on this branch: Active builds reads 1, the hero release is Release 0, and the next step is the server's STORY-000.">
+    <figcaption><strong>Active builds: 1.</strong> The hero release is <strong>“Release 0”</strong> with
+    <strong>9 tasks</strong>, and the next step is <strong>“Stand up the Command Center and let the platform
+    see your pushes”</strong> — the server's STORY-000. The training example is tagged
+    <code>example</code>.</figcaption>
+  </figure>
+</div>
+
+<h3>What the page itself reports</h3>
+<p>Read out of the live DOM and out of <code>localStorage</code> at the end of each walk, not transcribed by hand.</p>
+
+<div class="tblwrap">
+<table>
+  <thead><tr><th>Measured</th><th>Before (main)</th><th>After (this branch)</th><th>Server truth</th></tr></thead>
+  <tbody>
+    <tr><td>Origin chip on the card</td><td class="bad">starter template</td><td class="good">your tailored plan</td><td>pipeline-generated</td></tr>
+    <tr><td><code>origin</code> in the store</td><td class="n bad">local</td><td class="n good">pipeline</td><td class="n">—</td></tr>
+    <tr><td>Tasks on the card</td><td class="n bad">27</td><td class="n good">17</td><td class="n">17</td></tr>
+    <tr><td>Releases on the card</td><td class="n bad">6</td><td class="n good">2</td><td class="n">2</td></tr>
+    <tr><td>“Active builds” stat</td><td class="n bad">2</td><td class="n good">1</td><td class="n">1</td></tr>
+    <tr><td>Training example labelled</td><td class="bad">no</td><td class="good">yes</td><td>—</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="card defect">
+  <h3>Where 27 came from — and why the brief's mechanism was inverted</h3>
+  <p>The brief said the local template reuses the same <code>STORY-NNN</code> keyspace, so the merge was a
+  no-op. Reading <code>generateSkeleton</code> shows the opposite, and it changes the fix.</p>
+  <p><strong>The template's tasks carry no <code>storyId</code> at all</strong> — they are minted as
+  <code>id: '&lt;localId&gt;-t&lt;n&gt;'</code> and nothing else. The two key sets are therefore wholly
+  <strong>disjoint</strong>, so <code>adoptServerTasks</code> did not find “nothing missing”; it found
+  <em>everything</em> missing and <strong>added the plan to the template</strong> instead of replacing it.</p>
+  <p>The card became the union, and the arithmetic is exactly what the browser pass measured:</p>
+  <div class="tblwrap">
+  <table>
+    <thead><tr><th>Release</th><th>Source</th><th>Tasks</th></tr></thead>
+    <tbody>
+      <tr><td>Release 0 · Walking skeleton</td><td>server</td><td class="n">9</td></tr>
+      <tr><td>Release 1 · Utilisation and alerts</td><td>server</td><td class="n">8</td></tr>
+      <tr><td>Project DNA &amp; Requirements</td><td>browser template</td><td class="n">2</td></tr>
+      <tr><td>Core build</td><td>browser template</td><td class="n">4</td></tr>
+      <tr><td>Reliability &amp; polish</td><td>browser template</td><td class="n">2</td></tr>
+      <tr><td>Showcase &amp; portfolio</td><td>browser template</td><td class="n">2</td></tr>
+      <tr><td colspan="2"><strong>Total rendered</strong></td><td class="n bad"><strong>27</strong></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="margin-bottom:0"><strong>10 + 17 = 27</strong>, and <strong>10 + 19 = 29</strong> — the two numbers
+  reported against published plans of 17 and 19 stories. The plan was on the card the whole time, buried under
+  the template, mislabelled, and every count on the page ten too high.</p>
+</div>
+
+<h3>Root cause</h3>
+<p><code>claimBackendProject</code> calls <code>adoptServerIds</code>, which re-keys the placeholder's
+<code>id</code> <strong>to the server UUID at claim time</strong> — minutes before the plan exists. From that
+moment <code>reconcileProjects</code>' <code>matchIdx</code> matches, so the <code>supersede</code> branch,
+guarded by <code>matchIdx &lt; 0 &amp;&amp; mirrorIdx &lt; 0</code>, is unreachable in exactly the case it was
+written for. Reconcile falls through to <code>overlay</code>, and overlay adds rather than replaces.</p>
+
+<pre><code><span class="c">// before — reachable only while the placeholder still had its p&lt;epoch&gt; id</span>
+if (matchIdx &lt; 0 &amp;&amp; mirrorIdx &lt; 0) {
+  const claimIdx = local.findIndex((p) =&gt; !p.sample &amp;&amp; p.pipelineProjectId === tree!.id);
+  if (claimIdx &gt;= 0 &amp;&amp; !hasCompletedWork(local[claimIdx])) { /* supersede */ }
+}
+
+<span class="c">// after — ask whether the row IS this plan, which is all ids can no longer answer</span>
+if (boundIdx &gt;= 0
+  &amp;&amp; sharesNoTaskIdentity(local[boundIdx], tree!)
+  &amp;&amp; !hasCompletedWork(local[boundIdx])) {
+  next[boundIdx] = supersededBy(local[boundIdx], tree!);
+  return settle(next, true, 'supersede');
+}</code></pre>
+
+<p>A row sharing <strong>at least one</strong> task key with the tree is this plan — possibly stale, possibly
+missing a story — and is adopted or overlaid, never superseded. A row sharing <strong>nothing</strong> is the
+placeholder, and the plan supersedes it.</p>
+
+<div class="card note">
+  <h3>Why this fix and not the other one</h3>
+  <p>Two candidates were on the table: relax the <code>supersede</code> guard, or defer id adoption in
+  <code>claimBackendProject</code>.</p>
+  <p><strong>Deferring id adoption was rejected on evidence.</strong> That side-car-only shape <em>is</em> the
+  defect the id-adoption fix removed. <code>projectIdentity.ts</code> records it: the placeholder id “stayed the
+  project's identity, went into the workspace route, and was rejected with a 400”, and the message surfaced
+  under whatever field the student happened to be touching — which is how a project-id rejection once read as
+  “your GitHub username is invalid”. <code>projectsStore.idAdoption.test.ts</code> pins that behaviour.
+  Reverting it would reintroduce a fixed production defect in order to fix a display one.</p>
+  <p style="margin-bottom:0">Relaxing the guard also puts the change where the ambiguity actually is. Identity
+  is not the problem; <em>deciding what a row is</em> from identity alone was.</p>
+</div>
+
+<div class="card note">
+  <h3>What happens to a student who is mid-build when this lands</h3>
+  <p>The repair is <strong>lossless by construction</strong>. The completed-work guard is kept, so the only rows
+  it replaces are rows that share no task with the plan <em>and</em> have nothing ticked on them — rows with
+  nothing to lose.</p>
+  <ul>
+    <li><strong>Ticked nothing</strong> (the common case, and all four builds in the original pass): on the next
+      sync the card is replaced by their real plan, in place, keeping its rank position and its aliases, so a
+      bookmarked <code>/workspace/:id</code> URL still resolves.</li>
+    <li><strong>Ticked something:</strong> behaviour is unchanged from today. They keep their card and their
+      ticks. Carrying a completion across is impossible to do honestly — the two key sets are disjoint, so
+      nothing on the plan corresponds to the generic template task they ticked, and marking a plan story done
+      that they never did would be a worse defect than the one being fixed.</li>
+  </ul>
+  <p style="margin-bottom:0">A test pins each of these.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────── -->
+<h2><span class="num">STOP 02 — D1</span>The build counter</h2>
+
+<p><code>read()</code> re-seeds <code>sample-salon</code> whenever it is missing, so the array behind the page
+always carries the training example. The stat rendered <code>projects.length</code> straight, which made it one
+too high at every value.</p>
+
+<div class="tblwrap">
+<table>
+  <thead><tr><th>Student's real builds</th><th>Stat on main</th><th>Stat on this branch</th></tr></thead>
+  <tbody>
+    <tr><td class="n">0</td><td class="n bad">1</td><td class="n good">0</td></tr>
+    <tr><td class="n">1</td><td class="n bad">2</td><td class="n good">1</td></tr>
+    <tr><td class="n">2</td><td class="n bad">3</td><td class="n good">2</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>This is precisely the “Active builds: 2 while the API returned 1” report. It was never a stale cache — it was
+a training fixture counted as a build the student owns. The example is still listed, because it is a worked
+build a student can open and learn the shape from, but it now carries an <code>example</code> tag so it stops
+reading as their own work.</p>
+
+<!-- ─────────────────────────────────────────────────────────────────────── -->
+<h2><span class="num">STOP 03 — D4</span>Two elements on one screen, contradicting each other</h2>
+
+<p>The archive dialog reads every figure live from <code>GET …/archive-preview</code> — the server. The card
+behind it read <code>localStorage</code>. On <code>main</code> that put two different descriptions of the same
+build on one screen.</p>
+
+<figure>
+  <img src="screenshots/2026-08-19-multibuild-display/after-02-archive-dialog.png"
+       alt="The archive dialog open over the build card, both now reporting 17 tasks across 2 lists.">
+  <figcaption>After: the dialog says <strong>“17 tasks across 2 lists”</strong> and the card behind it is the
+  same 17 tasks across the same 2 releases.</figcaption>
+</figure>
+
+<div class="tblwrap">
+<table>
+  <thead><tr><th></th><th>Archive dialog says</th><th>Card behind it says</th><th>Agree?</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Before</strong></td><td class="n">17 tasks across 2 lists</td>
+        <td class="n bad">starter template · 27 tasks, 6 releases</td><td class="bad">no</td></tr>
+    <tr><td><strong>After</strong></td><td class="n">17 tasks across 2 lists</td>
+        <td class="n good">your tailored plan · 17 tasks, 2 releases</td><td class="good">yes</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="card verdict">
+  <h3>D4 fell out of D2 and got no separate fix</h3>
+  <p style="margin-bottom:0">Both dialog readings above are identical because the dialog was <strong>right all
+  along</strong> — it was reading the server, which always held 17 tasks in 2 lists. Only the card was wrong.
+  Fixing D2 closed the gap with no second change; a test now pins the agreement so it cannot reopen.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────── -->
+<h2><span class="num">STOP 04 — D3</span>Scoped, recommended, deliberately not built</h2>
+
+<div class="card scope">
+  <h3>The claim is confirmed: the build list is genuinely client state</h3>
+  <ul>
+    <li><code>reconcileProjects</code> has <strong>exactly one</strong> production caller, and it is handed the
+      body of <code>GET /api/portal/projects/active</code> — <strong>one</strong> tree, singular by type and by
+      source. It can add at most one card per invocation.</li>
+    <li>The inventory from <code>GET /api/portal/projects</code> is reduced to
+      <code>{known, ids[], activeId}</code> — no name, no tasks, no counts, nothing renderable. It is consumed
+      only by <code>pruneDeadProjects</code> (removal) and as an ordering fallback.</li>
+    <li>A student with <strong>4 published builds on a fresh browser sees 2 cards</strong>: their active build
+      and the training example. <code>hydrateProjectById</code> is the only path that can add a non-active
+      build, and it is reachable only from “Restore” on an <em>archived</em> project.</li>
+  </ul>
+</div>
+
+<h3>Two findings that block a naive unification</h3>
+<ol>
+  <li><strong><code>GET /api/portal/projects</code> is route-shadowed.</strong> <code>projectRoutes.ts</code> is
+    mounted ahead of <code>projectsPortalRoutes.ts</code> and wins, so <code>listEnrollmentProjectsSummary</code>
+    and <code>toProjectSummaryDto</code> are dead code for that path — and both the <code>projectApiEnabled</code>
+    flag gate and <code>requireContentEntitlement('projects')</code> are bypassed on it. This should be resolved
+    first; it is arguably a bug in its own right.</li>
+  <li><strong>The protected platform record is not filtered.</strong> <code>fcce50ef-…</code> is deliberately
+    <em>not</em> excluded from <code>listProjectsForEnrollment</code>, and it is invisible today only because
+    <code>/active</code> is the sole render source. A server-rendered list ships a second “Untitled project” card
+    to Ali's own account on day one.</li>
+</ol>
+
+<h3>Recommendation — do not flip the architecture to fix the symptom</h3>
+<p>The cheapest correct first slice is not the unification. In <code>reconcileFromBackend</code>, for each
+inventory id not already held locally, call the existing <code>hydrateProjectById</code> — a function that
+already exists, is already exercised by the restore flow, is deliberately routed <em>around</em>
+<code>reconcileProjects</code> so it cannot mis-assign <code>activeId</code>, and already refuses to overwrite
+local state. Roughly 15 lines, leaving every <code>pruneDeadProjects</code> interlock untouched.</p>
+<p>A card-shaped list DTO then becomes a payload optimisation rather than an architectural flip. It is the right
+unit — one tree is about 114&nbsp;KB, so four builds is roughly 456&nbsp;KB fetched and written into a
+localStorage budget of a few MB, and almost none of it is needed to draw a card.</p>
+<p>The full unification touches <code>projectHydrate.ts</code>, 755 lines of incident-derived logic where every
+one of <code>pruneDeadProjects</code>' six cases is a recorded near-miss, and it has no home for the optimistic
+wizard placeholder during the minutes a plan takes to generate. It should be its own piece of work with its own
+review, not a rider on a display fix.</p>
+
+<!-- ─────────────────────────────────────────────────────────────────────── -->
+<h2><span class="num">STOP 05</span>How this was verified</h2>
+
+<div class="card">
+  <h3>Tests watched failing against unmodified <code>main</code> first</h3>
+  <p>In a separate base worktree detached at <code>main</code>, with the real assertion output:</p>
+<pre><code><span class="c">● a project with a published server plan › MUST NOT render as the starter template</span>
+    Expected: "pipeline"
+    Received: "local"
+
+<span class="c">● a project with a published server plan › shows the SERVER plan, not the template
+  with the plan bolted onto it</span>
+    Expected: not 27
+
+<span class="c">● … › agrees with the server about how many tasks it has (what the archive dialog counts)</span>
+    Expected: 17
+    Received: 27
+
+<span class="c">● the "Active builds" counter › reads 1 when the student has one build</span>
+    Expected: "1"
+    Received: "2"
+
+<span class="c">● the "Active builds" counter › reads 2 when the student has two builds — the Quincy report</span>
+    Expected: "2"
+    Received: "3"</code></pre>
+  <p>Four guard tests <strong>pass on <code>main</code> and still pass after</strong>: the qninying case (a
+  cached plan missing a story must be adopted, never superseded), an already-hydrated <code>pipeline</code> row
+  with a local completion the server has not granted, a client-built project round-tripped through the server,
+  and a student mid-build. Those pin behaviour the fix must not disturb — one of them caught a real regression in
+  an earlier cut of this change and forced the discriminator to be task identity rather than <code>origin</code>.</p>
+</div>
+
+<div class="card">
+  <h3>Environment, proved rather than assumed</h3>
+  <dl class="kv">
+    <dt>DATABASE</dt><dd>Asked the app's own connection, not the variable:
+      <code>select current_database()</code> → <strong>accelerator_dev1</strong>. The copied <code>.env</code>
+      carries <code>DB_NAME=accelerator_prod</code> on line 7 <strong>and a second
+      <code>DATABASE_URL=…/accelerator_prod</code> landmine on line 8</strong>; both were forced on the command line.</dd>
+    <dt>IMAGE</dt><dd>Grepped the container filesystem and the bundle served over HTTP, not the build log.
+      <code>pj-sb-tag</code> (new in this commit) present in <code>static/css/main.ebc71045.css</code> and
+      <code>static/js/885.ab6dcf44.chunk.js</code>; absent from the <code>main</code> build, whose bundle hash
+      differs (<code>main.0ed99da1.js</code> vs <code>main.8963e9fd.js</code>).</dd>
+    <dt>FIXTURE</dt><dd>A throwaway enrollment and a seeded 17-story plan. The first capture pass was
+      <strong>discarded</strong>: <code>projectSync.mirrorToBackend</code> pushes the local template up to
+      <code>POST /api/portal/projects/import</code> on every sync, which wrote template rows into the server and
+      drifted the fixture under the capture. Both walks were redone with that call aborted and the fixture reset,
+      so the before and after measure the same plan.</dd>
+    <dt>SUITES</dt><dd><code>pages/portal/projects</code>: 22 suites, 291 tests, all passing. Full frontend:
+      1255 passing; the 2 failures reproduce identically on unmodified <code>main</code> and are untouched here.</dd>
+    <dt>TYPES</dt><dd><code>tsc --noEmit</code> clean, exit 0, pinned TypeScript <strong>5.7.3</strong> — a bare
+      <code>npx tsc</code> resolves 4.9.5 in this repo and both invents and hides errors.</dd>
+    <dt>SCOPE</dt><dd>Dev only. Production was never read or written.</dd>
+  </dl>
+</div>
+
+<footer>
+  Session CC-20260819-w7nq · 2026-08-19 · screenshots in
+  <code>docs/screenshots/2026-08-19-multibuild-display/</code> · capture script
+  <code>scripts/captureMultibuildDisplay.js</code>
+</footer>
+
+</div>
+</body>
+</html>
