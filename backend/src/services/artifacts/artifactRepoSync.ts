@@ -70,6 +70,8 @@ export interface StoredArtifact {
     size_bytes?: number;
     uploaded_at?: string;
     week?: number | null;
+    project_label?: string | null;
+    built_on_sample?: boolean;
   } | null;
 }
 
@@ -126,6 +128,12 @@ export function toArtifactRecords(
       text: textByCardId.get(row.card_id) ?? null,
       uploadedAt: c.uploaded_at || '',
       sizeBytes: typeof c.size_bytes === 'number' ? c.size_bytes : null,
+      // Absent on every artifact uploaded before this was recorded, which is
+      // all 53 of them. Defaults to "own project" rather than "sample" —
+      // labelling real capstone work as a sample is the worse error, and the
+      // backfill can correct any it can identify.
+      builtOnSample: c.built_on_sample === true,
+      projectLabel: c.project_label ?? null,
     });
   }
   return out;
