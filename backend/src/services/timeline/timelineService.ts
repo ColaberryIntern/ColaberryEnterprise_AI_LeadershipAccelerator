@@ -16,6 +16,7 @@ import { selectTestimonialForEnrollment } from './networkVideoService';
 import { selectPodcastForEnrollment } from './podcastMediaService';
 import { selectBlogForEnrollment } from './blogMediaService';
 import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingService';
+import { globalCurriculumWhere } from './curriculumScope';
 import { isFreePreviewTier } from '../access/contentEntitlement';
 import { env } from '../../config/env';
 
@@ -172,10 +173,15 @@ export interface TimelineFeed {
  * curriculum across every batch/cohort, so cards live at the global scope
  * (cohort_id IS NULL) and every enrolled student sees the same timeline. (The
  * cohort_id column is kept nullable for a possible future per-cohort override.)
+ *
+ * Global scope alone is NOT sufficient to identify that curriculum: `program_id`
+ * selects the course, and a second program authored at global scope will match
+ * every other clause here. See `curriculumScope` for why that is a correctness
+ * boundary rather than a refinement.
  */
 export async function getGlobalCards(): Promise<TimelineCard[]> {
   return TimelineCard.findAll({
-    where: { cohort_id: null, status: 'active', visibility: 'published' },
+    where: globalCurriculumWhere(),
     order: [['week', 'ASC'], ['order', 'ASC']],
   });
 }

@@ -29,6 +29,7 @@
 //   node backend/src/scripts/sendAnthropicPartnerFollowUp.js --preview 1
 //   node backend/src/scripts/sendAnthropicPartnerFollowUp.js --status
 //   node backend/src/scripts/sendAnthropicPartnerFollowUp.js --stop
+//   node backend/src/scripts/sendAnthropicPartnerFollowUp.js --resume       # un-pause a --stop, KEEPS what already sent
 //   node backend/src/scripts/sendAnthropicPartnerFollowUp.js --force        # ignore window/weekday, NOT the halts
 //   node backend/src/scripts/sendAnthropicPartnerFollowUp.js --retry-claim  # clear an ambiguous claim after checking Sent
 //
@@ -90,6 +91,7 @@ const FORCE = process.argv.includes('--force');
 const STATUS = process.argv.includes('--status');
 const STOP = process.argv.includes('--stop');
 const RESET = process.argv.includes('--reset');
+const RESUME = process.argv.includes('--resume');
 const RETRY_CLAIM = process.argv.includes('--retry-claim');
 const PREVIEW = arg('--preview', null);
 const LEDGER_PATH = arg('--ledger', ledgerLib.defaultLedgerPath());
@@ -180,7 +182,20 @@ async function main() {
 
   if (STATUS) { console.log(describeLedger(ledger)); return; }
 
+  if (RESUME) {
+    const before = ledgerLib.sentEntries(ledger).length;
+    ledgerLib.saveLedger(ledgerLib.resume(ledger), LEDGER_PATH);
+    log(`campaign resumed with its history intact: ${before} of ${SEQUENCE_LENGTH} already sent, next is note ${ledgerLib.nextDayNumber(ledger)}`);
+    return;
+  }
+
   if (RESET) {
+    const already = ledgerLib.sentEntries(ledger).length;
+    if (already > 0 && !FORCE) {
+      log(`refusing to reset: ${already} note(s) already went out, and resetting would send note 1 to Anthropic a second time.`);
+      log('Use --resume to un-pause and continue from where it stopped, or --reset --force if you really mean to start over.');
+      return;
+    }
     ledgerLib.saveLedger(ledgerLib.reset(ledger), LEDGER_PATH);
     log('ledger reset; the sequence will start again from note 1 on the next weekday tick');
     return;

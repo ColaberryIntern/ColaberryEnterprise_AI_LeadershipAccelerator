@@ -14,11 +14,21 @@ import React from 'react';
  * capeEvidenceBandWeightsService can patch the weights with versioning --
  * publishing them as immutable constants would be the wrong claim.
  *
- * THE COMPETENCY NAMES ARE THE REAL ONES. The prototype's radar invented
- * categories -- RAG, Vectors, LLM Core -- that the platform does not track,
- * while omitting several it does. A "sample data" badge covers made-up VALUES on
- * real categories; it does not cover made-up categories, which tell a reader the
- * product measures something it doesn't.
+ * THE COMPETENCY NAMES ARE THE REAL ONES, read from
+ * services/progression/seeders.ts -- the eleven promotion competencies:
+ * prompt_engineering, context_engineering, architecture, testing, debugging,
+ * deployment, github, communication, leadership, security, documentation.
+ *
+ * The prototype's radar invented categories -- RAG, Vectors, LLM Core -- that
+ * the platform does not track, while omitting several it does. A "sample data"
+ * badge covers made-up VALUES on real categories; it does not cover made-up
+ * categories, which tell a reader the product measures something it doesn't.
+ *
+ * CORRECTED AFTER FIRST SHIP: the initial list ended with "Claude Code", which
+ * came from a different source in the search and is NOT a promotion competency.
+ * The eleventh is DEBUGGING. Shipping a competency list on the page that argues
+ * every number traces to evidence, and getting the list wrong, is the same
+ * failure as the invented radar -- just quieter.
  */
 
 /** The four evidence bands, with the seeded default weights. */
@@ -53,8 +63,8 @@ const BANDS = [
 /** Real competency slugs, read from the platform rather than invented. */
 const COMPETENCIES = [
   'Architecture', 'Prompt engineering', 'Context engineering', 'Testing',
-  'Deployment', 'GitHub', 'Security', 'Documentation',
-  'Communication', 'Leadership', 'Claude Code',
+  'Debugging', 'Deployment', 'GitHub', 'Security',
+  'Documentation', 'Communication', 'Leadership',
 ];
 
 const RUNGS = [
