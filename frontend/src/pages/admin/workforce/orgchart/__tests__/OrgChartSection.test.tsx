@@ -12,9 +12,20 @@ import type { OrgChartResponse } from '../../../../../services/workforceOrgChart
  * and frontend/src/pages/admin/workforce/__tests__/WorkforceOSPage.smoke.test.tsx.
  */
 
-jest.mock('../../../../../services/workforceOrgChartApi', () => ({ getOrgChart: jest.fn() }));
+jest.mock('../../../../../services/workforceOrgChartApi', () => ({
+  getOrgChart: jest.fn(),
+  // Org Chart v3 (2026-08-19) — team-switch dropdown. NAMED_DEPARTMENTS is a
+  // real, static export (not a jest.fn()) — mirrors the module's actual
+  // shape so OrgChartHumanDrawer's dropdown options render for real in
+  // these tests, not just call-through mocks.
+  NAMED_DEPARTMENTS: ['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing'],
+  updateOrgMemberTeam: jest.fn(),
+  assignHierarchyTask: jest.fn(),
+}));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getOrgChart } = require('../../../../../services/workforceOrgChartApi') as { getOrgChart: jest.Mock };
+const { getOrgChart, updateOrgMemberTeam, assignHierarchyTask } = require('../../../../../services/workforceOrgChartApi') as {
+  getOrgChart: jest.Mock; updateOrgMemberTeam: jest.Mock; assignHierarchyTask: jest.Mock;
+};
 // OrgChartMermaid (and the MermaidDiagram it wraps) loads mermaid from a CDN
 // at runtime via a dynamic `import()` of a literal URL string — real
 // production behavior (MermaidDiagram.tsx's own graceful CDN-failure
@@ -40,19 +51,19 @@ jest.mock('../OrgChartMermaid', () => ({ __esModule: true, default: () => null }
 const CHART: OrgChartResponse = {
   organization: { id: 'org-colaberry', name: 'Colaberry' },
   humans: [
-    { id: 'f179c222-284e-4180-a335-cca9e4918b2e', name: 'Ali Muwwakkil', email: 'ali@colaberry.com', team: 'Exec', department: 'Exec', role: 'manager', leadership_agent_ids: ['corybrain-id'], staff_count: 14, task: { id: 't-ali', ticket_number: null, title: '[Student Success] Cross-Departmental Initiative Execution', status: 'backlog', priority: 'medium', type: 'strategic', created_at: '2026-08-19T11:28:06.114Z' } },
-    { id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', name: 'kesetebirhan@gmail.com', email: 'kesetebirhan@gmail.com', team: 'Operations', department: 'Operations', role: 'member', leadership_agent_ids: ['wie-id'], staff_count: 4, task: { id: 't-kes', ticket_number: null, title: '[Inbox Case] Employee Access To Enterprise Platform', status: 'in_progress', priority: 'medium', type: 'inbox_case', created_at: '2026-08-19T12:00:24.739Z' } },
-    { id: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f', name: 'Taiwo Oludimimu', email: 'taiwooludimimu@gmail.com', team: null, department: 'Other', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
-    { id: 'a6db5276-2993-4e0b-ace9-0052ba841c80', name: 'Jackie', email: 'jackie@colaberry.com', team: 'Operations', department: 'Operations', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
-    { id: '5db87b51-4554-4e52-93d7-c61f9887352c', name: 'Swati', email: 'swati@colaberry.com', team: null, department: 'Other', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
-    { id: '4e255894-ac0b-4367-ae06-27459ea05f66', name: 'Sohail', email: 'sohail@colaberry.com', team: 'Marketing', department: 'Marketing', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null },
+    { id: 'f179c222-284e-4180-a335-cca9e4918b2e', name: 'Ali Muwwakkil', email: 'ali@colaberry.com', team: 'Exec', department: 'Exec', role: 'manager', leadership_agent_ids: ['corybrain-id'], staff_count: 14, task: { id: 't-ali', ticket_number: null, title: '[Student Success] Cross-Departmental Initiative Execution', status: 'backlog', priority: 'medium', type: 'strategic', created_at: '2026-08-19T11:28:06.114Z' }, hierarchy_color: null },
+    { id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', name: 'kesetebirhan@gmail.com', email: 'kesetebirhan@gmail.com', team: 'Operations', department: 'Operations', role: 'member', leadership_agent_ids: ['wie-id'], staff_count: 4, task: { id: 't-kes', ticket_number: null, title: '[Inbox Case] Employee Access To Enterprise Platform', status: 'in_progress', priority: 'medium', type: 'inbox_case', created_at: '2026-08-19T12:00:24.739Z' }, hierarchy_color: null },
+    { id: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f', name: 'Taiwo Oludimimu', email: 'taiwooludimimu@gmail.com', team: null, department: 'Other', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null },
+    { id: 'a6db5276-2993-4e0b-ace9-0052ba841c80', name: 'Jackie', email: 'jackie@colaberry.com', team: 'Operations', department: 'Operations', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null },
+    { id: '5db87b51-4554-4e52-93d7-c61f9887352c', name: 'Swati', email: 'swati@colaberry.com', team: null, department: 'Other', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null },
+    { id: '4e255894-ac0b-4367-ae06-27459ea05f66', name: 'Sohail', email: 'sohail@colaberry.com', team: 'Marketing', department: 'Marketing', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null },
   ],
   leadership: [
-    { id: 'corybrain-id', agent_name: 'CoryBrain', display_name: 'Cory Brain — Strategic Initiatives', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: ['staff-1-id'], open_ticket_count: 129 },
-    { id: 'wie-id', agent_name: 'workforce_intelligence_engine', display_name: 'Workforce Intelligence Engine', reports_to_human_id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', reports_to_summary: 'Reports to: kesetebirhan@gmail.com', staff_ids: [], open_ticket_count: 202 },
+    { id: 'corybrain-id', agent_name: 'CoryBrain', display_name: 'Cory Brain — Strategic Initiatives', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: ['staff-1-id'], open_ticket_count: 129, hierarchy_color: null },
+    { id: 'wie-id', agent_name: 'workforce_intelligence_engine', display_name: 'Workforce Intelligence Engine', reports_to_human_id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', reports_to_summary: 'Reports to: kesetebirhan@gmail.com', staff_ids: [], open_ticket_count: 202, hierarchy_color: null },
   ],
   staff: [
-    { id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', display_name: 'Admissions Conversion Architect', reports_to_agent_id: 'corybrain-id', reports_to_summary: 'Reports to: Cory Brain — Strategic Initiatives', open_ticket_count: 12 },
+    { id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', display_name: 'Admissions Conversion Architect', reports_to_agent_id: 'corybrain-id', reports_to_summary: 'Reports to: Cory Brain — Strategic Initiatives', open_ticket_count: 12, hierarchy_color: null },
   ],
   unresolved: [],
   generated_at: '2026-08-19T14:00:00.000Z',
@@ -302,5 +313,172 @@ describe('OrgChartSection — fullscreen toggle', () => {
     });
 
     expect(container.querySelector('button[aria-label="View fullscreen"]')).toBeTruthy();
+  });
+});
+
+// Org Chart v3 (2026-08-19, session CC-20260818-x4nk continued) — Ali:
+// "Give me the ability to switch the people between teams."
+describe('OrgChartHumanDrawer — team dropdown', () => {
+  it('selecting a new department calls updateOrgMemberTeam with the right id/team and triggers a refetch', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    updateOrgMemberTeam.mockResolvedValue({ ...CHART.humans[3], team: 'Marketing' }); // Jackie
+    await render();
+
+    const jackieCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Jackie')) as HTMLElement;
+    await act(async () => {
+      jackieCard.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const select = container.querySelector('select[aria-label="Change Jackie\'s department"]') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+
+    await act(async () => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.set!;
+      nativeSetter.call(select, 'Marketing');
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(updateOrgMemberTeam).toHaveBeenCalledWith('a6db5276-2993-4e0b-ace9-0052ba841c80', 'Marketing');
+    // Refetch-on-success: getOrgChart called once on mount + once more after the team change.
+    expect(getOrgChart).toHaveBeenCalledTimes(2);
+  });
+
+  it('selecting the empty option ("None (Other)") clears the department by passing null', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    updateOrgMemberTeam.mockResolvedValue({ ...CHART.humans[0], team: null });
+    await render();
+
+    const aliCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Ali Muwwakkil')) as HTMLElement;
+    await act(async () => {
+      aliCard.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const select = container.querySelector('select[aria-label="Change Ali Muwwakkil\'s department"]') as HTMLSelectElement;
+    await act(async () => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.set!;
+      nativeSetter.call(select, '');
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(updateOrgMemberTeam).toHaveBeenCalledWith('f179c222-284e-4180-a335-cca9e4918b2e', null);
+  });
+});
+
+// Org Chart v3 (2026-08-19) — Ali: "Human, AI Leadership, AI Staff should
+// all have the same colors."
+describe('OrgChartSection — hierarchy colors', () => {
+  it('a colored branch (human + their leadership + their staff) all render the SAME background; an uncolored human falls back to the hash-based color unchanged', async () => {
+    const COLORED_CHART: OrgChartResponse = {
+      ...CHART,
+      humans: CHART.humans.map((h) => (h.id === 'f179c222-284e-4180-a335-cca9e4918b2e' ? { ...h, hierarchy_color: '#367895' } : { ...h, hierarchy_color: null })),
+      leadership: CHART.leadership.map((l) => (l.id === 'corybrain-id' ? { ...l, hierarchy_color: '#367895' } : { ...l, hierarchy_color: null })),
+      staff: CHART.staff.map((s) => ({ ...s, hierarchy_color: '#367895' })), // the only staff entry reports through corybrain-id
+    };
+    getOrgChart.mockResolvedValue(COLORED_CHART);
+    await render();
+
+    const aliCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Ali Muwwakkil')) as HTMLElement;
+    const aliAvatar = aliCard.querySelector('.wf-av') as HTMLElement;
+    const aliBackground = aliAvatar.style.background;
+    expect(aliBackground).toBeTruthy();
+
+    const corybrainCard = Array.from(container.querySelectorAll('a.wf-emp')).find((el) => el.textContent?.includes('Cory Brain')) as HTMLElement;
+    const corybrainAvatar = corybrainCard.querySelector('.wf-av') as HTMLElement;
+    // Same hierarchy_color value ('#367895') rendered through the same
+    // React inline-style path -> jsdom normalizes it identically either way,
+    // so a direct equality check is format-agnostic (never hardcodes
+    // whether jsdom keeps '#367895' or expands to rgb(...)).
+    expect(corybrainAvatar.style.background).toBe(aliBackground);
+
+    const staffCard = Array.from(container.querySelectorAll('a.wf-emp')).find((el) => el.textContent?.includes('Admissions Conversion Architect')) as HTMLElement;
+    const staffAvatar = staffCard.querySelector('.wf-av') as HTMLElement;
+    expect(staffAvatar.style.background).toBe(aliBackground);
+
+    // Sohail has no hierarchy_color anywhere in this fixture — falls back to
+    // the pre-existing hash-based color, which is simply SOME real color,
+    // not empty/unset, and not the same as the colored branch above.
+    const sohailCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Sohail')) as HTMLElement;
+    const sohailAvatar = sohailCard.querySelector('.wf-av') as HTMLElement;
+    expect(sohailAvatar.style.background).toBeTruthy();
+    expect(sohailAvatar.style.background).not.toBe(aliBackground);
+  });
+});
+
+// Org Chart v3 (2026-08-19) — Ali: "The human has the ability to create and
+// assign tasks to any agent in it's hierarchy even if they report to
+// another AI Agent."
+describe('OrgChartHumanDrawer — assign task', () => {
+  async function openAliDrawerAndAssignForm() {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const aliCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Ali Muwwakkil')) as HTMLElement;
+    await act(async () => {
+      aliCard.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const openButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Assign task') as HTMLElement;
+    await act(async () => {
+      openButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  it("the agent picker's options are exactly Ali's real downstream agents (CoryBrain AI Leadership + Admissions Conversion Architect AI Staff) — not Kes's workforce_intelligence_engine", async () => {
+    await openAliDrawerAndAssignForm();
+
+    const select = container.querySelector('select[aria-label="Assign task to agent"]') as HTMLSelectElement;
+    const optionLabels = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+
+    expect(optionLabels).toEqual([
+      'Cory Brain — Strategic Initiatives (AI Leadership)',
+      'Admissions Conversion Architect (AI Staff)',
+    ]);
+    expect(optionLabels).not.toContain(expect.stringContaining('Workforce Intelligence Engine'));
+  });
+
+  it('submitting calls assignHierarchyTask with a generated idempotency key, and a retry (form stays open on failure) reuses the SAME key', async () => {
+    await openAliDrawerAndAssignForm();
+
+    const titleInput = container.querySelector('input[aria-label="Task title"]') as HTMLInputElement;
+    const form = container.querySelector('form') as HTMLFormElement;
+
+    await act(async () => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+      nativeSetter.call(titleInput, 'Investigate lead spike');
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // First submit fails (simulated network error) — form stays open.
+    assignHierarchyTask.mockRejectedValueOnce(new Error('network error'));
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(assignHierarchyTask).toHaveBeenCalledTimes(1);
+    const firstKey = assignHierarchyTask.mock.calls[0][1].idempotencyKey;
+    expect(firstKey).toBeTruthy();
+
+    // Retry (same form, same key generated at open-time) — this time succeeds.
+    assignHierarchyTask.mockResolvedValueOnce({ id: 'ticket-1', title: 'Investigate lead spike' });
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(assignHierarchyTask).toHaveBeenCalledTimes(2);
+    const secondKey = assignHierarchyTask.mock.calls[1][1].idempotencyKey;
+    expect(secondKey).toBe(firstKey); // SAME key reused across the retry, never regenerated
+
+    expect(assignHierarchyTask).toHaveBeenLastCalledWith(
+      'f179c222-284e-4180-a335-cca9e4918b2e',
+      expect.objectContaining({ agentId: 'corybrain-id', title: 'Investigate lead spike', idempotencyKey: firstKey }),
+    );
   });
 });

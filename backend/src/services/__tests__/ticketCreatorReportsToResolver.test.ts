@@ -249,6 +249,20 @@ describe('enforceReportsToGate', () => {
     expect(mockAdminFindByPk).not.toHaveBeenCalled();
   });
 
+  // Org Chart v3 (2026-08-19) — 'org_member' bypass. Before this change,
+  // 'org_member' was a fully-modeled ASSIGNEE type (Ticket.ts) with no valid
+  // CREATOR path — resolveCreatorAiAgent() has no case for it, so it would
+  // have hit the `!creatorAgent` throw below and made
+  // orgChartTaskAssignmentService.ts's human-assigns-a-task feature unable
+  // to create a ticket at all. Required for that feature, not incidental.
+  it("'org_member': bypasses entirely, returns null, queries nothing — required for a human org_members row to create its own ticket (org-chart task assignment)", async () => {
+    const result = await enforceReportsToGate('org_member', 'any-org-member-uuid');
+
+    expect(result).toBeNull();
+    expect(mockAgentFindOne).not.toHaveBeenCalled();
+    expect(mockAdminFindByPk).not.toHaveBeenCalled();
+  });
+
   it('happy path (AI Leadership): a registered agent with reports_to_type=human resolves directly', async () => {
     mockAgentFindOne.mockResolvedValue({ reports_to_type: 'human', reports_to_id: 'jackie-id' });
 

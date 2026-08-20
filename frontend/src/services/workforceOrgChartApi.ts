@@ -37,6 +37,10 @@ export interface OrgChartHuman {
   /** The one throttled, most-recent OPEN task for this human, or null when
    * they genuinely have none yet — an honest empty state, never fabricated. */
   task: OrgChartTask | null;
+  /** Org Chart v3 (2026-08-19) — present only when this human has >=1 AI
+   * Leadership agent reporting to them; null for everyone else (fallback
+   * color is this frontend's own decision, not the API's). */
+  hierarchy_color: string | null;
 }
 
 export interface OrgChartLeadershipAgent {
@@ -48,6 +52,9 @@ export interface OrgChartLeadershipAgent {
   reports_to_summary: string;
   staff_ids: string[];
   open_ticket_count: number;
+  /** Org Chart v3 (2026-08-19) — same color as the human this agent reports
+   * to; never null in practice (every resolved leadership agent has one). */
+  hierarchy_color: string | null;
 }
 
 export interface OrgChartStaffAgent {
@@ -58,6 +65,9 @@ export interface OrgChartStaffAgent {
   /** "Reports to: <leadership agent name>" — real, present before any click. */
   reports_to_summary: string;
   open_ticket_count: number;
+  /** Org Chart v3 (2026-08-19) — same color as the leadership agent this
+   * staff agent reports through. */
+  hierarchy_color: string | null;
 }
 
 export interface OrgChartUnresolvedAgent {
@@ -77,5 +87,38 @@ export interface OrgChartResponse {
 
 export async function getOrgChart(): Promise<OrgChartResponse> {
   const res = await api.get<OrgChartResponse>('/api/admin/workforce/org-chart');
+  return res.data;
+}
+
+// Org Chart v3 (2026-08-19) — Ali: "Give me the ability to switch the
+// people between teams." `team: null` clears the department (buckets into
+// "Other" on next load).
+export async function updateOrgMemberTeam(id: string, team: string | null): Promise<OrgChartHuman> {
+  const res = await api.patch<OrgChartHuman>(`/api/admin/workforce/org-chart/members/${id}/team`, { team });
+  return res.data;
+}
+
+export interface AssignHierarchyTaskInput {
+  agentId: string;
+  title: string;
+  description?: string;
+  idempotencyKey: string;
+}
+
+export interface AssignedTask {
+  id: string;
+  title: string;
+}
+
+// Org Chart v3 (2026-08-19) — Ali: "The human has the ability to create and
+// assign tasks to any agent in it's hierarchy even if they report to
+// another AI Agent."
+export async function assignHierarchyTask(orgMemberId: string, input: AssignHierarchyTaskInput): Promise<AssignedTask> {
+  const res = await api.post<AssignedTask>(`/api/admin/workforce/org-chart/members/${orgMemberId}/tasks`, {
+    agent_id: input.agentId,
+    title: input.title,
+    description: input.description,
+    idempotency_key: input.idempotencyKey,
+  });
   return res.data;
 }

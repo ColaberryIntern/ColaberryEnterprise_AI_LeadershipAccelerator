@@ -12,7 +12,17 @@ import request from 'supertest';
 
 const getOrgChart = jest.fn();
 
-jest.mock('../../../services/workforce/orgChartService', () => ({ getOrgChart: (...a: unknown[]) => getOrgChart(...a) }));
+jest.mock('../../../services/workforce/orgChartService', () => ({
+  getOrgChart: (...a: unknown[]) => getOrgChart(...a),
+  // Same fix as workforceRoutes.orgChart.test.ts — handleUpdateOrgMemberTeam's
+  // z.enum([...NAMED_DEPARTMENTS]) executes at controller module-load time.
+  NAMED_DEPARTMENTS: ['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing'],
+}));
+// Org Chart v3 (2026-08-19) — see workforceRoutes.orgChart.test.ts's own
+// comment on this same addition: workforceController.ts now also imports
+// these two new service modules, mocked here to keep this suite isolated.
+jest.mock('../../../services/workforce/orgChartHierarchyService', () => ({ updateOrgMemberTeam: jest.fn() }));
+jest.mock('../../../services/workforce/orgChartTaskAssignmentService', () => ({ assignTaskToAgent: jest.fn() }));
 jest.mock('../../../services/workforce/workforceService', () => ({
   roster: jest.fn(), office: jest.fn(), briefing: jest.fn(), runDailyMeeting: jest.fn(),
   listMeetings: jest.fn(), listTasks: jest.fn(), createTask: jest.fn(), updateTask: jest.fn(),

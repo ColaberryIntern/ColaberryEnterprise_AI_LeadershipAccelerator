@@ -260,7 +260,13 @@ describe('runCommit', () => {
   });
 
   it('boundary: the untouched-list emails never appear in any write call', async () => {
-    const untouched = ['swati@colaberry.com', 'ali+10@colaberry.com', 'balakrishna.k@colaberry.com', 'channocatshhr@yahoo.com', 'reese@colaberry.com'];
+    // Org Chart v3 (2026-08-19): swati@colaberry.com and
+    // balakrishna.k@colaberry.com moved OUT of "untouched" — Ali named both
+    // directly this round ("Put both bala's in Customer Support - swati is
+    // is in operations"), so they're now real DEPARTMENT_ASSIGNMENTS entries
+    // (see the array above and the file's header comment). Only the emails
+    // Ali still has NOT named stay in this list.
+    const untouched = ['ali+10@colaberry.com', 'channocatshhr@yahoo.com', 'reese@colaberry.com'];
     expect(DEPARTMENT_ASSIGNMENTS.map((d) => d.email)).toEqual(expect.not.arrayContaining(untouched));
 
     await runCommit('/tmp', 'test-session');
