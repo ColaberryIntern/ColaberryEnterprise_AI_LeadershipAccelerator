@@ -4,6 +4,8 @@ import SeoV2 from '../../components/publicV2/SeoV2';
 import MaturityLadder from '../../components/publicV2/MaturityLadder';
 import HeroPlatformV8 from '../../components/publicV2/HeroPlatformV8';
 import CapabilityOS from '../../components/publicV2/CapabilityOS';
+import TwoExperiences from '../../components/publicV2/TwoExperiences';
+import ReceiptsDrilldown from '../../components/publicV2/ReceiptsDrilldown';
 import BuildPipeline from '../../components/publicV2/BuildPipeline';
 import CapabilityEarned from '../../components/publicV2/CapabilityEarned';
 import ArchitectExperience from '../../components/publicV2/ArchitectExperience';
@@ -131,7 +133,9 @@ function PlatformV2(): React.ReactElement {
       </section>
 
       <CapabilityOS />
+      <TwoExperiences />
       <BuildPipeline />
+      <ReceiptsDrilldown />
       <ArchitectExperience />
       <CapabilityEarned />
       <GovernanceReal />

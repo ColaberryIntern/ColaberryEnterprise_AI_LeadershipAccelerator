@@ -75,4 +75,45 @@ describe('platform sections 1 and 5 against the progression seeder', () => {
     // The prototype said ten competencies. It must not come back.
     expect(os).not.toContain("v: '10'");
   });
+
+  it('section 4 quotes the real Engineer gate thresholds', () => {
+    const rc = read(path.join(__dirname, '../ReceiptsDrilldown.tsx'));
+
+    // seeders.ts rank 5 (engineer). If anyone edits the seeder, the marketing
+    // page must not go on quoting the old numbers.
+    const eng = seeder.match(/slug: 'engineer', rank: 5[^\r\n]*/);
+    expect(eng).not.toBeNull();
+    const line = (eng as RegExpMatchArray)[0];
+
+    const need = (k: string): string => {
+      const m = line.match(new RegExp(`${k}: (\\d+)`));
+      expect(m).not.toBeNull();
+      return (m as RegExpMatchArray)[1];
+    };
+
+    expect(rc).toContain(`21 of ${need('min_evidence')}`);
+    expect(rc).toContain(`5 of ${need('min_artifacts')}`);
+    expect(rc).toContain(`9 of ${need('min_github')}`);
+    expect(line).toContain('requires_ai_approval: true');
+    // The approval is automated. The page must never call it a human signature.
+    expect(rc).toContain('automated');
+    expect(rc).not.toMatch(/human[- ]reviewed|human signature|humans remain accountable/i);
+  });
+
+  it('neither new section reintroduces the department tier', () => {
+    // OrgMemberDetail.team is `string | null`; there is no department rollup.
+    const rc = read(path.join(__dirname, '../ReceiptsDrilldown.tsx'));
+    const tx = read(path.join(__dirname, '../TwoExperiences.tsx'));
+    [rc, tx].forEach((src) => {
+      const body = src.slice(src.indexOf('export default'));
+      expect(body).not.toMatch(/[Dd]epartment/);
+    });
+  });
+
+  it('section 4 does not promise a click through to the commit', () => {
+    const rc = read(path.join(__dirname, '../ReceiptsDrilldown.tsx'));
+    const body = rc.slice(rc.indexOf('export default'));
+    expect(body).not.toMatch(/until you are looking at the commit|down to the line of code/i);
+    expect(body).toContain('does not');
+  });
 });
