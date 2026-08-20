@@ -47,7 +47,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     badge: 'Start here',
     name: 'Start free',
     priceClaim: 'pricing.free',
-    unit: 'to start',
+    unit: 'for the whole platform',
     blurb:
       'Explore the whole platform yourself, with both the learner experience and your own ' +
       'management dashboard, and invite your team free to test it.',
@@ -68,7 +68,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     badge: 'Activate a license',
     name: 'One license',
     priceClaim: 'pricing.individual.annual',
-    secondaryClaim: 'pricing.individual.monthly',
+    unit: 'per person, per month, billed annually',
     blurb:
       'Full platform access for one person, from first login through to certification ' +
       'preparation. The single paid step, taken only when you are ready.',
@@ -89,7 +89,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     name: 'Team and department',
     priceClaim: 'pricing.team',
     secondaryClaim: 'pricing.department',
-    unit: 'per seat, per year',
+    unit: 'per seat, per year — volume pricing as you scale',
     blurb:
       'Annual seats for your organization, reassignable as people move, plus the management ' +
       'dashboard across everyone you develop.',

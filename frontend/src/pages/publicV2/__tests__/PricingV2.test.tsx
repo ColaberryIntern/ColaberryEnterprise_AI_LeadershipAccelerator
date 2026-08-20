@@ -31,7 +31,11 @@ describe('PricingV2 — every figure comes from the registry', () => {
 
   it('shows the figures that ARE approved for this route', () => {
     // These are approved for /pricing only, which is why this page exists.
-    expect(publicClaim('pricing.individual.monthly', '/pricing')).not.toBeNull();
+    // RETIRED 2026-08-19: there is no month-to-month plan. The claim is kept in
+    // the registry as NEEDS_VERIFICATION with no approved route, so the key
+    // cannot be quietly reused for a different number -- and it must now
+    // resolve to null everywhere rather than print a price we do not offer.
+    expect(publicClaim('pricing.individual.monthly', '/pricing')).toBeNull();
     expect(publicClaim('pricing.team', '/pricing')).not.toBeNull();
     expect(publicClaim('pricing.department', '/pricing')).not.toBeNull();
   });

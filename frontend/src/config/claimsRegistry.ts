@@ -397,7 +397,7 @@ export const CLAIMS: readonly Claim[] = [
   /* ── pricing: verified against the LIVE site, not the repo ─────────────── */
   {
     key: 'pricing.free',
-    publicWording: 'Free to start — no credit card',
+    publicWording: 'Free',
     verification: 'VERIFIED',
     capability: 'live',
     evidenceSource: 'Live probe of enterprise.colaberry.ai/pricing, 2026-08-07.',
@@ -408,7 +408,7 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     key: 'pricing.individual.annual',
-    publicWording: '$149/month, billed annually',
+    publicWording: '$149',
     verification: 'VERIFIED',
     capability: 'live',
     evidenceSource: 'Live probe, 2026-08-07.',
@@ -418,19 +418,26 @@ export const CLAIMS: readonly Claim[] = [
     requiresSampleLabel: false,
   },
   {
+    /*
+     * RETIRED 2026-08-19. There is no month-to-month plan -- Ali confirmed the
+     * only individual price is $149/month billed annually. The entry stays as
+     * NEEDS_VERIFICATION rather than being deleted so the key cannot be quietly
+     * reused for a different number, and so anything still referencing it
+     * renders nothing instead of a price we do not offer.
+     */
     key: 'pricing.individual.monthly',
     publicWording: '$199/month, month-to-month',
-    verification: 'VERIFIED',
+    verification: 'NEEDS_VERIFICATION',
     capability: 'live',
     evidenceSource: 'Live probe, 2026-08-07.',
     owner: 'Ali',
     lastVerifiedAt: '2026-08-07',
-    approvedRoutes: ['/pricing'],
+    approvedRoutes: [],
     requiresSampleLabel: false,
   },
   {
     key: 'pricing.team',
-    publicWording: 'Team — $1,200',
+    publicWording: '$1,200',
     verification: 'VERIFIED',
     capability: 'live',
     evidenceSource: 'Live probe, 2026-08-07.',
@@ -441,7 +448,7 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     key: 'pricing.department',
-    publicWording: 'Department — $950',
+    publicWording: '$950 at department scale',
     verification: 'VERIFIED',
     capability: 'live',
     evidenceSource: 'Live probe, 2026-08-07.',
