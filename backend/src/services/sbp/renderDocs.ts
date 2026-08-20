@@ -84,8 +84,15 @@ export interface RenderContext {
  * The ONLY paths the platform may write in a student's repo (SBP-GH-v1 FR-027).
  * Everything else in that repo is theirs. repoWriter re-checks this before any
  * network call; enforcing it here too means a bad path cannot even be produced.
+ *
+ * `artifacts/**` was added 2026-08-20 so the weekly curriculum artifacts a
+ * student builds in Claude Code land in their repo instead of only on the
+ * platform's uploads volume. It is deliberately a THIRD root rather than a
+ * subfolder of `docs/`: `docs/` is the generated plan, rewritten wholesale on
+ * every sync, and an artifact must never be at risk of being rewritten by a
+ * plan republish.
  */
-export const PATH_ALLOWLIST = [/^CLAUDE\.md$/, /^docs\/.+/, /^\.colaberry\/.+/];
+export const PATH_ALLOWLIST = [/^CLAUDE\.md$/, /^docs\/.+/, /^\.colaberry\/.+/, /^artifacts\/.+/];
 
 export function isAllowedPath(path: string): boolean {
   return PATH_ALLOWLIST.some((re) => re.test(path));
