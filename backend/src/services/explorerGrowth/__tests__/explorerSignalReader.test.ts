@@ -212,25 +212,25 @@ describe('T000: the timestamps the state machine needs', () => {
   });
 
   describe('recentIntentTier vs highestIntentTier', () => {
-    it('EXCLUDES a stale tier-4 signal that highestIntentTier still counts', async () => {
+    it('EXCLUDES a stale tier-3 signal that highestIntentTier still counts', async () => {
       // The divergence is the entire reason recentIntentTier exists. §8.2 line
       // 772 gates HIGH_INTENT on a tier-3/4 signal "in 14d"; the lifetime
       // maximum would grant that overlay permanently once earned.
       mockSources([
-        { match: /FROM enrollments/, rows: [{ signal: 'enrollment_form_completed', occurred_at: daysAgo(200) }] },
+        { match: /FROM page_events/, rows: [{ signal: 'enrollment_form_started', occurred_at: daysAgo(200) }] },
       ]);
       const r = await readLearnerSignals(ENR, { asOf: NOW });
-      expect(r.highestIntentTier).toBe(4);
+      expect(r.highestIntentTier).toBe(3);
       expect(r.recentIntentTier).toBe(0);
     });
 
-    it('counts a tier-4 signal inside the window in both', async () => {
+    it('counts a tier-3 signal inside the window in both', async () => {
       mockSources([
-        { match: /FROM enrollments/, rows: [{ signal: 'enrollment_form_completed', occurred_at: daysAgo(3) }] },
+        { match: /FROM page_events/, rows: [{ signal: 'enrollment_form_started', occurred_at: daysAgo(3) }] },
       ]);
       const r = await readLearnerSignals(ENR, { asOf: NOW });
-      expect(r.highestIntentTier).toBe(4);
-      expect(r.recentIntentTier).toBe(4);
+      expect(r.highestIntentTier).toBe(3);
+      expect(r.recentIntentTier).toBe(3);
     });
 
     it('holds the boundary: 14 days in, 15 days out', async () => {
@@ -247,11 +247,16 @@ describe('T000: the timestamps the state machine needs', () => {
 
     it('reports the RECENT tier even when an older signal ranks higher', async () => {
       mockSources([
-        { match: /FROM enrollments/, rows: [{ signal: 'enrollment_form_completed', occurred_at: daysAgo(90) }] },
-        { match: /FROM page_events/, rows: [{ signal: 'pricing_page_view', occurred_at: NOW }] },
+        {
+          match: /FROM page_events/,
+          rows: [
+            { signal: 'enrollment_form_started', occurred_at: daysAgo(90) },
+            { signal: 'pricing_page_view', occurred_at: NOW },
+          ],
+        },
       ]);
       const r = await readLearnerSignals(ENR, { asOf: NOW });
-      expect(r.highestIntentTier).toBe(4); // lifetime
+      expect(r.highestIntentTier).toBe(3); // lifetime
       expect(r.recentIntentTier).toBe(1); // only the view is recent
     });
   });
