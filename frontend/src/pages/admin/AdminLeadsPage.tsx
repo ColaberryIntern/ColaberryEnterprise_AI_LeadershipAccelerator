@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import QuickAddLeadModal from '../../components/admin/QuickAddLeadModal';
+import ApolloImportModal from '../../components/admin/ApolloImportModal';
 import BatchActionBar from '../../components/admin/BatchActionBar';
 import TemperatureBadge from '../../components/TemperatureBadge';
 import TableSkeleton from '../../components/ui/TableSkeleton';
@@ -47,18 +48,39 @@ const ghlContactUrl = (contactId: string) =>
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'enrolled', 'lost'];
 
 /**
- * NOTE ON THE NAME: this filter is labelled "Source" but the API maps it onto
+ * NOTE ON THE NAME: this filter is labelled "Form" because the API maps it onto
  * `form_type`, not `leads.source` (leadService.listLeads assigns params.source to
  * where.form_type). Every value below is therefore a form_type. Renaming the
- * parameter would be the honest fix and is a breaking API change; adding the
- * missing option is not, so that is what this does.
+ * PARAMETER would be the honest fix and is a breaking API change; renaming the
+ * label is not, so the label is what changed here. The real origin filter is the
+ * Website dropdown below, fed by /leads/source-groups.
  *
  * `business_account` was absent, which meant leads created by the enterprise site's
  * business-account signup could not be filtered for at all -- no selection in this
  * dropdown would ever reveal one.
  */
+
+/** One website/origin group from GET /api/admin/leads/source-groups. */
+interface SourceGroup {
+  key: string;
+  label: string;
+  domain?: string;
+  kind: 'website' | 'event' | 'list' | 'internal' | 'test';
+  count: number;
+}
+
+// Websites first (what reps work daily), test data last.
+const WEBSITE_GROUP_ORDER: SourceGroup['kind'][] = ['website', 'event', 'list', 'internal', 'test'];
+const KIND_LABELS: Record<SourceGroup['kind'], string> = {
+  website: 'Our websites',
+  event: 'Events',
+  list: 'Pulled lists',
+  internal: 'Internal',
+  test: 'Test data',
+};
+
 const SOURCE_OPTIONS = [
-  { value: '', label: 'All Sources' },
+  { value: '', label: 'All Forms' },
   { value: 'business_account', label: 'Business Account Signup' },
   { value: 'open_house', label: 'Open House' },
   { value: 'executive_overview_download', label: 'Executive Briefing' },
@@ -89,6 +111,14 @@ function AdminLeadsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [websiteFilter, setWebsiteFilter] = useState<string[]>(() => {
+    const raw = new URLSearchParams(window.location.search).get('website') || '';
+    return raw ? raw.split(',').filter(Boolean) : [];
+  });
+  const [prefLocked, setPrefLocked] = useState(false);
+  const [prefSaving, setPrefSaving] = useState(false);
+  const [prefLoaded, setPrefLoaded] = useState(false);
+  const [sourceGroups, setSourceGroups] = useState<SourceGroup[]>([]);
   const [tempFilter, setTempFilter] = useState(() => new URLSearchParams(window.location.search).get('temperature') || '');
   const [scoreMin, setScoreMin] = useState('');
   const [scoreMax, setScoreMax] = useState('');
@@ -98,12 +128,16 @@ function AdminLeadsPage() {
   const search = useDebounce(searchInput, 300);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showApolloImport, setShowApolloImport] = useState(false);
 
   const fetchLeads = useCallback(async () => {
     try {
       const params: Record<string, string> = { page: String(page), limit: '25' };
       if (statusFilter) params.status = statusFilter;
       if (sourceFilter) params.source = sourceFilter;
+      if (websiteFilter.length) params.website = websiteFilter.join(',');
+      // Website signups outrank pulled-list names; see leadSourceGroups.ts.
+      params.sort = 'priority';
       if (tempFilter) params.temperature = tempFilter;
       if (scoreMin) params.scoreMin = scoreMin;
       if (scoreMax) params.scoreMax = scoreMax;
@@ -136,7 +170,61 @@ function AdminLeadsPage() {
       setLeads([]);
       setTotal(0);
     }
-  }, [page, statusFilter, sourceFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
+  }, [page, statusFilter, sourceFilter, websiteFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
+
+  const fetchSourceGroups = useCallback(async () => {
+    try {
+      const res = await api.get('/api/admin/leads/source-groups');
+      setSourceGroups(res.data.groups || []);
+    } catch (err) {
+      console.error('Failed to fetch lead source groups:', err);
+    }
+  }, []);
+
+  useEffect(() => { fetchSourceGroups(); }, [fetchSourceGroups]);
+
+  // Load this rep's saved settings. If they locked a selection and the URL did
+  // not already carry one, adopt it so the page opens the way they left it.
+  useEffect(() => {
+    let live = true;
+    api.get('/api/admin/leads/view-preference')
+      .then((res) => {
+        if (!live) return;
+        const pref = res.data.preference || { websites: [], locked: false };
+        setPrefLocked(!!pref.locked);
+        const fromUrl = new URLSearchParams(window.location.search).get('website');
+        if (!fromUrl && pref.locked && pref.websites.length) setWebsiteFilter(pref.websites);
+        setPrefLoaded(true);
+      })
+      .catch(() => { if (live) setPrefLoaded(true); });
+    return () => { live = false; };
+  }, []);
+
+  const toggleWebsite = (key: string) => {
+    setWebsiteFilter((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    setPage(1);
+  };
+
+  const savePreference = async (locked: boolean) => {
+    setPrefSaving(true);
+    try {
+      const res = await api.put('/api/admin/leads/view-preference', { websites: websiteFilter, locked });
+      setPrefLocked(!!res.data.preference?.locked);
+    } catch (err) {
+      console.error('Failed to save lead view preference:', err);
+    } finally {
+      setPrefSaving(false);
+    }
+  };
+
+  // Keep ?website= in the address bar so a rep can bookmark "just my sites".
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (websiteFilter.length) params.set('website', websiteFilter.join(','));
+    else params.delete('website');
+    const qs = params.toString();
+    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+  }, [websiteFilter]);
 
   const fetchStats = async () => {
     try {
@@ -206,7 +294,7 @@ function AdminLeadsPage() {
     fetchStats();
   };
 
-  const hasFilters = search || statusFilter || sourceFilter || scoreMin || scoreMax || dateFrom || dateTo;
+  const hasFilters = search || statusFilter || sourceFilter || websiteFilter.length || scoreMin || scoreMax || dateFrom || dateTo;
 
   // Per-page trust signal (Basecamp todo 10027085963) derived from live lead pipeline health.
   const trust: TrustSignal = useMemo(() => {
@@ -279,6 +367,9 @@ function AdminLeadsPage() {
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
               + Add Lead
             </button>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => setShowApolloImport(true)}>
+              Pull in leads
+            </button>
             <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/import')}>
               Import CSV
             </button>
@@ -340,8 +431,72 @@ function AdminLeadsPage() {
                 ))}
               </select>
             </div>
+            <div className="col-md-3">
+              <label className="form-label small text-muted d-flex align-items-center gap-2">
+                Websites
+                {prefLocked && (
+                  <span className="badge bg-secondary" style={{ fontSize: 10 }} title="These settings are saved and reapplied every visit">
+                    locked
+                  </span>
+                )}
+              </label>
+              <details className="admin-website-picker position-relative">
+                <summary className="form-select d-flex align-items-center" style={{ cursor: 'pointer', listStyle: 'none' }}>
+                  {websiteFilter.length === 0
+                    ? 'All sites'
+                    : websiteFilter.length === 1
+                      ? (sourceGroups.find((g) => g.key === websiteFilter[0])?.label || '1 site')
+                      : `${websiteFilter.length} sites`}
+                </summary>
+                <div
+                  className="position-absolute bg-white border rounded shadow-sm p-2"
+                  style={{ zIndex: 20, minWidth: 260, maxHeight: 320, overflowY: 'auto' }}
+                >
+                  {WEBSITE_GROUP_ORDER.map((kind) => {
+                    const inKind = sourceGroups.filter((g) => g.kind === kind);
+                    if (!inKind.length) return null;
+                    return (
+                      <div key={kind} className="mb-2">
+                        <div className="text-muted" style={{ fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                          {KIND_LABELS[kind]}
+                        </div>
+                        {inKind.map((g) => (
+                          <label key={g.key} className="d-flex align-items-center gap-2 py-1" style={{ fontSize: 13, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={websiteFilter.includes(g.key)}
+                              onChange={() => toggleWebsite(g.key)}
+                            />
+                            <span className="flex-grow-1">{g.label}</span>
+                            <span className="text-muted" style={{ fontSize: 12 }}>{g.count.toLocaleString()}</span>
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  <div className="d-flex gap-2 border-top pt-2 mt-1">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary flex-grow-1"
+                      onClick={() => { setWebsiteFilter([]); setPage(1); }}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary flex-grow-1"
+                      disabled={prefSaving || !prefLoaded}
+                      onClick={() => savePreference(!prefLocked)}
+                      title={prefLocked ? 'Stop reapplying these settings' : 'Reapply these settings every visit'}
+                    >
+                      {prefSaving ? 'Saving...' : prefLocked ? 'Unlock' : 'Lock these'}
+                    </button>
+                  </div>
+                </div>
+              </details>
+            </div>
             <div className="col-md-2">
-              <label className="form-label small text-muted">Source</label>
+              <label className="form-label small text-muted">Form</label>
               <select
                 className="form-select"
                 value={sourceFilter}
@@ -562,6 +717,12 @@ function AdminLeadsPage() {
           onLeadCreated={() => { fetchLeads(); fetchStats(); }}
         />
       )}
+
+      <ApolloImportModal
+        show={showApolloImport}
+        onClose={() => setShowApolloImport(false)}
+        onImported={() => { fetchLeads(); fetchStats(); fetchSourceGroups(); }}
+      />
     </>
   );
 }
