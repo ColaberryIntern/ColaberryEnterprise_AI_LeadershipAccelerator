@@ -6,6 +6,11 @@ interface Props {
   config: CountAndOverride<TeachSlideOverride>;
   defaults: TeachSlideOverride[];
   dayLabel: string;
+  /** Build Day only — the authored checkpoint block is not generated on
+   * Architecture Day, so the switch is hidden there rather than shown inert. */
+  dayKind: string;
+  checkpointsEnabled: boolean;
+  onToggleCheckpoints: (v: boolean) => void;
   onRewrite: (currentItems: TeachSlideOverride[], instruction: string) => Promise<TeachSlideOverride[]>;
   onChange: (next: CountAndOverride<TeachSlideOverride>) => void;
 }
@@ -22,7 +27,7 @@ const segmentLabel = (value: string) => {
  * instructor's own overrides once they've touched anything) directly editable
  * in place — no separate "authored defaults preview" vs. "write my own"
  * switch. The first edit/add/delete/move commits `overrides`. */
-const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onRewrite, onChange }) => {
+const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, dayKind, checkpointsEnabled, onToggleCheckpoints, onRewrite, onChange }) => {
   const slides = config.overrides ?? defaults;
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
 
@@ -42,6 +47,17 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onRewrite, on
         The deep-teaching substance for {dayLabel} — the multi-slide "lessons" (body, bullets, a copy-ready Claude Code
         example, and the instructor's script) spliced into each segment.
       </p>
+      {dayKind === 'build' && (
+        <div className="rounded-3 border bg-white p-3 mb-3">
+          <div className="form-check form-switch mb-0">
+            <input className="form-check-input" type="checkbox" id="cfg-checkpoints-on" checked={checkpointsEnabled} onChange={(e) => onToggleCheckpoints(e.target.checked)} />
+            <label className="form-check-label" htmlFor="cfg-checkpoints-on">
+              <span className="fw-semibold">Authored checkpoint slides</span>
+              <div className="text-muted small">The "The checkpoints" build map plus one slide per CP. These come from the week's own checkpoint list, not from your Lessons, so turn them off when you have rebuilt the guided build below and they no longer match.</div>
+            </label>
+          </div>
+        </div>
+      )}
       <CategoryToggleRow
         id="cfg-teach-on" label="Lessons" hint="Turn off every teaching slide for this class (the base segment content still shows)."
         enabled={config.enabled} onToggle={(v) => onChange({ ...config, enabled: v })}

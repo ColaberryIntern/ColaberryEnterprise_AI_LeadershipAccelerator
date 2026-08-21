@@ -452,10 +452,10 @@ const ProjectWorkspacePage: React.FC = () => {
             </div>
 
             <p className="rt-help-lead">
-              Two helpers, and neither one can see the other&apos;s side. <strong>Cory</strong> can
-              see this page — your story, your steps, and what the portal has recorded — but cannot
-              touch your files. <strong>Claude Code</strong> can read and change the code on your
-              computer, but cannot see this page at all.
+              You can ask <strong>either Cory or Claude</strong>. When the trouble is inside the
+              project you are building, <strong>Claude Code</strong> is the more direct route,
+              because it can read and change the code on your computer. <strong>Cory</strong> can
+              see this page, your story, your steps, and what the portal has recorded.
             </p>
 
             <div className="rt-doors">
@@ -513,11 +513,13 @@ const ProjectWorkspacePage: React.FC = () => {
               </div>
             </div>
 
-            {/* The expensive mistake, stated where the choice is made. */}
+            {/* The caveat, kept deliberately as a short note rather than a warning.
+                It has to point a portal question at Cory without reading as a
+                reason to avoid Claude Code, which is what the previous wording
+                did — reviewed and approved by Swati Raman. */}
             <p className="rt-door-warn">
-              Ask Claude Code about the portal and it will still answer you, confidently, and it
-              will be wrong — it is guessing about a page it cannot see. If your question is about
-              what the portal is showing you, it belongs with Cory.
+              One note: Claude Code cannot see the portal, so if your question is about what this
+              page is showing you, ask Cory instead.
             </p>
           </section>
 

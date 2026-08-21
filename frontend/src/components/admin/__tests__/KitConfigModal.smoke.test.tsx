@@ -21,7 +21,7 @@ const api = require('../../../utils/api').default;
 
 const emptyCA = { enabled: true, max: null, overrides: null };
 const config: KitConfig = {
-  storyBeats: emptyCA, theaterEnabled: true, buildBayDetail: false, evidenceOverrides: null,
+  storyBeats: emptyCA, theaterEnabled: true, buildBayDetail: false, checkpointsEnabled: true, evidenceOverrides: null,
   teach: emptyCA, prompts: emptyCA, interactions: emptyCA,
   opening: { coldOpen: { enabled: false, override: null }, hook: { enabled: false, override: null }, resultPreview: { enabled: false, override: null } },
 };
