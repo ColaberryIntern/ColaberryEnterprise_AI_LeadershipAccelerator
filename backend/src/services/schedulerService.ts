@@ -41,6 +41,7 @@ import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingFo
 import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 import { instrumentCronJob } from './cronInstrumentation';
+import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
 import {
   isWithinSendWindow,
   isWithinCallSchedule,
@@ -1643,6 +1644,32 @@ export function startScheduler(): void {
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {
       console.error('[Scheduler] Unexpected error:', err);
+    });
+  });
+
+  // Explorer Growth OS — nightly profile recompute (EPIC 3 T006).
+  //
+  // RECOMPUTES ONLY. It scores and classifies; it decides nothing and sends
+  // nothing. The Journey Governor that acts on a state is EPIC 4, behind its
+  // own separate flag.
+  //
+  // runScheduledRecompute checks isExplorerFeatureEnabled('journeyIntelligence')
+  // itself and returns immediately when off, so this is dark until BOTH the
+  // master flag and the sub-flag are on. Registered in agentRegistrySeed as
+  // ExplorerProfileRecompute so it is pausable from Admin > Agents without a
+  // redeploy.
+  //
+  // 03:20 UTC: deliberately offset from the :00 and */5 jobs above so a
+  // 153-learner batch does not contend with them on the shared Postgres.
+  cron.schedule('20 3 * * *', () => {
+    // Wrapped so the callback resolves to void: instrumentCronJob expects
+    // Promise<void>, and runScheduledRecompute returns a BatchResult the cron
+    // has no use for. The result is still captured in ai_agent_activity_logs by
+    // the instrumentation itself.
+    instrumentCronJob('ExplorerProfileRecompute', async () => {
+      await runScheduledRecompute();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerProfileRecompute failed:', err);
     });
   });
 
