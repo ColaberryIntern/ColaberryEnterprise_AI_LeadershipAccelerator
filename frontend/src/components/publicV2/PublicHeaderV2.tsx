@@ -40,7 +40,7 @@ export const V2_NAV: readonly NavItem[] = [
   { label: 'Platform', to: '/platform' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Proof', to: '/proof' },
-  { label: 'Start Free', to: '/start' },
+  { label: 'Start Free', to: '/try' },
 ];
 
 export interface PublicHeaderV2Props {

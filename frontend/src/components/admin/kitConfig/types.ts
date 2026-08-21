@@ -117,6 +117,7 @@ export interface KitConfig {
   storyBeats: CountAndOverride<StoryBeatOverride>;
   theaterEnabled: boolean;
   buildBayDetail: boolean;
+  checkpointsEnabled: boolean;
   evidenceOverrides: EvidenceOverride[] | null;
   teach: CountAndOverride<TeachSlideOverride>;
   prompts: CountAndOverride<PromptOverride>;

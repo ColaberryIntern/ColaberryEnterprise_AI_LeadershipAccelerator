@@ -69,6 +69,15 @@ export interface KitConfig {
   /** Build Bay "you should see" / "stop when" rows. When false, prompts still
    * show (label + copy box + rescue), just without the extra detail rows. */
   buildBayDetail: boolean;
+  /** The Build Day "The checkpoints" map slide and the CP0..CPn checkpoint
+   * slides that follow it. These are generated from the week's own
+   * `buildMap`/`checkpoints` arrays rather than from teach content, so before
+   * this toggle existed an instructor who had replaced the whole guided-build
+   * with `teach` overrides still had to arrow past a stale checkpoint block
+   * mid-class (Week 4, 2026-08-20 — five slides still advertising "8 prompts"
+   * after the session had been rebuilt around five). Default true, so every
+   * week that has not been rebuilt keeps its checkpoints exactly as authored. */
+  checkpointsEnabled: boolean;
   /** Full replacement for the readiness report's source/evidence ledger. Does
    * NOT change the small footer already baked into individual teach slides —
    * only the readiness report's aggregate list, which is the "what am I
@@ -124,6 +133,7 @@ export const DEFAULT_KIT_CONFIG: KitConfig = {
   storyBeats: { enabled: true, max: null, overrides: null },
   theaterEnabled: true,
   buildBayDetail: true,
+  checkpointsEnabled: true,
   evidenceOverrides: null,
   teach: { enabled: true, max: null, overrides: null },
   prompts: { enabled: true, max: null, overrides: null },
@@ -162,6 +172,7 @@ export function mergeKitConfig(saved: unknown): KitConfig {
     storyBeats: mergeCountAndOverride(s.storyBeats, DEFAULT_KIT_CONFIG.storyBeats),
     theaterEnabled: typeof s.theaterEnabled === 'boolean' ? s.theaterEnabled : DEFAULT_KIT_CONFIG.theaterEnabled,
     buildBayDetail: typeof s.buildBayDetail === 'boolean' ? s.buildBayDetail : DEFAULT_KIT_CONFIG.buildBayDetail,
+    checkpointsEnabled: typeof s.checkpointsEnabled === 'boolean' ? s.checkpointsEnabled : DEFAULT_KIT_CONFIG.checkpointsEnabled,
     evidenceOverrides: Array.isArray(s.evidenceOverrides) ? s.evidenceOverrides : DEFAULT_KIT_CONFIG.evidenceOverrides,
     teach: mergeCountAndOverride(s.teach, DEFAULT_KIT_CONFIG.teach),
     prompts: mergeCountAndOverride(s.prompts, DEFAULT_KIT_CONFIG.prompts),

@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import ContactPage from './pages/ContactPage';
 import { AuthProvider } from './contexts/AuthContext';
 import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
@@ -14,7 +15,6 @@ import ProofV2 from './pages/publicV2/ProofV2';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
 import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
-import SignupV2 from './pages/publicV2/SignupV2';
 import PricingV2 from './pages/publicV2/PricingV2';
 import StoriesV2 from './pages/publicV2/StoriesV2';
 import adminRoutes from './routes/adminRoutes';
@@ -76,8 +76,36 @@ function App() {
                 (ManagementPreviewPage, declared above). Mounting the V2 explainer
                 there post-cutover would shadow the product itself. */}
             <Route path="free-workspace" element={<TryV2 />} />
+            {/*
+                /contact moved OUT of the legacy publicRoutes block and under
+                PublicLayoutV2. Ali, 2026-08-21: "Talk to an Architect takes me
+                to a page that needs the navigation updated. That's the case
+                throughout the application."
+
+                It was rendering the old Home / The Program / Contact nav purely
+                because it sat outside this layout. ContactPage renders no header
+                of its own, so it simply inherits PublicHeaderV2 here -- no
+                double header.
+
+                THE SAME FIX APPLIES to the other legacy marketing pages still in
+                publicRoutes.tsx. They were left there deliberately (that block
+                carries /enroll and the payment flow), but the ones that are
+                purely marketing should move here too.
+            */}
+            <Route path="contact" element={<ContactPage />} />
             <Route path="privacy" element={<PrivacyV2 />} />
-            <Route path="start" element={<SignupV2 />} />
+            {/*
+                /start renders SignupV2 no longer. Ali, 2026-08-21, asked three
+                times: "Startfree page should go to try page." Every "Start free"
+                button now points at /try directly; this redirect catches the
+                inbound links, the sitemap and anyone who typed it.
+
+                SignupV2 is left in the tree ON PURPOSE -- it is the
+                account-creation page, and /try's own "Make this real: create
+                your free account" button is where that flow belongs. Check what
+                that button does before calling SignupV2 dead code.
+            */}
+            <Route path="start" element={<Navigate to="/try" replace />} />
             <Route path="pricing" element={<PricingV2 />} />
             <Route path="stories" element={<StoriesV2 />} />
           </Route>
