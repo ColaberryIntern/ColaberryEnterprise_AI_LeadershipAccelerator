@@ -120,6 +120,22 @@ describe('a drifted file that has ticked nothing is still a drifted file', () =>
     expect(untouched.unrecognised_criteria).toEqual([]);
   });
 
+  /**
+   * This used to assert `docs/stories/STORY-001.md`, and that assertion was
+   * pinning a defect rather than a feature.
+   *
+   * No `tree` is passed here, so the repo contents are UNKNOWN — and the
+   * platform writes `docs/stories/*.md` only into repos it can push to, which
+   * is one of the sixteen live student repos. Naming that path on an unknown
+   * repo is a coin flip we lose fifteen times out of sixteen, in the one
+   * message whose whole job is to get a stuck student unstuck.
+   *
+   * What the reason must do is unchanged: name the problem and give somewhere
+   * to go. So that is what is asserted now — the wording source is required to
+   * be present and reachable, and `driftAdviceReachability.test.ts` pins which
+   * source is chosen for each repo state, including that the doc IS still cited
+   * when the repo genuinely has it.
+   */
   it('says so in a reason the student can act on', () => {
     const v = decideStory(
       spec,
@@ -128,7 +144,14 @@ describe('a drifted file that has ticked nothing is still a drifted file', () =>
     );
     const said = v.reasons.join(' ');
     expect(said).toMatch(/do not match any acceptance criterion/i);
-    expect(said).toContain('docs/stories/STORY-001.md');
+    // Somewhere to get the right wording that genuinely reaches every student.
+    // Not a PATH: the seed path this once named is produced only inside the docs
+    // zip and was found in zero of the fifteen pull-only repos on 2026-08-21. An
+    // action the portal performs on request needs no file to be there already.
+    expect(said).toContain('Get my progress.json');
+    // And never a path we have not confirmed is in their repo.
+    expect(said).not.toContain('docs/stories/STORY-001.md');
+    expect(said).not.toContain('progress.seed.json');
   });
 });
 

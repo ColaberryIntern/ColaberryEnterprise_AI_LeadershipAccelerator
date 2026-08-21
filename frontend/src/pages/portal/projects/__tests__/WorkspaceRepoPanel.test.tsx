@@ -16,6 +16,7 @@ const mockConfirm = jest.fn();
 const mockProvision = jest.fn();
 const mockSync = jest.fn();
 const mockDownload = jest.fn();
+const mockProgress = jest.fn();
 
 // Plain functions where CRA's resetMocks would otherwise strip implementations.
 jest.mock('../../../../services/workspaceRepoApi', () => ({
@@ -25,6 +26,7 @@ jest.mock('../../../../services/workspaceRepoApi', () => ({
   provisionWorkspaceRepo: (...a: unknown[]) => mockProvision(...a),
   syncWorkspaceRepo: (...a: unknown[]) => mockSync(...a),
   downloadDocsBundle: (...a: unknown[]) => mockDownload(...a),
+  downloadProgressFile: (...a: unknown[]) => mockProgress(...a),
   // The webhook block fetches its own setup. Rejecting is the honest default
   // for these tests: an unconfigured platform is exactly the case where the
   // block must render nothing and leave the student with the Sync button.
@@ -42,6 +44,18 @@ import { WorkspaceRepoView, ConnectStateView } from '../../../../services/worksp
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
+/**
+ * jsdom implements neither `URL.createObjectURL` nor `URL.revokeObjectURL`.
+ *
+ * Without these, every download handler throws before it can set its note, and
+ * the panel renders the generic failure message instead — which looks exactly
+ * like the feature being broken. Stubbed rather than worked around in the
+ * component: saving a blob is how a browser downloads a file, and a product
+ * change to accommodate a test environment would be the wrong direction.
+ */
+(globalThis.URL as any).createObjectURL = () => 'blob:test';
+(globalThis.URL as any).revokeObjectURL = () => undefined;
+
 let container: HTMLDivElement;
 let root: Root;
 const onRepoChange = jest.fn();
@@ -50,7 +64,10 @@ const onConnectChange = jest.fn();
 beforeEach(() => {
   jest.clearAllMocks();
   mockStart.mockReset(); mockConfirm.mockReset(); mockProvision.mockReset();
-  mockSync.mockReset(); mockDownload.mockReset();
+  mockSync.mockReset(); mockDownload.mockReset(); mockProgress.mockReset();
+  // Every pull-only test renders the new button; a bare mock returning
+  // undefined would throw on destructuring the moment one of them clicks it.
+  mockProgress.mockResolvedValue({ blob: new Blob(['{}']), filename: 'progress.json', existing: 'merged' });
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -373,7 +390,99 @@ describe('a repo the platform can only read', () => {
   it('names the file that is now the student\'s to create, and where to get it', async () => {
     await mount(connected('pull_only'));
     expect(text()).toContain('.colaberry/progress.json');
-    expect(text()).toContain('STORY-000');
+    expect(buttonNamed('Get my progress.json')).toBeDefined();
+  });
+
+  /*
+   * ── AND IT NEVER NAMES A PATH THEY DO NOT HAVE ───────────────────────────
+   *
+   * The previous correction pointed here at `.colaberry/progress.seed.json`.
+   * `seedPathFor` produces that path in exactly one place, inside the docs zip.
+   * Read live from all fifteen pull-only repos on 2026-08-21 it was in ZERO of
+   * them, and none of those students had ever extracted a bundle. Telling
+   * someone to copy a file they cannot reach is the same defect as telling them
+   * to copy the wrong one. This asserts we stopped doing it.
+   */
+  it('does not send them to the seed path, which is in none of their repos', async () => {
+    await mount(connected('pull_only'));
+    expect(text()).not.toContain('progress.seed.json');
+  });
+
+  /*
+   * ── THE INSTRUCTION THAT BUILT A BROKEN FILE ─────────────────────────────
+   *
+   * This panel used to say "Open STORY-000 and copy the JSON block under Step
+   * 3". That block is `progressFileExample()`, and it carries STORY-000's five
+   * criteria and nothing else — an illustration of the file's SHAPE, not the
+   * file. A student who followed it exactly as written produced a
+   * `progress.json` that can confirm STORY-000 and can never confirm any other
+   * story, because the rest arrive with no `criteria` array for a tick to match
+   * against. No error, no warning: just a story that never ticks however much
+   * they build. Million Abate has exactly that file, and three rounds of
+   * increasingly precise emails treated it as his mistake.
+   *
+   * Meanwhile `renderProgressFile` has always seeded EVERY story's exact
+   * criteria. The content was never the problem; DELIVERY was, and pointing at
+   * a second unreachable path did not change that. The file is now built on
+   * request and handed over at the live path.
+   *
+   * These assertions are on the words because the words are the defect.
+   */
+  it('points at a button rather than a story document\'s JSON block', async () => {
+    await mount(connected('pull_only'));
+    // The old instruction, gone. Both halves of it: the block and the step.
+    expect(text()).not.toContain('copy the JSON block');
+    expect(text()).not.toContain('Step 3');
+  });
+
+  it('says the file covers EVERY story, not just the first one', async () => {
+    await mount(connected('pull_only'));
+    // The single fact that distinguishes this file from the STORY-000 block. A
+    // student who does not know this has no reason to prefer one over the other.
+    expect(text()).toContain('every story in your build — not just the first one');
+  });
+
+  it('warns off building the file from a story document, and says why', async () => {
+    await mount(connected('pull_only'));
+    expect(text()).toContain('Do not build this file by hand from the JSON block inside a story document');
+    // The consequence, stated — silence is what made this cost a week.
+    expect(text()).toContain('can never be confirmed');
+  });
+
+  it('tells a student who already has the broken file that it was our fault', async () => {
+    await mount(connected('pull_only'));
+    // Anyone reading this panel today may already have followed the old
+    // instruction. Naming their symptom is how they recognise themselves in it.
+    expect(text()).toContain('it was our instruction that caused it');
+  });
+
+  /*
+   * ── THE GUARD BECAME A GUARANTEE, DELIBERATELY ───────────────────────────
+   *
+   * This used to assert "do not copy over it", which was the only honest thing
+   * to say while the file on offer was a BLANK seed: copying it onto a file
+   * with ticks in it destroyed them. The cost of that honesty was that the
+   * student was left to reconcile two JSON documents by hand — stuck, and in at
+   * least one case having already told us plainly that they could not follow
+   * our instructions at all.
+   *
+   * The file is now merged server-side before it is sent, so "replace yours
+   * with it" is both the simplest instruction and the correct one. The
+   * assertion inverts with the behaviour rather than being dropped.
+   */
+  it('promises the replacement is safe, because the merge already happened', async () => {
+    await mount(connected('pull_only'));
+    expect(text()).toContain('replacing the file that is already there');
+    expect(text()).toContain('every criterion you had ticked stays ticked');
+  });
+
+  it('promises it is safe to press twice', async () => {
+    await mount(connected('pull_only'));
+    // Eleven students were emailed a computed file the day before this shipped,
+    // so a second run over an already-correct file is the COMMON case, not an
+    // edge one. A student who fears duplicates will not press the button.
+    expect(text()).toContain('doing it twice is safe');
+    expect(text()).toContain('will not lose a tick');
   });
 
   it('does not present it as a failure — verification still works either way', async () => {
@@ -483,14 +592,97 @@ describe('the pull-only instruction cannot be followed into losing progress', ()
     }),
   });
 
-  it('promises that the download leaves the progress file alone', async () => {
+  it('promises that the document zip leaves the progress file alone', async () => {
     await mount(pullOnly());
-    expect(text()).toContain('will not touch your');
-    expect(text()).toContain('carries no file at that path');
+    expect(text()).toContain('carries no file at');
+    expect(text()).toContain('.colaberry/progress.json');
   });
 
   it('says the extraction cannot cost ticks already earned', async () => {
     await mount(pullOnly());
     expect(text()).toMatch(/cannot cost you ticks you have already earned/i);
+  });
+});
+
+/**
+ * ── ONE OBVIOUS ACTION, AND IT HAS TO BE THE ONE THAT WORKS ─────────────────
+ *
+ * Everything above is copy. This block is the mechanism: the panel must offer a
+ * control that actually produces the student's file, wired to their project,
+ * and it must say afterwards what to do with what it produced.
+ *
+ * The bar was set by what failed twice. Naming a path is not delivery when the
+ * path is in none of their repos, and "unzip this archive, find the seed inside
+ * it, copy it to another name, then reconcile it by hand against the file you
+ * already have" is not one action. It is five, in a format none of these
+ * fifteen students had ever completed once.
+ */
+describe('getting the progress file is a single action', () => {
+  const pullOnlyRepo = () => view({
+    connected: true, provisioned: false,
+    repo_owner: 'me', repo_name: 'nightshift', repo_url: 'https://github.com/me/nightshift',
+    connect: connectState({
+      state: 'connected', method: 'byo', owner: 'me', repo: 'nightshift',
+      url: 'https://github.com/me/nightshift', write_access: 'pull_only',
+    }),
+  });
+
+  it('offers the button to a student whose repo the platform can only read', async () => {
+    await mount(pullOnlyRepo());
+    expect(buttonNamed('Get my progress.json')).toBeDefined();
+  });
+
+  it('asks the backend for THIS project, so a student gets their own file', async () => {
+    await mount(pullOnlyRepo());
+    await click('Get my progress.json');
+    expect(mockProgress).toHaveBeenCalledWith('p1');
+  });
+
+  it('tells them where to put it and that their ticks are already in it', async () => {
+    await mount(pullOnlyRepo());
+    await click('Get my progress.json');
+    expect(text()).toContain('Save it in your repo at .colaberry/progress.json');
+    expect(text()).toContain('Everything you had already ticked is in it');
+  });
+
+  /*
+   * The one case where "your ticks are already in it" is FALSE. Their file is
+   * there but unparseable, so `mergeProgressFile` carried nothing across. A
+   * student told the reassuring sentence here would replace a file believing
+   * work came with it that did not.
+   */
+  it('says the opposite when their existing file could not be read', async () => {
+    mockProgress.mockResolvedValue({
+      blob: new Blob(['{}']), filename: 'progress.json', existing: 'unreadable',
+    });
+    await mount(pullOnlyRepo());
+    await click('Get my progress.json');
+    expect(text()).toContain('could not be read');
+    expect(text()).toContain('re-tick anything you had genuinely finished');
+    expect(text()).not.toContain('Everything you had already ticked is in it');
+  });
+
+  it('falls back to the reassuring copy when the header is not exposed to it', async () => {
+    // Cross-origin, no allowlist: the client sees null and must not guess.
+    mockProgress.mockResolvedValue({
+      blob: new Blob(['{}']), filename: 'progress.json', existing: null,
+    });
+    await mount(pullOnlyRepo());
+    await click('Get my progress.json');
+    expect(text()).toContain('Everything you had already ticked is in it');
+  });
+
+  it('surfaces a failure instead of leaving the button spinning', async () => {
+    mockProgress.mockRejectedValue(new Error('boom'));
+    await mount(pullOnlyRepo());
+    await click('Get my progress.json');
+    expect(text()).toContain('Could not build your progress file just now');
+    expect(buttonNamed('Get my progress.json')!.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('does not displace Sync or the document download', async () => {
+    await mount(pullOnlyRepo());
+    expect(buttonNamed('Sync from GitHub')).toBeDefined();
+    expect(buttonNamed('Download the documents')).toBeDefined();
   });
 });
