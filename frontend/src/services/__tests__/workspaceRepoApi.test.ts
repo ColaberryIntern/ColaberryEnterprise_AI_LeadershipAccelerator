@@ -32,7 +32,8 @@ jest.mock('../../utils/participantToken', () => ({ getParticipantToken: () => 't
 
 import {
   getWorkspaceRepo, provisionWorkspaceRepo, syncWorkspaceRepo,
-  startRepoConnect, confirmRepoConnect, downloadDocsBundle, connectErrorOf,
+  startRepoConnect, confirmRepoConnect, downloadDocsBundle, downloadProgressFile,
+  connectErrorOf,
 } from '../workspaceRepoApi';
 
 const PROJECT = '11111111-1111-1111-1111-111111111111';
@@ -127,6 +128,59 @@ describe('downloadDocsBundle', () => {
   it('falls back to a sane filename when the header is absent', async () => {
     mockGet.mockResolvedValue({ data: new Blob(['zip']), headers: {} });
     await expect(downloadDocsBundle(PROJECT)).resolves.toMatchObject({ filename: 'build-docs.zip' });
+  });
+});
+
+/**
+ * The call that makes the progress file reachable at all for a pull-only
+ * student. Two things have to be right and neither is checkable by TypeScript:
+ * the project id has to be on the request (the failure this whole file was
+ * written about), and the filename has to survive a response whose custom
+ * headers a cross-origin browser will not expose.
+ */
+describe('downloadProgressFile', () => {
+  it('asks the progress-file route for this project, as a blob', async () => {
+    mockGet.mockResolvedValue({
+      data: new Blob(['{}']),
+      headers: {
+        'content-disposition': 'attachment; filename="progress.json"',
+        'x-colaberry-progress-existing': 'merged',
+      },
+    });
+
+    const result = await downloadProgressFile(PROJECT);
+
+    expect(mockGet).toHaveBeenCalledWith('/api/portal/workspace/progress-file', {
+      params: { project_id: PROJECT }, responseType: 'blob',
+    });
+    expect(result.filename).toBe('progress.json');
+    expect(result.existing).toBe('merged');
+  });
+
+  it('still names the file progress.json when no header is exposed', async () => {
+    // The fallback IS the correct name, not a placeholder: the student is being
+    // told to save this at `.colaberry/progress.json`, and a browser that named
+    // it `download` would strand them at the one step that matters.
+    mockGet.mockResolvedValue({ data: new Blob(['{}']), headers: {} });
+    await expect(downloadProgressFile(PROJECT)).resolves.toMatchObject({
+      filename: 'progress.json', existing: null,
+    });
+  });
+
+  it('reports an unreadable existing file rather than smoothing it over', async () => {
+    mockGet.mockResolvedValue({
+      data: new Blob(['{}']),
+      headers: { 'x-colaberry-progress-existing': 'unreadable' },
+    });
+    await expect(downloadProgressFile(PROJECT)).resolves.toMatchObject({ existing: 'unreadable' });
+  });
+
+  it('treats an unrecognised header value as "not told", never as a state', async () => {
+    mockGet.mockResolvedValue({
+      data: new Blob(['{}']),
+      headers: { 'x-colaberry-progress-existing': 'something-new' },
+    });
+    await expect(downloadProgressFile(PROJECT)).resolves.toMatchObject({ existing: null });
   });
 });
 

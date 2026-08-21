@@ -297,13 +297,28 @@ describe('reply classification', () => {
     expect(classifySender('jordan@anthropic.com').isReply).toBe(true);
   });
 
-  test('billing and marketing robots on subdomains are not a reply', () => {
+  test('billing and marketing robots are not a reply', () => {
     [
       'invoice+statements@mail.anthropic.com',
       'failed-payments@mail.anthropic.com',
       'no-reply-v040aLZnDIdXuaLfwXAM8w@mail.anthropic.com',
       'team@email.anthropic.com',
     ].forEach((from) => expect(classifySender(from).isReply).toBe(false));
+  });
+
+  // REGRESSION, 2026-08-21. This exact sender replied to letter 3 and the
+  // detector called it marketing because of the mail. subdomain, so the
+  // campaign did not halt and would have sent letter 4 the next weekday.
+  // The address is the very one we write TO.
+  test('the partner desk on the mail. subdomain IS a reply', () => {
+    const v = classifySender('Fin from Partner Experience <partner-support@mail.anthropic.com>');
+    expect(v.isReply).toBe(true);
+  });
+
+  test('a human on any anthropic subdomain counts', () => {
+    ['jordan@partners.anthropic.com', 'someone@support.anthropic.com'].forEach((from) => {
+      expect(classifySender(from).isReply).toBe(true);
+    });
   });
 
   test('a no-reply address on the bare domain is not a reply', () => {

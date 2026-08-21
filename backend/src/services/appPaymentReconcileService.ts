@@ -366,7 +366,11 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
     );
     s.rejectedByOriginGuard += byCidAll.length - byCid.length;
 
-    let membership: { amountCents: number; pid: string } | undefined = byCid[0];
+    // `date` rides along so activation can anchor the billing period on the day the
+    // money actually arrived. This job runs well after the fact by design — it exists
+    // to heal payments whose webhook never landed — so its own clock is the wrong
+    // basis for a billing period. See activateByRef.
+    let membership: { amountCents: number; pid: string; date?: string } | undefined = byCid[0];
     let via: 'customer_id' | 'checkout_window' = 'customer_id';
 
     // Path B — hosted page minted its own customer; fall back to the checkout window.
@@ -378,7 +382,7 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
         // up with one of our checkouts.
         if (!matchesCheckoutOrigin({ amountCents: p.amountCents, paidMs: p.paidMs }, c.checkouts)) continue;
         if (!matchesAppCheckout({ amountCents: p.amountCents, paidMs: p.paidMs, payerEmail: await payerEmail(p.cid) }, c.email, c.checkouts)) continue;
-        membership = { amountCents: p.amountCents, pid: p.pid };
+        membership = { amountCents: p.amountCents, pid: p.pid, date: p.date };
         via = 'checkout_window';
         break;
       }
@@ -419,6 +423,7 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
         const activated = await activateByRef(keep.payment_ref, {
           paymentId: keep.paysimple_payment_id ?? membership.pid,
           amount: membership.amountCents / 100,
+          paidAt: membership.date,
         });
         if (activated && activated.status === 'active') s.subscriptionsActivated++;
 
