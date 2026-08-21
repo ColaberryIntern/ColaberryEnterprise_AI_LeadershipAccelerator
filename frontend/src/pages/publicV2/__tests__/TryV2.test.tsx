@@ -101,16 +101,18 @@ describe('the reposition itself — V2 CTAs lead to account creation', () => {
 
   it('HomeV2 sends free-workspace CTAs to account creation', () => {
     const h = render(<HomeV2 />, '/');
-    expect(h).toContain('href="/start"');
-    // A bare /try link would drop the visitor out of the V2 shell into a preview
-    // with no signup path at all.
-    expect(h).not.toMatch(/href="\/try"/);
+    // CHANGED 2026-08-21, Ali's call: the free-workspace CTAs lead to the /try
+    // demo. The earlier rule here was the reverse -- it sent them to /start and
+    // banned /try, on the reasoning that /try was "a preview with no signup path
+    // at all". That premise expired: /try now opens on "Make this real: create
+    // your free account" and "Send free test invites", so it is no longer a dead
+    // end. Updated rather than deleted, so the reversal stays on the record.
+    expect(h).toContain('href="/try"');
   });
 
   it('PlatformV2 does the same', () => {
     const h = render(<PlatformV2 />, '/platform');
-    expect(h).toContain('href="/start"');
-    expect(h).not.toMatch(/href="\/try"/);
+    expect(h).toContain('href="/try"');
   });
 });
 
