@@ -207,7 +207,7 @@ function ManagementPreviewPage() {
   return (
     <div className="te-shell">
       <header className="te-top">
-        <div className="te-brand"><img className="te-mark" src="/colaberry-icon.png" alt="Colaberry" /><div><b><span className="cc">C</span>olaberry</b><span>AI Systems Architect Accelerator</span></div></div>
+        <div className="te-brand te-brand--site"><img className="te-mark" src="/colaberry-logo-transparent.png" alt="Colaberry" width={291} height={82} /><span>AI Systems Architect Accelerator</span></div>
         <div className="te-top-right">
           <div className="te-rail">
             <span className="te-cd class" title="Next class"><span className="ic">{Ic.class}</span><span className="tx"><span className="lbl">Next class</span><span className="when mono">3d 11h</span></span></span>
@@ -243,7 +243,12 @@ function ManagementPreviewPage() {
           data-pinned={pinned ? 'yes' : 'no'}
           aria-hidden={!pinned}
         >
-          <span className="te-trybar__t"><strong>Free preview</strong> &middot; sample data</span>
+          <span className="te-trybar__star" aria-hidden="true">&#9733;</span>
+          <span className="te-trybar__tx">
+            <span className="te-trybar__k">Your free account &middot; preview</span>
+            <span className="te-trybar__t">Make this real: create your free account</span>
+          </span>
+          <span className="te-trybar__chip">no card</span>
           <div className="te-trybar__b">
             <button type="button" onClick={openReg} tabIndex={pinned ? 0 : -1} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)' }} data-track="try_make_real_pinned">Make this real: create your free account</button>
             <a href="#invite" tabIndex={pinned ? 0 : -1} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)', textDecoration: 'none', background: 'var(--surface-subtle)', color: 'var(--text-body)' }}>Send free test invites</a>
