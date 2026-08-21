@@ -44,8 +44,8 @@ export default function OpenPlatform(): React.ReactElement {
         </ol>
 
         <div className="cbv2-cta9__btns">
-          <Link className="cbv2-btn cbv2-btn--primary" to="/start">Open my free company workspace</Link>
-          <Link className="cbv2-btn cbv2-btn--ghost" to="/services">Have an architect walk me through it</Link>
+          <Link className="cbv2-btn cbv2-btn--primary" to="/try">Open my free company workspace</Link>
+          <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">Have an architect walk me through it</Link>
         </div>
 
         {/* The registry-gated statement about the free workspace, kept from the
