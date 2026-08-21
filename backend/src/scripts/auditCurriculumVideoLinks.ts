@@ -25,6 +25,7 @@
  * results never fail the run — a rate limit or a network blip must not page anyone.
  */
 import { sequelize } from '../config/database';
+import { youtubeId } from '../services/curriculumHealth/videoLinkClassifier';
 
 const OEMBED = 'https://www.youtube.com/oembed';
 const TIMEOUT_MS = 15000;
@@ -70,23 +71,13 @@ export interface AuditResult extends Partial<VideoCardRow> {
 }
 
 /**
- * Accepts watch?v=, youtu.be/, /embed/ and /shorts/ forms. Returns null for a
- * non-YouTube URL so those are reported as SKIPPED rather than guessed at.
+ * Sourced from the scheduled check's classifier so this CLI audit and the daily
+ * job can never disagree about what counts as a video reference. The behaviour
+ * is unchanged; only the definition moved. Imported as well as re-exported
+ * because `export ... from` alone would not give this module a local binding,
+ * and `probeAll` below calls it.
  */
-export function youtubeId(url: string | null | undefined): string | null {
-  if (!url || typeof url !== 'string') return null;
-  const patterns = [
-    /[?&]v=([A-Za-z0-9_-]{6,})/,
-    /youtu\.be\/([A-Za-z0-9_-]{6,})/,
-    /\/embed\/([A-Za-z0-9_-]{6,})/,
-    /\/shorts\/([A-Za-z0-9_-]{6,})/,
-  ];
-  for (const re of patterns) {
-    const m = url.match(re);
-    if (m) return m[1];
-  }
-  return null;
-}
+export { youtubeId };
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
