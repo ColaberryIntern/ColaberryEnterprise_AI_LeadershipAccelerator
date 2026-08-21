@@ -110,6 +110,11 @@ export default function AdminTicketBoardPage() {
   const [filterPriority, setFilterPriority] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterSource, setFilterSource] = useState('');
+  // Org Chart v4 (2026-08-20) — the org chart's per-card ticket-filter
+  // button deep-links here as `?creator=<agent_name>`. Mirrors filterSource's
+  // exact shape (state + mount-time read + fetchBoard forwarding) rather
+  // than inventing a second mechanism.
+  const [filterCreator, setFilterCreator] = useState('');
   // Ticket Board UX fixes (2026-08-17) — drives the Open/Done stat-card
   // filters. Client-side only: the board fetch already returns every status
   // bucket regardless of this value (see fetchBoard below, unchanged), so
@@ -131,6 +136,7 @@ export default function AdminTicketBoardPage() {
       if (filterPriority) params.set('priority', filterPriority);
       if (filterType) params.set('type', filterType);
       if (filterSource) params.set('source', filterSource);
+      if (filterCreator) params.set('creator', filterCreator);
       // Ticket Board Performance fix (2026-08-18) — the actual fix for "takes
       // forever to load": by default, only ask the server for tickets created in
       // the last 7 days (backend/src/db/ensureTicketIndexesSchema.ts adds the
@@ -157,20 +163,24 @@ export default function AdminTicketBoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, filterPriority, filterType, filterSource, dateRange]);
+  }, [token, filterPriority, filterType, filterSource, filterCreator, dateRange]);
 
   useEffect(() => { fetchBoard(); }, [fetchBoard]);
 
   // Deep-link support: ?open=<ticketId> (the approval email's link) opens that
   // ticket's detail modal directly; ?source=<value> pre-applies the source filter
-  // (used by the Trust Center's "View tickets" link per director). Read once on
-  // mount — the filter select below stays the source of truth after that.
+  // (used by the Trust Center's "View tickets" link per director); ?creator=<value>
+  // (org chart v4, 2026-08-20 — the per-card ticket-filter button, opened in a
+  // new tab) pre-applies the creator filter. Read once on mount — the filter
+  // select/chip below stays the source of truth after that.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const open = params.get('open');
     const source = params.get('source');
+    const creator = params.get('creator');
     if (open) setSelectedTicket(open);
     if (source) setFilterSource(source);
+    if (creator) setFilterCreator(creator);
   }, []);
 
   const handleDragStart = (e: React.DragEvent, ticketId: string) => {
@@ -248,12 +258,13 @@ export default function AdminTicketBoardPage() {
   // via its own toggle, not a "filter" a user would expect "Clear" to blow away —
   // clearing Priority/Type/Source should never silently dump 16,000+ tickets back
   // onto the board as a side effect.
-  const noFiltersActive = !filterPriority && !filterType && !filterSource && !filterStatus;
+  const noFiltersActive = !filterPriority && !filterType && !filterSource && !filterStatus && !filterCreator;
   const clearAllFilters = () => {
     setFilterPriority('');
     setFilterType('');
     setFilterSource('');
     setFilterStatus('');
+    setFilterCreator('');
   };
   const toggleOpenFilter = () => setFilterStatus((prev) => (prev === 'open' ? '' : 'open'));
   const toggleCriticalFilter = () => setFilterPriority((prev) => (prev === 'critical' ? '' : 'critical'));
@@ -382,6 +393,22 @@ export default function AdminTicketBoardPage() {
         <button className="btn btn-sm btn-outline-secondary" onClick={clearAllFilters}>
           Clear
         </button>
+        {/* Org Chart v4 (2026-08-20) — the org chart's ticket-filter button
+            deep-links here as ?creator=<agent_name>. No fixed dropdown (agent
+            names are dynamic, not a closed enum like Source) — a dismissible
+            chip instead, so the applied filter is visible and clearable. */}
+        {filterCreator && (
+          <span className="badge text-bg-info d-inline-flex align-items-center gap-2" style={{ fontWeight: 500, padding: '6px 10px' }}>
+            Creator: {filterCreator}
+            <button
+              type="button"
+              className="btn-close btn-close-white"
+              style={{ fontSize: 10 }}
+              aria-label={`Clear creator filter (${filterCreator})`}
+              onClick={() => setFilterCreator('')}
+            />
+          </span>
+        )}
         <div className="vr d-none d-md-block mx-1" aria-hidden="true" />
         {/* Ticket Board Performance fix (2026-08-18) — the "last 7 days" default
             view toggle. Deliberately styled as its own segmented control, separate

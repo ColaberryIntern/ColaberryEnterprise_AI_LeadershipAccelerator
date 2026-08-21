@@ -58,7 +58,35 @@ export async function getBuildArtifactStatus(enrollmentId: string, cardId: strin
  * Store the uploaded build artifact as a PortfolioArtifact. Idempotent replace
  * (one per enrollment+card). Throws typed { status } on bad input before any write.
  */
-export async function uploadBuildArtifact(enrollmentId: string, cardId: string, file: UploadFile) {
+/**
+ * What the student picked in the build station's project selector. The renderer
+ * offers their own projects AND three sample projects, because in weeks 1-3
+ * they have no project yet and must still be able to build.
+ *
+ * This has to reach the server. An artifact built against "the Retail Analytics
+ * Dashboard (sample)" is real work and belongs in their portfolio, but it is
+ * NOT work on their own system — and mirroring it into their repo unlabelled
+ * would quietly present sample work as part of their capstone. Recorded here so
+ * the repo index can say what each artifact was built on.
+ */
+export interface BuildArtifactContext {
+  /** The selector's label, e.g. "the Retail Analytics Dashboard (sample)". */
+  project_label?: string;
+  /** True when that label is one of the built-in samples. */
+  is_sample?: boolean;
+}
+
+/** Multipart fields arrive as strings; 'false' must not read as truthy. */
+function parseBool(v: unknown): boolean {
+  return v === true || v === 'true' || v === '1';
+}
+
+export async function uploadBuildArtifact(
+  enrollmentId: string,
+  cardId: string,
+  file: UploadFile,
+  context: BuildArtifactContext = {},
+) {
   const card: any = await TimelineCard.findByPk(cardId);
   if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
   if (!BUILD_STATION_TYPES.has(card.type)) {
@@ -89,6 +117,8 @@ export async function uploadBuildArtifact(enrollmentId: string, cardId: string, 
     mimetype: file.mimetype || null,
     uploaded_at,
     week: card.week ?? null,
+    project_label: (context.project_label || '').slice(0, 200) || null,
+    built_on_sample: parseBool(context.is_sample),
   };
 
   const existing: any = await PortfolioArtifact.findOne({ where: { enrollment_id: enrollmentId, card_id: cardId } });
@@ -103,5 +133,42 @@ export async function uploadBuildArtifact(enrollmentId: string, cardId: string, 
     artifact = await PortfolioArtifact.create({ enrollment_id: enrollmentId, card_id: cardId, kind: BUILD_ARTIFACT_KIND, title, summary, content, competencies });
   }
 
-  return { uploaded: true, filename, size_bytes, uploaded_at, artifact: { id: artifact.id, kind: BUILD_ARTIFACT_KIND, title } };
+  // Mirror the artifact into the student's repo. Deliberately AFTER the row is
+  // saved and deliberately incapable of throwing: their artifact is already
+  // stored by this point, and a GitHub outage, a missing repo, or lost push
+  // access must never turn a successful upload into an error they see.
+  //
+  // Idempotent by construction (pure clock-free rendering + repoWriter's
+  // content-hash check), so running it on every upload costs one API read when
+  // nothing changed. The whole artifact set is written, not just this one, so a
+  // student whose repo was disconnected for three weeks repairs on the next
+  // successful sync instead of staying permanently short.
+  const repo_sync = await syncArtifactsForEnrollment(enrollmentId);
+
+  return { uploaded: true, filename, size_bytes, uploaded_at, artifact: { id: artifact.id, kind: BUILD_ARTIFACT_KIND, title }, repo_sync };
+}
+
+/**
+ * Resolve the enrollment's project and mirror its artifacts. Returns a
+ * classified outcome; never throws.
+ */
+async function syncArtifactsForEnrollment(enrollmentId: string): Promise<{ outcome: string; reason?: string }> {
+  try {
+    const { default: Project } = await import('../../models/Project');
+    const project: any = await Project.findOne({ where: { enrollment_id: enrollmentId } });
+    if (!project) return { outcome: 'no_repo', reason: 'No project yet.' };
+
+    const { syncArtifactsToRepo } = await import('../artifacts/artifactRepoSync');
+    const result = await syncArtifactsToRepo(project.id);
+    return { outcome: result.outcome, reason: result.reason };
+  } catch (err: any) {
+    // syncArtifactsToRepo does not throw, so reaching here means the lookup
+    // itself failed. Still not the student's problem.
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'build_artifact',
+      event: 'artifact_repo_sync_lookup_failed', outcome: 'failure',
+      error_class: err?.name ?? 'Error', context: { enrollment_id: enrollmentId },
+    }));
+    return { outcome: 'failed' };
+  }
 }

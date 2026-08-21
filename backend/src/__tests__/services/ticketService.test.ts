@@ -802,6 +802,50 @@ describe('getTicketsForBoard', () => {
       expect(board.backlog[0].id).toBe('recent-1');
     });
   });
+
+  // Org Chart v4 (2026-08-20) — ticket-filter-by-agent button. Same
+  // "pin the WHERE clause" convention as the createdAfter block above.
+  describe('creatorMatchIds filter (ticket-filter-by-agent button)', () => {
+    it('happy path: passing creatorMatchIds adds an Op.or across created_by_id and assigned_to_id, both Op.in over the full match list', async () => {
+      ticketFindAll.mockResolvedValue([]);
+
+      await getTicketsForBoard({ creatorMatchIds: ['cory-engine', 'agent-1', 'admin-1'] });
+
+      const calledWhere = ticketFindAll.mock.calls[0][0].where;
+      expect(calledWhere[Op.or as any]).toEqual([
+        { created_by_id: { [Op.in]: ['cory-engine', 'agent-1', 'admin-1'] } },
+        { assigned_to_id: { [Op.in]: ['cory-engine', 'agent-1', 'admin-1'] } },
+      ]);
+    });
+
+    it('boundary: no creatorMatchIds -> no Op.or key in the where clause at all, unchanged legacy behavior', async () => {
+      ticketFindAll.mockResolvedValue([]);
+
+      await getTicketsForBoard();
+
+      const calledWhere = ticketFindAll.mock.calls[0][0].where;
+      expect(calledWhere[Op.or as any]).toBeUndefined();
+    });
+
+    it('boundary: an empty creatorMatchIds array behaves the same as omitting it entirely', async () => {
+      ticketFindAll.mockResolvedValue([]);
+
+      await getTicketsForBoard({ creatorMatchIds: [] });
+
+      const calledWhere = ticketFindAll.mock.calls[0][0].where;
+      expect(calledWhere[Op.or as any]).toBeUndefined();
+    });
+
+    it('composition: creatorMatchIds composes with an existing filter (priority) in the same where clause', async () => {
+      ticketFindAll.mockResolvedValue([]);
+
+      await getTicketsForBoard({ creatorMatchIds: ['cory-engine'], priority: 'critical' });
+
+      const calledWhere = ticketFindAll.mock.calls[0][0].where;
+      expect(calledWhere.priority).toBe('critical');
+      expect(calledWhere[Op.or as any]).toBeDefined();
+    });
+  });
 });
 
 // Ticket Board Performance fix (2026-08-18) — getTicketStats() previously pulled

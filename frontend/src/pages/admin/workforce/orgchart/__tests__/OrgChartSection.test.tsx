@@ -19,6 +19,20 @@ jest.mock('../../../../../services/workforceOrgChartApi', () => ({
   // shape so OrgChartHumanDrawer's dropdown options render for real in
   // these tests, not just call-through mocks.
   NAMED_DEPARTMENTS: ['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing'],
+  // Org Chart v4 fix (2026-08-20, session CC-20260818-x4nk continued) — this
+  // mock factory was missing OTHER_DEPARTMENT, a real static export
+  // OrgChartSection.tsx also imports and uses to build its department render
+  // order (`[...NAMED_DEPARTMENTS, OTHER_DEPARTMENT]`). Without it here, the
+  // import resolved to `undefined` under this mock, so the "Other" bucket's
+  // key never matched anything in `byDepartment` and Taiwo/Swati silently
+  // vanished from the rendered output — a real, reproducible pre-existing
+  // bug (confirmed via root-cause analysis, not flakiness) that predates
+  // this run and was never caught because this repo's CI has no frontend
+  // jest job (see .github/workflows/ci.yml — frontend gets typecheck + build
+  // only). Fixed here as a direct, in-scope correction since this run
+  // already owns this exact mock block for the color-collision fixture
+  // change below.
+  OTHER_DEPARTMENT: 'Other',
   updateOrgMemberTeam: jest.fn(),
   assignHierarchyTask: jest.fn(),
 }));
@@ -145,13 +159,80 @@ describe('OrgChartSection — drill-down (human) and drill-through (agent)', () 
     expect(container.textContent).toContain('No AI Leadership agents report to Taiwo Oludimimu yet.');
   });
 
-  it('an agent card is a real <a href="/admin/agents/:id"> link (drill-through, not a modal)', async () => {
+  // Org Chart v4 (2026-08-20) — repointed from `corybrain-id` (a LEADERSHIP
+  // agent) to the fixture's one STAFF agent. Leadership-card click behavior
+  // is deliberately CHANGING in this run (see the new describe block below);
+  // this assertion now describes the card type whose behavior actually
+  // stays true — Staff cards remain real drill-through links, never a modal.
+  it('a staff agent card is a real <a href="/admin/agents/:id"> link (drill-through, not a modal)', async () => {
     getOrgChart.mockResolvedValue(CHART);
     await render();
 
-    const link = container.querySelector('a[href="/admin/agents/corybrain-id"]');
+    const link = container.querySelector('a[href="/admin/agents/staff-1-id"]');
     expect(link).toBeTruthy();
-    expect(link!.textContent).toContain('Cory Brain — Strategic Initiatives');
+    expect(link!.textContent).toContain('Admissions Conversion Architect');
+  });
+});
+
+// Org Chart v4 (2026-08-20, session CC-20260818-x4nk continued) — Ali, live:
+// "When I click on AI Leadership, I want to be able to see their AI Team
+// below and Human above in a pop up on the right side." Scoped to Leadership
+// cards only — Staff cards keep real navigation (see the repointed
+// drill-through test above).
+describe('OrgChartSection — AI Leadership drawer', () => {
+  it('clicking a Leadership card opens a drawer showing the human above and the AI Staff team below, with real data', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const leadershipCard = Array.from(container.querySelectorAll('button.wf-emp')).find((el) => el.textContent?.includes('Cory Brain — Strategic Initiatives')) as HTMLElement;
+    expect(leadershipCard).toBeTruthy();
+
+    await act(async () => {
+      leadershipCard.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Human above.
+    expect(container.textContent).toContain('Reports to');
+    expect(container.textContent).toContain('Ali Muwwakkil');
+    // AI Staff below.
+    expect(container.textContent).toContain('AI Staff team · 1');
+    expect(container.textContent).toContain('Admissions Conversion Architect');
+
+    // The staff row INSIDE the drawer is still a real drill-through link,
+    // not a nested modal.
+    const staffLinkInsideDrawer = container.querySelector('.wf-drawer a[href="/admin/agents/staff-1-id"]');
+    expect(staffLinkInsideDrawer).toBeTruthy();
+  });
+
+  it('a Leadership agent with zero AI Staff shows the honest empty state, never a crash', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const wieCard = Array.from(container.querySelectorAll('button.wf-emp')).find((el) => el.textContent?.includes('Workforce Intelligence Engine')) as HTMLElement;
+    await act(async () => {
+      wieCard.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.textContent).toContain('No AI Staff agents report to Workforce Intelligence Engine yet.');
+    expect(container.textContent).toContain('kesetebirhan@gmail.com'); // the human it reports to
+  });
+
+  it('clicking a Staff card never opens the Leadership drawer — Staff click behavior is unchanged (real navigation only)', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    // Staff cards render as <a>, not <button.wf-emp> — dispatching a click on
+    // the anchor itself (jsdom does not follow real navigation) must not
+    // cause any drawer markup to appear.
+    const staffLink = container.querySelector('a[href="/admin/agents/staff-1-id"]') as HTMLElement;
+    await act(async () => {
+      staffLink.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.querySelector('.wf-scrim')).toBeFalsy();
   });
 });
 
@@ -406,6 +487,87 @@ describe('OrgChartSection — hierarchy colors', () => {
     expect(sohailAvatar.style.background).toBeTruthy();
     expect(sohailAvatar.style.background).not.toBe(aliBackground);
   });
+
+  // Org Chart v4 color-collision fix (2026-08-20, session CC-20260818-x4nk
+  // continued) — the exact live bug Ali reported (JJ and Ali both rendering
+  // green). This 7th human's id was found by deterministically replaying
+  // agentAvatarColor.ts's own hash function offline (not guessed): under the
+  // OLD two-pass logic (hash-assign every human first with zero knowledge of
+  // reserved colors, THEN separately overwrite only the humans with a real
+  // server hierarchy_color), this exact id's fallback color collided
+  // byte-for-byte with Ali's server-assigned '#FB2832' — reproduced and
+  // confirmed via a standalone script before writing this assertion. After
+  // the fix (reserved-color set computed BEFORE the fallback pass), the two
+  // can never land on the same color.
+  it('the exact live-reported bug: a no-agent human whose hash fallback would have collided with a human-with-agents color never collides after the fix', async () => {
+    const NO_AGENT_COLLISION_ID = '99999999-0000-4000-8000-000000000002';
+    const COLLISION_CHART: OrgChartResponse = {
+      ...CHART,
+      humans: [
+        ...CHART.humans.map((h) => (h.id === 'f179c222-284e-4180-a335-cca9e4918b2e' ? { ...h, hierarchy_color: '#FB2832' } : h)),
+        {
+          id: NO_AGENT_COLLISION_ID, name: 'JJ', email: 'john@colaberry.com', team: null, department: 'Other',
+          role: 'member', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null,
+        },
+      ],
+    };
+    getOrgChart.mockResolvedValue(COLLISION_CHART);
+    await render();
+
+    const aliCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Ali Muwwakkil')) as HTMLElement;
+    const aliBackground = (aliCard.querySelector('.wf-av') as HTMLElement).style.background;
+    expect(aliBackground).toBeTruthy();
+
+    const jjCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('JJ')) as HTMLElement;
+    const jjBackground = (jjCard.querySelector('.wf-av') as HTMLElement).style.background;
+    expect(jjBackground).toBeTruthy();
+
+    // This is the specific assertion that would have FAILED before the fix
+    // (both would have rendered '#FB2832').
+    expect(jjBackground).not.toBe(aliBackground);
+  });
+
+  // The run's own bar: "never end up with the same color," checked across
+  // the FULL rendered population, not a single pair — every real hierarchy
+  // color reserved by a human/leadership/staff entry must never also be worn
+  // by a fallback (no-color) entry anywhere else on the same chart.
+  it('no fallback (no-color) card anywhere on the chart ever renders a color already reserved by a real hierarchy_color, checked across every human/leadership/staff card at once', async () => {
+    const MIXED_CHART: OrgChartResponse = {
+      ...CHART,
+      humans: [
+        ...CHART.humans.map((h) => (h.id === 'f179c222-284e-4180-a335-cca9e4918b2e' ? { ...h, hierarchy_color: '#FB2832' } : h)),
+        { id: '99999999-0000-4000-8000-000000000002', name: 'JJ', email: 'john@colaberry.com', team: null, department: 'Other', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null },
+        { id: '99999999-0000-4000-8000-000000000009', name: 'Extra Person', email: 'extra@colaberry.com', team: null, department: 'Other', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null },
+      ],
+      leadership: CHART.leadership.map((l) => (l.id === 'corybrain-id' ? { ...l, hierarchy_color: '#FB2832' } : l)),
+      staff: CHART.staff.map((s) => ({ ...s, hierarchy_color: '#FB2832' })),
+    };
+    getOrgChart.mockResolvedValue(MIXED_CHART);
+    await render();
+
+    const allCards = Array.from(container.querySelectorAll('.wf-emp, a.wf-emp'));
+    // Capture the REAL reserved color in whatever format jsdom normalizes it
+    // to (rather than comparing against the raw '#FB2832' literal, which may
+    // not string-match jsdom's own style-serialization format) — same
+    // format-agnostic approach the existing "colored branch" test above
+    // uses, extended to the full population.
+    const aliCard = allCards.find((el) => el.textContent?.includes('Ali Muwwakkil')) as HTMLElement;
+    const reservedBackground = (aliCard.querySelector('.wf-av') as HTMLElement).style.background;
+    expect(reservedBackground).toBeTruthy();
+
+    const noColorCardNames = ['JJ', 'Extra Person', 'Jackie', 'Swati', 'Sohail', 'Workforce Intelligence Engine'];
+    let checkedCount = 0;
+    for (const name of noColorCardNames) {
+      const card = allCards.find((el) => el.textContent?.includes(name));
+      const avatar = card?.querySelector('.wf-av') as HTMLElement | undefined;
+      if (!avatar) continue;
+      checkedCount += 1;
+      expect(avatar.style.background).not.toBe(reservedBackground);
+    }
+    // Guards against the loop above silently checking zero cards (e.g. a
+    // future fixture rename breaking every `.find()` and passing vacuously).
+    expect(checkedCount).toBeGreaterThanOrEqual(5);
+  });
 });
 
 // Org Chart v3 (2026-08-19) — Ali: "The human has the ability to create and
@@ -479,6 +641,75 @@ describe('OrgChartHumanDrawer — assign task', () => {
     expect(assignHierarchyTask).toHaveBeenLastCalledWith(
       'f179c222-284e-4180-a335-cca9e4918b2e',
       expect.objectContaining({ agentId: 'corybrain-id', title: 'Investigate lead spike', idempotencyKey: firstKey }),
+    );
+  });
+});
+
+// Org Chart v4 (2026-08-20, session CC-20260818-x4nk continued) — every AI
+// Leadership/AI Staff card's ticket-filter button. Opens the ticket board
+// filtered to exactly that agent's tickets in a NEW TAB.
+describe('OrgChartSection — ticket-filter button', () => {
+  let windowOpenSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    windowOpenSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+  });
+
+  afterEach(() => {
+    windowOpenSpy.mockRestore();
+  });
+
+  it('clicking a Leadership card\'s ticket-filter button opens the right filtered URL in a new tab, and does NOT also open the drawer', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const leadershipButton = container.querySelector('[aria-label="View Cory Brain — Strategic Initiatives\'s tickets"]') as HTMLElement;
+    expect(leadershipButton).toBeTruthy();
+
+    await act(async () => {
+      leadershipButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+    // The card's own click handler (open the Leadership drawer) must NOT
+    // also have fired — stopPropagation on the button click.
+    expect(container.querySelector('.wf-scrim')).toBeFalsy();
+  });
+
+  it('clicking a Staff card\'s ticket-filter button opens the right filtered URL in a new tab, and does NOT also navigate the card\'s own link', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const staffButton = container.querySelector('[aria-label="View Admissions Conversion Architect\'s tickets"]') as HTMLElement;
+    expect(staffButton).toBeTruthy();
+
+    await act(async () => {
+      staffButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+  });
+
+  it('encodes an agent_name with special characters safely in the URL', async () => {
+    const SPECIAL_CHART: OrgChartResponse = {
+      ...CHART,
+      leadership: [{ ...CHART.leadership[0], agent_name: 'agent name/with?special&chars' }],
+    };
+    getOrgChart.mockResolvedValue(SPECIAL_CHART);
+    await render();
+
+    const leadershipButton = container.querySelector('[aria-label="View Cory Brain — Strategic Initiatives\'s tickets"]') as HTMLElement;
+    await act(async () => {
+      leadershipButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      `/admin/tickets?creator=${encodeURIComponent('agent name/with?special&chars')}`,
+      '_blank',
+      'noopener,noreferrer',
     );
   });
 });

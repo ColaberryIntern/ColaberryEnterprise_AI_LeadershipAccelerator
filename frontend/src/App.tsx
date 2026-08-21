@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
@@ -14,7 +14,6 @@ import ProofV2 from './pages/publicV2/ProofV2';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
 import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
-import SignupV2 from './pages/publicV2/SignupV2';
 import PricingV2 from './pages/publicV2/PricingV2';
 import StoriesV2 from './pages/publicV2/StoriesV2';
 import adminRoutes from './routes/adminRoutes';
@@ -77,7 +76,18 @@ function App() {
                 there post-cutover would shadow the product itself. */}
             <Route path="free-workspace" element={<TryV2 />} />
             <Route path="privacy" element={<PrivacyV2 />} />
-            <Route path="start" element={<SignupV2 />} />
+            {/*
+                /start renders SignupV2 no longer. Ali, 2026-08-21, asked three
+                times: "Startfree page should go to try page." Every "Start free"
+                button now points at /try directly; this redirect catches the
+                inbound links, the sitemap and anyone who typed it.
+
+                SignupV2 is left in the tree ON PURPOSE -- it is the
+                account-creation page, and /try's own "Make this real: create
+                your free account" button is where that flow belongs. Check what
+                that button does before calling SignupV2 dead code.
+            */}
+            <Route path="start" element={<Navigate to="/try" replace />} />
             <Route path="pricing" element={<PricingV2 />} />
             <Route path="stories" element={<StoriesV2 />} />
           </Route>

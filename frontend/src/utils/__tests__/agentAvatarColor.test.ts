@@ -110,4 +110,106 @@ describe('assignDistinctAvatarColors', () => {
     // distinctness.
     expect(new Set(Object.values(colorById)).size).toBeLessThanOrEqual(8);
   });
+
+  // Org Chart v4 color-collision fix (2026-08-20) — the `reservedColors` param.
+  // This is the real, root-cause regression test for the live bug Ali reported
+  // (JJ and Ali both rendering green): a no-agent human's hash fallback must
+  // never land on a color a human-with-agents already owns.
+  describe('reservedColors', () => {
+    it("happy path: keeps a fallback id off an already-reserved palette color, even when that id's own hash would naturally land there", () => {
+      const id = REAL_AGENT_IDS['cory-engine'];
+      const naturalColor = agentAvatarColor(id);
+      const colorById = assignDistinctAvatarColors([id], [naturalColor]);
+      expect(colorById[id]).not.toBe(naturalColor);
+      expect(REAL_PALETTE).toContain(colorById[id]);
+    });
+
+    it('happy path: no id in the roster ever returns a color present in reservedColors, as long as free slots remain', () => {
+      const ids = Object.values(REAL_AGENT_IDS); // 5 ids, plenty of room in the remaining 6 slots
+      const reserved = [REAL_PALETTE[0], REAL_PALETTE[1]];
+      const colorById = assignDistinctAvatarColors(ids, reserved);
+      for (const color of Object.values(colorById)) {
+        expect(reserved).not.toContain(color);
+      }
+    });
+
+    it('boundary: reservedColors covering all 8 palette entries still returns a real palette color for every id — never throws, never undefined', () => {
+      const ids = Object.values(REAL_AGENT_IDS);
+      const colorById = assignDistinctAvatarColors(ids, REAL_PALETTE);
+      expect(Object.keys(colorById)).toHaveLength(ids.length);
+      for (const color of Object.values(colorById)) {
+        expect(color).toBeDefined();
+        expect(REAL_PALETTE).toContain(color);
+      }
+    });
+
+    it('boundary/regression: omitting reservedColors (every pre-existing caller) behaves byte-for-byte identically to an empty array — zero behavior change for today\'s callers', () => {
+      const ids = Object.values(REAL_AGENT_IDS);
+      expect(assignDistinctAvatarColors(ids)).toEqual(assignDistinctAvatarColors(ids, []));
+    });
+
+    it('failure/boundary: an unknown or malformed hex string in reservedColors is silently ignored, never throws', () => {
+      const ids = Object.values(REAL_AGENT_IDS);
+      expect(() => assignDistinctAvatarColors(ids, ['#NOTREAL', 'not-a-color', ''])).not.toThrow();
+    });
+
+    // The exact end-to-end scenario this run's instructions require proof of:
+    // a human-WITH-agents (simulated here by a reserved color standing in for
+    // their real server hierarchy_color) and a human-WITHOUT-agents (a plain
+    // fallback id) can never end up with the same color.
+    it('the exact scenario this fix closes: a reserved "human-with-agents" color and a fallback "human-without-agents" id never collide, across every id in a 7-person roster', () => {
+      const reservedColor = REAL_PALETTE[3]; // stands in for a real server hierarchy_color
+      const noAgentIds = [
+        ...Object.values(REAL_AGENT_IDS),
+        'agent-sixth-no-agents-0000-000000000006',
+        'agent-seventh-no-agents-0000-00000000007',
+      ];
+      const colorById = assignDistinctAvatarColors(noAgentIds, [reservedColor]);
+      for (const [, color] of Object.entries(colorById)) {
+        expect(color).not.toBe(reservedColor);
+      }
+    });
+
+    // PRODUCTION REGRESSION (2026-08-20, loop-production-verifier cycle 1
+    // FAIL) — the exact live-population shape that broke the first version
+    // of this fix: a small reserved set (3 real hierarchy_color values, the
+    // live count) plus a LARGE fallback roster (15 no-agent humans, the live
+    // count) — combined they exceed 8, meaning the old buggy guard
+    // (`takenSlots.size < 8`) went false partway through and stopped
+    // protecting reserved colors for every id processed afterward. This is
+    // the test that should have existed before the first "fix" shipped and
+    // didn't — it fails on the buggy implementation and passes on the real
+    // one. Never a coincidence: checks EVERY fallback id, not a sample.
+    it('PRODUCTION REGRESSION: with 3 reserved colors and 15 fallback ids (18 total, exceeding the 8-slot palette), no fallback id EVER lands on a reserved color, for the full roster', () => {
+      const reserved = [REAL_PALETTE[0], REAL_PALETTE[2], REAL_PALETTE[4]]; // 3 reserved, mirrors live prod count
+      const fallbackIds = Array.from({ length: 15 }, (_, i) => `no-agent-human-${i}-0000-0000-000000000000`);
+
+      const colorById = assignDistinctAvatarColors(fallbackIds, reserved);
+
+      expect(Object.keys(colorById)).toHaveLength(15);
+      for (const [id, color] of Object.entries(colorById)) {
+        expect(reserved).not.toContain(color);
+        expect(REAL_PALETTE).toContain(color);
+      }
+    });
+
+    // Same shape, but proves it holds regardless of HOW the 8-slot boundary
+    // is crossed (reserved-heavy vs fallback-heavy), and that fallback ids
+    // are still allowed to collide with EACH OTHER once genuinely exhausted
+    // (the documented, acceptable graceful degradation) — only reserved
+    // collisions are forbidden.
+    it('boundary: once every slot is genuinely taken, new fallback ids reuse an EARLIER FALLBACK color (never a reserved one) — collision degrades to the lesser defect', () => {
+      const reserved = [REAL_PALETTE[0]]; // 1 reserved, 7 slots left for fallbacks
+      const fallbackIds = Array.from({ length: 10 }, (_, i) => `agent-${i}-0000-0000-0000-00000000000${i}`);
+
+      const colorById = assignDistinctAvatarColors(fallbackIds, reserved);
+
+      const usedColors = new Set(Object.values(colorById));
+      expect(usedColors.has(reserved[0])).toBe(false); // never the reserved color
+      // With 10 ids and only 7 non-reserved slots, at least 2 fallback ids
+      // MUST share a color with another fallback id (pigeonhole) — proves
+      // the degradation actually engaged, not just avoided by chance.
+      expect(usedColors.size).toBeLessThanOrEqual(7);
+    });
+  });
 });

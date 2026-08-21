@@ -157,11 +157,60 @@ export function dateOnly(d: Date | string | null | undefined): DateOnly | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
-/** Capitalised words that open a sentence or name an actor rather than a system. */
+/**
+ * Capitalised words that open a sentence or name an actor rather than a system.
+ *
+ * The verbs matter as much as the articles. A constraint written as a plain
+ * sentence ("Built with Claude Code and deployed with Docker.") puts a capital
+ * on its opening verb, and without these the verb itself is reported as a
+ * system of record alongside the real ones.
+ */
 const NOT_A_SYSTEM = new Set([
   'The', 'This', 'That', 'It', 'A', 'An', 'System', 'Nothing', 'No', 'Every', 'Each',
   'All', 'Any', 'When', 'If', 'Only', 'Never', 'Always', 'Must', 'Should',
+  // Sentence-opening verbs and participles.
+  'Built', 'Build', 'Deployed', 'Deploy', 'Read', 'Reads', 'Write', 'Writes',
+  'Use', 'Uses', 'Used', 'Run', 'Runs', 'Store', 'Stores', 'Stored',
+  'Send', 'Sends', 'Sent', 'Created', 'Create', 'Generated', 'Generate',
+  'Hosted', 'Host', 'Connect', 'Connects', 'Integrate', 'Integrates',
 ]);
+
+/**
+ * Build tooling is not a system of record.
+ *
+ * Students routinely name their toolchain in a CONSTRAINT ("must be built with
+ * Claude Code", "deploy with Docker"), and every capitalised token in a
+ * CONSTRAINT gets promoted to a system. The Command Center then lists the tool
+ * as something the project integrates with and renders a live connection
+ * indicator for it, which is nonsense: reported by a student on 2026-08-20
+ * whose systems panel claimed Claude Code was live infrastructure.
+ *
+ * Matched case-insensitively so "Claude code" and "Claude Code" both fall out,
+ * and matched on the leading word too, because the extractor's optional
+ * second-word group only fires when BOTH words are capitalised.
+ *
+ * Tradeoff, deliberate: a real system whose name begins with one of these
+ * words is dropped as well. That direction is the safe one. Omitting a row
+ * from the integrations panel is a gap the student can see and describe;
+ * asserting a live connection to their text editor is a claim that makes the
+ * whole panel untrustworthy.
+ */
+const NOT_A_SYSTEM_TOOLING = new Set([
+  'claude', 'claude code', 'claude desktop', 'anthropic', 'chatgpt', 'openai',
+  'copilot', 'cursor', 'gemini', 'llm',
+  'git', 'github', 'gitlab', 'bitbucket', 'vs code', 'vscode', 'visual studio',
+  'python', 'node', 'node.js', 'nodejs', 'javascript', 'typescript', 'react',
+  'docker', 'kubernetes', 'npm', 'pip', 'terminal', 'bash', 'powershell',
+  'windows', 'macos', 'linux', 'ubuntu',
+]);
+
+/** True when a scraped proper noun names the student's toolchain, not a system. */
+function isTooling(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (NOT_A_SYSTEM_TOOLING.has(lower)) return true;
+  const head = lower.split(/\s+/)[0];
+  return NOT_A_SYSTEM_TOOLING.has(head);
+}
 
 /**
  * Systems of record, from CONSTRAINT requirements.
@@ -176,7 +225,7 @@ export function systemsOfRecord(requirements: PlanRequirement[]): string[] {
   for (const r of requirements.filter((x) => x.kind === 'CONSTRAINT')) {
     for (const m of r.statement.matchAll(/\b([A-Z][A-Za-z0-9.]*(?:\s+[A-Z][A-Za-z0-9.]*)?)\b/g)) {
       const name = m[1].trim();
-      if (!NOT_A_SYSTEM.has(name) && name.length > 2) names.push(name);
+      if (!NOT_A_SYSTEM.has(name) && !isTooling(name) && name.length > 2) names.push(name);
     }
   }
   return [...new Set(names)];

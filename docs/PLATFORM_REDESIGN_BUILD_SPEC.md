@@ -160,3 +160,77 @@ Agreed with Ali before starting:
 | 9 | Open the platform CTA | — |
 
 Sections 1, 6, 8 and 9 are unblocked and can be built first.
+
+---
+
+## CORRECTED (3) — RETRACTED. The drill-down IS live. Section 4 ships.
+
+**An earlier version of this section said the executive drill-down was a
+front-end-only mockup and recommended dropping section 4. That was WRONG, and
+how it went wrong is worth keeping.**
+
+`ManagementPreviewPage.tsx` (`/try`) really is static — zero `fetch(`, zero
+`useEffect`, a hardcoded roster — and its header comment says:
+
+> "Live data needs the Phase-2 manager/org rollup endpoints (none exist yet)."
+
+**That comment is stale.** It described the state when `/try` was written. The
+real manager surface shipped afterwards and nobody updated it. I checked the
+wrong surface, then trusted its comment instead of the route table.
+
+**The endpoints exist**, in `routes/participantRoutes.ts` lines 243-247, authed
+behind `requireParticipant + requireOrgManager`:
+
+```
+GET  /api/portal/org/overview
+GET  /api/portal/org/members
+GET  /api/portal/org/members/:enrollmentId    <- the drill-down
+GET  /api/portal/org/feed
+POST /api/portal/org/invites
+```
+
+`/portal/company` -> `pages/portal/company/CompanyPage.tsx`, whose header reads
+"the REAL, authed manager surface... Fetches the live org rollup, roster, and
+feed; a row click drills into the per-student detail."
+
+**Lesson for the rest of this build: verify against the route table and the
+type, never against a neighbouring file's prose.** A stale comment is exactly
+as convincing as a true one.
+
+### What the real payloads support
+
+`OrgOverview`: `member_count`, `level_distribution` (its own type comment says
+"Counts across the 9-level Builder ladder, ranks 0..8 (always length 9)" -- an
+independent confirmation of the nine ranks), `avg_readiness`,
+`builder_xp_by_week`, `evidence_this_week`, `attendance_rate`,
+`evaluations_passed_this_month`, `level_ups_last_30d`.
+
+`OrgMemberDetail`: `team`, `engagement`, `skill_xp`, `readiness`, `promotion`,
+`skill_genome`, `section_progress`, `evidence_by_source`, `evaluations`,
+`project_count`.
+
+Every number in the prototype's leadership panel has a real field behind it.
+**"AI readiness you can click into" is TRUE.**
+
+### Two prototype claims that still do NOT survive
+
+1. **"Five clicks to the line of code" -- NO.** The drill-down ends at
+   `evidence_by_source`, which is counts BY SOURCE TYPE
+   (`OrgEvidenceBySource[]`), not individual evidence records.
+   `CompanyMemberDrilldown.tsx` renders `.slice(0, 5)` of them as label/count
+   pairs. There is no path from the manager view to a commit.
+2. **"Readiness by department" -- NO.** `OrgMemberDetail.team` is
+   `string | null`, a flat optional label. There is no department tier, no org
+   hierarchy above the roster, and no department field on the participant or
+   enrollment models.
+
+**Section 4 ships as: one org, one roster, one person, their real signals --
+live and authed -- stopping honestly at evidence counts.** Section 2's
+leadership column is sound apart from "by department", which must go.
+
+### Knock-on
+
+Claims registry `surface.free.workspace` cites `ManagementPreviewPage.tsx,
+routed at /try`. That is the free PREVIEW surface, correctly labelled sample.
+The paid/authed surface is `/portal/company`. Both statements in that claim
+hold; no change needed.

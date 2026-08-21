@@ -137,13 +137,13 @@ describe('KitConfig panel smoke rendering', () => {
 
   it('TeachPanel always shows the resolved list directly editable — no mode switch', () => {
     const base: CountAndOverride<TeachSlideOverride> = { enabled: true, max: null, overrides: null };
-    const html1 = renderToStaticMarkup(<TeachPanel config={base} defaults={[teachSlide]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />);
+    const html1 = renderToStaticMarkup(<TeachPanel config={base} defaults={[teachSlide]} dayLabel="Build Day (Thursday)" dayKind="build" checkpointsEnabled={true} onToggleCheckpoints={noop} onRewrite={noopRewriteTeach} onChange={noop} />);
     expect(html1).toContain('A lesson');
     expect(html1).toContain('Remove'); // editable even though overrides is null
     expect(html1).not.toContain('Write my own');
     expect(html1).not.toContain('Authored defaults');
     const custom: CountAndOverride<TeachSlideOverride> = { enabled: true, max: null, overrides: [teachSlide] };
-    const html2 = renderToStaticMarkup(<TeachPanel config={custom} defaults={[]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />);
+    const html2 = renderToStaticMarkup(<TeachPanel config={custom} defaults={[]} dayLabel="Build Day (Thursday)" dayKind="build" checkpointsEnabled={true} onToggleCheckpoints={noop} onRewrite={noopRewriteTeach} onChange={noop} />);
     expect(html2).toContain('+ Add lesson slide');
     expect(html2).toContain('AI rewrite');
   });
@@ -171,7 +171,7 @@ describe('KitConfig panel smoke rendering', () => {
     const cfg: CountAndOverride<TeachSlideOverride> = { enabled: true, max: null, overrides: null };
 
     // overrides: null — the panel edits these real defaults directly.
-    const html = renderToStaticMarkup(<TeachPanel config={cfg} defaults={week2Lessons} dayLabel="Architecture Day (Monday)" onRewrite={noopRewriteTeach} onChange={onChange} />);
+    const html = renderToStaticMarkup(<TeachPanel config={cfg} defaults={week2Lessons} dayLabel="Architecture Day (Monday)" dayKind="architecture" checkpointsEnabled={true} onToggleCheckpoints={noop} onRewrite={noopRewriteTeach} onChange={onChange} />);
     expect(html).toContain('repetition tax every single session');
     expect(html).toContain('asset you have not built yet');
     expect((html.match(/card-header/g) || []).length).toBe(2);
@@ -179,7 +179,7 @@ describe('KitConfig panel smoke rendering', () => {
     // Remove the first slide — confirm the base is `overrides` (once set),
     // not `defaults`.
     const afterRemove: CountAndOverride<TeachSlideOverride> = { ...cfg, overrides: week2Lessons.slice(1) };
-    const htmlAfterRemove = renderToStaticMarkup(<TeachPanel config={afterRemove} defaults={week2Lessons} dayLabel="Architecture Day (Monday)" onRewrite={noopRewriteTeach} onChange={onChange} />);
+    const htmlAfterRemove = renderToStaticMarkup(<TeachPanel config={afterRemove} defaults={week2Lessons} dayLabel="Architecture Day (Monday)" dayKind="architecture" checkpointsEnabled={true} onToggleCheckpoints={noop} onRewrite={noopRewriteTeach} onChange={onChange} />);
     expect(htmlAfterRemove).not.toContain('repetition tax every single session');
     expect(htmlAfterRemove).toContain('asset you have not built yet');
     expect((htmlAfterRemove.match(/card-header/g) || []).length).toBe(1);
@@ -191,7 +191,7 @@ describe('KitConfig panel smoke rendering', () => {
     // wrapper, so this proves the actual array TeachPanel would commit.
     const swapped = [week2Lessons[1], week2Lessons[0]];
     const afterMove: CountAndOverride<TeachSlideOverride> = { ...cfg, overrides: swapped };
-    const htmlAfterMove = renderToStaticMarkup(<TeachPanel config={afterMove} defaults={week2Lessons} dayLabel="Architecture Day (Monday)" onRewrite={noopRewriteTeach} onChange={onChange} />);
+    const htmlAfterMove = renderToStaticMarkup(<TeachPanel config={afterMove} defaults={week2Lessons} dayLabel="Architecture Day (Monday)" dayKind="architecture" checkpointsEnabled={true} onToggleCheckpoints={noop} onRewrite={noopRewriteTeach} onChange={onChange} />);
     const assetIdx = htmlAfterMove.indexOf('asset you have not built yet');
     const taxIdx = htmlAfterMove.indexOf('repetition tax every single session');
     expect(assetIdx).toBeGreaterThan(-1);
@@ -208,7 +208,7 @@ describe('KitConfig panel smoke rendering', () => {
     // assume the frontend's Override types' fields are always present.
     const bareSlide = { segment: 'guided-build', eyebrow: '', title: 'Bare slide' } as TeachSlideOverride;
     expect(() => renderToStaticMarkup(
-      <TeachPanel config={{ enabled: true, max: null, overrides: [bareSlide] }} defaults={[]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />,
+      <TeachPanel config={{ enabled: true, max: null, overrides: [bareSlide] }} defaults={[]} dayLabel="Build Day (Thursday)" dayKind="build" checkpointsEnabled={true} onToggleCheckpoints={noop} onRewrite={noopRewriteTeach} onChange={noop} />,
     )).not.toThrow();
 
     const bareBeat = { segment: 'business-problem', icon: '💡', eyebrow: '', title: 'Bare beat', tone: 'berry' } as StoryBeatOverride;

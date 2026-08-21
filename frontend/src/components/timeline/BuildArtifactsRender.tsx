@@ -72,6 +72,10 @@ const CSS = `
 .ba-submit-btn:disabled{opacity:.6;cursor:default}
 .ba-err{color:#b3261e;background:#fdeceb;border:1px solid #f5c6c2;border-radius:8px;padding:8px 11px;font-size:12.5px;margin:10px 0 0}
 .ba-donemsg{border:1px solid #bfe6cd;background:#eafaf1;color:var(--green);border-radius:12px;padding:14px 16px;margin:18px 0 0;font-size:13.5px;font-weight:600}
+.ba-sync{border-radius:10px;padding:11px 14px;margin:10px 0 0;font-size:12.8px;line-height:1.55}
+.ba-sync.ok{border:1px solid #bfe6cd;background:#f2fbf6;color:#0b6e3f}
+.ba-sync.warn{border:1px solid #ffe0a3;background:#fff7e6;color:#5c4a1a}
+.ba-sync code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-family:Consolas,Menlo,monospace}
 .tld-body--buildartifacts{padding:0 !important;background:#fff !important;overflow:hidden !important;display:flex !important}
 `;
 
@@ -91,6 +95,7 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState('');
   const [localDone, setLocalDone] = useState(false);
+  const [repoSync, setRepoSync] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -124,8 +129,15 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
     setUploadErr(''); setUploading(true);
     try {
       if (cardId) {
-        const fd = new FormData(); fd.append('file', f);
-        await portalApi.post(`/api/portal/runtime/cards/${cardId}/build-artifact`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const fd = new FormData();
+        fd.append('file', f);
+        // Which project this was built against. A sample build is real work and
+        // is kept, but the repo index labels it — a portfolio that silently
+        // mixes sample work into a capstone overstates itself.
+        fd.append('project_label', proj);
+        fd.append('is_sample', String(SAMPLE_PROJECTS.some((p) => p.name === proj)));
+        const res: any = await portalApi.post(`/api/portal/runtime/cards/${cardId}/build-artifact`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        setRepoSync(res?.data?.repo_sync?.outcome || null);
       }
       if (onComplete) await onComplete();
       setLocalDone(true);
@@ -174,11 +186,33 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
         <div className="ba-pts">&#127942; <b>Points on your first submitted build only.</b> Re-run on other artifacts or projects any time for practice — extra builds don&rsquo;t add points.</div>
 
         {isDone ? (
-          <div className="ba-donemsg">&#10003; Build submitted — nice work. You can keep building more artifacts for practice (no extra points).</div>
+          <>
+            <div className="ba-donemsg">&#10003; Build submitted — nice work. You can keep building more artifacts for practice (no extra points).</div>
+            {repoSync === 'written' && (
+              <div className="ba-sync ok">&#10003; Saved to your GitHub repo under <code>artifacts/</code>.</div>
+            )}
+            {repoSync === 'unchanged' && (
+              <div className="ba-sync ok">&#10003; Already in your GitHub repo — nothing changed.</div>
+            )}
+            {repoSync === 'no_repo' && (
+              <div className="ba-sync warn">
+                This is saved here, but <b>not in GitHub yet</b> — you haven&rsquo;t connected a repository.
+                Connect one and your artifacts, including this one, sync automatically.
+              </div>
+            )}
+            {repoSync === 'no_access' && (
+              <div className="ba-sync warn">
+                Saved here, but we can no longer write to your repository. Re-connect it to resume syncing.
+              </div>
+            )}
+            {(repoSync === 'failed' || repoSync === 'not_configured') && (
+              <div className="ba-sync warn">Saved here. The GitHub copy didn&rsquo;t go through — we&rsquo;ll retry on your next upload.</div>
+            )}
+          </>
         ) : copyGateMet ? (
           <div className="ba-submit">
             <div className="ba-submit-h">Submit your build</div>
-            <p className="ba-submit-p">Upload the file Claude Code saved to your <b>Downloads</b> folder (it told you the exact name). Accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV.</p>
+            <p className="ba-submit-p">Upload the file Claude Code built (it told you the exact name and where it saved it). If you have a GitHub repository connected, it also lands there under <code>artifacts/</code>. Accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV.</p>
             <input ref={fileRef} type="file" accept={ACCEPT} style={{ display: 'none' }} onChange={onFile} />
             <button type="button" className="ba-submit-btn" disabled={uploading} onClick={() => fileRef.current && fileRef.current.click()}>{uploading ? 'Uploading…' : '⬆  Upload your file & submit'}</button>
             {uploadErr && <div className="ba-err">{uploadErr}</div>}
