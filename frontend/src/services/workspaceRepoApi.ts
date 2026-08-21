@@ -168,6 +168,51 @@ export async function downloadDocsBundle(projectId: string): Promise<{ blob: Blo
   return { blob: res.data as Blob, filename: match?.[1] ?? 'build-docs.zip' };
 }
 
+/**
+ * What the backend found at `.colaberry/progress.json` before it merged.
+ *
+ * `unreadable` is the one that changes what a student must be told: there IS a
+ * file, it could not be parsed, so nothing in it could be carried across. Saying
+ * "your ticks are already in it" there would be false.
+ */
+export type ProgressMergeState = 'absent' | 'merged' | 'unreadable';
+
+/**
+ * The student's OWN `.colaberry/progress.json`, built and merged server-side.
+ *
+ * This is the one action that makes the file reachable for a student whose repo
+ * the platform can only read. It is not the blank seed from the docs zip: the
+ * backend reads whatever is at `.colaberry/progress.json` in their repo, merges
+ * the platform's story list and exact criterion wording over it, carries their
+ * ticks and their own custom keys across, and returns the result. So the
+ * instruction on screen can be the simple one — save it over your file — which
+ * is the only instruction likely to be followed correctly.
+ *
+ * A blob fetch for the same reason as the bundle: the endpoint is
+ * participant-authed and an `<a href>` carries no Authorization header.
+ */
+export async function downloadProgressFile(
+  projectId: string,
+): Promise<{ blob: Blob; filename: string; existing: ProgressMergeState | null }> {
+  const res = await workspaceApi.get('/api/portal/workspace/progress-file', {
+    params: { project_id: projectId },
+    responseType: 'blob',
+  });
+  const disposition = String(res.headers?.['content-disposition'] ?? '');
+  const match = /filename="?([^"';]+)"?/.exec(disposition);
+  const state = String(res.headers?.['x-colaberry-progress-existing'] ?? '');
+  return {
+    blob: res.data as Blob,
+    // The fallback is the real name, not a placeholder: a cross-origin response
+    // exposes no Content-Disposition unless it is allowlisted, and a student
+    // told to save "download" at `.colaberry/progress.json` would be stuck.
+    filename: match?.[1] ?? 'progress.json',
+    // Null when the header is not exposed. The caller must degrade to copy that
+    // is true without it rather than guessing at a state it cannot see.
+    existing: state === 'absent' || state === 'merged' || state === 'unreadable' ? state : null,
+  };
+}
+
 /** Sync (pull) the student's repo — the portal never commits for them. */
 export async function syncWorkspaceRepo(projectId: string): Promise<WorkspaceRepoView> {
   const { data } = await workspaceApi.post<WorkspaceRepoView>(

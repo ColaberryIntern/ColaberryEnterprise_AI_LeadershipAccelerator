@@ -3,7 +3,6 @@ import { Route, Navigate } from 'react-router-dom';
 import HomePage from '../pages/HomePage';
 import ProgramPage from '../pages/ProgramPage';
 import PricingPage from '../pages/PricingPage';
-import ContactPage from '../pages/ContactPage';
 import SponsorshipPage from '../pages/SponsorshipPage';
 import AdvisoryPage from '../pages/AdvisoryPage';
 import CaseStudiesPage from '../pages/CaseStudiesPage';
@@ -41,11 +40,6 @@ const publicRoutes = (
       strategy-call pages are functional surfaces rather than marketing. Deleting
       those because "the old site is not needed" would break paying customers.
   */}
-  {/* Ali, 2026-08-21: /start had NO route and every "Start free" button in the
-      site pointed at it, so they all fell through to NotFound. It redirects
-      rather than 404s because the header, home and pricing all link it, and
-      inbound links plus the sitemap still point here. */}
-  <Route path="/start" element={<Navigate to="/try" replace />} />
   <Route path="/program" element={<Navigate to="/platform" replace />} />
   <Route path="/case-studies" element={<Navigate to="/stories" replace />} />
   <Route path="/demo-day" element={<Navigate to="/stories" replace />} />
@@ -56,7 +50,6 @@ const publicRoutes = (
     <Route path="/enroll" element={<EnrollPage />} />
     <Route path="/enroll/success" element={<EnrollSuccessPage />} />
     <Route path="/enroll/cancel" element={<EnrollCancelPage />} />
-    <Route path="/contact" element={<ContactPage />} />
     <Route path="/executive-overview/thank-you" element={<ExecOverviewThankYouPage />} />
     <Route path="/executive-roi-calculator" element={<ExecutiveROICalculatorPage />} />
     <Route path="/ai-architect" element={<AIArchitectLandingPage />} />

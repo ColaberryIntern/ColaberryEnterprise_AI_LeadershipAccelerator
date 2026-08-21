@@ -34,7 +34,12 @@
  * short.
  */
 import * as fs from 'fs/promises';
-import { ArtifactRecord, buildArtifactFiles, isTextArtifact } from './artifactRepoFiles';
+import {
+  ArtifactRecord,
+  buildArtifactFiles,
+  isTextArtifact,
+  mergeArtifactHashesIntoManifest,
+} from './artifactRepoFiles';
 import { resolveProjectRepo } from '../projectRepoResolver';
 
 export type ArtifactSyncOutcome =
@@ -187,12 +192,26 @@ export async function syncArtifactsToRepo(
 
     const files = buildArtifactFiles(toArtifactRecords(rows as StoredArtifact[], textByCardId));
 
-    const { readRepoManifest, writeDocsToRepo } = await import('../sbp/repoWriter');
+    const { readRepoManifest, writeDocsToRepo, MANIFEST_PATH } = await import('../sbp/repoWriter');
+    const { createHash } = await import('crypto');
+    const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
+
     const target = { owner: pointer.owner, repo: pointer.name };
     const manifest = await readRepoManifest(target, { correlationId: cid });
+
+    // Record our paths IN the manifest, or every sync re-commits identical
+    // content forever — proven in production, see mergeArtifactHashesIntoManifest.
+    // repoWriter excludes MANIFEST_PATH from the change comparison and appends it
+    // only when something substantive changed, so adding it here cannot itself
+    // trigger a commit.
+    const mergedManifest = mergeArtifactHashesIntoManifest(manifest, files, sha256);
+    const toWrite = mergedManifest
+      ? [...files, { path: MANIFEST_PATH, content: mergedManifest }]
+      : files;
+
     // No cast: RenderedArtifactFile and RenderedFile are the same { path, content }
     // shape, and a test asserts they stay assignable so this stays honest.
-    const result = await writeDocsToRepo(target, files, manifest, { correlationId: cid });
+    const result = await writeDocsToRepo(target, toWrite, manifest, { correlationId: cid });
 
     log('artifact_sync_done', cid, 'success', {
       project_id: projectId,

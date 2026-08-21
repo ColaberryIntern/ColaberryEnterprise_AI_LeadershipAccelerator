@@ -181,6 +181,9 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
                   )}
                   {active === 'teach' && (
                     <TeachPanel config={config.teach} defaults={defaults.teach} dayLabel={DAY_LABEL[defaults.dayKind]}
+                      dayKind={defaults.dayKind}
+                      checkpointsEnabled={config.checkpointsEnabled}
+                      onToggleCheckpoints={(v) => setConfig({ ...config, checkpointsEnabled: v })}
                       onRewrite={rewriteTeach}
                       onChange={(next) => setConfig({ ...config, teach: next })} />
                   )}

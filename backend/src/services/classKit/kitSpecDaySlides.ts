@@ -310,19 +310,27 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
   pushInteractions(out, interactions, 'readiness', readiness);
 
   const map = segById(segs, 'build-map');
-  out.push(slide(map, 0, 'buildmap', {
-    eyebrow: '🗺️ Build map', title: 'The checkpoints', bullets: t.buildMap,
-    diagram: buildCheckpointDiagram(t.checkpoints),
-    diagramCaption: 'Everyone moves together, checkpoint to checkpoint. Stuck? The rescue branch catches you up.',
-    presenterTip: 'Show the safety rails: the checkpoints and the rescue branch. Nobody gets left behind. Confirm CP0 before the first prompt.',
-  }));
-  out.push(...teachToSlides(tteach, 'build-map', map));
-  t.checkpoints.forEach((cp, i) => {
-    out.push(slide(map, i + 1, 'checkpoint', {
-      eyebrow: `Checkpoint ${cp.n}`, title: cp.label, body: cp.detail, checkpoint: cp,
-      presenterTip: i === 0 ? 'Everyone starts here. Confirm CP0 before the first prompt.' : 'Wait for the pulse to catch up before the next checkpoint.',
+  // The checkpoint block is generated from the week's own buildMap/checkpoints
+  // arrays, not from teach content, so a session rebuilt entirely through
+  // `teach` overrides would otherwise still carry the authored checkpoints —
+  // and they go stale silently, because nothing ties the two together.
+  if (config.checkpointsEnabled) {
+    out.push(slide(map, 0, 'buildmap', {
+      eyebrow: '🗺️ Build map', title: 'The checkpoints', bullets: t.buildMap,
+      diagram: buildCheckpointDiagram(t.checkpoints),
+      diagramCaption: 'Everyone moves together, checkpoint to checkpoint. Stuck? The rescue branch catches you up.',
+      presenterTip: 'Show the safety rails: the checkpoints and the rescue branch. Nobody gets left behind. Confirm CP0 before the first prompt.',
     }));
-  });
+  }
+  out.push(...teachToSlides(tteach, 'build-map', map));
+  if (config.checkpointsEnabled) {
+    t.checkpoints.forEach((cp, i) => {
+      out.push(slide(map, i + 1, 'checkpoint', {
+        eyebrow: `Checkpoint ${cp.n}`, title: cp.label, body: cp.detail, checkpoint: cp,
+        presenterTip: i === 0 ? 'Everyone starts here. Confirm CP0 before the first prompt.' : 'Wait for the pulse to catch up before the next checkpoint.',
+      }));
+    });
+  }
   pushStoryBeats(out, tBeats, 'build-map', map, config);
   pushInteractions(out, interactions, 'build-map', map);
 

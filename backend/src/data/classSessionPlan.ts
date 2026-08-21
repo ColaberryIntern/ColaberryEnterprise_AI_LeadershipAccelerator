@@ -1019,17 +1019,20 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         answer: 1,
         reveal: 'A versioned template with a tested example is what makes a prompt an asset instead of a one-off.',
       },
-      thursdayTrailer: 'Thursday we build the library — 8+ versioned prompts with tests and a "library-ready" standard.',
+      thursdayTrailer: 'Thursday we build the library — five versioned prompts, each with a real score, and a "library-ready" standard.',
     },
     thursday: {
-      resultPreview: 'An Enterprise Prompt Library with 8+ versioned, documented prompts, each with a tested example and metadata.',
-      readinessCheck: 'Your repo open with a prompts/ folder and your Week 3 eval pattern handy.',
-      buildMap: ['CP0: prompts/ scaffold', 'CP1: first versioned template', 'CP2: 8 prompts with metadata', 'CP3: standard doc + eval gate'],
+      resultPreview: 'A prompt library with five versioned, documented prompts, each scored against cases the student confirmed.',
+      // Week 3 shipped a confidence-threshold lab, never a reusable grader, so
+      // the readiness check must not send students hunting for one. The scorer
+      // is built from scratch in this session instead.
+      readinessCheck: 'Your repo open with Claude Code in it, your API key live in that terminal, and a couple of sentences about your project.',
+      buildMap: ['CP0: prompts/ scaffold', 'CP1: build the scorer', 'CP2: prompt #1 scored and improved', 'CP3: five prompts + standard + gate'],
       checkpoints: [
-        { n: 0, label: 'Scaffold', detail: 'prompts/ folder with a template format chosen.' },
-        { n: 1, label: 'First template', detail: 'One versioned prompt template with variables + a tested example.' },
-        { n: 2, label: 'Eight prompts', detail: '8+ prompts, each with metadata and a workflow mapping.' },
-        { n: 3, label: 'Governed', detail: 'A written "library-ready" standard and an eval gate.' },
+        { n: 0, label: 'Scaffold', detail: 'prompts/ folder with the template format chosen.' },
+        { n: 1, label: 'The scorer', detail: 'A script that runs a prompt against confirmed cases and returns a number.' },
+        { n: 2, label: 'Prompt one', detail: 'One prompt written, scored, improved, and scored again.' },
+        { n: 3, label: 'Governed', detail: 'Five prompts, a written "library-ready" standard, and a gate that enforces it.' },
       ],
       prompts: [
         { label: 'Templatize', prompt: 'Turn this prompt into a reusable template: extract variables, add an XML structure, and include one worked example.' },
@@ -1048,7 +1051,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     },
     assignment: {
       title: 'Enterprise Prompt Library',
-      deliverables: ['prompts/ library with 8+ versioned templates', 'A CONTRIBUTING/standard doc'],
+      deliverables: ['prompts/ library with five scored, versioned templates', 'A CONTRIBUTING/standard doc'],
       proof: 'A before/after of one prompt with its eval scores.',
     },
     builderBroadcastFocus: 'a versioned, tested Prompt Library your whole team can reuse',
