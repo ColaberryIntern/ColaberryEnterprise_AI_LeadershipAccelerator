@@ -171,6 +171,28 @@ than no test: the next person cannot tell which one is wrong.
 6. **Re-run the live Playwright funnel check** -- it is in this session's
    scratchpad as `funnel.js` and it correctly caught the failed deploy.
 
+## Sticky CTA bar on /try -- THE PATTERN, measured 2026-08-21
+
+The portal does NOT use JS for this. It is plain CSS sticky, offset below the
+61px shell header. From `pages/portal/today/TodayShell.css`:
+
+```
+.te-topbar { position: sticky; top: 0;    z-index: 20 }   /* the 61px header */
+.te-rail   { position: sticky; top: 61px; height: calc(100vh - 61px) }
+.te-side   { position: sticky; top: 20px; align-self: start }
+```
+
+So the /try bar should be `position: sticky; top: 61px` inside the scroll
+container, holding "Make this real: create your free account" and "Send free
+test invites". ManagementPreviewPage already imports TodayShell.css, so the
+tokens and the 61px offset are available -- do not invent a second header height.
+
+Reveal it once the pink banner scrolls past, via IntersectionObserver on the
+banner (the pattern used throughout publicV2, always paired with a
+prefers-reduced-motion check). A compact always-sticky bar is also acceptable and
+simpler. Ali called this "our signature functionality", so match how
+/portal/projects and /portal/classroom feel rather than inventing a new motion.
+
 ## Gates and shipping
 
 - `tsc --noEmit` in `frontend/` (slow on this machine, 10-20 min; run it in the

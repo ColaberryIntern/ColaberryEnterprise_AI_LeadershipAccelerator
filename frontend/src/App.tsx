@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import ContactPage from './pages/ContactPage';
 import { AuthProvider } from './contexts/AuthContext';
 import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
@@ -75,6 +76,23 @@ function App() {
                 (ManagementPreviewPage, declared above). Mounting the V2 explainer
                 there post-cutover would shadow the product itself. */}
             <Route path="free-workspace" element={<TryV2 />} />
+            {/*
+                /contact moved OUT of the legacy publicRoutes block and under
+                PublicLayoutV2. Ali, 2026-08-21: "Talk to an Architect takes me
+                to a page that needs the navigation updated. That's the case
+                throughout the application."
+
+                It was rendering the old Home / The Program / Contact nav purely
+                because it sat outside this layout. ContactPage renders no header
+                of its own, so it simply inherits PublicHeaderV2 here -- no
+                double header.
+
+                THE SAME FIX APPLIES to the other legacy marketing pages still in
+                publicRoutes.tsx. They were left there deliberately (that block
+                carries /enroll and the payment flow), but the ones that are
+                purely marketing should move here too.
+            */}
+            <Route path="contact" element={<ContactPage />} />
             <Route path="privacy" element={<PrivacyV2 />} />
             {/*
                 /start renders SignupV2 no longer. Ali, 2026-08-21, asked three
