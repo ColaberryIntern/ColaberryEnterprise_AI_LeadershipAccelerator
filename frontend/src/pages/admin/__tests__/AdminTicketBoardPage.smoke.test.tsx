@@ -15,9 +15,18 @@ import AdminTicketBoardPage from '../AdminTicketBoardPage';
  * reason why it's still open." (Ali, live feedback.) 3 fixtures per the plan:
  * stale-open (flag shows), fresh-open (no flag), stale-but-done (no flag — a
  * closed ticket isn't "stale," it's closed).
+ *
+ * Org Chart v5 (2026-08-21) — the Creator filter roster comes from
+ * `ticketCreatorApi.ts`, which goes through the shared axios `api` client
+ * (utils/api.ts), NOT `global.fetch` — mocking `global.fetch` alone would
+ * never intercept it. Mocked as its own module here, same as
+ * OrgChartSection.test.tsx already mocks `workforceOrgChartApi`.
  */
 
 jest.mock('../../../contexts/AuthContext', () => ({ useAuth: () => ({ token: 'test-token' }) }));
+jest.mock('../../../services/ticketCreatorApi', () => ({ getTicketCreatorOptions: jest.fn() }));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getTicketCreatorOptions } = require('../../../services/ticketCreatorApi') as { getTicketCreatorOptions: jest.Mock };
 
 function makeTicket(
   overrides: Partial<{
@@ -98,6 +107,10 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  // Default: empty roster. Tests that care about the Creator dropdown's real
+  // options override this explicitly (see "creator filter" describe block).
+  getTicketCreatorOptions.mockReset();
+  getTicketCreatorOptions.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -428,60 +441,108 @@ describe('AdminTicketBoardPage — last-7-days default view', () => {
   });
 });
 
-// Org Chart v4 (2026-08-20, session CC-20260818-x4nk continued) — the org
-// chart's per-card ticket-filter button deep-links here as
-// ?creator=<agent_name> in a new tab. This page reads that param and forwards
-// it to the board fetch as `creator`.
-describe('AdminTicketBoardPage — creator filter (org chart deep link)', () => {
+// Org Chart v4 (2026-08-20) shipped the `?creator=<agent_name>` deep link +
+// server-side filtering. Org Chart v5 (2026-08-21, session CC-20260818-x4nk
+// continued) replaces the old display-only "Creator: <raw-slug>" badge chip
+// (clearable but not changeable, and showing the internal agent_name slug
+// instead of a friendly name) with a real, roster-backed <select> — visible,
+// showing the friendly display_name, and changeable/clearable in-page like
+// every other filter (Priority/Type/Source).
+describe('AdminTicketBoardPage — creator filter (real, roster-backed select)', () => {
+  const ROSTER = [
+    { agent_name: 'cory-engine', display_name: 'Cory Engine — Autonomous Operations' },
+    { agent_name: 'MarketingGrowthStrategyArchitect', display_name: 'Marketing & Growth Strategy Architect' },
+  ];
+
   function boardFetchCalls(): string[] {
     return ((global as any).fetch as jest.Mock).mock.calls
       .map((c: any[]) => c[0])
       .filter((url: string) => url.startsWith('/api/admin/tickets/board'));
   }
 
+  function creatorSelect(): HTMLSelectElement {
+    return container.querySelector('select[aria-label="Creator"]') as HTMLSelectElement;
+  }
+
+  async function selectValue(select: HTMLSelectElement, value: string) {
+    await act(async () => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.set!;
+      nativeSetter.call(select, value);
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
   afterEach(() => {
     window.history.pushState({}, '', '/'); // reset the deep-link URL between tests
   });
 
-  it('happy path: ?creator=<agent_name> on load populates the filter and the board fetch includes creator=<agent_name>', async () => {
+  it('happy path: ?creator=<agent_name> on load selects the right option, showing the FRIENDLY display_name (fixing the old raw-slug bug), and the board fetch includes creator=<agent_name>', async () => {
     window.history.pushState({}, '', '/admin/tickets?creator=cory-engine');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
     mockFetch({ backlog: [makeTicket({ id: 'x-1' })] });
     await renderBoard();
 
+    const select = creatorSelect();
+    expect(select).toBeTruthy();
+    expect(select.value).toBe('cory-engine');
+    const selectedOption = select.options[select.selectedIndex];
+    expect(selectedOption.textContent).toBe('Cory Engine — Autonomous Operations'); // not the raw slug
+
     const calls = boardFetchCalls();
     expect(calls[calls.length - 1]).toMatch(/creator=cory-engine/);
-    expect(container.textContent).toContain('Creator: cory-engine');
   });
 
-  it('boundary: no ?creator= param -> the fetch omits it entirely, byte-for-byte unchanged from today, and no chip renders', async () => {
+  it('boundary: no ?creator= param -> select defaults to "All Creators", the fetch omits creator= entirely, byte-for-byte unchanged from today', async () => {
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
     mockFetch({ backlog: [makeTicket({ id: 'x-2' })] });
     await renderBoard();
 
+    expect(creatorSelect().value).toBe('');
     const calls = boardFetchCalls();
     expect(calls[calls.length - 1]).not.toMatch(/creator=/);
-    expect(container.textContent).not.toContain('Creator:');
   });
 
-  it('clicking the chip\'s clear (×) button removes the filter and re-fetches without creator=', async () => {
-    window.history.pushState({}, '', '/admin/tickets?creator=cory-engine');
+  it('adjustable: changing the select to a different agent updates the filter and re-fetches with the new creator=', async () => {
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
     mockFetch({ backlog: [makeTicket({ id: 'x-3' })] });
+    await renderBoard();
+
+    await selectValue(creatorSelect(), 'MarketingGrowthStrategyArchitect');
+
+    expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/creator=MarketingGrowthStrategyArchitect/);
+  });
+
+  it('combinable: setting Creator AND Priority together sends both params in the same board fetch', async () => {
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-combo' })] });
+    await renderBoard();
+
+    await selectValue(creatorSelect(), 'cory-engine');
+    const prioritySelect = container.querySelector('select:not([aria-label="Creator"])') as HTMLSelectElement;
+    await selectValue(prioritySelect, 'critical');
+
+    const lastCall = boardFetchCalls()[boardFetchCalls().length - 1];
+    expect(lastCall).toMatch(/creator=cory-engine/);
+    expect(lastCall).toMatch(/priority=critical/);
+  });
+
+  it('clearable: selecting "All Creators" removes the filter and re-fetches without creator=', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=cory-engine');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-4' })] });
     await renderBoard();
 
     expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/creator=cory-engine/);
 
-    const clearChipBtn = container.querySelector('.btn-close') as HTMLButtonElement;
-    expect(clearChipBtn).toBeTruthy();
-    await act(async () => {
-      clearChipBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    await selectValue(creatorSelect(), '');
 
     expect(boardFetchCalls()[boardFetchCalls().length - 1]).not.toMatch(/creator=/);
-    expect(container.textContent).not.toContain('Creator:');
   });
 
-  it('"Clear" (the existing filter-clear button) also clears the creator filter, same as every other dropdown filter', async () => {
+  it('"Clear" (the existing global filter-clear button) also clears the creator filter, same as every other dropdown filter', async () => {
     window.history.pushState({}, '', '/admin/tickets?creator=cory-engine');
-    mockFetch({ backlog: [makeTicket({ id: 'x-4' })] });
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-5' })] });
     await renderBoard();
 
     const clearBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Clear') as HTMLButtonElement;
@@ -490,5 +551,18 @@ describe('AdminTicketBoardPage — creator filter (org chart deep link)', () => 
     });
 
     expect(boardFetchCalls()[boardFetchCalls().length - 1]).not.toMatch(/creator=/);
+    expect(creatorSelect().value).toBe('');
+  });
+
+  it('boundary: a deep-linked/active creator value NOT in the loaded roster (stale agent, or roster still empty) stays visible via a synthetic option — never silently dropped', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=some-removed-agent');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER); // roster loaded, but doesn't include this agent
+    mockFetch({ backlog: [makeTicket({ id: 'x-6' })] });
+    await renderBoard();
+
+    const select = creatorSelect();
+    expect(select.value).toBe('some-removed-agent');
+    expect(Array.from(select.options).some((o) => o.value === 'some-removed-agent')).toBe(true);
+    expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/creator=some-removed-agent/);
   });
 });
