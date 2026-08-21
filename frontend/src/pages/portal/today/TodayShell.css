@@ -599,3 +599,14 @@
   .te-cluster{border-top:1px solid var(--border-sub);padding-top:16px;gap:16px}
   .te-tabbar{display:flex}
 }
+
+/* The /try preview CTAs, pinned once the banner scrolls away. Offset matches
+   .te-rail's 61px so it sits directly under the shell header, not over it. */
+.te-trybar{position:sticky;top:61px;z-index:15;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-3);
+  background:var(--surface-brand-subtle);border:var(--border-1) solid var(--border-subtle);border-radius:var(--radius-md);
+  padding:var(--space-2) var(--space-4);margin-bottom:var(--space-4);box-shadow:0 4px 14px rgba(0,0,0,.07);
+  opacity:0;transform:translateY(-8px);pointer-events:none;visibility:hidden;transition:opacity .25s ease,transform .25s ease}
+.te-trybar[data-pinned="yes"]{opacity:1;transform:none;pointer-events:auto;visibility:visible}
+.te-trybar__t{font-size:var(--fs-body-sm);color:var(--text-body)}
+.te-trybar__b{display:flex;gap:var(--space-2);flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){.te-trybar{transition:none;transform:none}}
