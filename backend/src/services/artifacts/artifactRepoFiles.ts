@@ -65,6 +65,19 @@ export interface RenderedArtifactFile {
   content: string;
 }
 
+/**
+ * Locale-INDEPENDENT string ordering.
+ *
+ * `localeCompare` was used here first and is the wrong tool: its result depends
+ * on the runtime's ICU data, so the same inputs can order differently on a
+ * different Node build. Everything this module emits is hashed and compared for
+ * byte-equality, so an ordering that varies by environment is a latent source of
+ * spurious diffs. Code-unit comparison is boring and identical everywhere.
+ */
+export function byCodeUnit(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 export const ARTIFACT_ROOT = 'artifacts';
 export const ARTIFACT_INDEX_PATH = `${ARTIFACT_ROOT}/INDEX.md`;
 
@@ -113,7 +126,7 @@ function ordered(artifacts: ArtifactRecord[]): ArtifactRecord[] {
     const aw = a.week ?? 0;
     const bw = b.week ?? 0;
     if (aw !== bw) return aw - bw;
-    return artifactPath(a).localeCompare(artifactPath(b));
+    return byCodeUnit(artifactPath(a), artifactPath(b));
   });
 }
 
@@ -182,6 +195,69 @@ export function renderArtifactIndex(artifacts: ArtifactRecord[]): string {
 }
 
 /**
+ * Merge artifact hashes into the repo's existing manifest.
+ *
+ * ── WHY THIS EXISTS: A PRODUCTION DEFECT THE UNIT TESTS COULD NOT SEE ───────
+ *
+ * `repoWriter.changedFiles` decides what to commit by comparing each file's
+ * hash against `.colaberry/manifest.json`. That manifest is written by the PLAN
+ * sync and lists only `CLAUDE.md` and `docs/**`. The artifact sync passed a file
+ * set containing no manifest at all — so artifact paths were compared against an
+ * entry that did not exist, came back "changed" every single time, and committed
+ * on every run.
+ *
+ * Proven in production 2026-08-21: two consecutive syncs of byte-identical
+ * content produced two separate commits (`0efb1cb8`, then `f735f1da`). Left
+ * alone this is one bot commit per upload forever, which is exactly the history
+ * churn the whole design was supposed to prevent. The renderer being
+ * deterministic was necessary and not sufficient; nothing recorded the result.
+ *
+ * MERGE, never replace: the plan's own entries are preserved untouched, because
+ * dropping them would make the next plan sync see all its files as changed and
+ * churn in the other direction. Only `files[]` is edited; every other field is
+ * left exactly as found, including `generated_at` — a timestamp bumped here
+ * would rewrite the manifest on runs where nothing else changed.
+ *
+ * KNOWN, BOUNDED CONSEQUENCE: `renderDocs` builds its manifest from its own file
+ * set, so a plan republish drops the artifact entries and the next artifact sync
+ * re-commits once. One redundant commit after a republish, not a loop. Making
+ * renderDocs preserve unknown entries would remove even that, and is a
+ * follow-up rather than part of this fix.
+ */
+export function mergeArtifactHashesIntoManifest(
+  existingManifest: string | null | undefined,
+  files: RenderedArtifactFile[],
+  sha256: (s: string) => string,
+): string | null {
+  let parsed: any;
+  try {
+    parsed = existingManifest ? JSON.parse(existingManifest) : null;
+  } catch {
+    parsed = null;
+  }
+  // No readable manifest means the plan sync has never run here. Writing one
+  // ourselves would fabricate plan bookkeeping we know nothing about, so we
+  // decline — the caller commits without one and the NEXT run, once a plan sync
+  // has created it, starts deduplicating properly.
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.files)) return null;
+
+  const byPath = new Map<string, { path: string; sha256: string }>();
+  for (const entry of parsed.files) {
+    if (entry && typeof entry.path === 'string') byPath.set(entry.path, entry);
+  }
+  for (const f of files) {
+    byPath.set(f.path, { path: f.path, sha256: sha256(f.content) });
+  }
+
+  // Deterministic ordering so an unchanged set serialises byte-identically.
+  const merged = {
+    ...parsed,
+    files: [...byPath.values()].sort((a, b) => byCodeUnit(a.path, b.path)),
+  };
+  return `${JSON.stringify(merged, null, 2)}\n`;
+}
+
+/**
  * The full file set for a student's artifacts: one file per artifact plus the
  * index. Feed straight to `writeDocsToRepo`.
  *
@@ -201,7 +277,7 @@ export function buildArtifactFiles(artifacts: ArtifactRecord[]): RenderedArtifac
   }
 
   return [
-    ...[...byPath.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    ...[...byPath.values()].sort((a, b) => byCodeUnit(a.path, b.path)),
     { path: ARTIFACT_INDEX_PATH, content: renderArtifactIndex(artifacts) },
   ];
 }
