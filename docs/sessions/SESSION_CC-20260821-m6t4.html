@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260821-m6t4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Friday, August 21, 2026 at 8:45 AM</div>
+    <div><span class="sid">CC-20260821-m6t4</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Gate 0 discovery maps produced from the live codebase; Gates 1-6 implemented, tested, and deliberately parked unmerged pending the Gate 0 review.**</h2>
+          <span class="badge">2026-08-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two commits on `workstream/multi-tenant-ecosystem` (branched from `origin/main` at `bb152ded`), split so the discovery artifacts can be reviewed in isolation. **Commit `1dcfdd60` is Gate 0 only** — twelve documents under `docs/architecture/multi-tenancy/` (CURRENT_STATE, DEPENDENCY_MAP, DATA_OWNERSHIP_MATRIX, ROUTE_IMPACT_MATRIX, CAMPAIGN_DEPENDENCY_MAP, TRACKING_DEPENDENCY_MAP, EXTRACTION_BOUNDARIES, MIGRATION_BACKFILL_MAP, TEST_MATRIX, BASELINE_TEST_RESULTS, TARGET_ARCHITECTURE with 10 Mermaid diagrams, IMPLEMENTATION_STATUS) plus IMPLEMENTATION_DEVIATIONS recording eleven places the master plan and the code disagree. **Commit `d76a80a7` is Gates 1-6, PARKED** — 9 models (Tenant, Brand, BrandDomain, SenderProfile, PlatformIdentity, PlatformIdentityLink, TenantMembership, LeadTenantContext, CommunicationPreference), `db/ensureMultiTenantSchema.ts` (additive-only idempotent DDL in the house `ensure*Schema` style: 9 new tables + nullable columns on 9 existing tables, zero drops/renames/retypes, zero NOT NULL on an existing column), `modules/tenancy/` (tenantRoles central registry, tenantResolver with a bounded 5-minute TTL cache, tenantAuthorization, leadContextService), `modules/identity/platformIdentityService`, `modules/attribution/journeyLinkService` (HMAC-signed `jx` cross-domain tokens carrying identifiers only, replacing the `?email=` pattern for new flows), `modules/communications/senderProfileService` (4-step resolution ramp with logged deprecation fallbacks, fail-closed preflight, cross-brand rejection before any provider call), server-side context wiring into `trackingController` + `visitorTrackingService` + `leadIngestionService`, an idempotent `seedEcosystem` + declarative `ecosystemSeedData`, a batched resumable `backfillTenancy` script that never runs at boot, three skeleton apps (`apps/cpn-public`, `apps/ai-flotation-public`, `apps/refactored-public`) with three shared packages, and `scripts/validate-app-boundaries.js`. **Nothing merged, nothing deployed, no DNS pointed, and the DDL has never run against any database** — the branch has not been booted anywhere and no backfill was executed. Also sent Aleem the per-brand design-profile brief this work depends on (see separate entry below).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**backend `tsc --noEmit` clean, 0 errors** (workspace binary, TypeScript 5.9.3, version confirmed before trusting the result rather than a bare `npx tsc` that can resolve a stale 4.9.5 and report a false clean). **jest 137/137 passing across 11 suites** — the 77-test 7-suite baseline recorded before any change still passes unchanged, plus 60 new tests across leadContextService, tenantAuthorization, journeyLinkService and senderProfileService. All three skeleton apps build independently (`node build.js`, zero dependencies). **The boundary validator was verified to FAIL on a deliberately planted violation** (`apps/refactored-public -&gt; apps/cpn-public` and `-&gt; backend/src`, exit 1, both edges named) and then pass again once removed, because a validator only ever observed passing is not evidence of anything. Basecamp/Mandrill send confirmed by Mandrill id and a posted BC comment, not by exit code.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The single most valuable finding was Gate 0 doing its job before any code was written.** The OneDrive working tree was **2,586 commits behind `origin/main`** and did not contain `Organization.ts`, `OrgMember.ts` or `OrgCohort.ts` at all — three models the plan names as foundations to preserve. All discovery and implementation were redone against a clean worktree from `origin/main` (D-01); building on the stale tree would have produced maps describing a codebase that no longer exists. Three design calls worth review: **resolution fails soft but authorization fails closed** (an unresolved brand on a tracking event records null context and still writes the event; an unresolved authorization on an admin read denies — opposite requirements, deliberately separate modules); **cross-tenant resource access returns 404, not 403**, because a 403 confirms the row exists and turns ID enumeration into a discovery tool for a competitor&#39;s campaign inventory; and **`tenantScopeWhere()` returns `{tenant_id: null}` — matching nothing — for a context with no memberships**, since returning `{}` there would silently turn an unauthenticated request into an unscoped `findAll()`. Two deviations from the plan were taken deliberately and documented rather than followed literally: **only `campaigns` gets tenancy columns** while its 17 child tables scope by joining to their parent (D-05 — the literal column-per-table reading would mean 17 backfills and 17 chances for a child&#39;s tenant to drift from its parent&#39;s), and **`apps/*`/`packages/*` were NOT added to the root npm workspaces** (D-11 — `backend/Dockerfile` runs `npm ci` against a context containing only the root/backend/frontend manifests, so declaring them would break the production backend build twice over; the apps have zero dependencies so registration buys nothing today). One real defect was caught by its own test during development and fixed in the service rather than by relaxing the test: a replayed `ensureLeadTenantContext` call reported `updated: true` because unchanged last-touch keys were counted as changes. **Not done, and deliberately:** `schedulerService` is not yet switched onto the sender resolver and the Mandrill webhook does not yet restore tenant context (both touch the live sending path); `orgService`/`adminOrgService` are not yet tenant-scoped; and **the Playwright ecosystem suite was not executed** — no running stack or staging credentials in this environment, so it is reported as not-executed rather than as passing (D-10). Gate 8 deployment was not attempted at all.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Emailed Aleem the per-brand design-profile brief for the five ecosystem segments</h2>
+          <span class="badge">2026-08-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/scripts/sendAleemBrandDesignBrief.js` — a Path A (`sendWithBcAttach`) send to aleem@colaberry.com, BCC ali@colaberry.com, attached to BC todo 10031928327 (&quot;Colaberry UI/UX Design&quot;) so the request extends the existing Colaberry Training design thread rather than starting an untracked one. The brief specifies the five segments and their personas (Refactored.ai as the parent platform that must NOT read as a Colaberry sub-brand, Colaberry Enterprise, Colaberry Training, Career Pathways Network as a separate legal entity, AI Flotation), the eleven color tokens each needing a light AND a dark value, typography/radius/shadow, the WCAG 2.1 AA ratios he must measure and report back, per-brand email identity (each brand sends from its own domain and the platform fail-closes a send when the sending identity is incomplete), and the exact per-brand JSON payload shape that loads straight into `brands.metadata` + `brands.default_theme_key`. It also names which fields Ali owns versus which Aleem supplies, so the design process syncs with the schema instead of needing translation.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Mandrill id `&lt;7ff4fbdc-5119-edbc-e0b6-9d72b4e0773c@colaberry.com&gt;`; BC comment posted at https://app.basecamp.com/3945211/buckets/7463955/todos/10031928327#__recording_10226434093. Pre-send checklist run and clean: 0 em-dashes/en-dashes, no informal closer, `validateBeforeSend()` preflight passed on a stubbed dry run before the real send.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The first send attempt **aborted before Mandrill** because the prod container&#39;s `BASECAMP_ACCESS_TOKEN` is stale (&quot;OAuth token expired (old age)&quot;) — the helper&#39;s BC preflight runs before the email goes out precisely so a token failure cannot produce a duplicate send on retry, and it worked as designed. Resolved by pulling the live active token from `CCPP.Basecamp_AuthInfo` rather than trusting the container env, which is the documented behaviour of this token. No deadline was imposed on Aleem; he was asked for his own estimate plus any typeface/stock budget needs, with a recommended sequence of Refactored.ai first (the parent, which the others differentiate against), then CPN, then AI Flotation, then the two Colaberry brands that already have a working look.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260821-m6t4</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
