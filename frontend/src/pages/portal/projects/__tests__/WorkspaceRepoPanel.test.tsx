@@ -373,7 +373,62 @@ describe('a repo the platform can only read', () => {
   it('names the file that is now the student\'s to create, and where to get it', async () => {
     await mount(connected('pull_only'));
     expect(text()).toContain('.colaberry/progress.json');
-    expect(text()).toContain('STORY-000');
+    expect(text()).toContain('.colaberry/progress.seed.json');
+  });
+
+  /*
+   * ── THE INSTRUCTION THAT BUILT A BROKEN FILE ─────────────────────────────
+   *
+   * This panel used to say "Open STORY-000 and copy the JSON block under Step
+   * 3". That block is `progressFileExample()`, and it carries STORY-000's five
+   * criteria and nothing else — an illustration of the file's SHAPE, not the
+   * file. A student who followed it exactly as written produced a
+   * `progress.json` that can confirm STORY-000 and can never confirm any other
+   * story, because the rest arrive with no `criteria` array for a tick to match
+   * against. No error, no warning: just a story that never ticks however much
+   * they build. Million Abate has exactly that file, and three rounds of
+   * increasingly precise emails treated it as his mistake.
+   *
+   * Meanwhile `renderProgressFile` has always seeded EVERY story's exact
+   * criteria, and `docsBundle` already ships that file to pull-only students as
+   * `.colaberry/progress.seed.json`. The right file was in the download the
+   * whole time and no surface named it.
+   *
+   * These assertions are on the words because the words are the defect.
+   */
+  it('points at the seed file rather than a story document\'s JSON block', async () => {
+    await mount(connected('pull_only'));
+    // The old instruction, gone. Both halves of it: the block and the step.
+    expect(text()).not.toContain('copy the JSON block');
+    expect(text()).not.toContain('Step 3');
+  });
+
+  it('says the seed covers EVERY story, not just the first one', async () => {
+    await mount(connected('pull_only'));
+    // The single fact that distinguishes the seed from the STORY-000 block. A
+    // student who does not know this has no reason to prefer one over the other.
+    expect(text()).toContain('every story in your build — not just the first one');
+  });
+
+  it('warns off building the file from a story document, and says why', async () => {
+    await mount(connected('pull_only'));
+    expect(text()).toContain('Do not build this file from the JSON block inside a story document');
+    // The consequence, stated — silence is what made this cost a week.
+    expect(text()).toContain('can never be confirmed');
+  });
+
+  it('tells a student who already has the broken file that it was our fault', async () => {
+    await mount(connected('pull_only'));
+    // Anyone reading this panel today may already have followed the old
+    // instruction. Naming their symptom is how they recognise themselves in it.
+    expect(text()).toContain('it was our instruction that caused it');
+  });
+
+  it('still refuses to let them copy the seed over real work', async () => {
+    await mount(connected('pull_only'));
+    // The seed is blank by construction. Copying it onto a file with ticks in
+    // it destroys them, and this panel is now the surface telling them to copy.
+    expect(text()).toContain('do not copy over it');
   });
 
   it('does not present it as a failure — verification still works either way', async () => {

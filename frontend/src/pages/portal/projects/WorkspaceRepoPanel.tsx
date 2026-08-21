@@ -189,22 +189,74 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
 
             Stated plainly here, with the one thing they have to do about it, and
             deliberately not styled as an error — verification, points and the
-            whole build work exactly the same on a repo we only read. */}
+            whole build work exactly the same on a repo we only read.
+
+            ── WHY THIS NO LONGER POINTS AT STORY-000's STEP 3 ─────────────────
+
+            It used to say "Open STORY-000 and copy the JSON block under Step 3".
+            That block is `progressFileExample()`, and it carries STORY-000's
+            five criteria and NOTHING ELSE — it is an illustration of the file's
+            shape, not the file. A student who followed that instruction exactly
+            as written produced a `progress.json` that can confirm STORY-000 and
+            can never confirm anything else, because every other story arrives
+            with no `criteria` array for the verifier to match a tick against.
+            The failure is silent: no error, no warning, just a story that never
+            ticks however much they build. It was our instruction, followed
+            correctly, that built the broken file.
+
+            `renderProgressFile` has always seeded EVERY story's exact criteria,
+            and for a pull-only student `docsBundle` already ships precisely that
+            file as `.colaberry/progress.seed.json` inside the download. The
+            right file was in their hands the whole time and no surface named it.
+            So this copy names it, says what it covers, and says plainly that a
+            story document's JSON block is not a substitute — because the people
+            reading this have already been sent the other way once. */}
         {connect?.write_access === 'pull_only' && (
-          <p className="rt-muted" style={{ margin: '8px 0' }}>
-            <strong>The platform has read-only access to this repo.</strong> That is fine — it reads your
-            commits and confirms your stories exactly as normal, and everything you earn is recorded here
-            rather than in the repo. It does mean the platform cannot put files INTO your repo, so the whole of
-            <code> .colaberry/</code> is yours to place — <code>.colaberry/progress.json</code>,
-            <code> .colaberry/plan.json</code> and <code> .colaberry/manifest.json</code>. Open{' '}
-            <strong>STORY-000</strong> and copy the JSON block under Step 3 for the progress file; it is
-            generated from the criteria the platform actually checks. The other two are build outputs rather
-            than files to write by hand, so take them from <strong>Download the documents</strong> below and
-            unzip it into your repo. The download will not touch your{' '}
-            <code>.colaberry/progress.json</code> — it deliberately carries no file at that path, so
-            extracting it cannot cost you ticks you have already earned. If you would rather the platform
-            maintained all three for you, add it as a collaborator with write access and reconnect.
-          </p>
+          <div className="rt-muted" style={{ margin: '8px 0' }}>
+            <p style={{ margin: '0 0 8px' }}>
+              <strong>The platform has read-only access to this repo.</strong> That is fine — it reads your
+              commits and confirms your stories exactly as normal, and everything you earn is recorded here
+              rather than in the repo. It does mean the platform cannot put files INTO your repo, so the whole
+              of <code>.colaberry/</code> is yours to place.
+            </p>
+            <p style={{ margin: '0 0 8px' }}>
+              Press <strong>Download the documents</strong> below and unzip it into your repo, keeping the
+              folders as they are. That gives you <code>.colaberry/plan.json</code> and{' '}
+              <code>.colaberry/manifest.json</code> ready to commit.
+            </p>
+            <p style={{ margin: '0 0 8px' }}>
+              Then do one thing by hand. The download also contains a file called{' '}
+              <strong><code>.colaberry/progress.seed.json</code></strong>.{' '}
+              <strong>Copy it to <code>.colaberry/progress.json</code></strong> and commit it. That is your
+              progress file, and it is the one the platform reads.
+            </p>
+            <p style={{ margin: '0 0 8px' }}>
+              <strong>The seed file already covers every story in your build — not just the first one.</strong>{' '}
+              Every story is in it, and under each story every acceptance criterion is written out in the exact
+              words the platform checks against, each one starting at <code>false</code>. Your job is only ever
+              to change a <code>false</code> to <code>true</code> as something genuinely passes. Never retype
+              the wording: the platform matches on the exact sentence, so a reworded line quietly counts for
+              nothing.
+            </p>
+            <p style={{ margin: '0 0 8px' }}>
+              <strong>Do not build this file from the JSON block inside a story document.</strong> Those blocks
+              show you the shape of the file using one story as the example, and a progress file built from one
+              of them contains that story alone. Every other story would be missing its criteria, and a story
+              with no criteria can never be confirmed no matter how much of it you build — with no error to
+              tell you why. If your <code>.colaberry/progress.json</code> today has the full wording for
+              STORY-000 but little or nothing for the rest, that is what happened, it was our instruction that
+              caused it, and the seed file is the fix.
+            </p>
+            <p style={{ margin: 0 }}>
+              <strong>If you already have a <code>.colaberry/progress.json</code> with work recorded in it, do
+              not copy over it</strong> — the seed is blank by design and would erase your ticks. Open both
+              files side by side and add the stories that are missing from yours instead. Unzipping the
+              download itself is always safe: it will not touch your <code>.colaberry/progress.json</code>,
+              because it deliberately carries no file at that path, so extracting it cannot cost you ticks you
+              have already earned. If you would rather the platform maintained all of this for you, add it as a
+              collaborator with write access and reconnect.
+            </p>
+          </div>
         )}
 
         <div className="rt-row">
