@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   WorkspaceRepoView, ConnectStateView, ConnectApiError, connectErrorOf,
   startRepoConnect, confirmRepoConnect, provisionWorkspaceRepo,
-  syncWorkspaceRepo, downloadDocsBundle,
+  syncWorkspaceRepo, downloadDocsBundle, downloadProgressFile,
 } from '../../../services/workspaceRepoApi';
 import WebhookSetupBlock from './WebhookSetupBlock';
 
@@ -64,6 +64,24 @@ const CommandBlock: React.FC<{ label: string; commands: string[] }> = ({ label, 
     </div>
   );
 };
+
+/**
+ * Hand a fetched blob to the browser as a download.
+ *
+ * Shared by the two download buttons rather than written twice: the revoke
+ * timing below is the sort of detail that gets copied once, fixed once, and
+ * then silently diverges. Revoked on the next tick because revoking
+ * synchronously can beat the download in some browsers and produce an empty
+ * file — which for the progress file would look exactly like the platform
+ * handing a stuck student an empty answer.
+ */
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 const ErrorNote: React.FC<{ err: ConnectApiError; onConfirmReplace?: () => void }> = ({ err, onConfirmReplace }) => (
   <div style={{ marginTop: 10 }}>
@@ -142,13 +160,7 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
     'download', 'Could not build your document bundle just now.',
     async () => {
       const { blob, filename } = await downloadDocsBundle(projectId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); a.remove();
-      // Revoked on the next tick: revoking synchronously can beat the download
-      // in some browsers and produce an empty file.
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      saveBlob(blob, filename);
       // The tail of this line is only true before a repo is connected. Said to
       // someone who has already connected one, it reads as a warning about a
       // problem they do not have.
@@ -158,6 +170,35 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
         : `Downloaded ${filename}. Unzip it into your project folder. Verification and points still need a connected repo.`);
     },
   ), [run, projectId, state]);
+
+  /**
+   * THE ONE ACTION THAT MAKES THE FILE REACHABLE.
+   *
+   * The backend renders every story's exact criteria, reads whatever is at
+   * `.colaberry/progress.json` in this student's repo, merges their ticks and
+   * their own custom keys across, and returns the result. So the instruction
+   * afterwards is the simple, safe one — save it over your file — instead of
+   * "open both files side by side and reconcile them", which is what pointing a
+   * student at a blank seed actually asks of them.
+   *
+   * `existing` is read back so the ONE case where "your ticks are already in it"
+   * would be false — a file that is present but does not parse, so nothing could
+   * be carried across — is told the truth instead. Null means the header was not
+   * exposed to us, and the copy falls back to what is true without it.
+   */
+  const doDownloadProgress = useCallback(() => run(
+    'progress', 'Could not build your progress file just now.',
+    async () => {
+      const { blob, filename, existing } = await downloadProgressFile(projectId);
+      saveBlob(blob, filename);
+      setNote(existing === 'unreadable'
+        ? `Downloaded ${filename}. IMPORTANT: the .colaberry/progress.json already in your repo could not be read, `
+          + 'so nothing in it could be carried across and this file starts every criterion at false. '
+          + 'Open your old file first and re-tick anything you had genuinely finished, then save this one over it and commit.'
+        : `Downloaded ${filename}. Save it in your repo at .colaberry/progress.json, replacing the file that is there, `
+          + 'then commit and push. Everything you had already ticked is in it.');
+    },
+  ), [run, projectId]);
 
   // ── connected ─────────────────────────────────────────────────────────────
   if (state === 'connected' && repo?.repo_owner) {
@@ -191,7 +232,7 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
             deliberately not styled as an error — verification, points and the
             whole build work exactly the same on a repo we only read.
 
-            ── WHY THIS NO LONGER POINTS AT STORY-000's STEP 3 ─────────────────
+            ── WHY THIS NOW OFFERS A BUTTON AND NOT A PATH ─────────────────────
 
             It used to say "Open STORY-000 and copy the JSON block under Step 3".
             That block is `progressFileExample()`, and it carries STORY-000's
@@ -204,13 +245,23 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
             ticks however much they build. It was our instruction, followed
             correctly, that built the broken file.
 
-            `renderProgressFile` has always seeded EVERY story's exact criteria,
-            and for a pull-only student `docsBundle` already ships precisely that
-            file as `.colaberry/progress.seed.json` inside the download. The
-            right file was in their hands the whole time and no surface named it.
-            So this copy names it, says what it covers, and says plainly that a
-            story document's JSON block is not a substitute — because the people
-            reading this have already been sent the other way once. */}
+            The first correction pointed at `.colaberry/progress.seed.json`
+            instead. That was the same defect one layer down. `seedPathFor` is
+            called in exactly one place — inside the docs zip — and reading all
+            fifteen pull-only repos on 2026-08-21 found the seed in ZERO of them,
+            with no evidence any of these students had ever extracted a bundle.
+            Rewriting copy to name a second file they cannot reach would have
+            been the third time we answered a delivery problem with wording.
+
+            So the file is now BUILT ON REQUEST, by `/api/portal/workspace/
+            progress-file`, and handed over at the path it belongs at. And it is
+            merged server-side over whatever is already in their repo, which is
+            what lets this copy say "replace your file" — the only instruction
+            short enough to survive being skimmed. Several of these students hold
+            real ticked criteria and one holds nine custom top-level keys her
+            Command Center reads at runtime; asking a stuck non-technical reader
+            to hand-reconcile two JSON documents was never going to work, and
+            it is not what a fix should require. */}
         {connect?.write_access === 'pull_only' && (
           <div className="rt-muted" style={{ margin: '8px 0' }}>
             <p style={{ margin: '0 0 8px' }}>
@@ -220,41 +271,59 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
               of <code>.colaberry/</code> is yours to place.
             </p>
             <p style={{ margin: '0 0 8px' }}>
-              Press <strong>Download the documents</strong> below and unzip it into your repo, keeping the
-              folders as they are. That gives you <code>.colaberry/plan.json</code> and{' '}
-              <code>.colaberry/manifest.json</code> ready to commit.
+              <strong>Your progress file is the one that matters, and the button below builds it for you.</strong>
+            </p>
+            <ol style={{ margin: '0 0 8px', paddingLeft: 20 }}>
+              <li>Press <strong>Get my progress.json</strong>.</li>
+              <li>
+                Save it in your repo at <strong><code>.colaberry/progress.json</code></strong>, replacing the
+                file that is already there.
+              </li>
+              <li>Commit it and push.</li>
+            </ol>
+            {/* SITED HERE, NOT IN THE BUTTON ROW BELOW.
+                The row below is the panel's general controls, and a student who
+                has just read three paragraphs about their progress file should
+                not then have to find the control among four others. The action
+                sits against the sentence that asks for it, and it is the primary
+                style because for this cohort it is the whole of the fix. */}
+            <div style={{ margin: '0 0 10px' }}>
+              <button className="rt-btn pri" disabled={busy === 'progress'} onClick={doDownloadProgress}>
+                {busy === 'progress' ? 'Building…' : 'Get my progress.json'}
+              </button>
+            </div>
+            <p style={{ margin: '0 0 8px' }}>
+              <strong>It covers every story in your build — not just the first one — and it already contains
+              your work.</strong> Under each story, every acceptance criterion is written out in the exact
+              words the platform checks against. Before the file reaches you, the platform reads the{' '}
+              <code>.colaberry/progress.json</code> that is in your repo right now and carries across
+              everything you have already done: every criterion you had ticked stays ticked, and anything else
+              you added to the file, including your own notes and any extra keys your Command Center reads,
+              comes across untouched.
             </p>
             <p style={{ margin: '0 0 8px' }}>
-              Then do one thing by hand. The download also contains a file called{' '}
-              <strong><code>.colaberry/progress.seed.json</code></strong>.{' '}
-              <strong>Copy it to <code>.colaberry/progress.json</code></strong> and commit it. That is your
-              progress file, and it is the one the platform reads.
+              <strong>So replacing your file with this one is safe, and doing it twice is safe.</strong> You
+              will not lose a tick and you will not end up with duplicate stories. After that, your job is only
+              ever to change a <code>false</code> to <code>true</code> as something genuinely passes. Never
+              retype the wording: the platform matches on the exact sentence, so a reworded line quietly counts
+              for nothing.
             </p>
             <p style={{ margin: '0 0 8px' }}>
-              <strong>The seed file already covers every story in your build — not just the first one.</strong>{' '}
-              Every story is in it, and under each story every acceptance criterion is written out in the exact
-              words the platform checks against, each one starting at <code>false</code>. Your job is only ever
-              to change a <code>false</code> to <code>true</code> as something genuinely passes. Never retype
-              the wording: the platform matches on the exact sentence, so a reworded line quietly counts for
-              nothing.
-            </p>
-            <p style={{ margin: '0 0 8px' }}>
-              <strong>Do not build this file from the JSON block inside a story document.</strong> Those blocks
-              show you the shape of the file using one story as the example, and a progress file built from one
-              of them contains that story alone. Every other story would be missing its criteria, and a story
-              with no criteria can never be confirmed no matter how much of it you build — with no error to
-              tell you why. If your <code>.colaberry/progress.json</code> today has the full wording for
-              STORY-000 but little or nothing for the rest, that is what happened, it was our instruction that
-              caused it, and the seed file is the fix.
+              <strong>Do not build this file by hand from the JSON block inside a story document.</strong>{' '}
+              Those blocks show you the shape of the file using one story as the example, and a progress file
+              built from one of them contains that story alone. Every other story would be missing its
+              criteria, and a story with no criteria can never be confirmed no matter how much of it you build
+              — with no error to tell you why. If your <code>.colaberry/progress.json</code> today has the full
+              wording for STORY-000 but little or nothing for the rest, that is what happened, it was our
+              instruction that caused it, and the button above is the fix.
             </p>
             <p style={{ margin: 0 }}>
-              <strong>If you already have a <code>.colaberry/progress.json</code> with work recorded in it, do
-              not copy over it</strong> — the seed is blank by design and would erase your ticks. Open both
-              files side by side and add the stories that are missing from yours instead. Unzipping the
-              download itself is always safe: it will not touch your <code>.colaberry/progress.json</code>,
-              because it deliberately carries no file at that path, so extracting it cannot cost you ticks you
-              have already earned. If you would rather the platform maintained all of this for you, add it as a
-              collaborator with write access and reconnect.
+              Separately, press <strong>Download the documents</strong> and unzip it into your repo, keeping
+              the folders as they are. That gives you <code>.colaberry/plan.json</code> and{' '}
+              <code>.colaberry/manifest.json</code> ready to commit. Unzipping is always safe: the archive
+              deliberately carries no file at <code>.colaberry/progress.json</code>, so extracting it cannot
+              cost you ticks you have already earned. If you would rather the platform maintained all of this
+              for you, add it as a collaborator with write access and reconnect.
             </p>
           </div>
         )}

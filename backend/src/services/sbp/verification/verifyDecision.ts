@@ -233,9 +233,20 @@ function compareByOldest(a: CommitFact, b: CommitFact): number {
  *
  * The unknown case (`tree === null`) takes the self-sufficient branch. That is
  * the same safe direction `commandCenterStoryDoc` chose for the same question:
- * the portal and the seed file are true for every student regardless of what
- * their repo holds, whereas the doc citation is false the moment we guess wrong.
- * Never claim a file is there on an unverified hunch.
+ * the portal is true for every student regardless of what their repo holds,
+ * whereas the doc citation is false the moment we guess wrong. Never claim a
+ * file is there on an unverified hunch.
+ *
+ * ── AND THE FALLBACK ITSELF HAD TO BE CHECKED THE SAME WAY ──────────────────
+ *
+ * This function's first version cited `.colaberry/progress.seed.json` as the
+ * always-reachable alternative. It is not reachable. That path exists only
+ * inside the docs zip, and reading all fifteen pull-only repos on 2026-08-21
+ * found it in zero of them and no evidence any student had ever extracted a
+ * bundle. Fixing an unreachable citation with a second unreachable citation is
+ * the same defect one layer down, so the fallback now names the portal control
+ * that BUILDS the file on demand — one click, no archive, and the file it hands
+ * over is the student's own merged copy rather than a blank seed.
  *
  * PURE.
  */
@@ -244,12 +255,11 @@ function correctWordingSource(storyId: string, tree: RepoTreeContext | null): st
   if (tree?.paths.has(storyDocPath)) {
     return `this story's doc in \`${storyDocPath}\``;
   }
-  // Both of these reach a student on any repo. The portal needs no files at all;
-  // the seed is inside the document download, which is how a pull-only student
-  // receives everything else too. Named in that order because opening the portal
-  // is one click and downloading a zip is not.
-  return 'the acceptance list for this story in the portal, or `.colaberry/progress.seed.json` '
-    + 'inside "Download the documents" in the portal — that seed carries every story, '
+  // Both of these reach a student on ANY repo, with no file needing to be
+  // present first: the acceptance list renders from the plan, and the progress
+  // file is built server-side on request.
+  return 'the acceptance list for this story in the portal, or the `.colaberry/progress.json` '
+    + 'the portal builds for you under "Get my progress.json" — that file carries every story, '
     + 'with each criterion in the exact words the platform checks';
 }
 

@@ -269,6 +269,30 @@ export async function readRepoManifest(
 }
 
 /**
+ * Read `.colaberry/progress.json` out of the repo, or null when it is not there.
+ *
+ * THE SAME READ THE COMMIT PATH ALREADY MAKES, exposed. `writeDocsToRepo` reads
+ * this exact file at this exact path to build the merge for a repo it can push
+ * to; a pull-only student needs the identical input to build the identical file
+ * as a download instead. Sharing the read is what makes the download and the
+ * commit the same answer rather than two implementations of it — including the
+ * soft-404 and the "a read we could not make is treated as absent" posture,
+ * which is what stops a transient GitHub failure turning into a merge that
+ * silently drops the student's ticks... as long as the CALLER distinguishes the
+ * two. It cannot, from a bare null, so a caller that must tell "they have no
+ * file" from "we could not read it" has to establish that itself; the download
+ * path does, by refusing to claim a merge that `parseProgressFile` did not back.
+ */
+export async function readRepoProgressFile(
+  target: RepoTarget,
+  opts: WriteOptions = {},
+): Promise<string | null> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token?.trim()) return null;
+  return readRepoFile(target, PROGRESS_FILE_PATH, token, opts.fetchImpl ?? fetch, opts.correlationId);
+}
+
+/**
  * Write the document set. Returns `committed: false` when nothing changed.
  *
  * @throws RepoWriteError('AllowlistViolation') before any network call if a path

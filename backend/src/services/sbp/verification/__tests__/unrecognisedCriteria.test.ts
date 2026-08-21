@@ -144,10 +144,14 @@ describe('a drifted file that has ticked nothing is still a drifted file', () =>
     );
     const said = v.reasons.join(' ');
     expect(said).toMatch(/do not match any acceptance criterion/i);
-    // Somewhere to get the right wording, that exists for every student.
-    expect(said).toContain('.colaberry/progress.seed.json');
+    // Somewhere to get the right wording that genuinely reaches every student.
+    // Not a PATH: the seed path this once named is produced only inside the docs
+    // zip and was found in zero of the fifteen pull-only repos on 2026-08-21. An
+    // action the portal performs on request needs no file to be there already.
+    expect(said).toContain('Get my progress.json');
     // And never a path we have not confirmed is in their repo.
     expect(said).not.toContain('docs/stories/STORY-001.md');
+    expect(said).not.toContain('progress.seed.json');
   });
 });
 

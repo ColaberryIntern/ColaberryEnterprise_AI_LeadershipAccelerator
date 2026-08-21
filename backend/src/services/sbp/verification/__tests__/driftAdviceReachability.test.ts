@@ -106,12 +106,26 @@ describe('drift advice on a repo that does NOT have the story doc', () => {
     expect(driftReason(verdict.reasons)).not.toContain('docs/stories/');
   });
 
-  it('points at the seed file, which these students genuinely have', () => {
+  /*
+   * ── AND NOT AT A SECOND FILE THEY ALSO DO NOT HAVE ───────────────────────
+   *
+   * This assertion previously demanded `.colaberry/progress.seed.json`, on the
+   * belief that pull-only students "genuinely have" it. They do not.
+   * `seedPathFor` produces that path in exactly one place, inside the docs zip,
+   * and reading all fifteen pull-only repos on 2026-08-21 found it in NONE of
+   * them, with no evidence any of those students had ever extracted a bundle.
+   * The advice was unreachable for precisely the cohort it was rewritten for.
+   *
+   * It now names the portal control that BUILDS the file on request, which needs
+   * nothing to be present in the repo first.
+   */
+  it('names the portal action that builds the file, not a path they do not have', () => {
     const verdict = decideStory(spec, drifted(), commits(), treeWithoutDoc);
-    expect(driftReason(verdict.reasons)).toContain('.colaberry/progress.seed.json');
+    expect(driftReason(verdict.reasons)).toContain('Get my progress.json');
+    expect(driftReason(verdict.reasons)).not.toContain('progress.seed.json');
   });
 
-  it('says the seed covers EVERY story, which is what a story doc block does not', () => {
+  it('says that file covers EVERY story, which is what a story doc block does not', () => {
     const verdict = decideStory(spec, drifted(), commits(), treeWithoutDoc);
     expect(driftReason(verdict.reasons)).toContain('every story');
   });
@@ -126,7 +140,8 @@ describe('drift advice when the tree was never captured', () => {
   it('takes the self-sufficient branch rather than guessing the file is there', () => {
     const verdict = decideStory(spec, drifted(), commits(), null);
     expect(driftReason(verdict.reasons)).not.toContain(STORY_DOC);
-    expect(driftReason(verdict.reasons)).toContain('.colaberry/progress.seed.json');
+    expect(driftReason(verdict.reasons)).toContain('Get my progress.json');
+    expect(driftReason(verdict.reasons)).not.toContain('progress.seed.json');
   });
 });
 
