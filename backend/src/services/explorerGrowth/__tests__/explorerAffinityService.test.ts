@@ -53,7 +53,7 @@ describe('the blend', () => {
     });
   });
 
-  it('observed alone can clear the threshold on one fresh engagement', async () => {
+  it('observed alone on ONE fresh engagement is deliberately NOT enough', async () => {
     // 1 - 2^-1 = 0.5 observed, × 0.6 = 0.30 — below 0.35, so ONE engagement is
     // deliberately not enough by itself.
     mockDb({ observed: [{ tag: 'agentic_ai', occurred_at: NOW }] });
@@ -109,11 +109,9 @@ describe('the 0.35 threshold', () => {
 describe('observed evidence decays on a 30-day half-life', () => {
   it('an engagement one half-life old counts half as much', async () => {
     mockDb({ observed: [{ tag: 'agentic_ai', occurred_at: daysAgo(30) }] });
-    const fresh = mockDb;
     const a = await computeAffinities(ENR, { asOf: NOW });
     // n = 0.5 → 1 - 2^-0.5 ≈ 0.293 → × 0.6 ≈ 0.176, under threshold
     expect(a.find((x) => x.tag === 'agentic_ai')).toBeUndefined();
-    expect(fresh).toBeDefined();
   });
 
   it('recent engagement outranks stale engagement of another tag', async () => {
