@@ -90,11 +90,20 @@ before changing any routing.**
 
 - Where `/start` and `/try` are actually declared.
 - Whether `/start` currently 404s, and if so what changed since 2026-08-20.
-- Whether Ali wants `/start` to survive as its own page or to become a redirect
-  to `/try`. His words support either: "bring that back" AND "Start Free, in
-  addition to being fixed, should also be targeting people and sending them to
-  the try page." **Ask, or implement /start as a real page whose CTAs go to
-  /try** — that satisfies both readings and is the safer default.
+- ~~Whether `/start` survives as its own page or becomes a redirect.~~
+  **ANSWERED by Ali, 2026-08-21: `/start` should lead to `/try`.** Implement it
+  as a redirect — `<Route path="/start" element={<Navigate to="/try" replace />} />`
+  — matching how `/program`, `/case-studies` and the other retired marketing
+  paths are already handled in `routes/publicRoutes.tsx`. Redirect rather than
+  delete, because "Start free" is on the header, the home page and the pricing
+  page, and inbound links and the sitemap still point at `/start`.
+
+  This also resolves item 1 ("bring Start Free back") without building a page:
+  the button works again and lands on the experience Ali actually wants people
+  to see. It means **no `HeroStartV8` is needed** — drop that from the backlog.
+
+  Leave the CTA *labels* alone. "Start free" is still the right words on the
+  button; only the destination changes.
 - The exact sticky-bar implementation on `/portal/projects` and
   `/portal/classroom`. Read it and reuse the pattern rather than inventing a
   second one; the repo already has one canonical answer.
@@ -134,7 +143,6 @@ not cover the portal shell's own header.
 
 - The 12-week roadmap renders nowhere since `/platform` was trimmed. `Roadmap12`
   still exports; restoring it on `/program` is a wiring change.
-- Start Free never got a V8 hero — it was not among the three Ali approved.
 - Ali wants the long "3-4 options that becomes 15-20 questions" form replaced by
   the Start Free path. **Which form was never identified.** `/enroll` carries
   the payment flow, so do not guess.
