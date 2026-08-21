@@ -125,6 +125,52 @@ not cover the portal shell's own header.
 
 ---
 
+## DECIDED 2026-08-21 — "Start free" lands on the /try demo
+
+Ali, asked directly: **the /try demo (the Acme Corp dashboard), not the signup
+page.**
+
+This overrides the earlier session's choice recorded in
+`pages/publicV2/__tests__/TryV2.test.tsx`, which asserts the opposite:
+
+```js
+expect(h).toContain('href="/start"');
+expect(h).not.toMatch(/href="\/try"/);
+```
+
+Its stated reason was "a bare /try link would drop the visitor out of the V2
+shell into a preview with no signup path at all." **That premise is now stale**
+-- /try leads with "Make this real: create your free account" and "Send free
+test invites", so it is no longer a dead end.
+
+**That test must be UPDATED, not deleted, and not left contradicting shipped
+behaviour.** Invert both assertions and rewrite the comment to record why the
+decision changed and who made it. A test that disagrees with production is worse
+than no test: the next person cannot tell which one is wrong.
+
+### The work, in order
+
+1. **Check whether `main` is red.** PR #1681 was merged on 2026-08-21 without
+   its CI being verified -- my miss. It retargets CTAs to /try, which violates
+   the assertions above. Fix or revert before anything else ships.
+2. **Restore `/start` to a real route.** `pages/publicV2/SignupV2.tsx` exists and
+   is almost certainly the page that served `h1 = "Start with your own
+   workspace"` on 2026-08-20. Its route was lost; that is the original
+   regression. Route it, THEN decide whether /start also redirects -- do not let
+   a redirect hide a missing page a second time.
+3. **Fix the three CTAs the first pass missed.** All config-driven, which is why
+   a JSX-only pattern skipped them:
+   - `components/publicV2/PublicHeaderV2.tsx:43` -- `{ label: 'Start Free', to: '/start' }`
+   - `config/v2Pricing.ts:61` -- `ctaRoute: '/start'`
+   - `config/v2Pricing.ts:82` -- `ctaRoute: '/start'`
+4. **Update TryV2.test.tsx** per the decision above.
+5. **Redeploy and confirm the bundle hash moves off `main.fdce7694.js`.** The
+   2026-08-21 deploy reported `HEAD == origin/main` and compose exit 0 yet /start
+   did not redirect, which points at a cached nginx image layer. Exit code 0 is
+   not evidence; the hash changing is.
+6. **Re-run the live Playwright funnel check** -- it is in this session's
+   scratchpad as `funnel.js` and it correctly caught the failed deploy.
+
 ## Gates and shipping
 
 - `tsc --noEmit` in `frontend/` (slow on this machine, 10-20 min; run it in the
