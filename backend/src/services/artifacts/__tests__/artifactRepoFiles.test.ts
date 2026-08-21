@@ -11,9 +11,11 @@ import {
   artifactPath,
   buildArtifactFiles,
   isTextArtifact,
+  mergeArtifactHashesIntoManifest,
   renderArtifactIndex,
   slugifyFilename,
 } from '../artifactRepoFiles';
+import { createHash } from 'crypto';
 import { isAllowedPath, RenderedFile } from '../../sbp/renderDocs';
 
 const artifact = (over: Partial<ArtifactRecord> = {}): ArtifactRecord => ({
@@ -160,6 +162,101 @@ describe('buildArtifactFiles', () => {
     ]);
     expect(files.filter((f) => f.path === 'artifacts/week-04/report.md')).toHaveLength(1);
     expect(files[0].content).toBe('second');
+  });
+});
+
+describe('mergeArtifactHashesIntoManifest — the production idempotency defect', () => {
+  // Two consecutive syncs of byte-identical content produced two commits in
+  // production (0efb1cb8, then f735f1da) because artifact paths were never
+  // recorded in the manifest that repoWriter compares against. Determinism in
+  // the renderer was necessary and not sufficient — nothing persisted the result.
+  const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
+
+  const planManifest = JSON.stringify({
+    generated_at: '2026-08-18T16:16:36.981Z',
+    plan_version: 2,
+    plan_sha256: 'planhash',
+    correlation_id: 'abc',
+    files: [
+      { path: 'CLAUDE.md', sha256: 'claudehash' },
+      { path: 'docs/REQUIREMENTS.md', sha256: 'reqhash' },
+    ],
+  });
+
+  const files = [{ path: 'artifacts/week-10/a.md', content: '# A' }];
+
+  it('adds the artifact paths so a second identical sync sees no change', () => {
+    const merged = mergeArtifactHashesIntoManifest(planManifest, files, sha256)!;
+    const entry = JSON.parse(merged).files.find((f: any) => f.path === 'artifacts/week-10/a.md');
+    expect(entry.sha256).toBe(sha256('# A'));
+  });
+
+  it('preserves the plan\'s own entries — dropping them churns in the other direction', () => {
+    const merged = JSON.parse(mergeArtifactHashesIntoManifest(planManifest, files, sha256)!);
+    const paths = merged.files.map((f: any) => f.path);
+    expect(paths).toContain('CLAUDE.md');
+    expect(paths).toContain('docs/REQUIREMENTS.md');
+    expect(merged.files.find((f: any) => f.path === 'CLAUDE.md').sha256).toBe('claudehash');
+  });
+
+  it('leaves every non-files field exactly as found, including generated_at', () => {
+    // Bumping a timestamp here would rewrite the manifest on runs where nothing
+    // else changed — reintroducing the churn from the other end.
+    const merged = JSON.parse(mergeArtifactHashesIntoManifest(planManifest, files, sha256)!);
+    expect(merged.generated_at).toBe('2026-08-18T16:16:36.981Z');
+    expect(merged.plan_version).toBe(2);
+    expect(merged.plan_sha256).toBe('planhash');
+  });
+
+  it('updates rather than duplicates an artifact path already present', () => {
+    const first = mergeArtifactHashesIntoManifest(planManifest, files, sha256)!;
+    const second = mergeArtifactHashesIntoManifest(first, [{ path: 'artifacts/week-10/a.md', content: '# CHANGED' }], sha256)!;
+    const entries = JSON.parse(second).files.filter((f: any) => f.path === 'artifacts/week-10/a.md');
+    expect(entries).toHaveLength(1);
+    expect(entries[0].sha256).toBe(sha256('# CHANGED'));
+  });
+
+  it('is byte-identical when merging the same files twice', () => {
+    const a = mergeArtifactHashesIntoManifest(planManifest, files, sha256);
+    expect(mergeArtifactHashesIntoManifest(planManifest, files, sha256)).toBe(a);
+  });
+
+  it('is independent of file order', () => {
+    const two = [{ path: 'artifacts/week-02/b.md', content: 'B' }, { path: 'artifacts/week-01/a.md', content: 'A' }];
+    expect(mergeArtifactHashesIntoManifest(planManifest, two, sha256))
+      .toBe(mergeArtifactHashesIntoManifest(planManifest, [...two].reverse(), sha256));
+  });
+
+  it('declines rather than fabricating plan bookkeeping when no manifest exists', () => {
+    // A repo the plan sync has never touched. Inventing plan_version/plan_sha256
+    // would be worse than committing without dedup for one run.
+    expect(mergeArtifactHashesIntoManifest(null, files, sha256)).toBeNull();
+    expect(mergeArtifactHashesIntoManifest('', files, sha256)).toBeNull();
+  });
+
+  it('declines on unparseable or wrong-shaped manifest content', () => {
+    expect(mergeArtifactHashesIntoManifest('not json', files, sha256)).toBeNull();
+    expect(mergeArtifactHashesIntoManifest('{"files":"nope"}', files, sha256)).toBeNull();
+  });
+
+  it('skips malformed entries without losing the good ones', () => {
+    const messy = JSON.stringify({ files: [{ path: 'CLAUDE.md', sha256: 'h' }, null, { nopath: true }] });
+    const merged = JSON.parse(mergeArtifactHashesIntoManifest(messy, files, sha256)!);
+    // Code-unit order: uppercase 'C' (0x43) sorts before lowercase 'a' (0x61).
+    expect(merged.files.map((f: any) => f.path)).toEqual(['CLAUDE.md', 'artifacts/week-10/a.md']);
+  });
+
+  it('orders by code unit, not by locale — ICU data must not change the bytes', () => {
+    // localeCompare was used first and would put 'artifacts/...' BEFORE
+    // 'CLAUDE.md'. Its result depends on the runtime's ICU build, so identical
+    // inputs could serialise differently on a different Node and produce a
+    // spurious diff in output that is compared byte-for-byte.
+    const merged = JSON.parse(mergeArtifactHashesIntoManifest(
+      JSON.stringify({ files: [{ path: 'CLAUDE.md', sha256: 'h' }, { path: 'Zed.md', sha256: 'z' }] }),
+      [{ path: 'apple.md', content: 'a' }],
+      sha256,
+    )!);
+    expect(merged.files.map((f: any) => f.path)).toEqual(['CLAUDE.md', 'Zed.md', 'apple.md']);
   });
 });
 
