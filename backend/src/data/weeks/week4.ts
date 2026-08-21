@@ -344,7 +344,7 @@ export const WEEK4_PACK: WeekPack = {
         ],
         code: {
           kind: 'review',
-          label: 'Your Week 3 grader, aimed at a prompt',
+          label: 'The scorer you build tonight, aimed at a prompt',
           code: 'def grade(output, transcript):\n    checks = {\n        "valid_json":   matches_schema(output),\n        "owners_real":  all(a["owner"] in named_people(transcript)\n                            for a in output["action_items"]),\n        "dates_honest": all(a["due"] is None or a["due"] in stated_dates(transcript)\n                            for a in output["action_items"]),\n        "summary_len":  sentence_count(output["summary"]) == 3,\n    }\n    return sum(checks.values()) / len(checks)     # 0.0 .. 1.0',
           expectedResult: 'Four checks, no adjectives. This is the same discipline you wrote on Thursday, pointed at a prompt instead of a program.',
         },
@@ -404,7 +404,7 @@ export const WEEK4_PACK: WeekPack = {
           code: 'I am starting a Prompt Library for this project. Before I write the prompt, I want its test.\n\nThe task, in one line: [WRITE YOURS — what goes in, what decision is made, what must come out].\n\n1. Find the eval grader I wrote in Week 3 in this project and tell me where it is and what it checks.\n2. Create prompts/<verb-noun-name>/eval.jsonl with 4 cases for this task. One JSON object per line, with an "input" object and an "expected" object.\n3. Three cases should be ordinary. The fourth must be awkward ON PURPOSE: missing data, genuinely ambiguous, or malformed input.\n4. Ask me to confirm every expected value rather than filling them in yourself. I am the one who knows what correct looks like for my work.\n\nDo NOT write the prompt yet.',
           expectedResult: 'Four cases you personally agree with, and a pointer to the grader you already own.',
           stopCondition: 'You have confirmed the expected answers yourself — not accepted a set the model invented.',
-          rescue: 'Cannot find your Week 3 grader? Do not stall. Tell Claude Code to write a fresh one with three objective checks for your output shape, and move on.',
+          rescue: 'Scorer not written yet? Do not stall. Tell Claude Code to write one now with three objective checks against your declared output shape, and move on.',
         },
         diagram: `flowchart LR
   Y["👤 You decide correct,<br/>in advance"] --> C["📄 4 cases"]
@@ -546,7 +546,7 @@ export const WEEK4_PACK: WeekPack = {
         segment: 'checkin', kind: 'poll',
         q: 'Two things open — where are you?',
         options: [
-          '✅ Project folder and my Week 3 grader both open',
+          '✅ Project folder open with Claude Code in it',
           '📁 Folder open, cannot find the grader',
           '📋 Neither — but my build plan is up',
           '😵 I need help right now',
@@ -648,13 +648,13 @@ export const WEEK4_PACK: WeekPack = {
         segment: 'build-map', eyebrow: '🗺️ Tonight', title: 'You ship a Prompt Library for YOUR project — eight prompts, each one gated',
         body: 'Monday you took one prompt to a number. Tonight you build the thing around it: eight prompts drawn from your own build plan, each with variables, metadata, a tested example and a real score, plus a written standard and a gate that enforces that standard without you being present. Then we do what we always do — we break it on purpose, three ways, and harden each break. By 8:30 the library defends itself, which is the only reason a library survives contact with a team.',
         bullets: [
-          'Eight prompts, all from your own build plan — not a demo list',
+          'Five prompts, all drawn from your own project — not a demo list',
           'Each one gated individually. Eight drafts is not a library.',
           'A written standard plus a runner that enforces it in one command',
           'Then broken deliberately, then hardened — same rhythm as Week 3',
         ],
         diagram: `flowchart LR
-  P["📋 Your build plan"] --> E["8️⃣ Eight prompts"]
+  P["📋 Your project"] --> E["5️⃣ Five prompts"]
   E --> G["🚪 Each gated<br/>individually"]
   G --> S["📜 CONTRIBUTING<br/>standard"]
   S --> CI["🤖 A gate that runs<br/>without you"]`,
@@ -662,16 +662,16 @@ export const WEEK4_PACK: WeekPack = {
       },
       {
         segment: 'build-map', eyebrow: '🧰 Readiness', title: 'Four green lights before anybody writes a line',
-        body: 'Four things have to be true or you will spend the first twenty minutes on setup instead of building. Your repo open with Claude Code in it. Your Week 3 grader reachable, because the gate reuses it. Your API key live in the terminal you are about to use — remember from Week 3 that it does not survive a new tab. And your eight workflows already written down, because deciding what to build while the clock runs is the single biggest time sink of a Build Day.',
+        body: 'Three things have to be true or you will spend the first twenty minutes on setup instead of building. Your repo open with Claude Code in it. Your API key live in the terminal you are about to use, because it does not survive a new tab and half the room will have opened one. And a couple of sentences about your project written down, because every prompt tonight is built for it. You do not need anything from a previous week: the scorer is built from scratch in this session.',
         bullets: [
           '1️⃣ Repo open, Claude Code in it, Monday’s prompt folder present',
-          '2️⃣ Your Week 3 grader reachable from this project',
+          '2️⃣ Key live in THIS terminal — echo it, do not assume',
           '3️⃣ Key live in THIS terminal — echo it, do not assume',
           '4️⃣ Eight workflows written down before we scaffold',
         ],
         diagram: `flowchart LR
   A["📁 Repo + Claude Code"] --> GO["✅ Green light"]
-  B["📊 Week 3 grader<br/>reachable"] --> GO
+  B["🔑 Key live in<br/>THIS terminal"] --> GO
   C["🔑 Key live in<br/>THIS terminal"] --> GO
   D["📝 Eight workflows<br/>written down"] --> GO`,
         script: 'Run this as a literal four-point roll call on the pulse rail and hold the room until it is nearly all green. Anyone red goes to a mentor now, not at the break. Say the Week 3 callback out loud on point three — half the room will have opened a fresh terminal tab tonight and lost the key without realising it.',
@@ -803,7 +803,7 @@ export const WEEK4_PACK: WeekPack = {
         code: {
           kind: 'paste', pasteWhere: 'Claude Code',
           label: 'Claude Code prompt — the gate runner',
-          code: 'Create scripts/gate_library.py.\n\nIt should walk prompts/*/v*.md and, for every file it finds:\n1. Parse the YAML front-matter.\n2. If status is library-ready, enforce ALL of these and report each by name:\n   - the filename matches vMAJOR.MINOR.PATCH.md\n   - every required front-matter field is present and non-empty\n   - eval.jsonl exists in that folder and has at least one case\n   - re-run my Week 3 grader over every case using the model named in the front-matter, and require score >= 0.85\n   - last_eval.model must equal the front-matter model\n3. If status is draft, report it as a draft and skip the eval — drafts are allowed, they are just not library entries.\n4. Print a table: name, version, model, score, status, verdict.\n5. Exit non-zero if any library-ready prompt fails any check.\n\nThen run it and show me the table for my library as it stands right now.',
+          code: 'Create scripts/gate_library.py.\n\nIt should walk prompts/*/v*.md and, for every file it finds:\n1. Parse the YAML front-matter.\n2. If status is library-ready, enforce ALL of these and report each by name:\n   - the filename matches vMAJOR.MINOR.PATCH.md\n   - every required front-matter field is present and non-empty\n   - eval.jsonl exists in that folder and has at least one case\n   - re-run the scorer we built earlier over every case using the model named in the front-matter, and require score >= 0.85\n   - last_eval.model must equal the front-matter model\n3. If status is draft, report it as a draft and skip the eval — drafts are allowed, they are just not library entries.\n4. Print a table: name, version, model, score, status, verdict.\n5. Exit non-zero if any library-ready prompt fails any check.\n\nThen run it and show me the table for my library as it stands right now.',
           expectedResult: 'A table with your prompt on it, a real score, and a clear PASS or FAIL — plus a non-zero exit if anything is wrong.',
           stopCondition: 'You have a score for prompt #1 and you know whether it earns promotion.',
           rescue: 'Every case failing usually means the grader is comparing free text instead of the structured decision fields. Tell Claude Code to compare only the fields declared in the output contract.',
@@ -995,7 +995,7 @@ export const WEEK4_PACK: WeekPack = {
         '"It worked when I ran it"',
       ],
       after: [
-        'Eight prompts, each drawn from your own build plan',
+        'Five prompts, each drawn from your own project',
         'A score recorded in the file and re-runnable in one command',
         'Your judgment, written down as a versioned template',
         'A teammate runs it from the metadata alone',
@@ -1016,7 +1016,7 @@ export const WEEK4_PACK: WeekPack = {
         {
           icon: '🔪', tone: 'leaf', eyebrow: 'Why we decide the eight before we build',
           title: 'The kitchen does the chopping before service, not during it',
-          body: 'Every professional kitchen sets out its prepared ingredients before the first order arrives, and it is not tidiness — it is that decisions made under time pressure are worse decisions, and a cook improvising a component mid-service holds up every other plate. Tonight the clock is the service. Deciding which eight workflows matter is the calm work, and it takes four minutes if you do it now and forty if you do it while everyone else is building around you.',
+          body: 'Every professional kitchen sets out its prepared ingredients before the first order arrives, and it is not tidiness — it is that decisions made under time pressure are worse decisions, and a cook improvising a component mid-service holds up every other plate. Tonight the clock is the service. Deciding which five prompts matter is the calm work, and it takes four minutes if you do it now and forty if you do it while everyone else is building around you.',
           punch: 'Decide slowly, build fast. Doing it the other way round is how a build night evaporates.',
         },
       ],
@@ -1043,8 +1043,8 @@ export const WEEK4_PACK: WeekPack = {
         options: [
           '✅ All four green',
           '🔑 Key not live in this terminal',
-          '📊 Cannot reach my Week 3 grader',
-          '📝 Have not picked my eight workflows',
+          '📊 My scorer is not running yet',
+          '📝 Have not picked my five prompts yet',
         ],
         eyebrow: '🚦 Roll call', title: 'Before anyone writes a line',
         presenterTip: 'Operational. Read the counts out loud and send mentors to every non-green student immediately. Do not begin the guided build with people stuck on setup — that is how a Build Day dies, and the second option is nearly always someone who opened a fresh terminal tab tonight.',
@@ -1059,7 +1059,7 @@ export const WEEK4_PACK: WeekPack = {
           'It is committed to the repo',
         ],
         answer: 1,
-        reveal: 'Transferability is the only test. Eight prompts nobody else can use is a personal notes folder with better formatting — and we prove this literally at the end of the night by making you swap laptops.',
+        reveal: 'Transferability is the only test. Five prompts nobody else can use is a personal notes folder with better formatting — and we prove this literally at the end of the night by making you swap laptops.',
         eyebrow: '🎯 Set the bar', title: 'How will you know tonight worked?',
         presenterTip: 'Take answers first — "well written" gets picked and deserves a serious response, because a beautifully engineered prompt with no metadata still fails the test. Then tell them the laptop swap is coming at the end so they build toward it all night.',
       },

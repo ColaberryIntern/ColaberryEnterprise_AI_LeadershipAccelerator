@@ -72,6 +72,40 @@ describe('buildKitSpec', () => {
     expect(spec.slides.some((s) => s.kind === 'broadcast')).toBe(true);
   });
 
+  /**
+   * The checkpoint block is generated from the week's own buildMap/checkpoints
+   * arrays, never from teach content, so nothing ties the two together. An
+   * instructor who rebuilds a Build Day entirely through `teach` overrides
+   * still inherits the authored checkpoints, and they go stale silently:
+   * on 2026-08-20 Week 4 was rebuilt around five prompts and the deck still
+   * carried five checkpoint slides advertising eight, which had to be skipped
+   * live. checkpointsEnabled is the switch that prevents that.
+   */
+  it('drops the build map and every checkpoint slide when checkpointsEnabled is false', async () => {
+    const base = await inputFor({
+      id: 's-thu-nocp', session_number: 3, title: 'Week 1: Business Analyst',
+      session_date: '2026-07-30', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    });
+    const on = buildKitSpec(base);
+    const off = buildKitSpec({ ...base, config: { ...DEFAULT_KIT_CONFIG, checkpointsEnabled: false } as KitConfig });
+
+    expect(on.slides.some((s) => s.kind === 'checkpoint')).toBe(true);
+    expect(on.slides.some((s) => s.kind === 'buildmap')).toBe(true);
+    expect(off.slides.some((s) => s.kind === 'checkpoint')).toBe(false);
+    expect(off.slides.some((s) => s.kind === 'buildmap')).toBe(false);
+
+    // Only the checkpoint block goes. The rest of the Build Day is untouched,
+    // which is the difference between a toggle and a wrecking ball.
+    expect(off.slides.some((s) => s.segmentId === 'guided-build')).toBe(true);
+    expect(off.slides.some((s) => s.segmentId === 'failure')).toBe(true);
+    expect(off.slides.some((s) => s.kind === 'broadcast')).toBe(true);
+    expect(off.slides.length).toBeLessThan(on.slides.length);
+  });
+
+  it('defaults checkpointsEnabled to true so untouched weeks keep their checkpoints', () => {
+    expect(DEFAULT_KIT_CONFIG.checkpointsEnabled).toBe(true);
+  });
+
   it('builds an Orientation spec with the three presenter segments', async () => {
     const spec = buildKitSpec(await inputFor({
       id: 's-orient', session_number: 1, title: 'Orientation',
