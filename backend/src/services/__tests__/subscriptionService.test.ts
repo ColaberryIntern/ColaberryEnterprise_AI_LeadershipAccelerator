@@ -612,6 +612,55 @@ describe('subscriptionService', () => {
       expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 8, 1, 10));
     });
 
+    // Regression: the 2026-08-12 webhook-backlog repair started 13 live members'
+    // billing clocks on the repair date instead of on their payment, handing out
+    // 202 unbilled days (~$1,300) and pushing every future renewal later by the
+    // same gap. Activation must anchor on when the money arrived, never on when
+    // the recovery code happened to run.
+    it('anchors on the PAYMENT date, not the activation date, when a missed webhook is repaired weeks later', async () => {
+      const paidAt = Date.UTC(2026, 6, 29, 14);   // paid July 29
+      const repairedAt = Date.UTC(2026, 7, 12, 20); // recovered August 12
+      const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const enrollment = { cohort_id: 'c-july', enrolled_at: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'c-july', name: 'Cohort - July 2026', start_date: '2026-07-23' });
+      await activateByRef('SUB-e1-1', { amount: 199, paidAt: new Date(paidAt).toISOString() }, repairedAt);
+
+      const subUpdate = sub.update.mock.calls[0][0];
+      expect(subUpdate.started_at.getTime()).toBe(paidAt);                            // July 29, NOT August 12
+      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 29, 14)); // due Aug 29, NOT Sep 12
+    });
+
+    it('still honors the class-start anchor when a late repair recovers an early payment', async () => {
+      const paidAt = Date.UTC(2026, 6, 21, 9);    // paid July 21, before class
+      const repairedAt = Date.UTC(2026, 7, 12, 20);
+      const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const enrollment = { cohort_id: 'c-july', enrolled_at: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'c-july', name: 'Cohort - July 2026', start_date: '2026-07-23' });
+      await activateByRef('SUB-e1-1', { amount: 199, paidAt }, repairedAt);
+
+      const subUpdate = sub.update.mock.calls[0][0];
+      expect(subUpdate.started_at.getTime()).toBe(Date.UTC(2026, 6, 23));         // class day
+      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 23)); // Aug 23
+    });
+
+    it('falls back to the activation clock when paidAt is absent or unparseable', async () => {
+      const activatedAt = Date.UTC(2026, 7, 1, 10);
+      for (const paidAt of [undefined, 'not-a-date']) {
+        const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+        const enrollment = { cohort_id: 'c-july', enrolled_at: null, update: jest.fn() };
+        (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+        (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
+        (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'c-july', name: 'Cohort - July 2026', start_date: '2026-07-23' });
+        await activateByRef('SUB-e1-1', { amount: 199, paidAt } as any, activatedAt);
+
+        expect(sub.update.mock.calls[0][0].started_at.getTime()).toBe(activatedAt);
+      }
+    });
+
     it('reroutes a paying Explorer out of the Explorer bucket into the paid cohort', async () => {
       const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
       const enrollment = { cohort_id: 'c-explorer', enrolled_at: null, update: jest.fn() };
