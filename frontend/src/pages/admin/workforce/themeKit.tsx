@@ -56,7 +56,41 @@ export const workforceCss = `
 .wf-emp .nm{font-weight:700;font-size:13.5px}.wf-emp .rl{font-size:11.5px;color:var(--muted)}
 .wf-emp .wl{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:right}
 .wf-emp .wl b{color:var(--ink);font-size:14px}.wf-emp .wl.busy b{color:var(--amber)}
-.wf-dirs{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
+/* Org Chart v5 (2026-08-21) — root-cause fix for the card-grid name-wrapping
+   bug (Ali, live, screenshot attached: long real agent names like "Cory
+   Engine — Autonomous Operations" were rendering character-by-character,
+   e.g. "Auton/omou/s/Opera/tions"). Root cause: body{overflow-wrap:
+   break-word} (colaberry/tokens/base.css) cascades into every text node,
+   and the OLD single-row .wf-emp flex layout left as little as ~40-70px
+   for the name text once avatar+ticket-count+button all shared one row in
+   a 215px card — any real word broke into fragments to avoid overflow.
+   .wf-emp-grid is a MODIFIER (combined as class="wf-emp wf-emp-grid", never
+   a replacement) so the drawers' existing single-row .wf-emp usage (which
+   is ~500px+ wide and was never the reported bug) is completely untouched.
+   New 2-row card: .wf-emp-head (avatar + name/role) on top,
+   .wf-emp-meta (reports-to chip + ticket-count/button) below. */
+.wf-emp-grid{flex-direction:column;align-items:stretch;gap:8px}
+.wf-emp-head{display:flex;align-items:flex-start;gap:11px;width:100%}
+.wf-emp-meta{display:flex;align-items:center;gap:8px;width:100%}
+.wf-emp-actions{display:flex;align-items:center;gap:6px;flex:none}
+/* 2-line clamp is the PRIMARY wrap strategy now that the wider grid column
+   (see .wf-dirs below) gives the name real room to wrap at word
+   boundaries; overflow-wrap:break-word stays only as a last-resort safety
+   net for a single token that still doesn't fit even a full line (never the
+   primary mechanism, unlike before). */
+.wf-emp-grid .nm{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:break-word;word-break:break-word}
+.wf-emp-grid .rl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal}
+/* Scoped modifier — the bare .wf-chip used elsewhere (e.g.
+   EnterpriseIntelligencePage.tsx's status label) is untouched. Truncates
+   the "Reports to: <name>" tag to one line instead of letting it wrap
+   char-by-char for long leadership names (e.g. "Cory Brain - Strategic
+   Initiatives"); full text always available via the element's title attr. */
+.wf-chip.trunc{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;display:inline-block}
+/* Column width bumped 215px -> 268px (~5 columns -> ~4 at this page's
+   1240px max-width) — Ali's own suggested direction ("fewer columns per
+   row may be the right fix") — giving each card real room instead of
+   fighting narrow columns with ever-more-aggressive text tricks. */
+.wf-dirs{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:12px}
 .wf-mtg{border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:6px;font-size:12.5px;display:flex;gap:9px;background:var(--panel2)}
 .wf-mtg .mav{width:24px;height:24px;border-radius:7px;flex:none;color:#fff;font-family:var(--mono);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .wf-mtg b{color:var(--ink)}

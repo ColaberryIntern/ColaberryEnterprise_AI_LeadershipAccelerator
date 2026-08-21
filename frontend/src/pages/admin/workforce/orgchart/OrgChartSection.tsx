@@ -30,6 +30,15 @@ import OrgChartDepartmentGroup from './OrgChartDepartmentGroup';
  * Leadership/AI Staff card shows its real `reports_to_summary` tag visible
  * before any click, and the organization-overview Mermaid diagram can go
  * fullscreen.
+ *
+ * Card restructure (2026-08-21, session CC-20260818-x4nk continued) — Ali,
+ * live, with a screenshot: long real agent names ("Cory Engine — Autonomous
+ * Operations", the "* Strategy Architect" agents) were rendering
+ * character-by-character in the old narrow single-row card. Root cause and
+ * fix live in themeKit.tsx's own header comment for `.wf-emp-grid`; this
+ * file's part is applying that new 2-row layout (`wf-emp-head` / `wf-emp-
+ * meta`) to the Leadership and Staff cards below, plus `title` tooltips on
+ * the name and reports-to chip for the full text on hover.
  */
 
 function initials(name: string): string {
@@ -223,28 +232,33 @@ const OrgChartSection: React.FC = () => {
             <button
               key={l.id}
               type="button"
-              className="wf-emp"
-              style={{ display: 'flex', textAlign: 'left', border: undefined }}
+              className="wf-emp wf-emp-grid"
+              style={{ textAlign: 'left', border: undefined }}
               onClick={() => setSelectedLeadership(l)}
             >
-              <span className="wf-av" style={{ background: leadershipColors[l.id] }}>{initials(l.display_name)}</span>
-              <div style={{ minWidth: 0 }}>
-                <div className="nm">{l.display_name}</div>
-                <div className="rl">{l.staff_ids.length} AI Staff reporting</div>
-                <span className="wf-chip" style={{ marginTop: 4 }}>{l.reports_to_summary}</span>
+              <div className="wf-emp-head">
+                <span className="wf-av" style={{ background: leadershipColors[l.id] }}>{initials(l.display_name)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="nm" title={l.display_name}>{l.display_name}</div>
+                  <div className="rl">{l.staff_ids.length} AI Staff reporting</div>
+                </div>
               </div>
-              <div className="wl"><b>{l.open_ticket_count}</b><br />open tickets</div>
-              <span
-                role="button"
-                tabIndex={0}
-                className="wf-toggle"
-                title={`View ${l.display_name}'s tickets`}
-                aria-label={`View ${l.display_name}'s tickets`}
-                style={{ marginLeft: 8, flex: 'none' }}
-                onClick={(e) => openAgentTickets(l.agent_name, e)}
-              >
-                {TICKET_ICON}
-              </span>
+              <div className="wf-emp-meta">
+                <span className="wf-chip trunc" title={l.reports_to_summary} style={{ flex: '1 1 auto', minWidth: 0 }}>{l.reports_to_summary}</span>
+                <div className="wf-emp-actions">
+                  <div className="wl"><b>{l.open_ticket_count}</b><br />open tickets</div>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="wf-toggle"
+                    title={`View ${l.display_name}'s tickets`}
+                    aria-label={`View ${l.display_name}'s tickets`}
+                    onClick={(e) => openAgentTickets(l.agent_name, e)}
+                  >
+                    {TICKET_ICON}
+                  </span>
+                </div>
+              </div>
             </button>
           ))}
         </div>
@@ -256,25 +270,30 @@ const OrgChartSection: React.FC = () => {
       ) : (
         <div className="wf-dirs">
           {data.staff.map((s) => (
-            <Link key={s.id} to={`/admin/agents/${s.id}`} className="wf-emp" style={{ display: 'flex', textDecoration: 'none', color: 'inherit' }}>
-              <span className="wf-av" style={{ background: staffColors[s.id] }}>{initials(s.display_name)}</span>
-              <div style={{ minWidth: 0 }}>
-                <div className="nm">{s.display_name}</div>
-                <div className="rl">AI Staff</div>
-                <span className="wf-chip" style={{ marginTop: 4 }}>{s.reports_to_summary}</span>
+            <Link key={s.id} to={`/admin/agents/${s.id}`} className="wf-emp wf-emp-grid" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className="wf-emp-head">
+                <span className="wf-av" style={{ background: staffColors[s.id] }}>{initials(s.display_name)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="nm" title={s.display_name}>{s.display_name}</div>
+                  <div className="rl">AI Staff</div>
+                </div>
               </div>
-              <div className="wl"><b>{s.open_ticket_count}</b><br />open tickets</div>
-              <span
-                role="button"
-                tabIndex={0}
-                className="wf-toggle"
-                title={`View ${s.display_name}'s tickets`}
-                aria-label={`View ${s.display_name}'s tickets`}
-                style={{ marginLeft: 8, flex: 'none' }}
-                onClick={(e) => openAgentTickets(s.agent_name, e)}
-              >
-                {TICKET_ICON}
-              </span>
+              <div className="wf-emp-meta">
+                <span className="wf-chip trunc" title={s.reports_to_summary} style={{ flex: '1 1 auto', minWidth: 0 }}>{s.reports_to_summary}</span>
+                <div className="wf-emp-actions">
+                  <div className="wl"><b>{s.open_ticket_count}</b><br />open tickets</div>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="wf-toggle"
+                    title={`View ${s.display_name}'s tickets`}
+                    aria-label={`View ${s.display_name}'s tickets`}
+                    onClick={(e) => openAgentTickets(s.agent_name, e)}
+                  >
+                    {TICKET_ICON}
+                  </span>
+                </div>
+              </div>
             </Link>
           ))}
         </div>
