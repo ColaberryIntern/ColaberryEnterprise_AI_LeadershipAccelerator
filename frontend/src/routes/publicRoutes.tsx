@@ -41,11 +41,6 @@ const publicRoutes = (
       strategy-call pages are functional surfaces rather than marketing. Deleting
       those because "the old site is not needed" would break paying customers.
   */}
-  {/* Ali, 2026-08-21: /start had NO route and every "Start free" button in the
-      site pointed at it, so they all fell through to NotFound. It redirects
-      rather than 404s because the header, home and pricing all link it, and
-      inbound links plus the sitemap still point here. */}
-  <Route path="/start" element={<Navigate to="/try" replace />} />
   <Route path="/program" element={<Navigate to="/platform" replace />} />
   <Route path="/case-studies" element={<Navigate to="/stories" replace />} />
   <Route path="/demo-day" element={<Navigate to="/stories" replace />} />
