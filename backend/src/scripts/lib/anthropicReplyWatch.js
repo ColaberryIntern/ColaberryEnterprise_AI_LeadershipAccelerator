@@ -28,8 +28,21 @@
 // the sender also supports an explicit --stop and why the daily log line names
 // this gap. Ram forwarding one line to Ali is the manual backstop.
 
-const AUTOMATED_SUBDOMAIN = /@(mail|email|e|mailer|notifications)\.anthropic\.com$/i;
-const NEVER_A_REPLY_LOCALPART = /^(no-?reply|donotreply|do-not-reply|bounces?|mailer-daemon|postmaster|invoice|failed-payments|statements)\b/i;
+// WHAT THIS GOT WRONG ONCE, AND WHY THE RULE CHANGED
+// The original rule was "humans write from the bare domain, robots write from
+// subdomains". On 2026-08-21 Anthropic's partner desk replied to us from
+// `Fin from Partner Experience <partner-support@mail.anthropic.com>`: the exact
+// address we had been writing TO, on the mail. subdomain. The subdomain rule
+// classified a genuine reply as marketing, the campaign did not halt, and it
+// would have sent another letter the following Monday.
+//
+// So the subdomain test is gone. Domain decides only whether it is Anthropic at
+// all; the LOCAL PART decides whether it is a robot. Anything at anthropic.com
+// or any subdomain counts as a reply unless its local part is a known
+// machine sender. An unrecognised sender counts as a reply, because stopping is
+// the safe error: a false halt costs one skipped letter that a human can
+// resume, and a false negative mails someone who already answered us.
+const NEVER_A_REPLY_LOCALPART = /^(no-?reply|donotreply|do-not-reply|bounces?|mailer-daemon|postmaster|invoice|failed-payments|statements|billing|receipts?|team|news|newsletter|marketing|updates|notifications?)\b/i;
 
 function parseSender(fromHeader) {
   const raw = String(fromHeader || '');
@@ -57,16 +70,11 @@ function classifySender(fromHeader) {
     return { isReply: false, why: `not an anthropic.com address (domain "${domain}")` };
   }
   if (NEVER_A_REPLY_LOCALPART.test(localPart)) {
-    return { isReply: false, why: `no-reply style local part "${localPart}"` };
+    return { isReply: false, why: `known machine local part "${localPart}"` };
   }
-  // Only the subdomains we have actually seen robots on are discounted. An
-  // unrecognised subdomain still counts as a reply: a human writing from
-  // partners.anthropic.com must stop the campaign, and the cost of being wrong
-  // that way is one skipped note rather than mail to someone who answered us.
-  if (AUTOMATED_SUBDOMAIN.test(address)) {
-    return { isReply: false, why: 'known automated subdomain (billing / marketing)' };
-  }
-  return { isReply: true, why: `human address at anthropic.com (${address})` };
+  // Subdomain is deliberately NOT consulted. partner-support@mail.anthropic.com
+  // is a real human-facing desk; see the note above the local-part list.
+  return { isReply: true, why: `replying address at anthropic.com (${address})` };
 }
 
 function headerValue(message, name) {
