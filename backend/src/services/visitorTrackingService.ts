@@ -135,6 +135,17 @@ export async function getOrCreateSession(
     ip_address?: string;
     device_type?: string;
     site_slug?: string;
+    // Multi-tenant ecosystem context, resolved server-side by the caller from
+    // site_slug or hostname. All optional: an unregistered site still tracks, with
+    // null context and an emitted metric. Tracking is fail-soft by design — see
+    // tenantResolver.ts. NEVER accept these from a request body.
+    tenant_id?: string | null;
+    brand_id?: string | null;
+    source_id?: string | null;
+    entry_point_id?: string | null;
+    campaign_id?: string | null;
+    campaign_lead_id?: string | null;
+    organization_id?: string | null;
   }
 ): Promise<string> {
   const timeoutMs = env.visitorSessionTimeoutMinutes * 60 * 1000;
@@ -181,6 +192,16 @@ export async function getOrCreateSession(
     is_bounce: true,
     landing_page_category: landingCategory,
     site_slug: data.site_slug || null,
+    // The session is the container that answers "which brand was this browsing on?".
+    // Visitors stay global because one browser legitimately moves between ecosystem
+    // brands; the brand relationship belongs to the session, not the browser.
+    tenant_id: data.tenant_id || null,
+    brand_id: data.brand_id || null,
+    source_id: data.source_id || null,
+    entry_point_id: data.entry_point_id || null,
+    campaign_id: data.campaign_id || null,
+    campaign_lead_id: data.campaign_lead_id || null,
+    organization_id: data.organization_id || null,
   } as any);
 
   // Increment visitor total_sessions
@@ -204,6 +225,18 @@ export async function recordPageEvent(params: {
   page_category?: string;
   event_data?: Record<string, any>;
   timestamp: Date;
+  // Multi-tenant ecosystem context. Denormalised onto the event rather than reached
+  // through a join to the session because page_events is the highest-row-count table
+  // in the database and the journey/analytics queries that need brand filtering are
+  // exactly the ones that cannot afford the join. Optional and never trusted from a
+  // request body; the caller resolves them server-side.
+  tenant_id?: string | null;
+  brand_id?: string | null;
+  source_id?: string | null;
+  entry_point_id?: string | null;
+  campaign_id?: string | null;
+  campaign_lead_id?: string | null;
+  organization_id?: string | null;
 }): Promise<void> {
   // Insert the page event
   await PageEvent.create({
@@ -216,6 +249,13 @@ export async function recordPageEvent(params: {
     page_category: params.page_category || null,
     event_data: params.event_data || null,
     timestamp: params.timestamp,
+    tenant_id: params.tenant_id || null,
+    brand_id: params.brand_id || null,
+    source_id: params.source_id || null,
+    entry_point_id: params.entry_point_id || null,
+    campaign_id: params.campaign_id || null,
+    campaign_lead_id: params.campaign_lead_id || null,
+    organization_id: params.organization_id || null,
   } as any);
 
   // Fetch the session to update aggregates

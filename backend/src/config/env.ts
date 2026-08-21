@@ -61,6 +61,13 @@ export const env = {
   // so an unsubscribe token can never be cross-used as a JWT and vice versa.
   unsubscribeSecret: process.env.UNSUBSCRIBE_SECRET || resolveJwtSecret(),
 
+  // Cross-domain journey link signing — HMAC secret for the `jx` token that carries
+  // visitor/lead/campaign context between ecosystem domains. Same fallback and same
+  // domain-separation reasoning as unsubscribeSecret above (see journeyLinkService).
+  // These tokens replace putting a raw email in a cross-domain URL, which is what the
+  // tracker's `?email=` parameter does today.
+  journeyLinkSecret: process.env.JOURNEY_LINK_SECRET || resolveJwtSecret(),
+
   // Email (SMTP)
   smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
   smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),

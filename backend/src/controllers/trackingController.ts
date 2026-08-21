@@ -13,6 +13,11 @@ import { evaluateVisitorForTriggers } from '../services/behavioralTriggerService
 import { env } from '../config/env';
 import { logAgentExecution } from '../services/governanceService';
 import { redactForLogs } from '../utils/piiRedaction';
+import {
+  resolvePublicContext,
+  ResolvedTenantContext,
+  ResolutionPath,
+} from '../modules/tenancy/tenantResolver';
 
 /** Fire-and-forget signal detection + intent scoring + behavioral triggers for high-value events */
 function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
@@ -101,6 +106,60 @@ function normalizeSiteSlug(raw: unknown, pageUrl?: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Resolve the ecosystem tenant/brand for an inbound tracking hit.
+ *
+ * SECURITY: resolution is driven ONLY by `site_slug` (which the server maps through
+ * `lead_sources`) and by the hostname in the page URL (mapped through `brand_domains`).
+ * A request body may never name its own tenant — if it could, any visitor could write
+ * into any tenant's data by editing one field.
+ *
+ * FAIL-SOFT: an unresolved site yields null context and the event is still recorded.
+ * A metric is emitted so unregistered sites and legacy-host-map usage are measurable
+ * rather than invisible. Dropping the event instead would lose real traffic to fix a
+ * bookkeeping problem.
+ */
+async function resolveTrackingContext(
+  siteSlug: string | undefined,
+  pageUrl: string | undefined,
+): Promise<ResolvedTenantContext | null> {
+  try {
+    const { context, path } = await resolvePublicContext({
+      sourceSlug: siteSlug,
+      pageUrl,
+    });
+    if (!context) emitUnresolvedContext(siteSlug, pageUrl, path);
+    return context;
+  } catch (err) {
+    // Resolution must never take the tracking endpoint down.
+    emitUnresolvedContext(siteSlug, pageUrl, 'unresolved');
+    return null;
+  }
+}
+
+function emitUnresolvedContext(
+  siteSlug: string | undefined,
+  pageUrl: string | undefined,
+  path: ResolutionPath,
+): void {
+  let hostname: string | null = null;
+  try {
+    hostname = pageUrl ? new URL(pageUrl).hostname : null;
+  } catch {
+    hostname = null;
+  }
+  console.warn(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'tenant_context_unresolved',
+      outcome: 'partial',
+      context: { site_slug: siteSlug ?? null, hostname, resolution_path: path },
+    }),
+  );
 }
 
 function validateTrackEvent(body: Record<string, unknown>): string | null {
@@ -204,6 +263,9 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       }
     }
 
+    // Server-resolved, never taken from the request body.
+    const ecosystem = await resolveTrackingContext(site_slug, page_url);
+
     const sessionId = await getOrCreateSession(visitorId, {
       page_url,
       referrer_url,
@@ -213,6 +275,10 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       ip_address: req.ip,
       device_type,
       site_slug,
+      tenant_id: ecosystem?.tenantId ?? null,
+      brand_id: ecosystem?.brandId ?? null,
+      source_id: ecosystem?.sourceId ?? null,
+      campaign_id: campaign_id ?? null,
     });
 
     const page_category = categorizePagePath(page_path);
@@ -227,6 +293,10 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       page_category,
       event_data,
       timestamp: timestamp ? new Date(timestamp) : new Date(),
+      tenant_id: ecosystem?.tenantId ?? null,
+      brand_id: ecosystem?.brandId ?? null,
+      source_id: ecosystem?.sourceId ?? null,
+      campaign_id: campaign_id ?? null,
     });
 
     // Trigger real-time signal analysis for high-value events
@@ -309,6 +379,11 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
     }
 
     const firstEvent = events[0];
+    // Resolved once per batch, not per event: every event in a batch comes from the
+    // same page load on the same site, so re-resolving would be pure overhead on the
+    // highest-write path in the system.
+    const ecosystem = await resolveTrackingContext(site_slug, firstEvent.page_url);
+
     const sessionId = await getOrCreateSession(visitorId, {
       page_url: firstEvent.page_url,
       referrer_url,
@@ -318,6 +393,10 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       ip_address: req.ip,
       device_type,
       site_slug,
+      tenant_id: ecosystem?.tenantId ?? null,
+      brand_id: ecosystem?.brandId ?? null,
+      source_id: ecosystem?.sourceId ?? null,
+      campaign_id: campaign_id ?? null,
     });
 
     let eventsRecorded = 0;
@@ -333,6 +412,10 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
         page_category,
         event_data: event.event_data,
         timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
+        tenant_id: ecosystem?.tenantId ?? null,
+        brand_id: ecosystem?.brandId ?? null,
+        source_id: ecosystem?.sourceId ?? null,
+        campaign_id: campaign_id ?? null,
       });
       eventsRecorded++;
     }
