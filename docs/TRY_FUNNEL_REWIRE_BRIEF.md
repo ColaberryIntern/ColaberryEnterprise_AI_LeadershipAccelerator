@@ -193,6 +193,42 @@ prefers-reduced-motion check). A compact always-sticky bar is also acceptable an
 simpler. Ali called this "our signature functionality", so match how
 /portal/projects and /portal/classroom feel rather than inventing a new motion.
 
+## OPEN, requested 2026-08-21 (Ali) -- not yet built
+
+### 1. Restyle the /try sticky bar to match the portal's next-step bar
+
+The bar works (verified live: pins at exactly `top: 61px`) but Ali wants it to
+LOOK like the one on /portal/classroom, not just behave like it. That bar is a
+compact pill INSIDE the topbar: a circled star icon, a two-line stack
+("YOUR NEXT STEP - ANNOUNCEMENT" over the title), a `+5 pts` chip, prev/next
+chevrons, and an "Open ->" pill on the right. Screenshot-match it; the classes
+are in TodayShell.css alongside `.te-topbar`.
+
+### 2. More CTAs through the home page
+
+Ali: "the user has to do so much scrolling in between CTAs. Give each a fresh
+look that is a segment to attract people that have heard enough and ready to get
+started."
+
+So: a distinct, repeating CTA BAND -- not a copy of the closing CTA -- dropped
+between the long home-page sections. Design it as its own segment with its own
+look. Every one of them points at /try.
+
+### 3. "Explore the Platform" must reach /try -- DONE 2026-08-21
+
+It pointed at `/platform`, the marketing page. Fixed in PublicHeaderV2 (both
+desktop and mobile), HeroV8, and `config/v2Content.ts` (`ctaRoute`).
+HeroPlatformV8 was already correct. **Re-check after any hero work.**
+
+### 4. Fix the Colaberry logo to match the site
+
+The portal shell (/try, /portal/*) renders a lowercase "colaberry" wordmark with
+the ring mark and the "AI Systems Architect Accelerator" subtitle. The marketing
+site renders the cherry mark plus "Colaberry" and "Enterprise AI". A visitor
+crossing from /platform to /try sees two different brands. Ali wants the portal
+one to match the site. Find the shell's logo component and align it -- do NOT
+alter the brand mark artwork itself.
+
 ## Gates and shipping
 
 - `tsc --noEmit` in `frontend/` (slow on this machine, 10-20 min; run it in the

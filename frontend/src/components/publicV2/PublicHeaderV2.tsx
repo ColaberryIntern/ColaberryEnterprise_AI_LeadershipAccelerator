@@ -107,7 +107,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
               <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
                 Talk to an Architect
               </Link>
-              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/platform">
+              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/try">
                 Explore the Platform
               </Link>
             </li>
@@ -129,7 +129,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
           <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
             Talk to an Architect
           </Link>
-          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/platform">
+          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/try">
             Explore the Platform
           </Link>
         </div>

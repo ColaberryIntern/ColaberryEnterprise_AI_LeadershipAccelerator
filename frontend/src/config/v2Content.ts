@@ -68,7 +68,7 @@ export const GOALS: readonly Goal[] = [
       'on a real company project, and produce evidence a manager can inspect.',
     proof: 'Per-person readiness, shipped artifacts and evaluation results on one dashboard.',
     cta: 'Explore the Platform',
-    ctaRoute: '/platform',
+    ctaRoute: '/try',
     next: 'Open the free company workspace and invite two people to try it.',
   },
   {
