@@ -402,7 +402,7 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
  */
 export async function activateByRef(
   paymentRef: string,
-  opts: { paymentId?: string | number; amount?: number } = {},
+  opts: { paymentId?: string | number; amount?: number; paidAt?: string | number | Date } = {},
   nowMs: number = Date.now(),
 ): Promise<Subscription | null> {
   const sub = await Subscription.findOne({ where: { payment_ref: paymentRef } });
@@ -419,7 +419,22 @@ export async function activateByRef(
   const enrollment = await Enrollment.findByPk(sub.enrollment_id);
   const cohort = enrollment ? await resolvePaidCohortFor(enrollment) : null;
   const cohortStart = cohort && (cohort as any).start_date ? String((cohort as any).start_date) : null;
-  const anchorMs = billingAnchorMs(nowMs, cohortStart);
+
+  // Anchor on WHEN THE MONEY ARRIVED, not when this code happened to run.
+  //
+  // This used to pass nowMs. That is right only when activation is prompt — the
+  // payment webhook firing seconds after the charge. It is wrong whenever
+  // activation is delayed: a missed webhook repaired days or weeks later started
+  // the member's billing clock at the repair, handing them unbilled access in
+  // between and pushing every future renewal later by the same gap. The
+  // 2026-08-12 webhook-backlog repair did exactly that to 13 live members
+  // (202 unbilled days, ~$1,300); see docs/RECURRING_BILLING_EXPOSURE.md.
+  //
+  // Callers that know the real payment date pass it. Falling back to nowMs keeps
+  // the live webhook path behaving exactly as before, where now IS the payment date.
+  const paidMs = opts.paidAt != null ? new Date(opts.paidAt).getTime() : NaN;
+  const anchorBasisMs = Number.isFinite(paidMs) ? paidMs : nowMs;
+  const anchorMs = billingAnchorMs(anchorBasisMs, cohortStart);
   const periodEnd = new Date(periodEndMs(anchorMs, cfg.cadence));
 
   await sub.update({
