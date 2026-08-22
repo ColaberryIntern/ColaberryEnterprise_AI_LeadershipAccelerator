@@ -21,6 +21,8 @@ export interface OrgMemberAttributes {
   role: OrgMemberRole;
   invite_status: OrgMemberInviteStatus;
   invited_by?: string | null;
+  /** Bridge to the platform-wide human identity. Nullable during migration. */
+  platform_identity_id?: string | null;
   joined_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
@@ -35,6 +37,7 @@ class OrgMember extends Model<OrgMemberAttributes> implements OrgMemberAttribute
   declare role: OrgMemberRole;
   declare invite_status: OrgMemberInviteStatus;
   declare invited_by: string | null;
+  declare platform_identity_id: string | null;
   declare joined_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
@@ -83,6 +86,10 @@ OrgMember.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // --- multi-tenant ecosystem context ---------------------------------------
+    // Declared because the DDL adds this column and Sequelize only touches
+    // attributes the model knows about.
+    platform_identity_id: { type: DataTypes.UUID, allowNull: true },
   },
   {
     sequelize,
