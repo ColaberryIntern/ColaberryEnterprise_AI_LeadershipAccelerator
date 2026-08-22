@@ -246,6 +246,41 @@ const LEAD_CONTEXT_TABLES: string[] = [
      ON communication_preferences (lead_id, tenant_id, brand_id, category)`,
   `CREATE INDEX IF NOT EXISTS idx_communication_preferences_tenant_brand
      ON communication_preferences (tenant_id, brand_id)`,
+
+  // --- tenant isolation audit trail (DEC-05) ---------------------------------
+  // CPN's isolation is a formal grant and donor requirement, not just good practice,
+  // and a control that silently works produces no evidence it worked. The DENIALS are
+  // the evidence: a log of successful reads proves nothing about a boundary.
+  //
+  // No foreign keys, on purpose. This table has to outlive the rows it describes —
+  // deleting a suspended operator or archiving a tenant must not cascade away the
+  // record of what they reached. No updated_at either: nothing here is ever updated.
+  `CREATE TABLE IF NOT EXISTS tenant_access_audits (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     platform_identity_id UUID,
+     actor_email VARCHAR(255),
+     resource_tenant_id UUID,
+     resource_brand_id UUID,
+     context_tenant_id UUID,
+     resource_type VARCHAR(64) NOT NULL,
+     resource_id VARCHAR(64),
+     action VARCHAR(32) NOT NULL,
+     decision VARCHAR(16) NOT NULL,
+     reason VARCHAR(64),
+     permission VARCHAR(64),
+     correlation_id VARCHAR(64),
+     ip_address VARCHAR(45),
+     metadata JSONB
+   )`,
+  // The query an auditor actually asks: every attempt against this tenant, newest first.
+  `CREATE INDEX IF NOT EXISTS idx_tenant_access_audits_tenant_time
+     ON tenant_access_audits (resource_tenant_id, occurred_at)`,
+  // The query a security review asks: show me the denials.
+  `CREATE INDEX IF NOT EXISTS idx_tenant_access_audits_decision_time
+     ON tenant_access_audits (decision, occurred_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_tenant_access_audits_identity
+     ON tenant_access_audits (platform_identity_id)`,
 ];
 
 /**

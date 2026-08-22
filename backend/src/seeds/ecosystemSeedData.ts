@@ -81,8 +81,20 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
           },
         ],
         // trustbeforeintelligence is Ram's book microsite feeding enterprise demand.
-        // Recorded here so the assignment is auditable rather than assumed.
-        lead_source_slugs: ['enterprise', 'colaberry', 'trustbeforeintelligence'],
+        //
+        // `advisor` and `worldoftaxonomy` were originally left unclassified because the
+        // code alone does not justify the assignment: advisor.colaberry.ai is a separate
+        // FastAPI product in its own repository. Ali classified both to Colaberry
+        // Enterprise on 2026-08-21 (DEC-06). That is a business fact the code cannot
+        // derive, which is exactly why it was asked rather than guessed, and it is
+        // recorded here so nobody re-litigates it in six months.
+        lead_source_slugs: [
+          'enterprise',
+          'colaberry',
+          'trustbeforeintelligence',
+          'advisor',
+          'worldoftaxonomy',
+        ],
       },
       {
         slug: 'colaberry-training',
@@ -198,14 +210,16 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
  * Sources whose ownership is genuinely ambiguous. They are NOT assigned to a tenant by
  * the backfill; they are reported as unresolved so a human can classify them.
  *
- * `advisor` is advisor.colaberry.ai — a separate FastAPI product in its own repository.
- * `worldoftaxonomy` is an independent microsite. Asserting either belongs to Colaberry
- * Enterprise would be a guess, and the migration plan is explicit: do not silently guess.
+ * Currently empty, and that is the point rather than an oversight. `advisor` and
+ * `worldoftaxonomy` sat here until 2026-08-21, when Ali classified both to Colaberry
+ * Enterprise (DEC-06). Every lead source in the database now has a deterministic owner,
+ * so the backfill reports zero unresolved rows instead of two known-unknowns.
+ *
+ * Keep the list. The next microsite that appears without an obvious owner belongs here,
+ * not in a guess: the migration plan is explicit that ambiguous ownership is reported,
+ * never assumed.
  */
-export const DELIBERATELY_UNCLASSIFIED_SOURCE_SLUGS: readonly string[] = [
-  'advisor',
-  'worldoftaxonomy',
-];
+export const DELIBERATELY_UNCLASSIFIED_SOURCE_SLUGS: readonly string[] = [];
 
 /** Flat hostname -> {tenantSlug, brandSlug} map derived from ECOSYSTEM_SEED. */
 export function buildHostnameMap(): Map<string, { tenantSlug: string; brandSlug: string }> {

@@ -416,6 +416,7 @@ import PlatformIdentityLink from './PlatformIdentityLink';
 import TenantMembership from './TenantMembership';
 import LeadTenantContext from './LeadTenantContext';
 import CommunicationPreference from './CommunicationPreference';
+import TenantAccessAudit from './TenantAccessAudit';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1478,6 +1479,7 @@ export {
   TenantMembership,
   LeadTenantContext,
   CommunicationPreference,
+  TenantAccessAudit,
 };
 
 // --- Enrollment Lead associations ---
