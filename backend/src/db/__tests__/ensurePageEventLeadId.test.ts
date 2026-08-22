@@ -119,7 +119,36 @@ describe('PageEvent model — the column must exist in all three places', () => 
         'session_id',
         'timestamp',
         'visitor_id',
+        // Multi-tenant ecosystem context, added 2026-08-22. Listed here rather than
+        // loosening the assertion: pinning the EXACT attribute set is the point of
+        // this test, and it caught these seven the moment they were added. An
+        // accidental eighth should still fail it.
+        'tenant_id',
+        'brand_id',
+        'source_id',
+        'entry_point_id',
+        'campaign_id',
+        'campaign_lead_id',
+        'organization_id',
       ].sort(),
     );
+  });
+
+  it('the tenancy columns carry NO foreign keys, matching lead_id', () => {
+    // page_events is the highest-write table in the system. The DDL deliberately
+    // omits FK constraints so Postgres never validate-scans it, and the model must
+    // not claim constraints the schema does not have.
+    const attrs = PageEvent.getAttributes() as Record<string, { references?: unknown }>;
+    for (const column of [
+      'tenant_id',
+      'brand_id',
+      'source_id',
+      'entry_point_id',
+      'campaign_id',
+      'campaign_lead_id',
+      'organization_id',
+    ]) {
+      expect(attrs[column].references).toBeUndefined();
+    }
   });
 });

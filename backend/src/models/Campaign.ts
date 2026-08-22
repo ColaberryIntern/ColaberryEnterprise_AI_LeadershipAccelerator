@@ -39,6 +39,10 @@ interface CampaignAttributes {
   budget_cap?: number;
   cost_per_lead_target?: number;
   expected_roi?: number;
+  tenant_id?: string | null;
+  brand_id?: string | null;
+  organization_id?: string | null;
+  sender_profile_id?: string | null;
   created_by?: string;
   capability_id?: string;
   mode_override?: string;
@@ -78,6 +82,10 @@ class Campaign extends Model<CampaignAttributes> implements CampaignAttributes {
   declare budget_cap: number;
   declare cost_per_lead_target: number;
   declare expected_roi: number;
+  declare tenant_id: string | null;
+  declare brand_id: string | null;
+  declare organization_id: string | null;
+  declare sender_profile_id: string | null;
   declare created_by: string;
   declare created_at: Date;
   declare updated_at: Date;
@@ -264,6 +272,15 @@ Campaign.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // --- multi-tenant ecosystem ownership ------------------------------------
+    // Declared because the DDL adds these columns and Sequelize only touches
+    // attributes the model knows about. schedulerService names them explicitly in
+    // its `attributes` list; without these declarations the query returns them as
+    // undefined and every campaign silently falls back to the legacy sender.
+    tenant_id: { type: DataTypes.UUID, allowNull: true },
+    brand_id: { type: DataTypes.UUID, allowNull: true },
+    organization_id: { type: DataTypes.UUID, allowNull: true },
+    sender_profile_id: { type: DataTypes.UUID, allowNull: true },
   },
   {
     sequelize,

@@ -31,6 +31,8 @@ interface FollowUpSequenceAttributes {
   description?: string;
   steps: SequenceStep[];
   is_active?: boolean;
+  /** Owning tenant. NULL means the shared platform sequence library. */
+  tenant_id?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -41,6 +43,7 @@ class FollowUpSequence extends Model<FollowUpSequenceAttributes> implements Foll
   declare description: string;
   declare steps: SequenceStep[];
   declare is_active: boolean;
+  declare tenant_id: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -70,6 +73,9 @@ FollowUpSequence.init(
       allowNull: false,
       defaultValue: true,
     },
+    // Declared because the DDL adds this column and Sequelize only touches
+    // attributes the model knows about. NULL = shared platform library.
+    tenant_id: { type: DataTypes.UUID, allowNull: true },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

@@ -8,6 +8,9 @@ interface EventLedgerAttributes {
   entity_type: string;
   entity_id: string;
   payload: any;
+  /** Multi-tenant ecosystem context. Nullable — most ledger events are platform-wide. */
+  tenant_id?: string | null;
+  brand_id?: string | null;
   created_at: Date;
 }
 
@@ -18,6 +21,8 @@ class EventLedger extends Model<EventLedgerAttributes> implements EventLedgerAtt
   declare entity_type: string;
   declare entity_id: string;
   declare payload: any;
+  declare tenant_id: string | null;
+  declare brand_id: string | null;
   declare created_at: Date;
 }
 
@@ -49,6 +54,12 @@ EventLedger.init(
       type: DataTypes.JSONB,
       allowNull: true,
     },
+    // --- multi-tenant ecosystem context ---------------------------------------
+    // Declared because the DDL adds these columns and Sequelize only touches
+    // attributes the model knows about. A column present in Postgres but absent
+    // here reads back undefined and silently drops writes.
+    tenant_id: { type: DataTypes.UUID, allowNull: true },
+    brand_id: { type: DataTypes.UUID, allowNull: true },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
