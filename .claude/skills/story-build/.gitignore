@@ -1,0 +1,21 @@
+# Runtime secrets. The skill pulls these from the prod container at the start of a
+# run and wipes them at the end (SKILL.md steps 0 and 3). If a run is interrupted
+# between those two steps, a live OPENAI_API_KEY and a live Basecamp token are left
+# sitting in the working tree, one `git add -A` away from being committed. The wipe
+# is the primary control; this is the one that still holds when the wipe never runs.
+.oaikey
+.bctok
+
+# Per-project run artifacts. The skill writes these next to its own scripts, so
+# without this they show up as untracked noise in every `git status` and invite
+# being swept into an unrelated commit. They are outputs of a run, not part of the
+# skill, and they carry client project detail that has no reason to be in the repo.
+scripts/*-deep-plan.json
+scripts/*-published.json
+scripts/gen.log
+scripts/gen_output*.log
+
+# Per-project story configs. EXAMPLE.json is the template and IS tracked; every
+# other config here describes a specific client build.
+story_configs/*.json
+!story_configs/EXAMPLE.json
