@@ -18,7 +18,7 @@ const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000);
 /** Route the declared query and the observed query to canned rows. */
 function mockDb(opts: {
   declared?: Record<string, unknown> | null;
-  observed?: Array<{ tag: string; occurred_at: Date }>;
+  observed?: Array<{ card_type: string; occurred_at: Date }>;
   failDeclared?: boolean;
   failObserved?: boolean;
 }) {
@@ -56,7 +56,7 @@ describe('the blend', () => {
   it('observed alone on ONE fresh engagement is deliberately NOT enough', async () => {
     // 1 - 2^-1 = 0.5 observed, × 0.6 = 0.30 — below 0.35, so ONE engagement is
     // deliberately not enough by itself.
-    mockDb({ observed: [{ tag: 'agentic_ai', occurred_at: NOW }] });
+    mockDb({ observed: [{ card_type: 'prompt_challenge', occurred_at: NOW }] });
     const a = await computeAffinities(ENR, { asOf: NOW });
     expect(a.find((x) => x.tag === 'agentic_ai')).toBeUndefined();
   });
@@ -65,8 +65,8 @@ describe('the blend', () => {
     // 1 - 2^-2 = 0.75, × 0.6 = 0.45.
     mockDb({
       observed: [
-        { tag: 'agentic_ai', occurred_at: NOW },
-        { tag: 'agentic_ai', occurred_at: NOW },
+        { card_type: 'prompt_challenge', occurred_at: NOW },
+        { card_type: 'prompt_challenge', occurred_at: NOW },
       ],
     });
     const a = await computeAffinities(ENR, { asOf: NOW });
@@ -76,7 +76,7 @@ describe('the blend', () => {
   it('combines both sources and reports both', async () => {
     mockDb({
       declared: { goal: 'build agents', resume_version: 0 },
-      observed: [{ tag: 'agentic_ai', occurred_at: NOW }],
+      observed: [{ card_type: 'prompt_challenge', occurred_at: NOW }],
     });
     const a = await computeAffinities(ENR, { asOf: NOW });
     const t = a.find((x) => x.tag === 'agentic_ai');
@@ -87,7 +87,7 @@ describe('the blend', () => {
   it('never exceeds 1', async () => {
     mockDb({
       declared: { goal: 'agent agentic autonomous', resume_version: 0 },
-      observed: Array.from({ length: 40 }, () => ({ tag: 'agentic_ai', occurred_at: NOW })),
+      observed: Array.from({ length: 40 }, () => ({ card_type: 'prompt_challenge', occurred_at: NOW })),
     });
     const a = await computeAffinities(ENR, { asOf: NOW });
     expect(a[0].confidence).toBeLessThanOrEqual(1);
@@ -96,7 +96,7 @@ describe('the blend', () => {
 
 describe('the 0.35 threshold', () => {
   it('drops anything below it', async () => {
-    mockDb({ observed: [{ tag: 'community', occurred_at: daysAgo(90) }] });
+    mockDb({ observed: [{ card_type: 'community_discussion', occurred_at: daysAgo(90) }] });
     const a = await computeAffinities(ENR, { asOf: NOW });
     expect(a).toEqual([]);
   });
@@ -108,7 +108,7 @@ describe('the 0.35 threshold', () => {
 
 describe('observed evidence decays on a 30-day half-life', () => {
   it('an engagement one half-life old counts half as much', async () => {
-    mockDb({ observed: [{ tag: 'agentic_ai', occurred_at: daysAgo(30) }] });
+    mockDb({ observed: [{ card_type: 'prompt_challenge', occurred_at: daysAgo(30) }] });
     const a = await computeAffinities(ENR, { asOf: NOW });
     // n = 0.5 → 1 - 2^-0.5 ≈ 0.293 → × 0.6 ≈ 0.176, under threshold
     expect(a.find((x) => x.tag === 'agentic_ai')).toBeUndefined();
@@ -117,10 +117,10 @@ describe('observed evidence decays on a 30-day half-life', () => {
   it('recent engagement outranks stale engagement of another tag', async () => {
     mockDb({
       observed: [
-        { tag: 'agentic_ai', occurred_at: NOW },
-        { tag: 'agentic_ai', occurred_at: NOW },
-        { tag: 'data_analytics', occurred_at: daysAgo(120) },
-        { tag: 'data_analytics', occurred_at: daysAgo(120) },
+        { card_type: 'prompt_challenge', occurred_at: NOW },
+        { card_type: 'prompt_challenge', occurred_at: NOW },
+        { card_type: 'market_intelligence', occurred_at: daysAgo(120) },
+        { card_type: 'market_intelligence', occurred_at: daysAgo(120) },
       ],
     });
     const a = await computeAffinities(ENR, { asOf: NOW });
@@ -170,8 +170,8 @@ describe('degrades rather than blinding the profile', () => {
     mockDb({
       failDeclared: true,
       observed: [
-        { tag: 'agentic_ai', occurred_at: NOW },
-        { tag: 'agentic_ai', occurred_at: NOW },
+        { card_type: 'prompt_challenge', occurred_at: NOW },
+        { card_type: 'prompt_challenge', occurred_at: NOW },
       ],
     });
     const a = await computeAffinities(ENR, { asOf: NOW });
@@ -193,8 +193,8 @@ describe('degrades rather than blinding the profile', () => {
 });
 
 describe('the tag vocabulary is closed', () => {
-  it('ignores a curriculum type outside the vocabulary', async () => {
-    mockDb({ observed: [{ tag: 'some_unrelated_type', occurred_at: NOW }] });
+  it('ignores a curriculum type that says nothing about interest', async () => {
+    mockDb({ observed: [{ card_type: 'github_sync', occurred_at: NOW }] });
     const a = await computeAffinities(ENR, { asOf: NOW });
     expect(a).toEqual([]);
   });
