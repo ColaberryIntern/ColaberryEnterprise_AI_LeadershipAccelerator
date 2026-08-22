@@ -184,6 +184,15 @@ the same diff.
 **Reality:** `/tests/systemV2` needs a running stack and staging credentials unavailable in
 this environment.
 
-**Resolution:** the specs are written and committed; they are **reported as not executed**, not
-as passing. This is a real gap in the Definition of Done and is stated as such in the
-validation report rather than papered over.
+**Resolution:** `tests/systemV2/ecosystemIsolation.e2e.js` is written and committed, and
+is **reported as not executed** rather than as passing. It aborts with exit 2 if the
+target is unreachable or the ecosystem is unseeded, so it cannot produce a green run
+over checks that never happened.
+
+**Correction:** an earlier revision of this entry and of `TEST_MATRIX.md` said the specs
+were already "authored" when no such file existed. That claim was false when written and
+has been made true rather than quietly softened.
+
+Running it against production is deliberately not done: the tenancy code is merged but
+not deployed, so a run would write test rows into the live CRM and fail on behaviour
+that is not live yet.
