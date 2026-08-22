@@ -28,15 +28,49 @@ function getAuthHeaders(): Record<string, string> {
 
 const isTestMode = (): boolean => env.paymentMode === 'test';
 
-async function apiRequest<T>(
+/** Outbound ceiling for a single PaySimple call. CLAUDE.md requires an explicit
+ *  timeout at every external boundary; this was a bare fetch that could hang
+ *  forever, which is how a batch job ends up half finished with no record of where
+ *  it stopped. 30s is generous for this API and still bounded. */
+const PAYSIMPLE_TIMEOUT_MS = 30_000;
+
+export type PaySimpleErrorClass =
+  | 'TimeoutError' | 'RateLimitError' | 'AuthError'
+  | 'UpstreamUnavailable' | 'ValidationError' | 'UpstreamError';
+
+/** A stable error_class beats a bare Error: "PaySimple API error" in a log tells
+ *  you nothing about whether to retry, re-auth, or fix the payload. */
+export class PaySimpleError extends Error {
+  readonly errorClass: PaySimpleErrorClass;
+  readonly status?: number;
+  constructor(message: string, errorClass: PaySimpleErrorClass, status?: number) {
+    super(message);
+    this.name = 'PaySimpleError';
+    this.errorClass = errorClass;
+    this.status = status;
+  }
+}
+
+function classifyStatus(status: number): PaySimpleErrorClass {
+  if (status === 401 || status === 403) return 'AuthError';
+  if (status === 429) return 'RateLimitError';
+  if (status >= 500) return 'UpstreamUnavailable';
+  if (status >= 400) return 'ValidationError';
+  return 'UpstreamError';
+}
+
+export async function apiRequest<T>(
   method: string,
   path: string,
   body?: unknown
 ): Promise<T> {
   const url = `${getBaseUrl()}${path}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PAYSIMPLE_TIMEOUT_MS);
   const options: RequestInit = {
     method,
     headers: getAuthHeaders(),
+    signal: controller.signal,
   };
   if (body) {
     options.body = JSON.stringify(body);
@@ -44,12 +78,26 @@ async function apiRequest<T>(
 
   console.log(`[PaySimple] ${method} ${path}${isTestMode() ? ' (TEST MODE)' : ''}`);
 
-  const response = await fetch(url, options);
+  let response: Response;
+  try {
+    response = await fetch(url, options);
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new PaySimpleError(`PaySimple ${method} ${path} timed out after ${PAYSIMPLE_TIMEOUT_MS}ms`, 'TimeoutError');
+    }
+    throw new PaySimpleError(`PaySimple ${method} ${path} failed: ${err?.message}`, 'UpstreamUnavailable');
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     const errorBody = await response.text();
     console.error(`[PaySimple] API error ${response.status}: ${errorBody}`);
-    throw new Error(`PaySimple API error ${response.status}: ${errorBody}`);
+    throw new PaySimpleError(
+      `PaySimple API error ${response.status}: ${errorBody}`,
+      classifyStatus(response.status),
+      response.status,
+    );
   }
 
   const data: any = await response.json();
