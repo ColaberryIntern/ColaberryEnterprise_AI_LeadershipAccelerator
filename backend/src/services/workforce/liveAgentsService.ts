@@ -95,6 +95,36 @@ export async function findBlueprintAdminUsers() {
 // `assigned_to_id`/status-filter usages in orgChartService.ts).
 export const OPEN_TICKET_STATUS_FILTER: WhereOperators = { [Op.notIn]: ['done', 'cancelled'] };
 
+/** The ONE canonical "how many OPEN tickets does this agent have" query — reused by
+ * `listLiveAgents()` below, `orgChartService.ts`'s per-card Leadership/Staff badges, and
+ * `agentDetailService.ts`'s Agent Detail page stat (Ticket Count Sync fix, 2026-08-21,
+ * session CC-20260818-x4nk continued). Extracted from this file's own `listLiveAgents()`
+ * loop, which already had this exactly right — the bug this run fixes was never in this
+ * query, it was in `orgChartService.ts` re-deriving its own (broken) version instead of
+ * reusing this one. A single per-agent query, not a batched cross-agent one: by
+ * construction every row this counts genuinely belongs to THIS agent (the WHERE clause is
+ * scoped to this agent's own match-id list), so there is no "which agent does this row
+ * actually belong to" attribution step for a caller to get wrong. Matches EITHER this
+ * agent's real `AdminUser.id` (`assigned_to_id`, the path every ticket uses going forward)
+ * OR any of its known legacy raw creator strings (`created_by_id`) — see
+ * `buildCreatorIdMatchList()`'s own header comment. */
+export async function countOpenTicketsForAgent(adminUserId: string, agent: AiAgent): Promise<number> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  return Ticket.count({
+    where: {
+      [Op.and]: [
+        { status: OPEN_TICKET_STATUS_FILTER },
+        {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+            { created_by_id: { [Op.in]: matchList } },
+          ],
+        },
+      ],
+    },
+  });
+}
+
 export async function listLiveAgents(): Promise<LiveAgent[]> {
   const adminUsers = await findBlueprintAdminUsers();
   if (adminUsers.length === 0) return [];
@@ -139,27 +169,11 @@ export async function listLiveAgents(): Promise<LiveAgent[]> {
       if (member) liveStatus = derivePresence(member.last_active_at);
     }
 
-    // Agent Alias & Identity Fix — matches EITHER this agent's real AdminUser.id
-    // (assigned_to_id, the path every ticket uses going forward) OR any of its
-    // known legacy raw creator strings (created_by_id — the ONLY field 100% of
-    // this agent's historical tickets ever populated, verified live against
-    // production). An agent with zero legacy aliases (e.g. Reese) gets a match
-    // list of exactly its own id, so this query is byte-for-byte equivalent to
-    // the original for agents that never needed the alias fallback.
-    const matchList = buildCreatorIdMatchList(adminUser.id, agent);
-    const openTicketCount = await Ticket.count({
-      where: {
-        [Op.and]: [
-          { status: OPEN_TICKET_STATUS_FILTER },
-          {
-            [Op.or]: [
-              { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
-              { created_by_id: { [Op.in]: matchList } },
-            ],
-          },
-        ],
-      },
-    });
+    // Ticket Count Sync fix (2026-08-21) — was an inline query here; now the ONE
+    // shared per-agent count function (see its own header comment above), also
+    // reused by orgChartService.ts and agentDetailService.ts. Byte-for-byte
+    // equivalent WHERE clause to what ran here before this extraction.
+    const openTicketCount = await countOpenTicketsForAgent(adminUser.id, agent);
 
     return {
       id: agent.id,

@@ -406,6 +406,18 @@ import ExplorerScoreSnapshot from './ExplorerScoreSnapshot';
 import ExplorerExperimentAssignment from './ExplorerExperimentAssignment';
 import ExplorerContentAsset from './ExplorerContentAsset';
 
+// --- Multi-tenant ecosystem foundation ---
+import Tenant from './Tenant';
+import Brand from './Brand';
+import BrandDomain from './BrandDomain';
+import SenderProfile from './SenderProfile';
+import PlatformIdentity from './PlatformIdentity';
+import PlatformIdentityLink from './PlatformIdentityLink';
+import TenantMembership from './TenantMembership';
+import LeadTenantContext from './LeadTenantContext';
+import CommunicationPreference from './CommunicationPreference';
+import TenantAccessAudit from './TenantAccessAudit';
+
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
 Enrollment.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
@@ -1457,6 +1469,17 @@ export {
   // CAPE — Colaberry Adaptive Path Engine (Phase 6: Feed Control governance board)
   CapeGovernancePolicy,
   CapeLifecycleModePolicy,
+  // Multi-tenant ecosystem foundation
+  Tenant,
+  Brand,
+  BrandDomain,
+  SenderProfile,
+  PlatformIdentity,
+  PlatformIdentityLink,
+  TenantMembership,
+  LeadTenantContext,
+  CommunicationPreference,
+  TenantAccessAudit,
 };
 
 // --- Enrollment Lead associations ---
@@ -1641,3 +1664,57 @@ ExplorerExperimentAssignment.belongsTo(Enrollment, { foreignKey: 'enrollment_id'
 // systems (network_videos, blog_posts, cohorts, ...) keyed by (source_system,
 // source_id), not a FK-joined entity. Associating it would imply a referential
 // integrity this table deliberately does not have.
+
+// --- Multi-tenant ecosystem associations ---
+// Only the tenancy spine and the lead-context bridge are associated. The tenancy
+// columns added to visitor_sessions, page_events, campaigns and organizations are
+// deliberately NOT associated: those tables are scoped by explicit where-clauses in
+// the service layer, and adding eager-loadable associations would invite an unscoped
+// `include` to leak a foreign tenant's rows through a route that looked innocent.
+Tenant.hasMany(Brand, { foreignKey: 'tenant_id', as: 'brands', onDelete: 'CASCADE' });
+Brand.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+
+Tenant.hasMany(BrandDomain, { foreignKey: 'tenant_id', as: 'domains', onDelete: 'CASCADE' });
+Brand.hasMany(BrandDomain, { foreignKey: 'brand_id', as: 'domains', onDelete: 'CASCADE' });
+BrandDomain.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+BrandDomain.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+
+Brand.hasMany(SenderProfile, { foreignKey: 'brand_id', as: 'senderProfiles', onDelete: 'CASCADE' });
+SenderProfile.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+SenderProfile.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+SenderProfile.belongsTo(BrandDomain, { foreignKey: 'sending_domain_id', as: 'sendingDomain' });
+SenderProfile.belongsTo(BrandDomain, { foreignKey: 'tracking_domain_id', as: 'trackingDomain' });
+
+PlatformIdentity.hasMany(PlatformIdentityLink, {
+  foreignKey: 'platform_identity_id',
+  as: 'links',
+  onDelete: 'CASCADE',
+});
+PlatformIdentityLink.belongsTo(PlatformIdentity, {
+  foreignKey: 'platform_identity_id',
+  as: 'identity',
+});
+
+PlatformIdentity.hasMany(TenantMembership, {
+  foreignKey: 'platform_identity_id',
+  as: 'memberships',
+  onDelete: 'CASCADE',
+});
+TenantMembership.belongsTo(PlatformIdentity, { foreignKey: 'platform_identity_id', as: 'identity' });
+TenantMembership.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+TenantMembership.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+// The canonical lead keeps its identity; the context rows carry the brand relationships.
+Lead.hasMany(LeadTenantContext, { foreignKey: 'lead_id', as: 'tenantContexts', onDelete: 'CASCADE' });
+LeadTenantContext.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+LeadTenantContext.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+LeadTenantContext.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+Lead.hasMany(CommunicationPreference, {
+  foreignKey: 'lead_id',
+  as: 'communicationPreferences',
+  onDelete: 'CASCADE',
+});
+CommunicationPreference.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+CommunicationPreference.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+CommunicationPreference.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });

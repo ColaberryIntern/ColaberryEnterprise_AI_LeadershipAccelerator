@@ -70,6 +70,7 @@ import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotific
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
+import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -2399,6 +2400,19 @@ async function start(): Promise<void> {
   // suspended without deleting the row and cascading its members away; and there was
   // no org<->cohort relationship anywhere in the schema.
   await ensureOrgAccountSchema();
+  // Multi-tenant ecosystem foundation: 9 new tables (tenants, brands, brand_domains,
+  // sender_profiles, platform_identities, platform_identity_links, tenant_memberships,
+  // lead_tenant_contexts, communication_preferences) plus additive nullable tenancy
+  // columns on lead_sources, entry_points, visitor_sessions, page_events, campaigns,
+  // follow_up_sequences, organizations, org_members and event_ledger.
+  //
+  // Runs AFTER ensureOrgAccountSchema because it adds columns to `organizations` and
+  // `org_members`, and BEFORE anything that reads tenancy, because a missing table here
+  // degrades context resolution to null rather than failing — which is the intended
+  // behaviour for tracking but would silently unscope an admin read if the ordering
+  // were reversed. Additive only; no NOT NULL, no backfill (backfills are separate
+  // explicitly-invoked scripts, never boot work).
+  await ensureMultiTenantSchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.

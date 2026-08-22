@@ -63,19 +63,46 @@ const TICKET_ICON = (
 
 /**
  * Org Chart v4 (2026-08-20) — every AI Leadership/AI Staff card's
- * ticket-filter button. Opens the ticket board filtered to exactly this
+ * ticket-filter control. Opens the ticket board filtered to exactly this
  * agent's tickets in a NEW TAB — `noopener,noreferrer` is a real security
  * requirement (the opened page must never get a `window.opener` reference
- * back into this admin session), not a style choice. `e.preventDefault()` +
- * `e.stopPropagation()` because this button renders NESTED inside a Staff
- * card's own `<Link>` (and inside a Leadership card's own onClick button) —
- * without both, the click would also trigger the parent card's own
- * navigation/drawer-open behavior.
+ * back into this admin session), not a style choice.
+ *
+ * Ticket Count Sync fix, Task 2 (2026-08-21, session CC-20260818-x4nk
+ * continued) — Ali, live: clicking the ticket-COUNT NUMBER (the natural click
+ * target) did nothing; only the small icon next to it navigated anywhere.
+ * Root cause: the count (`.wl`) and the icon (`.wf-toggle`) were two separate
+ * elements, and only the icon had `onClick`. Fixed by merging both into ONE
+ * clickable, keyboard-operable region (the `.wf-emp-actions` wrapper itself
+ * carries the handlers below; `.wl`/`.wf-toggle` are now purely visual
+ * children) rather than adding a second, redundant `onClick` to `.wl`
+ * alongside the icon's — one interactive target reads better for both mouse
+ * and keyboard users than two adjacent controls doing the identical thing.
  */
-function openAgentTickets(agentName: string, e: React.MouseEvent): void {
+function navigateToAgentTickets(agentName: string): void {
+  window.open(`/admin/tickets?creator=${encodeURIComponent(agentName)}`, '_blank', 'noopener,noreferrer');
+}
+
+// `e.preventDefault()` + `e.stopPropagation()` because this control renders
+// NESTED inside a Staff card's own `<Link>` (and inside a Leadership card's
+// own onClick button) — without both, the click would also trigger the
+// parent card's own navigation/drawer-open behavior.
+function handleAgentTicketsClick(agentName: string, e: React.MouseEvent): void {
   e.preventDefault();
   e.stopPropagation();
-  window.open(`/admin/tickets?creator=${encodeURIComponent(agentName)}`, '_blank', 'noopener,noreferrer');
+  navigateToAgentTickets(agentName);
+}
+
+// Keyboard equivalent — this is a `<div role="button">`, not a native
+// `<button>` (can't nest a real `<button>` inside the Leadership card's own
+// `<button>`, and invalid HTML aside, a Staff card's `<Link>` shouldn't
+// contain one either), so Enter/Space activation has to be wired explicitly;
+// a native button gets this for free, a role="button" div does not.
+function handleAgentTicketsKeyDown(agentName: string, e: React.KeyboardEvent): void {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  e.stopPropagation();
+  navigateToAgentTickets(agentName);
 }
 
 const OrgChartSection: React.FC = () => {
@@ -245,18 +272,17 @@ const OrgChartSection: React.FC = () => {
               </div>
               <div className="wf-emp-meta">
                 <span className="wf-chip trunc" title={l.reports_to_summary} style={{ flex: '1 1 auto', minWidth: 0 }}>{l.reports_to_summary}</span>
-                <div className="wf-emp-actions">
+                <div
+                  className="wf-emp-actions"
+                  role="button"
+                  tabIndex={0}
+                  title={`View ${l.display_name}'s tickets`}
+                  aria-label={`View ${l.display_name}'s tickets`}
+                  onClick={(e) => handleAgentTicketsClick(l.agent_name, e)}
+                  onKeyDown={(e) => handleAgentTicketsKeyDown(l.agent_name, e)}
+                >
                   <div className="wl"><b>{l.open_ticket_count}</b><br />open tickets</div>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    className="wf-toggle"
-                    title={`View ${l.display_name}'s tickets`}
-                    aria-label={`View ${l.display_name}'s tickets`}
-                    onClick={(e) => openAgentTickets(l.agent_name, e)}
-                  >
-                    {TICKET_ICON}
-                  </span>
+                  <span className="wf-toggle" aria-hidden="true">{TICKET_ICON}</span>
                 </div>
               </div>
             </button>
@@ -280,18 +306,17 @@ const OrgChartSection: React.FC = () => {
               </div>
               <div className="wf-emp-meta">
                 <span className="wf-chip trunc" title={s.reports_to_summary} style={{ flex: '1 1 auto', minWidth: 0 }}>{s.reports_to_summary}</span>
-                <div className="wf-emp-actions">
+                <div
+                  className="wf-emp-actions"
+                  role="button"
+                  tabIndex={0}
+                  title={`View ${s.display_name}'s tickets`}
+                  aria-label={`View ${s.display_name}'s tickets`}
+                  onClick={(e) => handleAgentTicketsClick(s.agent_name, e)}
+                  onKeyDown={(e) => handleAgentTicketsKeyDown(s.agent_name, e)}
+                >
                   <div className="wl"><b>{s.open_ticket_count}</b><br />open tickets</div>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    className="wf-toggle"
-                    title={`View ${s.display_name}'s tickets`}
-                    aria-label={`View ${s.display_name}'s tickets`}
-                    onClick={(e) => openAgentTickets(s.agent_name, e)}
-                  >
-                    {TICKET_ICON}
-                  </span>
+                  <span className="wf-toggle" aria-hidden="true">{TICKET_ICON}</span>
                 </div>
               </div>
             </Link>

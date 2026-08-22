@@ -93,7 +93,12 @@ export default function AgentDetailPage() {
             <StatCard label="Persona version" value={agent.persona_version || '—'} icon="git-commit-line" tone="neutral" />
           </div>
           <div className="col-6 col-lg-3">
-            <StatCard label="Open tickets" value={tickets.filter((t) => t.status !== 'done' && t.status !== 'cancelled').length} icon="ticket-2-line" tone="neutral" />
+            {/* Ticket Count Sync fix (2026-08-21) — was tickets.filter(open).length,
+                which undercounts for any agent whose true ticket volume exceeds the
+                tickets array's 50-row cap (e.g. InboxCaseEngine). open_ticket_count is
+                the server's true count, via the same shared query the org chart's
+                badges use — see agentDetailApi.ts's AgentDetail.open_ticket_count. */}
+            <StatCard label="Open tickets" value={detail.open_ticket_count} icon="ticket-2-line" tone="neutral" />
           </div>
         </div>
       </PageHeader>

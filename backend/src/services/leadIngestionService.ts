@@ -143,6 +143,49 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
     }
     await lead.update(leadUpdates as any);
 
+    // 8b. Ecosystem context: record this person's relationship with the brand that owns
+    //     the source. The canonical Lead is NOT duplicated — a person who already exists
+    //     from another brand gets a second context row here, never a second lead.
+    //
+    //     Non-fatal by design, and deliberately AFTER the lead is committed: a tenancy
+    //     failure must never lose a lead. An unclassified source (no brand_id yet during
+    //     migration) simply skips this, which is the normal state until the backfill runs.
+    const sourceTenantId = (source as any).tenant_id as string | null;
+    const sourceBrandId = (source as any).brand_id as string | null;
+    if (sourceTenantId && sourceBrandId) {
+      try {
+        const { ensureLeadTenantContext } = require('../modules/tenancy/leadContextService');
+        await ensureLeadTenantContext({
+          leadId: lead.id,
+          tenantId: sourceTenantId,
+          brandId: sourceBrandId,
+          // The entry point names the experience the person came through, which is a
+          // better relationship label than the generic form type.
+          relationshipType: (entry as any).entry_type || entry.slug,
+          consentContact: Boolean(normalized.consent_contact),
+          consentSource: `${source.slug}/${entry.slug}`,
+          attribution: {
+            sourceId: source.id,
+            entryPointId: entry.id,
+            visitorId: (lead as any).visitor_id || null,
+          },
+        });
+      } catch (err: any) {
+        console.warn(`[LeadIngest] Tenant context failed (non-blocking): ${err?.message}`);
+      }
+    } else {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'lead-ingest',
+          event: 'tenant_context_unresolved',
+          outcome: 'partial',
+          context: { source_slug: source.slug, entry_slug: entry.slug, lead_id: lead.id },
+        }),
+      );
+    }
+
     // 9. Attribution: if visitor fingerprint or session id present, link to visitor.
     const fingerprint: string | undefined = normalized.metadata?.visitor_fingerprint || req.sessionId;
     if (fingerprint) {

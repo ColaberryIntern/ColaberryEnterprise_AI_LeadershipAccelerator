@@ -876,8 +876,14 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     .replace(/(https?:\/\/(?:enterprise|advisor)\.colaberry\.ai\/[^\s"<>]*?)[.,;:!?)]+(?=[\s<"']|$)/gi, '$1');
   let campaignType = '';
 
+  let senderProfileId: string | null = null;
+  let campaignTenantId: string | null = null;
+  let campaignBrandId: string | null = null;
+
   if (action.campaign_id) {
-    const campaign = await Campaign.findByPk(action.campaign_id, { attributes: ['channel', 'type', 'settings'] });
+    const campaign = await Campaign.findByPk(action.campaign_id, {
+      attributes: ['channel', 'type', 'settings', 'tenant_id', 'brand_id', 'sender_profile_id'],
+    });
     if (campaign) {
       campaignType = campaign.type || '';
       // Auto-inject campaign tracking into all site links
@@ -888,10 +894,61 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
         campaignType || 'campaign',
         action.lead_id,
       );
-      // Use per-campaign sender if configured
       const settings = (campaign as any).settings || {};
-      if (settings.sender_email) senderEmail = settings.sender_email;
-      if (settings.sender_name) senderName = settings.sender_name;
+      campaignTenantId = (campaign as any).tenant_id || null;
+      campaignBrandId = (campaign as any).brand_id || null;
+
+      // Sender resolution, ecosystem-aware.
+      //
+      // Prefers the campaign's approved sender profile, then the brand default, then
+      // the legacy `settings.sender_email` this line used to read directly, then the
+      // module default. Every fallback past the first logs a deprecation so the removal
+      // project has usage data rather than a guess.
+      //
+      // Wrapped and non-fatal on purpose: a resolver fault must degrade to today's
+      // behaviour, never stop a campaign that has been sending fine for a year. The
+      // ONE exception is a cross-brand sender profile, which is re-thrown below —
+      // sending CPN mail over the AI Flotation envelope is a forgery, and falling back
+      // silently would produce exactly that.
+      try {
+        const { resolveCampaignSender, assertCanSendLive, SenderBrandMismatchError } =
+          require('../modules/communications/senderProfileService');
+        const resolved = await resolveCampaignSender({
+          campaignId: action.campaign_id,
+          tenantId: campaignTenantId,
+          brandId: campaignBrandId,
+          senderProfileId: (campaign as any).sender_profile_id || null,
+          settings,
+        });
+        senderEmail = resolved.fromEmail;
+        senderName = resolved.fromName;
+        senderProfileId = resolved.profileId;
+
+        // Preflight gates ecosystem-brand sends only. Applying it to the existing
+        // Colaberry pipeline would stop today's mail dead: those campaigns have no
+        // sender profile and no verified BrandDomain row yet, so every one of them
+        // would fail a check that describes a state they were never migrated into.
+        // A campaign that HAS been given a profile has opted into the stricter path.
+        if (resolved.profileId) {
+          await assertCanSendLive(resolved);
+        }
+      } catch (err: any) {
+        if (err?.name === 'SenderBrandMismatchError' || err?.name === 'SenderPreflightError') {
+          throw err;
+        }
+        console.warn(
+          JSON.stringify({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            service: 'scheduler',
+            event: 'sender_resolution_degraded',
+            outcome: 'partial',
+            context: { campaign_id: action.campaign_id, message: err?.message },
+          }),
+        );
+        if (settings.sender_email) senderEmail = settings.sender_email;
+        if (settings.sender_name) senderName = settings.sender_name;
+      }
 
       // Append Ali's signature for executive_outreach campaigns
       if (settings.ali_signature && campaignType === 'executive_outreach') {
@@ -907,6 +964,13 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     mcMetadata.trigger = 'ali_personal_outreach';
     mcMetadata.lead_id = action.lead_id;
   }
+  // Ecosystem context, so a delivery event coming back from the provider can be mapped
+  // to a brand instead of arriving as a bare message id. Only added when the campaign
+  // actually carries tenancy: existing keys are untouched, so messages already in
+  // flight with the old metadata shape keep resolving in the webhook exactly as before.
+  if (campaignTenantId) mcMetadata.tenant_id = campaignTenantId;
+  if (campaignBrandId) mcMetadata.brand_id = campaignBrandId;
+  if (senderProfileId) mcMetadata.sender_profile_id = senderProfileId;
 
   // The sequence step content appends its own CAN-SPAM line; strip it so the single legal
   // footer rendered by the wrapper is not duplicated.
@@ -2276,6 +2340,38 @@ export function startScheduler(): void {
     });
   }, { timezone: 'America/Chicago' });
   console.log('[Scheduler] Missed Opportunities Report: daily at 8:00 PM CT');
+
+  // -- Curriculum video link health — daily at 6:20 AM CT --
+  // 141 of the curriculum's 155 videos are third-party YouTube links that can be
+  // deleted, made private or have embedding disabled with no change on our side.
+  // Because every week's evaluation is gated on section_complete{learn, week},
+  // one dead video silently seals that week's evaluation -> survey -> reflection
+  // chain. Until 2026-08-21 the only detector was a student writing in.
+  //
+  // Runs before the working day so a break is triaged before class. The check is
+  // idempotent (one run per CT date) and read-only: it never edits a card,
+  // because choosing a replacement video is a curriculum judgement.
+  //
+  // OFF unless CURRICULUM_VIDEO_HEALTH_ENABLED=true. Alerts match the catch-all
+  // alert_subscriptions row, so enabling this starts real notifications; run it
+  // once with { dryRun: true } first.
+  if (env.curriculumVideoHealthEnabled) {
+    cron.schedule('20 6 * * *', () => {
+      instrumentCronJob('CurriculumVideoLinkHealth', async () => {
+        const { runVideoLinkHealthCheck } = require('./curriculumHealth/videoLinkHealthService');
+        const result = await runVideoLinkHealthCheck();
+        console.log('[Scheduler] Curriculum video link health:', JSON.stringify({
+          skipped: result.skipped, checked: result.checked, healthy: result.healthy,
+          unknown: result.unknown, failures: result.failures.length, sealed_weeks: result.sealed_weeks,
+        }));
+      }).catch((err: any) => {
+        console.error('[Scheduler] Curriculum video link health error:', err.message);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] Curriculum video link health: daily at 6:20 AM CT');
+  } else {
+    console.log('[Scheduler] Curriculum video link health: DISABLED (set CURRICULUM_VIDEO_HEALTH_ENABLED=true)');
+  }
 
   // -- Deleted/Spam ingestion for Deleted-Email Recovery — hourly --
   // Keeps inbox_deleted_emails fresh so the report's "Deleted But Potentially

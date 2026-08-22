@@ -131,12 +131,31 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
         continue;
       }
 
+      // Ecosystem context, restored from the metadata the scheduler attached at send.
+      //
+      // Read defensively and stored alongside the existing fields rather than replacing
+      // them: messages sent before the scheduler started attaching these keys are still
+      // in flight and still generating opens and clicks weeks later. Those events carry
+      // only the old metadata shape and must keep resolving exactly as they do today,
+      // so absence is normal and never an error.
+      //
+      // Without this a delivery event is a bare message id, and there is no way to
+      // report open or bounce rates per brand, which is half of what per-brand sending
+      // is for.
+      const tenantId = typeof metadata.tenant_id === 'string' ? metadata.tenant_id : null;
+      const brandId = typeof metadata.brand_id === 'string' ? metadata.brand_id : null;
+      const senderProfileId =
+        typeof metadata.sender_profile_id === 'string' ? metadata.sender_profile_id : null;
+
       await recordWebhookOutcome(scheduledEmailId, outcome, {
         mandrill_event: event.event,
         mandrill_ts: event.ts,
         ip: event.ip,
         user_agent: event.user_agent,
         url: event.url, // For click events
+        ...(tenantId ? { tenant_id: tenantId } : {}),
+        ...(brandId ? { brand_id: brandId } : {}),
+        ...(senderProfileId ? { sender_profile_id: senderProfileId } : {}),
       });
 
       // D2 FIX — suppress a hard-bounced address globally.

@@ -61,6 +61,13 @@ export const env = {
   // so an unsubscribe token can never be cross-used as a JWT and vice versa.
   unsubscribeSecret: process.env.UNSUBSCRIBE_SECRET || resolveJwtSecret(),
 
+  // Cross-domain journey link signing — HMAC secret for the `jx` token that carries
+  // visitor/lead/campaign context between ecosystem domains. Same fallback and same
+  // domain-separation reasoning as unsubscribeSecret above (see journeyLinkService).
+  // These tokens replace putting a raw email in a cross-domain URL, which is what the
+  // tracker's `?email=` parameter does today.
+  journeyLinkSecret: process.env.JOURNEY_LINK_SECRET || resolveJwtSecret(),
+
   // Email (SMTP)
   smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
   smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
@@ -96,6 +103,11 @@ export const env = {
   // Default off protects against the scheduled lead-gen agents draining credits
   // unattended. See CC-20260710-a9f2 (Apollo credit-leak audit).
   apolloEnabled: process.env.APOLLO_ENABLED === 'true',
+
+  // Curriculum video link health check (daily). Default OFF so the job cannot
+  // start raising alerts — which fan out to the catch-all alert subscription —
+  // until someone deliberately turns it on and has watched one dry run.
+  curriculumVideoHealthEnabled: process.env.CURRICULUM_VIDEO_HEALTH_ENABLED === 'true',
 
   // Mandrill
   mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
