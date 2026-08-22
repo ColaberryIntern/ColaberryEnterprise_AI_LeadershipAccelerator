@@ -238,14 +238,18 @@ describe('the page reads story first, then done means, then how to build it', ()
 
     const boxes = container.querySelectorAll<HTMLInputElement>('.rt-acc input[type="checkbox"]');
     expect(boxes).toHaveLength(2);
-    expect(container.querySelector('.rt-step-c')!.textContent).toBe('0 of 2 confirmed');
+    // "from your repo" is part of the count on purpose. This test's own premise
+    // — that a self-tick must not move the number — is exactly what made the
+    // bare "0 of 2 confirmed" read as a broken scoreboard to the student who
+    // had just ticked both boxes. See AcceptanceChecklist.honesty.test.tsx.
+    expect(container.querySelector('.rt-step-c')!.textContent).toBe('0 of 2 confirmed from your repo');
 
     // A student ticking a box is a note to self. It must NOT move the confirmed
     // count — that number answers "what has GitHub confirmed", and letting a
     // self-tick raise it would let a student read "2 of 2 confirmed" off a page
     // where the platform has confirmed nothing.
     await act(async () => { boxes[0].click(); });
-    expect(container.querySelector('.rt-step-c')!.textContent).toBe('0 of 2 confirmed');
+    expect(container.querySelector('.rt-step-c')!.textContent).toBe('0 of 2 confirmed from your repo');
     expect(container.querySelector('.rt-acc-self')).toBeTruthy();
     expect(container.querySelector('.rt-acc-tag.self')!.textContent).toContain('not confirmed');
     // And it is still visibly NOT a confirmation.
@@ -286,7 +290,7 @@ describe('completion is granted, not claimed', () => {
     mockVerification = verification();
     await mount();
 
-    expect(container.querySelector('.rt-step-c')!.textContent).toBe('1 of 2 confirmed');
+    expect(container.querySelector('.rt-step-c')!.textContent).toBe('1 of 2 confirmed from your repo');
     const confirmed = container.querySelectorAll('.rt-acc-ok');
     expect(confirmed).toHaveLength(1);
     // The confirmed box is server truth, so it cannot be un-ticked by hand.

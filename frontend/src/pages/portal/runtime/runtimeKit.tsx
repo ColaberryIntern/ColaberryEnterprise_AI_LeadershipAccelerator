@@ -82,7 +82,9 @@ a.rt-btn{text-decoration:none}
 .rt-lead p{margin:0;font-size:16.5px;line-height:1.5;font-weight:500;letter-spacing:-.005em}
 .rt-req{display:inline-block;margin-top:11px;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--berry);background:var(--berry-soft);border-radius:999px;padding:4px 10px}
 .rt-step{margin-top:22px}
-.rt-step-h{display:flex;align-items:center;gap:9px;margin:0 0 9px}
+/* Wraps rather than overflows: the acceptance count now says where the number
+   comes from, and at half screen a no-wrap row would push it off the edge. */
+.rt-step-h{display:flex;align-items:center;gap:9px;margin:0 0 9px;flex-wrap:wrap}
 .rt-step-n{flex:none;width:19px;height:19px;border-radius:50%;background:var(--sunken);color:var(--muted);font-family:var(--mono);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .rt-step-t{font-size:13.5px;font-weight:700;letter-spacing:-.005em}
 .rt-step-c{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted2)}
@@ -90,13 +92,43 @@ a.rt-btn{text-decoration:none}
 .rt-step .rt-card+.rt-card{margin-top:10px}
 /* Acceptance is a pre-flight the student WALKS, so it ticks. Bullets invite
    re-reading; checkboxes invite finishing. Ticks are working memory only —
-   "Mark done" is still the one thing that reports progress. */
+   the PLATFORM confirming the criterion out of the repo is the one thing that
+   reports progress. */
 .rt-acc{list-style:none;margin:0;padding:0}
 .rt-acc li{margin:0;border-top:1px solid var(--line-soft)}
 .rt-acc li:first-child{border-top:0}
 .rt-acc label{display:flex;gap:10px;align-items:flex-start;padding:9px 2px;cursor:pointer;font-size:13.5px;line-height:1.5}
-.rt-acc input{margin:3px 0 0;flex:none;width:15px;height:15px;accent-color:var(--leaf);cursor:pointer}
-.rt-acc input:checked+span{color:var(--muted);text-decoration:line-through}
+/* NEUTRAL, not leaf. Green is what "confirmed" looks like everywhere else on
+   this page — the tag, the verified banner, the header pill — so an unconfirmed
+   box that ticked green was claiming the platform's own signal for a note
+   saved in one browser. Confirmed rows take the leaf back below. */
+.rt-acc input{margin:3px 0 0;flex:none;width:15px;height:15px;accent-color:var(--muted2);cursor:pointer}
+/* SCOPED TO CONFIRMED ROWS. NOTE: this whole sheet is a template literal, so no
+   backticks below. This rule used to read .rt-acc input:checked+span, which
+   struck through ANY ticked box at specificity (0,2,2) and so beat the
+   self-tick's own text-decoration:none reset at (0,1,2). The result was that a
+   student's private note rendered wearing strike-through — the universal "done"
+   mark — which is the exact reading this panel exists to prevent. */
+.rt-acc-ok input:checked+span{color:var(--muted);text-decoration:line-through}
+
+/* ── WHAT THESE BOXES ARE ────────────────────────────────────────────────────
+   Above the first row and not conditional on anything. The sentence explaining
+   that a tick confirms nothing used to render only once the student had already
+   ticked something, so the warning arrived strictly after the mistake it
+   described. Placement is the fix; the words are secondary. Quiet by design —
+   this is an orientation line, not an error. */
+.rt-acc-note{margin:0 0 2px;padding:0 0 12px;border-bottom:1px solid var(--line-soft);
+  font-size:12.5px;line-height:1.55;color:var(--muted)}
+.rt-acc-note-h{font-size:12.5px;font-weight:700;color:var(--ink);margin:0 0 5px}
+.rt-acc-note p{margin:0 0 6px}
+.rt-acc-note p:last-child{margin:0}
+.rt-acc-note code{font-family:var(--mono);font-size:11.5px;background:var(--sunken);padding:1px 5px;border-radius:4px}
+/* Present to a screen reader, absent to everyone else. The page renders its own
+   chrome instead of PortalShell, so it carries its own rather than borrowing
+   Bootstrap's .visually-hidden and depending on a global that is not this
+   sheet's to guarantee. */
+.rt-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* ── CONFIRMED vs SELF-TICKED ────────────────────────────────────────────────
    Two states that must never be mistaken for each other. A criterion the
