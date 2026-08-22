@@ -202,7 +202,14 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
             )}
             {repoSync === 'no_access' && (
               <div className="ba-sync warn">
-                Saved here, but we can no longer write to your repository. Re-connect it to resume syncing.
+                Saved here, but <b>not in GitHub</b> — Colaberry doesn&rsquo;t have permission to write to your
+                repository. Reconnect it, or accept the pending invitation, and everything syncs automatically.
+              </div>
+            )}
+            {repoSync === 'repo_gone' && (
+              <div className="ba-sync warn">
+                Saved here, but we couldn&rsquo;t find the repository you connected &mdash; it may have been
+                renamed or deleted. Reconnect it and everything syncs automatically.
               </div>
             )}
             {(repoSync === 'failed' || repoSync === 'not_configured') && (
