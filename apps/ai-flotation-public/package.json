@@ -1,0 +1,11 @@
+{
+  "name": "@refactored/ai-flotation-public",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Flotation public skeleton — proves ecosystem plumbing, not a marketing site.",
+  "scripts": {
+    "build": "node build.js",
+    "validate:boundaries": "node ../../scripts/validate-app-boundaries.js"
+  },
+  "dependencies": {}
+}
