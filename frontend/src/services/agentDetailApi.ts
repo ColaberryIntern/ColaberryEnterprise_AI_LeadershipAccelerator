@@ -57,6 +57,12 @@ export interface AgentDetail {
   };
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';
+  /** The agent's TRUE open-ticket count (Ticket Count Sync fix, 2026-08-21) —
+   * computed server-side via the same shared query the org chart's badges use,
+   * NOT derived from `tickets` below (which is capped at 50, most-recent-first,
+   * and can undercount for a high-volume agent). Use this field for any
+   * "how many open tickets does this agent have" display. */
+  open_ticket_count: number;
   tickets: AgentDetailTicket[];
   capabilities: AgentDetailCapabilities;
   reports_to: AgentDetailReportsTo | null;

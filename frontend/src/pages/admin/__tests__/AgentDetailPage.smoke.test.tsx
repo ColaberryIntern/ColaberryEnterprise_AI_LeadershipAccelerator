@@ -59,6 +59,11 @@ const DETAIL: AgentDetail = {
   },
   identity: null,
   live_status: 'online',
+  // Ticket Count Sync fix (2026-08-21) — the server's TRUE open count,
+  // independent of the tickets array below (which is display-capped). Matches
+  // this fixture's 1 open ticket (t-1) + 1 closed (t-2) for consistency, though
+  // the two are intentionally separate fields/queries in the real service.
+  open_ticket_count: 1,
   tickets: [
     { id: 't-1', ticket_number: 1, title: 'Reaching out to Jordan Rivera', status: 'in_progress', priority: 'high', type: 'reese_autonomous_outreach', created_at: null, updated_at: '2026-08-12T15:00:00Z' },
     { id: 't-2', ticket_number: 2, title: 'DM conversation with Alex Chen', status: 'done', priority: 'medium', type: 'student_support', created_at: null, updated_at: '2026-01-15T15:00:00Z' },
@@ -143,6 +148,18 @@ describe('AgentDetailPage — Ticket activity table: colored status badges + CST
     // than one shared coincidental string.
     expect(container.textContent).toContain('9:00 AM CST');
     expect(container.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
+  });
+
+  // Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
+  // the "Open tickets" stat used to be tickets.filter(open).length, which
+  // undercounts once an agent's true ticket volume exceeds the capped tickets
+  // array. Proves the stat now renders the server's independent open_ticket_count.
+  it('renders the "Open tickets" stat from open_ticket_count, not from counting the (capped) tickets array', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, open_ticket_count: 294 }); // far more than the 2-row tickets fixture
+    await renderAgentPage();
+
+    const statCards = Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
+    expect(statCards.some((text) => text.includes('Open tickets') && text.includes('294'))).toBe(true);
   });
 });
 

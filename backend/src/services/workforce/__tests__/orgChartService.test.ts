@@ -20,7 +20,10 @@ jest.mock('../../agentBlueprint/legacyCreatorAliases', () => ({ buildCreatorIdMa
 // (real Sequelize models), which this unit suite never needs — mocked as a
 // literal to isolate orgChartService's own logic, same convention
 // ticketRoutes.createdAfter.test.ts uses for whole-service mocks.
-jest.mock('../liveAgentsService', () => ({ OPEN_TICKET_STATUS_FILTER: { [Op.notIn]: ['done', 'cancelled'] } }));
+jest.mock('../liveAgentsService', () => ({
+  OPEN_TICKET_STATUS_FILTER: { [Op.notIn]: ['done', 'cancelled'] },
+  countOpenTicketsForAgent: jest.fn(),
+}));
 
 import Organization from '../../../models/Organization';
 import OrgMember from '../../../models/OrgMember';
@@ -30,6 +33,7 @@ import AiAgent from '../../../models/AiAgent';
 import { Ticket } from '../../../models';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
 import { buildCreatorIdMatchList } from '../../agentBlueprint/legacyCreatorAliases';
+import { countOpenTicketsForAgent } from '../liveAgentsService';
 import { getOrgChart, ColaberryOrgNotFoundError, NAMED_DEPARTMENTS, OTHER_DEPARTMENT } from '../orgChartService';
 import { workforceOrgChartResponseSchema } from '../../../schemas/workforceOrgChartSchema';
 
@@ -41,6 +45,7 @@ const mockAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
 const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 const mockMatchList = buildCreatorIdMatchList as unknown as jest.Mock;
+const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
 
 const COLABERRY_ORG = { id: 'org-colaberry', name: 'Colaberry' };
 
@@ -60,6 +65,12 @@ function baseMocks() {
   mockAgentFindAll.mockResolvedValue([CORYBRAIN, STAFF_AGENT]);
   mockMatchList.mockImplementation((adminId: string) => [adminId]);
   mockTicketFindAll.mockResolvedValue([]);
+  // Ticket Count Sync fix (2026-08-21) — fetchOpenTicketCountsByAgent() now calls
+  // the shared countOpenTicketsForAgent() per agent instead of its own batched
+  // Ticket.findAll + JS attribution. Defaulted to 0 so pre-existing tests that
+  // don't care about ticket counts are unaffected; tests that DO care override
+  // this per-call via mockImplementation (see "ticket counts" describe below).
+  mockCountOpenTickets.mockResolvedValue(0);
   mockResolveChain.mockImplementation(async (agent: any) => {
     if (agent.id === CORYBRAIN.id) return { resolvedHumanId: 'ali-id', trail: ['CoryBrain (agent) -> [human]'] };
     if (agent.id === STAFF_AGENT.id) return { resolvedHumanId: 'ali-id', trail: ['AdmissionsConversionArchitect (agent)', 'CoryBrain (agent) -> [human]'] };
@@ -107,6 +118,84 @@ describe('getOrgChart — happy path', () => {
     expect(result.staff[0]).toMatchObject({ id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', reports_to_agent_id: 'corybrain-id' });
 
     expect(result.unresolved).toEqual([]);
+  });
+});
+
+// Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) — the
+// real production bug: fetchOpenTicketCountsByAgent() used to batch every
+// hierarchy agent's tickets into ONE query, then guess which agent a row
+// belonged to via `row.assigned_to_id || row.created_by_id`, preferring
+// assigned_to_id whenever non-null. Once the reports_to/reassignment build
+// started setting assigned_to_id to a HUMAN id on most agent-created tickets,
+// that guess silently dropped the row (assigned_to_id matched no agent) instead
+// of falling back to check created_by_id — the org chart summed to ~92 against
+// a real total of 476 open tickets. These tests prove the FIXED function is a
+// thin per-agent pass-through to the shared, canonical countOpenTicketsForAgent
+// (mocked here), with no attribution-guessing step left to regress.
+describe('getOrgChart — open ticket counts (the count-sync bug fix)', () => {
+  // baseMocks() defaults mockAdminFindAll to [] (no identities at all), which
+  // means fetchOpenTicketCountsByAgent's own `if (!identity) continue` guard
+  // would skip every agent regardless of what countOpenTicketsForAgent is
+  // mocked to return. These tests need real linked identities present so the
+  // per-agent count path is actually exercised — this mock supplies them for
+  // both hierarchy agents in the fixture (mirrors the real AdminUser.findAll
+  // shape fetchAgentIdentities() reads: id + agent_id).
+  function withLinkedIdentities() {
+    mockAdminFindAll.mockImplementation(async (query: any) => {
+      if (query?.where?.agent_id) {
+        return [
+          { agent_id: CORYBRAIN.id, id: 'admin-corybrain', display_name: 'Cory Brain' },
+          { agent_id: STAFF_AGENT.id, id: 'admin-staff-1', display_name: 'Admissions Conversion Architect' },
+        ];
+      }
+      return []; // excludeAiOperatedMembers' is_ai_operated query — no AI-operated humans in this fixture
+    });
+  }
+
+  it('the exact bug shape: a ticket created by an agent but reassigned to a HUMAN (assigned_to_id != any agent identity) still counts toward that agent, because attribution is no longer guessed from the returned row at all — it is computed per-agent up front', async () => {
+    withLinkedIdentities();
+    // Real bug shape: countOpenTicketsForAgent's own query already matches
+    // EITHER assigned_to_id OR created_by_id for THIS agent's match list — the
+    // old bug was orgChartService's own JS re-guessing which field matched
+    // across a batched multi-agent result set. Mocking per-agent proves that
+    // guessing step is gone: staff-1-id gets its real count regardless of what
+    // any OTHER agent's tickets look like.
+    mockCountOpenTickets.mockImplementation(async (_identityId: string, agent: any) => {
+      if (agent.id === STAFF_AGENT.id) return 1; // this agent's 1 open ticket, created by it, reassigned to a human
+      return 0;
+    });
+
+    const result = await getOrgChart();
+
+    const staffEntry = result.staff.find((s) => s.id === 'staff-1-id')!;
+    expect(staffEntry.open_ticket_count).toBe(1); // NOT 0 — the old bug would have dropped this
+    const leadershipEntry = result.leadership.find((l) => l.id === 'corybrain-id')!;
+    expect(leadershipEntry.open_ticket_count).toBe(0); // unaffected agents stay honestly at 0
+  });
+
+  it('calls countOpenTicketsForAgent once per hierarchy agent with a linked identity, never a batched cross-agent query', async () => {
+    withLinkedIdentities();
+    mockCountOpenTickets.mockResolvedValue(2);
+
+    await getOrgChart();
+
+    // 2 hierarchy agents in baseMocks() (CoryBrain, AdmissionsConversionArchitect),
+    // both have a linked identity via withLinkedIdentities() above — assert the
+    // shared function was called once per agent, not once total.
+    expect(mockCountOpenTickets).toHaveBeenCalledTimes(2);
+    expect(mockTicketFindAll).not.toHaveBeenCalledWith(expect.objectContaining({
+      attributes: ['assigned_to_id', 'created_by_id'],
+    })); // the old batched query shape must be gone entirely
+  });
+
+  it('an agent with no linked AdminUser identity gets 0, and the shared function is never called for it (nothing to count against)', async () => {
+    mockAdminFindAll.mockResolvedValue([]); // no identities at all -> identityByAgentId is empty
+    mockCountOpenTickets.mockResolvedValue(99); // would be wrong if ever called for this agent
+
+    const result = await getOrgChart();
+
+    expect(result.staff.find((s) => s.id === 'staff-1-id')?.open_ticket_count).toBe(0);
+    expect(mockCountOpenTickets).not.toHaveBeenCalled();
   });
 });
 
