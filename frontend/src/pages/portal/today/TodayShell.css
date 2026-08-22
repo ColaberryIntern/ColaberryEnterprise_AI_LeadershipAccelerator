@@ -607,14 +607,21 @@
 .te-brand--site .te-mark{width:auto;height:26px;border-radius:0}
 .te-brand--site>span{font-size:11px;color:var(--muted);padding-left:10px;border-left:1px solid var(--border);line-height:1.1}
 
-/* 1A: the /try CTAs as the portal's next-step pill. Offset matches .te-rail's
-   61px so it sits under the shell header rather than over it. */
-.te-trybar{position:sticky;top:61px;z-index:15;display:flex;align-items:center;gap:12px;
+/* 1A: the /try CTAs as the portal's next-step pill.
+
+   MEASURED, not assumed: the shell header on /try is 65px tall (sticky, bottom
+   at 65). The first cut used 61px -- copied from .te-rail -- which tucked the
+   pill 4px UNDER the header. Driven by --te-header-h now so there is one number
+   to change if the header ever resizes, rather than a magic constant per rule.
+
+   NOTE for whoever touches the portal next: .te-rail still hardcodes 61px. If
+   the header really is 65 everywhere, the rail is 4px under it too. Left alone
+   deliberately -- that is shared portal chrome and not what Ali asked for. */
+.te-trybar{position:sticky;top:var(--te-header-h,65px);z-index:15;display:flex;align-items:center;gap:12px;
   background:#fff;border:1px solid var(--border);border-radius:999px;
   padding:7px 8px 7px 10px;margin-bottom:var(--space-4);box-shadow:0 6px 18px rgba(0,0,0,.09);
-  opacity:0;transform:translateY(-8px);pointer-events:none;visibility:hidden;
-  transition:opacity .25s ease,transform .25s ease}
-.te-trybar[data-pinned="yes"]{opacity:1;transform:none;pointer-events:auto;visibility:visible}
+  opacity:0;pointer-events:none;visibility:hidden;transition:opacity .22s ease}
+.te-trybar[data-pinned="yes"]{opacity:1;pointer-events:auto;visibility:visible}
 .te-trybar__star{width:30px;height:30px;border-radius:50%;background:rgba(54,120,149,.12);color:#2e6a86;
   display:grid;place-items:center;flex:none;font-size:14px}
 .te-trybar__tx{display:flex;flex-direction:column;min-width:0;line-height:1.2}
@@ -629,4 +636,4 @@
   .te-trybar__t{white-space:normal}
   .te-trybar__b{margin-left:0;width:100%}
 }
-@media (prefers-reduced-motion:reduce){.te-trybar{transition:none;transform:none}}
+@media (prefers-reduced-motion:reduce){.te-trybar{transition:none}}
