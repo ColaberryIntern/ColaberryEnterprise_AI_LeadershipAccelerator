@@ -15,7 +15,10 @@ import { sequelize } from '../config/database';
 // billed). 'comp' is never offered in the student checkout (getSubscription
 // lists only annual+monthly; startCheckout rejects it).
 export type SubscriptionPlan = 'annual' | 'monthly' | 'comp';
-export type SubscriptionStatus = 'pending' | 'active' | 'canceled' | 'failed';
+// 'past_due' exists so a FAILED scheduled charge is storable state rather than
+// something recomputed at read time. Before recurring billing there was nothing
+// to record: a lapse was inferred on the dashboard and no code could act on it.
+export type SubscriptionStatus = 'pending' | 'active' | 'canceled' | 'failed' | 'past_due';
 
 export interface SubscriptionAttributes {
   id?: string;
@@ -27,6 +30,10 @@ export interface SubscriptionAttributes {
   payment_ref: string;                 // PaySimple external_id (SUB-<enr>-<ts>) — idempotency anchor
   paysimple_customer_id?: string | null;
   paysimple_payment_id?: string | null;
+  // The standing schedule at PaySimple, once one exists. NULL means this member
+  // is still on manual renewal. Cleared when a schedule is suspended, so a
+  // non-null value always means a live schedule is drawing against this row.
+  paysimple_schedule_id?: string | null;
   started_at?: Date | null;
   current_period_end?: Date | null;
   canceled_at?: Date | null;
@@ -45,6 +52,7 @@ class Subscription extends Model<SubscriptionAttributes> implements Subscription
   declare payment_ref: string;
   declare paysimple_customer_id: string | null;
   declare paysimple_payment_id: string | null;
+  declare paysimple_schedule_id: string | null;
   declare started_at: Date | null;
   declare current_period_end: Date | null;
   declare canceled_at: Date | null;
@@ -64,6 +72,7 @@ Subscription.init(
     payment_ref: { type: DataTypes.STRING(120), allowNull: false, unique: true },
     paysimple_customer_id: { type: DataTypes.STRING(120), allowNull: true },
     paysimple_payment_id: { type: DataTypes.STRING(120), allowNull: true },
+    paysimple_schedule_id: { type: DataTypes.STRING(120), allowNull: true },
     started_at: { type: DataTypes.DATE, allowNull: true },
     current_period_end: { type: DataTypes.DATE, allowNull: true },
     canceled_at: { type: DataTypes.DATE, allowNull: true },
@@ -78,6 +87,7 @@ Subscription.init(
     indexes: [
       { fields: ['enrollment_id'], name: 'idx_subscriptions_enrollment' },
       { fields: ['status'], name: 'idx_subscriptions_status' },
+      { fields: ['paysimple_schedule_id'], name: 'idx_subscriptions_schedule' },
     ],
   },
 );

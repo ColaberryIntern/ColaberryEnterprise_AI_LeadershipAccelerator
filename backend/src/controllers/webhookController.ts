@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { verifyWebhookSignature } from '../services/paysimpleService';
+import { verifyWebhookSignature, getPayment } from '../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed, enrollInClassReadinessCampaign } from '../services/enrollmentService';
 import { Cohort, EnrollmentLead } from '../models';
 import { runEnrollmentAutomation } from '../services/automationService';
@@ -68,6 +68,40 @@ export async function handlePaySimpleWebhook(req: Request, res: Response): Promi
         amount,
         paymentStatus,
       });
+
+      // A charge produced by a standing schedule carries NO order_external_id: the
+      // SUB- ref is minted by our own checkout, and a recurrence never goes through
+      // checkout. Without this branch every renewal fell into the "no external ID"
+      // warning below and silently did nothing, so money arrived at PaySimple and
+      // the member's period never advanced. That looks identical to having no
+      // recurring billing at all, while being far harder to diagnose.
+      //
+      // The payment record carries RecurringScheduleId, so a recurrence is matched
+      // deterministically rather than by amount or customer id, which is not unique
+      // across our subscriptions.
+      if (!externalId && paymentId) {
+        try {
+          const payment: any = await getPayment(paymentId as any);
+          const scheduleId = payment?.RecurringScheduleId;
+          if (scheduleId) {
+            const { advancePeriodForScheduledPayment } = await import('../services/subscriptionScheduleService');
+            const result = await advancePeriodForScheduledPayment({
+              scheduleId: String(scheduleId),
+              paymentId: String(paymentId),
+            });
+            console.log('[Webhook] Scheduled charge', JSON.stringify({ scheduleId, paymentId, ...result }));
+            // Real money that matches no subscription must be loud, never a quiet 200.
+            if (!result.advanced && result.reason === 'no_subscription_for_schedule') {
+              console.error('[Webhook] ALERT: scheduled payment matched no subscription',
+                JSON.stringify({ scheduleId, paymentId, amount }));
+            }
+            res.json({ received: true, recurring: true, ...result });
+            return;
+          }
+        } catch (err: any) {
+          console.error('[Webhook] Could not resolve a possible scheduled charge:', err?.message);
+        }
+      }
 
       if (!externalId) {
         console.error('[Webhook] No external ID in payment event:', JSON.stringify(event.data));
