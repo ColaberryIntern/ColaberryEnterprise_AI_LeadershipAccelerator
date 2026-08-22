@@ -10,10 +10,14 @@
  * calls, computes the schedule it WOULD create, and prints the lot for a human to
  * read. With ~25 rows the whole plan fits on a screen, which is the point.
  *
- * The invariant that matters most: a schedule's first charge is the member's
- * EXISTING current_period_end, never sooner. Nobody is back-charged for a period
- * that already lapsed, and nobody's date moves. If any computed start date is in
- * the past, the run refuses rather than inventing a catch-up charge.
+ * The invariant that matters most: the first scheduled charge is never earlier
+ * than what the member was told. That is NOT simply current_period_end. The
+ * consent notice promised the August cohort one more manual payment, so for them
+ * automatic billing starts the cycle AFTER their next renewal; see
+ * firstScheduledCharge. Using current_period_end for everyone would have billed 15
+ * members a month early, which is exactly the surprise the notice existed to
+ * prevent. Nobody is back-charged either: if any computed start lands in the past
+ * the run refuses rather than inventing a catch-up charge.
  *
  * Exclusions come from subscriptionScheduleService, not from this file, so the
  * migration and the rest of the system cannot disagree about who may be billed.
@@ -50,6 +54,34 @@ const SELECT = `
 
 const money = (c) => `$${(c / 100).toFixed(2)}`;
 
+/**
+ * The consent notice sent 2026-08-21 told every member renewing on or before
+ * 2026-08-31 that their NEXT payment stays manual ("your payment on August 27 you
+ * will still make yourself using the link we send") and that automatic billing
+ * begins the cycle AFTER it. Members renewing 2026-09-03 or later were told
+ * automatic starts at their next renewal.
+ *
+ * So the first scheduled charge is NOT simply current_period_end. For the August
+ * cohort that would bill them a full month earlier than they were told, which is
+ * precisely the surprise charge the consent notice existed to prevent. This
+ * encodes the promise instead of re-deriving it.
+ */
+const MANUAL_THROUGH = Date.UTC(2026, 7, 31, 23, 59, 59); // 2026-08-31, end of day UTC
+
+function firstScheduledCharge(periodEnd, plan) {
+  if (periodEnd.getTime() > MANUAL_THROUGH) return new Date(periodEnd.getTime());
+  const next = new Date(periodEnd.getTime());
+  if (plan === 'annual') {
+    next.setUTCFullYear(next.getUTCFullYear() + 1);
+    return next;
+  }
+  const day = periodEnd.getUTCDate();
+  next.setUTCMonth(next.getUTCMonth() + 1, 1);
+  const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+  next.setUTCDate(Math.min(day, lastDay));
+  return next;
+}
+
 (async () => {
   const startedAt = new Date();
   console.log(`[migrate] mode=${APPLY ? 'APPLY (CREATES REAL SCHEDULES)' : 'DRY RUN (no writes, no gateway mutations)'}`);
@@ -71,7 +103,8 @@ const money = (c) => `$${(c / 100).toFixed(2)}`;
     });
     if (why) { skipped.push({ name: r.full_name, email: r.email, why }); continue; }
 
-    const firstChargeOn = new Date(r.current_period_end);
+    const periodEnd = new Date(r.current_period_end);
+    const firstChargeOn = firstScheduledCharge(periodEnd, r.plan);
     let account;
     try {
       account = await resolveAccountForSubscription(r.paysimple_payment_id);
@@ -88,22 +121,27 @@ const money = (c) => `$${(c / 100).toFixed(2)}`;
       plan: r.plan,
       amount: r.amount_cents / 100,
       amountCents: r.amount_cents,
+      periodEnd,
       firstChargeOn,
       paysimplePaymentId: r.paysimple_payment_id,
       accountId: account.accountId,
-      cadence: cadenceFor(r.plan, firstChargeOn.getUTCDate()),
+      // Cadence comes from the member's REAL anchor, not the shifted first charge.
+      // The August-31 cohort shifts to 30 September, and deriving from that would
+      // put them on SpecificDayofMonth 30 forever, quietly moving them off the
+      // month-end anchor they have actually been billed on (31 Jul, 31 Aug).
+      cadence: cadenceFor(r.plan, periodEnd.getUTCDate()),
     });
   }
 
   console.log('WOULD SCHEDULE');
-  console.log('member                 plan     amount    first charge   cadence');
-  console.log('---------------------- -------- --------- -------------- --------------------------');
+  console.log('member                 plan     amount    renews      1st auto charge  cadence');
+  console.log('---------------------- -------- --------- ----------  ---------------  -------------------------');
   planned.forEach((p) => {
     const cad = p.cadence.ExecutionFrequencyType
       + (p.cadence.ExecutionFrequencyParameter ? ` (day ${p.cadence.ExecutionFrequencyParameter})` : '');
     console.log(
       `${String(p.fullName).slice(0, 22).padEnd(22)} ${p.plan.padEnd(8)} ${money(p.amountCents).padEnd(9)} `
-      + `${p.firstChargeOn.toISOString().slice(0, 10)}     ${cad}`,
+      + `${p.periodEnd.toISOString().slice(0, 10)}  ${p.firstChargeOn.toISOString().slice(0, 10)}       ${cad}`,
     );
   });
 

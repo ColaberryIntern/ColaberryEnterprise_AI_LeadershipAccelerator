@@ -49,18 +49,32 @@ export interface CadenceSpec {
 /**
  * Map a plan plus its anchor day onto PaySimple's frequency vocabulary.
  *
- * The 29th/30th/31st are the whole reason this is a function rather than a
- * constant. `SpecificDayofMonth: 31` does not survive a 30-day month, and eight of
- * the live subscribers anchor on the 30th or 31st. `LastofMonth` is the correct
- * shape for them: it keeps "end of month" meaning end of month in February as well
- * as in August. Days 1-28 exist in every month and map directly.
+ * Day 31 is the only special case, and the threshold is drawn from live evidence
+ * on this merchant account rather than from reasoning about calendars.
+ *
+ * Schedule 1865596 has been anchored on `SpecificDayofMonth: 31` since 2018. Its
+ * settled charges landed on the FIRST of the month eleven times out of twelve. So
+ * a day-31 anchor does not clamp back to the 30th in a short month, it rolls
+ * FORWARD into the next one. Our eight members anchored on the 31st were told
+ * their first automatic payment is 30 September; `SpecificDayofMonth: 31` would
+ * have charged them 1 October, a day late and in the wrong month. `LastofMonth`
+ * gives 30 September, which is what they were promised.
+ *
+ * Day 30 is NOT rolled: schedule 2253360 has run on day 30 since 2019 and charges
+ * on the 30th, so it maps directly and keeps the member's real anchor. Days 1-29
+ * likewise map directly.
+ *
+ * Known and deliberately not solved here: February. A day-29 or day-30 anchor has
+ * no exact February date, and by the day-31 evidence it will most likely roll into
+ * March rather than clamp to the 28th. That first bites in February 2027 and
+ * should be verified against a real schedule before then, not guessed at now.
  */
 export function cadenceFor(plan: 'monthly' | 'annual', anchorDayOfMonth: number): CadenceSpec {
   if (plan === 'annual') return { ExecutionFrequencyType: 'Annually' };
   if (!Number.isInteger(anchorDayOfMonth) || anchorDayOfMonth < 1 || anchorDayOfMonth > 31) {
     throw new Error(`anchorDayOfMonth out of range: ${anchorDayOfMonth}`);
   }
-  if (anchorDayOfMonth >= 29) return { ExecutionFrequencyType: 'LastofMonth' };
+  if (anchorDayOfMonth === 31) return { ExecutionFrequencyType: 'LastofMonth' };
   return { ExecutionFrequencyType: 'SpecificDayofMonth', ExecutionFrequencyParameter: anchorDayOfMonth };
 }
 
