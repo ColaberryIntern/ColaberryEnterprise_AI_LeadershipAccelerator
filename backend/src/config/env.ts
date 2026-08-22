@@ -104,6 +104,11 @@ export const env = {
   // unattended. See CC-20260710-a9f2 (Apollo credit-leak audit).
   apolloEnabled: process.env.APOLLO_ENABLED === 'true',
 
+  // Curriculum video link health check (daily). Default OFF so the job cannot
+  // start raising alerts — which fan out to the catch-all alert subscription —
+  // until someone deliberately turns it on and has watched one dry run.
+  curriculumVideoHealthEnabled: process.env.CURRICULUM_VIDEO_HEALTH_ENABLED === 'true',
+
   // Mandrill
   mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
   mandrillWebhookUrl: process.env.MANDRILL_WEBHOOK_URL || '',

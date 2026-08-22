@@ -22,7 +22,10 @@ jest.mock('../../../models/AiAgent', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn() } }));
 jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChainWithTrail: jest.fn() }));
 jest.mock('../../agentBlueprint/legacyCreatorAliases', () => ({ buildCreatorIdMatchList: jest.fn() }));
-jest.mock('../liveAgentsService', () => ({ OPEN_TICKET_STATUS_FILTER: { [Op.notIn]: ['done', 'cancelled'] } }));
+jest.mock('../liveAgentsService', () => ({
+  OPEN_TICKET_STATUS_FILTER: { [Op.notIn]: ['done', 'cancelled'] },
+  countOpenTicketsForAgent: jest.fn().mockResolvedValue(0),
+}));
 jest.mock('../orgChartColorAssignment', () => ({ assignHierarchyColors: () => ({ humanColors: new Map(), leadershipColors: new Map(), staffColors: new Map() }) }));
 
 import OrgMember from '../../../models/OrgMember';

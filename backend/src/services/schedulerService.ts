@@ -2341,6 +2341,38 @@ export function startScheduler(): void {
   }, { timezone: 'America/Chicago' });
   console.log('[Scheduler] Missed Opportunities Report: daily at 8:00 PM CT');
 
+  // -- Curriculum video link health — daily at 6:20 AM CT --
+  // 141 of the curriculum's 155 videos are third-party YouTube links that can be
+  // deleted, made private or have embedding disabled with no change on our side.
+  // Because every week's evaluation is gated on section_complete{learn, week},
+  // one dead video silently seals that week's evaluation -> survey -> reflection
+  // chain. Until 2026-08-21 the only detector was a student writing in.
+  //
+  // Runs before the working day so a break is triaged before class. The check is
+  // idempotent (one run per CT date) and read-only: it never edits a card,
+  // because choosing a replacement video is a curriculum judgement.
+  //
+  // OFF unless CURRICULUM_VIDEO_HEALTH_ENABLED=true. Alerts match the catch-all
+  // alert_subscriptions row, so enabling this starts real notifications; run it
+  // once with { dryRun: true } first.
+  if (env.curriculumVideoHealthEnabled) {
+    cron.schedule('20 6 * * *', () => {
+      instrumentCronJob('CurriculumVideoLinkHealth', async () => {
+        const { runVideoLinkHealthCheck } = require('./curriculumHealth/videoLinkHealthService');
+        const result = await runVideoLinkHealthCheck();
+        console.log('[Scheduler] Curriculum video link health:', JSON.stringify({
+          skipped: result.skipped, checked: result.checked, healthy: result.healthy,
+          unknown: result.unknown, failures: result.failures.length, sealed_weeks: result.sealed_weeks,
+        }));
+      }).catch((err: any) => {
+        console.error('[Scheduler] Curriculum video link health error:', err.message);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] Curriculum video link health: daily at 6:20 AM CT');
+  } else {
+    console.log('[Scheduler] Curriculum video link health: DISABLED (set CURRICULUM_VIDEO_HEALTH_ENABLED=true)');
+  }
+
   // -- Deleted/Spam ingestion for Deleted-Email Recovery — hourly --
   // Keeps inbox_deleted_emails fresh so the report's "Deleted But Potentially
   // Valuable" section has data without putting external API calls in the

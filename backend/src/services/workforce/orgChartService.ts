@@ -6,8 +6,7 @@ import Enrollment from '../../models/Enrollment';
 import AiAgent from '../../models/AiAgent';
 import { Ticket } from '../../models';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
-import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
-import { OPEN_TICKET_STATUS_FILTER } from './liveAgentsService';
+import { OPEN_TICKET_STATUS_FILTER, countOpenTicketsForAgent } from './liveAgentsService';
 import { assignHierarchyColors } from './orgChartColorAssignment';
 
 /**
@@ -179,49 +178,39 @@ async function fetchAgentIdentities(agentIds: string[]): Promise<Map<string, Adm
   return new Map(admins.map((a) => [a.agent_id as string, a]));
 }
 
-/** Open ticket counts for every hierarchy agent in ONE query (not one per
- * agent) — builds a flat matchId -> agentId map first (mirrors
- * liveAgentsService.ts::listLiveAgentActivity()'s metaByMatchId pattern),
- * then a single Ticket.findAll with an IN clause across every agent's full
- * match-id list, then tallies in JS. */
+/** Open ticket counts for every hierarchy agent — one `countOpenTicketsForAgent()`
+ * call per agent (the SAME shared, canonical per-agent query `liveAgentsService.ts`'s
+ * `listLiveAgents()` and `agentDetailService.ts` also use), run concurrently via
+ * `Promise.all` rather than sequentially (small, proven-safe fan-out — ~23 hierarchy
+ * agents today, the same count `listLiveAgents()` already fans out to in production).
+ *
+ * Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) — this used
+ * to be ONE batched `Ticket.findAll` across every agent's combined match-id list,
+ * followed by a JS loop that guessed which agent a returned row belonged to via
+ * `row.assigned_to_id || row.created_by_id`, preferring `assigned_to_id` whenever it
+ * was non-null. That guess was wrong as soon as `assigned_to_id` stopped being
+ * exclusively an agent identity: this same session's earlier `reports_to`/ticket-
+ * reassignment build now sets `assigned_to_id` to a HUMAN org_member id on most
+ * agent-created tickets, so those rows' `assigned_to_id` matched nothing in the
+ * agent lookup map and were silently dropped — the org chart summed to ~92 against a
+ * real total of 476 open tickets. Rather than patch the attribution guess in place (a
+ * second bugfix that risks drifting from the two OTHER already-correct
+ * implementations of "this agent's open ticket count" — `liveAgentsService.ts` and
+ * `ticketCreatorFilterResolver.ts`/`ticketService.ts`'s `?creator=` filter), this now
+ * reuses the same per-agent query `listLiveAgents()` already had right, eliminating
+ * the attribution step (and the bug class it enabled) entirely: N queries instead of
+ * 1 batched query, correctness over a premature optimization the org chart's own
+ * agent count (~23 today) doesn't need. */
 async function fetchOpenTicketCountsByAgent(
   agents: AiAgent[],
   identityByAgentId: Map<string, AdminUser>,
 ): Promise<Map<string, number>> {
-  const agentIdByMatchId = new Map<string, string>();
-  const allMatchIds: string[] = [];
-  for (const agent of agents) {
-    const identity = identityByAgentId.get(agent.id);
-    if (!identity) continue;
-    for (const matchId of buildCreatorIdMatchList(identity.id, agent)) {
-      agentIdByMatchId.set(matchId, agent.id);
-      allMatchIds.push(matchId);
-    }
-  }
-  if (allMatchIds.length === 0) return new Map();
-
-  const rows = await Ticket.findAll({
-    attributes: ['assigned_to_id', 'created_by_id'],
-    where: {
-      [Op.and]: [
-        { status: OPEN_TICKET_STATUS_FILTER },
-        {
-          [Op.or]: [
-            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: allMatchIds } },
-            { created_by_id: { [Op.in]: allMatchIds } },
-          ],
-        },
-      ],
-    },
-  });
-
   const counts = new Map<string, number>();
-  for (const row of rows) {
-    const matchId = row.assigned_to_id || row.created_by_id || '';
-    const agentId = agentIdByMatchId.get(matchId);
-    if (!agentId) continue;
-    counts.set(agentId, (counts.get(agentId) ?? 0) + 1);
-  }
+  await Promise.all(agents.map(async (agent) => {
+    const identity = identityByAgentId.get(agent.id);
+    if (!identity) return; // no linked AdminUser -> no ticket identity to count against
+    counts.set(agent.id, await countOpenTicketsForAgent(identity.id, agent));
+  }));
   return counts;
 }
 

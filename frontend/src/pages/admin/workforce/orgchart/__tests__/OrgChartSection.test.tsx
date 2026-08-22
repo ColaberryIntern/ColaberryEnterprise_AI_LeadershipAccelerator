@@ -782,3 +782,100 @@ describe('OrgChartSection — ticket-filter button', () => {
     );
   });
 });
+
+// Ticket Count Sync fix, Task 2 (2026-08-21, session CC-20260818-x4nk
+// continued) — Ali, live: clicking the ticket-COUNT NUMBER itself (the most
+// natural click target) did nothing; only the small icon next to it
+// navigated. Fixed by merging the count (.wl) and the icon (.wf-toggle) into
+// ONE clickable/keyboard-operable region (.wf-emp-actions itself). These
+// tests are the actual regression coverage for the reported bug — the suite
+// above already proves the aria-label-selected element still works (it now
+// resolves to the merged wrapper instead of the old icon-only span).
+describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (Task 2 fix)', () => {
+  let windowOpenSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    windowOpenSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+  });
+
+  afterEach(() => {
+    windowOpenSpy.mockRestore();
+  });
+
+  it('clicking specifically the .wl count badge (not the icon) on a Leadership card opens the filtered tickets — the exact reported bug, now fixed', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const leadershipControl = container.querySelector('[aria-label="View Cory Brain — Strategic Initiatives\'s tickets"]') as HTMLElement;
+    const countBadge = leadershipControl.querySelector('.wl') as HTMLElement;
+    expect(countBadge).toBeTruthy();
+
+    await act(async () => {
+      // bubbles: true — a real click on a child element bubbles up to the
+      // parent's onClick, exactly like a real mouse click on the number.
+      countBadge.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+    expect(container.querySelector('.wf-scrim')).toBeFalsy(); // still doesn't also open the drawer
+  });
+
+  it('clicking specifically the .wl count badge on a Staff card opens the filtered tickets, and does not also navigate the card\'s own Link', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const staffControl = container.querySelector('[aria-label="View Admissions Conversion Architect\'s tickets"]') as HTMLElement;
+    const countBadge = staffControl.querySelector('.wl') as HTMLElement;
+    expect(countBadge).toBeTruthy();
+
+    await act(async () => {
+      countBadge.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+  });
+
+  it('pressing Enter on the focused control (keyboard operability, previously missing on the icon-only control) opens the filtered tickets', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const leadershipControl = container.querySelector('[aria-label="View Cory Brain — Strategic Initiatives\'s tickets"]') as HTMLElement;
+
+    await act(async () => {
+      leadershipControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+  });
+
+  it('pressing Space on the focused control also opens the filtered tickets', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const staffControl = container.querySelector('[aria-label="View Admissions Conversion Architect\'s tickets"]') as HTMLElement;
+
+    await act(async () => {
+      staffControl.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+  });
+
+  it('a key other than Enter/Space does nothing', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const leadershipControl = container.querySelector('[aria-label="View Cory Brain — Strategic Initiatives\'s tickets"]') as HTMLElement;
+
+    await act(async () => {
+      leadershipControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(windowOpenSpy).not.toHaveBeenCalled();
+  });
+});

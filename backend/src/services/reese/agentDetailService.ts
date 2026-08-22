@@ -8,6 +8,7 @@ import { Ticket } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
+import { countOpenTicketsForAgent } from '../workforce/liveAgentsService';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 
@@ -38,6 +39,15 @@ export interface AgentDetailResult {
     is_ai_operated: boolean;
   } | null;
   live_status: CommunityPresenceStatus | 'unknown';
+  /** The agent's TRUE open-ticket count (Ticket Count Sync fix, 2026-08-21, session
+   * CC-20260818-x4nk continued) — computed via the shared `countOpenTicketsForAgent()`
+   * (the SAME query `orgChartService.ts`'s Leadership/Staff card badges and
+   * `liveAgentsService.ts`'s Live Agents grid use), NOT derived from the `tickets`
+   * array below. `tickets` is capped at `MAX_TICKETS` (most-recent-first) for display,
+   * so for any agent whose true ticket volume exceeds that cap, `tickets.filter(open
+   * status).length` would undercount — this field is the honest, uncapped answer. `0`
+   * when there's no linked `adminUser`, matching `tickets`' own fallback below. */
+  open_ticket_count: number;
   tickets: Array<{
     id: string;
     ticket_number: number | null;
@@ -145,6 +155,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     : [];
   const capabilities = deriveAgentCapabilities(agent.tools_granted);
 
+  // Ticket Count Sync fix (2026-08-21) — the TRUE open count, via the same
+  // shared per-agent query the org chart's badges and the Live Agents grid
+  // use, independent of the `tickets` array's MAX_TICKETS cap above.
+  const openTicketCount = adminUser ? await countOpenTicketsForAgent(adminUser.id, agent) : 0;
+
   // reports_to (org-chart hierarchy build, 2026-08-19) — null when this agent
   // has no reports_to_type configured at all, never a fabricated empty shape.
   let reportsTo: AgentDetailResult['reports_to'] = null;
@@ -176,6 +191,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
         }
       : null,
     live_status: liveStatus,
+    open_ticket_count: openTicketCount,
     tickets: tickets.map((t: any) => ({
       id: t.id,
       ticket_number: t.ticket_number ?? null,
