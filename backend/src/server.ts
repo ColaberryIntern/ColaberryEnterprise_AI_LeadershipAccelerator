@@ -778,6 +778,13 @@ async function ensureSubscriptionSchema() {
     `CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status)`,
     // Account-credit applied to this checkout's first charge (added 2026-07 with account_credits).
     `ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS applied_credit_cents INTEGER NOT NULL DEFAULT 0`,
+    // The standing PaySimple schedule, once one exists (added 2026-08 with recurring
+    // billing). NULL means the member is still on manual renewal. This MUST land
+    // before or with the deploy that ships the model field: Sequelize selects every
+    // declared attribute, so a model column with no database column turns every
+    // subscription read into "column does not exist".
+    `ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS paysimple_schedule_id VARCHAR(120)`,
+    `CREATE INDEX IF NOT EXISTS idx_subscriptions_schedule ON subscriptions (paysimple_schedule_id)`,
   ];
   for (const sql of statements) {
     try {

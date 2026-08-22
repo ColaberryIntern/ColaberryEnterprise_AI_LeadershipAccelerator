@@ -246,14 +246,3 @@ export async function markPastDueForSchedule(scheduleId: string, reason: string)
   return Boolean(affected);
 }
 
-/** Idempotent schema add-on. This repo does not sync models at boot (an ungated
- *  sync(alter) once produced 50k duplicate constraints), so new columns arrive
- *  through an explicit ensure function. */
-export async function ensureSubscriptionScheduleSchema(): Promise<void> {
-  await sequelize.query(
-    `ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS paysimple_schedule_id VARCHAR(120)`,
-  );
-  await sequelize.query(
-    `CREATE INDEX IF NOT EXISTS idx_subscriptions_schedule ON subscriptions (paysimple_schedule_id)`,
-  );
-}
