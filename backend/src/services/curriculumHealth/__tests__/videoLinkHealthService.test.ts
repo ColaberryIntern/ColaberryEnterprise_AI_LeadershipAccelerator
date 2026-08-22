@@ -2,6 +2,9 @@
  * Routing/idempotency tests for the scheduled check. No real network, no DB.
  * The classifier and impact modules are deliberately NOT mocked: their real
  * logic is what decides alert-vs-silence, and mocking it would test nothing.
+ *
+ * The false-positive guards — bot challenges, the control video, two-observation
+ * confirmation and the ownership metric — live in videoLinkFalsePositives.test.ts.
  */
 const mockQuery = jest.fn();
 const mockGetSetting = jest.fn();
@@ -20,51 +23,7 @@ jest.mock('../../timeline/curriculumScope', () => ({
 jest.mock('../../timeline/timelineGatingService', () => ({ isCompletableType: () => true }));
 
 import { centralDate, runVideoLinkHealthCheck } from '../videoLinkHealthService';
-
-const CANONICAL = '92b98a72-8681-4f04-8ba1-16a18334cd0b';
-
-const cardRow = (over: Record<string, unknown> = {}) => ({
-  id: 'aebd4db9-9d28-40d7-99cb-ffb04d29733e',
-  title: 'Tool use with the Claude 3 model family',
-  week: 3,
-  bucket: 'learn',
-  type: 'video',
-  visibility: 'published',
-  status: 'active',
-  cohort_id: null,
-  program_id: CANONICAL,
-  video_url: 'https://www.youtube.com/watch?v=6wkFb2_cUik',
-  ...over,
-});
-
-/** Build a watch page whose embedded player response says what we want. */
-const watchPage = (opts: { status: string; embeddable: boolean; owner?: string | null }) => {
-  const mf: Record<string, unknown> = {
-    ownerChannelName: opts.owner ?? 'Anthropic',
-    externalChannelId: 'UCrDwWp7EBBv4NwvScIpBDOA',
-    availableCountries: ['US'],
-  };
-  if (opts.embeddable) mf.embed = { iframeUrl: 'https://www.youtube.com/embed/x' };
-  return `<script>var ytInitialPlayerResponse = ${JSON.stringify({
-    playabilityStatus: { status: opts.status },
-    microformat: { playerMicroformatRenderer: mf },
-  })};</script>`;
-};
-
-/** Route fetch by URL so ordering between oEmbed and watch cannot drift. */
-function routeFetch(routes: {
-  oembed?: number;
-  watch?: { status: string; embeddable: boolean; owner?: string | null } | number;
-  channel?: number;
-}) {
-  return jest.fn(async (url: string) => {
-    if (url.includes('/oembed')) return { status: routes.oembed ?? 200, text: async () => '' } as never;
-    if (url.includes('/channel/')) return { status: routes.channel ?? 200, text: async () => '' } as never;
-    const w = routes.watch ?? { status: 'OK', embeddable: true };
-    if (typeof w === 'number') return { status: w, text: async () => '' } as never;
-    return { status: 200, text: async () => watchPage(w) } as never;
-  });
-}
+import { FAST, cardRow, routeFetch } from './helpers/videoLinkFixtures';
 
 /** cards query first, then any student-impact counts. */
 function primeDb(cards: Record<string, unknown>[], affected = 0) {
@@ -88,7 +47,7 @@ describe('idempotency', () => {
     (global as any).fetch = routeFetch({});
     primeDb([cardRow()]);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.skipped).toBe(true);
     expect(result.reason).toBe('already_ran_today');
@@ -100,12 +59,12 @@ describe('idempotency', () => {
     (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
     primeDb([cardRow()], 169);
 
-    const first = await runVideoLinkHealthCheck();
+    const first = await runVideoLinkHealthCheck(FAST);
     expect(first.alerts_emitted).toBe(1);
 
     // The first run stamped today's date; the guard reads it back on the second.
     mockGetSetting.mockResolvedValue(centralDate());
-    const second = await runVideoLinkHealthCheck();
+    const second = await runVideoLinkHealthCheck(FAST);
 
     expect(second.skipped).toBe(true);
     expect(mockEmitAlert).toHaveBeenCalledTimes(1);
@@ -116,7 +75,7 @@ describe('idempotency', () => {
     (global as any).fetch = routeFetch({});
     primeDb([cardRow()]);
 
-    const result = await runVideoLinkHealthCheck({ force: true });
+    const result = await runVideoLinkHealthCheck({ ...FAST, force: true });
 
     expect(result.skipped).toBe(false);
     expect(result.checked).toBe(1);
@@ -126,7 +85,7 @@ describe('idempotency', () => {
     (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
     primeDb([cardRow()], 12);
 
-    const result = await runVideoLinkHealthCheck({ dryRun: true });
+    const result = await runVideoLinkHealthCheck({ ...FAST, dryRun: true });
 
     expect(result.failures).toHaveLength(1);
     expect(result.alerts_emitted).toBe(0);
@@ -140,7 +99,7 @@ describe('happy path', () => {
     (global as any).fetch = routeFetch({ oembed: 200, watch: { status: 'OK', embeddable: true } });
     primeDb([cardRow(), cardRow({ id: 'b', video_url: 'https://youtu.be/w7_yWjYyxjE' })]);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.checked).toBe(2);
     expect(result.healthy).toBe(2);
@@ -154,7 +113,7 @@ describe('happy path', () => {
     (global as any).fetch = routeFetch({});
     primeDb([cardRow({ video_url: 'https://storage.googleapis.com/sample/BigBuckBunny.mp4' })]);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.checked).toBe(0);
     expect(global.fetch).not.toHaveBeenCalled();
@@ -166,7 +125,7 @@ describe('blast radius reporting', () => {
     (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
     primeDb([cardRow()], 169);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.failures).toHaveLength(1);
     const f = result.failures[0];
@@ -187,7 +146,7 @@ describe('blast radius reporting', () => {
     (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
     primeDb([cardRow({ visibility: 'archived' })]);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.failures[0].seals_week).toBe(false);
     expect(result.sealed_weeks).toEqual([]);
@@ -203,10 +162,10 @@ describe('blast radius reporting', () => {
     });
     primeDb([cardRow()], 5);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.failures[0].state).toBe('EMBEDDING_DISABLED');
-    expect(result.failures[0].ours).toBe(true);
+    expect(result.failures[0].ownership).toBe('ours');
     expect(mockEmitAlert.mock.calls[0][0].description).toContain('OUR CHANNEL');
   });
 
@@ -218,7 +177,7 @@ describe('blast radius reporting', () => {
     });
     primeDb([cardRow()], 1);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
     expect(result.failures[0].state).toBe('UPLOADER_CLOSED');
   });
 });
@@ -228,7 +187,7 @@ describe('failure paths never manufacture an outage', () => {
     (global as any).fetch = routeFetch({ oembed: 200, watch: 429 });
     primeDb([cardRow()]);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.unknown).toBe(1);
     expect(result.failures).toEqual([]);
@@ -236,14 +195,15 @@ describe('failure paths never manufacture an outage', () => {
   });
 
   // Deliberately exceeds Jest's 5s default: a full outage makes every video burn
-  // its capped retry ladder (3 oEmbed + 3 watch attempts with backoff, ~7.5s per
-  // video at CONCURRENCY 4). That slowness is the retry policy working, not a
-  // hang, so the test is given room rather than the policy being weakened.
+  // its capped retry ladder (3 oEmbed + 3 watch attempts with backoff), and the
+  // control video burns its own before the batch is declared untrusted. That
+  // slowness is the retry policy working, not a hang, so the test is given room
+  // rather than the policy being weakened.
   it('a total network outage reports UNKNOWN rather than a dead curriculum', async () => {
     (global as any).fetch = jest.fn(async () => { throw Object.assign(new Error('boom'), { name: 'TypeError' }); });
     primeDb([cardRow(), cardRow({ id: 'b', video_url: 'https://youtu.be/w7_yWjYyxjE' })]);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.unknown).toBe(2);
     expect(result.failures).toEqual([]);
@@ -255,7 +215,7 @@ describe('failure paths never manufacture an outage', () => {
     (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
     primeDb([cardRow()], 4);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.ran).toBe(true);
     expect(result.failures).toHaveLength(1);
@@ -266,7 +226,7 @@ describe('failure paths never manufacture an outage', () => {
     (global as any).fetch = routeFetch({});
     primeDb([]);
 
-    const result = await runVideoLinkHealthCheck();
+    const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.checked).toBe(0);
     expect(result.failures).toEqual([]);
@@ -283,3 +243,4 @@ describe('centralDate', () => {
     expect(centralDate(new Date('2026-08-22T01:30:00Z'))).toBe('2026-08-21');
   });
 });
+
