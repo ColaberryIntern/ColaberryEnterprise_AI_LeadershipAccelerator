@@ -7,6 +7,7 @@ import {
   getCompanionState, submitPollResponse, CompanionState,
 } from '../../services/onboardingApi';
 import { emitPointsEarned } from '../../services/pointsFx';
+import { LinkState, linkStateAfterFailure } from './classroomLinkState';
 
 // Public live-class check-in landing (`/portal/class-checkin/:sessionId`).
 //
@@ -91,12 +92,37 @@ const ClassCheckinPage: React.FC = () => {
   // Mirror the instructor deck: once checked in, poll the companion state so the
   // phone switches to whatever is on screen (status / a live question / broadcast).
   const [companion, setCompanion] = useState<CompanionState | null>(null);
+  /**
+   * Whether the phone is still hearing from the class.
+   *
+   * This poll used to swallow every error and keep rendering its last view
+   * forever, which meant a student whose session had gone simply watched a
+   * status screen while the room answered questions — no message, no retry,
+   * nothing to tell them or their instructor that anything was wrong. It looks
+   * identical to "the instructor is not on a question slide", so it is
+   * invisible from both ends. Reported live in class on 2026-08-20.
+   */
+  const [link, setLink] = useState<LinkState>('live');
+  const failures = useRef(0);
   useEffect(() => {
     if (joinPhase !== 'checked') return;
     let alive = true;
-    const tick = () => getCompanionState(sessionId).then((s) => { if (alive) setCompanion(s); }).catch(() => { /* keep last view */ });
+    const tick = () => getCompanionState(sessionId)
+      .then((s) => {
+        if (!alive) return;
+        failures.current = 0;
+        setLink('live');
+        setCompanion(s);
+      })
+      .catch((err: { response?: { status?: number } }) => {
+        if (!alive) return;
+        failures.current += 1;
+        setLink(linkStateAfterFailure(err?.response?.status, failures.current));
+      });
     tick();
     const id = window.setInterval(tick, 2500);
+    // Polling continues even while disconnected, so recovery is automatic and
+    // the student does not have to know to reload.
     return () => { alive = false; window.clearInterval(id); };
   }, [joinPhase, sessionId]);
 
@@ -223,6 +249,32 @@ const ClassCheckinPage: React.FC = () => {
                 <p className="cbck-eyebrow">You&rsquo;re checked in</p>
                 <h1 className="cbck-title">{info.title}</h1>
                 <p className="cbck-meta">{info.cohort_name}{info.start_time ? ` · ${formatTime(info.start_time)}` : ''}</p>
+
+                {/* ── CONNECTION — only ever shown when something is actually wrong ── */}
+                {link !== 'live' && (
+                  <div className={`cbck-link-warn${link === 'signed_out' ? ' is-hard' : ''}`} role="status" aria-live="polite">
+                    {link === 'signed_out' ? (
+                      <>
+                        <p className="cbck-link-title">You have been signed out</p>
+                        <p className="cbck-link-body">
+                          Questions will not reach this phone until you sign in again. Nothing you have already
+                          answered is lost.
+                        </p>
+                        <button type="button" className="cbck-link-btn" onClick={() => navigate('/portal/login')}>
+                          Sign in again
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="cbck-link-title">Reconnecting&hellip;</p>
+                        <p className="cbck-link-body">
+                          This phone has lost the class for a moment. It keeps trying on its own, so give it a few
+                          seconds before doing anything.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* ── LIVE QUESTION — appears automatically when the instructor is on a question slide ── */}
                 {companion?.phase === 'question' && companion.question ? (
@@ -502,6 +554,24 @@ const CBCK_CSS = `
 .cbck-broadcast-list li{
   padding:11px 14px; font-size:15px; font-weight:600; color:var(--text-body);
   background:var(--surface-subtle); border:1.5px solid var(--border-default); border-left:5px solid var(--amber-500, #E8920C); border-radius:var(--radius-lg);
+}
+
+/* Connection warning — only rendered when the companion poll is actually failing.
+   Amber for a blip it will recover from on its own, red for a signed-out session
+   the student has to act on. */
+.cbck-link-warn{
+  margin:0 0 16px; padding:12px 16px; border-radius:var(--radius-lg); text-align:left;
+  background:var(--status-warning-bg, color-mix(in srgb, var(--amber-500, #E8920C) 12%, transparent));
+  border-left:5px solid var(--amber-500, #E8920C);
+}
+.cbck-link-warn.is-hard{
+  background:var(--status-danger-bg); border-left-color:var(--status-danger);
+}
+.cbck-link-title{ margin:0 0 4px; font-size:14px; font-weight:700; color:var(--text-default); }
+.cbck-link-body{ margin:0; font-size:13px; line-height:1.5; color:var(--text-muted); }
+.cbck-link-btn{
+  margin-top:10px; padding:8px 16px; border:none; border-radius:999px;
+  background:var(--brand-accent); color:#fff; font-size:13px; font-weight:700; cursor:pointer;
 }
 
 /* Live Decision Theater badge on the phone */
