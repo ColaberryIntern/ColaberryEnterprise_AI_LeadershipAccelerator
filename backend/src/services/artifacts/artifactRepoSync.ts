@@ -41,6 +41,12 @@ import {
   mergeArtifactHashesIntoManifest,
 } from './artifactRepoFiles';
 import { resolveProjectRepo } from '../projectRepoResolver';
+import {
+  diagnoseWriteFailure,
+  messageForCause,
+  probeRepoReadable,
+  statusFromMessage,
+} from './writeFailureDiagnosis';
 
 export type ArtifactSyncOutcome =
   | 'written'        // files changed and were committed
@@ -48,6 +54,7 @@ export type ArtifactSyncOutcome =
   | 'no_repo'        // no repo connected yet. Expected in weeks 1-3, not a fault.
   | 'no_artifacts'   // nothing uploaded yet
   | 'no_access'      // the platform cannot push to this repo any more
+  | 'repo_gone'      // the connected repo cannot be found at all
   | 'not_configured' // GITHUB_TOKEN absent — our misconfiguration, not theirs
   | 'failed';
 
@@ -153,6 +160,8 @@ export async function syncArtifactsToRepo(
   opts: ArtifactSyncOptions = {},
 ): Promise<ArtifactSyncResult> {
   const cid = opts.correlationId;
+  // Hoisted so the catch block can probe the same repo the write targeted.
+  let repoTarget: { owner: string; repo: string } | null = null;
   try {
     const { default: Project } = await import('../../models/Project');
     const project: any = await Project.findByPk(projectId);
@@ -197,6 +206,7 @@ export async function syncArtifactsToRepo(
     const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 
     const target = { owner: pointer.owner, repo: pointer.name };
+    repoTarget = target;
     const manifest = await readRepoManifest(target, { correlationId: cid });
 
     // Record our paths IN the manifest, or every sync re-commits identical
@@ -239,6 +249,29 @@ export async function syncArtifactsToRepo(
     if (cls === 'ConfigError') {
       log('artifact_sync_not_configured', cid, 'failure', { project_id: projectId, error_class: cls });
       return { outcome: 'not_configured', changedPaths: [], reason: 'Repository sync is not configured.' };
+    }
+
+    // GitHub answers an unauthorised WRITE with 404, not 403, so a permissions
+    // problem arrives here as UpstreamError and used to be reported as "we'll
+    // retry" — advice that can never come true, since only the student can grant
+    // push access. Re-read the repo to tell "may not write" from "is gone".
+    // Measured 2026-08-21: 12 of 13 student repos were exactly this.
+    const status = statusFromMessage(err?.message);
+    let repoReadable: boolean | null = null;
+    if (status === 404 && repoTarget && process.env.GITHUB_TOKEN) {
+      repoReadable = await probeRepoReadable(repoTarget.owner, repoTarget.repo, process.env.GITHUB_TOKEN);
+    }
+    const cause = diagnoseWriteFailure({ errorClass: cls, status, repoReadable });
+
+    if (cause === 'no_push_access' || cause === 'repo_missing') {
+      log('artifact_sync_blocked', cid, 'failure', {
+        project_id: projectId, error_class: cls, status, cause, repo_readable: repoReadable,
+      });
+      return {
+        outcome: cause === 'no_push_access' ? 'no_access' : 'repo_gone',
+        changedPaths: [],
+        reason: messageForCause(cause),
+      };
     }
 
     // Deliberately not surfacing err.message — it can carry an upstream API body.
