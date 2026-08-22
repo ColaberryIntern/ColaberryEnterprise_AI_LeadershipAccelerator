@@ -1,6 +1,7 @@
 import React from 'react';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import HeroPlatformV8 from '../../components/publicV2/HeroPlatformV8';
+import CtaInterrupt from '../../components/publicV2/CtaInterrupt';
 import CapabilityOS from '../../components/publicV2/CapabilityOS';
 import TwoExperiences from '../../components/publicV2/TwoExperiences';
 import ReceiptsDrilldown from '../../components/publicV2/ReceiptsDrilldown';
@@ -115,8 +116,21 @@ function PlatformV2(): React.ReactElement {
       <CapabilityOS />
       <TwoExperiences />
       <BuildPipeline />
+      <CtaInterrupt
+        eyebrow="Want to see it run?"
+        title="That whole pipeline is sitting behind one free login."
+        body="Open the workspace and walk the same path yourself, from a sentence about a cost to a story with acceptance criteria attached."
+      />
+
       <ReceiptsDrilldown />
       <ArchitectExperience />
+      <CtaInterrupt
+        eyebrow="Your team, your numbers"
+        title="Everything above starts empty until someone does the work."
+        body="The demo workspace is furnished so there is something to look at. Your people, your repositories and every competency score begin at zero and move only on verified evidence."
+        primary={{ label: 'Open my free company workspace', to: '/try' }}
+      />
+
       <CapabilityEarned />
 
       <OpenPlatform />

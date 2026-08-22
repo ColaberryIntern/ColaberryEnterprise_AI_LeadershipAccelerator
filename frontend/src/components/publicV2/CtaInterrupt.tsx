@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import './ctaInterrupt.css';
 
 /**
  * Option 2A — the full-bleed dark CTA interrupt.
