@@ -72,7 +72,16 @@ export const workforceCss = `
 .wf-emp-grid{flex-direction:column;align-items:stretch;gap:8px}
 .wf-emp-head{display:flex;align-items:flex-start;gap:11px;width:100%}
 .wf-emp-meta{display:flex;align-items:center;gap:8px;width:100%}
-.wf-emp-actions{display:flex;align-items:center;gap:6px;flex:none}
+/* Ticket Count Sync fix, Task 2 (2026-08-21) — this wrapper is now itself the
+   clickable/keyboard-operable control (role="button", see OrgChartSection.tsx),
+   not just a layout container around a separately-clickable icon. cursor:pointer
+   + a hover affordance on the ticket-count text make that visually obvious —
+   previously only .wf-toggle (the icon) signaled interactivity. Scoped to this
+   exact class, used in exactly these 2 places (Leadership/Staff cards) per a
+   repo-wide grep — no other usage to accidentally affect. */
+.wf-emp-actions{display:flex;align-items:center;gap:6px;flex:none;cursor:pointer;border-radius:9px}
+.wf-emp-actions:hover .wl b,.wf-emp-actions:focus-visible .wl b{color:var(--berry)}
+.wf-emp-actions:focus-visible{outline:2px solid var(--berry);outline-offset:2px}
 /* 2-line clamp is the PRIMARY wrap strategy now that the wider grid column
    (see .wf-dirs below) gives the name real room to wrap at word
    boundaries; overflow-wrap:break-word stays only as a last-resort safety

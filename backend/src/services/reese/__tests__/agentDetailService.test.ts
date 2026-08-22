@@ -12,6 +12,13 @@ jest.mock('../../../models/OrgMember', () => ({ findByPk: jest.fn() }));
 jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn() } }));
 jest.mock('../../communityService', () => ({ derivePresence: jest.fn() }));
 jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChainWithTrail: jest.fn() }));
+// Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
+// getAgentDetail() now calls the REAL countOpenTicketsForAgent(), which itself
+// calls Ticket.count(). This file's own '../../../models' mock above has no
+// `.count` (only `findAll`), so without this mock, that call would throw
+// `TypeError: Ticket.count is not a function` for every test where adminUser
+// is truthy (i.e. almost all of them, per beforeEach below).
+jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn() }));
 
 import { Op } from 'sequelize';
 import AiAgent from '../../../models/AiAgent';
@@ -22,6 +29,7 @@ import OrgMember from '../../../models/OrgMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
+import { countOpenTicketsForAgent } from '../../workforce/liveAgentsService';
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
@@ -33,6 +41,7 @@ const mockOrgMemberFindByPk = OrgMember.findByPk as unknown as jest.Mock;
 const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
+const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
 
 const reeseAgent = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success',
@@ -49,6 +58,7 @@ beforeEach(() => {
   mockMemberFindOne.mockResolvedValue({ last_active_at: new Date() });
   mockDerivePresence.mockReturnValue('online');
   mockTicketFindAll.mockResolvedValue([]);
+  mockCountOpenTickets.mockResolvedValue(0);
 });
 
 describe('getAgentDetail', () => {
@@ -66,6 +76,37 @@ describe('getAgentDetail', () => {
     expect(result!.identity).toMatchObject({ admin_user_id: 'admin-1', email: 'reese@colaberry.com', is_ai_operated: true });
     expect(result!.live_status).toBe('online');
     expect(result!.tickets).toHaveLength(1);
+  });
+
+  // Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
+  // AgentDetailPage's "Open tickets" stat used to be derived client-side from
+  // `tickets.filter(open).length`, but `tickets` is capped at MAX_TICKETS (50,
+  // most-recent-first) — inaccurate for any agent whose true open volume
+  // exceeds that cap (e.g. InboxCaseEngine, ~90-294 open tickets live). This
+  // proves the new field is genuinely independent of the capped list.
+  it('open_ticket_count reflects the TRUE count via the shared per-agent query, even when it exceeds the 50-ticket tickets-list cap', async () => {
+    mockCountOpenTickets.mockResolvedValue(294); // far more than MAX_TICKETS
+    mockTicketFindAll.mockResolvedValue(
+      Array.from({ length: 50 }, (_, i) => ({
+        id: `t-${i}`, ticket_number: i, title: `Ticket ${i}`, status: 'todo', priority: 'medium',
+        type: 'agent_action', created_at: new Date(), updated_at: new Date(),
+      })),
+    ); // the capped, most-recent-first list — exactly 50, never more
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.tickets).toHaveLength(50); // the cap, unchanged
+    expect(result!.open_ticket_count).toBe(294); // NOT derived from the capped list's length
+    expect(mockCountOpenTickets).toHaveBeenCalledWith('admin-1', reeseAgent);
+  });
+
+  it('open_ticket_count is 0, and countOpenTicketsForAgent is never called, when there is no linked AdminUser identity', async () => {
+    mockAdminFindOne.mockResolvedValue(null);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.open_ticket_count).toBe(0);
+    expect(mockCountOpenTickets).not.toHaveBeenCalled();
   });
 
   it('capabilities (reads/produces): derives from the agent\'s real tools_granted, not hand-written text', async () => {

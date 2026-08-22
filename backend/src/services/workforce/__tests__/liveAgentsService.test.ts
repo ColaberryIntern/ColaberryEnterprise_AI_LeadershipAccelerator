@@ -22,7 +22,7 @@ import Enrollment from '../../../models/Enrollment';
 import CommunityMember from '../../../models/CommunityMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
-import { listLiveAgents, listLiveAgentActivity } from '../liveAgentsService';
+import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent } from '../liveAgentsService';
 
 const mockAdminUserFindAll = AdminUser.findAll as unknown as jest.Mock;
 const mockAiAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
@@ -280,6 +280,48 @@ describe('listLiveAgentActivity', () => {
     await listLiveAgentActivity(5);
 
     expect(mockTicketFindAll).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+  });
+});
+
+// Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
+// countOpenTicketsForAgent() was extracted OUT of listLiveAgents()'s own loop
+// (still exercised indirectly by every test above) so orgChartService.ts and
+// agentDetailService.ts can reuse the SAME query instead of each maintaining
+// their own. These tests cover it directly, as its own load-bearing contract,
+// not just as an implementation detail of listLiveAgents().
+describe('countOpenTicketsForAgent — the shared per-agent count reused by 3 call sites', () => {
+  it('returns the mocked count for a straightforward agent with no legacy aliases', async () => {
+    mockTicketCount.mockResolvedValue(4);
+
+    const count = await countOpenTicketsForAgent('admin-reese', reeseAgent as any);
+
+    expect(count).toBe(4);
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    const orClauses = countArgs.where[Op.and].find((c: any) => Op.or in c)[Op.or];
+    const assignedClause = orClauses.find((c: any) => 'assigned_to_id' in c);
+    expect(assignedClause.assigned_to_id[Op.in]).toEqual(['admin-reese']);
+  });
+
+  it('matches EITHER the real AdminUser id OR a legacy alias for an agent with historical raw-string tickets', async () => {
+    mockTicketCount.mockResolvedValue(9606);
+
+    const count = await countOpenTicketsForAgent('admin-process-1', processAgent as any);
+
+    expect(count).toBe(9606);
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    const orClauses = countArgs.where[Op.and].find((c: any) => Op.or in c)[Op.or];
+    const createdClause = orClauses.find((c: any) => 'created_by_id' in c);
+    expect(createdClause.created_by_id[Op.in]).toEqual(expect.arrayContaining(['admin-process-1', 'cory-engine']));
+  });
+
+  it('always filters to OPEN statuses only (not done/cancelled) — the exact bug class this function exists to prevent from regressing', async () => {
+    mockTicketCount.mockResolvedValue(0);
+
+    await countOpenTicketsForAgent('admin-reese', reeseAgent as any);
+
+    const countArgs = mockTicketCount.mock.calls[0][0];
+    const statusClause = countArgs.where[Op.and].find((c: any) => 'status' in c);
+    expect(statusClause.status[Op.notIn]).toEqual(['done', 'cancelled']);
   });
 });
 
