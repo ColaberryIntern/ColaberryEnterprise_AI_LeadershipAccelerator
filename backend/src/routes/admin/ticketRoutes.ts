@@ -11,7 +11,7 @@ import {
   getTicketStats,
   updateTicket,
 } from '../../services/ticketService';
-import { resolveCreatorMatchIds } from '../../services/ticketCreatorFilterResolver';
+import { resolveCreatorMatchIds, listTicketCreatorOptions, type TicketCreatorOption } from '../../services/ticketCreatorFilterResolver';
 import { dispatchTicketToAgent } from '../../services/ticketAgentDispatcher';
 import type { TicketStatus, TicketPriority, TicketType } from '../../models/Ticket';
 import { getEvidenceForTicket } from '../../services/evidence/evidenceService';
@@ -123,6 +123,25 @@ router.get('/api/admin/tickets/board', async (req: Request, res: Response) => {
       creatorMatchIds,
     });
     res.json({ board });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Creator filter options (Org Chart v5, 2026-08-21) ──────────────────────
+// Backs the Tickets page's real Creator <select> (see AdminTicketBoardPage.tsx
+// / TicketBoardFilterBar.tsx). No query params, so no Zod input schema
+// applies (Contract Enforcement Layer requires Zod on INPUTS; a parameterless
+// GET has none — same posture as the pre-existing /api/admin/tickets/stats
+// route just below). Response shape declared via TicketCreatorsResponse.
+interface TicketCreatorsResponse {
+  creators: TicketCreatorOption[];
+}
+router.get('/api/admin/tickets/creators', async (_req: Request, res: Response) => {
+  try {
+    const creators = await listTicketCreatorOptions();
+    const body: TicketCreatorsResponse = { creators };
+    res.json(body);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

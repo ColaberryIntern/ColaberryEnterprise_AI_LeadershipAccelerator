@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import TicketDetailModal from '../../components/admin/TicketDetailModal';
+import TicketBoardFilterBar from '../../components/admin/tickets/TicketBoardFilterBar';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
 import {
@@ -11,6 +12,7 @@ import {
   formatNextCheckLabel,
   TicketAutoCheck,
 } from '../../utils/ticketTypeMeta';
+import { getTicketCreatorOptions, TicketCreatorOption } from '../../services/ticketCreatorApi';
 
 interface Ticket {
   id: string;
@@ -115,6 +117,15 @@ export default function AdminTicketBoardPage() {
   // exact shape (state + mount-time read + fetchBoard forwarding) rather
   // than inventing a second mechanism.
   const [filterCreator, setFilterCreator] = useState('');
+  // Org Chart v5 (2026-08-21) — the roster TicketBoardFilterBar's Creator
+  // <select> renders as options (agent_name/display_name pairs). Fetched
+  // ONCE on mount via its own effect below, not tied to fetchBoard's
+  // filter-dependent re-fetch cycle — the roster itself doesn't change when
+  // a filter changes. Degrades to an empty list on failure (logged, never a
+  // crash); the select still functions via its synthetic-option fallback
+  // for whatever `filterCreator` value is already set (see
+  // TicketBoardFilterBar's own header comment).
+  const [creatorOptions, setCreatorOptions] = useState<TicketCreatorOption[]>([]);
   // Ticket Board UX fixes (2026-08-17) — drives the Open/Done stat-card
   // filters. Client-side only: the board fetch already returns every status
   // bucket regardless of this value (see fetchBoard below, unchanged), so
@@ -181,6 +192,17 @@ export default function AdminTicketBoardPage() {
     if (open) setSelectedTicket(open);
     if (source) setFilterSource(source);
     if (creator) setFilterCreator(creator);
+  }, []);
+
+  // Org Chart v5 (2026-08-21) — roster for the Creator filter's <select>,
+  // fetched once. A failure here is non-critical (matches this file's own
+  // fetchBoard catch-and-log convention just above): the filter itself still
+  // works via its raw-value fallback option, it just won't show friendly
+  // labels until the roster loads.
+  useEffect(() => {
+    getTicketCreatorOptions()
+      .then(setCreatorOptions)
+      .catch((err) => console.error('Failed to fetch ticket creator options:', err));
   }, []);
 
   const handleDragStart = (e: React.DragEvent, ticketId: string) => {
@@ -366,49 +388,19 @@ export default function AdminTicketBoardPage() {
 
       {/* Filters */}
       <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
-        <select className="form-select form-select-sm" style={{ width: 140 }} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-          <option value="">All Priorities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-        <select className="form-select form-select-sm" style={{ width: 160 }} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-          <option value="">All Types</option>
-          {/* Data-driven from real ticket data (stats.byType), not a hardcoded list —
-              every type that actually exists on a real ticket appears here, agent-
-              generated types included, so this can never again silently omit a new
-              TicketType the way it omitted student_support/reese_autonomous_outreach. */}
-          {buildTicketTypeFilterOptions(stats?.byType).map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label} ({opt.count})</option>
-          ))}
-        </select>
-        <select className="form-select form-select-sm" style={{ width: 140 }} value={filterSource} onChange={(e) => setFilterSource(e.target.value)}>
-          <option value="">All Sources</option>
-          <option value="cory">Cory</option>
-          <option value="manual">Manual</option>
-          <option value="system">System</option>
-          <option value="ai_workforce">AI Workforce</option>
-        </select>
-        <button className="btn btn-sm btn-outline-secondary" onClick={clearAllFilters}>
-          Clear
-        </button>
-        {/* Org Chart v4 (2026-08-20) — the org chart's ticket-filter button
-            deep-links here as ?creator=<agent_name>. No fixed dropdown (agent
-            names are dynamic, not a closed enum like Source) — a dismissible
-            chip instead, so the applied filter is visible and clearable. */}
-        {filterCreator && (
-          <span className="badge text-bg-info d-inline-flex align-items-center gap-2" style={{ fontWeight: 500, padding: '6px 10px' }}>
-            Creator: {filterCreator}
-            <button
-              type="button"
-              className="btn-close btn-close-white"
-              style={{ fontSize: 10 }}
-              aria-label={`Clear creator filter (${filterCreator})`}
-              onClick={() => setFilterCreator('')}
-            />
-          </span>
-        )}
+        <TicketBoardFilterBar
+          filterPriority={filterPriority}
+          setFilterPriority={setFilterPriority}
+          filterType={filterType}
+          setFilterType={setFilterType}
+          filterSource={filterSource}
+          setFilterSource={setFilterSource}
+          filterCreator={filterCreator}
+          setFilterCreator={setFilterCreator}
+          typeOptions={buildTicketTypeFilterOptions(stats?.byType)}
+          creatorOptions={creatorOptions}
+          onClear={clearAllFilters}
+        />
         <div className="vr d-none d-md-block mx-1" aria-hidden="true" />
         {/* Ticket Board Performance fix (2026-08-18) — the "last 7 days" default
             view toggle. Deliberately styled as its own segmented control, separate

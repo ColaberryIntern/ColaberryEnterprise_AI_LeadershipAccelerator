@@ -3,7 +3,6 @@ import { Route, Navigate } from 'react-router-dom';
 import HomePage from '../pages/HomePage';
 import ProgramPage from '../pages/ProgramPage';
 import PricingPage from '../pages/PricingPage';
-import ContactPage from '../pages/ContactPage';
 import SponsorshipPage from '../pages/SponsorshipPage';
 import AdvisoryPage from '../pages/AdvisoryPage';
 import CaseStudiesPage from '../pages/CaseStudiesPage';
@@ -51,7 +50,6 @@ const publicRoutes = (
     <Route path="/enroll" element={<EnrollPage />} />
     <Route path="/enroll/success" element={<EnrollSuccessPage />} />
     <Route path="/enroll/cancel" element={<EnrollCancelPage />} />
-    <Route path="/contact" element={<ContactPage />} />
     <Route path="/executive-overview/thank-you" element={<ExecOverviewThankYouPage />} />
     <Route path="/executive-roi-calculator" element={<ExecutiveROICalculatorPage />} />
     <Route path="/ai-architect" element={<AIArchitectLandingPage />} />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './portal/today/TodayShell.css';
 import CompanyMomentumDashboard from '../components/capability/CompanyMomentumDashboard';
 import { registerOrg, persistParticipantSession } from '../services/orgApi';
@@ -126,6 +126,30 @@ function ManagementPreviewPage() {
   const [team, setTeam] = useState('');
   const [invites, setInvites] = useState<{ email: string; team: string }[]>([]);
 
+  /*
+   * The signature sticky: once the preview banner scrolls away, its two CTAs
+   * pin to the top so they are always one click away. Same philosophy as the
+   * next-assignment bar on /portal/projects and /portal/classroom -- those use
+   * CSS `position: sticky; top: 61px` under the 61px shell header, and this
+   * reuses that offset rather than inventing a second header height.
+   *
+   * IntersectionObserver decides only WHETHER to show it; the pinning itself is
+   * CSS. Reduced motion keeps the bar but drops the slide.
+   */
+  const bannerRef = useRef<HTMLDivElement | null>(null);
+  const [pinned, setPinned] = useState(false);
+
+  useEffect(() => {
+    const el = bannerRef.current;
+    if (!el || typeof IntersectionObserver !== 'function') return undefined;
+    const io = new IntersectionObserver(
+      ([e]) => { setPinned(!e.isIntersecting && e.boundingClientRect.top < 0); },
+      { threshold: 0, rootMargin: '-61px 0px 0px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   // "Make this real" — the free-account registration modal. On success it stores
   // the returned participant JWT under the SAME key the portal uses and hands off
   // to the real, authed /portal/company page.
@@ -183,7 +207,7 @@ function ManagementPreviewPage() {
   return (
     <div className="te-shell">
       <header className="te-top">
-        <div className="te-brand"><img className="te-mark" src="/colaberry-icon.png" alt="Colaberry" /><div><b><span className="cc">C</span>olaberry</b><span>AI Systems Architect Accelerator</span></div></div>
+        <div className="te-brand te-brand--site"><img className="te-mark" src="/colaberry-logo-transparent.png" alt="Colaberry" width={291} height={82} /><span>AI Systems Architect Accelerator</span></div>
         <div className="te-top-right">
           <div className="te-rail">
             <span className="te-cd class" title="Next class"><span className="ic">{Ic.class}</span><span className="tx"><span className="lbl">Next class</span><span className="when mono">3d 11h</span></span></span>
@@ -206,11 +230,28 @@ function ManagementPreviewPage() {
       </nav>
 
       <main className="te-main">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', background: 'var(--surface-brand-subtle)', border: 'var(--border-1) solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', marginBottom: 'var(--space-6)' }}>
+        <div ref={bannerRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', background: 'var(--surface-brand-subtle)', border: 'var(--border-1) solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', marginBottom: 'var(--space-6)' }}>
           <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-body)' }}><strong>Free preview with sample data</strong>, shaped to the real metrics we capture. Your free account gives you both the learner experience and this management dashboard, no credit card. Create it to fill this with your team&rsquo;s live progress.</span>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
             <button type="button" onClick={openReg} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)' }} data-track="try_make_real">Make this real: create your free account</button>
             <a href="#invite" style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)', textDecoration: 'none', background: 'var(--surface-subtle)', color: 'var(--text-body)' }}>Send free test invites</a>
+          </div>
+        </div>
+
+        <div
+          className="te-trybar"
+          data-pinned={pinned ? 'yes' : 'no'}
+          aria-hidden={!pinned}
+        >
+          <span className="te-trybar__star" aria-hidden="true">&#9733;</span>
+          <span className="te-trybar__tx">
+            <span className="te-trybar__k">Your free account &middot; preview</span>
+            <span className="te-trybar__t">Make this real: create your free account</span>
+          </span>
+          <span className="te-trybar__chip">no card</span>
+          <div className="te-trybar__b">
+            <button type="button" onClick={openReg} tabIndex={pinned ? 0 : -1} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)' }} data-track="try_make_real_pinned">Make this real: create your free account</button>
+            <a href="#invite" tabIndex={pinned ? 0 : -1} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)', textDecoration: 'none', background: 'var(--surface-subtle)', color: 'var(--text-body)' }}>Send free test invites</a>
           </div>
         </div>
 

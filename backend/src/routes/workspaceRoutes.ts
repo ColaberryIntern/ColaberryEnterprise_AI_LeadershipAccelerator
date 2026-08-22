@@ -402,4 +402,69 @@ router.get('/api/portal/workspace/docs/bundle', requireParticipant, async (req, 
   }
 });
 
+// GET progress-file — THE student's own `.colaberry/progress.json`, merged and
+// ready to save.
+//
+// This is the delivery half of a fix whose content half has always been right.
+// `renderProgressFile` seeds every story's exact criteria and always has; what
+// no surface ever did was put that file within a pull-only student's reach. The
+// copy told them to build it from STORY-000's example block (one story, so it
+// can never confirm another), and the first correction pointed at
+// `.colaberry/progress.seed.json`, which exists only inside the docs zip and was
+// verified absent from all fifteen pull-only repos on 2026-08-21.
+//
+// One request, one file, at the path it belongs at. Merged server-side over
+// whatever the student already has, so "save this over your file" is safe advice
+// and is the ONLY instruction they need — no side-by-side JSON editing by hand.
+//
+// READ-ONLY. It reads their repo and writes nothing, to the repo or the database.
+router.get('/api/portal/workspace/progress-file', requireParticipant, async (req, res) => {
+  try {
+    const projectId = projectIdSchema.parse(req.query.project_id);
+    // Ownership FIRST, before a plan is read or a repo is touched — same order
+    // as the bundle route above. A student can only ever reach their own file.
+    const svc = await import('../services/studentWorkspaceService');
+    await svc.getWorkspaceRepo(req.participant!.sub, projectId);
+
+    const { buildStudentProgressFile } = await import('../services/sbp/studentProgressFile');
+    const file = await buildStudentProgressFile(projectId, { correlationId: correlationOf(req) });
+
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'info', service: 'backend',
+      event: 'workspace_progress_file_downloaded', correlation_id: correlationOf(req),
+      outcome: 'success',
+      context: {
+        project_id: projectId,
+        plan_version: file.planVersion,
+        published: file.published,
+        existing: file.merge.existing,
+        stories: file.merge.stories,
+        criteria: file.merge.criteria,
+        criteria_passed: file.merge.criteria_passed,
+        // Counts, never the keys themselves — a student's own key names are
+        // their business and a log line is the wrong place for them.
+        preserved_top_level_keys: file.merge.preserved_top_level_keys.length,
+        preserved_story_keys: file.merge.preserved_story_keys.length,
+        unrecognised_story_ids: file.merge.unrecognised_story_ids.length,
+      },
+    }));
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    // Machine-readable restatement of what the merge did, for triage. The panel
+    // does not depend on reading these back — a cross-origin response exposes no
+    // custom header unless it is allowlisted, so the UI's copy is written to be
+    // true without them.
+    res.setHeader('X-Colaberry-Progress-Existing', file.merge.existing);
+    res.setHeader('X-Colaberry-Progress-Stories', String(file.merge.stories));
+    res.setHeader('X-Colaberry-Plan-Version', String(file.planVersion));
+    res.status(200).send(file.content);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }
+    logError('workspace_progress_file_failed', req, err);
+    res.status(statusFor(err)).json(errorBody(err, 'Could not build your progress file'));
+  }
+});
+
 export default router;

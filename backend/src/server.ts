@@ -41,6 +41,7 @@ import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
+import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
 import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
@@ -2353,6 +2354,7 @@ async function start(): Promise<void> {
   await ensureLiveSessionSchema();
   // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
   await ensureInboxCaseSchema();
+  await ensureLeadViewPreferenceSchema();
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
   // nullable ticket columns (idempotent DDL, shadow mode).
   await ensureWorkLedgerSchema();

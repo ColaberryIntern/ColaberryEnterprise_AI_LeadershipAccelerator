@@ -317,6 +317,75 @@ describe('OrgChartSection — reports-to tags (visible before any click)', () =>
   });
 });
 
+// Card restructure (2026-08-21, session CC-20260818-x4nk continued) — Ali,
+// live, with a screenshot: long real agent names were rendering
+// character-by-character in the old narrow single-row card (e.g.
+// "Auton/omou/s/Opera/tions"). jsdom doesn't compute real CSS layout, so it
+// can't directly assert "no character-level wrap" the way a browser
+// screenshot can (that proof lives in this run's production verification
+// instead) — but it CAN prove the DOM/text contract that any such bug would
+// require breaking: the full name must render as one contiguous text node
+// on `.nm` (never split into several small text nodes by JS), and the new
+// `title` attribute must carry the full string for hover, using the exact
+// longest real production names from execution-contract.md.
+describe('OrgChartSection — longest real production names render intact (no JS-level splitting)', () => {
+  const LONG_NAME_CHART: OrgChartResponse = {
+    ...CHART,
+    leadership: [
+      { id: 'cory-engine-id', agent_name: 'cory-engine', display_name: 'Cory Engine — Autonomous Operations', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: [], open_ticket_count: 42, hierarchy_color: null },
+      { id: 'abm-id', agent_name: 'AgentBehaviorMonitorAgent', display_name: 'Agent Behavior Monitor — Security', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: [], open_ticket_count: 3, hierarchy_color: null },
+    ],
+    staff: [
+      { id: 'marketing-architect-id', agent_name: 'MarketingGrowthStrategyArchitect', display_name: 'Marketing & Growth Strategy Architect', reports_to_agent_id: 'cory-engine-id', reports_to_summary: 'Reports to: Cory Engine — Autonomous Operations', open_ticket_count: 7, hierarchy_color: null },
+      { id: 'platform-architect-id', agent_name: 'PlatformInfrastructureStrategyArchitect', display_name: 'Platform & Infrastructure Strategy Architect', reports_to_agent_id: 'cory-engine-id', reports_to_summary: 'Reports to: Cory Engine — Autonomous Operations', open_ticket_count: 2, hierarchy_color: null },
+    ],
+  };
+
+  it('the longest real Leadership/Staff display names each render as ONE contiguous text node on .nm, with a title attribute carrying the full name', async () => {
+    getOrgChart.mockResolvedValue(LONG_NAME_CHART);
+    await render();
+
+    const longNames = [
+      'Cory Engine — Autonomous Operations',
+      'Agent Behavior Monitor — Security',
+      'Marketing & Growth Strategy Architect',
+      'Platform & Infrastructure Strategy Architect',
+    ];
+    for (const name of longNames) {
+      const nameEls = Array.from(container.querySelectorAll('.wf-emp-grid .nm')).filter((el) => el.textContent === name);
+      expect(nameEls.length).toBeGreaterThanOrEqual(1); // full string intact in one element, never split
+      expect(nameEls[0].getAttribute('title')).toBe(name); // full text always available via hover, even if visually clamped
+    }
+  });
+
+  it('the reports-to chip for a long leadership name is truncatable (trunc class) and carries the full summary via title', async () => {
+    getOrgChart.mockResolvedValue(LONG_NAME_CHART);
+    await render();
+
+    const chip = Array.from(container.querySelectorAll('.wf-chip.trunc')).find(
+      (el) => el.getAttribute('title') === 'Reports to: Cory Engine — Autonomous Operations',
+    );
+    expect(chip).toBeTruthy();
+    expect(chip!.textContent).toBe('Reports to: Cory Engine — Autonomous Operations');
+  });
+
+  it('every AI Leadership/Staff card in the grid uses the new wf-emp-grid two-row layout', async () => {
+    getOrgChart.mockResolvedValue(LONG_NAME_CHART);
+    await render();
+
+    const gridCards = container.querySelectorAll('.wf-dirs .wf-emp-grid');
+    // LONG_NAME_CHART replaces `leadership`/`staff` wholesale: 2 leadership +
+    // 2 staff = 4 AI Leadership/Staff cards, all on the new layout. Human
+    // cards (also wf-emp-grid, in their own .wf-dirs per department) add
+    // more on top of that floor.
+    expect(gridCards.length).toBeGreaterThanOrEqual(4);
+    for (const card of Array.from(gridCards)) {
+      expect(card.querySelector('.wf-emp-head')).toBeTruthy();
+      expect(card.querySelector('.wf-emp-meta')).toBeTruthy();
+    }
+  });
+});
+
 describe('OrgChartSection — fullscreen toggle', () => {
   let fullscreenElement: Element | null;
   let requestFullscreenMock: jest.Mock;

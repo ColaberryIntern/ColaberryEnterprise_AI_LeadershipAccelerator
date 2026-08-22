@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import CtaInterrupt from '../../components/publicV2/CtaInterrupt';
 import HeroV8 from '../../components/publicV2/HeroV8';
 import EngineModel from '../../components/publicV2/EngineModel';
 import GoalDiagram, { GoalKey } from '../../components/publicV2/GoalDiagram';
@@ -191,6 +192,12 @@ function HomeV2(): React.ReactElement {
       ) : null}
 
       {/* 3 ─────────────────────────────────────────────────── goal chooser ── */}
+      <CtaInterrupt
+        eyebrow="Heard enough?"
+        title="Stop reading about it. Go stand inside it."
+        body="The workspace opens on sample data so there is something to look at on day one. No credit card, and no procurement conversation required to look."
+      />
+
       <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-goal-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
@@ -544,6 +551,13 @@ function HomeV2(): React.ReactElement {
       ) : null}
 
       {/* 5 ──────────────────────────────────────────────────────── services ── */}
+      <CtaInterrupt
+        eyebrow="Still with us?"
+        title="The fastest way to judge this is to open it."
+        body="Both experiences in one account: the management view, and the one your team actually works in. Invite people when it has earned it."
+        primary={{ label: 'Open my free company workspace', to: '/try' }}
+      />
+
       <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-services-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
@@ -615,7 +629,7 @@ function HomeV2(): React.ReactElement {
                 Invite your team and the sample gives way to their own progress.
               </p>
               <p style={{ marginTop: 'var(--space-6)' }}>
-                <Link className="cbv2-btn cbv2-btn--primary" to="/start">
+                <Link className="cbv2-btn cbv2-btn--primary" to="/try">
                   Open the Free Company Workspace
                 </Link>
               </p>
@@ -669,7 +683,7 @@ function HomeV2(): React.ReactElement {
             Start free, or bring one workflow to an architect.
           </p>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/start">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/try">
               Open the Free Company Workspace
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">

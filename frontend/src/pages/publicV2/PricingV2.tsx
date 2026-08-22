@@ -116,7 +116,7 @@ function PricingV2(): React.ReactElement {
         <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
           <h2 id="cbv2-pricing-cta">Start on the free tier and decide later.</h2>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/start">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/try">
               Create a free account
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">
