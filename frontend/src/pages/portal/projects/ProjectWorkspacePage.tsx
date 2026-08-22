@@ -365,7 +365,11 @@ const ProjectWorkspacePage: React.FC = () => {
 
           {/* WHAT DONE MEANS — checkable, because acceptance criteria are a
               pre-flight the student walks, not a paragraph they re-read. The
-              count in the header answers "how close am I?" without scrolling. */}
+              count in the header answers "how close am I?" without scrolling.
+              `writeAccess` is passed because it changes the INSTRUCTION: a
+              pull-only student was never given a `.colaberry/progress.json`,
+              so telling them to open theirs points at a file that may not
+              exist. See the prop's own note in AcceptanceChecklist. */}
           <AcceptanceChecklist
             acceptance={acceptance}
             stepNo={1}
@@ -373,6 +377,7 @@ const ProjectWorkspacePage: React.FC = () => {
             isJustConfirmed={verif.isJustConfirmed}
             ticked={ticked}
             onToggle={toggleAcc}
+            writeAccess={repo?.connect?.write_access ?? null}
           />
 
           {/* HOW TO BUILD IT — the prompt and the repo are the same job (get to

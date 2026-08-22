@@ -600,13 +600,33 @@
   .te-tabbar{display:flex}
 }
 
-/* The /try preview CTAs, pinned once the banner scrolls away. Offset matches
-   .te-rail's 61px so it sits directly under the shell header, not over it. */
-.te-trybar{position:sticky;top:61px;z-index:15;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-3);
-  background:var(--surface-brand-subtle);border:var(--border-1) solid var(--border-subtle);border-radius:var(--radius-md);
-  padding:var(--space-2) var(--space-4);margin-bottom:var(--space-4);box-shadow:0 4px 14px rgba(0,0,0,.07);
-  opacity:0;transform:translateY(-8px);pointer-events:none;visibility:hidden;transition:opacity .25s ease,transform .25s ease}
+/* 3B: the portal wears the SITE lockup so the crossing from /platform to /try
+   is invisible, and keeps the product subtitle so a signed-in user still knows
+   which room they are in. */
+.te-brand--site{gap:10px}
+.te-brand--site .te-mark{width:auto;height:26px;border-radius:0}
+.te-brand--site>span{font-size:11px;color:var(--muted);padding-left:10px;border-left:1px solid var(--border);line-height:1.1}
+
+/* 1A: the /try CTAs as the portal's next-step pill. Offset matches .te-rail's
+   61px so it sits under the shell header rather than over it. */
+.te-trybar{position:sticky;top:61px;z-index:15;display:flex;align-items:center;gap:12px;
+  background:#fff;border:1px solid var(--border);border-radius:999px;
+  padding:7px 8px 7px 10px;margin-bottom:var(--space-4);box-shadow:0 6px 18px rgba(0,0,0,.09);
+  opacity:0;transform:translateY(-8px);pointer-events:none;visibility:hidden;
+  transition:opacity .25s ease,transform .25s ease}
 .te-trybar[data-pinned="yes"]{opacity:1;transform:none;pointer-events:auto;visibility:visible}
-.te-trybar__t{font-size:var(--fs-body-sm);color:var(--text-body)}
-.te-trybar__b{display:flex;gap:var(--space-2);flex-wrap:wrap}
+.te-trybar__star{width:30px;height:30px;border-radius:50%;background:rgba(54,120,149,.12);color:#2e6a86;
+  display:grid;place-items:center;flex:none;font-size:14px}
+.te-trybar__tx{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.te-trybar__k{font-family:var(--mono,ui-monospace,monospace);font-size:10px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.te-trybar__t{font-weight:700;font-size:14px;color:var(--strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.te-trybar__chip{font-family:var(--mono,ui-monospace,monospace);font-size:10px;font-weight:700;color:#468a2e;
+  background:rgba(91,166,60,.13);border-radius:4px;padding:2px 7px;flex:none}
+.te-trybar__b{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;flex:none}
+@media (max-width:760px){
+  .te-trybar{border-radius:12px;flex-wrap:wrap}
+  .te-trybar__t{white-space:normal}
+  .te-trybar__b{margin-left:0;width:100%}
+}
 @media (prefers-reduced-motion:reduce){.te-trybar{transition:none;transform:none}}
