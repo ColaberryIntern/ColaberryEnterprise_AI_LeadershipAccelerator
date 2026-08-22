@@ -240,7 +240,20 @@ td code{font-size:12px}
 <h2 id="s2-sequencing-note">Sequencing note</h2>
 <p>Gate 0 was produced and committed on its own so it could be reviewed as the safety check before the migration. It was, and the build was <strong>unparked on 2026-08-22</strong> on Ali's instruction. Work has continued since.</p>
 <p>The reason the hold was worth honouring is visible in D-01: the discovery pass caught that the working tree was 2,586 commits stale and missing three models the plan names as foundations. That is what Gate 0 is for.</p>
-<p><strong>Still true:</strong> nothing has been merged to <code>main</code>, nothing has been deployed, no DNS has been pointed, and no migration has run against any database. <code>ensureMultiTenantSchema()</code> is wired into boot but this branch has never been booted anywhere, and no backfill has been executed.</p>
+<p><strong>Still true:</strong> nothing has been deployed, no DNS has been pointed, and no backfill has been executed against real data.</p>
+<h2 id="s2-schema-rehearsal-the-ddl-has-now-been-run-against-">Schema rehearsal — the DDL has now been run against a real database</h2>
+<p>The one genuine unknown in this work was that <code>ensureMultiTenantSchema()</code> had never executed anywhere. Merging arms it for the next production boot, so it was rehearsed first, on <strong>2026-08-22</strong>, against a throwaway Postgres 16 loaded with a <strong>structure-only dump of the live production schema</strong> (373 tables). No production data was copied and nothing on the production database was modified.</p>
+<div class="scroll"><table><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody><tr><td>All 69 statements against the real prod schema</td><td><strong>applied cleanly, zero errors</strong></td></tr><tr><td>Second identical run (boot executes this every time)</td><td><strong>zero errors, idempotent</strong></td></tr><tr><td>10 new tables created</td><td>all present</td></tr><tr><td>20 additive columns on 9 existing tables</td><td>all present, all nullable</td></tr><tr><td>Foreign keys on new columns of <code>page_events</code> / <code>visitor_sessions</code></td><td><strong>none</strong> — the write-hot policy held</td></tr><tr><td>Pre-existing <code>page_events</code> FKs</td><td>untouched (<code>session_id</code>, <code>visitor_id</code>)</td></tr></tbody></table></div>
+<p>Two constraints were exercised functionally rather than merely inspected:</p>
+<ul>
+<li>inserting a second <code>lead_tenant_contexts</code> row for the same <code>(lead, tenant, brand)</code> is</li>
+</ul>
+<p>  <strong>rejected</strong> by <code>lead_tenant_contexts_lead_tenant_brand_unique</code> — this is the   idempotency backstop for the whole lead-context pipeline;</p>
+<ul>
+<li>inserting a second default sender profile for one brand is <strong>rejected</strong> by</li>
+</ul>
+<p>  <code>sender_profiles_one_default_per_brand</code> — two defaults is not a preference, it is a   coin flip at send time.</p>
+<p>The only errors during restore were the <code>vector</code> extension being unavailable in the stock Postgres image, which is unrelated to this work.</p>
 <hr />
 <h2 id="s2-gate-0-discovery">Gate 0 — Discovery</h2>
 <p><strong>Status: COMPLETE</strong> — this is the deliverable for review.</p>

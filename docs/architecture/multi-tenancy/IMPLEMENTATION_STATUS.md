@@ -16,10 +16,37 @@ The reason the hold was worth honouring is visible in D-01: the discovery pass c
 that the working tree was 2,586 commits stale and missing three models the plan names as
 foundations. That is what Gate 0 is for.
 
-**Still true:** nothing has been merged to `main`, nothing has been deployed, no DNS has
-been pointed, and no migration has run against any database. `ensureMultiTenantSchema()`
-is wired into boot but this branch has never been booted anywhere, and no backfill has
-been executed.
+**Still true:** nothing has been deployed, no DNS has been pointed, and no backfill has
+been executed against real data.
+
+## Schema rehearsal — the DDL has now been run against a real database
+
+The one genuine unknown in this work was that `ensureMultiTenantSchema()` had never
+executed anywhere. Merging arms it for the next production boot, so it was rehearsed
+first, on **2026-08-22**, against a throwaway Postgres 16 loaded with a
+**structure-only dump of the live production schema** (373 tables). No production data
+was copied and nothing on the production database was modified.
+
+| Check | Result |
+|---|---|
+| All 69 statements against the real prod schema | **applied cleanly, zero errors** |
+| Second identical run (boot executes this every time) | **zero errors, idempotent** |
+| 10 new tables created | all present |
+| 20 additive columns on 9 existing tables | all present, all nullable |
+| Foreign keys on new columns of `page_events` / `visitor_sessions` | **none** — the write-hot policy held |
+| Pre-existing `page_events` FKs | untouched (`session_id`, `visitor_id`) |
+
+Two constraints were exercised functionally rather than merely inspected:
+
+- inserting a second `lead_tenant_contexts` row for the same `(lead, tenant, brand)` is
+  **rejected** by `lead_tenant_contexts_lead_tenant_brand_unique` — this is the
+  idempotency backstop for the whole lead-context pipeline;
+- inserting a second default sender profile for one brand is **rejected** by
+  `sender_profiles_one_default_per_brand` — two defaults is not a preference, it is a
+  coin flip at send time.
+
+The only errors during restore were the `vector` extension being unavailable in the
+stock Postgres image, which is unrelated to this work.
 
 ---
 
