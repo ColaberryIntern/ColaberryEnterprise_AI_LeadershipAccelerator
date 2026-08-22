@@ -11,7 +11,7 @@
 jest.mock('../../models/AiEvent', () => ({ findAll: jest.fn(), findOne: jest.fn() }));
 jest.mock('../alertService', () => ({ emitAlert: jest.fn().mockResolvedValue({ id: 'alert-1' }) }));
 
-import { evaluateErrorSpike, checkErrorClassSpikes } from '../errorSpikeAlertService';
+import { evaluateErrorSpike, checkErrorClassSpikes, thresholdsFor } from '../errorSpikeAlertService';
 import AiEvent from '../../models/AiEvent';
 import { emitAlert } from '../alertService';
 
@@ -21,15 +21,15 @@ const mockEmitAlert = emitAlert as jest.Mock;
 
 describe('evaluateErrorSpike — pure evaluator', () => {
   it('happy path: a low failure count produces no alert', () => {
-    expect(evaluateErrorSpike('admin_auth_failed', 1)).toEqual([]);
+    expect(evaluateErrorSpike('cory_auth_failed', 1)).toEqual([]);
   });
 
   it('boundary: one below the warning count does not trigger', () => {
-    expect(evaluateErrorSpike('admin_auth_failed', 9)).toEqual([]);
+    expect(evaluateErrorSpike('cory_auth_failed', 9)).toEqual([]);
   });
 
   it('boundary: exactly the warning count triggers a warning', () => {
-    const alerts = evaluateErrorSpike('admin_auth_failed', 10);
+    const alerts = evaluateErrorSpike('cory_auth_failed', 10);
     expect(alerts).toHaveLength(1);
     expect(alerts[0].type).toBe('warning');
     expect(alerts[0].impactArea).toBe('auth');
@@ -63,10 +63,63 @@ describe('evaluateErrorSpike — pure evaluator', () => {
   });
 
   it('regression: description never claims a percentage — only an absolute count is measurable here', () => {
-    const alerts = evaluateErrorSpike('admin_auth_failed', 12);
+    const alerts = evaluateErrorSpike('cory_auth_failed', 12);
     expect(alerts[0].description).not.toMatch(/%/);
     expect(alerts[0].metadata).not.toHaveProperty('error_rate');
     expect(alerts[0].metadata).not.toHaveProperty('total');
+  });
+});
+
+/**
+ * Per-event-type thresholds.
+ *
+ * A single global pair assumed every watched type sits near zero. Six of the
+ * nine do. `admin_auth_failed` averaged 48/hr over the 7 days to 2026-08-22
+ * (p95 121, peak 176), so a critical at 25 fired at severity 5/5 essentially
+ * every hour, indefinitely. The alert that was eventually investigated reported
+ * 46, which is BELOW that baseline. These tests keep the default honest for the
+ * quiet types and stop the noisy ones from crying wolf.
+ */
+describe('per-event-type thresholds', () => {
+  it('leaves every unlisted type on the shared default', () => {
+    for (const type of ['apollo_request_failed', 'ghl_request_failed', 'basecamp_request_failed',
+      'synthflow_call_failed', 'cory_auth_failed', 'alumni_auth_failed', 'some_unrelated_event']) {
+      expect(thresholdsFor(type)).toEqual({ warning: 10, critical: 25 });
+    }
+  });
+
+  it('silences admin_auth_failed at its real baseline instead of paging hourly', () => {
+    // 48/hr average and a 121 p95 both used to trip a severity-5 critical.
+    expect(evaluateErrorSpike('admin_auth_failed', 48)).toEqual([]);
+    expect(evaluateErrorSpike('admin_auth_failed', 121)).toEqual([]);
+    // The exact count from the alert that prompted this change.
+    expect(evaluateErrorSpike('admin_auth_failed', 46)).toEqual([]);
+  });
+
+  it('still pages when admin_auth_failed genuinely deviates', () => {
+    expect(evaluateErrorSpike('admin_auth_failed', 150)[0].type).toBe('warning');
+    expect(evaluateErrorSpike('admin_auth_failed', 250)[0].type).toBe('critical');
+  });
+
+  it('raises participant_auth_failed above its own peak but keeps it far below admin', () => {
+    // Measured peak was 19/hr. A student-session failure matters at a much
+    // lower volume than an admin poller, so it must not inherit admin's 150.
+    expect(evaluateErrorSpike('participant_auth_failed', 19)).toEqual([]);
+    expect(evaluateErrorSpike('participant_auth_failed', 30)[0].type).toBe('warning');
+    expect(evaluateErrorSpike('participant_auth_failed', 60)[0].type).toBe('critical');
+  });
+
+  it('keeps every override ordered warning-below-critical', () => {
+    for (const type of ['admin_auth_failed', 'participant_auth_failed']) {
+      const { warning, critical } = thresholdsFor(type);
+      expect(warning).toBeLessThan(critical);
+    }
+  });
+
+  it('never lets an override drop below the shared default, which would be a silent downgrade', () => {
+    for (const type of ['admin_auth_failed', 'participant_auth_failed']) {
+      expect(thresholdsFor(type).warning).toBeGreaterThanOrEqual(10);
+    }
   });
 });
 
@@ -77,7 +130,7 @@ describe('checkErrorClassSpikes — orchestrator', () => {
 
   it('happy path: counts failures per event_type from a failure-only query and alerts only the breaching one', async () => {
     findAllEvents.mockResolvedValue([
-      { event_type: 'admin_auth_failed', count: '12' },
+      { event_type: 'cory_auth_failed', count: '12' },
       { event_type: 'ghl_request_failed', count: '2' },
     ]);
     findOneEvent.mockResolvedValue({ metadata: { message: 'jwt expired', ip: '1.2.3.4' }, created_at: new Date('2026-07-17T12:00:00Z') });
@@ -106,7 +159,7 @@ describe('checkErrorClassSpikes — orchestrator', () => {
   });
 
   it('boundary: a breaching event type with no matching sample row (edge case) still alerts, with sample_failure null', async () => {
-    findAllEvents.mockResolvedValue([{ event_type: 'admin_auth_failed', count: '11' }]);
+    findAllEvents.mockResolvedValue([{ event_type: 'cory_auth_failed', count: '11' }]);
     findOneEvent.mockResolvedValue(null);
 
     await checkErrorClassSpikes();
@@ -117,7 +170,7 @@ describe('checkErrorClassSpikes — orchestrator', () => {
 
   it('failure isolation: an emitAlert failure for one event type does not throw or block others', async () => {
     findAllEvents.mockResolvedValue([
-      { event_type: 'admin_auth_failed', count: '30' },
+      { event_type: 'cory_auth_failed', count: '30' },
       { event_type: 'apollo_request_failed', count: '30' },
     ]);
     findOneEvent.mockResolvedValue(null);
