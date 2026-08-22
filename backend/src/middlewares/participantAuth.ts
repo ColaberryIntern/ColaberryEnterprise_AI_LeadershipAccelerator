@@ -57,7 +57,7 @@ export function requireParticipant(req: Request, res: Response, next: NextFuncti
     req.participant = payload;
     next();
   } catch (err) {
-    logAuthFailure('participant_auth_failed', err, 'participant', req.ip);
+    logAuthFailure('participant_auth_failed', err, 'participant', req.ip, req);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

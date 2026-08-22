@@ -72,7 +72,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     req.admin = payload;
     next();
   } catch (err) {
-    logAuthFailure('admin_auth_failed', err, 'admin', req.ip);
+    logAuthFailure('admin_auth_failed', err, 'admin', req.ip, req);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
@@ -155,7 +155,7 @@ export function requireSalesOrAdmin(req: Request, res: Response, next: NextFunct
     req.admin = payload;
     next();
   } catch (err) {
-    logAuthFailure('sales_or_admin_auth_failed', err, 'admin', req.ip);
+    logAuthFailure('sales_or_admin_auth_failed', err, 'admin', req.ip, req);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
@@ -208,7 +208,7 @@ export function requireCoryAuthorized(req: Request, res: Response, next: NextFun
     };
     next();
   } catch (err) {
-    logAuthFailure('cory_auth_failed', err, 'admin', req.ip);
+    logAuthFailure('cory_auth_failed', err, 'admin', req.ip, req);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
