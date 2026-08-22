@@ -18,6 +18,14 @@ interface PageEventAttributes {
   page_title?: string | null;
   page_category?: string | null;
   event_data?: Record<string, any> | null;
+  /** Multi-tenant ecosystem context. Nullable: tracking is fail-soft. */
+  tenant_id?: string | null;
+  brand_id?: string | null;
+  source_id?: string | null;
+  entry_point_id?: string | null;
+  campaign_id?: string | null;
+  campaign_lead_id?: string | null;
+  organization_id?: string | null;
   timestamp: Date;
   created_at?: Date;
 }
@@ -33,6 +41,13 @@ class PageEvent extends Model<PageEventAttributes> implements PageEventAttribute
   declare page_title: string | null;
   declare page_category: string | null;
   declare event_data: Record<string, any> | null;
+  declare tenant_id: string | null;
+  declare brand_id: string | null;
+  declare source_id: string | null;
+  declare entry_point_id: string | null;
+  declare campaign_id: string | null;
+  declare campaign_lead_id: string | null;
+  declare organization_id: string | null;
   declare timestamp: Date;
   declare created_at: Date;
 }
@@ -85,6 +100,20 @@ PageEvent.init(
       type: DataTypes.JSONB,
       allowNull: true,
     },
+    // --- multi-tenant ecosystem context -------------------------------------
+    // Declared here because the DDL adds these columns and Sequelize only ever
+    // SELECTs, INSERTs or UPDATEs attributes the model knows about. A column that
+    // exists in Postgres but not in the model is invisible: reads come back
+    // undefined and writes are silently dropped. That is exactly what happened
+    // before this block existed, and it left the whole tenancy runtime inert while
+    // every test still passed, because the tests mock the models.
+    tenant_id: { type: DataTypes.UUID, allowNull: true },
+    brand_id: { type: DataTypes.UUID, allowNull: true },
+    source_id: { type: DataTypes.UUID, allowNull: true },
+    entry_point_id: { type: DataTypes.UUID, allowNull: true },
+    campaign_id: { type: DataTypes.UUID, allowNull: true },
+    campaign_lead_id: { type: DataTypes.UUID, allowNull: true },
+    organization_id: { type: DataTypes.UUID, allowNull: true },
     timestamp: {
       type: DataTypes.DATE,
       allowNull: false,

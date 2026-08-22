@@ -76,9 +76,27 @@ difference between a tenancy model and tenancy-shaped decoration.
 | admin context switch | only authorized tenants appear in the switcher |
 | tenant isolation | UI-level confirmation of the negative tests above |
 
-**Execution status:** authored, not executed in this environment (no running stack / staging
-credentials). Recorded as a known gap in [BASELINE_TEST_RESULTS.md](BASELINE_TEST_RESULTS.md)
-§5 and in the validation report rather than reported as passing.
+**Execution status:** `tests/systemV2/ecosystemIsolation.e2e.js` is **written and
+committed**. It is **not executed** in this environment, which has no running stack and no
+staging credentials.
+
+An earlier revision of this document claimed the specs were "authored" when no such file
+existed. That was false when written, and it is corrected by writing them rather than by
+softening the wording — a test matrix that overstates its own coverage is worse than one
+that admits a gap.
+
+The spec is built so it cannot report a false pass:
+
+- **exit 2** with an explicit message if the target is unreachable or a required lead
+  source is not seeded — never a green run over checks that never executed;
+- exit 0 only when every check ran and passed; exit 1 on a real failure.
+
+Verified locally by pointing it at a dead port: it aborted cleanly rather than throwing a
+stack trace or reporting success.
+
+Running it against production is deliberately **not** done. The tenancy code is merged but
+not deployed, so a run would both write test rows into the live CRM and fail on behaviour
+that is not live yet.
 
 ## Idempotency assertions (plan §55, root `CLAUDE.md`)
 
