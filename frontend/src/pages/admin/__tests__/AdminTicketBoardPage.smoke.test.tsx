@@ -565,18 +565,16 @@ describe('AdminTicketBoardPage — creator filter (real, roster-backed select)',
     expect(Array.from(select.options).some((o) => o.value === 'some-removed-agent')).toBe(true);
     expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/creator=some-removed-agent/);
   });
-});
 
-// Org Chart v7 (2026-08-23, session CC-20260818-x4nk continued) — Ali, live:
-// the org chart's per-agent ticket count (date-unrestricted, see
-// orgChartService.ts) didn't match this board's default 7-day "recent" view,
-// so the org chart's ticket-filter button now deep-links with `&range=all`.
-describe('AdminTicketBoardPage — `range=all` deep-link (Org Chart v7)', () => {
-  afterEach(() => {
-    window.history.pushState({}, '', '/'); // reset the deep-link URL between tests
-  });
-
-  it('happy path: ?creator=<agent>&range=all starts on "All time" (no created_after in the board fetch), matching the org chart card that linked here', async () => {
+  // Org Chart v7 (2026-08-23, session CC-20260818-x4nk continued) — Ali,
+  // live: the org chart's per-agent ticket count (date-unrestricted, see
+  // orgChartService.ts) didn't match this board's default 7-day "recent"
+  // view, so the org chart's ticket-filter button now deep-links with
+  // `&range=all`. Nested here (not a separate top-level describe) so these
+  // tests share ROSTER/creatorSelect()/boardFetchCalls() with the rest of
+  // this file's creator-filter coverage, and the outer afterEach above
+  // already resets the deep-link URL between tests.
+  it('`range=all` happy path: ?creator=<agent>&range=all starts on "All time" (no created_after in the board fetch), matching the org chart card that linked here', async () => {
     window.history.pushState({}, '', '/admin/tickets?creator=cory-engine&range=all');
     getTicketCreatorOptions.mockResolvedValue(ROSTER);
     mockFetch({ backlog: [makeTicket({ id: 'x-7' })] });
@@ -590,7 +588,7 @@ describe('AdminTicketBoardPage — `range=all` deep-link (Org Chart v7)', () => 
     expect(allTimeBtn.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('boundary: plain navigation (no `range` param) keeps the existing 7-day "recent" default — the 2026-08-18 performance fix is untouched', async () => {
+  it('`range=all` boundary: plain navigation (no `range` param) keeps the existing 7-day "recent" default — the 2026-08-18 performance fix is untouched', async () => {
     getTicketCreatorOptions.mockResolvedValue(ROSTER);
     mockFetch({ backlog: [makeTicket({ id: 'x-8' })] });
     await renderBoard();
@@ -601,7 +599,7 @@ describe('AdminTicketBoardPage — `range=all` deep-link (Org Chart v7)', () => 
     expect(recentBtn?.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('boundary: `range` present but not exactly "all" (e.g. a typo or unrelated value) is ignored, staying on the 7-day default', async () => {
+  it('`range=all` boundary: `range` present but not exactly "all" (e.g. a typo or unrelated value) is ignored, staying on the 7-day default', async () => {
     window.history.pushState({}, '', '/admin/tickets?range=everything');
     getTicketCreatorOptions.mockResolvedValue(ROSTER);
     mockFetch({ backlog: [makeTicket({ id: 'x-9' })] });
