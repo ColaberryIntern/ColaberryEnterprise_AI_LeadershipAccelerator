@@ -136,7 +136,17 @@ export default function AdminTicketBoardPage() {
   // every page open. Defaults to the last 7 days; an explicit toggle switches to
   // "All time" and back. Deliberately NOT reset by clearAllFilters/"Clear" below
   // (see that function's own comment) — it's a view mode, not a dropdown filter.
-  const [dateRange, setDateRange] = useState<'recent' | 'all'>('recent');
+  //
+  // Org Chart v7 (2026-08-23) — Ali, live: the per-agent ticket counts on the
+  // org chart (fixed to be date-unrestricted, see orgChartService.ts) don't
+  // match a "recent" 7-day board, so the org chart's ticket-filter button now
+  // deep-links here with `&range=all` (read in the mount effect below) to
+  // start on the SAME unrestricted view its own count represents. Plain
+  // navigation to this page (no `range` param) keeps the 7-day default — the
+  // 2026-08-18 performance fix stays intact for the common case.
+  const [dateRange, setDateRange] = useState<'recent' | 'all'>(
+    new URLSearchParams(window.location.search).get('range') === 'all' ? 'all' : 'recent',
+  );
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'medium', type: 'task' });
   const [creating, setCreating] = useState(false);

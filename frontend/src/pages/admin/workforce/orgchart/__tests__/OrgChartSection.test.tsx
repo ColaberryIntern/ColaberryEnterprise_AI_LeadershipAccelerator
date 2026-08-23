@@ -740,7 +740,7 @@ describe('OrgChartSection — ticket-filter button', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain&range=all', '_blank', 'noopener,noreferrer');
     // The card's own click handler (open the Leadership drawer) must NOT
     // also have fired — stopPropagation on the button click.
     expect(container.querySelector('.wf-scrim')).toBeFalsy();
@@ -758,7 +758,7 @@ describe('OrgChartSection — ticket-filter button', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect&range=all', '_blank', 'noopener,noreferrer');
   });
 
   it('encodes an agent_name with special characters safely in the URL', async () => {
@@ -776,7 +776,7 @@ describe('OrgChartSection — ticket-filter button', () => {
     });
 
     expect(windowOpenSpy).toHaveBeenCalledWith(
-      `/admin/tickets?creator=${encodeURIComponent('agent name/with?special&chars')}`,
+      `/admin/tickets?creator=${encodeURIComponent('agent name/with?special&chars')}&range=all`,
       '_blank',
       'noopener,noreferrer',
     );
@@ -817,7 +817,7 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain&range=all', '_blank', 'noopener,noreferrer');
     expect(container.querySelector('.wf-scrim')).toBeFalsy(); // still doesn't also open the drawer
   });
 
@@ -834,7 +834,7 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect&range=all', '_blank', 'noopener,noreferrer');
   });
 
   it('pressing Enter on the focused control (keyboard operability, previously missing on the icon-only control) opens the filtered tickets', async () => {
@@ -848,7 +848,7 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain&range=all', '_blank', 'noopener,noreferrer');
   });
 
   it('pressing Space on the focused control also opens the filtered tickets', async () => {
@@ -862,7 +862,7 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect&range=all', '_blank', 'noopener,noreferrer');
   });
 
   it('a key other than Enter/Space does nothing', async () => {
