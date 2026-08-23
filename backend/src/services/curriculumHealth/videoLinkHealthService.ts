@@ -17,15 +17,26 @@
  * plausible-looking automatic substitution is exactly the kind of thing that
  * survives review and shouldn't.
  *
+ * HOW IT LOOKS. Through the YouTube Data API v3, not by scraping. The scraper it
+ * replaced worked from a laptop and was blind from the production host, which
+ * YouTube answers with a bot challenge. The dry run before this change was 150
+ * checked, 150 unknown, 0 failures, 6 untrusted batches, finished in nine seconds
+ * because every batch bailed the moment its control probe was challenged. That is
+ * the previous fix behaving correctly - quiet rather than 150 false alerts - and
+ * it is still no coverage. `videos.list` answers the same questions from a
+ * metered endpoint that has no reason to decide we are a robot, at one quota unit
+ * per fifty videos.
+ *
  * HOW A FAILURE EARNS AN ALERT. Three independent gates, each one added because
  * the check without it produced false positives at corpus scale:
  *
- *   1. The classifier must not be looking at a bot challenge. YouTube reuses
- *      LOGIN_REQUIRED and ERROR for "prove you are human", and on 2026-08-22
- *      reading that as an answer turned 146 healthy videos into PRIVATE.
- *   2. The batch's control video — one of ours, known good, probed in the same
- *      burst — must have come back healthy. If YouTube will not answer honestly
- *      about a video we know is fine, nothing else in that burst is evidence.
+ *   1. The API must have answered. Quota exhaustion, a rejected key, an IP
+ *      restriction, a timeout and a paginated response are all "we could not
+ *      see", and none of them may become a statement about a video.
+ *   2. The batch's control video - one of ours, known good, carried inside the
+ *      same `videos.list` call - must have come back healthy. If the API will not
+ *      answer honestly about a video we know is fine, nothing else in that
+ *      response is evidence, including the ids that were missing from it.
  *   3. The failure must reproduce in a second, separately controlled observation
  *      after a cooldown. A video that fails once and passes on retry was never
  *      broken.
@@ -33,15 +44,24 @@
  * Anything that does not clear all three lands in UNKNOWN, which is reported and
  * never paged on.
  *
+ * AND ABSENCE IS NOT HEALTH. `videos.list` omits ids it cannot return instead of
+ * erroring on them, so 47 items back from 50 ids means three videos are broken.
+ * The probe iterates the request rather than the response precisely so a missing
+ * video can never fall through as healthy: that is the 146-video mistake with the
+ * sign flipped, and silent instead of loud.
+ *
  * Failure-first notes:
- *  - What if a probe fails? Capped retry ladder, then UNKNOWN. UNKNOWN never
- *    alerts, so a rate limit cannot page anyone.
- *  - What if YouTube throttles the whole run? The control fails, every batch is
- *    marked untrusted, `untrusted_batches` and `throttled` go up and no failure
- *    is reported. Loud in the logs, silent on the pager.
- *  - What if YouTube changes its markup? `extractPlayerResponse` returns null,
- *    every video degrades to UNKNOWN, and the control degrades with them, so the
- *    run reports itself untrustworthy rather than reporting a dead curriculum.
+ *  - What if the API refuses? The batch is untrusted: `untrusted_batches` and
+ *    `unverified` go up, nothing is called healthy and nothing is called broken.
+ *  - What if the quota runs out mid-run? Identical treatment. The remaining
+ *    batches are unverified, the run reports it, and no alert fires.
+ *  - What if the key is missing entirely? The run refuses to start and says so,
+ *    rather than probing 150 videos into a wall.
+ *  - What if the response shape changed? A 200 with no items array is a
+ *    ContractViolation, not an empty result; an item carrying no
+ *    `status.embeddable` is UNKNOWN, not embeddable. Neither degrades to healthy.
+ *  - What if a run sees NOTHING at all? It does not stamp the day's idempotency
+ *    key, so a blind run cannot consume the slot a sighted one needs.
  *  - What if the DB is unreachable? The run throws; instrumentCronJob records the
  *    failure against the agent registry. No partial state is written.
  *  - Not handled: a video that is playable but whose *content* changed. No
@@ -54,16 +74,18 @@ import { getSetting, setSetting } from '../settingsService';
 import { emitAlert } from '../alertService';
 import { CANONICAL_PROGRAM_ID } from '../timeline/curriculumScope';
 import { ownershipOf, youtubeId, type Ownership, type VideoState } from './videoLinkClassifier';
+import { DAILY_QUOTA_NOTE, createVideoApiClient } from './videoLinkApiClient';
+import { createAbsenceProbe } from './videoLinkAbsenceProbe';
 import {
   BATCH_SIZE,
   CONFIRM_COOLDOWN_MS,
   CONTROL_VIDEO_ID,
   PACE_MS,
   chunk,
-  createProber,
   observeBatch,
   sleep,
   type Observation,
+  type ProbeDeps,
 } from './videoLinkProbe';
 import { assessCard, sealedWeeks, severityFor, type CardImpact, type ImpactCard } from './videoLinkImpact';
 
@@ -96,12 +118,18 @@ export interface VideoHealthRunResult {
   failures: VideoFailure[];
   sealed_weeks: number[];
   alerts_emitted: number;
-  /** Probes YouTube refused to answer. A measure of us, not of the curriculum. */
+  /** Follow-up lookups YouTube refused. A measure of us, not of the curriculum. */
   throttled: number;
-  /** Batches whose control failed. Nothing in them may be called broken. */
+  /** Batches the API would not vouch for. Nothing in them may be called broken. */
   untrusted_batches: number;
   /** Videos we declined to judge because their batch was untrusted. */
   unverified: number;
+  /**
+   * YouTube Data API quota units this run spent. Reported so the daily cost is an
+   * observed number rather than an estimate, and so a run that suddenly costs 100x
+   * (someone reached for `search.list`) is visible the day it happens.
+   */
+  quota_units: number;
   /**
    * Failing videos by owner. Reported as three numbers rather than one
    * "on our channel" count: that count read 0 during the 2026-08-22 dry run and
@@ -196,7 +224,7 @@ async function completableResolver(): Promise<(type: string | null) => boolean> 
   }
 }
 
-/** What one control-bracketed sweep of a video list produced. */
+/** What one control-carrying sweep of a video list produced. */
 interface SweepTally {
   healthy: Set<string>;
   inconclusive: Set<string>;
@@ -204,31 +232,39 @@ interface SweepTally {
   throttled: number;
   untrustedBatches: number;
   unverified: number;
+  quotaUnits: number;
 }
 
 /**
- * Probe a list of videos in control-bracketed batches and sort the answers into
+ * Look a list of videos up in control-carrying batches and sort the answers into
  * healthy / inconclusive / suspect. Nothing here decides that a video is broken;
  * a suspect is only a candidate for a second look.
+ *
+ * Note what is NOT here: any path that quietly drops a video. Every id in
+ * `videoIds` lands in exactly one of the three buckets, because a video that
+ * falls out of the tally altogether reads downstream as "not a problem", which is
+ * the same lie as calling it healthy.
  */
 async function sweep(
   videoIds: string[],
-  prober: ReturnType<typeof createProber>,
+  deps: ProbeDeps,
   correlationId: string,
   pass: 1 | 2,
 ): Promise<SweepTally> {
   const tally: SweepTally = {
     healthy: new Set(), inconclusive: new Set(), suspects: [],
-    throttled: 0, untrustedBatches: 0, unverified: 0,
+    throttled: 0, untrustedBatches: 0, unverified: 0, quotaUnits: 0,
   };
 
   for (const batch of chunk(videoIds, BATCH_SIZE)) {
-    const { trusted, observations, control_detail } = await observeBatch(batch, prober);
+    const { trusted, observations, control_detail, quota_units } = await observeBatch(batch, deps);
     tally.throttled += observations.filter((o) => o.challenged).length;
+    tally.quotaUnits += quota_units;
 
     if (!trusted) {
-      // The control is the only thing standing between a throttled run and 149
-      // false alerts. When it fails, this batch is not evidence of anything.
+      // The control is the only thing standing between a blind run and 150 false
+      // alerts. When it fails, this batch is not evidence of anything - and that
+      // includes the ids that were missing from the response.
       tally.untrustedBatches++;
       tally.unverified += batch.length;
       for (const id of batch) tally.inconclusive.add(id);
@@ -263,7 +299,7 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
   const base: VideoHealthRunResult = {
     ran: false, skipped: false, correlation_id: correlationId,
     checked: 0, healthy: 0, unknown: 0, failures: [], sealed_weeks: [], alerts_emitted: 0,
-    throttled: 0, untrusted_batches: 0, unverified: 0,
+    throttled: 0, untrusted_batches: 0, unverified: 0, quota_units: 0,
     ownership: { ours: 0, third_party: 0, unknown: 0 },
   };
 
@@ -290,21 +326,39 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
   }
 
   const videoIds = Array.from(byVideo.keys());
+
+  // A missing key is not a clean bill of health, and it is not an outage either.
+  // Refuse to start and say which, rather than spending a run discovering it 150
+  // times. `unverified` carries the corpus size so the result still reads "I
+  // could not see N videos" instead of the far more dangerous "N videos checked".
+  if (videoIds.length && !(process.env.YOUTUBE_API_KEY || '').trim()) {
+    log('error', 'run_skipped', 'failure', {
+      correlation_id: correlationId, reason: 'youtube_api_key_missing', videos: videoIds.length,
+      error_class: 'NotConfigured',
+    });
+    return {
+      ...base, skipped: true, reason: 'youtube_api_key_missing',
+      checked: videoIds.length, unknown: videoIds.length, unverified: videoIds.length,
+    };
+  }
+
   log('info', 'run_started', 'success', {
     correlation_id: correlationId, videos: videoIds.length, cards: cards.length,
     pace_ms: paceMs, batch_size: BATCH_SIZE, control_video: CONTROL_VIDEO_ID,
+    quota_budget: DAILY_QUOTA_NOTE,
   });
 
-  const prober = createProber(paceMs);
+  const deps: ProbeDeps = { api: createVideoApiClient(), absence: createAbsenceProbe(paceMs) };
 
   // Pass 1 finds candidates. It does not convict.
-  const first = await sweep(videoIds, prober, correlationId, 1);
+  const first = await sweep(videoIds, deps, correlationId, 1);
 
   const healthy = new Set(first.healthy);
   const inconclusive = new Set(first.inconclusive);
   let throttled = first.throttled;
   let untrustedBatches = first.untrustedBatches;
   let unverified = first.unverified;
+  let quotaUnits = first.quotaUnits;
   const confirmed: Observation[] = [];
 
   // Pass 2 re-observes only the suspects, in their own controlled burst, after a
@@ -315,10 +369,11 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
     });
     await sleep(cooldownMs);
 
-    const second = await sweep(first.suspects.map((s) => s.video_id), prober, correlationId, 2);
+    const second = await sweep(first.suspects.map((s) => s.video_id), deps, correlationId, 2);
     throttled += second.throttled;
     untrustedBatches += second.untrustedBatches;
     unverified += second.unverified;
+    quotaUnits += second.quotaUnits;
     second.healthy.forEach((id) => healthy.add(id));
     second.inconclusive.forEach((id) => inconclusive.add(id));
     confirmed.push(...second.suspects);
@@ -352,6 +407,14 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
   const weeks = sealedWeeks(failures.flatMap((f) => f.cards));
   let alertsEmitted = 0;
 
+  /**
+   * A run that verified nothing at all did not happen, whatever the clock says.
+   * Stamping the idempotency key on a blind run would burn the day's slot and
+   * leave `force: true` as the only way back in - which is precisely how a check
+   * that cannot see becomes a check nobody notices is silent.
+   */
+  const sawNothing = videoIds.length > 0 && unverified >= videoIds.length;
+
   if (!opts.dryRun) {
     for (const f of failures) {
       // Title is stable per video and state so alertService folds repeat
@@ -384,7 +447,7 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
         });
       });
     }
-    await setSetting(LAST_RUN_KEY, today);
+    if (!sawNothing) await setSetting(LAST_RUN_KEY, today);
   }
 
   const unknown = inconclusive.size;
@@ -393,12 +456,13 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
     failures.length || untrustedBatches ? 'partial' : 'success', {
       correlation_id: correlationId, duration_ms: Date.now() - started,
       checked: videoIds.length, healthy: healthy.size, unknown, failures: failures.length,
-      sealed_weeks: weeks, throttled, untrusted_batches: untrustedBatches, unverified, ownership,
+      sealed_weeks: weeks, throttled, untrusted_batches: untrustedBatches, unverified,
+      quota_units: quotaUnits, saw_nothing: sawNothing, ownership,
     });
 
   return {
     ran: true, skipped: false, correlation_id: correlationId, checked: videoIds.length,
     healthy: healthy.size, unknown, failures, sealed_weeks: weeks, alerts_emitted: alertsEmitted,
-    throttled, untrusted_batches: untrustedBatches, unverified, ownership,
+    throttled, untrusted_batches: untrustedBatches, unverified, quota_units: quotaUnits, ownership,
   };
 }

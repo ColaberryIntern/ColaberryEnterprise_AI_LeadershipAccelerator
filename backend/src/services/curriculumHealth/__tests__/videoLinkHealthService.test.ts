@@ -3,8 +3,9 @@
  * The classifier and impact modules are deliberately NOT mocked: their real
  * logic is what decides alert-vs-silence, and mocking it would test nothing.
  *
- * The false-positive guards — bot challenges, the control video, two-observation
- * confirmation and the ownership metric — live in videoLinkFalsePositives.test.ts.
+ * The false-positive and false-negative guards - the absence rule, the control
+ * video, two-observation confirmation, quota degradation and the ownership
+ * metric - live in videoLinkFalsePositives.test.ts.
  */
 const mockQuery = jest.fn();
 const mockGetSetting = jest.fn();
@@ -23,7 +24,12 @@ jest.mock('../../timeline/curriculumScope', () => ({
 jest.mock('../../timeline/timelineGatingService', () => ({ isCompletableType: () => true }));
 
 import { centralDate, runVideoLinkHealthCheck } from '../videoLinkHealthService';
-import { FAST, cardRow, routeFetch } from './helpers/videoLinkFixtures';
+import { FAST, OUR_CHANNEL, TEST_KEY, apiFetch, cardRow } from './helpers/videoLinkFixtures';
+
+const savedKey = process.env.YOUTUBE_API_KEY;
+
+/** The video id `cardRow()` points at. */
+const CARD_VIDEO = '6wkFb2_cUik';
 
 /** cards query first, then any student-impact counts. */
 function primeDb(cards: Record<string, unknown>[], affected = 0) {
@@ -34,17 +40,26 @@ function primeDb(cards: Record<string, unknown>[], affected = 0) {
   });
 }
 
+/** The card's video is gone: absent from the API response, oEmbed says 404. */
+const deadVideo = () => apiFetch({ absent: [CARD_VIDEO], oembed: { [CARD_VIDEO]: 404 } });
+
 beforeEach(() => {
   jest.clearAllMocks();
+  process.env.YOUTUBE_API_KEY = TEST_KEY;
   mockGetSetting.mockResolvedValue(null);
   mockSetSetting.mockResolvedValue(undefined);
   mockEmitAlert.mockResolvedValue({ id: 'alert-1' });
 });
 
+afterAll(() => {
+  if (savedKey === undefined) delete process.env.YOUTUBE_API_KEY;
+  else process.env.YOUTUBE_API_KEY = savedKey;
+});
+
 describe('idempotency', () => {
   it('is a no-op when it has already run today: no probes, no alerts', async () => {
     mockGetSetting.mockResolvedValue(centralDate());
-    (global as any).fetch = routeFetch({});
+    (global as any).fetch = apiFetch({});
     primeDb([cardRow()]);
 
     const result = await runVideoLinkHealthCheck(FAST);
@@ -56,7 +71,7 @@ describe('idempotency', () => {
   });
 
   it('running twice in one day raises the alert once, not twice', async () => {
-    (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
+    (global as any).fetch = deadVideo();
     primeDb([cardRow()], 169);
 
     const first = await runVideoLinkHealthCheck(FAST);
@@ -72,7 +87,7 @@ describe('idempotency', () => {
 
   it('force overrides the same-day guard', async () => {
     mockGetSetting.mockResolvedValue(centralDate());
-    (global as any).fetch = routeFetch({});
+    (global as any).fetch = apiFetch({});
     primeDb([cardRow()]);
 
     const result = await runVideoLinkHealthCheck({ ...FAST, force: true });
@@ -82,21 +97,33 @@ describe('idempotency', () => {
   });
 
   it('dryRun probes but neither alerts nor stamps the run', async () => {
-    (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
+    (global as any).fetch = deadVideo();
     primeDb([cardRow()], 12);
 
     const result = await runVideoLinkHealthCheck({ ...FAST, dryRun: true });
 
+    // It really did the work: the failure is found and reported...
+    expect(result.ran).toBe(true);
     expect(result.failures).toHaveLength(1);
+    // ...and neither side effect fired.
     expect(result.alerts_emitted).toBe(0);
     expect(mockEmitAlert).not.toHaveBeenCalled();
     expect(mockSetSetting).not.toHaveBeenCalled();
+  });
+
+  it('dryRun leaves the day unstamped, so a later real run is not skipped', async () => {
+    (global as any).fetch = deadVideo();
+    primeDb([cardRow()], 12);
+
+    await runVideoLinkHealthCheck({ ...FAST, dryRun: true });
+
+    expect(mockSetSetting).not.toHaveBeenCalledWith('curriculum_video_health_last_run', expect.anything());
   });
 });
 
 describe('happy path', () => {
   it('a healthy corpus alerts on nothing and records the run', async () => {
-    (global as any).fetch = routeFetch({ oembed: 200, watch: { status: 'OK', embeddable: true } });
+    (global as any).fetch = apiFetch({});
     primeDb([cardRow(), cardRow({ id: 'b', video_url: 'https://youtu.be/w7_yWjYyxjE' })]);
 
     const result = await runVideoLinkHealthCheck(FAST);
@@ -109,8 +136,18 @@ describe('happy path', () => {
     expect(mockSetSetting).toHaveBeenCalledWith('curriculum_video_health_last_run', centralDate());
   });
 
+  it('a healthy corpus is distinguishable from a blind one in the result itself', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([cardRow()]);
+
+    const result = await runVideoLinkHealthCheck(FAST);
+
+    // Healthy: seen and fine. Blind would be healthy 0 / unknown 1 / unverified 1.
+    expect(result).toMatchObject({ healthy: 1, unknown: 0, unverified: 0, untrusted_batches: 0 });
+  });
+
   it('skips a non-YouTube URL instead of guessing at it', async () => {
-    (global as any).fetch = routeFetch({});
+    (global as any).fetch = apiFetch({});
     primeDb([cardRow({ video_url: 'https://storage.googleapis.com/sample/BigBuckBunny.mp4' })]);
 
     const result = await runVideoLinkHealthCheck(FAST);
@@ -122,7 +159,7 @@ describe('happy path', () => {
 
 describe('blast radius reporting', () => {
   it('reports the card, the week and the number of students a dead video blocks', async () => {
-    (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
+    (global as any).fetch = deadVideo();
     primeDb([cardRow()], 169);
 
     const result = await runVideoLinkHealthCheck(FAST);
@@ -138,12 +175,12 @@ describe('blast radius reporting', () => {
     const alert = mockEmitAlert.mock.calls[0][0];
     expect(alert.type).toBe('critical');
     expect(alert.severity).toBe(9);
-    expect(alert.entityId).toBe('6wkFb2_cUik');
+    expect(alert.entityId).toBe(CARD_VIDEO);
     expect(alert.description).toContain('169 student');
   });
 
   it('an archived card is reported but flagged as sealing nothing', async () => {
-    (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
+    (global as any).fetch = deadVideo();
     primeDb([cardRow({ visibility: 'archived' })]);
 
     const result = await runVideoLinkHealthCheck(FAST);
@@ -156,9 +193,8 @@ describe('blast radius reporting', () => {
   });
 
   it('flags a failure on OUR channel as fixable in our own settings', async () => {
-    (global as any).fetch = routeFetch({
-      oembed: 401,
-      watch: { status: 'OK', embeddable: false, owner: 'Colaberry School Of Data & AI' },
+    (global as any).fetch = apiFetch({
+      videos: { [CARD_VIDEO]: { embeddable: false, channelTitle: OUR_CHANNEL } },
     });
     primeDb([cardRow()], 5);
 
@@ -169,38 +205,21 @@ describe('blast radius reporting', () => {
     expect(mockEmitAlert.mock.calls[0][0].description).toContain('OUR CHANNEL');
   });
 
-  it('distinguishes UPLOADER_CLOSED from REMOVED via the channel probe', async () => {
-    (global as any).fetch = routeFetch({
-      oembed: 404,
-      watch: { status: 'ERROR', embeddable: false },
-      channel: 404,
-    });
-    primeDb([cardRow()], 1);
+  it('reports a region-blocked video, which plays fine everywhere except here', async () => {
+    (global as any).fetch = apiFetch({ videos: { [CARD_VIDEO]: { regionBlocked: ['US'] } } });
+    primeDb([cardRow()], 5);
 
     const result = await runVideoLinkHealthCheck(FAST);
-    expect(result.failures[0].state).toBe('UPLOADER_CLOSED');
+
+    expect(result.failures[0].state).toBe('REGION_BLOCKED');
   });
 });
 
 describe('failure paths never manufacture an outage', () => {
-  it('a rate-limited watch page is UNKNOWN and alerts on nothing', async () => {
-    (global as any).fetch = routeFetch({ oembed: 200, watch: 429 });
-    primeDb([cardRow()]);
-
-    const result = await runVideoLinkHealthCheck(FAST);
-
-    expect(result.unknown).toBe(1);
-    expect(result.failures).toEqual([]);
-    expect(mockEmitAlert).not.toHaveBeenCalled();
-  });
-
-  // Deliberately exceeds Jest's 5s default: a full outage makes every video burn
-  // its capped retry ladder (3 oEmbed + 3 watch attempts with backoff), and the
-  // control video burns its own before the batch is declared untrusted. That
-  // slowness is the retry policy working, not a hang, so the test is given room
-  // rather than the policy being weakened.
   it('a total network outage reports UNKNOWN rather than a dead curriculum', async () => {
-    (global as any).fetch = jest.fn(async () => { throw Object.assign(new Error('boom'), { name: 'TypeError' }); });
+    (global as any).fetch = jest.fn(async () => {
+      throw Object.assign(new Error('boom'), { name: 'TypeError' });
+    });
     primeDb([cardRow(), cardRow({ id: 'b', video_url: 'https://youtu.be/w7_yWjYyxjE' })]);
 
     const result = await runVideoLinkHealthCheck(FAST);
@@ -212,7 +231,7 @@ describe('failure paths never manufacture an outage', () => {
 
   it('an alert that fails to emit does not abort the rest of the run', async () => {
     mockEmitAlert.mockRejectedValue(new Error('alerts table down'));
-    (global as any).fetch = routeFetch({ oembed: 404, watch: { status: 'ERROR', embeddable: false } });
+    (global as any).fetch = deadVideo();
     primeDb([cardRow()], 4);
 
     const result = await runVideoLinkHealthCheck(FAST);
@@ -223,13 +242,24 @@ describe('failure paths never manufacture an outage', () => {
   });
 
   it('an empty curriculum is handled without dividing by zero or hanging', async () => {
-    (global as any).fetch = routeFetch({});
+    (global as any).fetch = apiFetch({});
     primeDb([]);
 
     const result = await runVideoLinkHealthCheck(FAST);
 
     expect(result.checked).toBe(0);
     expect(result.failures).toEqual([]);
+  });
+
+  it('an empty curriculum with no API key is still a clean no-op, not a skip', async () => {
+    delete process.env.YOUTUBE_API_KEY;
+    (global as any).fetch = apiFetch({});
+    primeDb([]);
+
+    const result = await runVideoLinkHealthCheck(FAST);
+
+    expect(result.skipped).toBe(false);
+    expect(result.checked).toBe(0);
   });
 });
 
@@ -243,4 +273,3 @@ describe('centralDate', () => {
     expect(centralDate(new Date('2026-08-22T01:30:00Z'))).toBe('2026-08-21');
   });
 });
-

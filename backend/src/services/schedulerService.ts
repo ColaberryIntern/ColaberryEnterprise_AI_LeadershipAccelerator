@@ -2403,15 +2403,16 @@ export function startScheduler(): void {
       instrumentCronJob('CurriculumVideoLinkHealth', async () => {
         const { runVideoLinkHealthCheck } = require('./curriculumHealth/videoLinkHealthService');
         const result = await runVideoLinkHealthCheck();
-        // `throttled`, `untrusted_batches` and the three-way ownership split are
+        // `unverified`, `untrusted_batches` and the three-way ownership split are
         // logged because a quiet run and a blindfolded run look identical
         // otherwise. A run with untrusted batches found nothing because it could
-        // not see, not because everything is fine.
+        // not see, not because everything is fine. `quota_units` is logged so the
+        // YouTube Data API cost is an observed number, not an estimate.
         console.log('[Scheduler] Curriculum video link health:', JSON.stringify({
-          skipped: result.skipped, checked: result.checked, healthy: result.healthy,
+          skipped: result.skipped, reason: result.reason, checked: result.checked, healthy: result.healthy,
           unknown: result.unknown, failures: result.failures.length, sealed_weeks: result.sealed_weeks,
           throttled: result.throttled, untrusted_batches: result.untrusted_batches,
-          unverified: result.unverified, ownership: result.ownership,
+          unverified: result.unverified, quota_units: result.quota_units, ownership: result.ownership,
         }));
       }).catch((err: any) => {
         console.error('[Scheduler] Curriculum video link health error:', err.message);
