@@ -108,15 +108,27 @@ export default function AdminTicketBoardPage() {
   const [board, setBoard] = useState<BoardData | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
+  // Deep-link support: ?open=<ticketId> (the approval email's link), ?source=,
+  // ?creator= (org chart's per-card ticket-filter button), ?status= all read
+  // synchronously from the URL via lazy useState initializers — the SAME
+  // pattern dateRange below already used for `?range=`. This used to be a
+  // separate useEffect that ran AFTER the mount-time fetchBoard() effect,
+  // which raced two fetches against each other: an unfiltered one (fired
+  // first, before the URL read landed) and the correctly creator-filtered
+  // one (fired after). Nothing cancelled the first request, so whichever
+  // response arrived LAST won — and the unfiltered request, pulling the
+  // entire ticket table, was frequently the slower one over a real network,
+  // silently overwriting the correct filtered board a moment after it first
+  // rendered (Ali, live, 2026-08-23: "it starts off with the selected open
+  // tickets, but then it looks like something resets it"). Reading every
+  // filter from the URL before the FIRST fetchBoard() ever fires removes the
+  // race entirely — there is only ever one request for a deep-linked view.
+  const initialParams = new URLSearchParams(window.location.search);
+  const [selectedTicket, setSelectedTicket] = useState<string | null>(initialParams.get('open'));
   const [filterPriority, setFilterPriority] = useState('');
   const [filterType, setFilterType] = useState('');
-  const [filterSource, setFilterSource] = useState('');
-  // Org Chart v4 (2026-08-20) — the org chart's per-card ticket-filter
-  // button deep-links here as `?creator=<agent_name>`. Mirrors filterSource's
-  // exact shape (state + mount-time read + fetchBoard forwarding) rather
-  // than inventing a second mechanism.
-  const [filterCreator, setFilterCreator] = useState('');
+  const [filterSource, setFilterSource] = useState(initialParams.get('source') || '');
+  const [filterCreator, setFilterCreator] = useState(initialParams.get('creator') || '');
   // Org Chart v5 (2026-08-21) — the roster TicketBoardFilterBar's Creator
   // <select> renders as options (agent_name/display_name pairs). Fetched
   // ONCE on mount via its own effect below, not tied to fetchBoard's
@@ -130,7 +142,16 @@ export default function AdminTicketBoardPage() {
   // filters. Client-side only: the board fetch already returns every status
   // bucket regardless of this value (see fetchBoard below, unchanged), so
   // "filtering" here means which columns render, not a new backend query.
-  const [filterStatus, setFilterStatus] = useState<'' | 'open' | 'done'>('');
+  // Ticket Count Sync fix, Task 3 (2026-08-24) — Ali, live, reported 3 times:
+  // an agent's card says "N open tickets," but clicking through showed far
+  // more. `?status=` (matching the "Open" KPI card's own click) narrows which
+  // of the 5 columns render to just the 4 that make up "open"
+  // (backlog+todo+in_progress+in_review, matching OPEN_TICKET_STATUS_FILTER
+  // in liveAgentsService.ts, the same definition the card's own count uses).
+  const initialStatus = initialParams.get('status');
+  const [filterStatus, setFilterStatus] = useState<'' | 'open' | 'done'>(
+    initialStatus === 'open' || initialStatus === 'done' ? initialStatus : '',
+  );
   // Ticket Board Performance fix (2026-08-18) — the board used to load every
   // ticket ever created (16,000+ rows, ~500+/week from agent activity alone) on
   // every page open. Defaults to the last 7 days; an explicit toggle switches to
@@ -140,13 +161,11 @@ export default function AdminTicketBoardPage() {
   // Org Chart v7 (2026-08-23) — Ali, live: the per-agent ticket counts on the
   // org chart (fixed to be date-unrestricted, see orgChartService.ts) don't
   // match a "recent" 7-day board, so the org chart's ticket-filter button now
-  // deep-links here with `&range=all` (read in the mount effect below) to
-  // start on the SAME unrestricted view its own count represents. Plain
-  // navigation to this page (no `range` param) keeps the 7-day default — the
-  // 2026-08-18 performance fix stays intact for the common case.
-  const [dateRange, setDateRange] = useState<'recent' | 'all'>(
-    new URLSearchParams(window.location.search).get('range') === 'all' ? 'all' : 'recent',
-  );
+  // deep-links here with `&range=all` to start on the SAME unrestricted view
+  // its own count represents. Plain navigation to this page (no `range`
+  // param) keeps the 7-day default — the 2026-08-18 performance fix stays
+  // intact for the common case.
+  const [dateRange, setDateRange] = useState<'recent' | 'all'>(initialParams.get('range') === 'all' ? 'all' : 'recent');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'medium', type: 'task' });
   const [creating, setCreating] = useState(false);
@@ -187,36 +206,6 @@ export default function AdminTicketBoardPage() {
   }, [token, filterPriority, filterType, filterSource, filterCreator, dateRange]);
 
   useEffect(() => { fetchBoard(); }, [fetchBoard]);
-
-  // Deep-link support: ?open=<ticketId> (the approval email's link) opens that
-  // ticket's detail modal directly; ?source=<value> pre-applies the source filter
-  // (used by the Trust Center's "View tickets" link per director); ?creator=<value>
-  // (org chart v4, 2026-08-20 — the per-card ticket-filter button, opened in a
-  // new tab) pre-applies the creator filter. Read once on mount — the filter
-  // select/chip below stays the source of truth after that.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const open = params.get('open');
-    const source = params.get('source');
-    const creator = params.get('creator');
-    // Ticket Count Sync fix, Task 3 (2026-08-24, session CC-20260818-x4nk
-    // continued) — Ali, live, reported 3 times: an agent's card says "N open
-    // tickets," but clicking through showed far more. Root cause: `creator`
-    // and `range` (added in the prior fix) narrow WHICH tickets are fetched,
-    // but never touched `filterStatus` — so the board rendered all 5 status
-    // columns including Done, not just the 4 that make up "open"
-    // (backlog+todo+in_progress+in_review, matching OPEN_TICKET_STATUS_FILTER
-    // in liveAgentsService.ts, the same definition the card's own count uses).
-    // For InboxCaseEngine specifically this was the difference between the
-    // 304 the card promised and 1262 total tickets ever created by it. `status`
-    // reuses the SAME `filterStatus` state the "Open" KPI card's own click
-    // already sets — not a new filter mechanism.
-    const status = params.get('status');
-    if (open) setSelectedTicket(open);
-    if (source) setFilterSource(source);
-    if (creator) setFilterCreator(creator);
-    if (status === 'open' || status === 'done') setFilterStatus(status);
-  }, []);
 
   // Org Chart v5 (2026-08-21) — roster for the Creator filter's <select>,
   // fetched once. A failure here is non-critical (matches this file's own
