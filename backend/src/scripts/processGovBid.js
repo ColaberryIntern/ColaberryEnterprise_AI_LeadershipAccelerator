@@ -15,6 +15,16 @@
  */
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
+
+// Opportunity Pulse admin login. The password comes from the environment only;
+// it used to be a literal in this file, which published it to a public repo.
+const OP_ADMIN_EMAIL = process.env.OP_ADMIN_EMAIL || 'admin@opportunitypulse.com';
+const OP_ADMIN_PASSWORD = process.env.OP_ADMIN_PASSWORD;
+if (!OP_ADMIN_PASSWORD) {
+  console.error('FATAL: OP_ADMIN_PASSWORD is not set.');
+  console.error('This script logs in to Opportunity Pulse and cannot run without it.');
+  process.exit(1);
+}
 const { processBid } = require('./lib/govBidPipeline');
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -93,7 +103,7 @@ function getBasecampToken() {
     opts: {
       dryRun: DRY_RUN,
       opportunityPulseBase: 'http://95.216.199.47',
-      opportunityPulseCreds: { email: 'admin@opportunitypulse.com', password: '3yhEcVki3Vp4emDuuXWk' },
+      opportunityPulseCreds: { email: OP_ADMIN_EMAIL, password: OP_ADMIN_PASSWORD },
     },
   });
   console.log('\n=== DONE ===');
