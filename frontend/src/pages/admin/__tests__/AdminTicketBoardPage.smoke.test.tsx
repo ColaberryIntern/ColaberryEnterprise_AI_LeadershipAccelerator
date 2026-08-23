@@ -492,6 +492,30 @@ describe('AdminTicketBoardPage — creator filter (real, roster-backed select)',
     expect(calls[calls.length - 1]).toMatch(/creator=cory-engine/);
   });
 
+  // 2026-08-23 — Ali, live, on a fresh screenshot of a ?creator=...&range=all
+  // &status=open deep link: "When it goes to the page it starts off with the
+  // selected open tickets, but then it looks like something resets it."
+  // Root cause: filterCreator/filterSource/filterStatus used to be set by a
+  // SEPARATE useEffect that ran AFTER the mount-time fetchBoard() effect
+  // already fired once with the (still-empty) default filters — an
+  // unfiltered fetch racing an, uncancelled, against the correctly filtered
+  // one that followed. Whichever response arrived last won; over a real
+  // network the larger unfiltered response frequently arrived after the
+  // smaller filtered one, silently overwriting the correct board a moment
+  // after first paint. This proves the race is structurally gone: a
+  // creator-deep-linked mount now issues exactly ONE board fetch, so there
+  // is nothing left to race.
+  it('no double-fetch: a ?creator= deep link issues exactly ONE board fetch on mount, eliminating the race that let an unfiltered response silently overwrite the filtered one', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=cory-engine&range=all&status=open');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-single' })] });
+    await renderBoard();
+
+    const calls = boardFetchCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatch(/creator=cory-engine/);
+  });
+
   it('boundary: no ?creator= param -> select defaults to "All Creators", the fetch omits creator= entirely, byte-for-byte unchanged from today', async () => {
     getTicketCreatorOptions.mockResolvedValue(ROSTER);
     mockFetch({ backlog: [makeTicket({ id: 'x-2' })] });
