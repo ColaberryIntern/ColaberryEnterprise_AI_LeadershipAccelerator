@@ -46,19 +46,19 @@ describe('deriveAgentCapabilities', () => {
     expect(occurrences).toBe(1);
   });
 
-  it('boundary: null tools_granted returns empty reads/produces/undocumentedTools, never throws', () => {
+  it('boundary: null tools_granted returns empty reads/produces/undocumentedTools/byTool, never throws', () => {
     const result = deriveAgentCapabilities(null);
-    expect(result).toEqual({ reads: [], produces: [], undocumentedTools: [] });
+    expect(result).toEqual({ reads: [], produces: [], undocumentedTools: [], byTool: [] });
   });
 
   it('boundary: undefined tools_granted returns empty, never throws', () => {
     const result = deriveAgentCapabilities(undefined);
-    expect(result).toEqual({ reads: [], produces: [], undocumentedTools: [] });
+    expect(result).toEqual({ reads: [], produces: [], undocumentedTools: [], byTool: [] });
   });
 
   it('boundary: empty array returns empty', () => {
     const result = deriveAgentCapabilities([]);
-    expect(result).toEqual({ reads: [], produces: [], undocumentedTools: [] });
+    expect(result).toEqual({ reads: [], produces: [], undocumentedTools: [], byTool: [] });
   });
 
   it('honesty path: an unrecognized tool name is surfaced in undocumentedTools, never silently dropped or fabricated into reads/produces', () => {
@@ -89,5 +89,41 @@ describe('deriveAgentCapabilities', () => {
       expect([...capability.reads, ...capability.produces].every((s) => s.trim().length > 0)).toBe(true);
       void tool;
     }
+  });
+
+  // Tool & capability drill-down (2026-08-23) — Ali: "I also would like to see
+  // the tool & capability drill down so I can understand the tool better."
+  // byTool carries the SAME facts as reads/produces above, broken out per tool
+  // instead of flattened into one de-duplicated union.
+  describe('byTool', () => {
+    it('happy path: returns one entry per granted tool, in tools_granted order, each documented with its own reads/produces', () => {
+      const result = deriveAgentCapabilities(['respond_to_dm', 'read_learner_context']);
+
+      expect(result.byTool).toEqual([
+        { tool: 'respond_to_dm', reads: ["The student's direct-message conversation history"], produces: ['A reply message in the student DM thread'], documented: true },
+        { tool: 'read_learner_context', reads: ['ProofDesk learner-progress signals (XP, competencies, timeline state) for the student in the conversation'], produces: [], documented: true },
+      ]);
+    });
+
+    it('does NOT de-duplicate across tools the way the flattened reads/produces do — each tool keeps its own full list', () => {
+      // create_strategic_initiatives appears once; this proves byTool preserves
+      // a per-entry breakdown rather than reusing the deduped Set output.
+      const result = deriveAgentCapabilities(['create_agent_tasks', 'create_strategic_initiatives']);
+
+      expect(result.byTool).toHaveLength(2);
+      expect(result.byTool[0]).toEqual({ tool: 'create_agent_tasks', reads: [], produces: ['AgentTask records'], documented: true });
+      expect(result.byTool[1].produces).toContain('StrategicInitiative records');
+    });
+
+    it('honesty path: an undocumented tool gets a byTool entry with empty reads/produces and documented:false, never fabricated content', () => {
+      const result = deriveAgentCapabilities(['a_tool_from_the_future']);
+
+      expect(result.byTool).toEqual([{ tool: 'a_tool_from_the_future', reads: [], produces: [], documented: false }]);
+    });
+
+    it('boundary: empty/null tools_granted returns an empty byTool array', () => {
+      expect(deriveAgentCapabilities([]).byTool).toEqual([]);
+      expect(deriveAgentCapabilities(null).byTool).toEqual([]);
+    });
   });
 });
