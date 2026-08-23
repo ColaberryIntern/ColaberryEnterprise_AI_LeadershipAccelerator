@@ -112,7 +112,7 @@ export async function ensureCaseTicket(caseId: string, title: string, mode: Case
     await createTicket({
       title: `[Inbox Case] ${title}`,
       description: `${title}\n\nResolve-Work case (${mode.toLowerCase()}) opened by ${openedBy}. Tracks Discover -> Assess -> Plan -> Approve -> Execute -> Verify -> Close.`,
-      type: 'inbox_case' as any,
+      type: 'inbox_case',
       source: 'inbox_case',
       created_by_type: ACTOR_TYPE,
       created_by_id: ACTOR_ID,
