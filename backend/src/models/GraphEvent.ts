@@ -11,11 +11,16 @@ class GraphEvent extends Model {
   declare summary: string;
   declare actor: string | null;
   declare ref: string | null;
+  declare tenant_id: string | null;
   declare created_at: Date;
 }
 
 GraphEvent.init({
   id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  // Tenant scoping for the timeline. Declared here as well as in the DDL because
+  // Sequelize only touches attributes the model knows about. Nullable: node_id is too,
+  // so an event can exist without a node and still needs its own tenant.
+  tenant_id: { type: DataTypes.UUID, allowNull: true },
   node_id: { type: DataTypes.UUID, allowNull: true },
   event_type: { type: DataTypes.STRING(40), allowNull: false },
   summary: { type: DataTypes.STRING(500), allowNull: false },

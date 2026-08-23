@@ -417,6 +417,13 @@ import TenantMembership from './TenantMembership';
 import LeadTenantContext from './LeadTenantContext';
 import CommunicationPreference from './CommunicationPreference';
 import TenantAccessAudit from './TenantAccessAudit';
+// Memory Graph. Imported here so the models register with Sequelize when the index is
+// loaded, not only when an intelligence service happens to import them directly. The
+// schema/model parity test walks sequelize.models, so an unregistered model is an
+// invisible one -- which is exactly how it caught these two.
+import GraphNode from './GraphNode';
+import GraphEdge from './GraphEdge';
+import GraphEvent from './GraphEvent';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1480,6 +1487,9 @@ export {
   LeadTenantContext,
   CommunicationPreference,
   TenantAccessAudit,
+  GraphNode,
+  GraphEdge,
+  GraphEvent,
 };
 
 // --- Enrollment Lead associations ---

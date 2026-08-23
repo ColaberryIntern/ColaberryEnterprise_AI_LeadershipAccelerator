@@ -84,6 +84,49 @@ counts exist (e.g. a `loop-architect` state ledger or a TodoWrite list). Otherwi
 give the stage. The test: Ali types `/brief-me` in five tabs and instantly remembers what
 each one owns.
 
+## Step 1b - the build map (multi-phase work only)
+
+When this tab is one stage of a **bigger build** - a gated plan, a migration, a
+multi-PR feature, anything with named phases - show the whole outline with an arrow at
+the current position, immediately after THIS TAB.
+
+**Why:** long builds are mostly interruptions. Governance stops, decisions, bugs found
+sideways, other tabs. After an hour of that, Ali knows what just happened and has lost
+where it sits in the arc. The map restores that in one glance, without him asking.
+
+```markdown
+## 🗺️ Where this sits
+
+```
+  ✅ 1. Discovery          survey, dependency maps
+  ✅ 2. Schema             10 tables, live in production
+  ✅ 3. Context services   resolver, authorization, lead context
+▶ 4. Tracking            portal attribution  <- YOU ARE HERE
+  ⬜ 5. Campaigns          sender profiles, preferences
+  ⬜ 6. Admin UI           ecosystem page, journey view
+  ⬜ 7. Skeleton sites     CPN, AI Flotation, Refactored
+```
+
+**Phase 4 of 7.** Foundation is live; the brand-facing work has not started.
+```
+
+Rules:
+
+- **Use the plan's real phase names**, not invented ones. If the work has a gate list, a
+  task ledger, or a numbered plan, that is the outline. Never fabricate a structure to
+  have something to draw.
+- **One arrow.** `▶` on the current phase, `<- YOU ARE HERE` after it.
+- `✅` done · `▶` current · `⬜` not started · `🔴` blocked · `⏸️` parked
+- **Say the position in words underneath** ("Phase 4 of 7"), because the diagram alone
+  does not survive being skimmed.
+- **A phase is only `✅` if it is genuinely finished**, on the same shipping ladder as
+  everything else. Built-but-not-deployed is not done; mark it `▶` or note it.
+- **Skip this section entirely for single-shot work.** A one-file fix has no arc, and
+  drawing a map for it is noise.
+- Applies in `default`, `short`, `story` and `technical`. In `short` it is the one
+  permitted addition beyond the 5-8 lines - compress it to the phase line and the
+  position sentence if space is tight.
+
 ## Step 2 - default mode body
 
 ```markdown
@@ -214,7 +257,8 @@ mode.
 
 ## `short`
 
-Exactly this, roughly 5-8 lines, nothing else:
+Exactly this, roughly 5-8 lines, plus the build map from Step 1b when the work is
+multi-phase:
 
 ```markdown
 # 🧭 <Task Name>

@@ -359,6 +359,27 @@ const EXISTING_TABLE_EXTENSIONS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_org_members_platform_identity
      ON org_members (platform_identity_id)`,
 
+  // --- memory graph tenant scoping -------------------------------------------------
+  // The graph is one shared store. Before this, globalSearch was an unbounded findAll
+  // over every node, so a CPN operator searching a keyword could receive AI Flotation
+  // client memory. CPN's isolation is a formal grant commitment, so that is a leak
+  // rather than an untidiness.
+  //
+  // Nodes and events carry the tenant. EDGES DO NOT, deliberately: an edge is scoped by
+  // the nodes it joins, and a cross-tenant edge is refused at write time instead
+  // (assertSameTenant). Stamping edges too would invite a row whose own tenant disagrees
+  // with the nodes on either end, which is worse than not having the column.
+  //
+  // Nullable, because every one of the 227 existing nodes predates the ecosystem. Those
+  // stay unclassified and are reachable only by a platform superadmin — treating
+  // unclassified memory as public would void the boundary the moment a backfill missed
+  // something.
+  `ALTER TABLE graph_nodes ADD COLUMN IF NOT EXISTS tenant_id UUID`,
+  `ALTER TABLE graph_nodes ADD COLUMN IF NOT EXISTS brand_id UUID`,
+  `ALTER TABLE graph_events ADD COLUMN IF NOT EXISTS tenant_id UUID`,
+  `CREATE INDEX IF NOT EXISTS idx_graph_nodes_tenant ON graph_nodes (tenant_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_graph_events_tenant ON graph_events (tenant_id)`,
+
   // --- audit -----------------------------------------------------------------------
   `ALTER TABLE event_ledger ADD COLUMN IF NOT EXISTS tenant_id UUID`,
   `ALTER TABLE event_ledger ADD COLUMN IF NOT EXISTS brand_id UUID`,
