@@ -95,6 +95,25 @@ describe('recordAutoDecisionOnStatusChange', () => {
     expect(mockRecordDecision).toHaveBeenCalledTimes(1);
   });
 
+  it("real-world case: an 'inbox_case' ticket (InboxCaseEngine, the type found missing from the classifier on a real production ticket 2026-08-23) reaching in_review now auto-records too", async () => {
+    await recordAutoDecisionOnStatusChange(
+      { type: 'inbox_case', source: 'inbox_case', created_by_type: 'agent' },
+      TICKET_ID,
+      'in_progress',
+      'in_review',
+      'agent',
+      'InboxCaseEngine',
+    );
+
+    expect(mockRecordDecision).toHaveBeenCalledWith({
+      ticketId: TICKET_ID,
+      decisionType: 'note',
+      actorType: 'agent',
+      actorId: 'InboxCaseEngine',
+      rationale: 'Ticket transitioned from in_progress to in_review.',
+    });
+  });
+
   it('failure isolation: recordDecision rejecting never throws out of this function', async () => {
     mockRecordDecision.mockRejectedValue(new Error('DB unavailable'));
 

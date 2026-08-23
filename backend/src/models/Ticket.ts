@@ -15,7 +15,16 @@ export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_acti
   // backend/src/services/reese/reeseAutonomousOutreachService.ts. Distinct
   // from 'student_support' (which is reactive-only) so ticket-board filtering
   // and dedup never conflate the two conversation kinds.
-  | 'reese_autonomous_outreach';
+  | 'reese_autonomous_outreach'
+  // Inbox Intel Case Resolution Engine — one ticket per case (see
+  // services/inboxCase/caseTicketService.ts::ensureCaseTicket). Was written
+  // via a `type: 'inbox_case' as any` cast (found 2026-08-23 while auditing a
+  // real production ticket for the Decisions-tab gap fix) — a real,
+  // high-volume production value that had silently bypassed this union AND
+  // evidenceExpectationService.ts's classifier entirely, ever since it
+  // shipped. Fixed by giving it a real union member so the compiler and this
+  // module's own anti-vacuity test both enforce it going forward.
+  | 'inbox_case';
 export type TicketActorType = 'human' | 'cory' | 'agent'
   // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
   // autonomous background agents ('agent') so ticket activity attributed to Reese
