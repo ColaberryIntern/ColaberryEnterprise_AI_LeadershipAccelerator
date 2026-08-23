@@ -126,6 +126,11 @@ export function renewalSubject(
     : '';
   // States the fact, not the ask. "Payment is due" is accurate and it is what a
   // student scanning an inbox needs to see without opening anything.
+  // A lapsed member must never be told a payment "is due <a date that has passed>".
+  // day_delta is negative once the period has ended.
+  if (typeof input.day_delta === 'number' && input.day_delta < 0) {
+    return 'Your Colaberry membership payment';
+  }
   const word = urgencyWord(input.day_delta);
   if (!short) return 'Your Colaberry membership payment is due';
   return word
@@ -147,28 +152,48 @@ export function renderRenewalReminderEmail(
   const charge = Math.max(0, full - credit);
   const link = String(input.payment_link || '');
 
-  const endsLine = when
-    ? `Your Colaberry membership is paid through ${when}.`
-    : 'Your Colaberry membership term is ending.';
+  // Once the date has passed the whole framing has to change. "Paid through
+  // <past date>" reads as an accusation and "the next month" is ambiguous about
+  // whether they are being billed for time they did not have. What we are
+  // actually selling after a lapse is a FORWARD month starting when they pay;
+  // the elapsed period is written off and is never charged for.
+  const lapsed = typeof input.day_delta === 'number' && input.day_delta < 0;
+
+  const endsLine = lapsed
+    ? 'Your Colaberry membership renewal has come due and it looks like the payment has not gone through yet.'
+    : (when
+      ? `Your Colaberry membership is paid through ${when}.`
+      : 'Your Colaberry membership term is ending.');
 
   // The real charge is the only number that matters to the person paying it, so
   // the credit case leads with what leaves their account and shows the maths.
+  const nextTerm = lapsed ? `A further ${term}` : `The next ${term}`;
   const priceText = credit > 0
-    ? `The next ${term} is ${formatMoney(full)}. You have ${formatMoney(credit)} of account credit on file, so this payment is ${formatMoney(charge)}.`
-    : `The next ${term} is ${formatMoney(full)}.`;
+    ? `${nextTerm} is ${formatMoney(full)}. You have ${formatMoney(credit)} of account credit on file, so this payment is ${formatMoney(charge)}.`
+    : `${nextTerm} is ${formatMoney(full)}.`;
 
-  const word = urgencyWord(input.day_delta);
+  const word = lapsed ? null : urgencyWord(input.day_delta);
   const urgency = word ? `That is ${word}.` : '';
+
+  // Nothing has been cut off, and saying so plainly is the difference between a
+  // note someone acts on and one they brace against.
+  const reassurance = lapsed
+    ? 'Nothing has changed on your account and your access is exactly as it was. This is not a warning.'
+    : 'Nothing bills automatically, so this payment has to come from you.';
+
+  const closer = lapsed
+    ? 'If you would rather stop here, reply with the word "cancel" and I will take care of it. If something went wrong at the payment page, reply and tell me what you saw and I will fix it.'
+    : 'If you would rather stop here, do nothing and no payment will be taken. If any of the above looks wrong, reply to this and I will sort it out.';
 
   const text = `${name},
 
 ${endsLine}${urgency ? ` ${urgency}` : ''} ${priceText}
 
-Nothing bills automatically, so this payment has to come from you. This link opens a checkout page for it:
+${reassurance} This link opens a checkout page for it:
 
 ${link}
 
-If you would rather stop here, do nothing and no payment will be taken. If any of the above looks wrong, reply to this and I will sort it out.
+${closer}
 
 ${SIG_TEXT}
 `;
@@ -176,9 +201,9 @@ ${SIG_TEXT}
   const html = `<div style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; line-height: 1.6; max-width: 640px;">
 <p>${esc(name)},</p>
 <p>${esc(endsLine)}${urgency ? ` <strong>${esc(urgency)}</strong>` : ''} ${esc(priceText)}</p>
-<p>Nothing bills automatically, so this payment has to come from you.</p>
-<p style="margin: 22px 0;"><a href="${esc(link)}" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 11px 22px; border-radius: 4px; text-decoration: none; font-weight: 600;">Pay ${esc(formatMoney(charge))} for the next ${esc(term)}</a></p>
-<p>If you would rather stop here, do nothing and no payment will be taken. If any of the above looks wrong, reply to this and I will sort it out.</p>
+<p>${esc(reassurance)}</p>
+<p style="margin: 22px 0;"><a href="${esc(link)}" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 11px 22px; border-radius: 4px; text-decoration: none; font-weight: 600;">Pay ${esc(formatMoney(charge))} for ${lapsed ? 'a further' : 'the next'} ${esc(term)}</a></p>
+<p>${esc(closer)}</p>
 ${SIG_HTML}
 </div>`;
 

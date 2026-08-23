@@ -1,51 +1,49 @@
 /**
- * videoLinkProbe — the I/O half of the curriculum video health check: how we ask
- * YouTube about a video, how fast we are allowed to ask, and how we decide
- * whether the answers we got back are worth believing.
+ * videoLinkProbe — the measurement half of the curriculum video health check:
+ * how we ask the YouTube Data API about a batch of videos, and how we decide
+ * whether the answer we got back is worth believing.
  *
- * Split out of videoLinkHealthService so that file can stay about curriculum
- * blast radius and alerting. Everything here is about the measurement itself.
+ * Split from videoLinkHealthService so that file can stay about curriculum blast
+ * radius and alerting. Everything here is about the measurement itself.
  *
  * THREE RULES, ALL OF THEM LEARNED THE HARD WAY:
  *
- * 1. PACE THE PROBES. At this corpus size (~150 videos, two requests each)
- *    rate limiting is the common case, not the exception. An earlier sweep at
- *    CONCURRENCY 4 with no spacing turned 46 healthy videos "unreachable", and
- *    the 2026-08-22 run got a bot challenge on all 149. Throttling is a fact
- *    about us, not about the videos, so the fix is to ask more slowly. A daily
- *    job has all the time in the world; two minutes at 6:20 AM costs nothing.
+ * 1. ABSENCE IS AN ANSWER, AND IT IS NOT "FINE". `videos.list` omits ids it
+ *    cannot return rather than erroring on them, so 47 items back from 50 ids
+ *    means three videos are broken. This module never iterates the response; it
+ *    iterates the REQUEST and looks each id up, so there is no path on which a
+ *    missing video is quietly skipped and counted as healthy. That mistake would
+ *    be the 2026-08-22 incident with the sign flipped — 146 false positives
+ *    became loud and were caught in a day; false negatives are silent forever.
  *
- * 2. CARRY A CONTROL. Every batch is bracketed by a probe of a video we know is
- *    healthy — one of ours, so if it ever genuinely breaks we can fix it. If the
- *    control does not come back healthy, YouTube is not answering us honestly,
- *    and NOTHING in that batch may be called broken. This is the single
- *    technique that caught all three false readings during development, which is
- *    why it lives in the product now instead of in someone's debugging session.
- *    Bracketing rather than just leading the batch catches throttling that
- *    begins midway through.
+ * 2. CARRY A CONTROL. Every batch includes a video we know is healthy — one of
+ *    ours, so if it ever genuinely breaks we can fix it — in the same
+ *    `videos.list` call, at no extra quota cost. If the control does not come
+ *    back healthy, the API is not answering us honestly and NOTHING in that batch
+ *    may be called broken, including the ids that were absent from it. This is
+ *    what keeps quota exhaustion, a rejected key and an IP restriction from
+ *    reading as "the entire curriculum is gone".
  *
  * 3. NEVER CONDEMN ON ONE OBSERVATION. A video that fails once and passes on
  *    retry was never broken. The caller re-observes every suspect in a second,
- *    separately controlled burst before anything is allowed to alert.
+ *    separately controlled call before anything is allowed to alert.
  *
  * Failure-first notes:
- *  - Every outbound call has an explicit timeout and a capped retry ladder.
- *  - A throttle or a 5xx is never a verdict; it returns a null status, which the
- *    classifier degrades to UNKNOWN.
+ *  - The API client owns timeouts and retries; this module owns trust.
+ *  - Any client failure returns `trusted: false`, which the service counts as
+ *    `unverified` — reported, never alerted, and never counted as healthy.
+ *  - A paginated response also returns `trusted: false`: absence from a truncated
+ *    page is not evidence of anything.
  *  - If the control itself is the thing that broke, the check goes quiet rather
  *    than loud. That is the safe direction, but it is silent, so the run result
  *    reports `untrusted_batches` and the service logs it at warn.
  */
 
-import { classify, readPlayerResponse, extractPlayerResponse, type PlayerProbe } from './videoLinkClassifier';
-import type { Verdict } from './videoLinkClassifier';
+import { classifyAbsent, classifyPresent, type Verdict } from './videoLinkClassifier';
+import { MAX_IDS_PER_CALL, type VideoApiClient } from './videoLinkApiClient';
+import type { AbsenceProbe } from './videoLinkAbsenceProbe';
 
-const OEMBED = 'https://www.youtube.com/oembed';
-const WATCH = 'https://www.youtube.com/watch';
-const CHANNEL = 'https://www.youtube.com/channel';
-
-const TIMEOUT_MS = 15_000;
-const MAX_ATTEMPTS = 3;
+export { sleep } from './videoLinkAbsenceProbe';
 
 /**
  * A public, embeddable video on our own channel, used to decide whether a batch
@@ -54,199 +52,46 @@ const MAX_ATTEMPTS = 3;
  */
 export const CONTROL_VIDEO_ID = '2xRzYuit9ac';
 
-/** Minimum gap between any two outbound YouTube requests, across all workers. */
+/**
+ * Targets per call. One below the API's 50-id ceiling so the control rides along
+ * in the same request — same answer, same conditions, zero extra quota.
+ */
+export const BATCH_SIZE = MAX_IDS_PER_CALL - 1;
+
+/** Minimum gap between the follow-up oEmbed lookups. */
 export const PACE_MS = 350;
-
-/** Videos per control-bracketed batch. */
-export const BATCH_SIZE = 25;
-
-/** In-flight probes. Low on purpose; the pacer is the real throttle. */
-export const CONCURRENCY = 2;
 
 /** Breathing room before re-observing suspects, so pass 2 is a fresh opinion. */
 export const CONFIRM_COOLDOWN_MS = 20_000;
 
-/** A desktop UA: the watch page serves a different shell to unknown clients. */
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36';
-
-export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-export interface OembedResult {
-  /** null when the call never produced a meaningful status. Inconclusive. */
-  status: number | null;
-  /** author_name, available only on a 200. The fallback source for ownership. */
-  author: string | null;
-  /** We were rate limited. A statement about this run, not about the video. */
-  throttled: boolean;
-}
-
-/** One video, both methods, plus what we learned about who owns it. */
+/** One video, classified, plus what we learned about who owns it. */
 export interface Observation {
   video_id: string;
   verdict: Verdict;
   channel: string | null;
-  /** YouTube refused to answer for this video. Never a verdict. */
+  /** A follow-up lookup was refused. Never a verdict; feeds the throttle metric. */
   challenged: boolean;
 }
 
 export interface BatchResult {
-  /** False when the control did not come back healthy. Believe nothing. */
+  /** False when the API did not answer, or did not answer honestly. Believe nothing. */
   trusted: boolean;
   observations: Observation[];
-  /** Why the batch was rejected, for the log. */
+  /** Why the batch was rejected, for the log. Never contains the API key. */
   control_detail?: string;
+  /** Quota units this batch spent, so the run can report its daily cost. */
+  quota_units: number;
 }
 
-export interface Prober {
-  oembed(videoId: string): Promise<OembedResult>;
-  player(videoId: string): Promise<PlayerProbe>;
-  channelGone(channelId: string | null): Promise<boolean>;
-}
-
-/**
- * Serialises the START of every request behind a shared minimum gap, so raising
- * CONCURRENCY can never turn into a burst. Returns immediately when the gap is
- * zero, which is how the unit tests run without sleeping for minutes.
- */
-export function makePacer(gapMs: number): () => Promise<void> {
-  let nextAt = 0;
-  return async function pace(): Promise<void> {
-    if (gapMs <= 0) return;
-    const now = Date.now();
-    const at = Math.max(now, nextAt);
-    nextAt = at + gapMs;
-    if (at > now) await sleep(at - now);
-  };
-}
-
-/** A 429 or a 5xx is YouTube declining, not a fact about the video. */
-const isThrottle = (status: number): boolean => status === 429 || status >= 500;
-
-export function createProber(gapMs: number = PACE_MS): Prober {
-  const pace = makePacer(gapMs);
-
-  async function get(url: string, headers: Record<string, string>): Promise<Response> {
-    await pace();
-    return fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), headers });
-  }
-
-  async function oembed(videoId: string): Promise<OembedResult> {
-    const url = `${OEMBED}?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-    let throttled = false;
-
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        const res = await get(url, { 'User-Agent': UA });
-
-        if (res.status === 200) {
-          // A malformed body is not a dead video; keep the 200 and lose the author.
-          let author: string | null = null;
-          try {
-            author = ((await res.json()) as { author_name?: string }).author_name ?? null;
-          } catch {
-            author = null;
-          }
-          return { status: 200, author, throttled };
-        }
-
-        if (isThrottle(res.status)) {
-          throttled = true;
-          if (attempt < MAX_ATTEMPTS) {
-            await sleep(1500 * attempt);
-            continue;
-          }
-          // Throttled to the end: no verdict, and say so.
-          return { status: null, author: null, throttled: true };
-        }
-
-        // 401 / 403 / 404 are meaningful verdicts, not transport failures.
-        return { status: res.status, author: null, throttled };
-      } catch {
-        if (attempt < MAX_ATTEMPTS) await sleep(1000 * attempt);
-      }
-    }
-    return { status: null, author: null, throttled };
-  }
-
-  async function player(videoId: string): Promise<PlayerProbe> {
-    const headers = { 'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9', Cookie: 'CONSENT=YES+1' };
-
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        const res = await get(`${WATCH}?v=${encodeURIComponent(videoId)}`, headers);
-
-        if (res.status !== 200) {
-          if (attempt < MAX_ATTEMPTS) {
-            await sleep(1500 * attempt);
-            continue;
-          }
-          return {
-            reachable: false,
-            challenged: isThrottle(res.status),
-            note: `watch page HTTP ${res.status}`,
-          };
-        }
-
-        const probe = readPlayerResponse(extractPlayerResponse(await res.text()));
-
-        // A challenge will be served again immediately; burning retries on it
-        // only deepens the throttle. Report it and let the control guard act.
-        if (probe.challenged) return probe;
-
-        if (!probe.reachable && attempt < MAX_ATTEMPTS) {
-          await sleep(1500 * attempt);
-          continue;
-        }
-        return probe;
-      } catch (err) {
-        const e = err as Error;
-        if (attempt < MAX_ATTEMPTS) await sleep(1500 * attempt);
-        else return { reachable: false, note: e.name === 'TimeoutError' ? 'TimeoutError' : e.name };
-      }
-    }
-    return { reachable: false, note: 'exhausted attempts' };
-  }
-
+export interface ProbeDeps {
+  api: VideoApiClient;
+  absence: AbsenceProbe;
   /**
-   * Does a channel we recorded as the owner still resolve? Discriminates
-   * UPLOADER_CLOSED from a plain REMOVED, whose video URLs both 404.
+   * Channel ids we already know for a video, used to upgrade REMOVED to
+   * UPLOADER_CLOSED. Absent for most videos, which is why the upgrade is opt-in
+   * rather than assumed.
    */
-  async function channelGone(channelId: string | null): Promise<boolean> {
-    if (!channelId) return false;
-    try {
-      const res = await get(`${CHANNEL}/${encodeURIComponent(channelId)}`, { 'User-Agent': UA });
-      return res.status === 404;
-    } catch {
-      return false; // inconclusive: stay with the weaker, safer REMOVED
-    }
-  }
-
-  return { oembed, player, channelGone };
-}
-
-/**
- * Both methods for one video, combined into a verdict.
- *
- * Ownership is read from the watch page's microformat when present and falls
- * back to the oEmbed author, because the microformat is absent for exactly the
- * videos a failure report is about.
- */
-export async function observeOne(videoId: string, prober: Prober): Promise<Observation> {
-  const o = await prober.oembed(videoId);
-  const p = await prober.player(videoId);
-
-  let verdict = classify(o.status, p);
-  if (verdict.state === 'REMOVED' && (await prober.channelGone(p.channelId ?? null))) {
-    verdict = classify(o.status, p, true);
-  }
-
-  return {
-    video_id: videoId,
-    verdict,
-    channel: p.owner ?? o.author ?? null,
-    challenged: Boolean(p.challenged) || o.throttled,
-  };
+  knownChannels?: Map<string, string>;
 }
 
 /** Split a list into fixed-size batches. */
@@ -256,44 +101,81 @@ export function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+const untrusted = (detail: string, units: number): BatchResult => ({
+  trusted: false,
+  observations: [],
+  control_detail: detail,
+  quota_units: units,
+});
+
 /**
- * Observe a batch, bracketed by the control video.
+ * Observe one batch of videos in a single `videos.list` call that also carries
+ * the control video.
  *
- * The control is probed before AND after: a batch that starts clean and gets
- * throttled halfway through is exactly the shape that produced false failures,
- * and a leading control alone would have vouched for it.
+ * The control travels INSIDE the request rather than bracketing it, which is
+ * strictly stronger than the two extra calls the scraping version needed: it is
+ * subject to the identical quota state, the identical key, the identical network
+ * path and the identical response, so there is no window in which conditions
+ * could change between vouching for the batch and measuring it.
  */
-export async function observeBatch(videoIds: string[], prober: Prober): Promise<BatchResult> {
-  if (!videoIds.length) return { trusted: true, observations: [] };
+export async function observeBatch(videoIds: string[], deps: ProbeDeps): Promise<BatchResult> {
+  if (!videoIds.length) return { trusted: true, observations: [], quota_units: 0 };
 
-  const before = await observeOne(CONTROL_VIDEO_ID, prober);
-  if (before.verdict.state !== 'HEALTHY') {
-    return {
-      trusted: false,
-      observations: [],
-      control_detail: `control failed before the batch: ${before.verdict.state} (${before.verdict.detail})`,
-    };
+  // The control may legitimately be one of the corpus videos; asking for it twice
+  // would waste an id slot and return one item for two requested ids, which is
+  // exactly the arithmetic this module refuses to get wrong.
+  const ids = videoIds.includes(CONTROL_VIDEO_ID) ? [...videoIds] : [CONTROL_VIDEO_ID, ...videoIds];
+
+  const res = await deps.api.lookup(ids);
+  if (!res.ok) {
+    return untrusted(`videos.list did not answer: ${res.errorClass} - ${res.detail}`, res.quotaUnits);
+  }
+  if (!res.complete) {
+    // A truncated page means an id can be missing for a reason that has nothing to
+    // do with the video. Absence is only evidence when the answer was whole.
+    return untrusted('videos.list returned a paginated response; absence is not evidence', res.quotaUnits);
   }
 
-  const observations: Observation[] = new Array(videoIds.length);
-  let cursor = 0;
+  const control = res.found.get(CONTROL_VIDEO_ID);
+  if (!control) {
+    return untrusted(`the control video ${CONTROL_VIDEO_ID} was absent from the response`, res.quotaUnits);
+  }
+  const controlVerdict = classifyPresent(control);
+  if (controlVerdict.state !== 'HEALTHY') {
+    return untrusted(
+      `the control video came back ${controlVerdict.state} (${controlVerdict.detail})`,
+      res.quotaUnits,
+    );
+  }
 
-  async function worker(): Promise<void> {
-    while (cursor < videoIds.length) {
-      const i = cursor++;
-      observations[i] = await observeOne(videoIds[i], prober);
+  const observations: Observation[] = [];
+  for (const id of videoIds) {
+    const found = res.found.get(id);
+
+    if (found) {
+      observations.push({
+        video_id: id,
+        verdict: classifyPresent(found),
+        channel: found.channelTitle,
+        challenged: false,
+      });
+      continue;
     }
-  }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, videoIds.length) }, worker));
 
-  const after = await observeOne(CONTROL_VIDEO_ID, prober);
-  if (after.verdict.state !== 'HEALTHY') {
-    return {
-      trusted: false,
-      observations,
-      control_detail: `control failed after the batch: ${after.verdict.state} (${after.verdict.detail})`,
-    };
+    // Absent from a trusted, complete response. Broken; the only open question is
+    // which way, and that question is never allowed to make it healthy.
+    const evidence = await deps.absence.explain(id);
+    const channelId = deps.knownChannels?.get(id) ?? null;
+    const knownChannelGone =
+      evidence.oembedStatus === 404 && channelId ? await deps.absence.channelGone(channelId) : false;
+
+    observations.push({
+      video_id: id,
+      verdict: classifyAbsent({ ...evidence, knownChannelGone }),
+      channel: null,
+      challenged: evidence.throttled,
+    });
   }
 
-  return { trusted: true, observations };
+  return { trusted: true, observations, quota_units: res.quotaUnits };
 }

@@ -31,7 +31,14 @@ const DRY = process.argv.includes('--dry-run');
 // ============================================================================
 const OP_BASE = process.env.OPPORTUNITY_PULSE_BASE || 'http://95.216.199.47';
 const OP_ADMIN_EMAIL = process.env.OP_ADMIN_EMAIL || 'ali@colaberry.com';
-const OP_ADMIN_PASSWORD = process.env.OP_ADMIN_PASSWORD || '3yhEcVki3Vp4emDuuXWk';
+// No fallback: the password used to be a literal default here, which published
+// it to a public repo. Absent means stop, not "try a guess".
+const OP_ADMIN_PASSWORD = process.env.OP_ADMIN_PASSWORD;
+if (!OP_ADMIN_PASSWORD) {
+  console.error('FATAL: OP_ADMIN_PASSWORD is not set.');
+  console.error('This script logs in to Opportunity Pulse and cannot run without it.');
+  process.exit(1);
+}
 const KEYWORD = 'Massachusetts';
 
 // BC ticket the email will attach to. Created 2026-06-03 in Sales/Outreach list.

@@ -1,6 +1,7 @@
 import { createTicket, updateTicketStatus, addTicketComment, getTicketsByEntity } from '../ticketService';
 import { CaseMode, CaseState } from '../../types/inboxCase';
 import { getTicketCreatorAdminUserId } from '../agentBlueprint/ticketCreatorIdentitySeed';
+import { recordWorkUnitForCaseState } from '../workGraph/inboxCaseWorkGraphAutoRecorder';
 
 // Bridges the Inbox Intel Case Resolution Engine into the existing Tickets
 // board (Ali: "All work should be done in a ticket by the agents... I can
@@ -112,7 +113,7 @@ export async function ensureCaseTicket(caseId: string, title: string, mode: Case
     await createTicket({
       title: `[Inbox Case] ${title}`,
       description: `${title}\n\nResolve-Work case (${mode.toLowerCase()}) opened by ${openedBy}. Tracks Discover -> Assess -> Plan -> Approve -> Execute -> Verify -> Close.`,
-      type: 'inbox_case' as any,
+      type: 'inbox_case',
       source: 'inbox_case',
       created_by_type: ACTOR_TYPE,
       created_by_id: ACTOR_ID,
@@ -148,6 +149,10 @@ export async function syncTicketForCase(caseId: string, state: CaseState): Promi
     if (!ticket) return; // no ticket yet (e.g. ensureCaseTicket failed) — nothing to sync, already logged
     const target = mapCaseStateToTicketStatus(state);
     await advanceTicketTo(ticket.id, target, ticket.status as TicketStatus);
+    // Work Graph auto-recorder (2026-08-23) — real state, per-ticket-type
+    // honesty-gated inside the recorder itself; internally failure-isolated,
+    // so a work-unit write failure never breaks the real case sync above.
+    await recordWorkUnitForCaseState(ticket.id, (ticket as any).type, state);
   } catch (err: any) {
     console.error(`[InboxCase] Failed to sync ticket status for case ${caseId} -> ${state}: ${err?.message}`);
   }

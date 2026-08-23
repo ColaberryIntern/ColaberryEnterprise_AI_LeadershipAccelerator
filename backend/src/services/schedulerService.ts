@@ -2077,6 +2077,28 @@ export function startScheduler(): void {
     console.log('[Scheduler] RenewalReminders scheduled (0 9 * * * America/Chicago)');
   }
 
+  // Billing watch, daily at 8am Central, an hour before the renewal reminders so a
+  // broken collection path is known BEFORE the day's money depends on it.
+  //
+  // It is read only and it stays silent when the book is healthy. Every check in it
+  // exists because that exact thing happened during the 2026-08 billing work and a
+  // human found it by accident: subscriptions anchored to a repair date, a member
+  // holding two active rows, three members lapsing into permanent silence, a card
+  // that expired the month before its renewal. None of those announced themselves.
+  //
+  // Unlike the reminder job this needs no feature flag: it cannot touch a customer
+  // and it cannot move money. The worst it does is email Ali.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('BillingWatch', async () => {
+      const { runBillingWatch } = await import('./billing/billingHealthReport');
+      const r = await runBillingWatch({ send: true });
+      console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
+    }).catch((err) => {
+      console.error('[Scheduler] Billing watch error:', err);
+    });
+  }, { timezone: 'America/Chicago' });
+  console.log('[Scheduler] BillingWatch scheduled (0 8 * * * America/Chicago)');
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('PreviewStackReaper', async () => {
@@ -2403,15 +2425,16 @@ export function startScheduler(): void {
       instrumentCronJob('CurriculumVideoLinkHealth', async () => {
         const { runVideoLinkHealthCheck } = require('./curriculumHealth/videoLinkHealthService');
         const result = await runVideoLinkHealthCheck();
-        // `throttled`, `untrusted_batches` and the three-way ownership split are
+        // `unverified`, `untrusted_batches` and the three-way ownership split are
         // logged because a quiet run and a blindfolded run look identical
         // otherwise. A run with untrusted batches found nothing because it could
-        // not see, not because everything is fine.
+        // not see, not because everything is fine. `quota_units` is logged so the
+        // YouTube Data API cost is an observed number, not an estimate.
         console.log('[Scheduler] Curriculum video link health:', JSON.stringify({
-          skipped: result.skipped, checked: result.checked, healthy: result.healthy,
+          skipped: result.skipped, reason: result.reason, checked: result.checked, healthy: result.healthy,
           unknown: result.unknown, failures: result.failures.length, sealed_weeks: result.sealed_weeks,
           throttled: result.throttled, untrusted_batches: result.untrusted_batches,
-          unverified: result.unverified, ownership: result.ownership,
+          unverified: result.unverified, quota_units: result.quota_units, ownership: result.ownership,
         }));
       }).catch((err: any) => {
         console.error('[Scheduler] Curriculum video link health error:', err.message);

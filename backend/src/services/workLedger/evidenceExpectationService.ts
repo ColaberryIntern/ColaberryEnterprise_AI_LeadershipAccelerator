@@ -117,6 +117,26 @@ const TYPE_DEFAULTS: Record<TicketType, TicketEvidenceExpectations> = {
   // Reese Phase 2 — the ONE real, confirmed evidence_artifacts writer today
   // (reeseOutreachFollowUpService.closeWithEvidence, artifact types 'receipt'/'log').
   reese_autonomous_outreach: { visualProof: EXPECTED, workGraph: NOT_APPLICABLE, decisions: NOT_APPLICABLE },
+
+  // Inbox Intel Case Resolution Engine (services/inboxCase/caseTicketService.ts).
+  // Added 2026-08-23 — was missing from this table entirely (the real writer used
+  // `type: 'inbox_case' as any`, bypassing both the TicketType union and this
+  // classifier), so every one of this type's tickets silently fell through to the
+  // conservative all-not_applicable default regardless of how real its activity
+  // was - this is exactly the founder-distrust failure mode the 2026-08-16 Ticket
+  // Board Honesty fix existed to close, just for a type that audit missed.
+  // No visual dimension (an inbox case is textual/data triage, not UI/screenshot
+  // work) - visualProof stays not_applicable. workGraph EXPECTED: the type's own
+  // description names 7 real tracked stages (Discover -> Assess -> Plan -> Approve
+  // -> Execute -> Verify -> Close, see ensureCaseTicket()'s description string) -
+  // at least as work-graph-shaped as bpos_execution above, so marking it
+  // not_applicable would falsely assert no structural fit. decisions EXPECTED: one
+  // of those named stages IS "Approve", and mapCaseStateToTicketStatus() maps
+  // AWAITING_APPROVAL (among other states) to the real ticket status 'in_review' -
+  // exactly the transition ticketDecisionAutoRecorder.ts (2026-08-23) now writes an
+  // honest auto-decision note for, so this ticket type starts getting real
+  // Decisions-tab content immediately, not just a corrected label.
+  inbox_case: { visualProof: NOT_APPLICABLE, workGraph: EXPECTED, decisions: EXPECTED },
 };
 
 /**
