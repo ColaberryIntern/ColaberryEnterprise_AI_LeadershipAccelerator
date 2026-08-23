@@ -152,7 +152,9 @@ export async function uploadBuildArtifact(
  * Resolve the enrollment's project and mirror its artifacts. Returns a
  * classified outcome; never throws.
  */
-async function syncArtifactsForEnrollment(enrollmentId: string): Promise<{ outcome: string; reason?: string }> {
+async function syncArtifactsForEnrollment(
+  enrollmentId: string,
+): Promise<{ outcome: string; reason?: string; repo?: { owner: string; name: string } }> {
   try {
     const { default: Project } = await import('../../models/Project');
     const project: any = await Project.findOne({ where: { enrollment_id: enrollmentId } });
@@ -160,7 +162,10 @@ async function syncArtifactsForEnrollment(enrollmentId: string): Promise<{ outco
 
     const { syncArtifactsToRepo } = await import('../artifacts/artifactRepoSync');
     const result = await syncArtifactsToRepo(project.id);
-    return { outcome: result.outcome, reason: result.reason };
+    // `repo` rides along so the upload confirmation can offer the actual fix
+    // (a link to THIS repo's collaborator settings) rather than only the
+    // diagnosis. See ArtifactSyncResult.repo.
+    return { outcome: result.outcome, reason: result.reason, repo: result.repo };
   } catch (err: any) {
     // syncArtifactsToRepo does not throw, so reaching here means the lookup
     // itself failed. Still not the student's problem.

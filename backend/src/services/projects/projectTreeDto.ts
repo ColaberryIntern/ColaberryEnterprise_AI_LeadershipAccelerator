@@ -177,6 +177,23 @@ export interface ProjectTreeDto {
   build_verification: BuildVerificationRollupDto | null;
 }
 
+/**
+ * Whether this project's artifacts are actually reaching GitHub.
+ *
+ * `blocked` is the one that matters and the reason this field exists at all:
+ * a student can hold a connected repo, keep building, and have every artifact
+ * stop at the platform because Colaberry was never granted push. Measured on
+ * production 2026-08-23, that was 16 of 17 connected students, and none of them
+ * had any way to find out — every other surface that says so fires on an action
+ * (uploading, connecting) that the affected students have already stopped
+ * taking. The Projects list is the one page they still land on.
+ *
+ * `unknown` is deliberately distinct from `blocked`. A row whose permission was
+ * never recorded has not been shown to be broken, and badging it as broken
+ * would send a student to fix something that may be fine.
+ */
+export type ProjectRepoSync = 'ok' | 'blocked' | 'no_repo' | 'unknown';
+
 export interface ProjectSummaryDto {
   id: string;
   name: string | null;
@@ -185,6 +202,23 @@ export interface ProjectSummaryDto {
   requirements_completion_pct: number | null;
   health_score: number | null;
   is_active: boolean;
+  /** Null when the caller did not resolve connection state for this list. */
+  repo_sync: ProjectRepoSync | null;
+}
+
+/**
+ * PURE. Derive the badge state from the connection row, with no assumptions
+ * about what "missing" means beyond what was actually recorded.
+ */
+export function repoSyncFrom(connection: {
+  repo_url?: string | null;
+  status_json?: any;
+} | null | undefined): ProjectRepoSync {
+  if (!connection || !connection.repo_url) return 'no_repo';
+  const recorded = connection.status_json?.connect?.platform_can_push;
+  if (recorded === true) return 'ok';
+  if (recorded === false) return 'blocked';
+  return 'unknown';
 }
 
 type Plain = Record<string, any>;
@@ -440,7 +474,13 @@ export function commandCenterUrl(p: Plain): string | null {
   return /^https:\/\/[^\s]+$/i.test(url) ? url : null;
 }
 
-export function toProjectSummaryDto(p: Plain, activeProjectId: string | null): ProjectSummaryDto {
+export function toProjectSummaryDto(
+  p: Plain,
+  activeProjectId: string | null,
+  // Optional so every existing caller keeps compiling and simply reports null,
+  // which the badge treats as "not resolved" and renders nothing for.
+  connection?: { repo_url?: string | null; status_json?: any } | null,
+): ProjectSummaryDto {
   return {
     id: String(p.id),
     name: p.name ?? null,
@@ -449,5 +489,6 @@ export function toProjectSummaryDto(p: Plain, activeProjectId: string | null): P
     requirements_completion_pct: p.requirements_completion_pct ?? null,
     health_score: p.health_score ?? null,
     is_active: activeProjectId != null && String(p.id) === String(activeProjectId),
+    repo_sync: connection === undefined ? null : repoSyncFrom(connection),
   };
 }

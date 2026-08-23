@@ -76,6 +76,9 @@ const CSS = `
 .ba-sync.ok{border:1px solid #bfe6cd;background:#f2fbf6;color:#0b6e3f}
 .ba-sync.warn{border:1px solid #ffe0a3;background:#fff7e6;color:#5c4a1a}
 .ba-sync code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-family:Consolas,Menlo,monospace}
+.ba-sync a{color:inherit;font-weight:700}
+.ba-fixcmd{background:var(--code);color:#e7eefc;border-radius:7px;padding:9px 11px;margin:0 0 6px;overflow-x:auto;
+  font-family:Consolas,Menlo,monospace;font-size:11.5px;line-height:1.5;white-space:pre;user-select:all}
 .tld-body--buildartifacts{padding:0 !important;background:#fff !important;overflow:hidden !important;display:flex !important}
 `;
 
@@ -96,6 +99,7 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
   const [uploadErr, setUploadErr] = useState('');
   const [localDone, setLocalDone] = useState(false);
   const [repoSync, setRepoSync] = useState<string | null>(null);
+  const [syncRepo, setSyncRepo] = useState<{ owner: string; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -138,6 +142,8 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
         fd.append('is_sample', String(SAMPLE_PROJECTS.some((p) => p.name === proj)));
         const res: any = await portalApi.post(`/api/portal/runtime/cards/${cardId}/build-artifact`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
         setRepoSync(res?.data?.repo_sync?.outcome || null);
+        const r = res?.data?.repo_sync?.repo;
+        setSyncRepo(r?.owner && r?.name ? { owner: r.owner, name: r.name } : null);
       }
       if (onComplete) await onComplete();
       setLocalDone(true);
@@ -201,9 +207,43 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
               </div>
             )}
             {repoSync === 'no_access' && (
+              /* THE FIX, NOT THE DIAGNOSIS. "We cannot write to your repository"
+                 is something a student has to go and act on later, and later is
+                 exactly where sixteen of them got stuck. Both routes are shown
+                 because we cannot know which they have: the link needs only a
+                 browser, the command needs `gh` already authenticated but is
+                 faster for someone already in the terminal they build in. */
               <div className="ba-sync warn">
-                Saved here, but <b>not in GitHub</b> — Colaberry doesn&rsquo;t have permission to write to your
-                repository. Reconnect it, or accept the pending invitation, and everything syncs automatically.
+                <p style={{ margin: '0 0 8px' }}>
+                  Saved here, but <b>not in GitHub</b> — Colaberry can&rsquo;t write to your repository yet, so
+                  this artifact isn&rsquo;t on the version an employer would look at.
+                </p>
+                {syncRepo ? (
+                  <>
+                    <p style={{ margin: '0 0 6px' }}>
+                      <b>About a minute to fix.</b> Open{' '}
+                      <a
+                        href={`https://github.com/${syncRepo.owner}/${syncRepo.name}/settings/access`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {syncRepo.owner}/{syncRepo.name} → Collaborators
+                      </a>{' '}
+                      and add <code>ColaberryIntern</code>.
+                    </p>
+                    <p style={{ margin: '0 0 6px' }}>Or, if you have the GitHub CLI, run this where you build:</p>
+                    <pre className="ba-fixcmd">{`gh api --method PUT repos/${syncRepo.owner}/${syncRepo.name}/collaborators/ColaberryIntern -f permission=push`}</pre>
+                  </>
+                ) : (
+                  <p style={{ margin: '0 0 6px' }}>
+                    Open your repo&rsquo;s <b>Settings → Collaborators</b> on GitHub and add{' '}
+                    <code>ColaberryIntern</code>.
+                  </p>
+                )}
+                <p style={{ margin: 0 }}>
+                  We accept within the hour, and <b>every artifact you&rsquo;ve already built syncs then too</b>,
+                  not just the next one.
+                </p>
               </div>
             )}
             {repoSync === 'repo_gone' && (

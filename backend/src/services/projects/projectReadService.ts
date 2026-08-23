@@ -162,5 +162,31 @@ export async function listEnrollmentProjectsSummary(enrollmentId: string): Promi
     getProjectByEnrollment(enrollmentId),
   ]);
   const activeId = active ? active.id : null;
-  return projects.map((p) => toProjectSummaryDto(p.get({ plain: true }) as any, activeId));
+
+  // ONE query for the whole list, not one per project. This runs on the page a
+  // student lands on, and the badge is not worth an N+1 there.
+  //
+  // Fail-soft: if the lookup throws, every card reports `repo_sync: null` and
+  // simply shows no badge. A Projects page that 500s because a decoration could
+  // not be computed would be a straight downgrade on the page it decorates.
+  let byProject = new Map<string, { repo_url?: string | null; status_json?: any }>();
+  try {
+    const { default: GitHubConnection } = await import('../../models/GitHubConnection');
+    const rows: any[] = await GitHubConnection.findAll({
+      where: { project_id: projects.map((p) => String(p.id)) },
+    });
+    byProject = new Map(rows.map((r) => [String(r.project_id), r]));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'project-read',
+      event: 'repo_sync_badge_lookup_failed', outcome: 'partial',
+      error_class: err?.name ?? 'Error',
+    }));
+    return projects.map((p) => toProjectSummaryDto(p.get({ plain: true }) as any, activeId));
+  }
+
+  return projects.map((p) => {
+    const plain = p.get({ plain: true }) as any;
+    return toProjectSummaryDto(plain, activeId, byProject.get(String(plain.id)) ?? null);
+  });
 }
