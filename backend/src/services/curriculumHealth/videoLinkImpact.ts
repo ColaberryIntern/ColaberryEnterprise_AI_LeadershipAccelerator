@@ -37,6 +37,15 @@ export interface ImpactCard {
   status: string | null;
   cohort_id: string | null;
   program_id: string | null;
+  /**
+   * The card's raw video URL, trimmed, or null when it carries none.
+   *
+   * Kept separate from `video_id` because that field is null for two unrelated
+   * reasons — no URL at all, and a URL that is not YouTube (Loom, Wistia) — and
+   * collapsing them loses the distinction between a content gap we report and a
+   * video we simply cannot check.
+   */
+  video_url: string | null;
   video_id: string | null;
 }
 
@@ -98,6 +107,37 @@ export function assessCard(
     student_reachable: reachable,
     seals_week: seals,
     blocks,
+  };
+}
+
+/**
+ * What a card carrying NO video URL blocks. The answer is always "nothing", and
+ * the asymmetry with {@link assessCard} is the entire point of a separate
+ * function.
+ *
+ * `assessCard` would call this card sealing: it is reachable, in the learn
+ * bucket, completable, and has a week, which is every condition the gate looks
+ * at. That verdict is correct for a card whose video is dead and wrong for a card
+ * that has no video, because sealing requires a watch requirement to exist and go
+ * unmet. `requiredWatchPct` returns null when `hasVideoMetadata` finds no URL, so
+ * no requirement is ever armed.
+ *
+ * Routing these through `assessCard` would raise a critical "seals week N" alert,
+ * against a live cohort, for a card students have already been completing all
+ * along — which is the false positive most likely to get the whole check muted.
+ */
+export function assessMissingUrlCard(card: ImpactCard, canonicalProgramId: string): CardImpact {
+  const reachable = isStudentReachable(card, canonicalProgramId);
+  return {
+    card_id: card.id,
+    title: card.title,
+    week: card.week,
+    bucket: card.bucket,
+    student_reachable: reachable,
+    seals_week: false,
+    blocks: reachable
+      ? 'Nothing. With no URL the card arms no watch gate, so students complete it normally and the week stays open. The gap is the absent content itself, not a lock.'
+      : `Nothing. The card is ${card.visibility}/${card.status}, so no student can reach it at all.`,
   };
 }
 

@@ -52,6 +52,14 @@ export type VideoState =
    * an honest one that does not pretend to know which.
    */
   | 'UNAVAILABLE'
+  /**
+   * The CARD carries no video URL at all, so there was never an id to ask about.
+   * Not a broken link: a piece of content that was never attached. Reported
+   * because silence here is indistinguishable from health, and never actionable
+   * because — unlike every other state above — it strands nobody.
+   * See {@link classifyMissingUrl}.
+   */
+  | 'URL_MISSING'
   | 'UNKNOWN';
 
 /**
@@ -272,6 +280,40 @@ export function classifyAbsent(evidence: AbsenceEvidence): Verdict {
       ? 'the API returned no record for this id; the follow-up lookup was refused, so the exact cause is unconfirmed'
       : `the API returned no record for this id; the follow-up lookup was inconclusive (oEmbed=${oembedStatus ?? 'n/a'})`,
     remedy: 'Private, deleted, or the uploading channel is closed. Open the link to confirm which, then replace it.',
+  };
+}
+
+/**
+ * Classify a CARD that carries no video URL at all.
+ *
+ * `classifyAbsent` answers "the API omitted this id". This answers the same
+ * question one step earlier: "the card omitted the URL". Both exist because the
+ * thing being looked for is missing from the result set, and a check that only
+ * inspects what it found reports the gap as health. `loadVideoCards` selected
+ * `WHERE metadata->'video'->>'url' IS NOT NULL`, so a card with no URL was never
+ * a row, was never probed, and was healthy by omission. On 2026-08-23 that was a
+ * Week 3 card that had been empty since 2026-07-14, with two unactioned student
+ * comments on the card itself before a third report reached us.
+ *
+ * WHY THIS IS NOT ACTIONABLE WHEN A DEAD URL IS. The predicate that renders the
+ * player is the same one that arms the watch gate: `requiredWatchPct` returns
+ * null unless `hasVideoMetadata` finds a non-empty URL string, and
+ * `assertWatchRequirement` returns immediately on null. No URL therefore means no
+ * watch requirement, so there is nothing to leave unsatisfied — students complete
+ * the card normally and the week's evaluation -> survey -> reflection chain stays
+ * open. A DEAD url is the dangerous inverse: it satisfies `hasVideoMetadata`,
+ * arms a 75% gate, and then emits no watch beats to satisfy it, sealing the week.
+ *
+ * So this is a content gap for the curriculum owner, not an outage. It is
+ * reported on every run, is never paged on, and can never read as HEALTHY.
+ */
+export function classifyMissingUrl(): Verdict {
+  return {
+    state: 'URL_MISSING',
+    actionable: false,
+    detail: 'the card carries no video URL, so there is no video to check and no player to render',
+    remedy:
+      'Curriculum owner: attach a video, or retire the card. It blocks nobody meanwhile, because a card with no URL arms no watch gate.',
   };
 }
 

@@ -1,4 +1,7 @@
-import { assessCard, isStudentReachable, sealedWeeks, severityFor, type ImpactCard } from '../videoLinkImpact';
+import {
+  assessCard, assessMissingUrlCard, isStudentReachable, sealedWeeks, severityFor,
+  type ImpactCard,
+} from '../videoLinkImpact';
 
 const CANONICAL = '92b98a72-8681-4f04-8ba1-16a18334cd0b';
 
@@ -12,6 +15,7 @@ const card = (over: Partial<ImpactCard> = {}): ImpactCard => ({
   status: 'active',
   cohort_id: null,
   program_id: CANONICAL,
+  video_url: 'https://www.youtube.com/watch?v=6wkFb2_cUik',
   video_id: '6wkFb2_cUik',
   ...over,
 });
@@ -88,6 +92,52 @@ describe('sealedWeeks', () => {
 
   it('returns an empty list when nothing seals', () => {
     expect(sealedWeeks([assessCard(card({ visibility: 'archived' }), CANONICAL, true)])).toEqual([]);
+  });
+});
+
+/**
+ * The card that prompted this: Week 3 "Building with the Claude API", published,
+ * active, canonical program, learn bucket, and carrying no video URL since it was
+ * authored on 2026-07-14. Every condition `assessCard` looks at for sealing is
+ * true of it, and it has sealed nothing — 15 students completed it, and Week 3's
+ * evaluation, survey and reflection each have 6 completions.
+ */
+describe('assessMissingUrlCard: a card with no URL blocks nobody', () => {
+  const urlless = (over: Partial<ImpactCard> = {}) =>
+    card({ video_url: null, video_id: null, ...over });
+
+  it('never seals a week, even when every condition assessCard seals on is true', () => {
+    const viaMissingUrl = assessMissingUrlCard(urlless(), CANONICAL);
+    // The contrast IS the assertion: same card, same reachability, opposite verdict.
+    const viaDeadVideo = assessCard(urlless(), CANONICAL, true);
+
+    expect(viaDeadVideo.seals_week).toBe(true);
+    expect(viaMissingUrl.seals_week).toBe(false);
+    expect(viaMissingUrl.student_reachable).toBe(true);
+  });
+
+  it('contributes no sealed weeks, so no week is reported locked', () => {
+    expect(sealedWeeks([assessMissingUrlCard(urlless({ week: 3 }), CANONICAL)])).toEqual([]);
+  });
+
+  it('explains that the absent content is the gap, not a lock', () => {
+    expect(assessMissingUrlCard(urlless(), CANONICAL).blocks).toMatch(/arms no watch gate/);
+  });
+
+  it('reports an out-of-program card as unreachable, so it is not alerted on', () => {
+    const other = assessMissingUrlCard(
+      urlless({ program_id: '7557ec5e-a7c1-4699-955d-c5b8021bdc03' }),
+      CANONICAL,
+    );
+    expect(other.student_reachable).toBe(false);
+    expect(other.seals_week).toBe(false);
+  });
+
+  it('reports an archived card as unreachable', () => {
+    expect(
+      assessMissingUrlCard(urlless({ visibility: 'archived', status: 'inactive' }), CANONICAL)
+        .student_reachable,
+    ).toBe(false);
   });
 });
 
