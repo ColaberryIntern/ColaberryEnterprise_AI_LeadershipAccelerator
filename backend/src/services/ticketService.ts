@@ -25,6 +25,7 @@ import {
 } from './actorIdentity/resolveActorDisplayName';
 import { buildTicketAutoCheckResolver } from './ticketAutoCheckService';
 import { enforceReportsToGate } from './ticketCreatorReportsToResolver';
+import { recordAutoDecisionOnStatusChange } from './evidence/ticketDecisionAutoRecorder';
 
 // ── State Machine ────────────────────────────────────────────────────────
 
@@ -216,6 +217,22 @@ export async function updateTicketStatus(
     sourceRecordType: 'ticket_activity',
     sourceRecordId: activity.id,
   });
+
+  // ProofDesk Decisions-tab gap fix (2026-08-23) — see
+  // ticketDecisionAutoRecorder.ts's header comment for the full rationale.
+  // Awaited (unlike the two fire-and-forget hooks below) since it's a single
+  // fast local insert, not a heavier scheduling call — awaiting it means the
+  // Decisions tab is guaranteed consistent the moment this function returns.
+  // Doubly failure-isolated: the callee never throws by its own contract, and
+  // this call site catches anyway — the same defense-in-depth the other two
+  // hooks below get via their own `.catch()`, so a future change to either
+  // layer can't silently turn a decision-record failure into a broken status
+  // transition.
+  try {
+    await recordAutoDecisionOnStatusChange(ticket as any, ticketId, fromStatus, newStatus, actorType, actorId);
+  } catch (err: any) {
+    console.warn(`[ticketService] recordAutoDecisionOnStatusChange threw unexpectedly for ticket ${ticketId}:`, err.message);
+  }
 
   // Learning loop: when a strategic ticket reaches 'done', trigger outcome tracking
   if (newStatus === 'done' && (ticket as any).type === 'strategic' && (ticket as any).source === 'cory') {
