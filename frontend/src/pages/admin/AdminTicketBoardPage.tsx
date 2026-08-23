@@ -199,9 +199,23 @@ export default function AdminTicketBoardPage() {
     const open = params.get('open');
     const source = params.get('source');
     const creator = params.get('creator');
+    // Ticket Count Sync fix, Task 3 (2026-08-24, session CC-20260818-x4nk
+    // continued) — Ali, live, reported 3 times: an agent's card says "N open
+    // tickets," but clicking through showed far more. Root cause: `creator`
+    // and `range` (added in the prior fix) narrow WHICH tickets are fetched,
+    // but never touched `filterStatus` — so the board rendered all 5 status
+    // columns including Done, not just the 4 that make up "open"
+    // (backlog+todo+in_progress+in_review, matching OPEN_TICKET_STATUS_FILTER
+    // in liveAgentsService.ts, the same definition the card's own count uses).
+    // For InboxCaseEngine specifically this was the difference between the
+    // 304 the card promised and 1262 total tickets ever created by it. `status`
+    // reuses the SAME `filterStatus` state the "Open" KPI card's own click
+    // already sets — not a new filter mechanism.
+    const status = params.get('status');
     if (open) setSelectedTicket(open);
     if (source) setFilterSource(source);
     if (creator) setFilterCreator(creator);
+    if (status === 'open' || status === 'done') setFilterStatus(status);
   }, []);
 
   // Org Chart v5 (2026-08-21) — roster for the Creator filter's <select>,

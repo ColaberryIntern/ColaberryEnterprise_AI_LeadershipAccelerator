@@ -351,9 +351,9 @@ signature title is part of the fixed block and stays; the sender asserts this.
 - Reply to any waiting nudge (Nazma/HR chases this for payroll — e.g. "Could you please send
   over the commission list? As we are approaching payroll").
 - Keep the month's folder at `~/Downloads/<Month> <Year> Commission/` with all four artifacts.
-- **Do not** add a PROGRESS.md entry. Per CLAUDE.md, outbound email sent on Ali's behalf and
-  ad-hoc data pulls are explicitly out of scope for PROGRESS.md. Changes to *this skill* do
-  belong there.
+- **Do not** add a progress-log entry. Per CLAUDE.md, outbound email sent on Ali's behalf and
+  ad-hoc data pulls are explicitly out of scope for the progress log. Changes to *this skill* do
+  belong there — in `docs/sessions/CC-<id>.md`, this session's own log.
 
 ---
 

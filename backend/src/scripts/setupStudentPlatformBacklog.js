@@ -66,7 +66,7 @@ function dsc(o) {
   if (o.build) parts.push(`<p><strong>Build notes (precise):</strong> ${o.build}</p>`);
   if (o.done) parts.push(`<p><strong>Done means:</strong> ${o.done}</p>`);
   parts.push(`<p><strong>Reference:</strong> ${o.ref ? o.ref + '. ' : ''}${DOCS_REF}</p>`);
-  parts.push(`<p><strong>Rules:</strong> adhere to CLAUDE.md - idempotency, failure-first (timeouts/retries), typed contracts (tsc green), tests (happy+failure+boundary), per-student data isolation, PROGRESS.md.</p>`);
+  parts.push(`<p><strong>Rules:</strong> adhere to CLAUDE.md - idempotency, failure-first (timeouts/retries), typed contracts (tsc green), tests (happy+failure+boundary), per-student data isolation, a docs/sessions/CC-&lt;id&gt;.md progress entry.</p>`);
   return `<div>${parts.join('')}</div>`;
 }
 

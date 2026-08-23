@@ -70,6 +70,10 @@ export interface AgentDetailResult {
     produces: string[];
     undocumented_tools: string[];
     produced_ticket_types: string[];
+    /** Per-tool breakdown of the same reads/produces facts, in tools_granted
+     * order — lets AgentDetailPage show which tool a given fact came from
+     * instead of only the flattened union above (2026-08-23 drill-down ask). */
+    by_tool: Array<{ tool: string; reads: string[]; produces: string[]; documented: boolean }>;
   };
   /** This agent's own real reports_to chain (org-chart hierarchy build,
    * 2026-08-19) — the "Reports to" section on AgentDetailPage. `null` only
@@ -81,6 +85,14 @@ export interface AgentDetailResult {
   reports_to: {
     trail: string[];
     resolved_human: { id: string; name: string; email: string } | null;
+    /** The DIRECT next hop, when it's another agent (AI Staff -> AI
+     * Leadership) — real id + name so AgentDetailPage can link straight to
+     * that agent's own detail page (Ali, 2026-08-23: "I'd like to have a
+     * link to the agent they report to"). `null` when this agent reports
+     * directly to a human (resolved_human already covers that case), or
+     * when the configured reports_to_id doesn't resolve to a real agent row
+     * (disclosed honestly, never a dead link). */
+    immediate_agent: { id: string; name: string } | null;
   } | null;
 }
 
@@ -166,7 +178,16 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   if (agent.reports_to_type) {
     const { resolvedHumanId, trail } = await resolveReportsToChainWithTrail(agent);
     const resolvedHuman = resolvedHumanId ? await resolveHumanIdentity(resolvedHumanId) : null;
-    reportsTo = { trail, resolved_human: resolvedHuman };
+    // Immediate next hop, only when it's an agent (2026-08-23 "link to the
+    // agent they report to" ask) — a single extra lookup, not a second copy
+    // of the recursive chain-walk (that stays the one canonical
+    // implementation in ticketCreatorReportsToResolver.ts).
+    let immediateAgent: { id: string; name: string } | null = null;
+    if (agent.reports_to_type === 'agent' && agent.reports_to_id) {
+      const nextAgent = await AiAgent.findByPk(agent.reports_to_id);
+      if (nextAgent) immediateAgent = { id: nextAgent.id, name: nextAgent.agent_name };
+    }
+    reportsTo = { trail, resolved_human: resolvedHuman, immediate_agent: immediateAgent };
   }
 
   return {
@@ -207,6 +228,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       produces: capabilities.produces,
       undocumented_tools: capabilities.undocumentedTools,
       produced_ticket_types: producedTicketTypeRows.map((t: any) => t.type),
+      by_tool: capabilities.byTool.map((t) => ({ tool: t.tool, reads: t.reads, produces: t.produces, documented: t.documented })),
     },
     reports_to: reportsTo,
   };
