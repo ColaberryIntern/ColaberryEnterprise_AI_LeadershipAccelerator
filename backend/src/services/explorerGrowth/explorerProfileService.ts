@@ -4,13 +4,10 @@ import { isExplorerFeatureEnabled } from '../../config/explorerGrowthFlags';
 import { readLearnerSignals } from './explorerSignalReader';
 import { scoreLearner } from './explorerScoringService';
 import { classify } from './explorerStateMachine';
-import {
-  hasFullCurriculumAccess,
-  isStaffEnrollment,
-  activeCompEnrollmentIds,
-} from '../access/contentEntitlement';
+import { hasFullCurriculumAccess } from '../access/contentEntitlement';
+import { isStaffEnrollment } from '../access/staffAccess';
 import { Cohort, Enrollment } from '../../models';
-import { getSubscription } from '../subscriptionService';
+import { getSubscription, activeCompEnrollmentIds } from '../subscriptionService';
 import { redactForLogs } from '../../utils/piiRedaction';
 import type {
   ExplorerAffinity,
