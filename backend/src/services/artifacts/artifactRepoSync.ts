@@ -64,6 +64,20 @@ export interface ArtifactSyncResult {
   commitSha?: string;
   /** Plain-language, safe to show a student. Never carries an API body. */
   reason?: string;
+  /**
+   * Which repo this concerned, when we got far enough to know.
+   *
+   * Returned specifically so the UI can offer the FIX rather than only the
+   * diagnosis: `no_access` is actionable in one click, but only if the student
+   * is handed a link to their own repo's collaborator settings. Telling someone
+   * "we cannot write to your repository" without saying which repo or where to
+   * go is a diagnosis they have to go and act on later, which is how sixteen
+   * students ended up stuck in the first place.
+   *
+   * Owner and repo only. Never the URL of anything the platform authenticated
+   * with, and nothing derived from the token.
+   */
+  repo?: { owner: string; name: string };
 }
 
 export interface ArtifactSyncOptions {
@@ -271,6 +285,7 @@ export async function syncArtifactsToRepo(
         outcome: cause === 'no_push_access' ? 'no_access' : 'repo_gone',
         changedPaths: [],
         reason: messageForCause(cause),
+        ...(repoTarget ? { repo: { owner: repoTarget.owner, name: repoTarget.repo } } : {}),
       };
     }
 
