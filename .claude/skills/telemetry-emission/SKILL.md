@@ -48,7 +48,7 @@ POST to `/api/portal/project/telemetry`. The portal validates, ingests, and trig
 
 ## What Claude Code owns
 - `BuildManifest` emission for every non-trivial build.
-- Updating `PROGRESS.md` (the human-readable log).
+- Updating `docs/sessions/CC-<id>.md` (this session's human-readable log).
 - Updating directives in `/directives` when scope changes.
 - Updating `CLAUDE.md` itself for new operational rules.
 

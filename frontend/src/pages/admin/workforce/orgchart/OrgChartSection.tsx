@@ -80,7 +80,21 @@ const TICKET_ICON = (
  * and keyboard users than two adjacent controls doing the identical thing.
  */
 function navigateToAgentTickets(agentName: string): void {
-  window.open(`/admin/tickets?creator=${encodeURIComponent(agentName)}`, '_blank', 'noopener,noreferrer');
+  // Org Chart v7 (2026-08-23) — `range=all` mirrors this agent's card count,
+  // which is itself date-unrestricted (see orgChartService.ts). Without it,
+  // the board's own 7-day-default performance fix would show a SMALLER count
+  // than the card just displayed, defeating the reason this button exists.
+  //
+  // Ticket Count Sync fix, Task 3 (2026-08-24) — `status=open` mirrors the
+  // card's own `open_ticket_count` label. Without it, the board showed every
+  // status INCLUDING Done — reported 3 times as "the card says N but the
+  // board shows way more" (confirmed live: InboxCaseEngine's card says 304,
+  // the board without this param would show up to 1262).
+  window.open(
+    `/admin/tickets?creator=${encodeURIComponent(agentName)}&range=all&status=open`,
+    '_blank',
+    'noopener,noreferrer',
+  );
 }
 
 // `e.preventDefault()` + `e.stopPropagation()` because this control renders

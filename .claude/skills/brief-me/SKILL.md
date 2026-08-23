@@ -19,7 +19,7 @@ on him. `/brief-me` answers that in about one screen.
 ## Governance position
 
 This skill changes **communication format only**. It does not override `CLAUDE.md`, the
-Autonomy Model, the Escalation Protocol, the PROGRESS.md hard gate, verification
+Autonomy Model, the Escalation Protocol, the progress-log hard gate, verification
 requirements, deployment gates, `loop-architect`, `telemetry-emission`,
 `screenshot-review`, or PR protection rules. If `/loop-architect` is mid-run,
 `/brief-me` **translates** its current state into this format; it never takes over the
@@ -358,7 +358,7 @@ shows parallel activity, say it neutrally:
 > `<current task>`.
 
 Follow CLAUDE.md's Session ID and concurrent-instance rules. `/brief-me` is read-only, so
-it never touches PROGRESS.md - and never another session's entries.
+it never touches any session log - and never another session's file.
 
 # Cognitive load budget
 

@@ -136,7 +136,17 @@ export default function AdminTicketBoardPage() {
   // every page open. Defaults to the last 7 days; an explicit toggle switches to
   // "All time" and back. Deliberately NOT reset by clearAllFilters/"Clear" below
   // (see that function's own comment) — it's a view mode, not a dropdown filter.
-  const [dateRange, setDateRange] = useState<'recent' | 'all'>('recent');
+  //
+  // Org Chart v7 (2026-08-23) — Ali, live: the per-agent ticket counts on the
+  // org chart (fixed to be date-unrestricted, see orgChartService.ts) don't
+  // match a "recent" 7-day board, so the org chart's ticket-filter button now
+  // deep-links here with `&range=all` (read in the mount effect below) to
+  // start on the SAME unrestricted view its own count represents. Plain
+  // navigation to this page (no `range` param) keeps the 7-day default — the
+  // 2026-08-18 performance fix stays intact for the common case.
+  const [dateRange, setDateRange] = useState<'recent' | 'all'>(
+    new URLSearchParams(window.location.search).get('range') === 'all' ? 'all' : 'recent',
+  );
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'medium', type: 'task' });
   const [creating, setCreating] = useState(false);
@@ -189,9 +199,23 @@ export default function AdminTicketBoardPage() {
     const open = params.get('open');
     const source = params.get('source');
     const creator = params.get('creator');
+    // Ticket Count Sync fix, Task 3 (2026-08-24, session CC-20260818-x4nk
+    // continued) — Ali, live, reported 3 times: an agent's card says "N open
+    // tickets," but clicking through showed far more. Root cause: `creator`
+    // and `range` (added in the prior fix) narrow WHICH tickets are fetched,
+    // but never touched `filterStatus` — so the board rendered all 5 status
+    // columns including Done, not just the 4 that make up "open"
+    // (backlog+todo+in_progress+in_review, matching OPEN_TICKET_STATUS_FILTER
+    // in liveAgentsService.ts, the same definition the card's own count uses).
+    // For InboxCaseEngine specifically this was the difference between the
+    // 304 the card promised and 1262 total tickets ever created by it. `status`
+    // reuses the SAME `filterStatus` state the "Open" KPI card's own click
+    // already sets — not a new filter mechanism.
+    const status = params.get('status');
     if (open) setSelectedTicket(open);
     if (source) setFilterSource(source);
     if (creator) setFilterCreator(creator);
+    if (status === 'open' || status === 'done') setFilterStatus(status);
   }, []);
 
   // Org Chart v5 (2026-08-21) — roster for the Creator filter's <select>,

@@ -73,12 +73,17 @@ const DETAIL: AgentDetail = {
     produces: ['A reply message in the student DM thread'],
     undocumented_tools: [],
     produced_ticket_types: ['reese_autonomous_outreach', 'student_support'],
+    by_tool: [
+      { tool: 'respond_to_dm', reads: [], produces: ['A reply message in the student DM thread'], documented: true },
+      { tool: 'read_learner_context', reads: ['ProofDesk learner-progress signals (XP, competencies, timeline state) for the student in the conversation'], produces: [], documented: true },
+    ],
   },
   // Org-chart hierarchy build (2026-08-19) — Reese's real shape: AI Staff
   // reporting through workforce_intelligence_engine to Kes.
   reports_to: {
     trail: ['Reese (agent)', 'workforce_intelligence_engine (agent) -> [human]'],
     resolved_human: { id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', name: 'Kes', email: 'kesetebirhan@gmail.com' },
+    immediate_agent: { id: 'agent-wie', name: 'workforce_intelligence_engine' },
   },
 };
 
@@ -237,7 +242,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
   it('honesty path: an agent with an undocumented tool renders the disclosure note, never silent, never fabricated text', async () => {
     getAgentDetail.mockResolvedValue({
       ...DETAIL,
-      capabilities: { reads: [], produces: [], undocumented_tools: ['a_tool_from_the_future'], produced_ticket_types: [] },
+      capabilities: { reads: [], produces: [], undocumented_tools: ['a_tool_from_the_future'], produced_ticket_types: [], by_tool: [] },
     });
 
     await renderAgentPage();
@@ -249,7 +254,7 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
   it('boundary: an agent with empty reads/produces (no granted tools) shows an honest empty state, not a blank section', async () => {
     getAgentDetail.mockResolvedValue({
       ...DETAIL,
-      capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [] },
+      capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [], by_tool: [] },
     });
 
     await renderAgentPage();
@@ -337,11 +342,96 @@ describe('AgentDetailPage — "Reports to" section', () => {
   it('boundary: the chain trail exists but resolved_human is null -> discloses the break honestly, never fabricates a human', async () => {
     getAgentDetail.mockResolvedValue({
       ...DETAIL,
-      reports_to: { trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null },
+      reports_to: { trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null, immediate_agent: null },
     });
 
     await renderAgentPage();
 
     expect(container.textContent).toContain('does not currently resolve to a real human');
+  });
+
+  // 2026-08-23 — "I'd like to have a link to the agent they report to" (Ali,
+  // 3rd time reporting the linked issue this message bundled with).
+  it('immediate_agent: renders a real clickable link to the next-hop agent\'s own detail page', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL); // immediate_agent = { id: 'agent-wie', name: 'workforce_intelligence_engine' }
+
+    await renderAgentPage();
+
+    const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent === 'workforce_intelligence_engine');
+    expect(link).toBeDefined();
+    expect(link!.getAttribute('href')).toBe('/admin/agents/agent-wie');
+  });
+
+  it('boundary: immediate_agent is null (reports directly to a human) -> no "Reports directly to" link rendered, only the existing chain text', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      reports_to: { trail: ['Reese (agent) -> [human]'], resolved_human: { id: 'ali', name: 'Ali', email: 'ali@colaberry.com' }, immediate_agent: null },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).not.toContain('Reports directly to');
+  });
+});
+
+// Tool & capability drill-down (2026-08-23) — Ali: "I also would like to see
+// the tool & capability drill down so I can understand the tool better."
+describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getAgentDetail.mockResolvedValue(DETAIL);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('renders one collapsible <details> per granted tool, named after the real tool string', async () => {
+    await renderAgentPage();
+
+    const details = Array.from(container.querySelectorAll('details'));
+    const toolNames = details.map((d) => d.querySelector('summary code')?.textContent);
+    expect(toolNames).toEqual(['respond_to_dm', 'read_learner_context']);
+  });
+
+  it('each tool\'s own reads/produces are nested inside ITS details element, not the flattened aggregate', async () => {
+    await renderAgentPage();
+
+    const details = Array.from(container.querySelectorAll('details'));
+    const readLearnerContext = details.find((d) => d.querySelector('summary code')?.textContent === 'read_learner_context');
+    expect(readLearnerContext?.textContent).toContain('ProofDesk learner-progress signals');
+    // respond_to_dm has no reads of its own — its OWN details element must not
+    // claim the other tool's read fact.
+    const respondToDm = details.find((d) => d.querySelector('summary code')?.textContent === 'respond_to_dm');
+    expect(respondToDm?.textContent).not.toContain('ProofDesk learner-progress signals');
+    expect(respondToDm?.textContent).toContain('A reply message in the student DM thread');
+  });
+
+  it('honesty path: an undocumented tool renders an "undocumented" badge and a per-tool disclosure, never fabricated reads/produces', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      capabilities: { ...DETAIL.capabilities, by_tool: [{ tool: 'a_tool_from_the_future', reads: [], produces: [], documented: false }] },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('a_tool_from_the_future');
+    expect(container.textContent).toContain('undocumented');
+    expect(container.textContent).toContain('No documented reads/produces yet for this tool');
+  });
+
+  it('boundary: no tools granted (by_tool empty) shows the existing "No tools recorded" empty state', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      capabilities: { ...DETAIL.capabilities, by_tool: [] },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('No tools recorded.');
   });
 });

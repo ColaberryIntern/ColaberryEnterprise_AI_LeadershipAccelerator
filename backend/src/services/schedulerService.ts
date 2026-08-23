@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { randomUUID } from 'crypto';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import nodemailer from 'nodemailer';
@@ -1765,6 +1766,48 @@ export function startScheduler(): void {
     });
   });
 
+  // GitHub repository-invitation sweep (SBP-GH). Accepts the collaborator
+  // invitations students send us, which is the ONLY way the platform ever gets
+  // push access to a student repo.
+  //
+  // WHY THIS RUNS HOURLY, AND WHY IT WAS THE HIGHEST-VALUE CRON WE WERE MISSING.
+  // `sweepPendingInvitations` has existed and been tested since the SBP-GH work,
+  // but it was only ever runnable by hand — it was scheduled nowhere. GitHub
+  // expires a repository invitation after 7 days, and an expired one cannot be
+  // recovered: only a fresh invitation from the student restores that access.
+  // Measured on production 2026-08-23: of 28 connections with a repo,
+  // `platform_can_push` was TRUE for exactly ONE — and that one only because a
+  // human accepted the invitation by hand. `Samrawit26/jobflow_Agent` was
+  // invited 2026-07-21 and expired unaccepted; that grant is gone.
+  //
+  // Hourly rather than daily because the cost of a miss is asymmetric: an empty
+  // queue costs a single API request, while a missed window costs a student
+  // their portfolio sync for the rest of the cohort.
+  //
+  // Safe to run unattended (see repoInvitations' header): it accepts only
+  // invitations that already exist, never solicits one, never patches an EXPIRED
+  // invitation — a PATCH on an expired invite returns a lying 204 and destroys
+  // the evidence the student ever invited us — and never trusts a status code,
+  // re-reading `permissions.push` to settle whether access was actually gained.
+  cron.schedule('7 * * * *', () => {
+    instrumentCronJob('GithubInvitationSweep', async () => {
+      const { sweepPendingInvitations } = await import('./sbp/repoConnect/repoInvitations');
+      const result = await sweepPendingInvitations({ correlationId: randomUUID() });
+      // Silent on the common empty-queue case; loud when something happened or
+      // when a grant was lost, because an expiry is a student we must go ask.
+      if (result.accepted.length || result.expired.length || result.failed.length) {
+        console.log('[Scheduler] GitHub invitation sweep:', {
+          accepted: result.accepted.length,
+          expired: result.expired.length,
+          failed: result.failed.length,
+          expired_repos: result.expired.map((i) => `${i.owner}/${i.repo}`),
+        });
+      }
+    }).catch((err) => {
+      console.error('[Scheduler] GitHub invitation sweep error:', err);
+    });
+  });
+
   // Reese Phase 2 (Autonomous Outreach) — daily scan of the approved pilot
   // cohort for two real risk signals; on a real, non-duplicate,
   // non-cadence-capped hit, sends one real autonomous DM + opens a ProofDesk
@@ -2360,9 +2403,16 @@ export function startScheduler(): void {
       instrumentCronJob('CurriculumVideoLinkHealth', async () => {
         const { runVideoLinkHealthCheck } = require('./curriculumHealth/videoLinkHealthService');
         const result = await runVideoLinkHealthCheck();
+        // `unverified`, `untrusted_batches` and the three-way ownership split are
+        // logged because a quiet run and a blindfolded run look identical
+        // otherwise. A run with untrusted batches found nothing because it could
+        // not see, not because everything is fine. `quota_units` is logged so the
+        // YouTube Data API cost is an observed number, not an estimate.
         console.log('[Scheduler] Curriculum video link health:', JSON.stringify({
-          skipped: result.skipped, checked: result.checked, healthy: result.healthy,
+          skipped: result.skipped, reason: result.reason, checked: result.checked, healthy: result.healthy,
           unknown: result.unknown, failures: result.failures.length, sealed_weeks: result.sealed_weeks,
+          throttled: result.throttled, untrusted_batches: result.untrusted_batches,
+          unverified: result.unverified, quota_units: result.quota_units, ownership: result.ownership,
         }));
       }).catch((err: any) => {
         console.error('[Scheduler] Curriculum video link health error:', err.message);

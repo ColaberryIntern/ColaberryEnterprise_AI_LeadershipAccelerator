@@ -17,7 +17,7 @@ blocker/major finding against the real diff, then synthesizes one verdict:
 |---|---|
 | merge-readiness | mergeable/conflicts (re-checked with `git merge-tree`), base==main, draft, required approvals, self-approval block, CI rollup |
 | correctness | real bugs/logic errors/regressions in the diff |
-| governance | PROGRESS.md hard gate (Session ID + verification evidence), idempotency, secrets, tests-for-logic, Zod/contract validation, file-size ceilings, em-dash/style |
+| governance | progress-log hard gate (`docs/sessions/CC-<id>.md` + verification evidence), idempotency, secrets, tests-for-logic, Zod/contract validation, file-size ceilings, em-dash/style |
 | tests | happy + failure + boundary + idempotency coverage |
 | security | input validation, secrets, route auth, injection, unbounded external calls |
 
@@ -113,10 +113,15 @@ auto-merge there sends real money/comms, leaks secrets, or corrupts schema):
 `stripe | paysimple | billing | enrollment | payment | webhook | auth | token |
 password | secret | credential | models/index | migration | *.sql | seeds/`.
 
-**Serial merge queue.** PRs are merged one at a time, re-syncing main between each, so the
-PROGRESS.md union driver resolves cleanly and concurrent PRs don't thrash. (Merging in
-parallel cascades conflicts — observed 2026-06-24 when 9 merges put every in-flight PR
-into conflict.) A merge that hits a non-PROGRESS code conflict is aborted and flagged.
+**Serial merge queue.** PRs are merged one at a time, re-syncing main between each so
+concurrent PRs don't thrash. (Merging in parallel cascades conflicts — observed
+2026-06-24 when 9 merges put every in-flight PR into conflict.) A merge that hits a code
+conflict is aborted and flagged.
+
+Since the 2026-08-23 per-session log migration each session writes its own
+`docs/sessions/CC-<id>.md`, so the progress log is no longer a conflict source. Serial
+merging is retained for genuine code conflicts, which it still prevents. The autopilot's
+conflict-marker guard covers both `PROGRESS.md` and `docs/sessions/`.
 
 **Standing loop (cloud routine, every 3h):**
 `prReviewState.js diff` → `pr-approval-review` (check) → `remediate-pr` on REQUEST_CHANGES

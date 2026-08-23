@@ -8,8 +8,8 @@ description: End-to-end autonomous delivery loop for large, multi-step build req
 A governed autonomous build loop for **this** repo. It does not replace `CLAUDE.md` -
 it operationalizes it: the plan-auditor rubric *is* the confidence-scoring gate, the
 task-verifier retry cap *is* Stall Detection (3 identical failures), the hard-stop list
-*is* the Escalation Protocol, and every task the loop marks complete still needs a
-`PROGRESS.md` entry under CLAUDE.md's hard gate. Read `CLAUDE.md` in full before running
+*is* the Escalation Protocol, and every task the loop marks complete still needs an
+entry in this session's `docs/sessions/CC-<id>.md` log under CLAUDE.md's hard gate. Read `CLAUDE.md` in full before running
 this skill - it governs the run, this skill just sequences it.
 
 Relationship to other skills in this repo: `remediate-pr` is the narrow maker/verifier
@@ -69,8 +69,8 @@ the Blocked dashboard instead of chat prose.
   minimum), `jest` under `backend/src/**/__tests__/`, Playwright under
   `/tests/systemV2` (target coverage, not yet universal - if it doesn't cover the
   changed surface, say so rather than claiming E2E coverage that doesn't exist).
-- **PROGRESS.md hard gate (CLAUDE.md, non-negotiable):** every task this loop marks
-  `passed` needs a session-ID-tagged `PROGRESS.md` entry with verification evidence
+- **Progress-log hard gate (CLAUDE.md, non-negotiable):** every task this loop marks
+  `passed` needs an entry in `docs/sessions/CC-<id>.md` with verification evidence
   before the run's Phase G is considered satisfied. This loop does not substitute for
   that gate - it feeds it.
 - **Escalation boundary (CLAUDE.md Autonomy Model):** routine app deploys (`docker
@@ -96,7 +96,7 @@ the Blocked dashboard instead of chat prose.
 `/loop-architect <describe the build>` or trigger it implicitly with the phrases above.
 On invocation:
 1. Mint or reuse this session's `CC-<YYYYMMDD>-<id>` per CLAUDE.md's Session Start
-   Protocol (this loop's tasks still land in `PROGRESS.md` under that ID).
+   Protocol (this loop's tasks land in `docs/sessions/CC-<id>.md`, the file named for that ID).
 2. Check `.loop-architect/runs/` for an incomplete run matching this request's hash
    before starting a new one (see `references/state-ledger-schema.md` Resume Behavior).
 3. Proceed through the phase table above, invoking `loop-plan-auditor`,

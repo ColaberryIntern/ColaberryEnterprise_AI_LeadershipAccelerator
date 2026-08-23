@@ -565,4 +565,107 @@ describe('AdminTicketBoardPage — creator filter (real, roster-backed select)',
     expect(Array.from(select.options).some((o) => o.value === 'some-removed-agent')).toBe(true);
     expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/creator=some-removed-agent/);
   });
+
+  // Org Chart v7 (2026-08-23, session CC-20260818-x4nk continued) — Ali,
+  // live: the org chart's per-agent ticket count (date-unrestricted, see
+  // orgChartService.ts) didn't match this board's default 7-day "recent"
+  // view, so the org chart's ticket-filter button now deep-links with
+  // `&range=all`. Nested here (not a separate top-level describe) so these
+  // tests share ROSTER/creatorSelect()/boardFetchCalls() with the rest of
+  // this file's creator-filter coverage, and the outer afterEach above
+  // already resets the deep-link URL between tests.
+  it('`range=all` happy path: ?creator=<agent>&range=all starts on "All time" (no created_after in the board fetch), matching the org chart card that linked here', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=cory-engine&range=all');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-7' })] });
+    await renderBoard();
+
+    expect(creatorSelect().value).toBe('cory-engine');
+    const lastCall = boardFetchCalls()[boardFetchCalls().length - 1];
+    expect(lastCall).toMatch(/creator=cory-engine/);
+    expect(lastCall).not.toMatch(/created_after=/);
+    const allTimeBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'All Time') as HTMLButtonElement;
+    expect(allTimeBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('`range=all` boundary: plain navigation (no `range` param) keeps the existing 7-day "recent" default — the 2026-08-18 performance fix is untouched', async () => {
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-8' })] });
+    await renderBoard();
+
+    const lastCall = boardFetchCalls()[boardFetchCalls().length - 1];
+    expect(lastCall).toMatch(/created_after=/);
+    const recentBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Last 7 Days') as HTMLButtonElement;
+    expect(recentBtn?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('`range=all` boundary: `range` present but not exactly "all" (e.g. a typo or unrelated value) is ignored, staying on the 7-day default', async () => {
+    window.history.pushState({}, '', '/admin/tickets?range=everything');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-9' })] });
+    await renderBoard();
+
+    expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/created_after=/);
+  });
+
+  // Ticket Count Sync fix, Task 3 (2026-08-24, session CC-20260818-x4nk
+  // continued) — Ali, live, reported 3 times: an agent's card says "N open
+  // tickets," but clicking through showed far more (confirmed live:
+  // InboxCaseEngine's card said 304, the unfixed board showed up to 1262 —
+  // every status including Done, since `creator`/`range` narrow WHICH
+  // tickets are fetched but never touched `filterStatus`, which controls
+  // which of the 5 Kanban columns render). `status=open` closes this by
+  // reusing the SAME filterStatus state the "Open" KPI card already sets
+  // (see the "clickable stat cards" suite above for its column-hiding
+  // behavior) — this is the actual regression test for the reported bug.
+  function columnHeaderLabels(): (string | null)[] {
+    return Array.from(container.querySelectorAll('.rounded-top span'))
+      .filter((el) => !el.classList.contains('admin-status-badge'))
+      .map((el) => el.textContent);
+  }
+
+  it('`status=open` happy path: ?creator=<agent>&status=open renders ONLY the 4 non-Done columns — the exact reported bug, now fixed', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=InboxCaseEngine&range=all&status=open');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({
+      backlog: [makeTicket({ id: 'ice-1', title: 'Open one', status: 'backlog' })],
+      done: [makeTicket({ id: 'ice-2', title: 'Done one', status: 'done' })],
+    });
+    await renderBoard();
+
+    expect(creatorSelect().value).toBe('InboxCaseEngine');
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review']);
+    const openBtn = Array.from(container.querySelectorAll('.admin-stat-card__button')).find((b) => b.textContent?.includes('Open')) as HTMLButtonElement;
+    expect(openBtn?.querySelector('.admin-stat-card')?.classList.contains('admin-stat-card--active')).toBe(true);
+  });
+
+  it('`status=open` boundary: no `status` param renders all 5 columns including Done, same as today — this test would have caught the reported bug', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=InboxCaseEngine&range=all');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({
+      backlog: [makeTicket({ id: 'ice-3', title: 'Open one', status: 'backlog' })],
+      done: [makeTicket({ id: 'ice-4', title: 'Done one', status: 'done' })],
+    });
+    await renderBoard();
+
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
+  });
+
+  it('`status=done` also works (symmetry — the param isn\'t hardcoded to only ever mean "open")', async () => {
+    window.history.pushState({}, '', '/admin/tickets?status=done');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ done: [makeTicket({ id: 'x-10', title: 'Done', status: 'done' })] });
+    await renderBoard();
+
+    expect(columnHeaderLabels()).toEqual(['Done']);
+  });
+
+  it('`status=` with an unrecognized value is ignored, keeping the default all-5-columns view (fails safe, matches the `range` boundary test above)', async () => {
+    window.history.pushState({}, '', '/admin/tickets?status=archived');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-11' })] });
+    await renderBoard();
+
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
+  });
 });

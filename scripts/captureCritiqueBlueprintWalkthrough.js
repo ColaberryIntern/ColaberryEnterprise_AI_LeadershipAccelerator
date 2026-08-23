@@ -267,7 +267,7 @@ const USE_CASES = {
           '# Pricing page: rewrite hero from feature-y to buyer-y\n\n' +
           '## Why\nA pin captured during a Critique session on /pricing flagged that the headline "Executive Accelerator Pricing" tells visitors WHAT this is, not WHO it’s for. An exec landing here wants to know which tier matches their stage.\n\n' +
           '## Implementation expectations\n- Rewrite the hero headline to lead with the operator situation\n- Position the tiers as outcomes ("Get to your first AI system" / "Operate AI at scale") not labels\n- Keep the existing visual structure\n- Do not bundle unrelated copy edits elsewhere on the page\n\n' +
-          '## Verification\n- `npx tsc --noEmit` clean\n- Open /pricing in a new tab and confirm the hero reads as intended\n- Update PROGRESS.md with the change'
+          '## Verification\n- `npx tsc --noEmit` clean\n- Open /pricing in a new tab and confirm the hero reads as intended\n- Record the change in docs/sessions/CC-<id>.md'
         );
         sessionStorage.setItem('visualWorkspace:pendingBuildSourceRoute', '/pricing');
         sessionStorage.setItem('visualWorkspace:lastSessionTouchedAt', new Date().toISOString());

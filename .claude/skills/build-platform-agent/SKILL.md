@@ -198,7 +198,7 @@ H. *(deploy + verify)* `tsc --noEmit` both stacks; unit tests (happy/failure/bou
    real (not empty) identity/prompt/tickets — the same close-out verification Reese
    Phase 1 used. If step G.5 applied, also run
    `validateAgentTicketStandard.ts` against the new agent live in production and
-   attach its real output to this build's `PROGRESS.md` entry.
+   attach its real output to this build's `docs/sessions/CC-<id>.md` entry.
 
 ## If this agent needs to be proactive (initiates contact on its own)
 

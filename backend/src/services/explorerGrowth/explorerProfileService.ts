@@ -4,8 +4,10 @@ import { isExplorerFeatureEnabled } from '../../config/explorerGrowthFlags';
 import { readLearnerSignals } from './explorerSignalReader';
 import { scoreLearner } from './explorerScoringService';
 import { classify } from './explorerStateMachine';
-import { resolveContentPageAccess } from '../access/contentEntitlement';
-import { getSubscription } from '../subscriptionService';
+import { hasFullCurriculumAccess } from '../access/contentEntitlement';
+import { isStaffEnrollment } from '../access/staffAccess';
+import { Cohort, Enrollment } from '../../models';
+import { getSubscription, activeCompEnrollmentIds } from '../subscriptionService';
 import { redactForLogs } from '../../utils/piiRedaction';
 import type {
   ExplorerAffinity,
@@ -56,25 +58,51 @@ export interface RecomputeResult {
 /**
  * Entitlement for the CONVERTED rule.
  *
- * Uses `resolveContentPageAccess`, which already assembles cohort lookup, staff
- * check and comp-enrollment resolution internally — rather than rebuilding that
- * chain here, where it would drift from the real access rule the portal uses.
- * A CONVERTED check that disagrees with the entitlement gate is how someone who
- * has paid keeps receiving acquisition email.
+ * Uses `hasFullCurriculumAccess` DIRECTLY, assembling cohort, staff status and
+ * comp state the same way `isFreePreviewTier` does.
  *
- * Fails CLOSED: an error resolving entitlement means "not converted", so the
- * worst case is a paying learner briefly scored as a prospect, never the
- * reverse. Both halves are logged.
+ * IT MUST NOT USE `resolveContentPageAccess`. That helper looks like the right
+ * thing - it returns `{ isStaff, hasFullAccess }` and does this assembly for you
+ * - but it FAILS OPEN by design, returning `hasFullAccess: true` when the
+ * content gate flag is off, when the enrollment is missing, and on ANY error.
+ * That is correct for its real job: it is a UI gate, and if the check breaks it
+ * should show the lesson rather than lock a paying student out of content they
+ * bought.
+ *
+ * As a CONVERSION predicate, failing open means "assume they paid". Using it
+ * here marked ALL 153 production Explorers as CONVERTED - and CONVERTED is
+ * terminal, so every free user would have been permanently excluded from the
+ * campaign this system exists to run. Verified on production 2026-08-22.
+ *
+ * This function fails CLOSED, and unlike the previous version that claim is
+ * true: each half is independently caught, and a failure yields `false`.
  */
 async function resolveEntitlement(
   enrollmentId: string,
 ): Promise<{ hasFullCurriculumAccess: boolean; hasActiveNonCompSubscription: boolean }> {
-  let hasFullCurriculumAccess = false;
+  let fullAccess = false;
   let hasActiveNonCompSubscription = false;
 
   try {
-    const access = await resolveContentPageAccess(enrollmentId);
-    hasFullCurriculumAccess = access.hasFullAccess;
+    const enrollment = await Enrollment.findByPk(enrollmentId, {
+      attributes: ['id', 'payment_status', 'cohort_id', 'access_starts_at'],
+    });
+    if (enrollment) {
+      const cohortId = (enrollment as any).cohort_id;
+      const cohort = cohortId
+        ? await Cohort.findByPk(cohortId, { attributes: ['id', 'cohort_type'] })
+        : null;
+      const [isStaff, compIds] = await Promise.all([
+        isStaffEnrollment(enrollmentId),
+        activeCompEnrollmentIds([enrollmentId]),
+      ]);
+      fullAccess = hasFullCurriculumAccess(enrollment as any, cohort as any, {
+        isStaff,
+        hasActiveComp: compIds.has(enrollmentId),
+      });
+    }
+    // A missing enrollment leaves fullAccess false: no record is not evidence
+    // of purchase.
   } catch (err: any) {
     console.warn(
       redactForLogs(
@@ -82,6 +110,7 @@ async function resolveEntitlement(
           event: 'explorer.entitlement_read_failed',
           service: 'explorer-growth',
           level: 'warn',
+          outcome: 'failure',
           error_class: err?.name || 'EntitlementError',
           enrollment_id: enrollmentId,
         }),
@@ -92,7 +121,7 @@ async function resolveEntitlement(
   try {
     const view = await getSubscription(enrollmentId);
     const sub = (view as any)?.subscription;
-    // "Active AND non-comp". A comped subscription is not a conversion — it is
+    // "Active AND non-comp". A comped subscription is not a conversion - it is
     // exactly the population EPIC 4 still needs to convert.
     hasActiveNonCompSubscription =
       !!sub && sub.status === 'active' && sub.plan !== 'comp';
@@ -103,6 +132,7 @@ async function resolveEntitlement(
           event: 'explorer.subscription_read_failed',
           service: 'explorer-growth',
           level: 'warn',
+          outcome: 'failure',
           error_class: err?.name || 'SubscriptionError',
           enrollment_id: enrollmentId,
         }),
@@ -110,7 +140,7 @@ async function resolveEntitlement(
     );
   }
 
-  return { hasFullCurriculumAccess, hasActiveNonCompSubscription };
+  return { hasFullCurriculumAccess: fullAccess, hasActiveNonCompSubscription };
 }
 
 /** YYYY-MM-DD in UTC. The snapshot's daily key. */

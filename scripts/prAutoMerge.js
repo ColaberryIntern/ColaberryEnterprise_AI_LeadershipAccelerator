@@ -3,9 +3,13 @@
  * prAutoMerge.js — the autonomous merge step of the pr-review-autopilot, with guardrails.
  *
  * Given a verdicts JSON (from pr-approval-review), it merges the ELIGIBLE PRs into main
- * SERIALLY — one at a time, re-syncing main between each so the PROGRESS.md union driver
- * resolves cleanly and concurrent PRs do not thrash (the cascade we hit when merging in
- * parallel). Everything not eligible is FLAGGED for a human, never force-merged.
+ * SERIALLY — one at a time, re-syncing main between each so concurrent PRs do not thrash
+ * (the cascade we hit when merging in parallel). Everything not eligible is FLAGGED for a
+ * human, never force-merged.
+ *
+ * Since the 2026-08-23 per-session progress-log migration, sessions write their own
+ * docs/sessions/CC-<id>.md rather than a shared PROGRESS.md, so the log is no longer a
+ * conflict source. Serial merging is retained for CODE conflicts, which it still prevents.
  *
  * A truly autonomous system still refuses to merge what it shouldn't. Eligibility:
  *   1. recommendation is APPROVE or APPROVE_WITH_NITS (never BLOCK / REQUEST_CHANGES)
@@ -46,6 +50,32 @@ if (!verdictsPath) { console.error('usage: node scripts/prAutoMerge.js <verdicts
 function gh(args) { return execFileSync('gh', args, { encoding: 'utf8' }); }
 function git(cwd, args) { return execFileSync('git', args, { cwd, encoding: 'utf8' }); }
 
+/**
+ * Paths that must never reach main carrying an unresolved conflict marker.
+ * `docs/sessions/` holds the per-session progress logs (since 2026-08-23);
+ * `PROGRESS.md` is the sealed pre-cutover archive, still listed because
+ * long-lived branches cut before the migration can still touch it.
+ */
+const MARKER_PATHS = ['PROGRESS.md', 'docs/sessions/'];
+
+/**
+ * True when any of `pathspecs` carries an unresolved conflict marker.
+ *
+ * `git grep` exits 1 when it matches NOTHING and execFileSync throws on any
+ * non-zero exit — so the previous unguarded call threw on the CLEAN path, the
+ * overwhelmingly common one. Here exit 1 is the happy case; only exit > 1 is a
+ * real error and is allowed to propagate.
+ */
+function hasConflictMarkers(wt, pathspecs) {
+  try {
+    execFileSync('git', ['grep', '-lE', '^<<<<<<<|^>>>>>>>', '--', ...pathspecs], { cwd: wt, encoding: 'utf8' });
+    return true;
+  } catch (e) {
+    if (e.status === 1) return false;
+    throw e;
+  }
+}
+
 function prFacts(pr) {
   const j = JSON.parse(gh(['pr', 'view', String(pr), '-R', REPO, '--json', 'state,headRefName,mergeable,files,author']));
   const files = (j.files || []).map((f) => f.path);
@@ -72,10 +102,12 @@ function mergeIntoMain(wt, pr, branch) {
     git(wt, ['merge', `origin/${branch}`, '--no-edit', '-m', `Merge pull request #${pr} from ${branch} [autopilot]`]);
   } catch (e) {
     git(wt, ['merge', '--abort']);
-    return { merged: false, reason: 'code conflict on merge (not PROGRESS.md) — flagged' };
+    return { merged: false, reason: 'code conflict on merge — flagged' };
   }
-  const markers = git(wt, ['grep', '-cE', '^<<<<<<<|^>>>>>>>', '--', 'PROGRESS.md']).trim();
-  if (markers && markers !== '0') { git(wt, ['reset', '--hard', 'origin/main', '--quiet']); return { merged: false, reason: 'unresolved markers' }; }
+  if (hasConflictMarkers(wt, MARKER_PATHS)) {
+    git(wt, ['reset', '--hard', 'origin/main', '--quiet']);
+    return { merged: false, reason: `unresolved markers in ${MARKER_PATHS.join(' or ')}` };
+  }
   git(wt, ['push', 'origin', 'HEAD:main', '--quiet']);
   return { merged: true, reason: 'merged' };
 }

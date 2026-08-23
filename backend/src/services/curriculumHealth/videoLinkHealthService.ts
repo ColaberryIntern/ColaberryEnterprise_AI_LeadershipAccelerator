@@ -17,12 +17,51 @@
  * plausible-looking automatic substitution is exactly the kind of thing that
  * survives review and shouldn't.
  *
+ * HOW IT LOOKS. Through the YouTube Data API v3, not by scraping. The scraper it
+ * replaced worked from a laptop and was blind from the production host, which
+ * YouTube answers with a bot challenge. The dry run before this change was 150
+ * checked, 150 unknown, 0 failures, 6 untrusted batches, finished in nine seconds
+ * because every batch bailed the moment its control probe was challenged. That is
+ * the previous fix behaving correctly - quiet rather than 150 false alerts - and
+ * it is still no coverage. `videos.list` answers the same questions from a
+ * metered endpoint that has no reason to decide we are a robot, at one quota unit
+ * per fifty videos.
+ *
+ * HOW A FAILURE EARNS AN ALERT. Three independent gates, each one added because
+ * the check without it produced false positives at corpus scale:
+ *
+ *   1. The API must have answered. Quota exhaustion, a rejected key, an IP
+ *      restriction, a timeout and a paginated response are all "we could not
+ *      see", and none of them may become a statement about a video.
+ *   2. The batch's control video - one of ours, known good, carried inside the
+ *      same `videos.list` call - must have come back healthy. If the API will not
+ *      answer honestly about a video we know is fine, nothing else in that
+ *      response is evidence, including the ids that were missing from it.
+ *   3. The failure must reproduce in a second, separately controlled observation
+ *      after a cooldown. A video that fails once and passes on retry was never
+ *      broken.
+ *
+ * Anything that does not clear all three lands in UNKNOWN, which is reported and
+ * never paged on.
+ *
+ * AND ABSENCE IS NOT HEALTH. `videos.list` omits ids it cannot return instead of
+ * erroring on them, so 47 items back from 50 ids means three videos are broken.
+ * The probe iterates the request rather than the response precisely so a missing
+ * video can never fall through as healthy: that is the 146-video mistake with the
+ * sign flipped, and silent instead of loud.
+ *
  * Failure-first notes:
- *  - What if a probe fails? It is retried with capped backoff, then reported
- *    UNKNOWN. UNKNOWN never alerts, so a rate limit cannot page anyone.
- *  - What if YouTube changes its markup? `extractPlayerResponse` returns null,
- *    every video degrades to UNKNOWN, the run reports `unknown` high and alerts
- *    on nothing. Loud in the logs, silent on the pager.
+ *  - What if the API refuses? The batch is untrusted: `untrusted_batches` and
+ *    `unverified` go up, nothing is called healthy and nothing is called broken.
+ *  - What if the quota runs out mid-run? Identical treatment. The remaining
+ *    batches are unverified, the run reports it, and no alert fires.
+ *  - What if the key is missing entirely? The run refuses to start and says so,
+ *    rather than probing 150 videos into a wall.
+ *  - What if the response shape changed? A 200 with no items array is a
+ *    ContractViolation, not an empty result; an item carrying no
+ *    `status.embeddable` is UNKNOWN, not embeddable. Neither degrades to healthy.
+ *  - What if a run sees NOTHING at all? It does not stamp the day's idempotency
+ *    key, so a blind run cannot consume the slot a sighted one needs.
  *  - What if the DB is unreachable? The run throws; instrumentCronJob records the
  *    failure against the agent registry. No partial state is written.
  *  - Not handled: a video that is playable but whose *content* changed. No
@@ -34,28 +73,26 @@ import { sequelize } from '../../config/database';
 import { getSetting, setSetting } from '../settingsService';
 import { emitAlert } from '../alertService';
 import { CANONICAL_PROGRAM_ID } from '../timeline/curriculumScope';
+import { ownershipOf, youtubeId, type Ownership, type VideoState } from './videoLinkClassifier';
+import { DAILY_QUOTA_NOTE, createVideoApiClient } from './videoLinkApiClient';
+import { createAbsenceProbe } from './videoLinkAbsenceProbe';
 import {
-  classify,
-  extractPlayerResponse,
-  isOurChannel,
-  readPlayerResponse,
-  youtubeId,
-  type PlayerProbe,
-  type VideoState,
-} from './videoLinkClassifier';
+  BATCH_SIZE,
+  CONFIRM_COOLDOWN_MS,
+  CONTROL_VIDEO_ID,
+  PACE_MS,
+  chunk,
+  observeBatch,
+  sleep,
+  type Observation,
+  type ProbeDeps,
+} from './videoLinkProbe';
 import { assessCard, sealedWeeks, severityFor, type CardImpact, type ImpactCard } from './videoLinkImpact';
 
-const OEMBED = 'https://www.youtube.com/oembed';
-const WATCH = 'https://www.youtube.com/watch';
-const TIMEOUT_MS = 15_000;
-const MAX_ATTEMPTS = 3;
-const CONCURRENCY = 4;
 const LAST_RUN_KEY = 'curriculum_video_health_last_run';
 const SERVICE = 'curriculum-video-health';
 
-/** A desktop UA: the watch page serves a different shell to unknown clients. */
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36';
+export { CONTROL_VIDEO_ID };
 
 export interface VideoFailure {
   video_id: string;
@@ -63,7 +100,8 @@ export interface VideoFailure {
   detail: string;
   remedy: string;
   channel: string | null;
-  ours: boolean;
+  /** Tri-state on purpose: "we could not tell" is not "not ours". */
+  ownership: Ownership;
   cards: CardImpact[];
   students_affected: number;
   seals_week: boolean;
@@ -80,6 +118,24 @@ export interface VideoHealthRunResult {
   failures: VideoFailure[];
   sealed_weeks: number[];
   alerts_emitted: number;
+  /** Follow-up lookups YouTube refused. A measure of us, not of the curriculum. */
+  throttled: number;
+  /** Batches the API would not vouch for. Nothing in them may be called broken. */
+  untrusted_batches: number;
+  /** Videos we declined to judge because their batch was untrusted. */
+  unverified: number;
+  /**
+   * YouTube Data API quota units this run spent. Reported so the daily cost is an
+   * observed number rather than an estimate, and so a run that suddenly costs 100x
+   * (someone reached for `search.list`) is visible the day it happens.
+   */
+  quota_units: number;
+  /**
+   * Failing videos by owner. Reported as three numbers rather than one
+   * "on our channel" count: that count read 0 during the 2026-08-22 dry run and
+   * was taken as reassurance, when in fact the owner was unknown for all 149.
+   */
+  ownership: Record<Ownership, number>;
 }
 
 export interface RunOptions {
@@ -87,6 +143,10 @@ export interface RunOptions {
   force?: boolean;
   /** Probe and report but emit no alerts. */
   dryRun?: boolean;
+  /** Minimum gap between outbound probes. Operational tuning; 0 in unit tests. */
+  paceMs?: number;
+  /** Wait before re-observing suspects. Operational tuning; 0 in unit tests. */
+  confirmCooldownMs?: number;
 }
 
 function log(
@@ -108,65 +168,6 @@ export function centralDate(now: Date = new Date()): string {
     month: '2-digit',
     day: '2-digit',
   }).format(now);
-}
-
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-async function fetchStatus(url: string): Promise<number | null> {
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { 'User-Agent': UA } });
-      // 4xx here are meaningful verdicts, not transport failures: return them.
-      return res.status;
-    } catch {
-      if (attempt < MAX_ATTEMPTS) await sleep(1000 * attempt);
-    }
-  }
-  return null;
-}
-
-async function probePlayer(videoId: string): Promise<PlayerProbe> {
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const res = await fetch(`${WATCH}?v=${encodeURIComponent(videoId)}`, {
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        headers: { 'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9', Cookie: 'CONSENT=YES+1' },
-      });
-      if (res.status !== 200) {
-        if (attempt < MAX_ATTEMPTS) {
-          await sleep(1500 * attempt);
-          continue;
-        }
-        return { reachable: false, note: `watch page HTTP ${res.status}` };
-      }
-      const probe = readPlayerResponse(extractPlayerResponse(await res.text()));
-      if (!probe.reachable && attempt < MAX_ATTEMPTS) {
-        await sleep(1500 * attempt);
-        continue;
-      }
-      return probe;
-    } catch (err) {
-      const e = err as Error;
-      if (attempt < MAX_ATTEMPTS) await sleep(1500 * attempt);
-      else return { reachable: false, note: e.name === 'TimeoutError' ? 'TimeoutError' : e.name };
-    }
-  }
-  return { reachable: false, note: 'exhausted attempts' };
-}
-
-/** Both independent methods for one video. Exported for the CLI audit. */
-export async function probeVideo(videoId: string): Promise<{ oembed: number | null; player: PlayerProbe }> {
-  const oembed = await fetchStatus(`${OEMBED}?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
-  const player = await probePlayer(videoId);
-  return { oembed, player };
-}
-
-/** Does a channel we recorded as the owner still resolve? Discriminates
- *  UPLOADER_CLOSED from a plain REMOVED, whose video URLs both 404. */
-async function channelGone(channelId: string | null): Promise<boolean> {
-  if (!channelId) return false;
-  const status = await fetchStatus(`https://www.youtube.com/channel/${encodeURIComponent(channelId)}`);
-  return status === 404;
 }
 
 async function loadVideoCards(): Promise<ImpactCard[]> {
@@ -223,14 +224,83 @@ async function completableResolver(): Promise<(type: string | null) => boolean> 
   }
 }
 
+/** What one control-carrying sweep of a video list produced. */
+interface SweepTally {
+  healthy: Set<string>;
+  inconclusive: Set<string>;
+  suspects: Observation[];
+  throttled: number;
+  untrustedBatches: number;
+  unverified: number;
+  quotaUnits: number;
+}
+
+/**
+ * Look a list of videos up in control-carrying batches and sort the answers into
+ * healthy / inconclusive / suspect. Nothing here decides that a video is broken;
+ * a suspect is only a candidate for a second look.
+ *
+ * Note what is NOT here: any path that quietly drops a video. Every id in
+ * `videoIds` lands in exactly one of the three buckets, because a video that
+ * falls out of the tally altogether reads downstream as "not a problem", which is
+ * the same lie as calling it healthy.
+ */
+async function sweep(
+  videoIds: string[],
+  deps: ProbeDeps,
+  correlationId: string,
+  pass: 1 | 2,
+): Promise<SweepTally> {
+  const tally: SweepTally = {
+    healthy: new Set(), inconclusive: new Set(), suspects: [],
+    throttled: 0, untrustedBatches: 0, unverified: 0, quotaUnits: 0,
+  };
+
+  for (const batch of chunk(videoIds, BATCH_SIZE)) {
+    const { trusted, observations, control_detail, quota_units } = await observeBatch(batch, deps);
+    tally.throttled += observations.filter((o) => o.challenged).length;
+    tally.quotaUnits += quota_units;
+
+    if (!trusted) {
+      // The control is the only thing standing between a blind run and 150 false
+      // alerts. When it fails, this batch is not evidence of anything - and that
+      // includes the ids that were missing from the response.
+      tally.untrustedBatches++;
+      tally.unverified += batch.length;
+      for (const id of batch) tally.inconclusive.add(id);
+      log('warn', 'batch_untrusted', 'partial', {
+        correlation_id: correlationId, pass, videos: batch.length,
+        control_video: CONTROL_VIDEO_ID, detail: control_detail,
+      });
+      continue;
+    }
+
+    for (const o of observations) {
+      if (o.verdict.state === 'HEALTHY') tally.healthy.add(o.video_id);
+      else if (!o.verdict.actionable) {
+        tally.inconclusive.add(o.video_id);
+        log('warn', 'video_inconclusive', 'partial', {
+          correlation_id: correlationId, pass, video_id: o.video_id, detail: o.verdict.detail,
+        });
+      } else tally.suspects.push(o);
+    }
+  }
+
+  return tally;
+}
+
 export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<VideoHealthRunResult> {
   const correlationId = randomUUID();
   const started = Date.now();
   const today = centralDate();
+  const paceMs = opts.paceMs ?? PACE_MS;
+  const cooldownMs = opts.confirmCooldownMs ?? CONFIRM_COOLDOWN_MS;
 
   const base: VideoHealthRunResult = {
     ran: false, skipped: false, correlation_id: correlationId,
     checked: 0, healthy: 0, unknown: 0, failures: [], sealed_weeks: [], alerts_emitted: 0,
+    throttled: 0, untrusted_batches: 0, unverified: 0, quota_units: 0,
+    ownership: { ours: 0, third_party: 0, unknown: 0 },
   };
 
   // Idempotency: one run per Central-time date. A re-fired cron, a container
@@ -256,49 +326,94 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
   }
 
   const videoIds = Array.from(byVideo.keys());
-  log('info', 'run_started', 'success', { correlation_id: correlationId, videos: videoIds.length, cards: cards.length });
 
-  const failures: VideoFailure[] = [];
-  let healthy = 0;
-  let unknown = 0;
-  let cursor = 0;
+  // A missing key is not a clean bill of health, and it is not an outage either.
+  // Refuse to start and say which, rather than spending a run discovering it 150
+  // times. `unverified` carries the corpus size so the result still reads "I
+  // could not see N videos" instead of the far more dangerous "N videos checked".
+  if (videoIds.length && !(process.env.YOUTUBE_API_KEY || '').trim()) {
+    log('error', 'run_skipped', 'failure', {
+      correlation_id: correlationId, reason: 'youtube_api_key_missing', videos: videoIds.length,
+      error_class: 'NotConfigured',
+    });
+    return {
+      ...base, skipped: true, reason: 'youtube_api_key_missing',
+      checked: videoIds.length, unknown: videoIds.length, unverified: videoIds.length,
+    };
+  }
 
-  async function worker(): Promise<void> {
-    while (cursor < videoIds.length) {
-      const videoId = videoIds[cursor++];
-      const { oembed, player } = await probeVideo(videoId);
-      let verdict = classify(oembed, player);
+  log('info', 'run_started', 'success', {
+    correlation_id: correlationId, videos: videoIds.length, cards: cards.length,
+    pace_ms: paceMs, batch_size: BATCH_SIZE, control_video: CONTROL_VIDEO_ID,
+    quota_budget: DAILY_QUOTA_NOTE,
+  });
 
-      if (verdict.state === 'REMOVED') {
-        const gone = await channelGone(player.channelId ?? null);
-        if (gone) verdict = classify(oembed, player, true);
-      }
+  const deps: ProbeDeps = { api: createVideoApiClient(), absence: createAbsenceProbe(paceMs) };
 
-      if (verdict.state === 'HEALTHY') { healthy++; continue; }
-      if (!verdict.actionable) {
-        unknown++;
-        log('warn', 'video_inconclusive', 'partial', { correlation_id: correlationId, video_id: videoId, detail: verdict.detail });
-        continue;
-      }
+  // Pass 1 finds candidates. It does not convict.
+  const first = await sweep(videoIds, deps, correlationId, 1);
 
-      const impacts = (byVideo.get(videoId) ?? []).map((c) =>
-        assessCard(c, CANONICAL_PROGRAM_ID, isCompletable(c.type)),
-      );
-      const seals = impacts.some((i) => i.seals_week);
-      const students = await studentsBlockedBy(impacts.filter((i) => i.seals_week).map((i) => i.card_id));
+  const healthy = new Set(first.healthy);
+  const inconclusive = new Set(first.inconclusive);
+  let throttled = first.throttled;
+  let untrustedBatches = first.untrustedBatches;
+  let unverified = first.unverified;
+  let quotaUnits = first.quotaUnits;
+  const confirmed: Observation[] = [];
 
-      failures.push({
-        video_id: videoId, state: verdict.state, detail: verdict.detail, remedy: verdict.remedy,
-        channel: player.owner ?? null, ours: isOurChannel(player.owner), cards: impacts,
-        students_affected: students, seals_week: seals,
+  // Pass 2 re-observes only the suspects, in their own controlled burst, after a
+  // cooldown. A failure that does not reproduce is not a failure.
+  if (first.suspects.length) {
+    log('info', 'confirmation_started', 'success', {
+      correlation_id: correlationId, suspects: first.suspects.length, cooldown_ms: cooldownMs,
+    });
+    await sleep(cooldownMs);
+
+    const second = await sweep(first.suspects.map((s) => s.video_id), deps, correlationId, 2);
+    throttled += second.throttled;
+    untrustedBatches += second.untrustedBatches;
+    unverified += second.unverified;
+    quotaUnits += second.quotaUnits;
+    second.healthy.forEach((id) => healthy.add(id));
+    second.inconclusive.forEach((id) => inconclusive.add(id));
+    confirmed.push(...second.suspects);
+
+    const notReproduced = first.suspects.filter((s) => !second.suspects.some((c) => c.video_id === s.video_id));
+    for (const s of notReproduced) {
+      log('info', 'suspect_not_reproduced', 'success', {
+        correlation_id: correlationId, video_id: s.video_id, first_pass_state: s.verdict.state,
       });
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, videoIds.length) }, worker));
+  const failures: VideoFailure[] = [];
+  for (const o of confirmed) {
+    const impacts = (byVideo.get(o.video_id) ?? []).map((c) =>
+      assessCard(c, CANONICAL_PROGRAM_ID, isCompletable(c.type)),
+    );
+    const seals = impacts.some((i) => i.seals_week);
+    const students = await studentsBlockedBy(impacts.filter((i) => i.seals_week).map((i) => i.card_id));
+
+    failures.push({
+      video_id: o.video_id, state: o.verdict.state, detail: o.verdict.detail, remedy: o.verdict.remedy,
+      channel: o.channel, ownership: ownershipOf(o.channel), cards: impacts,
+      students_affected: students, seals_week: seals,
+    });
+  }
+
+  const ownership: Record<Ownership, number> = { ours: 0, third_party: 0, unknown: 0 };
+  for (const f of failures) ownership[f.ownership]++;
 
   const weeks = sealedWeeks(failures.flatMap((f) => f.cards));
   let alertsEmitted = 0;
+
+  /**
+   * A run that verified nothing at all did not happen, whatever the clock says.
+   * Stamping the idempotency key on a blind run would burn the day's slot and
+   * leave `force: true` as the only way back in - which is precisely how a check
+   * that cannot see becomes a check nobody notices is silent.
+   */
+  const sawNothing = videoIds.length > 0 && unverified >= videoIds.length;
 
   if (!opts.dryRun) {
     for (const f of failures) {
@@ -307,19 +422,24 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
       const scope = f.seals_week
         ? `seals week ${f.cards.filter((c) => c.seals_week).map((c) => c.week).join(', ')} for ${f.students_affected} student(s)`
         : 'no week gate affected';
+      const owner =
+        f.ownership === 'ours' ? ' (OUR CHANNEL - fixable in our own settings)'
+        : f.ownership === 'third_party' ? ' (third party)'
+        : ' (owner could not be read)';
       await emitAlert({
         type: f.seals_week ? 'critical' : 'warning',
         severity: severityFor(f.seals_week, f.students_affected),
         title: `Curriculum video ${f.state}: ${f.video_id}`,
-        description: `${f.detail}. ${scope}. Owner: ${f.channel ?? 'unknown'}${f.ours ? ' (OUR CHANNEL - fixable in our own settings)' : ' (third party)'}. ${f.remedy}`,
+        description: `${f.detail}. ${scope}. Owner: ${f.channel ?? 'unknown'}${owner}. ${f.remedy}`,
         sourceType: 'system',
         impactArea: 'curriculum',
         entityType: 'curriculum_video',
         entityId: f.video_id,
         urgency: f.seals_week ? 'high' : 'low',
         metadata: {
-          video_id: f.video_id, state: f.state, ours: f.ours, channel: f.channel,
+          video_id: f.video_id, state: f.state, ownership: f.ownership, channel: f.channel,
           students_affected: f.students_affected, cards: f.cards, correlation_id: correlationId,
+          confirmed_observations: 2,
         },
       }).then(() => { alertsEmitted++; }).catch((err: Error) => {
         log('error', 'alert_emit_failed', 'failure', {
@@ -327,16 +447,22 @@ export async function runVideoLinkHealthCheck(opts: RunOptions = {}): Promise<Vi
         });
       });
     }
-    await setSetting(LAST_RUN_KEY, today);
+    if (!sawNothing) await setSetting(LAST_RUN_KEY, today);
   }
 
-  log(failures.length ? 'warn' : 'info', 'run_finished', failures.length ? 'partial' : 'success', {
-    correlation_id: correlationId, duration_ms: Date.now() - started,
-    checked: videoIds.length, healthy, unknown, failures: failures.length, sealed_weeks: weeks,
-  });
+  const unknown = inconclusive.size;
+
+  log(failures.length || untrustedBatches ? 'warn' : 'info', 'run_finished',
+    failures.length || untrustedBatches ? 'partial' : 'success', {
+      correlation_id: correlationId, duration_ms: Date.now() - started,
+      checked: videoIds.length, healthy: healthy.size, unknown, failures: failures.length,
+      sealed_weeks: weeks, throttled, untrusted_batches: untrustedBatches, unverified,
+      quota_units: quotaUnits, saw_nothing: sawNothing, ownership,
+    });
 
   return {
     ran: true, skipped: false, correlation_id: correlationId, checked: videoIds.length,
-    healthy, unknown, failures, sealed_weeks: weeks, alerts_emitted: alertsEmitted,
+    healthy: healthy.size, unknown, failures, sealed_weeks: weeks, alerts_emitted: alertsEmitted,
+    throttled, untrusted_batches: untrustedBatches, unverified, quota_units: quotaUnits, ownership,
   };
 }

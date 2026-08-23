@@ -43,14 +43,28 @@ const { exclusionFor, scheduleSubscription, resolveAccountForSubscription } =
   require('./dist/services/subscriptionScheduleService');
 const { cadenceFor } = require('./dist/services/paysimpleRecurring');
 
+/**
+ * ONE row per member, never one per subscription row.
+ *
+ * A manual renewal leaves the member holding TWO active rows: the period that just
+ * ended and the new one. Liza Ayele renewed on 2026-08-22 and immediately had rows
+ * ending 2026-08-23 and 2026-09-22, both 'active'. Selecting rows rather than
+ * people would have created a schedule for each and charged her twice a month.
+ *
+ * This is not a one-off and it grows: every member who renews before the migration
+ * runs adds another pair. DISTINCT ON takes the LATEST period per enrollment, which
+ * is the live one. The assertion after the query is the real safety net, because a
+ * silent duplicate here is money out of somebody's account.
+ */
 const SELECT = `
-  SELECT s.id, s.enrollment_id, s.plan, s.status, s.amount_cents,
+  SELECT DISTINCT ON (s.enrollment_id)
+         s.id, s.enrollment_id, s.plan, s.status, s.amount_cents,
          s.current_period_end, s.paysimple_payment_id, s.paysimple_schedule_id,
          e.email, e.full_name
     FROM subscriptions s
     JOIN enrollments e ON e.id = s.enrollment_id
    WHERE s.status = 'active'
-   ORDER BY s.current_period_end`;
+   ORDER BY s.enrollment_id, s.current_period_end DESC`;
 
 const money = (c) => `$${(c / 100).toFixed(2)}`;
 
@@ -147,6 +161,23 @@ function firstScheduledCharge(periodEnd, plan) {
 
   console.log('\nHELD BACK');
   skipped.forEach((s) => console.log(`  ${String(s.name).slice(0, 22).padEnd(22)} ${s.why.code.padEnd(18)} ${s.why.detail}`));
+
+  // Belt and braces on top of DISTINCT ON: if two planned schedules ever share an
+  // enrollment, stop. Double-charging a real member is the worst outcome this
+  // script can produce, so it refuses rather than proceeding on a near miss.
+  const byEnrollment = new Map();
+  planned.forEach((p) => byEnrollment.set(p.enrollmentId, (byEnrollment.get(p.enrollmentId) || 0) + 1));
+  const doubled = [...byEnrollment.entries()].filter(([, n]) => n > 1);
+  if (doubled.length) {
+    console.log(`
+REFUSING: ${doubled.length} member(s) would receive more than one schedule.`);
+    doubled.forEach(([id, n]) => {
+      const who = planned.find((p) => p.enrollmentId === id);
+      console.log(`  ${who ? who.fullName : id}: ${n} schedules`);
+    });
+    process.exit(4);
+  }
+  console.log(`checked: ${byEnrollment.size} distinct members, one schedule each.`);
 
   const total = planned.reduce((sum, p) => sum + p.amountCents, 0);
   console.log(`\nplanned=${planned.length}  held=${skipped.length}  first-cycle value=${money(total)}`);

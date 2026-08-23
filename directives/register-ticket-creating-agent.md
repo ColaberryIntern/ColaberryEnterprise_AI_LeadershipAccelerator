@@ -370,12 +370,13 @@ shipped the change) re-runs real queries/commands against production and reports
 matching results - self-reported claims from the implementing session are not
 sufficient.
 
-### 9. PROGRESS.md entry with concrete verification evidence
+### 9. Progress-log entry with concrete verification evidence
 
 Per this repo's root `CLAUDE.md` (Logging, Reporting & Progress Tracking - hard
-gate), no code change is "done" without a session-ID-tagged `PROGRESS.md` entry
-carrying real verification evidence (a test name, a deploy URL, a query result -
-never "looks right" or "should work").
+gate), no code change is "done" without an entry in this session's log —
+`docs/sessions/CC-<YYYYMMDD>-<id>.md` — carrying real verification evidence (a test
+name, a deploy URL, a query result - never "looks right" or "should work"). The root
+`PROGRESS.md` is a sealed pre-2026-08-23 archive and is not written to.
 
 **Verify:** the entry exists, is tagged with the session's real ID, and every
 `[x]` claim has a concrete artifact attached on the same line.
