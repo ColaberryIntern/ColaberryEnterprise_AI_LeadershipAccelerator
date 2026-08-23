@@ -303,15 +303,16 @@ export function selectRenewalReminders(
       due.push({
         subscription_id: row.id,
         enrollment_id: row.enrollment_id,
-        email: row.email as string,
+        email: String(row.email).trim(),
         full_name: row.full_name ?? null,
         plan: row.plan,
         amount_cents: row.amount_cents,
-        applied_credit_cents: row.applied_credit_cents ?? 0,
         period_end: new Date(endMs).toISOString(),
-        kind: lapseKind,
-        days_until: daysUntil,
+        days_until: Math.round(daysUntil * 100) / 100,
+        // Negative: this is how the template knows the date has passed and must
+        // not speak as though the renewal is still ahead.
         day_delta: -sinceEnd,
+        kind: lapseKind,
       });
       continue;
     }
