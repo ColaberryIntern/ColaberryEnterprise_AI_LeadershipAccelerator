@@ -128,6 +128,20 @@ describe('getAgentDetail', () => {
     expect(result!.capabilities.undocumented_tools).toEqual(['a_tool_from_the_future']);
   });
 
+  // Tool & capability drill-down (2026-08-23) — capabilities.by_tool carries
+  // the per-tool breakdown AgentDetailPage's drill-down renders, straight
+  // through from deriveAgentCapabilities().
+  it('capabilities.by_tool: passes through the per-tool breakdown for the AgentDetailPage drill-down, in tools_granted order', async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, tools_granted: ['respond_to_dm', 'a_tool_from_the_future'] });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.capabilities.by_tool).toEqual([
+      { tool: 'respond_to_dm', reads: ["The student's direct-message conversation history"], produces: ['A reply message in the student DM thread'], documented: true },
+      { tool: 'a_tool_from_the_future', reads: [], produces: [], documented: false },
+    ]);
+  });
+
   it('capabilities.produced_ticket_types: reflects the real, live DISTINCT ticket types this agent has created — a second, unlimited grouped query, not the capped 50-row tickets list', async () => {
     // The capped tickets list only has 1 recent ticket, but the agent has
     // historically created 3 distinct types — produced_ticket_types must reflect
@@ -254,13 +268,56 @@ describe('getAgentDetail', () => {
 
     it('boundary: the chain fails to resolve (dangling) -> reports_to.trail is populated but resolved_human is null, never fabricated', async () => {
       const orphanAgent = { ...reeseAgent, agent_name: 'OrphanedAgent', reports_to_type: 'agent', reports_to_id: 'nonexistent-id' };
-      mockAgentFindByPk.mockResolvedValue(orphanAgent);
+      mockAgentFindByPk.mockImplementation(async (id: string) => (id === 'agent-1' ? orphanAgent : null));
       mockResolveChain.mockResolvedValue({ resolvedHumanId: null, trail: ['OrphanedAgent (agent) -> [dangling]'] });
 
       const result = await getAgentDetail('agent-1');
 
-      expect(result!.reports_to).toEqual({ trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null });
+      expect(result!.reports_to).toEqual({ trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null, immediate_agent: null });
       expect(mockOrgMemberFindByPk).not.toHaveBeenCalled();
+    });
+
+    // 2026-08-23 — "I'd like to have a link to the agent they report to"
+    // (Ali, reported 3rd time alongside the ticket-filter bug). immediate_agent
+    // is the DIRECT next hop, only populated when it's another agent — lets
+    // AgentDetailPage link straight to that agent's own detail page.
+    describe('immediate_agent', () => {
+      it('happy path: reports_to_type=agent resolves the real next-hop agent id + name for linking', async () => {
+        const staffAgent = { ...reeseAgent, id: 'agent-1', reports_to_type: 'agent', reports_to_id: 'corybrain-id' };
+        const leadershipAgent = { id: 'corybrain-id', agent_name: 'CoryBrain' };
+        mockAgentFindByPk.mockImplementation(async (id: string) => {
+          if (id === 'agent-1') return staffAgent;
+          if (id === 'corybrain-id') return leadershipAgent;
+          return null;
+        });
+        mockResolveChain.mockResolvedValue({ resolvedHumanId: 'ali-org-member-id', trail: ['Reese (agent)', 'CoryBrain (agent) -> [human]'] });
+        mockOrgMemberFindByPk.mockResolvedValue({ id: 'ali-org-member-id', email: 'ali@colaberry.com', enrollment_id: null });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.reports_to!.immediate_agent).toEqual({ id: 'corybrain-id', name: 'CoryBrain' });
+      });
+
+      it('null when reports_to_type=human — a human is not an agent to link to (resolved_human already covers that case)', async () => {
+        const leadershipAgent = { ...reeseAgent, id: 'agent-1', reports_to_type: 'human', reports_to_id: 'ali-org-member-id' };
+        mockAgentFindByPk.mockResolvedValue(leadershipAgent);
+        mockResolveChain.mockResolvedValue({ resolvedHumanId: 'ali-org-member-id', trail: ['Reese (agent) -> [human]'] });
+        mockOrgMemberFindByPk.mockResolvedValue({ id: 'ali-org-member-id', email: 'ali@colaberry.com', enrollment_id: null });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.reports_to!.immediate_agent).toBeNull();
+      });
+
+      it('honesty boundary: reports_to_type=agent but the target id doesn\'t resolve to a real row -> null, never a dead link', async () => {
+        const staffAgent = { ...reeseAgent, id: 'agent-1', reports_to_type: 'agent', reports_to_id: 'nonexistent-id' };
+        mockAgentFindByPk.mockImplementation(async (id: string) => (id === 'agent-1' ? staffAgent : null));
+        mockResolveChain.mockResolvedValue({ resolvedHumanId: null, trail: ['Reese (agent) -> [dangling]'] });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.reports_to!.immediate_agent).toBeNull();
+      });
     });
   });
 });

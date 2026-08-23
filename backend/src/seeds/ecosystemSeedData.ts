@@ -34,6 +34,22 @@ export interface SeedBrand {
   sender_profiles: SeedSenderProfile[];
   /** lead_sources.slug values that belong to this brand. Drives the backfill. */
   lead_source_slugs: string[];
+  /**
+   * Tracking-only sources this seed CREATES when they do not already exist.
+   *
+   * Distinct from `lead_source_slugs`, and the difference matters. That list says
+   * "these slugs belong to this brand" and drives the backfill; it covers sources
+   * created elsewhere, chiefly by `seedLeadSources.ts`, which owns sources that carry
+   * forms and field mappings.
+   *
+   * These are different animals: they exist purely so tracking can attribute a
+   * hostname to a brand. They have no entry points and no form definitions, because
+   * no form posts to them. `enterprise` is the clearest case — the tracker has been
+   * emitting `site_slug=enterprise` from the server-side host map since long before
+   * this project, but no row was ever registered, so 1,751 sessions had nothing to
+   * attach to.
+   */
+  tracking_sources?: Array<{ slug: string; name: string; domain: string }>;
 }
 
 export interface SeedTenant {
@@ -95,6 +111,15 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
           'advisor',
           'worldoftaxonomy',
         ],
+        // `enterprise` is the slug the server-side host map has been stamping on
+        // enterprise.colaberry.ai traffic all along, with no matching row to attach to.
+        tracking_sources: [
+          {
+            slug: 'enterprise',
+            name: 'Colaberry Enterprise (enterprise.colaberry.ai)',
+            domain: 'enterprise.colaberry.ai',
+          },
+        ],
       },
       {
         slug: 'colaberry-training',
@@ -107,7 +132,21 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
           { hostname: 'myfreeaiclass.com', purpose: 'web' },
         ],
         sender_profiles: [],
-        lead_source_slugs: ['training', 'myfreeaiclass'],
+        // `winback` is "Alumni Win-Back (CCPP)" and its registered domain is
+        // training.colaberry.com, so it is Training rather than Enterprise. Confirmed
+        // by Ali 2026-08-23 rather than inferred from the domain alone, because the two
+        // Colaberry brands are exactly where a wrong guess would be least visible.
+        lead_source_slugs: ['training', 'myfreeaiclass', 'winback'],
+        // Training is a live external site (training.colaberry.com). It is tracked, not
+        // built here. This registers the source so the brand is ready the moment the
+        // tracker snippet goes on that site; until then it will simply receive nothing.
+        tracking_sources: [
+          {
+            slug: 'training',
+            name: 'Colaberry Training (training.colaberry.com)',
+            domain: 'training.colaberry.com',
+          },
+        ],
       },
     ],
   },
