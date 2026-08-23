@@ -263,6 +263,150 @@ describe('failure paths never manufacture an outage', () => {
   });
 });
 
+/**
+ * The gap that let Week 3 "Building with the Claude API" sit empty from
+ * 2026-07-14 to 2026-08-23. `loadVideoCards` selected
+ * `WHERE metadata->'video'->>'url' IS NOT NULL`, so a card with no URL was never
+ * in the result set, was never probed, and reported healthy by omission. Two
+ * students commented on the card itself before a third report reached us.
+ */
+describe('a card with no video URL is reported, not silently healthy', () => {
+  const KNOWN_CARD = '361ae8d3-a198-4ad5-ab8b-04236f463bc1';
+  const urlless = (over: Record<string, unknown> = {}) =>
+    cardRow({ id: KNOWN_CARD, title: 'Building with the Claude API', video_url: null, ...over });
+
+  it('reports the card rather than omitting it', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([urlless()]);
+
+    const result = await runVideoLinkHealthCheck(FAST);
+
+    expect(result.missing_url.map((m) => m.card_id)).toEqual([KNOWN_CARD]);
+  });
+
+  it('does not count it as a checked video, and does not call it healthy', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([urlless()]);
+
+    const result = await runVideoLinkHealthCheck(FAST);
+
+    // There was no video, so nothing was checked and nothing passed. The old
+    // behaviour was checked:0 healthy:0 failures:0 - indistinguishable from a
+    // clean corpus, which is exactly the reading that has to become impossible.
+    expect(result.checked).toBe(0);
+    expect(result.healthy).toBe(0);
+    expect(result.missing_url).toHaveLength(1);
+  });
+
+  it('is not counted as a broken video', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([urlless()]);
+
+    const result = await runVideoLinkHealthCheck(FAST);
+
+    // A `failure` is keyed on a video_id and describes a link that broke. This
+    // card has no video_id and describes a link never made. Folding it into
+    // `failures` would spike the broken-video count without a video breaking.
+    expect(result.failures).toEqual([]);
+    expect(result.sealed_weeks).toEqual([]);
+  });
+
+  it('alerts once, as a warning that blocks nobody, never as a sealed week', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([urlless()]);
+
+    await runVideoLinkHealthCheck(FAST);
+
+    expect(mockEmitAlert).toHaveBeenCalledTimes(1);
+    const alert = mockEmitAlert.mock.calls[0][0];
+    expect(alert.type).toBe('warning');
+    expect(alert.urgency).toBe('low');
+    expect(alert.entityId).toBe(KNOWN_CARD);
+    expect(alert.metadata.seals_week).toBe(false);
+    expect(alert.metadata.students_affected).toBe(0);
+  });
+
+  it('does not read at the same severity as a video that seals a week', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([urlless()]);
+    await runVideoLinkHealthCheck(FAST);
+    const missingUrlAlert = mockEmitAlert.mock.calls[0][0];
+
+    jest.clearAllMocks();
+    mockEmitAlert.mockResolvedValue({ id: 'alert-2' });
+    mockGetSetting.mockResolvedValue(null);
+    (global as any).fetch = deadVideo();
+    primeDb([cardRow()], 169);
+    await runVideoLinkHealthCheck(FAST);
+    const deadAlert = mockEmitAlert.mock.calls[0][0];
+
+    expect(deadAlert.type).toBe('critical');
+    expect(missingUrlAlert.severity).toBeLessThan(deadAlert.severity);
+  });
+
+  it('alerts only on the card students can reach, not on all 21', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([
+      urlless(),
+      // The 7 real ones in program 7557ec5e, correctly scoped out of the classroom.
+      urlless({ id: 'other-program', program_id: '7557ec5e-a7c1-4699-955d-c5b8021bdc03' }),
+      // And the 13 archived ones.
+      urlless({ id: 'archived', visibility: 'archived', status: 'inactive', program_id: null }),
+    ]);
+
+    const result = await runVideoLinkHealthCheck(FAST);
+
+    expect(result.missing_url).toHaveLength(3);          // all reported
+    expect(mockEmitAlert).toHaveBeenCalledTimes(1);      // one alerted
+    expect(mockEmitAlert.mock.calls[0][0].entityId).toBe(KNOWN_CARD);
+    // Reachable first, so the one that matters is not buried among the other 20.
+    expect(result.missing_url[0].card_id).toBe(KNOWN_CARD);
+  });
+
+  it('does not confuse a missing URL with a URL we cannot check', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([cardRow({ id: 'loom-card', video_url: 'https://www.loom.com/share/abc123' })]);
+
+    const result = await runVideoLinkHealthCheck(FAST);
+
+    // Both leave video_id null, and they are different findings: a Loom link is a
+    // video we cannot inspect and must not guess at, not absent content.
+    expect(result.missing_url).toEqual([]);
+    expect(mockEmitAlert).not.toHaveBeenCalled();
+  });
+
+  it('still reports the gap when the API key is missing', async () => {
+    delete process.env.YOUTUBE_API_KEY;
+    (global as any).fetch = apiFetch({});
+    primeDb([urlless(), cardRow({ id: 'has-video' })]);
+
+    const result = await runVideoLinkHealthCheck(FAST);
+
+    // The video check needs YouTube. Knowing a card carries no URL does not, so a
+    // missing key must not hide the content gap along with the video check.
+    expect(result.skipped).toBe(true);
+    expect(result.reason).toBe('youtube_api_key_missing');
+    expect(result.missing_url.map((m) => m.card_id)).toEqual([KNOWN_CARD]);
+    expect(mockEmitAlert).not.toHaveBeenCalled();  // a blind run still alerts on nothing
+  });
+
+  it('selects URL-less cards in SQL instead of filtering them out', async () => {
+    (global as any).fetch = apiFetch({});
+    primeDb([urlless()]);
+
+    await runVideoLinkHealthCheck(FAST);
+
+    // Asserted on the query text because the bug lives in the WHERE clause, and a
+    // mocked `sequelize.query` returns its fixture rows whatever the SQL says.
+    const sql = String(mockQuery.mock.calls.find((c) => String(c[0]).includes('FROM timeline_cards'))?.[0]);
+    expect(sql).toMatch(/type IN \(:cardOwnedVideoTypes\)/);
+    // COALESCE, because `NOT (metadata->'video' ? 'url')` is NULL - not true - for
+    // a card with no 'video' key, so the naive predicate drops the very rows it
+    // hunts and returns a confident zero.
+    expect(sql).toMatch(/COALESCE/);
+  });
+});
+
 describe('centralDate', () => {
   it('formats as an ISO calendar date in Central time', () => {
     expect(centralDate(new Date('2026-08-21T12:00:00Z'))).toBe('2026-08-21');

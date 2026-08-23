@@ -10,6 +10,7 @@
  */
 import {
   classifyAbsent,
+  classifyMissingUrl,
   classifyPresent,
   isOurChannel,
   ownershipOf,
@@ -266,6 +267,28 @@ describe('the real production corpus (150 videos, YouTube Data API, 2026-08-23)'
     const restricted = verdicts.filter((v) => v.row.regionAllowed || v.row.regionBlocked);
     expect(restricted.length).toBeGreaterThan(0);
     expect(restricted.every((v) => v.verdict.state === 'HEALTHY')).toBe(true);
+  });
+
+  it('a card with no URL is classified, never left to read as healthy', () => {
+    // The API-side twin of this rule is `classifyAbsent`: an id the response
+    // omits must be classified deliberately. This is the DB-side twin — a card
+    // the query omitted, for want of a URL to select on.
+    const verdict = classifyMissingUrl();
+    expect(verdict.state).toBe('URL_MISSING');
+    expect(verdict.state).not.toBe('HEALTHY');
+  });
+
+  it('does not page: a missing URL arms no watch gate, so it strands nobody', () => {
+    // The asymmetry that matters. Every other non-healthy state is actionable
+    // because it can seal a week; this one cannot, and must not read the same.
+    expect(classifyMissingUrl().actionable).toBe(false);
+    expect(classifyAbsent({ oembedStatus: 404, throttled: false }).actionable).toBe(true);
+  });
+
+  it('names the remedy as a content decision, not a repair', () => {
+    // There is nothing to restore: the card never had a video. The only moves are
+    // attach one or retire the card, and both belong to the curriculum owner.
+    expect(classifyMissingUrl().remedy).toMatch(/attach a video, or retire the card/i);
   });
 
   it('does not reference Yjfh5jtaLx4: a retired tombstone URL is not a live link', () => {
