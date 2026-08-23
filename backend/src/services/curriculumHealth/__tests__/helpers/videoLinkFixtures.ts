@@ -1,24 +1,34 @@
 /**
  * Shared fakes for the curriculum video health suites.
  *
- * Extracted when videoLinkHealthService.test.ts crossed the 500-line ceiling and
- * a second suite needed the same YouTube stand-ins. Everything here is a pure
- * builder — no `jest.mock`, no module-registry state — because that machinery is
- * per-suite and cannot be shared.
+ * Everything here is a pure builder - no `jest.mock`, no module-registry state -
+ * because that machinery is per-suite and cannot be shared.
+ *
+ * These now build YOUTUBE DATA API responses rather than scraped watch pages.
+ * The single most important thing a fake in this file can do is let a test
+ * express "the API was asked for these ids and returned FEWER items than that",
+ * because that is the shape of the bug the whole check now has to survive:
+ * `videos.list` omits ids it cannot return, and any consumer that reads the
+ * response instead of reconciling it against the request will call a dead video
+ * healthy. `apiFetch({ absent: [...] })` is how a test says that out loud.
  */
 
 export const CANONICAL = '92b98a72-8681-4f04-8ba1-16a18334cd0b';
 
 /**
- * Every run is paced and cooled down in production. Suites drive a fake fetch, so
- * the waiting proves nothing and would add minutes to the run. Zero here means
- * "do not sleep", not "pacing is optional" — the `pacing` suite is what proves
- * the defaults are the safe ones.
+ * Every run paces its follow-up lookups and cools down between passes. Suites
+ * drive a fake fetch, so the waiting proves nothing and would add minutes to the
+ * run. Zero here means "do not sleep", not "pacing is optional".
  */
 export const FAST = { paceMs: 0, confirmCooldownMs: 0 };
 
 /** A public, embeddable video on our channel. Must match videoLinkProbe. */
 export const CONTROL_ID = '2xRzYuit9ac';
+
+export const OUR_CHANNEL = 'Colaberry School Of Data & AI';
+
+/** Placeholder value only. Never a real key, and never logged by the client. */
+export const TEST_KEY = 'test-key-do-not-log';
 
 export const cardRow = (over: Record<string, unknown> = {}) => ({
   id: 'aebd4db9-9d28-40d7-99cb-ffb04d29733e',
@@ -40,109 +50,182 @@ export const corpusOf = (n: number) =>
     cardRow({ id: `card-${i}`, video_url: `https://www.youtube.com/watch?v=vid${String(i).padStart(6, '0')}` }),
   );
 
-/** Build a watch page whose embedded player response says what we want. */
-export const watchPage = (opts: { status: string; embeddable: boolean; owner?: string | null }) => {
-  const mf: Record<string, unknown> = {
-    externalChannelId: 'UCrDwWp7EBBv4NwvScIpBDOA',
-    availableCountries: ['US'],
+export interface VideoSpec {
+  privacyStatus?: string | null;
+  uploadStatus?: string | null;
+  /** `undefined` omits the key entirely, which is NOT the same as false. */
+  embeddable?: boolean;
+  /** Pass true to omit `status.embeddable` while keeping the rest of status. */
+  omitEmbeddable?: boolean;
+  channelTitle?: string | null;
+  regionAllowed?: string[];
+  regionBlocked?: string[];
+}
+
+/** Build one `videos.list` item. */
+export function apiItem(id: string, spec: VideoSpec = {}): Record<string, unknown> {
+  const status: Record<string, unknown> = {
+    privacyStatus: spec.privacyStatus === undefined ? 'public' : spec.privacyStatus,
+    uploadStatus: spec.uploadStatus === undefined ? 'processed' : spec.uploadStatus,
   };
-  // An explicit null means the page names no owner, which is the whole point of
-  // the oEmbed fallback. Only `undefined` takes the convenience default.
-  if (opts.owner !== null) mf.ownerChannelName = opts.owner ?? 'Anthropic';
-  if (opts.embeddable) mf.embed = { iframeUrl: 'https://www.youtube.com/embed/x' };
-  return `<script>var ytInitialPlayerResponse = ${JSON.stringify({
-    playabilityStatus: { status: opts.status },
-    microformat: { playerMicroformatRenderer: mf },
-  })};</script>`;
-};
+  if (status.privacyStatus === null) delete status.privacyStatus;
+  if (status.uploadStatus === null) delete status.uploadStatus;
+  if (!spec.omitEmbeddable) status.embeddable = spec.embeddable ?? true;
 
-/**
- * The page YouTube serves when it decides the caller is a robot. No microformat,
- * so no owner and no embed key — which is why the 2026-08-22 dry run reported a
- * null channel for all 149 videos as well as a false PRIVATE for 146 of them.
- */
-export const challengePage = () =>
-  `<script>var ytInitialPlayerResponse = ${JSON.stringify({
-    playabilityStatus: { status: 'LOGIN_REQUIRED', reason: 'Sign in to confirm you’re not a bot' },
-  })};</script>`;
+  const contentDetails: Record<string, unknown> = { duration: 'PT6M42S' };
+  if (spec.regionAllowed || spec.regionBlocked) {
+    contentDetails.regionRestriction = {
+      ...(spec.regionAllowed ? { allowed: spec.regionAllowed } : {}),
+      ...(spec.regionBlocked ? { blocked: spec.regionBlocked } : {}),
+    };
+  }
 
-export type WatchSpec = { status: string; embeddable: boolean; owner?: string | null } | number | 'challenge';
+  return {
+    id,
+    status,
+    contentDetails,
+    snippet: {
+      title: `video ${id}`,
+      channelId: 'UCrDwWp7EBBv4NwvScIpBDOA',
+      channelTitle: spec.channelTitle === undefined ? 'Anthropic' : spec.channelTitle,
+    },
+  };
+}
 
-export const HEALTHY_WATCH: WatchSpec = { status: 'OK', embeddable: true };
+/** The ids a `videos.list` URL asked for. */
+export function requestedIds(url: string): string[] {
+  const m = /[?&]id=([^&]*)/.exec(url);
+  return m ? decodeURIComponent(m[1]).split(',').filter(Boolean) : [];
+}
 
-export const renderWatch = (w: WatchSpec) => {
-  if (w === 'challenge') return { status: 200, text: async () => challengePage() } as never;
-  if (typeof w === 'number') return { status: w, text: async () => '' } as never;
-  return { status: 200, text: async () => watchPage(w) } as never;
-};
-
-export const videoIdOf = (url: string): string => new URL(url, 'https://x').searchParams.get('v') ?? '';
-
-/**
- * Route fetch by URL so ordering between oEmbed and watch cannot drift.
- *
- * The control video is served healthy unless a test says otherwise. A test that
- * wants to describe a broken *target* is not also asserting that YouTube stopped
- * answering us, and conflating the two would make every failure test unreachable
- * once the control guard landed.
- */
-export function routeFetch(routes: {
-  oembed?: number;
-  oembedAuthor?: string | null;
-  watch?: WatchSpec;
+export interface ApiRoutes {
+  /** Per-id overrides. Any id not named here comes back healthy. */
+  videos?: Record<string, VideoSpec>;
+  /**
+   * Ids the API must OMIT from its response, exactly as it does for private,
+   * deleted and channel-terminated videos. The response still returns 200.
+   */
+  absent?: string[];
+  /** Make the control video absent too, to void the batch. */
+  controlAbsent?: boolean;
+  /** Override the control video's own record. */
+  control?: VideoSpec;
+  /** Make videos.list fail. `{ status, reason }`, e.g. 403 quotaExceeded. */
+  apiError?: { status: number; reason?: string };
+  /** Fail videos.list only from the Nth call onward (1-based). Quota running out. */
+  apiErrorFromCall?: number;
+  /** Return a nextPageToken, so absence proves nothing. */
+  paginate?: boolean;
+  /** Return a 200 whose body has no items array at all. */
+  unshaped?: boolean;
+  /** oEmbed status per id, used to discriminate WHY an id is absent. */
+  oembed?: Record<string, number>;
+  /** Default oEmbed status for ids with no entry above. */
+  oembedDefault?: number;
+  /** Channel page status, for the UPLOADER_CLOSED upgrade. */
   channel?: number;
-  control?: WatchSpec;
-  controlOembed?: number;
-}) {
+}
+
+/**
+ * Route fetch by URL across both surfaces the check uses: the Data API and the
+ * oEmbed follow-up. The control video answers healthy unless a test says
+ * otherwise, because a test describing a broken TARGET is not also asserting
+ * that YouTube stopped answering us, and conflating the two would make every
+ * failure test unreachable once the control guard landed.
+ */
+export function apiFetch(routes: ApiRoutes = {}) {
+  let apiCalls = 0;
+
   return jest.fn(async (url: string) => {
-    const isControl = url.includes(CONTROL_ID);
-    if (url.includes('/oembed')) {
-      const status = isControl ? routes.controlOembed ?? 200 : routes.oembed ?? 200;
-      const author = isControl ? 'Colaberry School Of Data & AI' : routes.oembedAuthor ?? null;
-      return { status, json: async () => ({ author_name: author }), text: async () => '' } as never;
+    const u = String(url);
+
+    if (u.startsWith('https://www.googleapis.com/youtube/v3/videos')) {
+      apiCalls++;
+
+      const failing =
+        routes.apiError && (!routes.apiErrorFromCall || apiCalls >= routes.apiErrorFromCall);
+      if (failing) {
+        const { status, reason } = routes.apiError as { status: number; reason?: string };
+        return {
+          status,
+          ok: false,
+          json: async () => ({ error: { errors: [{ reason: reason ?? 'forbidden' }], message: reason } }),
+        } as never;
+      }
+
+      if (routes.unshaped) {
+        return { status: 200, ok: true, json: async () => ({ kind: 'youtube#videoListResponse' }) } as never;
+      }
+
+      const absent = new Set(routes.absent ?? []);
+      const items = requestedIds(u)
+        .filter((id) => {
+          if (id === CONTROL_ID) return !routes.controlAbsent;
+          return !absent.has(id);
+        })
+        .map((id) =>
+          id === CONTROL_ID
+            ? apiItem(id, { channelTitle: OUR_CHANNEL, privacyStatus: 'unlisted', ...(routes.control ?? {}) })
+            : apiItem(id, routes.videos?.[id] ?? {}),
+        );
+
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({ items, ...(routes.paginate ? { nextPageToken: 'CAUQAA' } : {}) }),
+      } as never;
     }
-    if (url.includes('/channel/')) return { status: routes.channel ?? 200, text: async () => '' } as never;
-    if (isControl) return renderWatch(routes.control ?? HEALTHY_WATCH);
-    return renderWatch(routes.watch ?? HEALTHY_WATCH);
+
+    if (u.startsWith('https://www.youtube.com/oembed')) {
+      const inner = decodeURIComponent(/url=([^&]*)/.exec(u)?.[1] ?? '');
+      const id = /[?&]v=([A-Za-z0-9_-]+)/.exec(inner)?.[1] ?? '';
+      const status = routes.oembed?.[id] ?? routes.oembedDefault ?? 404;
+      return { status, json: async () => ({ author_name: null }), text: async () => '' } as never;
+    }
+
+    if (u.includes('/channel/')) return { status: routes.channel ?? 200, text: async () => '' } as never;
+
+    // Anything else (notably the watch page the old scraper read) is a 404 here.
+    return { status: 404, json: async () => ({}), text: async () => '' } as never;
   });
 }
 
 /**
- * A fetch whose answer for a given video changes between the first observation
- * and the second. This is how "failed once, fine on retry" is expressed.
+ * A fetch whose answer for a given id changes between the first observation and
+ * the second. This is how "failed once, fine on retry" is expressed: pass
+ * `{ vid000000: [true, false] }` to have it absent from the first response and
+ * present in the second.
  */
-export function flakyFetch(
-  perVideo: Record<string, WatchSpec[]>,
-  oembedPerVideo: Record<string, number[]> = {},
-) {
+export function flakyApiFetch(absentPerCall: Record<string, boolean[]>, oembed: Record<string, number> = {}) {
   const seen: Record<string, number> = {};
-  return jest.fn(async (url: string) => {
-    if (url.includes(CONTROL_ID)) {
-      if (url.includes('/oembed')) {
-        return {
-          status: 200,
-          json: async () => ({ author_name: 'Colaberry School Of Data & AI' }),
-          text: async () => '',
-        } as never;
-      }
-      return renderWatch(HEALTHY_WATCH);
-    }
-    if (url.includes('/channel/')) return { status: 200, text: async () => '' } as never;
 
-    const id = videoIdOf(url.replace('&format=json', ''));
-    if (url.includes('/oembed')) {
-      const ladder = oembedPerVideo[id] ?? [200];
-      const n = seen[`o:${id}`] ?? 0;
-      seen[`o:${id}`] = n + 1;
-      return {
-        status: ladder[Math.min(n, ladder.length - 1)],
-        json: async () => ({ author_name: null }),
-        text: async () => '',
-      } as never;
+  return jest.fn(async (url: string) => {
+    const u = String(url);
+
+    if (u.startsWith('https://www.googleapis.com/youtube/v3/videos')) {
+      const items = requestedIds(u)
+        .filter((id) => {
+          const ladder = absentPerCall[id];
+          if (!ladder) return true;
+          const n = seen[id] ?? 0;
+          seen[id] = n + 1;
+          return !ladder[Math.min(n, ladder.length - 1)];
+        })
+        .map((id) =>
+          id === CONTROL_ID
+            ? apiItem(id, { channelTitle: OUR_CHANNEL, privacyStatus: 'unlisted' })
+            : apiItem(id),
+        );
+      return { status: 200, ok: true, json: async () => ({ items }) } as never;
     }
-    const ladder = perVideo[id] ?? [HEALTHY_WATCH];
-    const n = seen[`w:${id}`] ?? 0;
-    seen[`w:${id}`] = n + 1;
-    return renderWatch(ladder[Math.min(n, ladder.length - 1)]);
+
+    if (u.startsWith('https://www.youtube.com/oembed')) {
+      const inner = decodeURIComponent(/url=([^&]*)/.exec(u)?.[1] ?? '');
+      const id = /[?&]v=([A-Za-z0-9_-]+)/.exec(inner)?.[1] ?? '';
+      return { status: oembed[id] ?? 404, json: async () => ({}), text: async () => '' } as never;
+    }
+
+    if (u.includes('/channel/')) return { status: 200, text: async () => '' } as never;
+    return { status: 404, json: async () => ({}), text: async () => '' } as never;
   });
 }
