@@ -607,4 +607,65 @@ describe('AdminTicketBoardPage — creator filter (real, roster-backed select)',
 
     expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/created_after=/);
   });
+
+  // Ticket Count Sync fix, Task 3 (2026-08-24, session CC-20260818-x4nk
+  // continued) — Ali, live, reported 3 times: an agent's card says "N open
+  // tickets," but clicking through showed far more (confirmed live:
+  // InboxCaseEngine's card said 304, the unfixed board showed up to 1262 —
+  // every status including Done, since `creator`/`range` narrow WHICH
+  // tickets are fetched but never touched `filterStatus`, which controls
+  // which of the 5 Kanban columns render). `status=open` closes this by
+  // reusing the SAME filterStatus state the "Open" KPI card already sets
+  // (see the "clickable stat cards" suite above for its column-hiding
+  // behavior) — this is the actual regression test for the reported bug.
+  function columnHeaderLabels(): (string | null)[] {
+    return Array.from(container.querySelectorAll('.rounded-top span'))
+      .filter((el) => !el.classList.contains('admin-status-badge'))
+      .map((el) => el.textContent);
+  }
+
+  it('`status=open` happy path: ?creator=<agent>&status=open renders ONLY the 4 non-Done columns — the exact reported bug, now fixed', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=InboxCaseEngine&range=all&status=open');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({
+      backlog: [makeTicket({ id: 'ice-1', title: 'Open one', status: 'backlog' })],
+      done: [makeTicket({ id: 'ice-2', title: 'Done one', status: 'done' })],
+    });
+    await renderBoard();
+
+    expect(creatorSelect().value).toBe('InboxCaseEngine');
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review']);
+    const openBtn = Array.from(container.querySelectorAll('.admin-stat-card__button')).find((b) => b.textContent?.includes('Open')) as HTMLButtonElement;
+    expect(openBtn?.querySelector('.admin-stat-card')?.classList.contains('admin-stat-card--active')).toBe(true);
+  });
+
+  it('`status=open` boundary: no `status` param renders all 5 columns including Done, same as today — this test would have caught the reported bug', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=InboxCaseEngine&range=all');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({
+      backlog: [makeTicket({ id: 'ice-3', title: 'Open one', status: 'backlog' })],
+      done: [makeTicket({ id: 'ice-4', title: 'Done one', status: 'done' })],
+    });
+    await renderBoard();
+
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
+  });
+
+  it('`status=done` also works (symmetry — the param isn\'t hardcoded to only ever mean "open")', async () => {
+    window.history.pushState({}, '', '/admin/tickets?status=done');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ done: [makeTicket({ id: 'x-10', title: 'Done', status: 'done' })] });
+    await renderBoard();
+
+    expect(columnHeaderLabels()).toEqual(['Done']);
+  });
+
+  it('`status=` with an unrecognized value is ignored, keeping the default all-5-columns view (fails safe, matches the `range` boundary test above)', async () => {
+    window.history.pushState({}, '', '/admin/tickets?status=archived');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-11' })] });
+    await renderBoard();
+
+    expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
+  });
 });
