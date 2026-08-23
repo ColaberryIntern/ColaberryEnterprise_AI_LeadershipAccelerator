@@ -594,7 +594,7 @@ export async function activeCompEnrollmentIds(enrollmentIds: string[]): Promise<
 
 export type CancelResult =
   | { ok: true; access_until: string | null }
-  | { ok: false; reason: 'no_active_subscription' };
+  | { ok: false; reason: 'no_active_subscription' | 'schedule_suspend_failed' };
 
 /** Cancel the active subscription, capturing the reason. Access is retained
  *  through the end of the paid period; no immediate revocation. */
@@ -602,6 +602,22 @@ export async function cancelSubscription(enrollmentId: string, reason: string, n
   const sub = await currentSubscription(enrollmentId);
   if (!sub || sub.status !== 'active') return { ok: false, reason: 'no_active_subscription' };
   const now = new Date(nowMs);
+
+  // Take the standing schedule down BEFORE flipping the local status.
+  //
+  // Ordering is the whole point. Marking the row cancelled first and then failing
+  // to suspend would leave the member reading as cancelled in our UI while
+  // PaySimple quietly keeps drawing their card: we would be taking money from
+  // someone who told us to stop, and nothing in our own data would show it.
+  // Suspending first means the worst case is a schedule already down while the row
+  // still says active, which the next attempt simply fixes.
+  const scheduleId = (sub as any).paysimple_schedule_id as string | null | undefined;
+  if (scheduleId) {
+    const { suspendScheduleForSubscription } = await import('./subscriptionScheduleService');
+    const res = await suspendScheduleForSubscription(sub.id, scheduleId);
+    if (!res.suspended) return { ok: false, reason: 'schedule_suspend_failed' };
+  }
+
   await sub.update({
     status: 'canceled',
     canceled_at: now,
