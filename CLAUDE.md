@@ -23,6 +23,45 @@ Claude's role: reason, plan, orchestrate, validate, and modify instructions/code
 
 ---
 
+# Response Format: every reply ends with a brief (MANDATORY)
+
+**Every response Claude sends to Ali MUST end with a `brief-me` block.** Answer the message normally first, then append the brief as the final thing in the reply.
+
+**Why:** Ali runs several Claude Code tabs at once. The bottom of the terminal is what he actually sees, so the last block in a reply is the first thing he reads. Without it he has to reconstruct which tab is doing what, how far along it is, and whether it is waiting on him — from scrollback, five times over. This rule exists to make that unnecessary.
+
+## The format
+
+Use the `short` mode from the `brief-me` skill. Full detail lives in `.claude/skills/brief-me/SKILL.md`; this is the shape:
+
+```markdown
+---
+
+# 🧭 <Task Name>
+
+**Status:** <one sentence>
+**Done:** <one sentence>
+**Problem:** <one sentence, or "None">
+**Need from you:** <one sentence, or "Nothing">
+**Next:** <one sentence>
+**PR:** <full clickable URL, or omit the line entirely>
+```
+
+`short` is the default rather than the full briefing because a 300-word report appended to every reply would bury the answer it is attached to. Ali can ask for a fuller one at any time with `/brief-me`, `/brief-me technical` or `/brief-me story`.
+
+## Rules that carry over from the skill
+
+- **Never fabricate a percentage or a status.** If a check has not run, say so.
+- **Always paste full PR URLs**, never a bare `#1234`.
+- **"Nothing"** is the correct answer under *Need from you* whenever it is true, and it should be said plainly rather than manufactured into a question.
+- **Never collapse the shipping ladder into "done".** Built, tested, merged, deployed and production-verified are five different states.
+- The brief is a **translation of what already happened in the reply**, not new work. It never triggers a command, a build, or a tool call.
+
+## When to skip it
+
+Only when a reply is a single clarifying question and there is genuinely no state to report. When in doubt, include it.
+
+---
+
 # Telemetry Synchronization Contract
 
 After every non-trivial build, emit a `BuildManifest` to `/api/portal/project/telemetry` so the portal can rebuild its state maps. **Full rules, schema, and reading-state endpoints live in the `telemetry-emission` skill.** Invoke via `/telemetry-emission` when you've completed a feature/fix/refactor.
