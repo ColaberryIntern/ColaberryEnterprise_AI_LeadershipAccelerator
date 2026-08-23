@@ -80,7 +80,15 @@ const TICKET_ICON = (
  * and keyboard users than two adjacent controls doing the identical thing.
  */
 function navigateToAgentTickets(agentName: string): void {
-  window.open(`/admin/tickets?creator=${encodeURIComponent(agentName)}`, '_blank', 'noopener,noreferrer');
+  // Org Chart v7 (2026-08-23) — `range=all` mirrors this agent's card count,
+  // which is itself date-unrestricted (see orgChartService.ts). Without it,
+  // the board's own 7-day-default performance fix would show a SMALLER count
+  // than the card just displayed, defeating the reason this button exists.
+  window.open(
+    `/admin/tickets?creator=${encodeURIComponent(agentName)}&range=all`,
+    '_blank',
+    'noopener,noreferrer',
+  );
 }
 
 // `e.preventDefault()` + `e.stopPropagation()` because this control renders

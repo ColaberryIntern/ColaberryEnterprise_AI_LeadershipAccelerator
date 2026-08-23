@@ -566,3 +566,47 @@ describe('AdminTicketBoardPage — creator filter (real, roster-backed select)',
     expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/creator=some-removed-agent/);
   });
 });
+
+// Org Chart v7 (2026-08-23, session CC-20260818-x4nk continued) — Ali, live:
+// the org chart's per-agent ticket count (date-unrestricted, see
+// orgChartService.ts) didn't match this board's default 7-day "recent" view,
+// so the org chart's ticket-filter button now deep-links with `&range=all`.
+describe('AdminTicketBoardPage — `range=all` deep-link (Org Chart v7)', () => {
+  afterEach(() => {
+    window.history.pushState({}, '', '/'); // reset the deep-link URL between tests
+  });
+
+  it('happy path: ?creator=<agent>&range=all starts on "All time" (no created_after in the board fetch), matching the org chart card that linked here', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=cory-engine&range=all');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-7' })] });
+    await renderBoard();
+
+    expect(creatorSelect().value).toBe('cory-engine');
+    const lastCall = boardFetchCalls()[boardFetchCalls().length - 1];
+    expect(lastCall).toMatch(/creator=cory-engine/);
+    expect(lastCall).not.toMatch(/created_after=/);
+    const allTimeBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'All Time') as HTMLButtonElement;
+    expect(allTimeBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('boundary: plain navigation (no `range` param) keeps the existing 7-day "recent" default — the 2026-08-18 performance fix is untouched', async () => {
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-8' })] });
+    await renderBoard();
+
+    const lastCall = boardFetchCalls()[boardFetchCalls().length - 1];
+    expect(lastCall).toMatch(/created_after=/);
+    const recentBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Last 7 Days') as HTMLButtonElement;
+    expect(recentBtn?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('boundary: `range` present but not exactly "all" (e.g. a typo or unrelated value) is ignored, staying on the 7-day default', async () => {
+    window.history.pushState({}, '', '/admin/tickets?range=everything');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'x-9' })] });
+    await renderBoard();
+
+    expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/created_after=/);
+  });
+});
