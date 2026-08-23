@@ -23,6 +23,15 @@ export interface AgentDetailTicket {
   updated_at: string | null;
 }
 
+/** One tool's own reads/produces, so the UI can show a per-tool drill-down
+ * instead of only the flattened union below. */
+export interface AgentDetailToolCapability {
+  tool: string;
+  reads: string[];
+  produces: string[];
+  documented: boolean;
+}
+
 /** What this agent reads / produces — derived from its real, live tools_granted
  * (+ real, live observed ticket types it creates), never hand-written free text.
  * See backend/src/services/reese/agentToolCapabilities.ts. */
@@ -31,6 +40,7 @@ export interface AgentDetailCapabilities {
   produces: string[];
   undocumented_tools: string[];
   produced_ticket_types: string[];
+  by_tool: AgentDetailToolCapability[];
 }
 
 /** This agent's own real reports_to chain (org-chart hierarchy build,
@@ -40,6 +50,11 @@ export interface AgentDetailCapabilities {
 export interface AgentDetailReportsTo {
   trail: string[];
   resolved_human: { id: string; name: string; email: string } | null;
+  /** The direct next hop, when it's another agent — real id/name so the UI
+   * can link straight to that agent's own detail page. `null` when this
+   * agent reports directly to a human, or the configured target doesn't
+   * resolve to a real agent row. */
+  immediate_agent: { id: string; name: string } | null;
 }
 
 export interface AgentDetail {
