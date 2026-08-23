@@ -1,31 +1,39 @@
-# Append-only log: union-merge keeps BOTH sides instead of producing a conflict.
-# "union" is a built-in git merge driver, so no local config is needed.
+# PROGRESS.md was frozen on 2026-08-23. The live progress log is now one file per
+# session at docs/sessions/CC-<YYYYMMDD>-<id>.md, and PROGRESS.md is a sealed archive
+# that nothing appends to. Sessions no longer share a write target, so the conflict
+# class this attribute existed to soften no longer arises for new work.
 #
-# READ THIS BEFORE TRUSTING IT. Git honours merge drivers LOCALLY ONLY. GitHub
-# does not run them server-side: it computes mergeability with a plain
-# three-way merge and reports CONFLICTING for any PR whose PROGRESS.md region
-# also moved on main. A PR can therefore merge perfectly cleanly in a worktree
-# and still be blocked in the UI.
+# WHY IT IS STILL HERE: branches cut before the cutover still carry PROGRESS.md edits.
+# Until those drain, the union driver keeps their local merges resolving without
+# hand-editing. Once no open PR touches PROGRESS.md, this line can be deleted.
 #
-# An earlier version of this comment claimed this attribute "eliminates the
-# recurring PROGRESS.md merge conflicts across concurrent Claude sessions
-# (which were blocking ~6 of 9 open PRs)". It does not. It hides them locally,
-# which is worse than not having it, because the branch looks healthy right up
-# until GitHub refuses to merge it.
+# WHAT IT NEVER BOUGHT, and the reason for the migration. Git honours merge drivers
+# LOCALLY ONLY. GitHub does not run them server-side: it computes mergeability with a
+# plain three-way merge and reports CONFLICTING for any PR whose PROGRESS.md region
+# also moved on main. A PR could therefore merge perfectly cleanly in a worktree and
+# still be blocked in the UI. Clearing that required merging main into the branch and
+# pushing — and branch protection sets dismiss_stale_reviews AND
+# require_last_push_approval, so that push permanently destroyed any approval the PR
+# carried. Force-pushing back did not restore it. That cost four approvals in one week
+# and once stranded thirteen at a time.
 #
-# What this attribute actually buys: local merges of PROGRESS.md resolve
-# without hand-editing. That is real and worth keeping.
+# An early version of this comment claimed the attribute "eliminates the recurring
+# PROGRESS.md merge conflicts across concurrent Claude sessions". It never did. It hid
+# them locally, which was worse than not having it, because the branch looked healthy
+# right up until GitHub refused to merge it.
 #
-# What it cannot buy: a green Merge button. To clear a CONFLICTING PR you must
-# merge main INTO the branch locally (the driver resolves PROGRESS.md) and then
-# push, which makes main's tip an ancestor and leaves GitHub nothing to merge.
-# On this repo that push is expensive: branch protection sets
-# dismiss_stale_reviews AND require_last_push_approval, so it permanently
-# destroys any approval the PR already carried. See MERGE_WORKFLOW.md, section
-# "PROGRESS.md conflicts, and why GitHub still says CONFLICTING".
+# See MERGE_WORKFLOW.md, "PROGRESS.md conflicts (RESOLVED 2026-08-23)".
 PROGRESS.md merge=union
+
+# Per-session logs deliberately get NO merge driver. One session writes one file, so
+# there is nothing to union-merge; a conflict here would mean two sessions picked the
+# same Session ID, which should surface loudly rather than be silently concatenated.
 
 # Git hooks are executed by /bin/sh. With core.autocrlf=true (the default on
 # Windows here) a checkout would rewrite these to CRLF, and a CRLF shebang
 # fails with "bad interpreter". Pin them to LF so the hook survives a clone.
 .githooks/** text eol=lf
+
+# Same reasoning for the Claude Code hooks: .claude/settings.json invokes them via
+# `bash <path>`, and stray CR bytes in the body surface as `$'\r': command not found`.
+.claude/hooks/** text eol=lf

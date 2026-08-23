@@ -1,3 +1,63 @@
+# PROGRESS.md — SEALED ARCHIVE (frozen 2026-08-23)
+
+> **This file is closed. Do not add entries to it.**
+> The live progress log is now **one markdown file per session**:
+>
+> ```
+> docs/sessions/CC-<YYYYMMDD>-<id>.md
+> ```
+>
+> Create the file named for your Session ID and write your entries there.
+
+## Why this changed
+
+Every PR that touched this file conflicted on GitHub. `.gitattributes` sets
+`merge=union`, but **git honours merge drivers locally only** — GitHub computes
+mergeability with a plain three-way merge and reports `CONFLICTING` for any PR
+whose region of this file also moved on `main`. Clearing that requires a push,
+and branch protection sets both `dismiss_stale_reviews` and
+`require_last_push_approval`, so the push **permanently destroys the approval**
+the PR already carried. Force-pushing back does not restore it. That cost four
+approvals in a single week and once stranded thirteen at one time.
+
+One file per session removes the shared write target, so there is nothing left
+to conflict on.
+
+**Concurrent-instance safety is now structural, not honour-system.** The old
+rules ("re-read the tail before appending", "only edit your own entries", "never
+clean up another instance's work") asked every session to behave politely around
+a file they all wrote to at once. Under per-session files a session physically
+cannot write to another session's log, because it writes only the file bearing
+its own Session ID. The guarantee no longer depends on anyone remembering it.
+
+## Index
+
+| Where | What |
+|---|---|
+| `docs/sessions/CC-<id>.md` | **Live log.** One file per session, named for the Session ID. Source of truth for all work from 2026-08-23 onward. |
+| `docs/sessions/SESSION_CC-<id>.html` | Generated change report for that session (`node scripts/generateSessionChangelog.js <SessionID>`). Never hand-edited. |
+| `PROGRESS.md` (below this line) | **Sealed archive.** 2,248 entries, 2026-05-05 to 2026-08-23. Read-only. |
+
+Entry format, the gates, and the session protocol are unchanged and live in
+`CLAUDE.md` → *Logging, Reporting & Progress Tracking*.
+
+## Searching the archive
+
+The archive is ~5 MB; do not read it end to end. Search it:
+
+```bash
+grep -n "Session: CC-20260731" PROGRESS.md      # one session's entries
+grep -n "openclawContentResponseAgent" PROGRESS.md   # everything about a file
+```
+
+---
+
+<!-- ===================================================================== -->
+<!-- EVERYTHING BELOW IS THE PRE-CUTOVER ARCHIVE. DO NOT APPEND.           -->
+<!-- Left byte-for-byte in place (not split into per-session files) so     -->
+<!-- `git log --follow` and `git blame` keep resolving through the cutover.-->
+<!-- ===================================================================== -->
+
 # PROGRESS.md
 **Colaberry Enterprise AI Accelerator — Build Progress Tracker**
 
@@ -16252,3 +16312,22 @@ fresh now versus taken from the run directory
   - What changed: Two edits to `frontend/src/pages/portal/projects/WorkspaceRepoPanel.tsx`. **(1) The `pull_only` block.** It read "The platform has read-only access to this repo. **That is fine** — it reads your commits and confirms your stories exactly as normal." That was TRUE and carefully written: when the only thing the platform wrote was plan documents, read-only cost nothing the student could not hand-place, and the panel already offered a "Get my progress.json" button for exactly that. **The artifact sync shipped this week invalidated it** — its entire purpose is writing artifacts into the repo, so under read-only a student's portfolio never reaches GitHub at all, while the screen reassures them nothing is lost. Rewritten to keep the true half (verification and points are unaffected, recorded platform-side) and state the real cost: artifacts are saved on the platform but cannot be written to the repo, "which is the version an employer or client actually looks at", plus the exact remedy (Settings → Collaborators → add `ColaberryIntern`, accepted automatically within the hour, GitHub expires invitations after 7 days) and the incentive that matters — granting access syncs every artifact already built, not just future ones. **(2) The `awaiting_proof` step now asks for the collaborator grant**, placed in the SAME card as the push proof rather than after it.
   - Verification: **Frontend jest 58/58 across 3 suites** (`WorkspaceRepoPanel.test.tsx`, `WorkspaceRepoPanel.publicRepo.test.tsx`, `AcceptanceChecklist.honesty.test.tsx`) via `CI=true npx react-scripts test` — the root jest cannot run these, it applies the backend's ts-jest transform to `.tsx` and fails to transform before any test executes. Frontend `tsc --noEmit` exit 0 (5.9.3, version printed in-band). The `pull_only` branch and its copy were already covered by `AcceptanceChecklist.honesty.test.tsx`, which is how the change was validated rather than eyeballed.
   - Notes: **This defect was mine, introduced this week, in a file I never opened.** The screen was not neglected — it was correct until a feature changed what the permission buys. There is no test for "this sentence is still true", and the copy reads fine to any reviewer who does not know the sync exists. Worth remembering whenever something extends what the platform does with a student's repo. **Why the collaborator ask sits in the push card, not a later screen:** a student who reaches `connected` considers themselves finished and never returns — which is exactly how 18 connections ended up with exactly ONE holding platform push. A later screen would have reproduced the bug with better wording. It is deliberately framed as optional and non-blocking ("you can connect without it and add it later — nothing you earn depends on it"), because both halves are true and the retroactive sync is the real incentive. **Known gap CI does not cover:** the repo's CI typechecks and builds the frontend but **never runs frontend jest**, so these 58 tests are verified by nobody unless a human runs them locally. Pre-existing, not introduced here. **What none of this fixes:** the 16 students who already connected will not revisit that panel unprompted. Reaching them needs a direct message, which is a communications action and is NOT taken here.
+- [x] Register the two missing tracking sources, and map winback to Colaberry Training
+  - Date: 2026-08-23
+  - Session: CC-20260821-m6t4
+  - What changed: `ecosystemSeedData.ts` gains a `tracking_sources` concept and `seedEcosystem.ts` gains `seedTrackingSources()` to create them. Two sources were missing entirely from `lead_sources`: **`enterprise`**, which the server-side `HOST_TO_SITE_SLUG` map in `trackingController.ts` has been stamping on enterprise.colaberry.ai traffic since long before this project with no row to attach to (1,751 production sessions stranded), and **`training`**, needed so the Colaberry Training brand is ready the moment a tracker snippet goes on that live external site. Also mapped **`winback`** ("Alumni Win-Back (CCPP)", registered domain `training.colaberry.com`) to Colaberry Training rather than Enterprise - confirmed by Ali rather than inferred from the domain, because the two Colaberry brands are exactly where a wrong guess would be least visible. `tracking_sources` is deliberately a separate concept from `lead_source_slugs`: the latter is the backfill ownership map covering sources created elsewhere, chiefly by `seedLeadSources.ts` which owns form-bearing ingest sources. These carry no entry points and no form definitions because nothing posts a form to them; they exist purely so tracking can attribute a hostname to a brand.
+  - Verification: Rehearsed against a throwaway Postgres loaded with a **structure-only dump of the live production schema**, seeded with the real `winback` and `colaberry` rows plus sessions carrying `site_slug` of enterprise/training/winback. Result: seed created both missing sources; backfill then reported **`lead_sources: updated=2 already_correct=2 unresolved=0`** - down from 1 unresolved - and **all 3 sessions classified**. Confirmed each landed correctly by joining to brands: `enterprise`->Colaberry Enterprise, `training`->Colaberry Training, `winback`->Colaberry Training, `colaberry`->Colaberry Enterprise. Second seed run reported `created=0 already_correct=30`, so it is idempotent. Backend `tsc --noEmit` clean; **114/114 tests across 9 suites**.
+  - Notes: An existing source row is **never re-pointed** by this seeder - it is stamped with tenant/brand only when it has none, and a source already owned by a different brand is reported and left alone. Silently reassigning ownership is how attribution history gets rewritten by accident. **Not done:** nothing run against production yet; this only prepares the rows. Training will still receive nothing until a tracker snippet is installed on training.colaberry.com, which needs someone with access to that site - it currently has no tracker and no analytics of any kind and has never sent a single event.
+- [x] AI Workforce -> Tickets drill-through: agent's open-ticket count now matches what actually renders
+  - Date: 2026-08-23
+  - Session: CC-20260818-x4nk (continued)
+  - What changed: Ali reported (3rd time reporting this specific bug) that clicking an agent's "N open tickets" button on the AI Organization page took him to a board showing far more than N, with no way to tell what he was looking at. Root cause: `filterStatus` (`''|'open'|'done'`, the client-side toggle controlling which of the 5 Kanban columns render - `backlog, todo, in_progress, in_review, done`, there is no `cancelled` column) was never being set by the drill-through, so all 5 columns rendered including `done`, inflating the visible count up to 4x. Confirmed live before the fix: InboxCaseEngine had 304 open tickets but 1262 total across all statuses - the card's promised "304" vs. the 1262 actually shown was the exact mismatch Ali was seeing. Fix: `frontend/src/pages/admin/AdminTicketBoardPage.tsx`'s existing mount effect now also reads a `status` URL param and calls the existing `setFilterStatus()` when it's `'open'` or `'done'`; `frontend/src/pages/admin/workforce/orgchart/OrgChartSection.tsx`'s `navigateToAgentTickets()` now appends `&status=open` alongside the existing `&range=all&creator=`. PR #1723, SHA `28a8849bc8737218e39e2989b331328c10be52f2`.
+  - Verification: New regression tests added directly against the bug (not just the URL string) in `AdminTicketBoardPage.smoke.test.tsx`: `status=open` renders exactly the 4 non-Done columns with the Creator select and Open KPI card correct; a boundary test with no `status` param confirms all 5 columns render (this test would have caught the original bug); a symmetry test for `status=done`; a fail-safe test for an unrecognized status value. `OrgChartSection.test.tsx`'s 7 existing `windowOpenSpy` URL assertions updated to expect `&status=open`. `tsc --noEmit` clean both stacks, all CI checks passed, merged, deployed to production (`docker compose -f docker-compose.production.yml up -d --build backend nginx`), health-checked 200 `{"status":"ok"}`. **Independently confirmed in the live deployed bundle** using the multi-string chunk-co-occurrence method (a naive single-string or main-bundle search had already produced false negatives/positives on the prior fix in this same file - see the entry above): `static/js/1294.97039e80.chunk.js` contains the URL-builder `.concat(encodeURIComponent(e),"&range=all&status=open"),"_blank"`; `static/js/2875.b0e021ce.chunk.js` contains the minified param-reading logic that triggers `setFilterStatus` when `status` is `'open'` or `'done'`.
+  - Notes: This closes the ticket-count-mismatch bug Ali reported 3 times. Two other asks from the same message are still open, tracked as follow-up work, not yet started: (1) a clickable link from an agent's detail page to the agent/human it reports to (blocked on `backend/src/services/reese/agentDetailService.ts`'s `reports_to.trail` today being pre-formatted display strings, not structured data with real ids - needs a data-shape change before the frontend can link to it), and (2) a tool & capability "drill down" on the same page explaining what each granted tool actually does.
+
+- [x] AgentDetailPage: clickable reports-to link + per-tool capability drill-down
+  - Date: 2026-08-23
+  - Session: CC-20260818-x4nk (continued)
+  - What changed: closes the other 2 asks from the same message as the ticket-filter fix above. (1) `backend/src/services/reese/agentDetailService.ts`'s `reports_to` now includes `immediate_agent: { id, name } | null` - the direct next hop, resolved via one extra `AiAgent.findByPk()` lookup (not a second copy of the recursive chain-walk, which stays the one canonical implementation in `ticketCreatorReportsToResolver.ts`), populated only when that hop is another agent so it's never a dead link. `frontend/src/pages/admin/AgentDetailPage.tsx`'s "Reports to" section now renders that as a real `<Link>` straight to the leadership agent's own `/admin/agents/:id` page. (2) `backend/src/services/reese/agentToolCapabilities.ts`'s `deriveAgentCapabilities()` now also returns `byTool` - the same grounded reads/produces dictionary broken out per tool instead of only the flattened de-duplicated union - and the page's "Tools & capabilities" section changed from a flat list of tool-name badges to a per-tool `<details>` drill-down (the same native-`<details>` pattern already used in 17 other files in this codebase), each tool showing its own reads/produces or an honest "undocumented" badge. PR #1726, SHA `0d493d92`, merged to main at `0a48f158`.
+  - Verification: New backend unit tests in `agentToolCapabilities.test.ts` (byTool happy path in tools_granted order, no cross-tool de-dup, undocumented-tool honesty, empty-array boundary) and `agentDetailService.test.ts` (immediate_agent happy path, null when reporting directly to a human, null when the target id doesn't resolve to a real row, by_tool passthrough). New frontend smoke tests in `AgentDetailPage.smoke.test.tsx` (real clickable href to the next-hop agent's own page, no link rendered when immediate_agent is null, per-tool `<details>` scoping - proved read_learner_context's fact never leaks into respond_to_dm's own element - undocumented-tool badge, empty-tools state). All CI checks passed (`tsc --noEmit` both stacks, backend unit tests, frontend build/typecheck). Deployed (`docker compose -f docker-compose.production.yml up -d --build backend nginx`), backend health-checked 200 `{"status":"ok"}` after the boot window. **Independently verified in the live deployed bundle**: `static/js/2819.a3e04c77.chunk.js` contains all 4 unique strings co-occurring - `"Reports directly to"`, `"undocumented"`, `"what it reads and produces"`, and the raw field name `"immediate_agent"`. **Independently verified against real production data**: queried `ai_agents` directly - Reese (`97dfbdf4-0e5b-4d86-b060-f4087b61f311`) has `reports_to_type='agent'`, `reports_to_id='8bff103b-a6ed-4073-a432-c403d2aaa209'`, which resolves to a real row (`workforce_intelligence_engine`, `tools_granted: ['query_agent_fleet_stats', 'create_workforce_tickets']`, both documented in `TOOL_CAPABILITIES`) - so both features render real, non-empty content on Reese's live page today, not just an empty/boundary case.
+  - Notes: Closes all 3 parts of Ali's bundled message (the ticket-filter fix shipped separately above, this entry covers the other 2). No known open items from that message remain unbuilt.
