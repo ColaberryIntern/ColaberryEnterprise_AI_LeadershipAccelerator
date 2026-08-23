@@ -186,6 +186,13 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
         default_theme_key: 'refactored',
         domains: [
           { hostname: 'refactored.ai', purpose: 'web', is_primary: true },
+          // The logged-in product lives at enterprise.colaberry.ai today, behind the
+          // login. Same hostname as Colaberry Consulting's public site, different
+          // brand — which is exactly why brand_domains is keyed on (hostname, purpose)
+          // rather than hostname alone. The `web` row on that host stays with
+          // Colaberry Enterprise; this `app` row is what /portal paths resolve to.
+          // refactored.ai itself still needs its own customer-facing site built.
+          { hostname: 'enterprise.colaberry.ai', purpose: 'app', is_primary: true },
           { hostname: 'refactored.ai', purpose: 'email', is_primary: true },
           { hostname: 'track.refactored.ai', purpose: 'tracking', is_primary: true },
         ],

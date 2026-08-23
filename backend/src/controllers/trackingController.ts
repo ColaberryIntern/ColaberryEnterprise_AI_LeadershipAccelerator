@@ -15,6 +15,8 @@ import { logAgentExecution } from '../services/governanceService';
 import { redactForLogs } from '../utils/piiRedaction';
 import {
   resolvePublicContext,
+  resolveContextByHostname,
+  hostnameFromUrl,
   ResolvedTenantContext,
   ResolutionPath,
 } from '../modules/tenancy/tenantResolver';
@@ -109,6 +111,42 @@ function normalizeSiteSlug(raw: unknown, pageUrl?: string): string | undefined {
 }
 
 /**
+ * Paths that belong to the logged-in product rather than the public marketing site.
+ *
+ * One hostname, two brands: enterprise.colaberry.ai serves Colaberry Consulting when
+ * logged out and the Refactored.ai working portal when logged in. The `brand_domains`
+ * table already models this as (hostname, purpose) — a `web` row and an `app` row — so
+ * the only question is how a request declares which side it is on.
+ *
+ * The path does, and that is why this list is the mechanism rather than auth state.
+ * Reading auth would mean the tracker knowing who the visitor is, which is exactly the
+ * new data collection this approach exists to avoid. Nothing here observes anything the
+ * request was not already sending.
+ *
+ * `/admin` is absent deliberately: the frontend tracker refuses to run there at all
+ * (`shouldTrack()` in utils/tracker.ts), so no admin event ever reaches this code.
+ *
+ * KNOWN LIMIT, stated rather than hidden: the portal is a single-page app that emits
+ * very few page events, so this undercounts Refactored.ai. It attributes correctly what
+ * it sees; it does not make the portal chatty. Fixing that is a separate decision about
+ * instrumenting the portal, which carries a consent question of its own.
+ */
+const APP_PATH_PREFIXES = ['/portal'] as const;
+
+function isAppPath(pageUrl: string | undefined): boolean {
+  if (!pageUrl) return false;
+  let pathname: string;
+  try {
+    pathname = new URL(pageUrl).pathname;
+  } catch {
+    // Not a parseable URL: treat it as a bare path, which is what the batch endpoint
+    // sometimes carries.
+    pathname = pageUrl.split('?')[0] || '';
+  }
+  return APP_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/**
  * Resolve the ecosystem tenant/brand for an inbound tracking hit.
  *
  * SECURITY: resolution is driven ONLY by `site_slug` (which the server maps through
@@ -126,6 +164,15 @@ async function resolveTrackingContext(
   pageUrl: string | undefined,
 ): Promise<ResolvedTenantContext | null> {
   try {
+    // A portal path resolves against the hostname's `app` row, which points at
+    // Refactored.ai. `resolveContextByHostname` falls back to the `web` row when no
+    // `app` row is registered, so a host without one keeps behaving exactly as before.
+    if (isAppPath(pageUrl)) {
+      const host = hostnameFromUrl(pageUrl);
+      const appContext = await resolveContextByHostname(host, 'app');
+      if (appContext) return appContext;
+    }
+
     const { context, path } = await resolvePublicContext({
       sourceSlug: siteSlug,
       pageUrl,
