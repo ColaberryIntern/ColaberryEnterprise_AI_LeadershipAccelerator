@@ -84,8 +84,14 @@ function navigateToAgentTickets(agentName: string): void {
   // which is itself date-unrestricted (see orgChartService.ts). Without it,
   // the board's own 7-day-default performance fix would show a SMALLER count
   // than the card just displayed, defeating the reason this button exists.
+  //
+  // Ticket Count Sync fix, Task 3 (2026-08-24) — `status=open` mirrors the
+  // card's own `open_ticket_count` label. Without it, the board showed every
+  // status INCLUDING Done — reported 3 times as "the card says N but the
+  // board shows way more" (confirmed live: InboxCaseEngine's card says 304,
+  // the board without this param would show up to 1262).
   window.open(
-    `/admin/tickets?creator=${encodeURIComponent(agentName)}&range=all`,
+    `/admin/tickets?creator=${encodeURIComponent(agentName)}&range=all&status=open`,
     '_blank',
     'noopener,noreferrer',
   );
