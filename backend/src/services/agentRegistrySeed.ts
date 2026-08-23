@@ -2413,6 +2413,35 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     tools_granted: ['respond_to_dm', 'read_learner_context'],
     persona_version: '2026-08-06',
   },
+  // --- SBP GitHub: repository-invitation sweep ---
+  // Registered rather than left untracked for two reasons. It gives an operator
+  // a pause switch from Admin > Agents with no redeploy; and, more importantly,
+  // cronHealthAlertService's missed-run detector only evaluates agents that are
+  // in this registry AND enabled — an untracked cron that silently stops
+  // producing zero signal anywhere, which is precisely the failure this job
+  // exists to end.
+  {
+    agent_name: 'GithubInvitationSweep',
+    agent_type: 'access_control',
+    module: 'sbp',
+    source_file: 'backend/src/services/sbp/repoConnect/repoInvitations.ts',
+    trigger_type: 'cron',
+    schedule: '7 * * * *',
+    category: 'student_success',
+    description:
+      'Accepts the GitHub collaborator invitations students send us — the ONLY ' +
+      'way the platform ever gains push access to a student repo. Written and ' +
+      'tested long before it was scheduled: on 2026-08-23, 28 connections had a ' +
+      'repo and platform_can_push was true for exactly ONE, and only because a ' +
+      'human accepted that invitation by hand. GitHub expires an invitation ' +
+      'after 7 days and an expired one is unrecoverable without the student ' +
+      'sending a new one, so this runs hourly — an empty queue costs one API ' +
+      'request, a missed window costs a student their portfolio sync. Never ' +
+      'solicits an invitation, never patches an expired one (that returns a ' +
+      'lying 204 and destroys the evidence), and re-reads permissions.push ' +
+      'rather than trusting a status code.',
+    enabled: true,
+  },
   // --- Reese Phase 2: Autonomous Outreach (the two new scheduled crons) ---
   // Registered here (not left to run "untracked", the gap Phase 1's own
   // ReesePresenceHeartbeat cron has today) specifically so
