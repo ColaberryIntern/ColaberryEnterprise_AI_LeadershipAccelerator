@@ -30,7 +30,7 @@ export function renderReport(r: HealthResult): { subject: string; text: string; 
 
   // The subject carries the whole message for someone scanning a phone.
   const subject = actNow
-    ? `[Billing] ${actNow} thing${actNow === 1 ? '' : 's'} need you now`
+    ? `[Billing] ${actNow} thing${actNow === 1 ? '' : 's'} need${actNow === 1 ? 's' : ''} you now`
     : r.findings.length
       ? `[Billing] ${r.findings.length} thing${r.findings.length === 1 ? '' : 's'} to look at`
       : `[Billing] Milestone: ${r.milestones[0]?.what ?? 'checkpoint'}`;
