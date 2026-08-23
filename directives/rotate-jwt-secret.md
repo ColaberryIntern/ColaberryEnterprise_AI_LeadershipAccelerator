@@ -43,6 +43,8 @@ ever printing either.
 | 17 × `/opt/acc-*/.env` (per-user preview stacks) | **EDIT or retire** | Every one carries the same leaked 128-char value. |
 | 16 × `/opt/colaberry-accelerator/.env.bak*` | **No runtime edit** | Not read at runtime, but they still contain the leaked value on disk. Clean up separately. |
 | Repo `.env*.example` files | **No edit** | Placeholders only (`CHANGE_ME...`, `<random-64-char-hex>`). |
+| `accelerator-intelligence` container | **No edit — not a consumer** | No `env_file: .env`, no `JWT_SECRET` in its `environment:` block, and no JWT code in the Python service. This is why step 5 can safely use `--no-deps`. |
+| `accelerator-nginx` / the frontend bundle | **No edit — not a consumer** | Nothing in `frontend/src` verifies a token; the browser only stores and sends it. Tokens are minted and verified backend-side only. |
 | Other apps on the host (Opportunity Pulse, Landjet, agent-foundry, optisight, ROI_Architect) | **No edit** | Each has its own distinct `JWT_SECRET`. Unaffected. |
 
 ## Steps
