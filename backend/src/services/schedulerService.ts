@@ -2077,6 +2077,28 @@ export function startScheduler(): void {
     console.log('[Scheduler] RenewalReminders scheduled (0 9 * * * America/Chicago)');
   }
 
+  // Billing watch, daily at 8am Central, an hour before the renewal reminders so a
+  // broken collection path is known BEFORE the day's money depends on it.
+  //
+  // It is read only and it stays silent when the book is healthy. Every check in it
+  // exists because that exact thing happened during the 2026-08 billing work and a
+  // human found it by accident: subscriptions anchored to a repair date, a member
+  // holding two active rows, three members lapsing into permanent silence, a card
+  // that expired the month before its renewal. None of those announced themselves.
+  //
+  // Unlike the reminder job this needs no feature flag: it cannot touch a customer
+  // and it cannot move money. The worst it does is email Ali.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('BillingWatch', async () => {
+      const { runBillingWatch } = await import('./billing/billingHealthReport');
+      const r = await runBillingWatch({ send: true });
+      console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
+    }).catch((err) => {
+      console.error('[Scheduler] Billing watch error:', err);
+    });
+  }, { timezone: 'America/Chicago' });
+  console.log('[Scheduler] BillingWatch scheduled (0 8 * * * America/Chicago)');
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('PreviewStackReaper', async () => {
