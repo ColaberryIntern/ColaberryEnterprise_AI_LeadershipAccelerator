@@ -1,6 +1,6 @@
 import { connectDatabase } from '../config/database';
 import '../models';
-import { Tenant, Brand, BrandDomain, SenderProfile } from '../models';
+import { Tenant, Brand, BrandDomain, SenderProfile, LeadSource } from '../models';
 import { ECOSYSTEM_SEED, SeedBrand, SeedTenant } from './ecosystemSeedData';
 
 /**
@@ -115,6 +115,56 @@ async function seedSenderProfiles(
   return counts;
 }
 
+/**
+ * Create the brand's tracking-only lead sources, if they are not already there.
+ *
+ * These carry no entry points and no form definitions on purpose: nothing posts a form
+ * to them. They exist so tracking can attribute a hostname to a brand, which is a
+ * different job from the form-bearing sources `seedLeadSources.ts` owns.
+ *
+ * An existing row is never re-pointed here, only stamped with tenant/brand if it has
+ * none. A source that already belongs to another brand is reported rather than moved —
+ * reassigning ownership silently is how attribution history gets rewritten by accident.
+ */
+async function seedTrackingSources(
+  tenantId: string,
+  brandId: string,
+  brand: SeedBrand,
+): Promise<SeedCounts> {
+  const counts = emptyCounts();
+  for (const source of brand.tracking_sources ?? []) {
+    counts.processed += 1;
+    const existing = await LeadSource.findOne({ where: { slug: source.slug } });
+
+    if (!existing) {
+      await LeadSource.create({
+        slug: source.slug,
+        name: source.name,
+        domain: source.domain,
+        is_active: true,
+        tenant_id: tenantId,
+        brand_id: brandId,
+      } as any);
+      counts.created += 1;
+      console.log(`    + tracking source "${source.slug}"`);
+      continue;
+    }
+
+    const currentBrand = (existing as any).brand_id as string | null;
+    if (!currentBrand) {
+      await existing.update({ tenant_id: tenantId, brand_id: brandId } as any);
+      counts.updated += 1;
+      console.log(`    · tracking source "${source.slug}" adopted`);
+    } else if (currentBrand !== brandId) {
+      counts.failed += 1;
+      console.warn(`    ! tracking source "${source.slug}" belongs to another brand — left alone`);
+    } else {
+      counts.already_correct += 1;
+    }
+  }
+  return counts;
+}
+
 async function seedBrandsFor(tenant: Tenant, seed: SeedTenant): Promise<SeedCounts> {
   const counts = emptyCounts();
   for (const brandSeed of seed.brands) {
@@ -139,6 +189,7 @@ async function seedBrandsFor(tenant: Tenant, seed: SeedTenant): Promise<SeedCoun
 
     merge(counts, await seedDomains(tenant.id, brand.id, brandSeed));
     merge(counts, await seedSenderProfiles(tenant.id, brand.id, brandSeed));
+    merge(counts, await seedTrackingSources(tenant.id, brand.id, brandSeed));
   }
   return counts;
 }
