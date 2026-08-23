@@ -57,7 +57,7 @@ function buildPrompt(task) {
     '- Typed contracts; `tsc --noEmit` clean for the files you touch.',
     '- Tests: happy + failure + boundary + idempotency (jest).',
     '- Idempotent + failure-first (timeouts/retries around anything external).',
-    '- Update PROGRESS.md with a fresh Session ID (CC-YYYYMMDD-xxxx) + verification evidence.',
+    '- Write docs/sessions/CC-YYYYMMDD-xxxx.md (a fresh Session ID) with verification evidence. Do NOT append to PROGRESS.md; it is a sealed archive.',
     `- Work on a new branch workstream/${slug}; open a PR when green. DO NOT deploy. DO NOT auto-post to Basecamp. No secrets in code.`,
     '',
     'DELIVERABLE: a PR with the implementation + tests. Report back the files changed, the test results, and the PR link. If the ticket turns out to need a human decision or data you do not have, STOP and say so instead of guessing.',

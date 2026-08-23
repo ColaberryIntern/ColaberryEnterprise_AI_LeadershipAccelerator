@@ -1,3 +1,63 @@
+# PROGRESS.md — SEALED ARCHIVE (frozen 2026-08-23)
+
+> **This file is closed. Do not add entries to it.**
+> The live progress log is now **one markdown file per session**:
+>
+> ```
+> docs/sessions/CC-<YYYYMMDD>-<id>.md
+> ```
+>
+> Create the file named for your Session ID and write your entries there.
+
+## Why this changed
+
+Every PR that touched this file conflicted on GitHub. `.gitattributes` sets
+`merge=union`, but **git honours merge drivers locally only** — GitHub computes
+mergeability with a plain three-way merge and reports `CONFLICTING` for any PR
+whose region of this file also moved on `main`. Clearing that requires a push,
+and branch protection sets both `dismiss_stale_reviews` and
+`require_last_push_approval`, so the push **permanently destroys the approval**
+the PR already carried. Force-pushing back does not restore it. That cost four
+approvals in a single week and once stranded thirteen at one time.
+
+One file per session removes the shared write target, so there is nothing left
+to conflict on.
+
+**Concurrent-instance safety is now structural, not honour-system.** The old
+rules ("re-read the tail before appending", "only edit your own entries", "never
+clean up another instance's work") asked every session to behave politely around
+a file they all wrote to at once. Under per-session files a session physically
+cannot write to another session's log, because it writes only the file bearing
+its own Session ID. The guarantee no longer depends on anyone remembering it.
+
+## Index
+
+| Where | What |
+|---|---|
+| `docs/sessions/CC-<id>.md` | **Live log.** One file per session, named for the Session ID. Source of truth for all work from 2026-08-23 onward. |
+| `docs/sessions/SESSION_CC-<id>.html` | Generated change report for that session (`node scripts/generateSessionChangelog.js <SessionID>`). Never hand-edited. |
+| `PROGRESS.md` (below this line) | **Sealed archive.** 2,248 entries, 2026-05-05 to 2026-08-23. Read-only. |
+
+Entry format, the gates, and the session protocol are unchanged and live in
+`CLAUDE.md` → *Logging, Reporting & Progress Tracking*.
+
+## Searching the archive
+
+The archive is ~5 MB; do not read it end to end. Search it:
+
+```bash
+grep -n "Session: CC-20260731" PROGRESS.md      # one session's entries
+grep -n "openclawContentResponseAgent" PROGRESS.md   # everything about a file
+```
+
+---
+
+<!-- ===================================================================== -->
+<!-- EVERYTHING BELOW IS THE PRE-CUTOVER ARCHIVE. DO NOT APPEND.           -->
+<!-- Left byte-for-byte in place (not split into per-session files) so     -->
+<!-- `git log --follow` and `git blame` keep resolving through the cutover.-->
+<!-- ===================================================================== -->
+
 # PROGRESS.md
 **Colaberry Enterprise AI Accelerator — Build Progress Tracker**
 
