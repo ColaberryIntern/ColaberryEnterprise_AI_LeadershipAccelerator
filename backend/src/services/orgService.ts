@@ -238,7 +238,17 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
 
   return {
     jwt: free.jwt,
-    organization: { id: organization.id, name: organization.name, owner_enrollment_id: organization.owner_enrollment_id },
+    organization: {
+      id: organization.id,
+      name: organization.name,
+      // `ownerEnrollmentId`, not `organization.owner_enrollment_id`. The column became
+      // nullable in 2026-08 so a client company can exist without an enrollment (ESC-1),
+      // but a management account registered through THIS path always has one — it is the
+      // key findOrCreate just matched on. Returning the local keeps the non-null contract
+      // this function's callers rely on, without a cast that would also silence a real
+      // null somewhere else later.
+      owner_enrollment_id: ownerEnrollmentId,
+    },
     enrollment: free.enrollment,
   };
 }
