@@ -2360,9 +2360,15 @@ export function startScheduler(): void {
       instrumentCronJob('CurriculumVideoLinkHealth', async () => {
         const { runVideoLinkHealthCheck } = require('./curriculumHealth/videoLinkHealthService');
         const result = await runVideoLinkHealthCheck();
+        // `throttled`, `untrusted_batches` and the three-way ownership split are
+        // logged because a quiet run and a blindfolded run look identical
+        // otherwise. A run with untrusted batches found nothing because it could
+        // not see, not because everything is fine.
         console.log('[Scheduler] Curriculum video link health:', JSON.stringify({
           skipped: result.skipped, checked: result.checked, healthy: result.healthy,
           unknown: result.unknown, failures: result.failures.length, sealed_weeks: result.sealed_weeks,
+          throttled: result.throttled, untrusted_batches: result.untrusted_batches,
+          unverified: result.unverified, ownership: result.ownership,
         }));
       }).catch((err: any) => {
         console.error('[Scheduler] Curriculum video link health error:', err.message);

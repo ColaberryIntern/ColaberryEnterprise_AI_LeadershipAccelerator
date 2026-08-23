@@ -8,7 +8,9 @@
 import {
   classify,
   extractPlayerResponse,
+  isBotChallenge,
   isOurChannel,
+  ownershipOf,
   readPlayerResponse,
   youtubeId,
   type PlayerProbe,
@@ -210,5 +212,152 @@ describe('the real production corpus (154 videos measured 2026-08-21)', () => {
     // The whole-blob sweep that matched this id inside
     // metadata.replaced_video.previous_url is what archived a healthy Week 3 card.
     expect(corpus.map((r) => r.video_id)).not.toContain('Yjfh5jtaLx4');
+  });
+});
+
+/**
+ * The 2026-08-22 dry run: 149 videos probed, 149 reported as failures, 146 of
+ * them provably healthy from an unthrottled workstation moments later. Every one
+ * carried the same detail string — "Sign in to confirm you're not a bot".
+ *
+ * That string is YouTube declining to answer, and the classifier read it as an
+ * answer. `playabilityStatus.status` is LOGIN_REQUIRED for a genuinely private
+ * video AND for a bot challenge, so status alone cannot tell "you may not see
+ * this" from "we don't believe you're a person". The `reason` text is the only
+ * discriminator, and it was being used as display copy rather than as signal.
+ *
+ * These payloads are the real shapes: the private/removed ones were captured
+ * from the live watch pages of the two genuinely broken videos on 2026-08-22,
+ * and the challenge shape is the one the dry run recorded. Note what the
+ * challenge does NOT carry: no microformat, so no owner and no embed key. That
+ * absence is also why `channel` came back null for all 149.
+ */
+describe('a bot challenge is not a verdict', () => {
+  /** Reason text uses U+2019, as YouTube serves it. Do not "fix" the apostrophe. */
+  const botChallenge = (status: string) => ({
+    playabilityStatus: {
+      status,
+      reason: 'Sign in to confirm you’re not a bot',
+      errorScreen: {
+        playerErrorMessageRenderer: {
+          reason: { simpleText: 'Sign in to confirm you’re not a bot' },
+          subreason: { runs: [{ text: 'This helps protect our community. ' }, { text: 'Learn more' }] },
+        },
+      },
+    },
+  });
+
+  /** Genuinely private. Live capture of OntMoGj45Tc, 2026-08-22. */
+  const reallyPrivate = {
+    playabilityStatus: {
+      status: 'LOGIN_REQUIRED',
+      messages: ['This is a private video. Please sign in to verify that you may see it.'],
+      errorScreen: {
+        playerErrorMessageRenderer: {
+          reason: { simpleText: 'Private video' },
+          subreason: { simpleText: "Sign in if you've been granted access to this video" },
+        },
+      },
+    },
+  };
+
+  /** Genuinely gone. Live capture of _RxzOouIcII, 2026-08-22. */
+  const reallyRemoved = {
+    playabilityStatus: {
+      status: 'ERROR',
+      reason: 'Video unavailable',
+      errorScreen: {
+        playerInterstitialRenderer: {
+          content: { interstitialViewModel: { title: { content: 'Video unavailable' } } },
+        },
+      },
+    },
+  };
+
+  it('THE HEADLINE: a challenged probe is UNKNOWN, never PRIVATE', () => {
+    const verdict = classify(403, readPlayerResponse(botChallenge('LOGIN_REQUIRED')));
+    expect(verdict.state).toBe('UNKNOWN');
+    expect(verdict.actionable).toBe(false);
+  });
+
+  it('a challenge arriving as ERROR is UNKNOWN, never REMOVED', () => {
+    const verdict = classify(404, readPlayerResponse(botChallenge('ERROR')));
+    expect(verdict.state).toBe('UNKNOWN');
+    expect(verdict.actionable).toBe(false);
+  });
+
+  it('the challenge is flagged on the probe itself, so callers can count throttling', () => {
+    expect(readPlayerResponse(botChallenge('LOGIN_REQUIRED')).challenged).toBe(true);
+    expect(readPlayerResponse(reallyPrivate).challenged).toBe(false);
+    expect(readPlayerResponse(reallyRemoved).challenged).toBe(false);
+  });
+
+  it('says plainly that it is us being throttled, not the video being broken', () => {
+    const verdict = classify(403, readPlayerResponse(botChallenge('LOGIN_REQUIRED')));
+    expect(verdict.detail).toMatch(/challenge|throttl/i);
+    expect(verdict.detail).not.toMatch(/private/i);
+  });
+
+  it.each([
+    ['curly apostrophe, as served', 'Sign in to confirm you’re not a bot'],
+    ['straight apostrophe', "Sign in to confirm you're not a bot"],
+    ['unusual traffic', 'Our systems have detected unusual traffic from your computer network.'],
+    ['too many requests', 'Too Many Requests'],
+  ])('recognises the challenge phrased as %s', (_label, reason) => {
+    expect(isBotChallenge({ status: 'LOGIN_REQUIRED', reason })).toBe(true);
+  });
+
+  it.each([
+    ['a private video', reallyPrivate.playabilityStatus],
+    ['a removed video', reallyRemoved.playabilityStatus],
+    ['a healthy video', { status: 'OK' }],
+  ])('does not mistake %s for a challenge', (_label, status) => {
+    expect(isBotChallenge(status)).toBe(false);
+  });
+
+  it('still calls a genuinely private video PRIVATE: the fix must not blunt the check', () => {
+    const verdict = classify(403, readPlayerResponse(reallyPrivate));
+    expect(verdict.state).toBe('PRIVATE');
+    expect(verdict.actionable).toBe(true);
+  });
+
+  it('still calls a genuinely removed video REMOVED', () => {
+    const verdict = classify(404, readPlayerResponse(reallyRemoved));
+    expect(verdict.state).toBe('REMOVED');
+    expect(verdict.actionable).toBe(true);
+  });
+
+  it('the whole 149-video challenge storm yields nothing actionable', () => {
+    const storm = corpus.map(() => classify(403, readPlayerResponse(botChallenge('LOGIN_REQUIRED'))));
+    expect(storm.filter((v) => v.actionable)).toHaveLength(0);
+    expect(storm.every((v) => v.state === 'UNKNOWN')).toBe(true);
+  });
+});
+
+/**
+ * `ours: false` was reported for every failing video, and read as "none of these
+ * are ours". It was not a finding: the watch page carries no microformat for a
+ * private, removed or challenged video, so `owner` is null in exactly the cases
+ * the metric covers. A boolean cannot express "we could not tell", so it lied
+ * in the reassuring direction.
+ */
+describe('ownership is tri-state, because "we could not tell" is not "not ours"', () => {
+  it('reports unknown, not third_party, when the owner could not be read', () => {
+    expect(ownershipOf(null)).toBe('unknown');
+    expect(ownershipOf(undefined)).toBe('unknown');
+    expect(ownershipOf('')).toBe('unknown');
+  });
+
+  it('still identifies our channel and third parties', () => {
+    expect(ownershipOf('Colaberry School Of Data & AI')).toBe('ours');
+    expect(ownershipOf('colaberry school of data & ai')).toBe('ours');
+    expect(ownershipOf('TOK TIK VENTURES')).toBe('third_party');
+  });
+
+  it('agrees with isOurChannel wherever isOurChannel is meaningful', () => {
+    for (const row of corpus) {
+      const owner = row.owner as string | null;
+      if (owner) expect(ownershipOf(owner) === 'ours').toBe(isOurChannel(owner));
+    }
   });
 });
