@@ -3,7 +3,10 @@ const profileFindAll = jest.fn();
 const snapFindOne = jest.fn();
 const snapCreate = jest.fn();
 const readSignals = jest.fn();
-const resolveAccess = jest.fn();
+const hasFullAccessMock = jest.fn();
+const isStaffMock = jest.fn();
+const compIdsMock = jest.fn();
+const enrollmentFindByPk = jest.fn();
 const getSub = jest.fn();
 
 jest.mock('../../../models', () => ({
@@ -15,16 +18,27 @@ jest.mock('../../../models', () => ({
     findOne: (...a: unknown[]) => snapFindOne(...a),
     create: (...a: unknown[]) => snapCreate(...a),
   },
+  Enrollment: { findByPk: (...a: unknown[]) => enrollmentFindByPk(...a) },
+  Cohort: { findByPk: jest.fn().mockResolvedValue(null) },
 }));
 jest.mock('../explorerSignalReader', () => ({
   readLearnerSignals: (...a: unknown[]) => readSignals(...a),
   RECENT_INTENT_WINDOW_DAYS: 14,
 }));
 jest.mock('../../access/contentEntitlement', () => ({
-  resolveContentPageAccess: (...a: unknown[]) => resolveAccess(...a),
+  hasFullCurriculumAccess: (...a: unknown[]) => hasFullAccessMock(...a),
+}));
+// staffAccess and subscriptionService are mocked SEPARATELY because that is
+// where these two helpers actually live - contentEntitlement only imports them.
+// Mocking them off contentEntitlement left the real ones in place, and an
+// undefined activeCompEnrollmentIds threw into the fail-closed catch, which
+// silently produced "not converted" rather than a visible error.
+jest.mock('../../access/staffAccess', () => ({
+  isStaffEnrollment: (...a: unknown[]) => isStaffMock(...a),
 }));
 jest.mock('../../subscriptionService', () => ({
   getSubscription: (...a: unknown[]) => getSub(...a),
+  activeCompEnrollmentIds: (...a: unknown[]) => compIdsMock(...a),
 }));
 jest.mock('../../../config/explorerGrowthFlags', () => {
   const actual = jest.requireActual('../../../config/explorerGrowthFlags');
@@ -57,8 +71,8 @@ function emptyReadout(over: Record<string, unknown> = {}) {
 let profileUpdate: jest.Mock;
 
 beforeEach(() => {
-  [profileFindByPk, profileFindAll, snapFindOne, snapCreate, readSignals, resolveAccess, getSub]
-    .forEach((m) => m.mockReset());
+  [profileFindByPk, profileFindAll, snapFindOne, snapCreate, readSignals, getSub,
+   hasFullAccessMock, isStaffMock, compIdsMock, enrollmentFindByPk].forEach((m) => m.mockReset());
   profileUpdate = jest.fn().mockResolvedValue(undefined);
   profileFindByPk.mockResolvedValue({
     enrollment_id: ENR,
@@ -68,7 +82,10 @@ beforeEach(() => {
     update: profileUpdate,
   });
   readSignals.mockResolvedValue(emptyReadout());
-  resolveAccess.mockResolvedValue({ isStaff: false, hasFullAccess: false });
+  enrollmentFindByPk.mockResolvedValue({ id: ENR, payment_status: 'pending', cohort_id: null });
+  isStaffMock.mockResolvedValue(false);
+  compIdsMock.mockResolvedValue(new Set());
+  hasFullAccessMock.mockReturnValue(false);
   getSub.mockResolvedValue({ subscription: null });
   snapFindOne.mockResolvedValue(null);
   snapCreate.mockResolvedValue({});
@@ -142,7 +159,7 @@ describe('the profile write is column-scoped', () => {
 
 describe('CONVERTED via entitlement OR subscription', () => {
   it('converts on full curriculum access alone', async () => {
-    resolveAccess.mockResolvedValue({ isStaff: false, hasFullAccess: true });
+    hasFullAccessMock.mockReturnValue(true);
     const r = await recomputeExplorerProfile(ENR, { asOf: NOW });
     expect(r.primary_state).toBe('CONVERTED');
   });
@@ -169,7 +186,7 @@ describe('CONVERTED via entitlement OR subscription', () => {
   it('fails CLOSED when entitlement lookup throws — not converted', async () => {
     // Worst case must be a paying learner briefly scored as a prospect, never
     // a prospect wrongly marked converted and dropped from every campaign.
-    resolveAccess.mockRejectedValue(new Error('db down'));
+    enrollmentFindByPk.mockRejectedValue(new Error('db down'));
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     const r = await recomputeExplorerProfile(ENR, { asOf: NOW });
     expect(r.primary_state).not.toBe('CONVERTED');
