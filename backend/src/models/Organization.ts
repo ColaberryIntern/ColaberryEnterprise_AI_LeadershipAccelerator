@@ -33,6 +33,10 @@ export interface OrganizationAttributes {
    * two independent calls, and the "skip" path creates an account with no lead at
    * all, so an org must remain creatable without one.
    */
+  tenant_id?: string | null;
+  brand_id?: string | null;
+  /** enterprise_customer | community_partner | church | nonprofit_partner | client | internal | sponsor */
+  organization_type?: string | null;
   lead_id?: number | null;
   created_at?: Date;
   updated_at?: Date;
@@ -46,6 +50,9 @@ class Organization extends Model<OrganizationAttributes> implements Organization
   declare status: OrganizationStatus;
   declare status_changed_at: Date | null;
   declare status_changed_by: string | null;
+  declare tenant_id: string | null;
+  declare brand_id: string | null;
+  declare organization_type: string | null;
   declare lead_id: number | null;
   declare created_at: Date;
   declare updated_at: Date;
@@ -90,6 +97,13 @@ Organization.init(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    // --- multi-tenant ecosystem context ---------------------------------------
+    // Declared because the DDL adds these columns and Sequelize only touches
+    // attributes the model knows about. A column in Postgres but not here reads
+    // back undefined and silently drops writes.
+    tenant_id: { type: DataTypes.UUID, allowNull: true },
+    brand_id: { type: DataTypes.UUID, allowNull: true },
+    organization_type: { type: DataTypes.STRING(40), allowNull: true },
   },
   {
     sequelize,

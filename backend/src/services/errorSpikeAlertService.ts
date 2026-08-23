@@ -57,6 +57,36 @@ const WARNING_COUNT = 10;
 const CRITICAL_COUNT = 25;
 const WINDOW_HOURS = 1;
 
+/**
+ * Per-event-type thresholds, for the types whose real baseline makes the shared
+ * default meaningless.
+ *
+ * A single global pair assumed every watched type is normally near zero. That
+ * holds for six of the nine (apollo/ghl/basecamp/synthflow and two auth types
+ * recorded ZERO events in the 7 days to 2026-08-22), and is badly wrong for the
+ * auth types below. `admin_auth_failed` averaged 48/hr with a p95 of 121 and a
+ * peak of 176, so a 25 critical fired at severity 5/5 essentially every hour,
+ * around the clock, for as long as the data goes back. The alert that finally
+ * got looked at reported 46 — comfortably BELOW that baseline. An alarm that is
+ * always on is not an alarm; it is a filter that teaches people to ignore the
+ * channel, and it buries the genuine signal it is supposed to carry.
+ *
+ * These are set above the measured p95 so ordinary volume is silent and a real
+ * deviation still pages. They are NOT an endorsement of the baseline: something
+ * is polling with a dead admin token roughly once a minute, and the caller
+ * fields added to `authFailureLog.ts` in the same change exist to find it.
+ * Re-derive these if that baseline is ever driven down.
+ */
+const THRESHOLD_OVERRIDES: Record<string, { warning: number; critical: number }> = {
+  admin_auth_failed: { warning: 150, critical: 250 },
+  participant_auth_failed: { warning: 30, critical: 60 },
+};
+
+/** Thresholds for one event type: its override, else the shared default. */
+export function thresholdsFor(eventType: string): { warning: number; critical: number } {
+  return THRESHOLD_OVERRIDES[eventType] || { warning: WARNING_COUNT, critical: CRITICAL_COUNT };
+}
+
 // ─── Pure Evaluator ─────────────────────────────────────────────────────────
 
 export interface SampleFailure {
@@ -70,10 +100,11 @@ export function evaluateErrorSpike(
   failed: number,
   sample: SampleFailure | null = null,
 ): ErrorSpikeAlert[] {
-  if (failed < WARNING_COUNT) return [];
+  const { warning, critical } = thresholdsFor(eventType);
+  if (failed < warning) return [];
 
   const impactArea = WATCHED_EVENT_TYPES[eventType] || 'unknown';
-  const isCritical = failed >= CRITICAL_COUNT;
+  const isCritical = failed >= critical;
 
   return [{
     type: isCritical ? 'critical' : 'warning',
@@ -114,9 +145,11 @@ export async function checkErrorClassSpikes(): Promise<void> {
     const failed = Number(row.count);
     try {
       // Cheap pre-check (same threshold logic evaluateErrorSpike applies)
-      // before spending a second query fetching the sample failure row.
+      // before spending a second query fetching the sample failure row. Must
+      // use the per-type threshold too, or a high-baseline type fetches a
+      // sample row every run for an alert that is then correctly suppressed.
       let sample: SampleFailure | null = null;
-      if (failed >= WARNING_COUNT) {
+      if (failed >= thresholdsFor(eventType).warning) {
         const latest = await AiEvent.findOne({
           where: { event_type: eventType, outcome: 'failure', created_at: { [Op.gte]: since } },
           order: [['created_at', 'DESC']],

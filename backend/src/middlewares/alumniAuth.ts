@@ -34,7 +34,7 @@ export function requireAlumni(req: Request, res: Response, next: NextFunction): 
     req.alumni = payload;
     next();
   } catch (err) {
-    logAuthFailure('alumni_auth_failed', err, 'alumni', req.ip);
+    logAuthFailure('alumni_auth_failed', err, 'alumni', req.ip, req);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

@@ -55,7 +55,10 @@ describe('requireAdmin', () => {
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
-    expect(mockLogAuthFailure).toHaveBeenCalledWith('admin_auth_failed', expect.objectContaining({ name: 'TokenExpiredError' }), 'admin', '198.51.100.7');
+    // The request itself is now passed through so the caller can be identified:
+    // req.ip is the Cloudflare edge, and the forwarded chain is the only place
+    // the real client appears. See authFailureLog.describeCaller.
+    expect(mockLogAuthFailure).toHaveBeenCalledWith('admin_auth_failed', expect.objectContaining({ name: 'TokenExpiredError' }), 'admin', '198.51.100.7', req);
   });
 
   it('boundary: a valid token with an insufficient role 403s and does not call logAuthFailure', () => {
