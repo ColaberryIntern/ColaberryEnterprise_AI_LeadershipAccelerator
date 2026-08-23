@@ -653,7 +653,7 @@ deployed.
       stated explicitly rather than left to be discovered
 - [ ] No secrets and no student PII in anything written down; refer to students by
       enrollment id in artefacts that leave the session
-- [ ] `PROGRESS.md` updated with a Session ID and verification evidence, per `CLAUDE.md`'s
+- [ ] `docs/sessions/CC-<id>.md` updated with verification evidence, per `CLAUDE.md`'s
       hard gate — if code changed
 - [ ] `tsc --noEmit` clean on both stacks if code changed
 - [ ] If a new failure mode was found, it is added to

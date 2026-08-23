@@ -93,11 +93,17 @@ approval. `staging` is intentionally unprotected so Kes can merge into it freely
 > hard "restrict who can push to `main`" control is not available. The review gate
 > above is the enforcement: Ali is the approver, therefore Ali is the gate.
 
-## PROGRESS.md conflicts, and why GitHub still says CONFLICTING
+## PROGRESS.md conflicts (RESOLVED 2026-08-23 — kept for branches cut before the cutover)
 
-`CLAUDE.md` makes a PROGRESS.md entry a hard gate on every change, so nearly every PR
-touches the same append region of the same file. With several Claude sessions open at
-once those regions collide constantly.
+> **This class of conflict is fixed.** Sessions no longer share an append region: each
+> writes its own `docs/sessions/CC-<YYYYMMDD>-<id>.md`, and `PROGRESS.md` is a sealed
+> archive nothing appends to. See "The structural fix, taken 2026-08-23" at the end of
+> this section. The diagnosis below is retained because long-lived branches cut before
+> the cutover still carry `PROGRESS.md` edits and can still hit it.
+
+`CLAUDE.md` used to make a PROGRESS.md entry a hard gate on every change, so nearly every
+PR touched the same append region of the same file. With several Claude sessions open at
+once those regions collided constantly.
 
 `.gitattributes` sets `PROGRESS.md merge=union` to deal with that. **It only works
 locally.** Git runs merge drivers on your machine; GitHub does not run them
@@ -151,11 +157,24 @@ a single new approval, rather than pay the approval cost thirteen times.
 - If several approved PRs are already stranded, compose them onto one integration
   branch and request one approval. Do not re-push the individual branches.
 
-### The deeper fix, not taken here
+### The structural fix, taken 2026-08-23
 
-The structural cure is to stop routing every session's progress log through one shared
-append region — for example one file per session under `docs/sessions/`, with
-`PROGRESS.md` reduced to an index. That changes a `CLAUDE.md` hard gate and the
-end-of-session audit protocol, which is a governance decision for the DRI rather than
-something to slip into a merge-plumbing PR. Recorded here so the next person hitting
-this does not have to rediscover it.
+The cure proposed here — stop routing every session's progress log through one shared
+append region — was approved by the DRI and shipped.
+
+- **Live log:** `docs/sessions/CC-<YYYYMMDD>-<id>.md`, one file per session. Two sessions
+  cannot collide on a file only one of them ever opens, so concurrent-instance safety is
+  now structural rather than honour-system.
+- **`PROGRESS.md`:** frozen in place as a sealed archive with a header stating the
+  cutover. Deliberately NOT split into per-session files — that would have been a ~5 MB
+  single-commit rewrite repointing every archive `git blame` at the migration commit, for
+  no operational gain, since the problem was only ever about future writes.
+- **Also changed in the same commit:** `CLAUDE.md`'s hard gate and session protocol,
+  `scripts/generateSessionChangelog.js` (reads the per-session file; now exits 1 rather
+  than rendering an empty report), `.claude/hooks/session-end-progress-audit.sh` (counts
+  real entries instead of passing vacuously), `scripts/prAutoMerge.js` (marker guard
+  widened to `docs/sessions/`), and `.claude/workflows/pr-approval-review.js` (accepts a
+  session log instead of flagging every PR).
+
+`PROGRESS.md merge=union` is retained in `.gitattributes` only until branches predating
+the cutover drain.

@@ -20,7 +20,7 @@ production, verify it, and teach me exactly how to test it."
 - PLAN tasks (illustrative): baseline verification -> Sequelize model/migration for
   onboarding state (idempotent, per CLAUDE.md) -> Zod-validated route -> service layer
   -> React page + route wiring -> unit tests (happy/failure/boundary/idempotency per
-  CLAUDE.md Mandatory Test Types) -> `tsc --noEmit` both stacks -> PROGRESS.md entry ->
+  CLAUDE.md Mandatory Test Types) -> `tsc --noEmit` both stacks -> session-log entry ->
   deploy -> live smoke test -> `handoff.md`.
 - Deploy: `docker compose -f docker-compose.production.yml up -d --build backend
   frontend` after PR merge to `main`.

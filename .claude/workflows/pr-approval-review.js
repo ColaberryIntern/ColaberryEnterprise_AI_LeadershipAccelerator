@@ -71,7 +71,7 @@ const VERDICT_SCHEMA = {
 
 // ---- reviewer prompts ----------------------------------------------------
 const GOV_DIGEST = `CLAUDE.md governance gates that apply to this repo:
-- PROGRESS.md HARD GATE: any commit touching /backend /frontend /scripts /nginx /directives MUST also update PROGRESS.md with an entry carrying a Session ID (CC-YYYYMMDD-xxxx), a "Verification:" line with concrete evidence (test name | deploy | "tsc passes" | "user confirmed"), and only [x] when that evidence exists.
+- PROGRESS HARD GATE: any commit touching /backend /frontend /scripts /nginx /directives /docs MUST also add or update THIS SESSION'S progress log — docs/sessions/CC-YYYYMMDD-xxxx.md — with an entry carrying a "Verification:" line with concrete evidence (test name | deploy | "tsc passes" | "user confirmed"), and only [x] when that evidence exists. Since 2026-08-23 the log is ONE FILE PER SESSION, named for the Session ID; the root PROGRESS.md is a SEALED ARCHIVE and a PR is NOT expected to touch it. A PR that adds docs/sessions/CC-*.md satisfies this gate. Do NOT raise a finding merely because PROGRESS.md is absent from the diff.
 - Idempotency (NON-NEGOTIABLE): every new script/worker/webhook/side-effecting service must be safe to run twice. Mandrill sends dedup on (recipient,subject,business_event_id); Basecamp todo create checks existing first; webhook writes use unique constraint + ON CONFLICT; lead capture dedups on (email,source).
 - Secrets: none in source/history/logs. No hardcoded hostnames/tokens/keys.
 - Tests: new business logic in services/intelligence ships with at least a happy-path unit test.
@@ -102,7 +102,7 @@ function governancePrompt(pr) {
 Fetch: gh pr view ${pr} -R ${REPO} --json files,title  and  gh pr diff ${pr} -R ${REPO}
 ${GOV_DIGEST}
 Check THIS PR against those gates. Concretely:
-- Does the PR touch /backend /frontend /scripts /nginx /directives? If yes, does the diff also update PROGRESS.md with a Session-ID-tagged entry that has a Verification line? (Look for PROGRESS.md in the changed files and inspect the added lines.) If it touches those dirs and does NOT update PROGRESS.md, that is a 'major' governance finding.
+- Does the PR touch /backend /frontend /scripts /nginx /directives /docs (excluding docs/sessions/ itself)? If yes, does the diff also add or update a session log at docs/sessions/CC-YYYYMMDD-xxxx.md whose entries carry a Verification line? (Look for a docs/sessions/CC-*.md file in the changed files and inspect the added lines.) If it touches those dirs and adds NO such session log, that is a 'major' governance finding. IMPORTANT: the root PROGRESS.md was sealed as a read-only archive on 2026-08-23 — its absence from the diff is CORRECT and must NOT be reported as a finding.
 - Any new script/worker/webhook/email-send that is not idempotent? cite it.
 - Any secret/token/hostname hardcoded in the diff? that is a 'blocker'.
 - New service/intelligence logic without an accompanying test? 'major'.
