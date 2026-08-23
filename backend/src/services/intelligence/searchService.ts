@@ -8,6 +8,7 @@
 import { Op } from 'sequelize';
 import GraphNode from '../../models/GraphNode';
 import GraphEdge from '../../models/GraphEdge';
+import { IntelligenceScope, graphScopeWhere } from '../../modules/tenancy/intelligenceScope';
 
 const TYPE_HINTS: Array<[RegExp, string]> = [
   [/student|learner|architect[- ]?ready|at[- ]?risk/, 'Student'],
@@ -28,12 +29,20 @@ function intent(q: string): { node_type?: string; keyword: string } {
   return { node_type: hit?.[1], keyword };
 }
 
-export async function globalSearch(q: string) {
+/**
+ * Global search over the Memory Graph, scoped to what the caller may see.
+ *
+ * `scope` is REQUIRED rather than optional-with-a-default. An optional scope would mean
+ * every future caller that forgets it silently searches the whole ecosystem, which is
+ * the exact bug this parameter exists to prevent. Callers with no tenants get
+ * `emptyScope()`, which matches nothing.
+ */
+export async function globalSearch(q: string, scope: IntelligenceScope) {
   const query = (q || '').trim();
   if (!query) return { query, count: 0, results: [], interpreted: null };
   const { node_type, keyword } = intent(query);
 
-  const where: any = {};
+  const where: any = { ...graphScopeWhere(scope) };
   if (node_type) where.node_type = node_type;
   if (keyword.length >= 2) where.label = { [Op.iLike]: `%${keyword}%` };
   else if (!node_type) where.label = { [Op.iLike]: `%${query}%` };

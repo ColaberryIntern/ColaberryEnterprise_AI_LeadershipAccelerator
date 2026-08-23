@@ -9,6 +9,12 @@ import { Op } from 'sequelize';
 import GraphNode from '../../models/GraphNode';
 import GraphEdge from '../../models/GraphEdge';
 import GraphEvent from '../../models/GraphEvent';
+import {
+  IntelligenceScope,
+  graphScopeWhere,
+  scopeAllows,
+  assertSameTenant,
+} from '../../modules/tenancy/intelligenceScope';
 
 export async function upsertNode(node_type: string, entity_id: string, label: string, metadata: any = {}, opts: { owner?: string; trust_score?: number; status?: string } = {}) {
   const [node, created] = await GraphNode.findOrCreate({
@@ -19,8 +25,20 @@ export async function upsertNode(node_type: string, entity_id: string, label: st
   return node;
 }
 
+/**
+ * Create an edge between two nodes, refusing to cross a tenant boundary.
+ *
+ * Checked at WRITE time, not read time. Once a CPN node and an AI Flotation node are
+ * joined, any traversal from either side crosses the boundary and no read filter can
+ * undo it. Two unclassified nodes may still be related -- that is the entire existing
+ * graph, and refusing it would break every current write.
+ */
 export async function relate(from_id: string, to_id: string, edge_type: string, opts: { strength?: number; confidence?: number; evidence?: any } = {}) {
   if (from_id === to_id) return null;
+
+  const [fromNode, toNode] = await Promise.all([GraphNode.findByPk(from_id), GraphNode.findByPk(to_id)]);
+  if (!fromNode || !toNode) return null;
+  assertSameTenant(fromNode.tenant_id, toNode.tenant_id);
   const [edge, created] = await GraphEdge.findOrCreate({
     where: { from_id, to_id, edge_type },
     defaults: { from_id, to_id, edge_type, strength: opts.strength ?? 1, confidence: opts.confidence ?? 0.8, evidence: opts.evidence ?? [] },
@@ -41,9 +59,13 @@ export async function findNode(node_type: string, entity_id: string) {
 }
 
 /** A node + its immediate neighborhood (in + out edges, resolved to nodes). */
-export async function neighbors(id: string) {
+export async function neighbors(id: string, scope: IntelligenceScope) {
   const node = await GraphNode.findByPk(id);
-  if (!node) throw Object.assign(new Error('Node not found'), { status: 404 });
+  // 404 rather than 403 for a node in another tenant: a 403 confirms the node exists,
+  // which turns id enumeration into a discovery tool for another tenant's memory.
+  if (!node || !scopeAllows(scope, node.tenant_id)) {
+    throw Object.assign(new Error('Node not found'), { status: 404 });
+  }
   const edges = await GraphEdge.findAll({ where: { [Op.or]: [{ from_id: id }, { to_id: id }] }, limit: 200 });
   const otherIds = Array.from(new Set(edges.map((e) => (e.from_id === id ? e.to_id : e.from_id))));
   const others = otherIds.length ? await GraphNode.findAll({ where: { id: { [Op.in]: otherIds } } }) : [];
@@ -58,14 +80,28 @@ export async function neighbors(id: string) {
   };
 }
 
-export async function nodesByType(node_type: string, limit = 100) {
-  const rows = await GraphNode.findAll({ where: { node_type }, order: [['updated_at', 'DESC']], limit });
+export async function nodesByType(node_type: string, scope: IntelligenceScope, limit = 100) {
+  const rows = await GraphNode.findAll({
+    where: { ...graphScopeWhere(scope), node_type },
+    order: [['updated_at', 'DESC']],
+    limit,
+  });
   return rows.map((r) => r.toJSON());
 }
 
-export async function graphStats() {
-  const nodes = await GraphNode.findAll({ attributes: ['node_type'] });
-  const edges = await GraphEdge.findAll({ attributes: ['edge_type'] });
+/**
+ * Counts, scoped.
+ *
+ * Even an aggregate leaks: "AI Flotation has 40 Client nodes" tells a CPN operator
+ * something about a tenant they cannot otherwise see. Edges are counted through the
+ * nodes they touch rather than directly, because edges carry no tenant of their own by
+ * design -- see intelligenceScope.ts.
+ */
+export async function graphStats(scope: IntelligenceScope) {
+  const nodes = await GraphNode.findAll({ where: graphScopeWhere(scope), attributes: ['id', 'node_type'] });
+  const visibleIds = new Set(nodes.map((n) => n.id));
+  const allEdges = await GraphEdge.findAll({ attributes: ['edge_type', 'from_id', 'to_id'] });
+  const edges = allEdges.filter((e) => visibleIds.has(e.from_id) || visibleIds.has(e.to_id));
   const nodeBy: Record<string, number> = {};
   nodes.forEach((n) => { nodeBy[n.node_type] = (nodeBy[n.node_type] || 0) + 1; });
   const edgeBy: Record<string, number> = {};
