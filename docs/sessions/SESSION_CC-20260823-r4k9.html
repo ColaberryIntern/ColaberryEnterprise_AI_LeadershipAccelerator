@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260823-r4k9 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Sunday, August 23, 2026 at 4:23 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">9 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**16 discovery documents establishing the repository truth map**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`docs/architecture/refactored-delivery-os/` — 16 documents, 3,191 lines: `CURRENT_STATE`, `DOMAIN_REUSE_MAP`, `DATA_OWNERSHIP_MATRIX`, `AUTHORIZATION_MATRIX`, `SBP_INTEGRATION_MAP`, `EXECUTION_CAPABILITY_MAP`, `EVIDENCE_INTEGRATION_MAP`, `CLIENT_PORTAL_MAP`, `CASE_STUDY_INTEGRATION_MAP`, `ROUTE_IMPACT`, `SCHEMA_CONFLICTS`, `MIGRATION_STRATEGY`, `TARGET_ARCHITECTURE` (14 Mermaid diagrams), `TEST_PLAN`, `BASELINE_TEST_RESULTS`, `IMPLEMENTATION_STATUS`. **No feature code** — the gate forbids it, and the branch contains none.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">all 13 Gate 0 questions from the master plan answered with file-and-line evidence in `CURRENT_STATE.md` §10; a verification-evidence table mapping every load-bearing claim to the command that proved it is in `IMPLEMENTATION_STATUS.md`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">of 34 required capabilities, **9 are pure reuse, 12 are extensions of something real, and 13 are genuinely new** — the plan is roughly one third greenfield, which is a materially different project from what &quot;build an AI Delivery OS&quot; implies.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Worked against `origin/main`, not the requested checkout**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">created an external worktree `C:/Users/ali_m/refactored-os-wt` off `origin/main` rather than editing the OneDrive tree the request arrived in.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`git rev-list --left-right --count origin/main...HEAD` → **`2722  76`**. Path-by-path `git cat-file -e` confirmed every `docs/architecture/multi-tenancy/*`, `docs/BUILD_PIPELINE_*`, `docs/REPO_CONNECT_CONTRACT.md` and `backend/src/services/sbp/*` path the plan names is **absent from that checkout and present on main**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**This is the finding that justifies the gate existing.** `buildPlanIngestService.ts` — named in master plan §2.3 as a service to trace and reuse — exists **only** in the stale checkout and on no commit of `main`. A plan written by reading that tree would have been designed around a service that has not existed for thousands of commits, and nothing about reading it would have felt wrong. The multi-tenancy Gate 0 hit the same thing at 2,586 commits behind; this is the second occurrence, so `MIGRATION_STRATEGY.md` §1 records it as a standing rule rather than an anecdote.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Confirmed `Project` cannot generalize, and found the same trap one level up**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">documented as C-01 and C-02 in `SCHEMA_CONFLICTS.md`, with the recommended `DeliveryProject` + optional-source-link structure that leaves `Project` untouched.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`models/Project.ts:98-109` — `enrollment_id` and `program_id` both `allowNull: false`, `program_id` FK&#39;d to `program_blueprints`. **32 files** read or write `Project` (ripgrep across `backend/src`), all assuming an enrollment exists. `models/Organization.ts:72-77` — `owner_enrollment_id` is `allowNull: false, unique: true` with an FK to `enrollments`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the `Project` constraint the master plan predicted (§2.2). The `Organization` one **it does not mention**, and it blocks commercial delivery just as hard: §6 hangs the entire ownership chain `Tenant → Brand → Organization → DeliveryEngagement` off a table that today models &quot;a manager&#39;s management account&quot; and cannot exist without a student enrollment. An external client company with an acceptance owner who never enrolled cannot be represented. Escalated as ESC-1.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Verified multi-tenancy Gate 5 is genuinely open, not stale documentation**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">recorded as ESC-2 and as a hard Gate 1 prerequisite in `MIGRATION_STRATEGY.md` §6.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`grep -c &quot;tenant_id&quot; services/orgService.ts services/adminOrgService.ts` → **`0` and `0`**. Neither org service filters by tenant.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the multi-tenancy work deferred this deliberately and said so, reasoning that every organization today is Colaberry Enterprise so scoping changes no behaviour. That was correct when made and **expires the moment this plan creates an AI Flotation client org**. It belongs to that workstream, not this one — raising it rather than silently absorbing it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Mapped the execution plane: less missing than expected, one security finding**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`EXECUTION_CAPABILITY_MAP.md` — provider contracts, the default-deny enforcement table, and findings E-01/S-01/E-03.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no `@anthropic-ai/claude-code`, no Agent SDK, no `claude-code`/`ClaudeCode` symbol in `backend/src` or `frontend/src` (only `@anthropic-ai/sdk ^0.106.0`). No `bull`/`bullmq`/`agenda`; scheduling is `node-cron ^4.2.1` plus two in-process queues. `services/previewStackService.ts` (398 lines) already provisions isolated per-project docker-compose workspaces cloned from a user&#39;s own repo, with lifecycle on `PreviewStack`/`PreviewEvent`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**S-01** — that service&#39;s stated assumption is the Docker socket mounted into the backend container, which also serves public HTTP. Docker socket access is root-equivalent on the host, so the isolation boundary protecting client repositories is one API call wide behind an internet-facing process. Today&#39;s blast radius is students&#39; own repos; Gate 8&#39;s would be client source under commercial and government contracts. **Three of the eight default-deny rules in master plan §Gate 8 are unenforceable until this is decided.** Recommendation: GitHub Actions runner for MVP — of the three shapes the plan permits, the only one that requires no new isolation code to be correct.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Found the approval and risk model the plan proposes already exists**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`AUTHORIZATION_MATRIX.md` maps master plan Gate 2&#39;s R0–R5 onto the live vocabulary instead of defining a parallel one, and specifies the full 13-role × 13-permission grid alongside the tenant-then-delivery guard order.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`services/agentAutonomy.ts:65` carries the comment &quot;per-action R0-R4 risk tier (already on `tickets.risk_tier` / `work_ledger_events.risk_tier`)&quot;. `models/ApprovalRequest.ts` has `risk_tier`, `autonomy_level`, `prepared_action`, `approval_scope`, `expires_at`, `decided_by`, and `ApprovalStatus = &#39;shadow_logged&#39; | &#39;pending&#39; | &#39;approved&#39; | &#39;rejected&#39; | &#39;expired&#39;`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">only R5 is missing. More useful: `shadow_logged` means the platform already knows how to run an authorization model in observe-only mode, recording what it *would* have decided before enforcing. Gate 2 should ship that way, which also makes adding R5 to a live ops-agent authorization path safe.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**Baseline gate captured before any work, with the compiler version pinned**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`BASELINE_TEST_RESULTS.md`, plus the per-checkpoint regression contract naming the four SBP assertions that act as tripwires.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `tsc --noEmit` under **TypeScript 5.9.3 invoked by explicit path** — **2 errors, both `Cannot find module &#39;@anthropic-ai/sdk&#39;`**, the known artifact of junctioning `node_modules` from a donor whose install predates that dependency; **zero real `src/` errors**. Jest on `src/services/sbp/__tests__` + `src/modules/tenancy/__tests__`: **50 of 51 suites, 879 tests passed**, 5 skipped, 1 failed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the compiler version is recorded because a bare `npx tsc` from `backend/` resolves the root-hoisted **4.9.5**, which can report zero `src/` errors while never having properly checked them — a false clean, not a gate. The single failure is `docsBundle.studentFiles` hitting Jest&#39;s default 5,000 ms per-test timeout under parallel load; **re-run in isolation it passes 8/8 in 8.3 s**, so it is environmental and is recorded as D-09 rather than re-run into a green number. Playwright is reported as **not executed** — no running stack, no staging credentials — never as passing.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>**Read the canonical Trust Before Intelligence book — D-04 closed**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `TRUST_BEFORE_INTELLIGENCE_INTEGRATION.md`; corrected the D-04 caveat in `DOMAIN_REUSE_MAP.md`, the layer names and warning box in `TARGET_ARCHITECTURE.md` diagram 7, and the Gate 5 row in `TEST_PLAN.md`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">read `manuscript/` at `main` of `colaberry/trust-before-intelligence-book` (public) — chapters 2 (INPACT), 4/5/6 (the seven layers) and 7 (GOALS). Confirmed the master plan&#39;s vocabulary is correct, and that the book&#39;s canonical layer names are fuller than the plan&#39;s shorthand: **Layer 1 Multi-Modal Storage**, **Layer 2 Real-Time Data**. `archive/` holds superseded drafts and is explicitly not the source.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the plan&#39;s caution inverted the real finding.** It says &quot;do not invent scores if the book does not define them&quot; — the book **does** define them, exactly: INPACT is **1–6 per dimension** (36 max, reported on a 100-point scale), GOALS is **1–5 per dimension** (25 max) on a named maturity ladder (Absent/Basic/Developing/Proficient/Advanced). So the risk was never inventing a score, it was inventing a *different* one and quietly diverging from the framework Colaberry sells. Two further constraints surfaced: the INPACT dependency order (Instant → Natural+Permitted → Contextual → Adaptive+Transparent) is a **build constraint** — a story graph scheduling Adaptive before Instant is invalid, not merely ambitious; and GOALS must be stored as five separate scores, never averaged, because averaging hides the single-dimension collapse the framework exists to catch. The book also ties minimum GOALS thresholds to regulation (EU AI Act 2024/1689 Arts. 9–15, NIST AI RMF), which is the shape `DeliveryProfile` should take at Gate 13 — thresholds, not a compliance claim. **Still unread:** Chapter 9 (`measuring_agent_readiness`, fetch timed out) and the appendix scoring methodology — both needed before the assessment UI is built.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**Recorded ESC-1 decision: relax `Organization.owner_enrollment_id` (Option A)**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">decision recorded in `IMPLEMENTATION_STATUS.md` ESC-1, `SCHEMA_CONFLICTS.md` C-02 and `MIGRATION_STRATEGY.md` §5. **No schema code written** — this is Gate 1 work and Gate 1 remains blocked on ESC-2.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">n/a — a decision record, not an implementation.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Ali approved Option A on 2026-08-23. Conditions carried into Gate 1: existing rows keep their owner and FK (it is a relaxation, so nothing currently valid becomes invalid); every read path in `orgService`/`adminOrgService` assuming a non-null owner must be null-guarded in the same change; `organization_type` becomes the discriminator with existing rows backfilled to the management-account value. **Not cleanly reversible** — once a client org exists, re-adding `NOT NULL UNIQUE` fails. This decision makes ESC-2 *more* urgent rather than less: the moment `organizations` can hold a client company, an unscoped `orgService` is a real cross-tenant read path rather than a theoretical one.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260823-r4k9.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
