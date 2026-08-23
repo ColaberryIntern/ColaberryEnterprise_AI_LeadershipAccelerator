@@ -27,11 +27,18 @@ jest.mock('../explorerSignalReader', () => ({
 }));
 jest.mock('../../access/contentEntitlement', () => ({
   hasFullCurriculumAccess: (...a: unknown[]) => hasFullAccessMock(...a),
+}));
+// staffAccess and subscriptionService are mocked SEPARATELY because that is
+// where these two helpers actually live - contentEntitlement only imports them.
+// Mocking them off contentEntitlement left the real ones in place, and an
+// undefined activeCompEnrollmentIds threw into the fail-closed catch, which
+// silently produced "not converted" rather than a visible error.
+jest.mock('../../access/staffAccess', () => ({
   isStaffEnrollment: (...a: unknown[]) => isStaffMock(...a),
-  activeCompEnrollmentIds: (...a: unknown[]) => compIdsMock(...a),
 }));
 jest.mock('../../subscriptionService', () => ({
   getSubscription: (...a: unknown[]) => getSub(...a),
+  activeCompEnrollmentIds: (...a: unknown[]) => compIdsMock(...a),
 }));
 jest.mock('../../../config/explorerGrowthFlags', () => {
   const actual = jest.requireActual('../../../config/explorerGrowthFlags');
