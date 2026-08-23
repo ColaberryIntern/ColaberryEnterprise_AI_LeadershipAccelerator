@@ -5,10 +5,22 @@
 // 404 path is gone.
 const path = require('path');
 const fs = require('fs');
+// The digest-action tokens minted below are signed with the platform's live
+// JWT signing key — the same key that signs every session token. It is read
+// from the environment and must never be written into this file: a signing key
+// committed to a public repo is a full authentication bypass for every user,
+// including admins. Checked before the heavy requires so a missing variable
+// fails on the configuration, not on a module load several seconds later.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set.');
+  console.error('This script signs admin digest-action tokens and cannot run without the real signing key.');
+  console.error('Run it as: JWT_SECRET=<value> node backend/src/scripts/verifyInboxCosDigestFlow.js');
+  process.exit(1);
+}
+
 const jwt = require(path.resolve(__dirname, '../../../node_modules/jsonwebtoken'));
 const { chromium } = require(path.resolve(__dirname, '../../../node_modules/playwright'));
-
-const JWT_SECRET = '97004a53b229259d75f702785aa34808efe8b9b6f4f653cf3e09cd91533d94f04b43b03689332671249c069d60e34cfcf137abe3b92473ffc730883772679c4c';
 const BASE = 'https://enterprise.colaberry.ai';
 const OUT = path.resolve(__dirname, '../../../docs/screenshots/2026-06-01-inbox-cos-fix');
 

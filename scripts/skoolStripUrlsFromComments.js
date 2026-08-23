@@ -4,8 +4,15 @@ const path = require('path');
 
 const RESPONSES = JSON.parse(fs.readFileSync(path.join(__dirname, '.skool_at_risk.json'), 'utf8'));
 
-const SKOOL_EMAIL = process.env.SKOOL_EMAIL || 'ali_muwwakkil@hotmail.com';
-const SKOOL_PASSWORD = process.env.SKOOL_PASSWORD || 'ali00250025';
+const SKOOL_EMAIL = process.env.SKOOL_EMAIL || 'ali@colaberry.com';
+// No fallback: the password used to be a literal default here, which published
+// it to a public repo. Absent means stop, not "try a guess".
+const SKOOL_PASSWORD = process.env.SKOOL_PASSWORD;
+if (!SKOOL_PASSWORD) {
+  console.error('FATAL: SKOOL_PASSWORD is not set.');
+  console.error('This script signs in to Skool and cannot run without it.');
+  process.exit(1);
+}
 
 function stripUrls(body, category) {
   // Strategy: keep ONLY the personal opener (first 1-2 sentences that reference the author),
