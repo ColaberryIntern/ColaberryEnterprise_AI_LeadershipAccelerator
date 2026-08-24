@@ -413,7 +413,7 @@ describe('workforceOrgChartResponseSchema — boundary', () => {
   // block isn't in T007's own diff hunks, so it's easy to miss scoping to
   // just the new lines).
   const VALID_HUMAN = { id: 'h1', name: 'Ali', email: 'ali@colaberry.com', team: 'Exec', department: 'Exec', role: 'manager', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null };
-  const VALID_LEADERSHIP = { id: 'l1', agent_name: 'CoryBrain', display_name: 'Cory Brain', reports_to_human_id: 'h1', reports_to_summary: 'Reports to: Ali', staff_ids: [], open_ticket_count: 0, hierarchy_color: null };
+  const VALID_LEADERSHIP = { id: 'l1', agent_name: 'CoryBrain', display_name: 'Cory Brain', reports_to_human_id: 'h1', reports_to_summary: 'Reports to: Ali', staff_ids: [], open_ticket_count: 0, hierarchy_color: null, enabled: true };
   const VALID_RESPONSE = {
     organization: { id: 'org1', name: 'Colaberry' },
     humans: [VALID_HUMAN],
