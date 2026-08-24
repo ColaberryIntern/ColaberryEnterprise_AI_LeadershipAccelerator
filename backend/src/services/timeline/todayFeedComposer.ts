@@ -322,28 +322,41 @@ async function completedCardIds(enrollmentId: string, cardIds: string[]): Promis
  * the gate could never be satisfied, and the button never appeared. Half of a
  * sampled 40-item feed was dead this way.
  *
- * A card MISSING from the result set is also unservable: `findByPk` in every
- * action handler would 404 on it too.
- *
  * Uses the shared {@link isCardServable} predicate rather than its own
  * `!== 'published'` — one rule, consulted by both the read side and the write
  * side, because two copies drifting apart is what produced this bug.
  *
- * Batched, and fail-soft in the SAFE direction: on error nothing is dropped, so
- * a database blip degrades to today's behaviour instead of emptying the feed.
+ * POSITIVE IDENTIFICATION ONLY, and this is the important part. A card is
+ * dropped when a row came back and that row says it is not servable. A card
+ * whose row is simply ABSENT from the result is treated as UNKNOWN and KEPT —
+ * absence is never read as a verdict.
+ *
+ * The first cut of this function did infer "missing row ⇒ unservable", on the
+ * reasoning that `findByPk` in the action handlers would 404 on it anyway. That
+ * was wrong, and an existing test caught it: `Model.findAll` routes through
+ * `sequelize.query`, so anything that intercepts or perturbs that layer yields
+ * an empty result set, and the inference silently converted it into "every card
+ * is dead" — `todayFeedComposer.suppressionSharedPath` went from `["card:kept"]`
+ * to `[]`. The asymmetry decides it: keeping a vanished card costs the student a
+ * 404 they already get today, while dropping a live one costs them real content
+ * for no reason. So only a row that positively states a non-published
+ * visibility is allowed to remove anything.
+ *
+ * Batched, and fail-soft in the same safe direction: on error nothing is
+ * dropped, so a database blip degrades to today's behaviour rather than
+ * emptying the student's landing page.
  */
 async function unservableCardIds(cardIds: string[]): Promise<Set<string>> {
   const ids = Array.from(new Set(cardIds.filter((x): x is string => !!x)));
   if (!ids.length) return new Set();
   try {
     const rows = await TimelineCard.findAll({ where: { id: ids }, attributes: ['id', 'visibility'] });
-    const servable = new Set(
+    return new Set(
       rows
         .map((r) => r.get({ plain: true }) as { id: string; visibility: string | null })
-        .filter((r) => isCardServable(r.visibility))
+        .filter((r) => !isCardServable(r.visibility))
         .map((r) => r.id),
     );
-    return new Set(ids.filter((id) => !servable.has(id)));
   } catch (err: any) {
     console.warn('[todayFeedComposer] servable lookup failed:', err?.message?.split('\n')[0]);
     return new Set();

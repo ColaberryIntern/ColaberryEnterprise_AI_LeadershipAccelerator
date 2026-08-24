@@ -125,14 +125,31 @@ it('drops draft and scheduled cards too — the rule is an allow-list, not just 
   expect(page.items.map((i) => i.ref)).toEqual(['card:card-live']);
 });
 
-it('drops a card whose row has VANISHED entirely (findByPk in every action handler would 404 on it)', async () => {
+it('KEEPS a card whose row is absent from the lookup — absence is unknown, never a verdict', async () => {
   seedCard(0, 'card-live');
-  seedCard(1, 'card-deleted');
-  mockFindAll.mockResolvedValue([mkCardRow('card-live', 'published')]); // 'card-deleted' simply absent
+  seedCard(1, 'card-absent');
+  mockFindAll.mockResolvedValue([mkCardRow('card-live', 'published')]); // 'card-absent' simply not returned
 
   const page = await getTodayPage('enr-1', 0, 10);
 
-  expect(page.items.map((i) => i.ref)).toEqual(['card:card-live']);
+  // Deliberate, and the safer of the two readings. An earlier cut inferred
+  // "missing row ⇒ unservable"; because Model.findAll routes through
+  // sequelize.query, anything that perturbs that layer returns an empty set and
+  // the inference wiped the whole feed — it turned todayFeedComposer.
+  // suppressionSharedPath's ["card:kept"] into []. Keeping a vanished card costs
+  // a 404 the student already gets; dropping a live one costs them real content.
+  // Only a row that positively says "not published" may remove anything.
+  expect(page.items.map((i) => i.ref)).toEqual(['card:card-live', 'card:card-absent']);
+});
+
+it('drops NOTHING when the lookup returns no rows at all, rather than emptying the feed', async () => {
+  seedCard(0, 'card-a');
+  seedCard(1, 'card-b');
+  mockFindAll.mockResolvedValue([]);
+
+  const page = await getTodayPage('enr-1', 0, 10);
+
+  expect(page.items.map((i) => i.ref)).toEqual(['card:card-a', 'card:card-b']);
 });
 
 it('does NOT touch non-card items — ambient blog/podcast refs have no card_id and are unaffected', async () => {
