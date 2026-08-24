@@ -8,7 +8,7 @@
 import portalApi from '../utils/portalApi';
 
 export type CareerEvidenceLevel = 'none' | 'resume' | 'colaberry_verified' | 'delivery_verified';
-export type CareerAccessState = 'needs_resume' | 'ready';
+export type CareerAccessState = 'baseline_missing' | 'ready';
 
 export interface CareerIdentity {
   full_name: string;

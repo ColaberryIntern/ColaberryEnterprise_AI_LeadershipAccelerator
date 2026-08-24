@@ -90,11 +90,13 @@ export function computeReadiness(
     },
     {
       key: 'resume_uploaded',
-      label: 'Resume uploaded',
+      // Students do not know a LinkedIn PDF export IS a resume here — the uploader
+      // accepts application/pdf and the parser treats it the same. Say so.
+      label: 'Resume or LinkedIn PDF uploaded',
       weight: 15,
       required: true,
       met: !!identity.resume,
-      detail: identity.resume ? identity.resume.file_name : 'No resume uploaded',
+      detail: identity.resume ? identity.resume.file_name : 'Upload a resume, or export your LinkedIn profile to PDF and upload that',
     },
     {
       key: 'profile_title',
@@ -110,7 +112,12 @@ export function computeReadiness(
       weight: 5,
       required: false,
       met: !!identity.linkedin_url?.trim(),
-      detail: identity.linkedin_url?.trim() || 'No LinkedIn URL',
+      // "No LinkedIn URL" was confusing for a real learner (Ali, 2026-08-24) whose
+      // Settings page visibly showed one: Settings PREFILLS the field from the parsed
+      // resume but only persists on "Save changes", so the field looks filled while
+      // onboarding_profiles.linkedin_url is still NULL. Name the actual next action.
+      detail: identity.linkedin_url?.trim()
+        || 'Not saved yet — add it in Settings and press Save changes',
     },
     {
       key: 'verified_capabilities',

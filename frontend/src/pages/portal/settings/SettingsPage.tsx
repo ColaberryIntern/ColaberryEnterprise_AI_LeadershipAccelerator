@@ -361,7 +361,18 @@ const SettingsPage: React.FC = () => {
           <div className="set-field full" style={{ marginTop: 16 }}>
             <label className="set-label" htmlFor="s-linkedin">LinkedIn URL</label>
             <input id="s-linkedin" className="set-input" value={form.linkedin_url} onChange={(e) => setField('linkedin_url', e.target.value)} placeholder="https://www.linkedin.com/in/you" />
-            <span className="set-sub" style={{ margin: '2px 0 0' }}>Saved with “Save changes” below.</span>
+            {/* The field is PREFILLED from the parsed resume (see prefillEmpty) but only
+                persists on "Save changes". A real learner hit this on 2026-08-24: Settings
+                showed their LinkedIn URL while onboarding_profiles.linkedin_url was still
+                NULL, so their Portfolio correctly reported "No LinkedIn URL" and the two
+                screens appeared to contradict each other. Say it plainly instead. */}
+            {form.linkedin_url.trim() && !settings?.profile.linkedin_url ? (
+              <span className="set-sub" style={{ margin: '2px 0 0', color: 'var(--cherry-text)', fontWeight: 600 }}>
+                Not saved yet — we read this from your resume. Press “Save changes” below to keep it.
+              </span>
+            ) : (
+              <span className="set-sub" style={{ margin: '2px 0 0' }}>Saved with “Save changes” below.</span>
+            )}
           </div>
         </section>
 
