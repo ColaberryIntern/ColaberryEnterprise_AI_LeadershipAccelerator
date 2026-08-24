@@ -389,6 +389,87 @@ const DISCOVERY_AND_OPPORTUNITIES: string[] = [
      ON delivery_opportunities (discovery_id)`,
 ];
 
+
+/**
+ * Gate 5 — Trust Before Intelligence.
+ *
+ * `delivery_agent_trust_requirements` is one row per (agent, INPACT dimension) rather
+ * than a JSONB blob on the agent, because the gate has to answer "which dimensions are
+ * unaddressed, and who owns each one" as a query. A blob makes that a parse, hides partial
+ * completion in list views, and leaves nobody to assign. Six small rows are six things a
+ * person can own.
+ *
+ * `delivery_trust_layer_map` records which of the book's seven layers a project component
+ * depends on — the Architecture-of-Trust map, so "which layers is this standing on, and
+ * are they operational?" is a query rather than an opinion.
+ */
+const TRUST_BEFORE_INTELLIGENCE: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_agent_definitions (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     name VARCHAR(160) NOT NULL,
+     purpose TEXT,
+     business_owner_identity_id UUID,
+     human_owner_identity_id UUID,
+     inputs JSONB,
+     outputs JSONB,
+     tools JSONB,
+     can_read JSONB,
+     can_write JSONB,
+     prohibited_actions JSONB,
+     autonomy_boundary VARCHAR(4) NOT NULL DEFAULT 'R0',
+     approval_rules JSONB,
+     escalation_rules JSONB,
+     layer_dependencies JSONB,
+     goals_measures JSONB,
+     evaluation_suite JSONB,
+     deployment_intent VARCHAR(30) NOT NULL DEFAULT 'design_only',
+     status VARCHAR(20) NOT NULL DEFAULT 'draft',
+     version INTEGER NOT NULL DEFAULT 1,
+     approved_version INTEGER,
+     approved_by_identity_id UUID,
+     approved_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_agent_definitions_project_name_unique
+     ON delivery_agent_definitions (delivery_project_id, name)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_agent_definitions_intent
+     ON delivery_agent_definitions (delivery_project_id, deployment_intent)`,
+
+  `CREATE TABLE IF NOT EXISTS delivery_agent_trust_requirements (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     agent_definition_id UUID NOT NULL,
+     dimension VARCHAR(20) NOT NULL,
+     requirement TEXT,
+     implementation_evidence TEXT,
+     evaluation TEXT,
+     owner_identity_id UUID,
+     status VARCHAR(20) NOT NULL DEFAULT 'not_started',
+     score INTEGER,
+     assessed_at TIMESTAMPTZ,
+     notes TEXT,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_agent_trust_requirements_unique
+     ON delivery_agent_trust_requirements (agent_definition_id, dimension)`,
+
+  `CREATE TABLE IF NOT EXISTS delivery_trust_layer_map (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     component VARCHAR(255) NOT NULL,
+     layer VARCHAR(40) NOT NULL,
+     status VARCHAR(20) NOT NULL DEFAULT 'planned',
+     evidence TEXT,
+     notes TEXT,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_trust_layer_map_unique
+     ON delivery_trust_layer_map (delivery_project_id, component, layer)`,
+];
+
 /**
  * Order matters across the groups: the spine must exist before its children reference
  * it, and the organization relaxation runs first because delivery engagements point at
@@ -416,4 +497,5 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...DELIVERY_CHILDREN,
   ...BUILDER_AUTHORITY,
   ...DISCOVERY_AND_OPPORTUNITIES,
+  ...TRUST_BEFORE_INTELLIGENCE,
 ];
