@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 3:59 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">52 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 4:26 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">55 changes</span></div>
   </header>
   <main>
     
@@ -837,6 +837,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">a calm builder produces **zero** exceptions (the control that keeps this an exception list rather than a dashboard); a failing trust or security gate fires urgently; the first-client-review exception fires only for a builder with no prior experience; overload fires strictly *above* the threshold, not at it; a rework rate computed from fewer than five completed stories is ignored; the prioritizer is stable across repeated calls and does not mutate its input.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**`first_client_review` and `release_ready` fire on good events.** A mentor system that only surfaces failure trains people to hide things, and it misses the two moments where a mentor is most useful — before someone&#39;s first client exposure, and at the point where shipping becomes irreversible. The first-review trigger fires *before* the review, because a mentor arriving afterwards has missed the moment they could have changed. The rework floor exists because &quot;100% rework&quot; computed from one story is noise that would land on the person least able to absorb it. **The thresholds (4 concurrent stories, 30% rework, 5-story minimum) are defensible starting points, not measured values** — no delivery has run yet, so calling them tuned would be a fabrication. They are named constants and overridable per call so they can move once there is data.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">53</span>
+          <h2>**Capacity signals, constructed so they cannot become surveillance**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/capacitySignals.ts` — the eleven signals, a per-signal policy, and `decideSignalAccess`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`estimated_human_attention_hours` and `meeting_load` are refused at individual scope **whatever justification is offered**; an individual read without a named requester, without a real justification, or below the sample floor is refused; a justified, named, well-sampled individual read is **allowed and flagged for audit** (the negative control — without it a module that refused everything would pass every refusal test while being useless); portfolio and project reads need no ceremony.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 12 asks for eleven signals and, in the same section, says **do not turn this into employee surveillance**. Those pull against each other and the tension is the design problem — per-person rework, attention hours and meeting load *are* surveillance infrastructure once they exist, whatever anyone intends. An instruction not to misuse them lives in a document that the people who would misuse them do not read. So the constraint lives in the construction. Three controls, in order of strength: **(1)** two signals can never resolve to a person, because they measure how much human time a *body of work* consumes — attributed to an individual they become a productivity score with no denominator, and whoever spent six hours in review because their project was in crisis looks worse than whoever&#39;s project was quiet. **(2)** Individual resolution requires a *justification*, not a permission: a permission is granted once and then invisible, a reason is written per lookup and readable afterwards. **(3)** Individual rates need a minimum sample, because noise presented as a metric invites a conversation the data cannot support. None of this stops a determined operator with database access; it stops the ordinary path — the dashboard someone builds because the data was sitting there — which is how surveillance actually arrives. Portfolio and project reads are deliberately frictionless: if ordinary reads needed justification, people would route around the module with raw SQL and the control would achieve nothing.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">54</span>
+          <h2>**Capacity overrides that expire by construction**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/capacityOverride.ts` plus the `delivery_capacity_overrides` and `delivery_metric_access_log` tables.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">an override expiring in the past, running longer than 30 days, exceeding the absolute ceiling, carrying a placeholder reason, or not actually raising the cap is refused; an expired override falls back to the profile cap automatically; a live override is clamped to the ceiling; `reliesOnOverride` is true only when the builder would be over their base cap without it.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Gate 2&#39;s `checkCapacity` already returned a decision rather than throwing, precisely so an override was possible — this is that override. It is built around one observation: **an override with no expiry is not an override, it is a new cap.** The failure is mundane and universal — someone is over capacity during a crunch, a lead grants an exception, the crunch passes, and nobody remembers to remove it; six months later the authority profile that said four is decorative, and nothing was ever decided. So expiry is required at creation rather than offered, because the version that gets left on forever is always the one where expiry was optional. `auditRequired: true` is in the *type* rather than a boolean the caller computes, so no call site can skip it. `reliesOnOverride` is surfaced separately because &quot;within capacity&quot; and &quot;within capacity only because someone signed an exception three weeks ago&quot; are different situations, and a lead planning next week should not have to go looking to tell them apart. Neither new table has an UPDATE path: a mutable audit log is not an audit log.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">55</span>
+          <h2>**Factory economics, with the caveat attached to the number**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/factoryEconomics.ts` — the six measures, the internal ratio, and `assertPublishable`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`THROUGHPUT_RATIO_VALIDATION` is `&#39;unvalidated&#39;`; every computed ratio carries that state and a caveat string; a zero denominator returns **null, not Infinity**; the ratio is not interpretable below ten verified stories; client **and** external publication are refused while unvalidated; internal use is permitted (the negative control); absent measures are omitted rather than reported as zero.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">&quot;do not market externally until validated&quot; is a sentence in a plan, and plans are read once. The ratio, once it exists and produces a flattering number, will be put on a slide by someone who never read the plan — that is not cynicism, it is how every internal metric escapes. So the validation state is a value this module exports, it travels with every computed ratio, and publication is refused while it is unvalidated. A number that cannot be separated from its own caveat is much harder to misquote. **A client is not an internal audience** — a number shown to a client becomes a claim about what they are buying, and an unvalidated efficiency ratio is not a claim we can support. The denominator is *judgment acts, not hours*: a time denominator improves when people work faster, which measures pace; a judgment denominator improves when the system needs fewer human decisions per unit of verified output, which is the actual claim being tested and does not reward overwork. `null` rather than `Infinity` for a zero denominator because zero human judgment effort does not mean infinite efficiency — it means nobody has reviewed anything yet, and `Infinity` on a dashboard is exactly the number that gets screenshotted.</span></div>
           
         </div>
       </article>
