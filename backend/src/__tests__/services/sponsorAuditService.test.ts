@@ -36,7 +36,7 @@ describe('fingerprintToken', () => {
   });
 
   it('never contains the token itself', () => {
-    const token = '8f14e45f-ea0a-4f0b-9c1a-1b2c3d4e5f60';
+    const token = '8f14e45f-ea0a-4f0b-9c1a-1b2c3d4e5f60'; // gitleaks:allow
     const fingerprint = fingerprintToken(token);
     expect(fingerprint).not.toContain(token);
     expect(fingerprint).toHaveLength(16);

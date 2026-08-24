@@ -46,8 +46,27 @@ entropy = 2.5
 regexTarget = "match"
 # Placeholders, local development, and docs examples are not credentials.
 regexes = [
-  '''(?i):(?:password|pass|pwd|secret|changeme|placeholder|your[_-]?password|xxx+|\*+|<[^>]+>|\$\{[^}]+\}|%[a-z_]+%)@''',
-  '''(?i)@(?:localhost|127\.0\.0\.1|host\.docker\.internal|db|postgres|mysql|mongo|redis)[:/ ]''',
+  # A password that is literally the word "password", a template marker, or an
+  # instruction to replace it. `change[_-]?me` is a prefix match on purpose:
+  # `CHANGE_ME_strong_password_here` is a placeholder, and the previous
+  # whole-word `changeme` did not recognise it.
+  '''(?i):(?:password|pass|pwd|secret|change[_-]?me[a-z0-9_-]*|placeholder|your[_-]?password|xxx+|\*+|<[^>]+>|\$\{[^}]+\}|%[a-z_]+%)@''',
+
+  # Local and container-internal database hosts.
+  #
+  # The trailing delimiter here USED to be `[:/ ]`, which could never match. The
+  # rule's own regex ends the match at the hostname — `@[a-z0-9.-]+` stops at
+  # the `:` before the port — so the match text is `postgres://u:p@localhost`
+  # with no delimiter left to anchor on. Every local dev URI in the repo was
+  # therefore reported, 14 of them, and the noise is why nobody read the report.
+  # Anchor on end-of-match instead.
+  #
+  # This stays an explicit LIST rather than a "hostname with no dot" heuristic.
+  # A dotless host is unreachable from the internet, but the password beside it
+  # is still readable and may be reused elsewhere, so a new service name should
+  # cost one reviewed line here rather than being silently absorbed by a
+  # pattern. Add compose service names as they appear.
+  '''(?i)@(?:localhost|127\.0\.0\.1|\[::1\]|host\.docker\.internal|postgres|pgvector|accelerator-db|db|mysql|mongo|redis)(?:[:/ ]|$)''',
 ]
 
 [[rules]]
@@ -75,7 +94,10 @@ keywords = ["api_key", "apikey", "secret_key", "auth_token", "access_token", "cl
 # ---------------------------------------------------------------------------
 # Global allowlist
 # ---------------------------------------------------------------------------
-[allowlist]
+# Declared in the array form `[[allowlists]]` rather than the singular
+# `[allowlist]`: gitleaks refuses to load a config that mixes the two, and the
+# scanner-artifact block below needs its own `regexTarget`.
+[[allowlists]]
 description = "Paths and values that cannot contain a real credential"
 
 # NOTE ON SCOPE: docs/, *.md and test files are deliberately NOT excluded here.
@@ -100,4 +122,46 @@ regexes = [
   '''process\.env\.[A-Z0-9_]+''',
   '''\$\{[A-Z0-9_]+\}''',
   '''<[A-Z0-9_ -]+>''',
+]
+
+# ---------------------------------------------------------------------------
+# Scanner artifacts
+# ---------------------------------------------------------------------------
+# These two patterns are not exceptions granted to real credentials. They are
+# places where a rule matches something that is structurally NOT a value, and
+# the right fix is here rather than a per-line fingerprint: a fingerprint is
+# anchored to a line number, so it goes stale the moment the file shifts and
+# the same false positive returns under a new identity.
+#
+# Matched against the full match text, not the captured secret, because in both
+# cases it is the surrounding shape that proves the value is not a credential.
+[[allowlists]]
+description = "Rule artifacts: matches that are structurally not a value"
+regexTarget = "match"
+regexes = [
+  # An EMPTY assignment in an env template, immediately followed by the next
+  # variable. `SKOOL_PASSWORD=` holds nothing; the rule ran past the line break
+  # and captured the following line's `SKOOL_DAILY_LIMIT=10` as the secret.
+  #
+  # The trailing `[A-Z][A-Z0-9_]*=` is load-bearing, not decoration. Matching a
+  # bare newline after the `=` would also allow a real secret that a formatter
+  # wrapped onto the next line:
+  #
+  #     const api_key =
+  #       'sk-a-genuinely-real-key-here';
+  #
+  # Requiring another SHOUTING_CASE assignment restricts this to the .env
+  # template shape, where the value is provably absent rather than just
+  # elsewhere.
+  '''(?i)(?:password|passwd|secret|token|key|pass|pwd)[ \t]*=[ \t]*[\r\n]+[A-Z][A-Z0-9_]*[ \t]*=''',
+
+  # A field NAMED *_key that holds an identifier. `quota_key: 'executions_per_24h'`
+  # is a map key, not an API key.
+  #
+  # Deliberately a short list of names that are STRUCTURAL by nature — a sort
+  # key, a partition key, a dedup key. Names like `config_key`, `feature_key` or
+  # `meta_key` are excluded on purpose: they are generic enough to plausibly
+  # hold a real credential one day, and an allowlist entry that might one day be
+  # wrong is worse than a false positive that gets read.
+  '''(?i)\b(?:quota|cache|sort|group|partition|idempotency|dedup|primary|foreign|composite|translation|i18n)[_-]key\s*[:=]''',
 ]

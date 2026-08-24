@@ -51,8 +51,8 @@ const mockRecordAudit = recordSponsorPortalAuditEvent as jest.Mock;
 // anything not UUID-shaped before it reaches the database. Fixtures must look
 // like the real thing or they exercise the malformed-token guard instead of
 // the path under test.
-const LIVE_TOKEN = '7a1f9c2e-1111-4000-8000-1234567890ab';
-const DEAD_TOKEN = '7a1f9c2e-2222-4000-8000-1234567890ab';
+const LIVE_TOKEN = '7a1f9c2e-1111-4000-8000-1234567890ab'; // gitleaks:allow
+const DEAD_TOKEN = '7a1f9c2e-2222-4000-8000-1234567890ab'; // gitleaks:allow
 
 beforeEach(() => jest.clearAllMocks());
 
