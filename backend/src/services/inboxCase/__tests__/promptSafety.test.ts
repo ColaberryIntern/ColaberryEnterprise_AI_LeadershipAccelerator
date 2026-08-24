@@ -74,7 +74,7 @@ describe('redactSecretLikePatterns', () => {
   });
 
   it('redacts a labeled api key', () => {
-    const result = redactSecretLikePatterns('api_key=sk-abc123def456');
+    const result = redactSecretLikePatterns('api_key=sk-abc123def456'); // gitleaks:allow
     expect(result).not.toContain('sk-abc123def456');
   });
 
