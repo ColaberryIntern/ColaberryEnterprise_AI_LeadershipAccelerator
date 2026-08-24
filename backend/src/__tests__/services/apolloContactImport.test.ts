@@ -42,6 +42,21 @@ function stubContactsPage(contacts: unknown[], pagination: Record<string, number
   return fetchMock;
 }
 
+/**
+ * The body of the contacts-search request.
+ *
+ * Deliberately located by URL rather than by index: the importer now fetches
+ * /v1/labels first to resolve list names, so the contacts call is no longer
+ * call 0. Asserting on a fixed index is what broke when that fetch was added.
+ */
+function contactsSearchBody(fetchMock: jest.Mock): any {
+  const call = fetchMock.mock.calls.find(
+    ([url, init]) => String(url).includes('/v1/contacts/search') && init?.body
+  );
+  if (!call) throw new Error('no contacts-search request was made');
+  return JSON.parse(call[1].body);
+}
+
 beforeEach(() => {
   mockFindOne.mockReset();
   mockCreate.mockReset();
@@ -261,7 +276,7 @@ describe('importApolloContacts', () => {
 
     await importApolloContacts({ limit: 100000 });
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = contactsSearchBody(fetchMock);
     expect(body.per_page).toBeLessThanOrEqual(MAX_CONTACTS_PER_RUN);
     expect(body.per_page).toBeLessThanOrEqual(100);
   });
@@ -272,7 +287,7 @@ describe('importApolloContacts', () => {
 
     await importApolloContacts({ labelIds: ['label-7'] });
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = contactsSearchBody(fetchMock);
     expect(body.contact_label_ids).toEqual(['label-7']);
   });
 
