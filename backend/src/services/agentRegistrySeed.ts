@@ -29,6 +29,17 @@ interface AgentSeedEntry {
 const AGENT_REGISTRY: AgentSeedEntry[] = [
   // --- schedulerService.ts cron jobs ---
   {
+    agent_name: 'ExplorerGovernorDecide',
+    agent_type: 'scheduled_processor',
+    module: 'runGovernor',
+    source_file: 'backend/src/services/explorerGrowth/governor/runGovernor.ts',
+    trigger_type: 'cron',
+    schedule: '50 3 * * *',
+    category: 'behavioral',
+    description:
+      'Explorer Growth OS Journey Governor. Decides one action per Explorer per day across section 9.1 priority tiers, writing explorer_journey_decisions with the chosen action AND every suppressed candidate with its reason. DECIDES AND RECORDS ONLY - enqueues nothing and sends nothing; every row is executed:false and execution is a separate epic. Runs 30 minutes after ExplorerProfileRecompute because it reads the scores that job writes. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_GOVERNOR_ENABLED are on.',
+  },
+  {
     agent_name: 'ExplorerProfileRecompute',
     agent_type: 'scheduled_processor',
     module: 'explorerProfileService',

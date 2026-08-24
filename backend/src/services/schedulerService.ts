@@ -43,6 +43,7 @@ import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 import { instrumentCronJob } from './cronInstrumentation';
 import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
+import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
 import {
   isWithinSendWindow,
   isWithinCallSchedule,
@@ -1726,6 +1727,28 @@ export function startScheduler(): void {
   //
   // 03:20 UTC: deliberately offset from the :00 and */5 jobs above so a
   // 153-learner batch does not contend with them on the shared Postgres.
+  // Explorer Growth OS - Journey Governor (EPIC 4 T005).
+  //
+  // 03:50 UTC, THIRTY MINUTES AFTER the recompute above. Ordering is the whole
+  // point: the Governor reads the scores and journey states the recompute
+  // writes, and deciding on yesterday's scores would defeat the freshness gate
+  // it enforces. The recompute takes ~4s for 153 learners, so 30 minutes is
+  // generous headroom rather than a tight coupling.
+  //
+  // DECIDES AND RECORDS ONLY. It enqueues nothing and sends nothing; every row
+  // is written with executed:false. Execution is EPIC 6, behind its own flag.
+  //
+  // runScheduledGovernor checks isExplorerFeatureEnabled('journeyGovernor')
+  // itself and returns immediately when off, so this is dark until BOTH the
+  // master flag and the sub-flag are on.
+  cron.schedule('50 3 * * *', () => {
+    instrumentCronJob('ExplorerGovernorDecide', async () => {
+      await runScheduledGovernor();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerGovernorDecide failed:', err);
+    });
+  });
+
   cron.schedule('20 3 * * *', () => {
     // Wrapped so the callback resolves to void: instrumentCronJob expects
     // Promise<void>, and runScheduledRecompute returns a BatchResult the cron
