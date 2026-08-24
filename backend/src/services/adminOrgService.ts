@@ -9,6 +9,18 @@ import {
 } from '../models';
 import type { OrganizationStatus } from '../models/Organization';
 import { sequelize } from '../config/database';
+import type { IntelligenceScope } from '../modules/tenancy/intelligenceScope';
+import { orgScopeWhere } from '../modules/tenancy/organizationScope';
+
+/**
+ * TENANT SCOPE IS A REQUIRED ARGUMENT ON EVERY FUNCTION HERE, deliberately.
+ *
+ * It could have defaulted to "everything" to avoid touching call sites. That is exactly
+ * the mistake: a default that reads across tenants makes the dangerous case the quiet one,
+ * and a route that forgets to pass scope would leak silently instead of failing loudly.
+ * Making it required turns the compiler into the audit — it lists every call site that has
+ * not been considered, which is how the six unscoped intelligence reads were found.
+ */
 
 /**
  * adminOrgService — staff-side read/write for business accounts.
@@ -78,12 +90,18 @@ export interface ListOrgParams {
  * fetching them per row would make the list cost scale with the number of
  * companies.
  */
-export async function listOrganizations(params: ListOrgParams = {}): Promise<OrgListResult> {
+export async function listOrganizations(
+  params: ListOrgParams,
+  scope: IntelligenceScope,
+): Promise<OrgListResult> {
   const page = Math.max(1, params.page ?? 1);
   const limit = Math.min(100, Math.max(1, params.limit ?? 25));
   const offset = (page - 1) * limit;
 
-  const where: Record<string, unknown> = {};
+  // Tenant scope first, so a filter can never widen it. `orgScopeWhere` returns an
+  // unsatisfiable clause for an empty scope, which is what makes an unauthorized list
+  // return nothing rather than everything.
+  const where: Record<string, unknown> = { ...orgScopeWhere(scope) };
   if (params.status) where.status = params.status;
   if (params.search && params.search.trim()) {
     where.name = { [Op.iLike]: `%${params.search.trim()}%` };
@@ -239,8 +257,16 @@ export interface OrgDetail {
  * models/OrgCohort.ts), so the two numbers legitimately differ and collapsing
  * them would hide unfilled seats.
  */
-export async function getOrganizationDetail(orgId: string): Promise<OrgDetail | null> {
-  const org = await Organization.findByPk(orgId, {
+export async function getOrganizationDetail(
+  orgId: string,
+  scope: IntelligenceScope,
+): Promise<OrgDetail | null> {
+  // Scope is folded into the QUERY rather than checked after loading, so an org in
+  // another tenant is never read out of the database in the first place. The caller maps
+  // null to 404 — deliberately not 403, because a 403 on an org that exists elsewhere
+  // confirms it exists and turns this endpoint into an id-enumeration oracle.
+  const org = await Organization.findOne({
+    where: { id: orgId, ...orgScopeWhere(scope) },
     include: [
       { model: Enrollment, as: 'owner', attributes: ['id', 'email', 'full_name'], required: false },
     ],
@@ -380,8 +406,12 @@ export async function setOrganizationStatus(
   orgId: string,
   status: OrganizationStatus,
   changedBy: string,
+  scope: IntelligenceScope,
 ): Promise<{ id: string; status: OrganizationStatus; changed: boolean } | null> {
-  const org = await Organization.findByPk(orgId);
+  // A write is scoped the same way a read is. Suspending another tenant's business
+  // account would be a worse outcome than reading it, so this must not be the one path
+  // that trusts the id.
+  const org = await Organization.findOne({ where: { id: orgId, ...orgScopeWhere(scope) } });
   if (!org) return null;
 
   if ((org.status ?? 'active') === status) {
@@ -411,11 +441,14 @@ export async function addCohortToOrganization(
   cohortId: string,
   seatsSponsored: number | null,
   addedBy: string,
+  scope: IntelligenceScope,
 ): Promise<{ link_id: string; created: boolean } | { error: 'org_not_found' | 'cohort_not_found' }> {
   const [org, cohort] = await Promise.all([
-    Organization.findByPk(orgId),
+    Organization.findOne({ where: { id: orgId, ...orgScopeWhere(scope) } }),
     Cohort.findByPk(cohortId),
   ]);
+  // An out-of-scope org reports `org_not_found`, the same answer as one that does not
+  // exist. Distinguishing the two would tell a CPN operator which ids belong to Colaberry.
   if (!org) return { error: 'org_not_found' };
   if (!cohort) return { error: 'cohort_not_found' };
 
@@ -435,7 +468,17 @@ export async function addCohortToOrganization(
 export async function removeCohortFromOrganization(
   orgId: string,
   cohortId: string,
+  scope: IntelligenceScope,
 ): Promise<boolean> {
+  // Confirm the org is in scope BEFORE deleting. `OrgCohort` carries no tenant of its
+  // own, so an unscoped destroy keyed on ids alone would happily unlink another tenant's
+  // cohort from another tenant's account.
+  const org = await Organization.findOne({
+    where: { id: orgId, ...orgScopeWhere(scope) },
+    attributes: ['id'],
+  });
+  if (!org) return false;
+
   const deleted = await OrgCohort.destroy({ where: { org_id: orgId, cohort_id: cohortId } });
   return deleted > 0;
 }
@@ -446,12 +489,28 @@ export async function removeCohortFromOrganization(
  * Deliberately a single grouped query rather than several counts: these four
  * numbers are read together on every page load.
  */
-export async function getOrganizationStats(): Promise<{
+export async function getOrganizationStats(scope: IntelligenceScope): Promise<{
   total: number;
   active: number;
   suspended: number;
   with_cohorts: number;
 }> {
+  // This is raw SQL, so it cannot reuse `orgScopeWhere`. The scope is applied here in the
+  // same three cases, and the tenant ids go in as a BIND PARAMETER — never interpolated
+  // into the string, even though they are internal UUIDs. A header that counted every
+  // tenant's accounts above a correctly-scoped list would also be its own small leak: the
+  // total tells you how many rows you are not being shown.
+  let tenantClause = '';
+  const replacements: Record<string, unknown> = {};
+  if (scope.crossTenant) {
+    tenantClause = '';
+  } else if (scope.tenantIds.length === 0) {
+    tenantClause = 'WHERE false'; // authorized for no tenant: count nothing
+  } else {
+    tenantClause = 'WHERE tenant_id IN (:tenantIds)';
+    replacements.tenantIds = scope.tenantIds;
+  }
+
   const [row] = (await sequelize.query(
     `SELECT
        COUNT(*)::int AS total,
@@ -460,8 +519,11 @@ export async function getOrganizationStats(): Promise<{
        COUNT(*) FILTER (WHERE EXISTS (
          SELECT 1 FROM org_cohorts oc WHERE oc.org_id = organizations.id
        ))::int AS with_cohorts
-     FROM organizations`,
-    { type: (sequelize.constructor as unknown as { QueryTypes: { SELECT: string } }).QueryTypes.SELECT as never },
+     FROM organizations ${tenantClause}`,
+    {
+      replacements,
+      type: (sequelize.constructor as unknown as { QueryTypes: { SELECT: string } }).QueryTypes.SELECT as never,
+    },
   )) as unknown as { total: number; active: number; suspended: number; with_cohorts: number }[];
 
   return row ?? { total: 0, active: 0, suspended: 0, with_cohorts: 0 };
