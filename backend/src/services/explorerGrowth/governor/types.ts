@@ -79,3 +79,12 @@ export interface SuppressedCandidate {
   campaign_key: string | null;
   reason: string;
 }
+
+/** What the contact policy needs. Resolved FRESH at decision time. */
+export interface ContactPolicyInput {
+  channelEligible: boolean;
+  channelReason?: string;
+  consent: { verdict: 'allow' | 'block'; reason: string; hasRecord: boolean };
+  recentContactCount: number;
+  hoursSinceLastContact: number | null;
+}

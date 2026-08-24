@@ -1,4 +1,4 @@
-import type { Candidate, GovernorContext } from './types';
+import type { Candidate, ContactPolicyInput } from './types';
 
 /**
  * Explorer Growth OS — contact policy. Plan §9.3; EPIC 4 T002.
@@ -41,19 +41,6 @@ export type ContactVerdict =
   | { allowed: true; basis: 'record'; }
   | { allowed: true; basis: 'no_evidence'; note: string }
   | { allowed: false; reason: string };
-
-/** What the policy needs. Resolved FRESH at decision time, never from the profile. */
-export interface ContactPolicyInput {
-  /** Live contactability, re-resolved now. */
-  channelEligible: boolean;
-  channelReason?: string;
-  /** The consent engine's verdict, plus whether it rested on a real record. */
-  consent: { verdict: 'allow' | 'block'; reason: string; hasRecord: boolean };
-  /** Sends to this learner inside the frequency window. */
-  recentContactCount: number;
-  /** Hours since the last contact, or null if never contacted. */
-  hoursSinceLastContact: number | null;
-}
 
 /** §9.3 defaults. Conservative: the population has never been messaged at all. */
 export const MAX_CONTACTS_PER_WINDOW = 3;
