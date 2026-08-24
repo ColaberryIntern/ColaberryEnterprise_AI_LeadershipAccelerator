@@ -57,6 +57,24 @@ export interface AgentDetailReportsTo {
   immediate_agent: { id: string; name: string } | null;
 }
 
+/** Trust Contract, "Instant" dimension (2026-08-24) — grounded in Ram
+ * Katamaraja's *Trust Before Intelligence* INPACT(tm) framework, per Ali's
+ * explicit ask. Every field is a real, pre-existing `AiAgent` column that was
+ * never surfaced on this page before. `null`/`0` for an agent invoked outside
+ * the generic scheduler wrapper (e.g. Reese, InboxCaseEngine) is honest, not
+ * a fabricated "no data yet" placeholder. */
+export interface AgentDetailTrustContract {
+  trigger_type: string | null;
+  schedule: string | null;
+  status: string;
+  last_run_at: string | null;
+  run_count: number;
+  error_count: number;
+  avg_duration_ms: number | null;
+  last_error: string | null;
+  last_error_at: string | null;
+}
+
 export interface AgentDetail {
   agent: {
     id: string;
@@ -81,6 +99,7 @@ export interface AgentDetail {
   tickets: AgentDetailTicket[];
   capabilities: AgentDetailCapabilities;
   reports_to: AgentDetailReportsTo | null;
+  trust_contract: AgentDetailTrustContract;
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {

@@ -89,6 +89,19 @@ const DETAIL: AgentDetail = {
     resolved_human: { id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', name: 'Kes', email: 'kesetebirhan@gmail.com' },
     immediate_agent: { id: 'agent-wie', name: 'workforce_intelligence_engine' },
   },
+  // Trust Contract (2026-08-24) — Reese's real shape: identity-only, invoked
+  // outside the generic scheduler wrapper, so honest nulls/zeros.
+  trust_contract: {
+    trigger_type: 'event_driven',
+    schedule: null,
+    status: 'idle',
+    last_run_at: null,
+    run_count: 0,
+    error_count: 0,
+    avg_duration_ms: null,
+    last_error: null,
+    last_error_at: null,
+  },
 };
 
 let container: HTMLDivElement;
@@ -513,5 +526,81 @@ describe('AgentDetailPage — "Deactivate" action', () => {
     });
 
     expect(container.textContent).toContain('Failed to deactivate: Agent not found');
+  });
+});
+
+// Trust Contract (2026-08-24) — Ali, live: "All Agents should have a trust
+// contract based on [Trust Before Intelligence]."
+describe('AgentDetailPage — "Trust Contract" section', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('happy path: a cron-tracked agent shows its real schedule, last run, and run/error counts', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      trust_contract: {
+        trigger_type: 'cron',
+        schedule: '28 */6 * * *',
+        status: 'idle',
+        last_run_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+        run_count: 623,
+        error_count: 4,
+        avg_duration_ms: 5791,
+        last_error: 'out of shared memory',
+        last_error_at: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
+      },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Trust Contract');
+    expect(container.textContent).toContain('cron');
+    expect(container.textContent).toContain('28 */6 * * *');
+    expect(container.textContent).toContain('623'); // total runs
+    expect(container.textContent).toContain('5h ago'); // last run, via the real timeAgo() helper
+    expect(container.textContent).toContain('5.8s'); // avg duration, formatted from ms
+    expect(container.textContent).toContain('out of shared memory'); // real last error, disclosed
+  });
+
+  it('honesty boundary: an identity-only agent (no scheduler tracking) shows its real trigger_type, not a fabricated schedule', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL); // base fixture: trigger_type 'event_driven', schedule null
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Trust Contract');
+    expect(container.textContent).toContain('event_driven');
+  });
+
+  it("boundary: no trigger_type at all shows the honest 'not invoked through the scheduled-run tracker' disclosure", async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      trust_contract: { ...DETAIL.trust_contract, trigger_type: null },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain("isn't invoked through the");
+  });
+
+  it('never fabricates a schedule/error when both are genuinely absent', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      trust_contract: { ...DETAIL.trust_contract, trigger_type: 'cron', schedule: null, last_error: null },
+    });
+
+    await renderAgentPage();
+
+    // The stat grid renders (trigger_type is set), but no fabricated error banner.
+    expect(container.textContent).toContain('Trust Contract');
+    expect(container.querySelector('.alert-warning')).toBeNull();
   });
 });
