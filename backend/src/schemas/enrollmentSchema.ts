@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
 export const createInvoiceSchema = z.object({
+  /**
+   * Marketing consent checkbox. OPTIONAL and defaulting to absent: an unticked
+   * box must not fail validation, and it records nothing rather than a
+   * revocation. See services/consent/captureSignupConsent.ts.
+   */
+  marketing_opt_in: z.union([z.boolean(), z.literal('true'), z.literal('on')]).optional(),
+
   full_name: z.string().min(1, 'Full name is required').max(255),
   email: z.string().email('Invalid email address').max(255),
   company: z.string().min(1, 'Company is required').max(255),
@@ -20,6 +27,13 @@ export type CreateInvoiceRequestInput = CreateInvoiceInput;
 // (createExplorerEnrollment), and company is optional since a personal free
 // trial shouldn't require B2B lead-qual fields to complete.
 export const createFreeAccountSchema = z.object({
+  /**
+   * Marketing consent checkbox. OPTIONAL and defaulting to absent: an unticked
+   * box must not fail validation, and it records nothing rather than a
+   * revocation. See services/consent/captureSignupConsent.ts.
+   */
+  marketing_opt_in: z.union([z.boolean(), z.literal('true'), z.literal('on')]).optional(),
+
   full_name: z.string().min(1, 'Full name is required').max(255),
   email: z.string().email('Invalid email address').max(255),
   company: z.string().max(255).optional().default(''),

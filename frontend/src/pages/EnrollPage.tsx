@@ -47,6 +47,9 @@ function EnrollPage() {
     title: '',
     phone: '',
     company_size: '',
+    // Marketing consent. Defaults to UNTICKED: consent must be an affirmative
+    // act, and a pre-ticked box is not consent in any regime that matters.
+    marketing_opt_in: false,
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState('');
@@ -91,9 +94,13 @@ function EnrollPage() {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target as HTMLInputElement;
     signalFormStart();
-    setFormData({ ...formData, [name]: value });
+    // A checkbox carries its state in `checked`, not `value` — reading `value`
+    // would store the literal string "on" and silently record consent for
+    // anyone who merely focused the field.
+    const next = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    setFormData({ ...formData, [name]: next });
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
     }
@@ -421,6 +428,26 @@ function EnrollPage() {
 
                 {/* Submit */}
                 <div className="col-12" style={{ marginTop: 'var(--space-5)' }}>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label
+                      htmlFor="marketing_opt_in"
+                      style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', cursor: 'pointer', fontSize: '0.9rem', lineHeight: 1.45 }}
+                    >
+                      <input
+                        type="checkbox"
+                        id="marketing_opt_in"
+                        name="marketing_opt_in"
+                        checked={formData.marketing_opt_in}
+                        onChange={handleChange}
+                        style={{ marginTop: '0.2rem', flexShrink: 0 }}
+                      />
+                      <span>
+                        Email me about Colaberry courses, events and AI resources.
+                        You can unsubscribe at any time.
+                      </span>
+                    </label>
+                  </div>
+
                   <Button type="submit" size="lg" fullWidth disabled={submitting}>
                     {submitting ? 'Creating your account...' : 'Create My Free Account'}
                   </Button>

@@ -19,6 +19,7 @@ import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
 import careerPortfolioRoutes from './routes/careerPortfolioRoutes';
 import explorerSignalRoutes from './routes/explorerSignalRoutes';
+import consentPromptRoutes from './routes/consentPromptRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
@@ -127,6 +128,9 @@ app.use(careerPortfolioRoutes);
 // Explorer Growth OS learner signal ingest (EPIC 2). Dark until
 // EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
 app.use(explorerSignalRoutes);
+// In-app consent prompt (participant-authed). A PROMPT, not a gate: the portal
+// stays fully usable whether a learner accepts, declines or ignores it.
+app.use(consentPromptRoutes);
 app.use(capeAdminRoutes);
 app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
