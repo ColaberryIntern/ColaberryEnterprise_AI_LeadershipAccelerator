@@ -116,7 +116,7 @@ export const careerRecentActivitySchema = z.object({
 });
 
 export const careerProfileResponseSchema = z.object({
-  state: z.enum(['needs_resume', 'ready']),
+  state: z.enum(['baseline_missing', 'ready']),
   visibility: z.literal('private'),
   identity: careerIdentitySchema.nullable(),
   capabilities: z.array(careerCapabilitySchema),

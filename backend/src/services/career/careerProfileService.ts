@@ -11,10 +11,15 @@
  *   adapter reads all of that person's evidence. "Portfolio remains tied to one
  *   Project" is a stop condition (plan §71).
  *
- * - **The resume prerequisite is enforced HERE, server-side.** A caller without a
- *   resume gets `state: 'needs_resume'` and no career data at all — not a full
- *   payload that the UI politely hides. Plan §39: "Enforce server-side
- *   authorization too. Do not rely only on UI hiding."
+ * - **The resume is a BASELINE, not a gate** (product decision 2026-08-24). It was
+ *   originally a hard prerequisite that withheld everything, but prod data showed
+ *   6,503 evidence rows against only 26 resumes — the gate was hiding the platform's
+ *   richest portfolios from the students who earned them, inverting the product's own
+ *   principle ("make their work become the portfolio"). A learner without a resume now
+ *   sees everything they have earned; `state: 'baseline_missing'` tells the UI to prompt.
+ *   NOTE this was never a security control — it withheld a learner's OWN data from
+ *   themselves. The real boundary is that every read is scoped to req.participant.sub,
+ *   which is unchanged.
  *
  * - **Partial failure degrades a section, never the page.** Adapters are settled
  *   independently and a failed one reports itself in `degraded[]`. Plan §63
@@ -36,7 +41,7 @@ import {
 } from './careerEvidenceAdapters';
 import { computeReadiness, DEFAULT_POLICY, type ReadinessResult, type PortfolioReadinessPolicy } from './careerReadiness';
 
-export type CareerAccessState = 'needs_resume' | 'ready';
+export type CareerAccessState = 'baseline_missing' | 'ready';
 
 const RECENT_WINDOW_DAYS = 7;
 
@@ -57,6 +62,7 @@ export interface CareerRecentActivity {
 }
 
 export interface CareerProfileResponse {
+  /** A HINT for the UI, never a withholding. See the note on getCareerProfile. */
   state: CareerAccessState;
   visibility: 'private';
   identity: CareerIdentity | null;
@@ -197,25 +203,6 @@ export async function getCareerProfile(
     generated_at,
   };
 
-  // GATE 1 — the resume prerequisite. Returns BEFORE any evidence is assembled,
-  // so a direct API call without a resume yields no skills, artifacts, projects
-  // or repos. This is the security boundary, not the UI.
-  if (!identity.resume) {
-    return {
-      ...base,
-      state: 'needs_resume',
-      capabilities: [],
-      artifacts: [],
-      projects: [],
-      github: null,
-      delivery_experience: [],
-      readiness: null,
-      narrative: null,
-      recent_activity: null,
-      degraded,
-    };
-  }
-
   const [capabilities, artifacts, projects, github, delivery_experience] = await Promise.all([
     section('capabilities', () => skillAdapter(enrollmentId), [] as CareerCapability[], degraded),
     section('artifacts', () => artifactAdapter(enrollmentId), [] as CareerArtifact[], degraded),
@@ -226,7 +213,10 @@ export async function getCareerProfile(
 
   return {
     ...base,
-    state: 'ready',
+    // The resume is a BASELINE, not a gate (product decision 2026-08-24). A learner
+    // without one still sees everything they have earned; the state flags the gap so
+    // the UI can prompt for it, rather than hiding their own work from them.
+    state: identity.resume ? 'ready' : 'baseline_missing',
     capabilities,
     artifacts,
     projects,

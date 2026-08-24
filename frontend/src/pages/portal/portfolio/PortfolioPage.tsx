@@ -3,7 +3,7 @@ import PortalShell from '../today/PortalShell';
 import { PaywallScreen } from '../../../components/paywall/PageGate';
 import { GATED_FEATURES } from '../../../components/paywall/gatedFeatures';
 import { fetchCareerProfile, CareerProfile } from '../../../services/careerApi';
-import ResumePrerequisite from './ResumePrerequisite';
+import BaselineBanner from './BaselineBanner';
 import StudioOverview from './StudioOverview';
 import CapabilityList from './CapabilityList';
 import BuildsSection from './BuildsSection';
@@ -18,10 +18,14 @@ import './PortfolioPage.css';
  * later gate; the "Publishing" tab exists to say so honestly rather than to hide
  * the concept.
  *
- * Access states rendered here mirror the server's own state machine (plan §39):
- *   402          → PaywallScreen (defensive; <PageGate> normally catches this first)
- *   needs_resume → resume prerequisite ONLY, no career data
- *   ready        → the Studio
+ * Access states rendered here mirror the server's own state machine:
+ *   402              → PaywallScreen (defensive; <PageGate> normally catches this first)
+ *   baseline_missing → the Studio, PLUS an inline prompt for a resume/LinkedIn PDF
+ *   ready            → the Studio
+ *
+ * `baseline_missing` used to be a blocking screen that showed nothing else. It was
+ * softened on 2026-08-24 after prod data showed the gate was hiding real earned
+ * evidence from the students who had the most of it. See BaselineBanner.
  */
 
 type Tab = 'overview' | 'capabilities' | 'builds' | 'publishing';
@@ -101,17 +105,6 @@ const PortfolioPage: React.FC = () => {
     );
   }
 
-  // Paid, but no resume on file: the prerequisite gate is the ONLY thing that
-  // renders. The server already withheld the career data, so there is nothing
-  // here that a hidden element could leak.
-  if (profile.state === 'needs_resume') {
-    return (
-      <PortalShell>
-        <ResumePrerequisite firstName={profile.identity?.full_name ?? null} />
-      </PortalShell>
-    );
-  }
-
   return (
     <PortalShell>
       <div className="te-page-h cp-head">
@@ -138,6 +131,8 @@ const PortfolioPage: React.FC = () => {
           <button type="button" className="cp-link" onClick={load}>Retry</button>
         </div>
       )}
+
+      {profile.state === 'baseline_missing' && <BaselineBanner />}
 
       <div className="cp-tabs" role="tablist" aria-label="Portfolio sections">
         {TABS.map((t, i) => (
