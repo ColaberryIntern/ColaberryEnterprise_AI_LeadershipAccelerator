@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CareerCapability, CareerEvidenceLevel, EVIDENCE_LEVEL_LABEL } from '../../../services/careerApi';
+import { CareerCapability, CareerEvidenceLevel, EVIDENCE_LEVEL_LABEL, isVerifiedLevel } from '../../../services/careerApi';
 
 /**
  * CapabilityList — verified capabilities with clickable provenance
@@ -20,6 +20,7 @@ const LEVEL_ORDER: Record<CareerEvidenceLevel, number> = {
   delivery_verified: 0,
   colaberry_verified: 1,
   resume: 2,
+  none: 3,
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -46,9 +47,15 @@ const CapabilityRow: React.FC<{ cap: CareerCapability }> = ({ cap }) => {
       >
         <span className="cp-cap-title">
           <span className="cp-cap-name">{cap.name}</span>
-          <span className={`cp-level cp-level-${cap.evidence_level}`}>
-            {EVIDENCE_LEVEL_LABEL[cap.evidence_level]}
-          </span>
+          {/* A capability with nothing behind it gets no provenance badge at all.
+              Labelling it "Resume evidence" next to "0 pieces of evidence" was a
+              real defect caught by looking at the rendered page — it asserted a
+              source the learner never supplied. */}
+          {cap.evidence_level !== 'none' && (
+            <span className={`cp-level cp-level-${cap.evidence_level}`}>
+              {EVIDENCE_LEVEL_LABEL[cap.evidence_level]}
+            </span>
+          )}
         </span>
         <span className="cp-cap-meta">
           <span className="cp-muted">
@@ -118,7 +125,7 @@ const CapabilityList: React.FC<{ capabilities: CareerCapability[] }> = ({ capabi
   const sorted = capabilities.slice().sort(
     (a, b) => LEVEL_ORDER[a.evidence_level] - LEVEL_ORDER[b.evidence_level] || b.proficiency - a.proficiency,
   );
-  const verified = sorted.filter((c) => c.evidence_level !== 'resume');
+  const verified = sorted.filter((c) => isVerifiedLevel(c.evidence_level));
 
   return (
     <div className="cp-card">
@@ -126,6 +133,9 @@ const CapabilityList: React.FC<{ capabilities: CareerCapability[] }> = ({ capabi
       <p className="cp-muted cp-cap-lede">
         {verified.length} of {capabilities.length} verified by Colaberry. Open any capability to see
         exactly what evidence stands behind it.
+        {verified.length === 0 && capabilities.every((c) => c.evidence_level === 'none') && (
+          <> Nothing is evidenced yet — these are the capabilities we track, not claims about you.</>
+        )}
       </p>
       <ul className="cp-caps">
         {sorted.map((c) => <CapabilityRow key={c.skill_id} cap={c} />)}

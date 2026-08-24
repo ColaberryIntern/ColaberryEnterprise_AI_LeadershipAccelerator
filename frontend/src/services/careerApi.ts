@@ -7,7 +7,7 @@
  */
 import portalApi from '../utils/portalApi';
 
-export type CareerEvidenceLevel = 'resume' | 'colaberry_verified' | 'delivery_verified';
+export type CareerEvidenceLevel = 'none' | 'resume' | 'colaberry_verified' | 'delivery_verified';
 export type CareerAccessState = 'needs_resume' | 'ready';
 
 export interface CareerIdentity {
@@ -118,8 +118,23 @@ export interface CareerProfile {
   generated_at: string;
 }
 
+/**
+ * The ONE definition of "Colaberry stands behind this capability".
+ *
+ * Deliberately a positive allow-list, and deliberately in one place. Two
+ * components previously each carried their own `evidence_level !== 'resume'`
+ * check; when the `none` level was introduced both silently flipped every
+ * no-evidence capability to "verified" and the UI reported 10 of 10 verified
+ * from an empty ledger. A new level must never widen this by default — adding
+ * one to the union should require an explicit decision here.
+ */
+export function isVerifiedLevel(level: CareerEvidenceLevel): boolean {
+  return level === 'colaberry_verified' || level === 'delivery_verified';
+}
+
 /** Employer-readable label for an evidence level. Never exposes raw band scores. */
 export const EVIDENCE_LEVEL_LABEL: Record<CareerEvidenceLevel, string> = {
+  none: 'No evidence yet',
   resume: 'Resume evidence',
   colaberry_verified: 'Colaberry Verified',
   delivery_verified: 'Delivery Verified',

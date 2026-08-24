@@ -102,6 +102,22 @@ describe('computeReadiness', () => {
     expect(r.meets_policy).toBe(false);
   });
 
+  it('never counts no-evidence capabilities toward the verified requirement', () => {
+    // The 'none' level was added after seeing an empty capability render a
+    // "Resume evidence" badge on dev. Readiness uses a positive allow-list, so
+    // a new level can never silently start counting as proof.
+    const r = computeReadiness({
+      ...full(),
+      capabilities: [
+        cap({ skill_id: 'a', evidence_level: 'none', bands: { claim: 0, knowledge: 0, application: 0, judgment: 0 } }),
+        cap({ skill_id: 'b', evidence_level: 'none', bands: { claim: 0, knowledge: 0, application: 0, judgment: 0 } }),
+        cap({ skill_id: 'c', evidence_level: 'none', bands: { claim: 0, knowledge: 0, application: 0, judgment: 0 } }),
+      ],
+    });
+    expect(r.blocking).toContain('verified_capabilities');
+    expect(r.requirements.find((x) => x.key === 'verified_capabilities')!.detail).toBe('0 verified of 3 tracked');
+  });
+
   it('counts delivery-verified capabilities toward the verified requirement', () => {
     const r = computeReadiness({
       ...full(),

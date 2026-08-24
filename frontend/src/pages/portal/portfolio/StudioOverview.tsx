@@ -1,5 +1,5 @@
 import React from 'react';
-import { CareerProfile } from '../../../services/careerApi';
+import { CareerProfile, isVerifiedLevel } from '../../../services/careerApi';
 
 /**
  * StudioOverview — the Career Studio landing view (build plan §19): readiness,
@@ -34,7 +34,7 @@ const StudioOverview: React.FC<{
   onJump: (t: 'capabilities' | 'builds' | 'publishing') => void;
 }> = ({ profile, onJump }) => {
   const { readiness, recent_activity: recent, narrative, capabilities, artifacts, projects, github } = profile;
-  const verified = capabilities.filter((c) => c.evidence_level !== 'resume').length;
+  const verified = capabilities.filter((c) => isVerifiedLevel(c.evidence_level)).length;
 
   return (
     <div className="cp-overview">
