@@ -72,6 +72,7 @@ import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
+import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -2415,6 +2416,23 @@ async function start(): Promise<void> {
   // were reversed. Additive only; no NOT NULL, no backfill (backfills are separate
   // explicitly-invoked scripts, never boot work).
   await ensureMultiTenantSchema();
+  // Refactored AI Delivery OS — Gate 1: 7 delivery tables (engagements, projects, the
+  // student-project bridge, project membership, contracts, the decision ledger and the
+  // append-only event stream), plus the ESC-1 relaxation of
+  // `organizations.owner_enrollment_id` to nullable.
+  //
+  // Runs LAST of the organization-touching modules, and that ordering is load-bearing.
+  // Two earlier statements recreate `organizations` with `owner_enrollment_id UUID NOT
+  // NULL` on a fresh database (the inline DDL above, and ensureOrgAccountSchema). Both
+  // are CREATE TABLE IF NOT EXISTS, so on an existing database they are no-ops and the
+  // ordering is irrelevant — but on a fresh one (dev, preview stacks, CI) the DROP NOT
+  // NULL has to come after them or a brand-new environment would silently keep the
+  // constraint that blocks client organizations, and the failure would only appear the
+  // first time somebody created one.
+  //
+  // Additive apart from that single relaxation; no backfill beyond stamping
+  // organization_type on rows that predate the column.
+  await ensureRefactoredDeliverySchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.
