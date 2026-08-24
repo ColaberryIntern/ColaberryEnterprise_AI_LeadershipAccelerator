@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, August 23, 2026 at 6:55 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">16 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 6:09 AM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">26 changes</span></div>
   </header>
   <main>
     
@@ -297,6 +297,156 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">the pinned typecheck caught it — `orgService.ts(241,67): TS2322 Type &#39;string | null&#39; is not assignable to type &#39;string&#39;`. After the fix, backend `tsc --noEmit` under **TypeScript 5.9.3** reports **2 errors, both the known `@anthropic-ai/sdk` junction artifact, zero real `src/` errors** — exactly the Gate 0 baseline.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">this is the ESC-1 condition &quot;audit and null-guard the read paths&quot; actually being discharged, and it is why the relaxation had to ship with a pinned compiler rather than a bare `npx tsc` (which resolves 4.9.5 and can report a false clean). The fix returns the value the function just matched on instead of re-reading it, so the non-null contract callers rely on holds by construction rather than by a cast that would also have silenced a genuine null later.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>**Delivery role registry: 13 roles, 30 permissions, separate from tenant roles**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/modules/delivery/deliveryRoles.ts`, mirroring `modules/tenancy/tenantRoles.ts` — one registry, roles compared here and nowhere else.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryRoles.test.ts`, part of **58 passing** across the two authorization suites. Pinned: unknown roles grant nothing; **a tenant role is not a delivery role** (`tenant_admin` and `platform_super_admin` both grant zero delivery permissions); client roles cannot execute stories, write requirements or architecture, read architecture or agent internals, or manage members; `client.accept` is held by exactly the two client decision roles and **not** by the delivery owner; a security reviewer can approve architecture but not write it; only the delivery owner can deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the separation master plan §4 asks for. Tenant membership answers &quot;may this identity act in this tenant at all&quot;; delivery membership answers &quot;may they approve THIS design decision&quot;. `isClientOnly()` deliberately requires *every* role to be client-side, so someone holding both a client and an internal role is not served the client projection — that would hide work they are entitled to see.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>**Risk ladder R0–R5, aligned with the ops fleet but failing closed**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryRiskLevels.ts`. R0–R4 mean exactly what they mean in `services/agentAutonomy.ts`; R5 (`destructive_or_high_consequence`) is new and delivery-only. Consequential actions are a **declared registry**, not keyword-classified strings.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">an undeclared action resolves to **R5 requiring the highest authority**, so adding a consequential action without declaring it is maximally restricted and immediately visible rather than silently permitted. An unrecognized risk level is treated as maximum risk in both directions.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**one deliberate divergence from the ops model, and it is the interesting part.** `agentAutonomy.isHighRiskTier()` treats an unrecognized tier as *not* high risk — it fails OPEN, and says so, because a malformed string there must not manufacture approvals for an established pipeline. Delivery inverts that and fails CLOSED: an action nobody can classify is not safe to run unreviewed, and there is no established delivery pipeline to protect from false positives. **I did not extend the ops ladder to R5 in this gate.** Doing so means editing three sites — `agentAutonomy.ts`, `workGraph/capabilityRouter.ts`, and the typed `maxRiskTier: &#39;R0&#39;|…|&#39;R4&#39;` union in `capabilityRegistry.ts` — one of which gates live agent dispatch. Per Gate 0&#39;s AUTHORIZATION_MATRIX that must ship shadow-logged and reviewed, which is its own change with its own blast radius.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>**Authorization gate: tenant first, delivery second, no enumeration**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryAuthorization.ts` — `buildDeliveryContext`, `requireDeliveryPermission`, `requireTenantThenDelivery`, and `authorizeAction` (which returns a decision rather than throwing, because in the execution plane a denial is a run state, not an HTTP error).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a cross-tenant caller gets **404, not 403**, even when they hold the permission — they must not learn the project exists. A non-member gets 404; a member missing one permission gets 403, because they already know it exists and the distinction is useful to them. Unauthenticated gets 401. An unreadable project or membership table fails closed with a structured log.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the function deliberately does **not** call the tenant guard itself. Hiding the ordering inside a helper would hide the security property — the caller passes its tenant-guard result in, so the ordering is visible at the call site. `platform.cross_tenant` grants nothing here: a superadmin can see a project exists, but approving a client&#39;s design decision on their behalf is a different act, enforced by this module simply never consulting the superadmin flag.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">20</span>
+          <h2>**Builder Authority Profile: caps, never grants**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/BuilderAuthorityProfile.ts`, `modules/delivery/builderAuthority.ts`, and a `builder_authority_profiles` table appended to `ensureRefactoredDeliverySchema` (additive, idempotent, unique per identity).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`builderAuthority.test.ts`. No profile → R0, one project, no client contact, no release authority. An unreadable profile fails **closed** with a visible structured log. A generous row with `last_evaluated_at = null` is still the floor. A malformed `max_risk_without_review` falls back to R0. An R5 ceiling on an observer still yields no access — **the ceiling can never grant a permission the role lacks**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 2 forbids authority based on time-in-program, so the table has no concept of cohort week or attendance. The key behaviour is that an action above the ceiling becomes a **review requirement rather than a refusal** — that is what lets an intern drive real work they cannot unilaterally land, instead of being blocked from touching it. `last_evaluated_at` is nullable with no default on purpose: defaulting it to `NOW()` would fabricate the very signal that a human reviewed the numbers.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>**Versioned contracts with frozen approval snapshots**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/services/delivery/deliveryContractService.ts` — `draftContract`, `approveContract`, `approvedTerms`, `hasDriftedFromApproval`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryContractService.test.ts`. Approval freezes a snapshot; the working row then changing does **not** change what `approvedTerms()` returns. Re-approving is idempotent and returns the **original** approver and timestamp. Approving supersedes older approved versions so exactly one governs. Drift between the live row and the approved terms is detectable.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the point of the file. If approval were a status flag on a mutable row, &quot;the client approved this&quot; would decay into &quot;the client approved something, and here is what the row says now&quot; — worthless in exactly the situations a contract exists for. The snapshot uses an **explicit field list, not a spread**: a spread would silently start capturing any column added later, including internal bookkeeping, and the snapshot is the thing a client may be shown. `data_sensitivity` defaults to `internal`, never `public`, so an unclassified contract cannot become publishable by omission.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">22</span>
+          <h2>**Decision ledger: supersession, never mutation**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryDecisionService.ts` — `openDecision`, `decide`, `supersedeDecision`, `getGoverningDecisions`, `getOpenDecisions`, `getDecisionHistory`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryDecisionService.test.ts`. `decide()` **refuses** on an already-settled decision and directs the caller to supersede. Supersession preserves the prior decision&#39;s answer, rationale, decider and timestamp — the only mutation is the link and the status. Creating the successor happens **before** linking the prior, so a mid-failure leaves a recoverable orphan rather than a project with no current decision. History walking is cycle-safe and bounded at 50 hops.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §24 lists &quot;design approval can be silently overwritten&quot; as a stop condition. The difference between &quot;we changed our mind&quot; and &quot;we never said that&quot; is the entire value of a ledger, and an in-place edit erases it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">23</span>
+          <h2>**Project graph: impact analysis and fail-closed traceability**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryProjectGraph.ts` — pure, no I/O, no model imports. `reachableFrom`, `analyzeImpact`, `findTraceabilityGaps`, `graphFromAffectedNodes`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryProjectGraph.test.ts`. Cycles terminate rather than hang. An impact report surfaces `touchesAcceptedWork` and `touchesDeployedWork` as their own flags, and reports `truncated` when the walk hit its depth limit. Traceability fails closed: an uncovered `must` requirement or approved design decision is a gap, and a recorded no-code rationale excuses the latter. Malformed `affected_nodes` entries are skipped and **counted**, not thrown on.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">no graph database — master plan §Gate 3 forbids one absent evidence that relational modelling is inadequate, and Gate 0 found none. `truncated` earns its place: an impact report that silently stopped walking reads as &quot;nothing else is affected&quot;, which is the most dangerous way to be wrong here. The accepted/deployed flags are surfaced separately because they change the *conversation* — altering something a client already signed off is a different request from altering a draft, and the approver should not have to notice that themselves.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">24</span>
+          <h2>**The book&#39;s frameworks encoded with their exact scales**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/modules/delivery/inpact.ts` — INPACT (6 dimensions, 1–6, 36 max, 100-point headline), the 7 layers by canonical name, GOALS (5 dimensions, 1–5, 25 max, named maturity ladder), the INPACT dependency phases, and per-dimension GOALS threshold gating.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`inpact.test.ts`, **36 tests**. Explicitly pins `INPACT_MAX_SCORE === 6` and `INPACT_MAX_TOTAL === 36` against the specific drift of reusing GOALS&#39;s 1–5 ladder. Rejects Adaptive-before-Instant and Permitted-before-Instant. Layer 1 asserted as &quot;Multi-Modal Storage&quot; and layer 2 as &quot;Real-Time Data&quot;, the book&#39;s names rather than the master plan&#39;s shorthand.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the load-bearing test is **&quot;a single collapsed dimension fails even when the total looks healthy&quot;** — GOALS 5+5+5+5+1 totals 21/25 and looks fine averaged, but Solid at 1/5 means the data is wrong, and the book&#39;s interdependence principle says that cascades. So gating is per dimension and the total is display-only. An unscored dimension is a **failure, not a pass**: &quot;not scored&quot; is not &quot;meets the bar&quot;. The headline INPACT score returns null unless all six are scored, because a partial assessment reported as a number invites comparison with a complete one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">25</span>
+          <h2>**Discovery snapshots, approved before architecture**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryDiscovery.ts` + DDL. Versioned with an `approved_snapshot`, same freeze discipline as `DeliveryContract`. The seven Project AI outputs are distinct columns: understood, recommended, **remains_human**, software_handles, ai_recommends, agents_may_act, open_decisions.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">covered by the schema-contract and model-parity suites; the Gate 1 tenancy-by-parent test still passes unchanged with the two new tables, confirming neither carries a `tenant_id`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">storing the seven outputs as separate columns rather than one blob is what lets Gate 7 check that the story graph honours them — and what stops &quot;where AI should recommend&quot; quietly collapsing into &quot;where agents may act&quot;, which is the difference between a suggestion and an action taken on someone&#39;s behalf.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">26</span>
+          <h2>**AI-native Opportunity Map, with &quot;do not force AI everywhere&quot; enforced**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryOpportunity.ts` + DDL + `services/delivery/deliveryOpportunityMap.ts` (pure). One row per capability, unique on (project, capability).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryOpportunityMap.test.ts`, **32 tests**. Autonomy with no declared trust requirement is **blocking**; an acting agent that omits `permitted` is blocking; trust requirements must reference the INPACT registry rather than free text; every disposition must describe itself. Scores warn rather than block.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`disposition` defaults to `traditional_software` — a capability nobody has classified is **not** an agent opportunity by default, and that default is precisely how &quot;AI everywhere&quot; happens without anyone deciding it. The `ai_everywhere` check **warns and does not block**: there are real projects where nearly everything is an agent opportunity, and a gate that refused them would be wrong — the signal exists so a human looks, not so the tool decides. `human_only_decision` is a first-class column rather than an absence of AI columns, so &quot;a form and a database&quot; is recorded as an answer instead of leaving a gap that later reads as an unexplored opportunity.</span></div>
           
         </div>
       </article>
