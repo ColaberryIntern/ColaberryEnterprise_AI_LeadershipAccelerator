@@ -20,7 +20,7 @@ import { resolveContentPageAccess } from '../services/access/contentEntitlement'
  * is the actual security boundary, not decoration on top of the frontend gate.
  */
 
-type GatedFeature = 'classroom' | 'projects';
+type GatedFeature = 'classroom' | 'projects' | 'portfolio';
 
 const NOT_ENTITLED_BODY = (feature: GatedFeature) => ({
   error: 'content_requires_paid',
