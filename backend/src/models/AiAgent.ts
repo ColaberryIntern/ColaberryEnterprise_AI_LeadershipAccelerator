@@ -248,6 +248,11 @@ interface AiAgentAttributes {
   // from this — it always resolves to a human at the end, however many hops.
   reports_to_type?: 'human' | 'agent' | null;
   reports_to_id?: string | null;
+  // AI Workforce Reset, Phase C (2026-08-24) — the 4-level autonomy ladder
+  // docs/ai-governance/abac-design.md already proposed (still awaiting sign-off
+  // on enforcement — this column is purely declarative, set at reactivation
+  // time). See ensureAiAgentAutonomyLevelSchema.ts for the real schema.
+  autonomy_level?: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
 }
 
 class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
@@ -282,6 +287,7 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare reports_to_org_member_id: string | null;
   declare reports_to_type: 'human' | 'agent' | null;
   declare reports_to_id: string | null;
+  declare autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
 }
 
 AiAgent.init(
@@ -430,6 +436,11 @@ AiAgent.init(
       // express. Same no-DB-FK convention either way; see above.
       type: DataTypes.UUID,
       allowNull: true,
+    },
+    autonomy_level: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: 'observe',
     },
   },
   {
