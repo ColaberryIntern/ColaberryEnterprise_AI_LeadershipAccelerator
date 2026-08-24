@@ -8,10 +8,19 @@
  * the page. This module is the plan half of that payload; the build-progress
  * half is `.colaberry/progress.json`. See docs/COMMAND_CENTER_DATA_CONTRACT.md.
  *
- * OWNERSHIP: platform, rewritten wholesale on every publish and sync. A student
- * editing this file will have their edit overwritten, and the managed block in
- * CLAUDE.md says so. Anything a student is meant to own goes in
- * `.colaberry/profile.json` (theirs) or `.colaberry/progress.json` (co-owned).
+ * OWNERSHIP: platform-GENERATED, rewritten wholesale on every publish and sync
+ * — but only while the copy in the student's repo is byte-identical to the one
+ * the platform last wrote. This file used to be described as platform-owned
+ * outright, and the writer behaved that way: students who hand-edited it had
+ * their work replaced on the next sync. `repoWriter.planWriteDecision` now
+ * compares the repo's copy against the manifest hash and refuses to overwrite
+ * anything it cannot prove the platform wrote, so a hand-edited plan survives —
+ * at the cost of no longer receiving platform updates. See `fileOwnership.ts`
+ * for the full class (`platform_unless_edited`).
+ *
+ * Anything a student is meant to own OUTRIGHT still goes in
+ * `.colaberry/profile.json` (theirs) or `.colaberry/progress.json` (co-owned);
+ * this file remains the wrong place to put state you want the platform to keep.
  *
  * TWO INVARIANTS THIS MODULE MUST NOT BREAK:
  *

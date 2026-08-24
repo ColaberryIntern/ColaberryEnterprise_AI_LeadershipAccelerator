@@ -4,7 +4,10 @@
    so light/dark theming and the Design E palette come for free — no new colour
    constants are introduced here. */
 
-.cp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.cp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+/* At phone width the badge was being pushed past the right edge — caught on a
+   real 390px capture, not in review. Let it drop under the heading instead. */
+@media (max-width: 560px) { .cp-head .cp-privacy { order: -1; } }
 
 .cp-privacy {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
@@ -137,12 +140,14 @@
 .cp-level-colaberry_verified { color: var(--leaf-text); background: var(--sunken); border-color: var(--leaf-text); }
 .cp-level-delivery_verified { color: var(--berry); background: var(--sunken); border-color: var(--berry); }
 .cp-level-resume { color: var(--muted); background: var(--sunken); border-color: var(--border); }
+.cp-level-none { color: var(--muted); background: transparent; border-color: var(--border-sub); }
 
 .cp-cap-bar { height: 6px; border-radius: 999px; background: var(--sunken); margin-top: 9px; overflow: hidden; }
 .cp-cap-fill { display: block; height: 100%; border-radius: 999px; }
 .cp-fill-colaberry_verified { background: var(--leaf); }
 .cp-fill-delivery_verified { background: var(--berry); }
 .cp-fill-resume { background: var(--border); }
+.cp-fill-none { background: transparent; }
 
 .cp-cap-body { margin-top: 12px; padding-left: 2px; }
 .cp-sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; color: var(--body); }
