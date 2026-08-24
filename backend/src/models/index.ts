@@ -427,6 +427,7 @@ import DeliveryProjectMember from './DeliveryProjectMember';
 import DeliveryContract from './DeliveryContract';
 import DeliveryDecision from './DeliveryDecision';
 import DeliveryEvent from './DeliveryEvent';
+import BuilderAuthorityProfile from './BuilderAuthorityProfile';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
 // loaded, not only when an intelligence service happens to import them directly. The
 // schema/model parity test walks sequelize.models, so an unregistered model is an
@@ -1505,6 +1506,7 @@ export {
   DeliveryContract,
   DeliveryDecision,
   DeliveryEvent,
+  BuilderAuthorityProfile,
   GraphNode,
   GraphEdge,
   GraphEvent,
@@ -1814,3 +1816,14 @@ DeliveryProjectSourceLink.belongsTo(Project, {
 // DeliveryEvent has NO associations, deliberately. It is append-only and must outlive
 // what it describes — archiving a project or removing an identity cannot cascade away
 // the record of what happened. Same discipline as TenantAccessAudit.
+
+// A builder's authority travels with the identity, not with a project — so this is a
+// one-to-one on PlatformIdentity rather than anything project-scoped.
+PlatformIdentity.hasOne(BuilderAuthorityProfile, {
+  foreignKey: 'platform_identity_id',
+  as: 'builderAuthority',
+});
+BuilderAuthorityProfile.belongsTo(PlatformIdentity, {
+  foreignKey: 'platform_identity_id',
+  as: 'identity',
+});
