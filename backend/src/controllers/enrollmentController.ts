@@ -47,7 +47,11 @@ export async function handleCreateInvoice(
       source: 'enrollment_form',
       consentText: SIGNUP_CONSENT_TEXT,
       ipAddress: req.ip ?? null,
-      userAgent: req.get('user-agent') ?? null,
+      // `req.get` is an Express helper, not part of the bare request shape.
+      // Calling it unguarded threw on a hand-rolled req in an existing test, and
+      // the controller's catch turned that into a silent failure to respond -
+      // consent capture must never be able to break a signup that way.
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
     });
 
     // Validate cohort availability
@@ -176,7 +180,11 @@ export async function handleCreateFreeAccount(
       source: 'free_signup',
       consentText: SIGNUP_CONSENT_TEXT,
       ipAddress: req.ip ?? null,
-      userAgent: req.get('user-agent') ?? null,
+      // `req.get` is an Express helper, not part of the bare request shape.
+      // Calling it unguarded threw on a hand-rolled req in an existing test, and
+      // the controller's catch turned that into a silent failure to respond -
+      // consent capture must never be able to break a signup that way.
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
     });
 
     console.log(
