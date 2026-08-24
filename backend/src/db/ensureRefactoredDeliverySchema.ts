@@ -319,6 +319,76 @@ const BUILDER_AUTHORITY: string[] = [
      ON builder_authority_profiles (platform_identity_id)`,
 ];
 
+
+/**
+ * Gate 4 — discovery snapshots and the AI-native Opportunity Map.
+ *
+ * `delivery_discoveries` follows the same freeze discipline as `delivery_contracts`:
+ * versioned, with an `approved_snapshot`, because what the client confirmed we understood
+ * must stay readable exactly as they confirmed it.
+ *
+ * `delivery_opportunities` is unique on (project, capability). A capability assessed
+ * twice with different answers is not richer information, it is an unresolved
+ * disagreement, and the map is meant to be the resolved view.
+ */
+const DISCOVERY_AND_OPPORTUNITIES: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_discoveries (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     version INTEGER NOT NULL DEFAULT 1,
+     status VARCHAR(20) NOT NULL DEFAULT 'draft',
+     business_goal TEXT,
+     users JSONB,
+     jobs_to_be_done JSONB,
+     workflow JSONB,
+     systems JSONB,
+     data_sources JSONB,
+     pain_points JSONB,
+     human_judgment JSONB,
+     constraints JSONB,
+     compliance JSONB,
+     success_measures JSONB,
+     understood TEXT,
+     recommended TEXT,
+     remains_human TEXT,
+     software_handles TEXT,
+     ai_recommends TEXT,
+     agents_may_act TEXT,
+     open_decisions JSONB,
+     approved_snapshot JSONB,
+     approved_by_identity_id UUID,
+     approved_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_discoveries_project_version_unique
+     ON delivery_discoveries (delivery_project_id, version)`,
+
+  `CREATE TABLE IF NOT EXISTS delivery_opportunities (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     discovery_id UUID,
+     capability VARCHAR(255) NOT NULL,
+     disposition VARCHAR(30) NOT NULL DEFAULT 'traditional_software',
+     traditional_software TEXT,
+     ai_recommendation TEXT,
+     agent_opportunity TEXT,
+     automation TEXT,
+     human_only_decision TEXT,
+     data_dependency JSONB,
+     trust_requirement JSONB,
+     value_score INTEGER,
+     complexity_score INTEGER,
+     notes TEXT,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_opportunities_project_capability_unique
+     ON delivery_opportunities (delivery_project_id, capability)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_opportunities_discovery
+     ON delivery_opportunities (discovery_id)`,
+];
+
 /**
  * Order matters across the groups: the spine must exist before its children reference
  * it, and the organization relaxation runs first because delivery engagements point at
@@ -345,4 +415,5 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...DELIVERY_SPINE,
   ...DELIVERY_CHILDREN,
   ...BUILDER_AUTHORITY,
+  ...DISCOVERY_AND_OPPORTUNITIES,
 ];

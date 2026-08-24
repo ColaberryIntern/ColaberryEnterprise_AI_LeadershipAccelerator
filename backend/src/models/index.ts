@@ -428,6 +428,8 @@ import DeliveryContract from './DeliveryContract';
 import DeliveryDecision from './DeliveryDecision';
 import DeliveryEvent from './DeliveryEvent';
 import BuilderAuthorityProfile from './BuilderAuthorityProfile';
+import DeliveryDiscovery from './DeliveryDiscovery';
+import DeliveryOpportunity from './DeliveryOpportunity';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
 // loaded, not only when an intelligence service happens to import them directly. The
 // schema/model parity test walks sequelize.models, so an unregistered model is an
@@ -1507,6 +1509,8 @@ export {
   DeliveryDecision,
   DeliveryEvent,
   BuilderAuthorityProfile,
+  DeliveryDiscovery,
+  DeliveryOpportunity,
   GraphNode,
   GraphEdge,
   GraphEvent,
@@ -1826,4 +1830,28 @@ PlatformIdentity.hasOne(BuilderAuthorityProfile, {
 BuilderAuthorityProfile.belongsTo(PlatformIdentity, {
   foreignKey: 'platform_identity_id',
   as: 'identity',
+});
+
+// Discovery and the Opportunity Map are strict children of DeliveryProject — no
+// tenant_id of their own, scoped by join. An opportunity optionally cites the discovery
+// it came from, so the map can be read back against the understanding it was built on.
+DeliveryProject.hasMany(DeliveryDiscovery, {
+  foreignKey: 'delivery_project_id',
+  as: 'discoveries',
+  onDelete: 'CASCADE',
+});
+DeliveryDiscovery.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+DeliveryProject.hasMany(DeliveryOpportunity, {
+  foreignKey: 'delivery_project_id',
+  as: 'opportunities',
+  onDelete: 'CASCADE',
+});
+DeliveryOpportunity.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+DeliveryOpportunity.belongsTo(DeliveryDiscovery, {
+  foreignKey: 'discovery_id',
+  as: 'discovery',
 });
