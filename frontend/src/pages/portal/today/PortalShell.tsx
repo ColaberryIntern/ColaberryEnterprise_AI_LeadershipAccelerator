@@ -26,8 +26,8 @@ import { useScrollCondense } from '../../../hooks/useScrollCondense';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
 // icon per item. Today / Path / Schedule / Projects / Classroom / Community /
-// Rooms are built and navigate; Cert Prep / Portfolio are deferred past the
-// P0 launch fence and render as a dimmed "Soon" item. (Rooms IS the group-chat
+// Rooms / Portfolio are built and navigate; Cert Prep is still deferred past the
+// P0 launch fence and renders as a dimmed "Soon" item. (Rooms IS the group-chat
 // surface — text + video rooms — so the old "Group Chat" placeholder was removed.)
 // `gate` marks an item as content-paywalled (<PageGate> on its route) — the item
 // STAYS a clickable Link (unlike `soon`, which fully disables it): a free/unpaid
@@ -79,7 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Library', to: '/portal/library', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
       ) },
-      { label: 'Portfolio', soon: true, icon: (
+      { label: 'Portfolio', to: '/portal/portfolio', gate: 'portfolio', icon: (
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M9 6V4h6v2M3 12h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },
     ],

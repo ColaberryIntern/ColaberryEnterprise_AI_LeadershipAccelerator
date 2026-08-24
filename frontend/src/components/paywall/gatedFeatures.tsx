@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type GatedFeatureKey = 'classroom' | 'projects' | 'cert-prep';
+export type GatedFeatureKey = 'classroom' | 'projects' | 'cert-prep' | 'portfolio';
 
 export interface GatedFeatureCopy {
   key: GatedFeatureKey;
@@ -21,6 +21,9 @@ const ICONS = {
   ),
   'cert-prep': (
     <svg viewBox="0 0 24 24" fill="none" width="26" height="26"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+  ),
+  portfolio: (
+    <svg viewBox="0 0 24 24" fill="none" width="26" height="26"><rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M9 6V4h6v2M3 12h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
   ),
 };
 
@@ -61,6 +64,20 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeatureCopy> = {
       'Every completed build counts toward certification',
     ],
     ctaLabel: 'Enroll to start building →',
+    ctaTo: '/portal/settings?tab=subscription',
+  },
+  portfolio: {
+    key: 'portfolio',
+    eyebrow: 'Portfolio',
+    title: 'Build a portfolio employers can verify',
+    subtitle: 'Your learning, projects and GitHub work automatically become a professional portfolio — with the evidence behind every claim.',
+    benefits: [
+      'Your class work becomes portfolio artifacts automatically',
+      'Every capability shows the evidence that earned it',
+      'One portfolio across all your projects and repositories',
+      'Private by default — you control what is ever shared',
+    ],
+    ctaLabel: 'Enroll to unlock your portfolio →',
     ctaTo: '/portal/settings?tab=subscription',
   },
   'cert-prep': {
