@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 12:44 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">45 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 2:38 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">49 changes</span></div>
   </header>
   <main>
     
@@ -732,6 +732,66 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">only `commit` and `pull_request` project; non-passing outcomes do not; a builder with no enrollment yields `projects: false` with a reason rather than an error; the projected row reuses the **same** idempotency key; `projectProgressionToDelivery()` throws.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">master plan §2.5 — one event, one delivery row, at most one derived progression row. Reusing the delivery row&#39;s idempotency key rather than minting a second makes the replay guarantee structural: two replays collide on the same unique index on **both** sides. The reverse direction is written as a function that throws rather than left as a comment, because a future caller looking for `projectStudentEvidenceToDelivery` would otherwise find nothing and write it. Builder-credit types are deliberately narrow: a passing security scan is real evidence about the release but nobody authored it, and crediting it would inflate the ledger with work that was not done. Gate 11 can widen this with a reason; it should not widen by default.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">46</span>
+          <h2>**The client visibility contract: allowlist, not blocklist**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/clientVisibility.ts` — the eight nav sections, the five forbidden categories, per-object field allowlists, and `findForbiddenFields` as a tripwire.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a builder project object carrying `mentor_notes`, `builder_assessment`, `agent_scratchpad`, `api_key` and `stack_trace` projects to exactly four allowlisted keys; a field invented later is dropped by default; the projection builds a new object rather than mutating the source; a test asserts no allowlist contains a field that would trip the tripwire.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**a blocklist protects only against the fields that exist today.** Every field added afterwards is exposed by default, and the person adding it is thinking about the builder view, not about a client reading it six months later. The allowlist inverts that: a new field is invisible until someone names it, and naming it is a reviewable line in a diff. The tripwire is deliberately redundant with the allowlist — the allowlist is the control, the tripwire catches someone adding `internal_notes` *to* an allowlist. Truncation of the walk is reported as a hit rather than returning clean, because an incomplete check that answers &quot;clean&quot; is worse than no check.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">47</span>
+          <h2>**The projection happens server-side and produces a different object**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/clientProjection.ts` — `audienceFor`, `projectForAudience`, `guardClientPayload`, `stripForbidden`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">client-only roles receive the reduced shape; staff receive the full object; **no roles at all receives the client shape**; a mixed staff-and-client role set is staff; the guard throws in development and strips in production; `stripForbidden` removes nested offenders and keeps everything else.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Gate 0&#39;s CLIENT_PORTAL_MAP is the source of this shape. A client-role check applied in React puts a mentor&#39;s private assessment of an intern into a network payload that anyone can open DevTools and read — the data has already left the building by the time the UI decides not to draw it. **Two deliberate deviations from the obvious default.** (1) `audienceFor([])` returns `client`: an unknown caller is not a trusted caller, and a role-lookup failure must never be the thing that widens access. (2) CLAUDE.md&#39;s contract rule says outbound responses &quot;log and continue&quot; in production — **continuing unchanged here IS the leak**, so production strips and logs while development throws. Recorded as a considered deviation rather than followed into a data disclosure.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">48</span>
+          <h2>**Client acceptance as a durable object**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryClientAcceptance.ts`, `services/delivery/clientAcceptanceService.ts`, and the `delivery_client_acceptances` table.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`accepted` can be superseded or withdrawn but not mutated; `superseded` is terminal; an acceptance with no named acceptor, no promise snapshot or no preview reference is refused; `accepted_with_exceptions` with an empty exception list is refused, as is a clean `accepted` that quietly carries exceptions; an ambiguous scope (both release and story) is refused.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §24 lists &quot;client acceptance is not durable&quot; as a stop condition; `AcceptanceChecklist.tsx` in the student portal is a UI component, not a record, and deliberately not the precedent. **Acceptance is not terminal on purpose** — if it were, the only way to correct one would be an UPDATE on the accepted row, which is the silent-overwrite failure §24 forbids. Making supersession legal is what makes mutation unnecessary. The promise, preview and evidence columns are **snapshots, not foreign keys**: a client accepted a specific promise against a specific preview, and read through live references the record would silently re-describe itself every time the underlying story was edited. Missing evidence **warns rather than blocks** — a client may accept on their own judgement, and refusing to record that would push the sign-off out of the system entirely, which is the failure the table exists to prevent.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">49</span>
+          <h2>**Change requests must show impact before build**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/clientChangeRequest.ts`, `models/DeliveryChangeRequest.ts`, and the `delivery_change_requests` table.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">there is **no** `submitted -&gt; approved_for_build` edge, so the path to build runs through assessment; the client summary reports counts and flags and contains no node identifiers; truncated analysis is stated as &quot;may be incomplete&quot; rather than implied complete; build approval is refused with no impact summary and refused with no named approver.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the impact comes from Gate 3&#39;s `analyzeImpact`, reused rather than re-derived, so the client&#39;s answer and the builder&#39;s answer cannot drift apart. The gate is enforced **twice on purpose**: the transition table makes the path to build run through assessment, and `gateChangeRequest` checks that the assessment actually produced something — a status can be set by a caller, but a recorded summary cannot be faked by setting a field to the right string. `impact_summary` and `impact_internal` live on one row rather than in two tables so they cannot drift; the projection layer decides which one leaves the building.</span></div>
           
         </div>
       </article>

@@ -576,6 +576,78 @@ const QUALITY_EVIDENCE: string[] = [
 ];
 
 /**
+ * GATE 10 — the Client Review Room's two durable objects.
+ *
+ * `delivery_client_acceptances` exists because master plan §24 lists "client acceptance is
+ * not durable" as a stop condition. Note the absence of any UPDATE path in its design: an
+ * acceptance that changes gets a successor row and `superseded_by_id` back-pointer, the
+ * same discipline as `delivery_decisions`. An UPDATE on an accepted row would let the
+ * record claim a client approved something they never saw.
+ *
+ * The snapshot columns (`promised_acceptance`, `preview_ref`, `evidence_summary`) are
+ * copies rather than foreign keys on purpose. A client accepted a specific promise against
+ * a specific preview; read through live references, the record would silently re-describe
+ * itself every time the underlying story was edited.
+ *
+ * `delivery_change_requests` carries BOTH impact shapes on one row — `impact_summary` is
+ * client-safe counts and flags, `impact_internal` is the full node-level report that never
+ * leaves the builder surface. One row rather than two tables so they cannot drift; the
+ * projection layer decides which one is served.
+ */
+const CLIENT_REVIEW_ROOM: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_client_acceptances (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     scope_kind VARCHAR(20) NOT NULL,
+     release_id UUID,
+     story_id UUID,
+     promised_acceptance JSONB,
+     preview_ref TEXT,
+     evidence_summary JSONB,
+     accepted_by_identity_id UUID,
+     accepted_at TIMESTAMPTZ,
+     comments TEXT,
+     exceptions JSONB,
+     status VARCHAR(30) NOT NULL DEFAULT 'pending',
+     superseded_by_id UUID,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_client_acceptances_project
+     ON delivery_client_acceptances (delivery_project_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_client_acceptances_release
+     ON delivery_client_acceptances (release_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_client_acceptances_story
+     ON delivery_client_acceptances (story_id)`,
+  // The live-acceptance read path: current rows are the ones nothing has superseded.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_client_acceptances_current
+     ON delivery_client_acceptances (delivery_project_id, status)
+     WHERE superseded_by_id IS NULL`,
+
+  `CREATE TABLE IF NOT EXISTS delivery_change_requests (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     title VARCHAR(255) NOT NULL,
+     description TEXT,
+     status VARCHAR(30) NOT NULL DEFAULT 'draft',
+     requested_by_identity_id UUID,
+     requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     impact_summary JSONB,
+     impact_internal JSONB,
+     impact_assessed_at TIMESTAMPTZ,
+     approved_by_identity_id UUID,
+     approved_at TIMESTAMPTZ,
+     declined_reason TEXT,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_change_requests_project
+     ON delivery_change_requests (delivery_project_id, requested_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_change_requests_status
+     ON delivery_change_requests (status)`,
+];
+
+/**
  * Order matters across the groups: the spine must exist before its children reference
  * it, and the organization relaxation runs first because delivery engagements point at
  * organizations that may now legitimately have no owner.
@@ -605,4 +677,5 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...TRUST_BEFORE_INTELLIGENCE,
   ...EXECUTION_RUNS,
   ...QUALITY_EVIDENCE,
+  ...CLIENT_REVIEW_ROOM,
 ];
