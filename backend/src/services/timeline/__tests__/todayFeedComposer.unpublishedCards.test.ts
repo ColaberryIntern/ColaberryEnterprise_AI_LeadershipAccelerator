@@ -34,8 +34,18 @@ jest.mock('../../../models/TimelineCard', () => ({
   default: { findAll: (...args: any[]) => mockFindAll(...args) },
 }));
 
+// Ambient supply is empty by default (so most tests see exactly the impressions
+// they seeded) but is switchable per-test, for the backfill case below.
+let ambientCounter = 0;
+let ambientSupplyOn = false;
 jest.mock('../ambientPool', () => ({
-  pickAmbientBatch: jest.fn().mockResolvedValue([]),
+  pickAmbientBatch: jest.fn((_eid: string, provider: string, n: number) =>
+    Promise.resolve(ambientSupplyOn
+      ? Array.from({ length: n }, () => {
+        const id = `${provider}-${ambientCounter++}`;
+        return { provider, ref: `${provider}:${id}`, media_id: id, title: id, description: null, video: null, blog: null, image: null };
+      })
+      : [])),
   AMBIENT_PROVIDERS: ['blog', 'podcast', 'testimonial'],
   AMBIENT_REPEAT_COOLDOWN_DAYS: 30,
 }));
@@ -78,6 +88,8 @@ function seedCard(position: number, cardId: string) {
 beforeEach(() => {
   jest.clearAllMocks();
   store = [];
+  ambientCounter = 0;
+  ambientSupplyOn = false;
   jest.spyOn(sequelize, 'query').mockImplementation(((sql: any, opts: any) => {
     const s = String(sql);
     if (s.includes('INSERT INTO today_feed_impressions')) {
@@ -189,6 +201,23 @@ it('asks for visibility in ONE batched query, not per card', async () => {
   const arg = mockFindAll.mock.calls[0][0];
   expect(arg.where.id.sort()).toEqual(['c1', 'c2', 'c3']);
   expect(arg.attributes).toContain('visibility');
+});
+
+it('BACKFILLS the gap: dropping dead cards must not hand the student a shorter page', async () => {
+  // The half-fixed version of this change is arguably worse than the bug: if
+  // dropping 20 dead items just made the feed 20 items shorter, we would have
+  // traded a broken card for a thinner Today page. buildServed runs BEFORE the
+  // composer's top-up loop, whose condition is on the count of SURVIVING items,
+  // so the gap refills from live content.
+  for (let i = 0; i < 12; i++) seedCard(i, `card-dead-${i}`);
+  mockFindAll.mockImplementation(({ where }: any) =>
+    Promise.resolve((where.id as string[]).map((id) => mkCardRow(id, 'archived'))));
+  ambientSupplyOn = true;
+
+  const page = await getTodayPage('enr-1', 0, 10);
+
+  expect(page.items).toHaveLength(10);                                  // a full page, not 0
+  expect(page.items.every((i) => !i.ref.startsWith('card:card-dead'))).toBe(true);
 });
 
 it('leaves the impression rows themselves ALONE — the append-only log is never rewritten or deleted', async () => {
