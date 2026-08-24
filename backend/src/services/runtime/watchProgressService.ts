@@ -23,6 +23,7 @@ import { videoFromMetadata } from '../timeline/timelineService';
 import { getAssignedTestimonialDurationS } from '../timeline/networkVideoService';
 import { getAssignedPodcastDurationS } from '../timeline/podcastMediaService';
 import { accumulateWatch, requiredWatchPct, meetsWatchRequirement, withAuthoritativeDuration, WatchBeat, WatchState } from './watchProgressMath';
+import { isCardServable } from '../timeline/curriculumScope';
 
 export { DEFAULT_WATCH_PCT, MAX_DELTA_PER_BEAT_S, accumulateWatch, requiredWatchPct, meetsWatchRequirement, isWatchableCard } from './watchProgressMath';
 export type { WatchBeat, WatchState } from './watchProgressMath';
@@ -45,7 +46,7 @@ export async function resolveAuthoritativeDurationS(card: TimelineCard, enrollme
 /** Record one heartbeat and return the gate status for the UI. */
 export async function recordWatchBeat(enrollmentId: string, cardId: string, beat: WatchBeat) {
   const card = await TimelineCard.findByPk(cardId);
-  if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
+  if (!card || !isCardServable(card.visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
 
   const [progress] = await TimelineCardProgress.findOrCreate({
     where: { card_id: cardId, enrollment_id: enrollmentId },

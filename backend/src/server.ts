@@ -76,6 +76,7 @@ import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
+import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
 import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValueRankerSchema';
@@ -2449,6 +2450,13 @@ async function start(): Promise<void> {
   // Comment moderation (Community Organizer role) — status/removed_at/removed_by
   // on community_comments, mirroring the existing post-moderation columns.
   await ensureCommunityCommentModerationSchema();
+  // Capstone Record — the two capstone tables plus community_posts.shared_to_portfolio.
+  //
+  // Runs AFTER the community ensures above because the consent column is an ALTER
+  // against community_posts: on a fresh database a reversed ordering drops that
+  // statement into its catch and leaves consent unreadable, which reads at runtime
+  // as "nobody consented" rather than as a missing column.
+  await ensureCapstoneSchema();
   // Free-trial Organization / Manager layer — org + roster tables (idempotent).
   await ensureOrgSchema();
   // Student self-serve subscriptions (idempotent).

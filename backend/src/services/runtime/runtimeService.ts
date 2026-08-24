@@ -24,6 +24,7 @@ import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { ritualStudentLabel } from './communityRituals';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
+import { isCardServable } from '../timeline/curriculumScope';
 
 /** Build the student's signal vector from progression + completed evidence + portfolio. */
 export async function studentSignals(enrollmentId: string): Promise<StudentSignals> {
@@ -103,7 +104,7 @@ export async function openCard(enrollmentId: string, cardId: string, opts: { rea
   if (cardId.startsWith('blog:')) return openAmbientBlogCard(enrollmentId, cardId);
 
   const card = await TimelineCard.findByPk(cardId);
-  if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
+  if (!card || !isCardServable(card.visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
   // Gating: a locked card (unmet prerequisites) can't be opened by direct URL.
   // Throws { status: 423, code: 'card_locked' }; fail-open on error.
   const { assertCardUnlocked } = await import('../timeline/timelineGatingService');

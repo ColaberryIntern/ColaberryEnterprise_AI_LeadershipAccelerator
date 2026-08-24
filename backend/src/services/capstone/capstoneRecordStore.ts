@@ -105,14 +105,23 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
         verification: null,
       };
     }),
-    // Bands with no reader yet resolve to empty rather than being faked. An
-    // absent competency list renders as absent; it never renders as zero.
+    // Read in parallel below; both degrade to [] rather than throwing, so one
+    // unreadable band costs that band and not the whole record.
     competencies: [],
     posts: [],
     certification: null,
   };
 
-  return { inputs, enrollmentId: String(project.enrollment_id) };
+  const enrollmentId = String(project.enrollment_id);
+  const { readCompetencies, readSharedPosts } = await import('./capstoneReaders');
+  const [competencies, posts] = await Promise.all([
+    readCompetencies(enrollmentId),
+    readSharedPosts(enrollmentId),
+  ]);
+  inputs.competencies = competencies;
+  inputs.posts = posts;
+
+  return { inputs, enrollmentId };
 }
 
 /**
