@@ -76,14 +76,43 @@ difference between a tenancy model and tenancy-shaped decoration.
 | admin context switch | only authorized tenants appear in the switcher |
 | tenant isolation | UI-level confirmation of the negative tests above |
 
-**Execution status:** `tests/systemV2/ecosystemIsolation.e2e.js` is **written and
-committed**. It is **not executed** in this environment, which has no running stack and no
-staging credentials.
+**Execution status: EXECUTED 2026-08-24 against the dev stack — 11/11 checks pass,
+exit 0.** Command: `BASE_URL=http://95.216.199.47:9999 node
+tests/systemV2/ecosystemIsolation.e2e.js`.
 
 An earlier revision of this document claimed the specs were "authored" when no such file
-existed. That was false when written, and it is corrected by writing them rather than by
-softening the wording — a test matrix that overstates its own coverage is worse than one
-that admits a gap.
+existed. That was corrected by writing them. This revision closes the second half of the
+same gap: written is not executed, and the first execution found three real defects that
+196 passing unit tests could not:
+
+1. **`cpn` and `ai-flotation` lead sources did not exist.** `ecosystemSeedData.ts`
+   declares `lead_source_slugs: ['cpn']`, but that field only drives the backfill — it
+   never creates the source row, and no seeder did. Both brands returned "Unknown or
+   inactive source" and could not capture a lead at all. Added to `seedLeadSources.ts`.
+2. **The spec posted to `/api/ingest`, which is not a route.** The real endpoint is
+   `/api/leads/ingest`. The resulting 401s were the catch-all `/api/*` guard, not an
+   auth defect — a false alarm that would have been read as one.
+3. **The spoof check asserted the wrong thing.** It searched the entire response for the
+   claimed `tenant_id`, which legitimately appears in `normalized.metadata` because the
+   raw payload is captured verbatim. It failed while the system was behaving correctly.
+   Now it excludes the verbatim echo and asserts the value is never *adopted*.
+
+**Prerequisites are three steps, not two.** `seedEcosystem` → `seedLeadSources` →
+`backfillTenancy`. The third is easy to miss and produces the most confusing failure: the
+ingest path writes a brand relationship only when the SOURCE carries `tenant_id` and
+`brand_id`, so an unclassified source still accepts the post and still creates the lead,
+then silently logs `tenant_context_unresolved` and skips the relationship.
+
+**Verified in the database, not just by exit code** — a green run is only evidence if the
+rows exist. One canonical lead `24113` carrying **two** brand relationships:
+
+| tenant / brand | consent | relationship |
+|---|---|---|
+| `cpn / cpn` | true | `scholarship_interest` |
+| `ai-flotation / ai-flotation` | true | `workflow_intake` |
+
+and `select count(*) from lead_tenant_contexts where tenant_id::text like '00000000%'`
+returns **0** — the hostile body's claimed tenant was stored nowhere.
 
 The spec is built so it cannot report a false pass:
 
@@ -91,12 +120,14 @@ The spec is built so it cannot report a false pass:
   source is not seeded — never a green run over checks that never executed;
 - exit 0 only when every check ran and passed; exit 1 on a real failure.
 
-Verified locally by pointing it at a dead port: it aborted cleanly rather than throwing a
-stack trace or reporting success.
+Verified by pointing it at a dead port: it aborted cleanly rather than throwing a stack
+trace or reporting success.
 
-Running it against production is deliberately **not** done. The tenancy code is merged but
-not deployed, so a run would both write test rows into the live CRM and fail on behaviour
-that is not live yet.
+Running it against **production** is still deliberately **not** done: it writes real rows,
+and the default `BASE_URL` is production precisely so that an accidental bare run is the
+thing you notice. Dev is the correct target (`accelerator_dev1`, a separate database from
+`accelerator_prod` despite both stacks resolving the hostname `postgres` to the same
+container).
 
 ## Idempotency assertions (plan §55, root `CLAUDE.md`)
 

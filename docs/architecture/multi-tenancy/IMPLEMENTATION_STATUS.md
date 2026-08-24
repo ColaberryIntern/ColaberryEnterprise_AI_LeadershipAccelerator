@@ -176,14 +176,29 @@ validator verified to **fail** on a planted violation, not merely to pass.
 
 ## Gate 7 — Full E2E
 
-**Status: PARTIAL**
+**Status: COMPLETE for the ecosystem isolation suite** (2026-08-24). D-10 is closed.
 
 Unit + integration: **196/196 passing across 16 suites**, backend `tsc --noEmit` clean.
 Tenant-isolation evidence generated from real test output: **73 checks, 0 failures** —
 see [ISOLATION_EVIDENCE.md](ISOLATION_EVIDENCE.md).
 
-The Playwright ecosystem suite is **not executed** (D-10) — no running stack or staging
-credentials in this environment. Reported as not-executed, never as passing.
+`ecosystemIsolation.e2e.js` has now been **executed against the dev stack: 11/11 checks,
+exit 0**, and the resulting rows were verified directly in `accelerator_dev1` rather than
+trusted from the exit code. One canonical lead carries two brand relationships
+(`cpn/scholarship_interest`, `ai-flotation/workflow_intake`), and the hostile body's
+claimed tenant is stored nowhere — 0 rows.
+
+**The first execution found three defects that 196 passing unit tests could not**, which
+is the whole argument for the gate: two brands could not capture a lead at all because no
+seeder ever created their `lead_sources` rows; the spec posted to a route that does not
+exist; and its most important assertion was testing the verbatim raw-payload echo rather
+than what the server resolved, so it failed while the system was correct. All three are
+fixed. Detail in [TEST_MATRIX.md](TEST_MATRIX.md).
+
+**Still not executed:** the browser-level journey specs in the table in TEST_MATRIX.md
+(CPN / AI Flotation / Refactored skeleton journeys, admin context switch). Those need the
+skeleton apps served somewhere; the isolation suite covers the API boundary they sit on,
+but they are not the same thing and are not being reported as done.
 
 ## Gate 8 — Deployment
 
