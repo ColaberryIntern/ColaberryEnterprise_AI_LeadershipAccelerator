@@ -16,6 +16,7 @@ import { signReadOnlyParticipantJwt } from '../participantService';
 import { createTestEnrollments } from '../../scripts/createTestUsers';
 import { env } from '../../config/env';
 import { buildViewAsWorkspaceUrl } from './workspacePreviewUrl';
+import { isCardServable } from './curriculumScope';
 
 function httpError(message: string, status: number): Error {
   return Object.assign(new Error(message), { status });
@@ -24,7 +25,7 @@ function httpError(message: string, status: number): Error {
 export async function buildWorkspacePreviewUrl(cardId: string, impersonatedBy: string): Promise<string> {
   const card = await TimelineCard.findByPk(cardId);
   if (!card) throw httpError('Card not found', 404);
-  if (card.visibility !== 'published') {
+  if (!isCardServable(card.visibility)) {
     throw httpError('Publish this card first — the live workspace only opens published cards.', 409);
   }
 

@@ -33,6 +33,8 @@
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
+import TimelineCard from '../../models/TimelineCard';
+import { isCardServable } from './curriculumScope';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
@@ -301,6 +303,53 @@ async function completedCardIds(enrollmentId: string, cardIds: string[]): Promis
   }
 }
 
+/**
+ * Card ids that are no longer SERVABLE — dropped from the served feed because
+ * every action against them would 404.
+ *
+ * The Today feed is an append-only snapshot: `today_feed_impressions` stores a
+ * frozen copy of the item and replays it forever, never re-consulting the live
+ * row. Meanwhile `generatedContentRetention.pruneGeneratedContent` flips cards
+ * from `published` to `archived` on an 18-day cycle, on the documented (and,
+ * for this path, false) assumption that "getFeed only returns
+ * visibility='published' … so flipping visibility -> 'archived' is the
+ * discard". That is true of the Classroom, which reads through `getFeed`; it
+ * was never true here.
+ *
+ * The result a student saw: the card renders, `POST /cards/:id/content` 200s,
+ * and then `dwell`/`watch`/`openCard` all 404 "Card not available" — so Collect
+ * Points sat frozen at "0s of 120s" through 140 seconds and fifteen heartbeats,
+ * the gate could never be satisfied, and the button never appeared. Half of a
+ * sampled 40-item feed was dead this way.
+ *
+ * A card MISSING from the result set is also unservable: `findByPk` in every
+ * action handler would 404 on it too.
+ *
+ * Uses the shared {@link isCardServable} predicate rather than its own
+ * `!== 'published'` — one rule, consulted by both the read side and the write
+ * side, because two copies drifting apart is what produced this bug.
+ *
+ * Batched, and fail-soft in the SAFE direction: on error nothing is dropped, so
+ * a database blip degrades to today's behaviour instead of emptying the feed.
+ */
+async function unservableCardIds(cardIds: string[]): Promise<Set<string>> {
+  const ids = Array.from(new Set(cardIds.filter((x): x is string => !!x)));
+  if (!ids.length) return new Set();
+  try {
+    const rows = await TimelineCard.findAll({ where: { id: ids }, attributes: ['id', 'visibility'] });
+    const servable = new Set(
+      rows
+        .map((r) => r.get({ plain: true }) as { id: string; visibility: string | null })
+        .filter((r) => isCardServable(r.visibility))
+        .map((r) => r.id),
+    );
+    return new Set(ids.filter((id) => !servable.has(id)));
+  } catch (err: any) {
+    console.warn('[todayFeedComposer] servable lookup failed:', err?.message?.split('\n')[0]);
+    return new Set();
+  }
+}
+
 /** Blog refs the student has already collected points for — dropped from the feed
  *  so a read blog disappears (award is keyed on the same `blog:<id>` ref). */
 async function collectedBlogRefs(enrollmentId: string, refs: string[]): Promise<Set<string>> {
@@ -326,12 +375,15 @@ async function collectedBlogRefs(enrollmentId: string, refs: string[]): Promise<
  * seed so pagination within one visit never repeats or skips.
  */
 async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed?: number): Promise<TodayFeedItem[]> {
-  const [completed, collectedBlogs] = await Promise.all([
-    completedCardIds(enrollmentId, existing.map((r) => r.card_id).filter((x): x is string => !!x)),
+  const cardIds = existing.map((r) => r.card_id).filter((x): x is string => !!x);
+  const [completed, collectedBlogs, unservable] = await Promise.all([
+    completedCardIds(enrollmentId, cardIds),
     collectedBlogRefs(enrollmentId, existing.map((r) => r.ref)),
+    unservableCardIds(cardIds),
   ]);
   const items = existing
     .filter((r) => !(r.card_id && completed.has(r.card_id)))                        // completed via progress
+    .filter((r) => !(r.card_id && unservable.has(r.card_id)))                       // no longer published — every action would 404
     .filter((r) => !collectedBlogs.has(r.ref))                                      // blog points already collected
     .filter((r) => (r.item as TodayFeedItem | null)?.status !== 'completed')        // snapshot already completed (project/etc.)
     .map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
