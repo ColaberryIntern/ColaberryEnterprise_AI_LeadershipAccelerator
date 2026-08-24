@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 11:49 AM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">40 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 12:44 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">45 changes</span></div>
   </header>
   <main>
     
@@ -657,6 +657,81 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">every non-terminal state can fail, cancel or time out; skipping `provisioning` is rejected; terminal runs cannot be resurrected; verification failure sends a run **back** to `executing`; `waiting_for_human` still holds a workspace; only `queued` is claimable.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">this answers Gate 0&#39;s **E-03** without a new dependency — the row *is* the queue, claimed with `SELECT … FOR UPDATE SKIP LOCKED`, so it survives a `docker compose up -d --build`. A test asserts `SKIP LOCKED` is present because without it concurrent workers serialize behind one lock and the table is not a queue at all. Staleness is detected by **heartbeat age**, not by a worker reporting its own failure — a worker that can reliably report its own death is not the failure being modelled. `waiting_for_human` is exempt from staleness (waiting on a person is not a dead worker) but **not** from holding a workspace: parked for days, it still holds a client&#39;s source.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">41</span>
+          <h2>**Quality OS vocabulary: fourteen dimensions, fourteen evidence types**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/deliveryEvidence.ts` — the dimension and evidence-type unions from master plan §Gate 9, the `DIMENSION_SATISFIED_BY` map, the SHA-pinned and post-release sets, and the idempotency-key builder.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">14 dimensions, 14 evidence types; every dimension has at least one satisfier (a dimension with none could never pass, making the gate unsatisfiable rather than strict); every satisfier is a real evidence type; `pass` is the only satisfying outcome.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`not_run` exists as an outcome deliberately rather than being modelled as an absent row. A recorded `not_run` says &quot;we looked and chose not to measure,&quot; which is auditable; an absent row says nothing at all. **Both fail the gate — but only one of them is a decision.**</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">42</span>
+          <h2>**`delivery_evidence` table and model, separate from `evidence_records`**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryEvidence.ts` and the `QUALITY_EVIDENCE` group in `ensureRefactoredDeliverySchema.ts`; wired into `models/index.ts` with a project-scoped `hasMany`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">TypeScript passes; the delivery model suite passes; the unique index on `idempotency_key` is a `CREATE UNIQUE INDEX IF NOT EXISTS` rather than a column constraint, so the statement stays idempotent across boots.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this is Gate 0&#39;s design, not a new one. `evidence_records.enrollment_id` is NOT NULL and a client project has no enrollment. Both alternatives were worse: relaxing it pushes a delivery concern into the student progression path (master plan §24 lists &quot;student `Project` behavior regresses&quot; as a stop condition), and widening its closed `EvidenceSource` union with eleven delivery-only values would make the progression table answer two questions at once. `story_id` and `release_id` are plain UUIDs with no FK because `delivery_stories` and `delivery_releases` are not tables yet — following the convention `delivery_execution_runs.story_id` already set rather than inventing a second one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">43</span>
+          <h2>**The release gate that fails closed**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryQualityGate.ts` — `requiredDimensionsFor()` derives the required set from the story contract, `evaluateQualityGate()` decides.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no evidence at all produces exactly one blocking finding per baseline dimension; `not_run` and `partial` both fail; a low-risk non-UI story requires **only** the baseline (the negative control — without it, a bug that required everything unconditionally would pass every &quot;adds X&quot; test); R2 adds integration, R3 adds security, UI adds browser + visual contract + accessibility, agent impact adds AI evals + trust coverage, `client_approval` adds client acceptance, release scope adds architecture drift + defects.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">requirements are **derived from the contract**, not configured per project. A per-project required-list drifts into &quot;whatever we happened to run last time,&quot; which is how a quality bar quietly becomes a description of current practice rather than a standard.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">44</span>
+          <h2>**Three refusals the gate makes that an obvious implementation would not**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the validation and staleness rules inside `deliveryQualityGate.ts`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a `screenshot` declared as `security` is rejected (`evidence_type_mismatch`); an R2 story with baseline evidence is still blocked on `integration` even though its `test_run` rows share `test_run` as a satisfier; a `fail` row blocks on a story whose risk tier did not require that dimension; passing evidence pinned to another commit is rejected as `stale_evidence`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**(1) It never infers a dimension from an evidence type.** A `test_run` can satisfy unit tests, integration, acceptance or defects — an inferring gate would let one `jest` run silently claim four dimensions and report integration coverage nobody wrote. Inference here is a generous lie; declaration is checkable. **(2) A recorded `fail` blocks whether or not its dimension was required** — the alternative is a red security scan sitting in the table while the release ships because security was not on the required list for that risk tier. You do not get to un-know a result. **(3) `client_acceptance` is deliberately NOT SHA-pinned** unlike the ten code-derived dimensions: re-requiring a client&#39;s sign-off on every commit means either badgering them or quietly dropping the requirement, and a control that gets dropped is worse than one never claimed. Scope changes are Gate 10&#39;s change-impact flow, not SHA pinning&#39;s.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">45</span>
+          <h2>**The one-way projection into progression**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryEvidenceProjection.ts` — a pure decision function, no writes.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">only `commit` and `pull_request` project; non-passing outcomes do not; a builder with no enrollment yields `projects: false` with a reason rather than an error; the projected row reuses the **same** idempotency key; `projectProgressionToDelivery()` throws.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §2.5 — one event, one delivery row, at most one derived progression row. Reusing the delivery row&#39;s idempotency key rather than minting a second makes the replay guarantee structural: two replays collide on the same unique index on **both** sides. The reverse direction is written as a function that throws rather than left as a comment, because a future caller looking for `projectStudentEvidenceToDelivery` would otherwise find nothing and write it. Builder-credit types are deliberately narrow: a passing security scan is real evidence about the release but nobody authored it, and crediting it would inflate the ledger with work that was not done. Gate 11 can widen this with a reason; it should not widen by default.</span></div>
           
         </div>
       </article>

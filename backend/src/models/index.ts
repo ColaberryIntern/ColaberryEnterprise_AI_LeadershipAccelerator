@@ -432,6 +432,7 @@ import DeliveryDiscovery from './DeliveryDiscovery';
 import DeliveryOpportunity from './DeliveryOpportunity';
 import DeliveryAgentDefinition from './DeliveryAgentDefinition';
 import DeliveryAgentTrustRequirement from './DeliveryAgentTrustRequirement';
+import DeliveryEvidence from './DeliveryEvidence';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
 // loaded, not only when an intelligence service happens to import them directly. The
 // schema/model parity test walks sequelize.models, so an unregistered model is an
@@ -1515,6 +1516,7 @@ export {
   DeliveryOpportunity,
   DeliveryAgentDefinition,
   DeliveryAgentTrustRequirement,
+  DeliveryEvidence,
   GraphNode,
   GraphEdge,
   GraphEvent,
@@ -1824,6 +1826,18 @@ DeliveryProjectSourceLink.belongsTo(Project, {
 // DeliveryEvent has NO associations, deliberately. It is append-only and must outlive
 // what it describes — archiving a project or removing an identity cannot cascade away
 // the record of what happened. Same discipline as TenantAccessAudit.
+
+// Gate 9's Quality OS ledger. Scoped to the project so evidence is reachable, but
+// deliberately NOT cascaded from story or release: `delivery_stories` and
+// `delivery_releases` are not tables yet (Gate 7 shipped stories as pure logic, releases
+// belong to Gate 14), so those columns stay plain UUIDs — the same convention
+// `delivery_execution_runs.story_id` already set.
+DeliveryProject.hasMany(DeliveryEvidence, {
+  foreignKey: 'delivery_project_id',
+  as: 'evidence',
+  onDelete: 'CASCADE',
+});
+DeliveryEvidence.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
 
 // A builder's authority travels with the identity, not with a project — so this is a
 // one-to-one on PlatformIdentity rather than anything project-scoped.
