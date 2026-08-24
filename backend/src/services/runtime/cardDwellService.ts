@@ -14,13 +14,14 @@ import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress from '../../models/TimelineCardProgress';
 import { accumulateDwell, meetsDwell, type DwellState } from './dwellGateMath';
 import { dwellSecondsFor } from './dwellGateConfig';
+import { isCardServable } from '../timeline/curriculumScope';
 
 export interface DwellVerdict { dwell_s: number; required_s: number; met: boolean; }
 
 /** Record one dwell heartbeat and return the gate status for the UI. */
 export async function recordDwellBeat(enrollmentId: string, cardId: string, beat: { delta_s: number }): Promise<DwellVerdict> {
   const card = await TimelineCard.findByPk(cardId);
-  if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
+  if (!card || !isCardServable(card.visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
 
   const requiredS = dwellSecondsFor(card);
   if (requiredS == null) return { dwell_s: 0, required_s: 0, met: true };   // type isn't dwell-gated

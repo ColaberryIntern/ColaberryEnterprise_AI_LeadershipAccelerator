@@ -7,6 +7,7 @@
  * previews. Reuses the runtimePreview generation pattern (componentAiService).
  */
 import TimelineCard from '../../models/TimelineCard';
+import { isCardServable } from './curriculumScope';
 import { getBlueprintContext } from './blueprintContext';
 import { getSectionCurriculumContext, SECTION_ROSTER_TYPES } from './sectionCurriculumContext';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
@@ -308,6 +309,17 @@ const GENERATE_ON_FIRST_OPEN = new Set(['setup_lab', 'implementation_task', 'art
 export async function ensureFreshContent(cardId: string): Promise<{ content: CardContent | null; regenerated: boolean }> {
   const card = await TimelineCard.findByPk(cardId);
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
+  // Same servability rule as every action handler (openCard, dwell, watch, the
+  // assessment / field-guide / build-artifact / architect routes). This function
+  // was the ONE reader on the runtime path that checked existence but not
+  // visibility, and the asymmetry was the visible half of the dead-card bug:
+  // `POST /cards/:id/content` returned 200 and rendered the card while `dwell`
+  // 404'd against the same id in the same second, so the drawer opened, the
+  // heartbeats were rejected, and the dwell gate could never be satisfied.
+  // Its only caller is the participant route `POST /api/portal/runtime/cards/
+  // /:cardId/content`, so aligning it closes the hole without touching authoring
+  // or seed paths (which construct content directly, never through here).
+  if (!isCardServable(card.visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
   const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
   const existing = meta.content && typeof meta.content === 'object' ? (meta.content as CardContent) : null;
   const at = typeof meta.content_at === 'string' ? Date.parse(meta.content_at) : null;
