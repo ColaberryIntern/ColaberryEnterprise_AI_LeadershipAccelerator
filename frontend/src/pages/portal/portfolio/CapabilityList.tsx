@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CareerCapability, CareerEvidenceLevel, EVIDENCE_LEVEL_LABEL } from '../../../services/careerApi';
+import { CareerCapability, CareerEvidenceLevel, EVIDENCE_LEVEL_LABEL, isVerifiedLevel } from '../../../services/careerApi';
 
 /**
  * CapabilityList — verified capabilities with clickable provenance
@@ -125,7 +125,7 @@ const CapabilityList: React.FC<{ capabilities: CareerCapability[] }> = ({ capabi
   const sorted = capabilities.slice().sort(
     (a, b) => LEVEL_ORDER[a.evidence_level] - LEVEL_ORDER[b.evidence_level] || b.proficiency - a.proficiency,
   );
-  const verified = sorted.filter((c) => c.evidence_level !== 'resume');
+  const verified = sorted.filter((c) => isVerifiedLevel(c.evidence_level));
 
   return (
     <div className="cp-card">
