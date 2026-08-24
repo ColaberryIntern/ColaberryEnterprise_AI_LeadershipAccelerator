@@ -54,7 +54,11 @@ function importsOf(file: string): string[] {
  * rather than an import nobody notices in review.
  */
 const ALLOWED_IMPORT_PATTERNS: RegExp[] = [
-  /^\.{1,2}\//,                              // within explorerGrowth / governor
+  // NOTE: `^\.{1,2}\/` would be WRONG here — it matches `../../../emailService`
+  // too, because that also begins `../`. The whitelist has to pin the depth or
+  // it silently permits anything reachable by climbing far enough.
+  /^\.\/[A-Za-z]/,                            // same directory (governor/)
+  /^\.\.\/[A-Za-z]/,                           // one level up (explorerGrowth/)
   /^sequelize$/,
   /^\.\.\/\.\.\/\.\.\/types\//,
   /^\.\.\/\.\.\/\.\.\/config\/(env|database|explorerGrowthFlags)$/,
