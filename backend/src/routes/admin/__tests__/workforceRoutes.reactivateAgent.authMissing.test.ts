@@ -1,15 +1,15 @@
 import express from 'express';
 import request from 'supertest';
 
-// AI Workforce Reset (2026-08-24) — the auth-missing path for
-// POST /api/admin/workforce/agents/reset, REAL requireAdmin (never mocked
-// ANYWHERE in this file). Same split-file convention as
-// workforceRoutes.orgChartAssignTask.authMissing.test.ts, per CLAUDE.md's
-// "test the auth path on every route" requirement — this route can
-// deactivate real agents and cancel real tickets, so an auth gap here would
-// be a real production incident, not a nitpick.
+// AI Workforce Reset, Phase C (2026-08-24) — the auth-missing path for
+// POST /api/admin/workforce/agents/:id/reactivate, REAL requireAdmin (never
+// mocked ANYWHERE in this file). Same split-file convention as
+// workforceRoutes.resetAgents.authMissing.test.ts, per CLAUDE.md's "test the
+// auth path on every route" requirement — this route can re-enable a
+// deactivated agent, so an auth gap here would be a real production
+// incident, not a nitpick.
 
-const resetAgents = jest.fn();
+const reactivateAgent = jest.fn();
 
 jest.mock('../../../services/workforce/orgChartService', () => ({
   getOrgChart: jest.fn(),
@@ -26,14 +26,9 @@ jest.mock('../../../services/workforce/liveAgentsService', () => ({
   listLiveAgents: jest.fn(), listLiveAgentActivity: jest.fn(),
 }));
 jest.mock('../../../services/workforce/liveAgentsTimelineService', () => ({ listLiveAgentTimeline: jest.fn() }));
-jest.mock('../../../services/workforce/agentResetService', () => ({
-  resetAgents: (...a: unknown[]) => resetAgents(...a),
-}));
-// AI Workforce Reset, Phase C — workforceController.ts now also imports this
-// sibling service; mocked here so this file never loads its real AiAgent
-// import chain, matching every other service mock in this suite.
+jest.mock('../../../services/workforce/agentResetService', () => ({ resetAgents: jest.fn() }));
 jest.mock('../../../services/workforce/agentReactivationService', () => ({
-  reactivateAgent: jest.fn(),
+  reactivateAgent: (...a: unknown[]) => reactivateAgent(...a),
   AUTONOMY_LEVELS: ['observe', 'suggest', 'act_audited', 'communicate'],
 }));
 // authMiddleware is NEVER mocked in this file — the real requireAdmin runs.
@@ -51,23 +46,23 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('POST /api/admin/workforce/agents/reset — auth-missing path (REAL requireAdmin)', () => {
+describe('POST /api/admin/workforce/agents/:id/reactivate — auth-missing path (REAL requireAdmin)', () => {
   it('a request with no Authorization header gets 401, never reaches the service', async () => {
     const res = await request(app)
-      .post('/api/admin/workforce/agents/reset')
-      .send({ agent_ids: ['agent-1'] });
+      .post('/api/admin/workforce/agents/agent-1/reactivate')
+      .send({ autonomy_level: 'observe' });
 
     expect(res.status).toBe(401);
-    expect(resetAgents).not.toHaveBeenCalled();
+    expect(reactivateAgent).not.toHaveBeenCalled();
   });
 
   it('a request with a malformed bearer token gets 401', async () => {
     const res = await request(app)
-      .post('/api/admin/workforce/agents/reset')
+      .post('/api/admin/workforce/agents/agent-1/reactivate')
       .set('Authorization', 'Bearer not-a-real-jwt')
-      .send({ agent_ids: ['agent-1'] });
+      .send({ autonomy_level: 'observe' });
 
     expect(res.status).toBe(401);
-    expect(resetAgents).not.toHaveBeenCalled();
+    expect(reactivateAgent).not.toHaveBeenCalled();
   }, 20000);
 });

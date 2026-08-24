@@ -44,9 +44,25 @@ jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn()
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentDetail } = require('../../../services/agentDetailApi') as { getAgentDetail: jest.Mock };
 // AI Workforce Reset (2026-08-24) — the "Deactivate" button's real API call.
-jest.mock('../../../services/workforceOrgChartApi', () => ({ resetAgents: jest.fn() }));
+// Phase C adds reactivateAgent() + the real AUTONOMY_LEVELS/descriptions the
+// component imports directly (not mockable per-call — must exist here since
+// the module itself is mocked).
+jest.mock('../../../services/workforceOrgChartApi', () => ({
+  resetAgents: jest.fn(),
+  reactivateAgent: jest.fn(),
+  AUTONOMY_LEVELS: ['observe', 'suggest', 'act_audited', 'communicate'],
+  AUTONOMY_LEVEL_DESCRIPTIONS: {
+    observe: 'Read only — the safest starting point for any agent coming back online.',
+    suggest: 'May propose actions for human review, never executes them directly.',
+    act_audited: 'May write to an allowlisted set of tables; every write is audited.',
+    communicate: 'May send outbound email/SMS/voice/social, within scope + consent + approval rules.',
+  },
+}));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { resetAgents } = require('../../../services/workforceOrgChartApi') as { resetAgents: jest.Mock };
+const { resetAgents, reactivateAgent } = require('../../../services/workforceOrgChartApi') as {
+  resetAgents: jest.Mock;
+  reactivateAgent: jest.Mock;
+};
 
 const DETAIL: AgentDetail = {
   agent: {
@@ -60,6 +76,9 @@ const DETAIL: AgentDetail = {
     persona_version: null,
     enabled: true,
     created_at: null,
+    // AI Workforce Reset, Phase C (2026-08-24) — honest null: this fixture
+    // agent has never been through the reactivation flow.
+    autonomy_level: null,
   },
   identity: null,
   live_status: 'online',
@@ -529,6 +548,102 @@ describe('AgentDetailPage — "Deactivate" action', () => {
   });
 });
 
+// AI Workforce Reset, Phase C (2026-08-24) — Ali, live: "add new ones
+// slowly... so I can see how they perform." Reactivation requires a
+// deliberate autonomy-level choice before the button enables.
+describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  function reactivateSelect(): HTMLSelectElement | undefined {
+    return container.querySelector('select[aria-label="Autonomy level"]') as HTMLSelectElement | undefined;
+  }
+
+  function reactivateButton(): HTMLButtonElement | undefined {
+    return Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Reactivate')) as HTMLButtonElement | undefined;
+  }
+
+  it('renders no autonomy-level select or Reactivate button when the agent is enabled', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL); // enabled: true
+    await renderAgentPage();
+
+    expect(reactivateSelect()).toBeUndefined();
+    expect(reactivateButton()).toBeUndefined();
+  });
+
+  it('boundary: a disabled agent shows the autonomy-level select and a Reactivate button disabled until a level is chosen', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, enabled: false } });
+    await renderAgentPage();
+
+    expect(reactivateSelect()).toBeDefined();
+    expect(reactivateButton()!.disabled).toBe(true);
+  });
+
+  it('choosing a level enables the button and shows that level\'s real description', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, enabled: false } });
+    await renderAgentPage();
+
+    await act(async () => {
+      const select = reactivateSelect()!;
+      select.value = 'suggest';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(reactivateButton()!.disabled).toBe(false);
+    expect(container.textContent).toContain('May propose actions for human review, never executes them directly.');
+  });
+
+  it('happy path: clicking Reactivate calls reactivateAgent() with the real id and chosen level, then shows the real confirmation', async () => {
+    reactivateAgent.mockResolvedValue({
+      agentId: 'agent-reese', agentName: 'Reese', found: true, reactivated: true, autonomyLevel: 'observe', error: null,
+    });
+    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, enabled: false } });
+    await renderAgentPage();
+
+    await act(async () => {
+      const select = reactivateSelect()!;
+      select.value = 'observe';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      reactivateButton()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(reactivateAgent).toHaveBeenCalledWith('agent-reese', 'observe');
+    expect(container.textContent).toContain('Reactivated at autonomy level "observe".');
+  });
+
+  it('failure path: a server error is shown honestly, not swallowed', async () => {
+    reactivateAgent.mockResolvedValue({
+      agentId: 'agent-reese', agentName: 'Reese', found: false, reactivated: false, autonomyLevel: null, error: 'Agent not found',
+    });
+    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, enabled: false } });
+    await renderAgentPage();
+
+    await act(async () => {
+      const select = reactivateSelect()!;
+      select.value = 'observe';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      reactivateButton()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.textContent).toContain('Failed to reactivate: Agent not found');
+  });
+});
+
 // Trust Contract (2026-08-24) — Ali, live: "All Agents should have a trust
 // contract based on [Trust Before Intelligence]."
 describe('AgentDetailPage — "Trust Contract" section', () => {
@@ -602,5 +717,25 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
     // The stat grid renders (trigger_type is set), but no fabricated error banner.
     expect(container.textContent).toContain('Trust Contract');
     expect(container.querySelector('.alert-warning')).toBeNull();
+  });
+
+  // AI Workforce Reset, Phase C (2026-08-24) — the Permitted dimension: this
+  // agent's real, chosen autonomy level (or an honest "not yet set").
+  it('Permitted: shows "Not yet set" when autonomy_level is null (never reactivated through the Phase C flow)', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL); // base fixture: agent.autonomy_level null
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Autonomy level (Permitted)');
+    expect(container.textContent).toContain('Not yet set');
+  });
+
+  it('Permitted: shows the real, previously-chosen autonomy level verbatim', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, autonomy_level: 'act_audited' } });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Autonomy level (Permitted)');
+    expect(container.textContent).toContain('act_audited');
   });
 });

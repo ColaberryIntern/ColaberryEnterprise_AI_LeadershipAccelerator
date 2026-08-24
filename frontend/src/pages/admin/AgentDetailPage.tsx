@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getAgentDetail, AgentDetail } from '../../services/agentDetailApi';
-import { resetAgents } from '../../services/workforceOrgChartApi';
+import { resetAgents, reactivateAgent, AUTONOMY_LEVELS, AutonomyLevel, AUTONOMY_LEVEL_DESCRIPTIONS } from '../../services/workforceOrgChartApi';
 import { PageHeader, StatCard, SectionCard, StatusBadge } from '../../components/admin/shell';
 import { fmtCentralDateTime } from '../../utils/centralTime';
 import { timeAgo } from '../../components/admin/shell/trust';
@@ -30,6 +30,14 @@ export default function AgentDetailPage() {
   // cancellation) — see workforceOrgChartApi.ts::resetAgents().
   const [resetting, setResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  // AI Workforce Reset, Phase C (2026-08-24) — Ali, live: "add new ones
+  // slowly... so I can see how they perform." Reactivating a deactivated
+  // agent requires a deliberate autonomy-level choice — never a bare
+  // confirm, never a silent flip back to unlimited trust. `''` (no
+  // selection) is the initial state so "Reactivate" starts disabled.
+  const [selectedAutonomyLevel, setSelectedAutonomyLevel] = useState<AutonomyLevel | ''>('');
+  const [reactivating, setReactivating] = useState(false);
+  const [reactivationMessage, setReactivationMessage] = useState<string | null>(null);
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
@@ -74,6 +82,24 @@ export default function AgentDetailPage() {
     }
   }, [id, detail, fetchDetail]);
 
+  const handleReactivate = useCallback(async () => {
+    if (!id || !selectedAutonomyLevel) return;
+    setReactivating(true);
+    setReactivationMessage(null);
+    try {
+      const result = await reactivateAgent(id, selectedAutonomyLevel);
+      setReactivationMessage(
+        result.error ? `Failed to reactivate: ${result.error}` : `Reactivated at autonomy level "${result.autonomyLevel}".`,
+      );
+      setSelectedAutonomyLevel('');
+      await fetchDetail();
+    } catch (err: any) {
+      setReactivationMessage(err?.response?.data?.error || 'Failed to reactivate agent.');
+    } finally {
+      setReactivating(false);
+    }
+  }, [id, selectedAutonomyLevel, fetchDetail]);
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -117,6 +143,44 @@ export default function AgentDetailPage() {
         {resetMessage && (
           <div className={`alert ${resetMessage.startsWith('Failed') ? 'alert-danger' : 'alert-success'} py-2 mb-3`}>
             {resetMessage}
+          </div>
+        )}
+        {reactivationMessage && (
+          <div className={`alert ${reactivationMessage.startsWith('Failed') ? 'alert-danger' : 'alert-success'} py-2 mb-3`}>
+            {reactivationMessage}
+          </div>
+        )}
+        {/* AI Workforce Reset, Phase C (2026-08-24) — a deactivated agent gets a
+            real form here, not a bare "Reactivate" confirm: an autonomy level
+            must be chosen before the button enables, so bringing an agent back
+            online is always a deliberate, visible act. */}
+        {!agent.enabled && (
+          <div className="alert alert-secondary py-2 mb-3">
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <span className="fw-semibold small">This agent is inactive.</span>
+              <select
+                className="form-select form-select-sm"
+                style={{ width: 'auto' }}
+                aria-label="Autonomy level"
+                value={selectedAutonomyLevel}
+                onChange={(e) => setSelectedAutonomyLevel(e.target.value as AutonomyLevel | '')}
+              >
+                <option value="">Choose an autonomy level…</option>
+                {AUTONOMY_LEVELS.map((level) => (
+                  <option key={level} value={level}>{level}</option>
+                ))}
+              </select>
+              <button
+                className="btn btn-success btn-sm"
+                onClick={handleReactivate}
+                disabled={!selectedAutonomyLevel || reactivating}
+              >
+                <i className="ri-play-circle-line" aria-hidden="true" /> {reactivating ? 'Reactivating…' : 'Reactivate'}
+              </button>
+            </div>
+            {selectedAutonomyLevel && (
+              <p className="text-muted small mb-0 mt-2">{AUTONOMY_LEVEL_DESCRIPTIONS[selectedAutonomyLevel]}</p>
+            )}
           </div>
         )}
         <div className="row g-3">
@@ -178,6 +242,16 @@ export default function AgentDetailPage() {
           </a>{' '}
           INPACT™ framework — every value below is a real, pre-existing field, never invented.
         </p>
+        <div className="row g-3 mb-1">
+          <div className="col-6 col-lg-3">
+            <StatCard
+              label="Autonomy level (Permitted)"
+              value={agent.autonomy_level || 'Not yet set'}
+              icon="key-2-line"
+              tone={agent.autonomy_level ? 'success' : 'neutral'}
+            />
+          </div>
+        </div>
         {trust_contract.trigger_type ? (
           <div className="row g-3">
             <div className="col-6 col-lg-3">

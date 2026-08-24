@@ -15,6 +15,7 @@ import { workforceOrgChartResponseSchema } from '../schemas/workforceOrgChartSch
 import { updateOrgMemberTeam } from '../services/workforce/orgChartHierarchyService';
 import { assignTaskToAgent } from '../services/workforce/orgChartTaskAssignmentService';
 import { resetAgents } from '../services/workforce/agentResetService';
+import { reactivateAgent, AUTONOMY_LEVELS } from '../services/workforce/agentReactivationService';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -200,5 +201,24 @@ export async function handleResetAgents(req: Request, res: Response, next: NextF
     const actorId = req.admin?.email || req.admin?.sub || 'unknown-admin';
     const results = await resetAgents(parsed.agent_ids, actorId);
     res.json({ results });
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * AI Workforce Reset, Phase C (2026-08-24) — POST
+ * /api/admin/workforce/agents/:id/reactivate. Ali, live: "add new ones
+ * slowly... so I can see how they perform." `autonomy_level` is required
+ * (one of docs/ai-governance/abac-design.md's already-proposed 4-level
+ * ladder) — bringing an agent back online is a deliberate, visible act, not
+ * a silent flip. See agentReactivationService.ts for the real mechanism.
+ */
+const reactivateAgentSchema = z.object({
+  autonomy_level: z.enum(AUTONOMY_LEVELS),
+});
+export async function handleReactivateAgent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = reactivateAgentSchema.parse(req.body || {});
+    const result = await reactivateAgent(String(req.params.id), parsed.autonomy_level);
+    res.json({ result });
   } catch (e) { fail(res, e, next); }
 }

@@ -87,6 +87,9 @@ export interface AgentDetail {
     persona_version: string | null;
     enabled: boolean;
     created_at: string | null;
+    /** AI Workforce Reset, Phase C (2026-08-24) — Permitted dimension of the
+     * Trust Contract; `null` until this agent is reactivated through that flow. */
+    autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
   };
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';
