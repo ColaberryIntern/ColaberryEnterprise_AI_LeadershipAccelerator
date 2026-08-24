@@ -18,7 +18,9 @@ jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChain
 // `.count` (only `findAll`), so without this mock, that call would throw
 // `TypeError: Ticket.count is not a function` for every test where adminUser
 // is truthy (i.e. almost all of them, per beforeEach below).
-jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn() }));
+// Trust Contract fix (2026-08-24) — getAgentDetail() now also calls the REAL
+// getLastTicketActivityForAgent() (same module), mocked alongside its sibling.
+jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn() }));
 
 import { Op } from 'sequelize';
 import AiAgent from '../../../models/AiAgent';
@@ -29,7 +31,7 @@ import OrgMember from '../../../models/OrgMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
-import { countOpenTicketsForAgent } from '../../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../../workforce/liveAgentsService';
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
@@ -42,6 +44,7 @@ const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
+const mockLastActivity = getLastTicketActivityForAgent as unknown as jest.Mock;
 
 const reeseAgent = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success',
@@ -59,6 +62,7 @@ beforeEach(() => {
   mockDerivePresence.mockReturnValue('online');
   mockTicketFindAll.mockResolvedValue([]);
   mockCountOpenTickets.mockResolvedValue(0);
+  mockLastActivity.mockResolvedValue(null);
 });
 
 describe('getAgentDetail', () => {
@@ -119,6 +123,30 @@ describe('getAgentDetail', () => {
 
     expect(result!.open_ticket_count).toBe(0);
     expect(mockCountOpenTickets).not.toHaveBeenCalled();
+  });
+
+  // Trust Contract fix (2026-08-24) — Ali, live: "Reese has several tickets
+  // that have been opened... but this says it's never been run." Proves
+  // trust_contract.last_activity_at carries the real, ticket-derived signal
+  // for an event-driven agent whose scheduler-tracked last_run_at is null.
+  it('trust_contract.last_activity_at reflects the real most-recent ticket activity, independent of last_run_at', async () => {
+    const recentActivity = new Date('2026-08-24T10:00:00Z');
+    mockLastActivity.mockResolvedValue(recentActivity);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.trust_contract.last_run_at).toBeNull(); // reeseAgent has no scheduler columns set — honestly null
+    expect(result!.trust_contract.last_activity_at).toBe(recentActivity);
+    expect(mockLastActivity).toHaveBeenCalledWith('admin-1', reeseAgent);
+  });
+
+  it('trust_contract.last_activity_at is null, and getLastTicketActivityForAgent is never called, when there is no linked AdminUser identity', async () => {
+    mockAdminFindOne.mockResolvedValue(null);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.trust_contract.last_activity_at).toBeNull();
+    expect(mockLastActivity).not.toHaveBeenCalled();
   });
 
   it('capabilities (reads/produces): derives from the agent\'s real tools_granted, not hand-written text', async () => {
