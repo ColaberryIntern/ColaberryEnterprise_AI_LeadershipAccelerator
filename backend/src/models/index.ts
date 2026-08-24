@@ -417,6 +417,16 @@ import TenantMembership from './TenantMembership';
 import LeadTenantContext from './LeadTenantContext';
 import CommunicationPreference from './CommunicationPreference';
 import TenantAccessAudit from './TenantAccessAudit';
+// Refactored AI Delivery OS (Gate 1). Imported here so the models register with
+// Sequelize when the index loads — the schema/model parity test walks
+// sequelize.models, so an unregistered model is an invisible one.
+import DeliveryEngagement from './DeliveryEngagement';
+import DeliveryProject from './DeliveryProject';
+import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
+import DeliveryProjectMember from './DeliveryProjectMember';
+import DeliveryContract from './DeliveryContract';
+import DeliveryDecision from './DeliveryDecision';
+import DeliveryEvent from './DeliveryEvent';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
 // loaded, not only when an intelligence service happens to import them directly. The
 // schema/model parity test walks sequelize.models, so an unregistered model is an
@@ -1487,6 +1497,14 @@ export {
   LeadTenantContext,
   CommunicationPreference,
   TenantAccessAudit,
+  // Refactored AI Delivery OS (Gate 1)
+  DeliveryEngagement,
+  DeliveryProject,
+  DeliveryProjectSourceLink,
+  DeliveryProjectMember,
+  DeliveryContract,
+  DeliveryDecision,
+  DeliveryEvent,
   GraphNode,
   GraphEdge,
   GraphEvent,
@@ -1728,3 +1746,71 @@ Lead.hasMany(CommunicationPreference, {
 CommunicationPreference.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 CommunicationPreference.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
 CommunicationPreference.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+// --- Refactored AI Delivery OS (Gate 1) associations ---------------------------------
+//
+// TENANCY BY PARENT. Only DeliveryEngagement and DeliveryProject belong to a Tenant/Brand
+// directly; every child below reaches its tenant by joining back up to DeliveryProject.
+// See docs/architecture/refactored-delivery-os/DATA_OWNERSHIP_MATRIX.md for why the
+// children deliberately carry no tenant_id of their own.
+DeliveryEngagement.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+DeliveryEngagement.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+DeliveryEngagement.belongsTo(Organization, { foreignKey: 'organization_id', as: 'organization' });
+
+DeliveryEngagement.hasMany(DeliveryProject, {
+  foreignKey: 'engagement_id',
+  as: 'projects',
+  onDelete: 'CASCADE',
+});
+DeliveryProject.belongsTo(DeliveryEngagement, { foreignKey: 'engagement_id', as: 'engagement' });
+DeliveryProject.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+DeliveryProject.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+DeliveryProject.hasMany(DeliveryProjectMember, {
+  foreignKey: 'delivery_project_id',
+  as: 'members',
+  onDelete: 'CASCADE',
+});
+DeliveryProjectMember.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+DeliveryProjectMember.belongsTo(PlatformIdentity, {
+  foreignKey: 'platform_identity_id',
+  as: 'identity',
+});
+
+DeliveryProject.hasMany(DeliveryContract, {
+  foreignKey: 'delivery_project_id',
+  as: 'contracts',
+  onDelete: 'CASCADE',
+});
+DeliveryContract.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+DeliveryProject.hasMany(DeliveryDecision, {
+  foreignKey: 'delivery_project_id',
+  as: 'decisions',
+  onDelete: 'CASCADE',
+});
+DeliveryDecision.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+// The student-project bridge. `Project` itself gains NOTHING here: no column, no
+// required association, no behaviour change. A student project that is never linked is
+// bit-for-bit what it was before this feature existed (master plan §Gate 1).
+DeliveryProject.hasMany(DeliveryProjectSourceLink, {
+  foreignKey: 'delivery_project_id',
+  as: 'sourceLinks',
+  onDelete: 'CASCADE',
+});
+DeliveryProjectSourceLink.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'deliveryProject',
+});
+DeliveryProjectSourceLink.belongsTo(Project, {
+  foreignKey: 'student_project_id',
+  as: 'studentProject',
+});
+
+// DeliveryEvent has NO associations, deliberately. It is append-only and must outlive
+// what it describes — archiving a project or removing an identity cannot cascade away
+// the record of what happened. Same discipline as TenantAccessAudit.
