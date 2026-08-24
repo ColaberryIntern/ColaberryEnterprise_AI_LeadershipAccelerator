@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, August 23, 2026 at 7:29 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">20 changes</span></div>
+    <div class="meta">Generated Sunday, August 23, 2026 at 8:08 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">23 changes</span></div>
   </header>
   <main>
     
@@ -357,6 +357,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`builderAuthority.test.ts`. No profile → R0, one project, no client contact, no release authority. An unreadable profile fails **closed** with a visible structured log. A generous row with `last_evaluated_at = null` is still the floor. A malformed `max_risk_without_review` falls back to R0. An R5 ceiling on an observer still yields no access — **the ceiling can never grant a permission the role lacks**.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 2 forbids authority based on time-in-program, so the table has no concept of cohort week or attendance. The key behaviour is that an action above the ceiling becomes a **review requirement rather than a refusal** — that is what lets an intern drive real work they cannot unilaterally land, instead of being blocked from touching it. `last_evaluated_at` is nullable with no default on purpose: defaulting it to `NOW()` would fabricate the very signal that a human reviewed the numbers.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>**Versioned contracts with frozen approval snapshots**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/services/delivery/deliveryContractService.ts` — `draftContract`, `approveContract`, `approvedTerms`, `hasDriftedFromApproval`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryContractService.test.ts`. Approval freezes a snapshot; the working row then changing does **not** change what `approvedTerms()` returns. Re-approving is idempotent and returns the **original** approver and timestamp. Approving supersedes older approved versions so exactly one governs. Drift between the live row and the approved terms is detectable.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the point of the file. If approval were a status flag on a mutable row, &quot;the client approved this&quot; would decay into &quot;the client approved something, and here is what the row says now&quot; — worthless in exactly the situations a contract exists for. The snapshot uses an **explicit field list, not a spread**: a spread would silently start capturing any column added later, including internal bookkeeping, and the snapshot is the thing a client may be shown. `data_sensitivity` defaults to `internal`, never `public`, so an unclassified contract cannot become publishable by omission.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">22</span>
+          <h2>**Decision ledger: supersession, never mutation**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryDecisionService.ts` — `openDecision`, `decide`, `supersedeDecision`, `getGoverningDecisions`, `getOpenDecisions`, `getDecisionHistory`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryDecisionService.test.ts`. `decide()` **refuses** on an already-settled decision and directs the caller to supersede. Supersession preserves the prior decision&#39;s answer, rationale, decider and timestamp — the only mutation is the link and the status. Creating the successor happens **before** linking the prior, so a mid-failure leaves a recoverable orphan rather than a project with no current decision. History walking is cycle-safe and bounded at 50 hops.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §24 lists &quot;design approval can be silently overwritten&quot; as a stop condition. The difference between &quot;we changed our mind&quot; and &quot;we never said that&quot; is the entire value of a ledger, and an in-place edit erases it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">23</span>
+          <h2>**Project graph: impact analysis and fail-closed traceability**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryProjectGraph.ts` — pure, no I/O, no model imports. `reachableFrom`, `analyzeImpact`, `findTraceabilityGaps`, `graphFromAffectedNodes`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryProjectGraph.test.ts`. Cycles terminate rather than hang. An impact report surfaces `touchesAcceptedWork` and `touchesDeployedWork` as their own flags, and reports `truncated` when the walk hit its depth limit. Traceability fails closed: an uncovered `must` requirement or approved design decision is a gap, and a recorded no-code rationale excuses the latter. Malformed `affected_nodes` entries are skipped and **counted**, not thrown on.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">no graph database — master plan §Gate 3 forbids one absent evidence that relational modelling is inadequate, and Gate 0 found none. `truncated` earns its place: an impact report that silently stopped walking reads as &quot;nothing else is affected&quot;, which is the most dangerous way to be wrong here. The accepted/deployed flags are surfaced separately because they change the *conversation* — altering something a client already signed off is a different request from altering a draft, and the approver should not have to notice that themselves.</span></div>
           
         </div>
       </article>
