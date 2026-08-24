@@ -145,6 +145,70 @@ const SEEDS: SeedSource[] = [
       },
     ],
   },
+
+  // ---------------------------------------------------------------------------
+  // Ecosystem brands (CPN, AI Flotation)
+  // ---------------------------------------------------------------------------
+  // These two were MISSING, and the gap was invisible until the ecosystem E2E
+  // was actually executed for the first time.
+  //
+  // `ecosystemSeedData.ts` lists `lead_source_slugs: ['cpn']` and
+  // `['ai-flotation']`, but that field only says "this slug BELONGS to this
+  // brand" and drives the backfill — it never creates the source row. Nothing
+  // did. So `/api/ingest?source=cpn` answered "Unknown or inactive source" and
+  // neither brand could capture a lead at all.
+  //
+  // Domains match `ecosystemSeedData.ts` exactly (cpn.org, aiflotation.com); if
+  // they drift apart, a submission resolves to a brand that does not own it.
+  //
+  // No HMAC, for the same reason as `trustbeforeintelligence` above: these are
+  // public marketing pages that cannot hold a shared secret. Abuse protection
+  // lives at the rate-limit and validation layer.
+  {
+    slug: 'cpn',
+    name: 'Career Pathways Network',
+    domain: 'cpn.org',
+    entry_points: [
+      {
+        slug: 'scholarship_interest',
+        name: 'Scholarship Interest',
+        page: '/scholarships',
+        form_name: 'scholarship-interest',
+        description: 'Scholarship interest form on the CPN site',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+    ],
+  },
+  {
+    slug: 'ai-flotation',
+    name: 'AI Flotation',
+    domain: 'aiflotation.com',
+    entry_points: [
+      {
+        slug: 'workflow_intake',
+        name: 'Workflow Intake',
+        page: '/workflow',
+        form_name: 'workflow-intake',
+        description: 'Workflow automation intake form on the AI Flotation site',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          role: 'role',
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+    ],
+  },
 ];
 
 async function run() {
