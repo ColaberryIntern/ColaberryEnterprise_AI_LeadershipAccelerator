@@ -63,6 +63,7 @@ import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchem
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
+import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
@@ -2579,6 +2580,9 @@ async function start(): Promise<void> {
   // AI Leadership / AI Staff hierarchy — reports_to_type/reports_to_id, superseding
   // reports_to_org_member_id above as the resolver's source of truth. Additive, idempotent, no flag.
   await ensureAiAgentHierarchySchema();
+  // AI Workforce Reset, Phase C — autonomy_level (docs/ai-governance/abac-design.md's
+  // 4-level ladder), required at agent reactivation time. Additive, idempotent, no flag.
+  await ensureAiAgentAutonomyLevelSchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

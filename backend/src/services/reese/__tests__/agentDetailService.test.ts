@@ -73,9 +73,21 @@ describe('getAgentDetail', () => {
     expect(result!.agent.agent_name).toBe('Reese');
     expect(result!.agent.system_prompt).toBe('PROMPT');
     expect(result!.agent.tools_granted).toEqual(['respond_to_dm']);
+    expect(result!.agent.autonomy_level).toBeNull(); // never reactivated through the Phase C flow — honest null
     expect(result!.identity).toMatchObject({ admin_user_id: 'admin-1', email: 'reese@colaberry.com', is_ai_operated: true });
     expect(result!.live_status).toBe('online');
     expect(result!.tickets).toHaveLength(1);
+  });
+
+  // AI Workforce Reset, Phase C (2026-08-24) — Permitted dimension of the
+  // Trust Contract: a real, previously-reactivated agent's chosen autonomy
+  // level passes through verbatim.
+  it("agent.autonomy_level passes through the real, previously-reactivated value verbatim", async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, autonomy_level: 'act_audited' });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.autonomy_level).toBe('act_audited');
   });
 
   // Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
