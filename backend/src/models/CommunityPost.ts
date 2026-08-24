@@ -35,6 +35,7 @@ export interface CommunityPostAttributes {
   week?: number | null;
   source_card_id?: string | null;
   ritual_meta?: RitualMeta | null;
+  shared_to_portfolio?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -58,6 +59,7 @@ class CommunityPost extends Model<CommunityPostAttributes> implements CommunityP
   declare week: number | null;
   declare source_card_id: string | null;
   declare ritual_meta: RitualMeta | null;
+  declare shared_to_portfolio: boolean;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -154,6 +156,15 @@ CommunityPost.init(
     ritual_meta: {
       type: DataTypes.JSONB,
       allowNull: true,
+    },
+    // Opt-in to appear on the student's public Capstone Record. A ritual post
+    // was written for a closed cohort; a public portfolio is a different
+    // audience and a different consent. Default off, granted per post by the
+    // student, and never inferred from the post being visible on the wall.
+    shared_to_portfolio: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
   },
   {
