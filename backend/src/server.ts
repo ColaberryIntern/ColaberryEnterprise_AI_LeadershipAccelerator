@@ -19,6 +19,7 @@ import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
 import careerPortfolioRoutes from './routes/careerPortfolioRoutes';
 import explorerSignalRoutes from './routes/explorerSignalRoutes';
+import consentPromptRoutes from './routes/consentPromptRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
@@ -74,6 +75,7 @@ import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema'
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
+import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
@@ -126,6 +128,9 @@ app.use(careerPortfolioRoutes);
 // Explorer Growth OS learner signal ingest (EPIC 2). Dark until
 // EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
 app.use(explorerSignalRoutes);
+// In-app consent prompt (participant-authed). A PROMPT, not a gate: the portal
+// stays fully usable whether a learner accepts, declines or ignores it.
+app.use(consentPromptRoutes);
 app.use(capeAdminRoutes);
 app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
@@ -2435,6 +2440,7 @@ async function start(): Promise<void> {
   // Additive apart from that single relaxation; no backfill beyond stamping
   // organization_type on rows that predate the column.
   await ensureRefactoredDeliverySchema();
+  await ensureCareerPublicationSchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.

@@ -422,6 +422,9 @@ import TenantAccessAudit from './TenantAccessAudit';
 // sequelize.models, so an unregistered model is an invisible one.
 import DeliveryEngagement from './DeliveryEngagement';
 import DeliveryProject from './DeliveryProject';
+import CareerPublication from './CareerPublication';
+import CareerPublicationSnapshot from './CareerPublicationSnapshot';
+import CareerPublicationApproval from './CareerPublicationApproval';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
 import DeliveryContract from './DeliveryContract';
@@ -433,6 +436,8 @@ import DeliveryOpportunity from './DeliveryOpportunity';
 import DeliveryAgentDefinition from './DeliveryAgentDefinition';
 import DeliveryAgentTrustRequirement from './DeliveryAgentTrustRequirement';
 import DeliveryEvidence from './DeliveryEvidence';
+import DeliveryClientAcceptance from './DeliveryClientAcceptance';
+import DeliveryChangeRequest from './DeliveryChangeRequest';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
 // loaded, not only when an intelligence service happens to import them directly. The
 // schema/model parity test walks sequelize.models, so an unregistered model is an
@@ -1507,6 +1512,11 @@ export {
   DeliveryEngagement,
   DeliveryProject,
   DeliveryProjectSourceLink,
+
+  // Living Career Portfolio (Gate 10 — versioned publication)
+  CareerPublication,
+  CareerPublicationSnapshot,
+  CareerPublicationApproval,
   DeliveryProjectMember,
   DeliveryContract,
   DeliveryDecision,
@@ -1517,6 +1527,8 @@ export {
   DeliveryAgentDefinition,
   DeliveryAgentTrustRequirement,
   DeliveryEvidence,
+  DeliveryClientAcceptance,
+  DeliveryChangeRequest,
   GraphNode,
   GraphEdge,
   GraphEvent,
@@ -1838,6 +1850,30 @@ DeliveryProject.hasMany(DeliveryEvidence, {
   onDelete: 'CASCADE',
 });
 DeliveryEvidence.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+// Gate 10's Client Review Room. Acceptances are NOT cascaded away with a project: master
+// plan §24 makes durability the point of the table, and "the project was archived" is not
+// a reason a client's signed acceptance should stop existing. Same reasoning as
+// DeliveryEvent. Change requests cascade, because an unbuilt request against a deleted
+// project is not a record of anything.
+DeliveryProject.hasMany(DeliveryClientAcceptance, {
+  foreignKey: 'delivery_project_id',
+  as: 'clientAcceptances',
+});
+DeliveryClientAcceptance.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+
+DeliveryProject.hasMany(DeliveryChangeRequest, {
+  foreignKey: 'delivery_project_id',
+  as: 'changeRequests',
+  onDelete: 'CASCADE',
+});
+DeliveryChangeRequest.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
 
 // A builder's authority travels with the identity, not with a project — so this is a
 // one-to-one on PlatformIdentity rather than anything project-scoped.
