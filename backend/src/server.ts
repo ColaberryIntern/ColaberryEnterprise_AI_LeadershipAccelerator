@@ -31,6 +31,7 @@ import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
 import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
+import publicTalentRoutes from './routes/publicTalentRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
@@ -140,6 +141,10 @@ app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
+// Gate 11 public talent read. Mounted HERE, beside the other public routes and
+// BEFORE adminRoutes, for the reason documented just below: a public route
+// registered downstream of adminRoutes inherits its requireAdmin guard and 401s.
+app.use(publicTalentRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);

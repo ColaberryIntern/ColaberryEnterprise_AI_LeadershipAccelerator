@@ -281,3 +281,96 @@ describe('getUnpublishedChanges — "updates since v3"', () => {
     expect(r).toEqual({ has_changes: false, published_version: 3 });
   });
 });
+
+describe('listReviewQueue — what a reviewer is handed', () => {
+  const pubFindAllQ = CareerPublication.findAll as unknown as jest.Mock;
+  const snapFindAll = (CareerPublicationSnapshot as any).findAll as jest.Mock;
+  const apprFindAll = (CareerPublicationApproval as any).findAll as jest.Mock;
+
+  beforeEach(() => {
+    (CareerPublicationSnapshot as any).findAll = jest.fn();
+    (CareerPublicationApproval as any).findAll = jest.fn();
+  });
+
+  it('excludes a snapshot that already has a decision', async () => {
+    pubFindAllQ.mockResolvedValueOnce([{ id: 'pub-1' }]);
+    (CareerPublicationSnapshot as any).findAll.mockResolvedValue([
+      { id: 'snap-1', publication_id: 'pub-1', version: 1, requested_at: new Date(), payload: {} },
+      { id: 'snap-2', publication_id: 'pub-1', version: 2, requested_at: new Date(), payload: {} },
+    ]);
+    // snap-1 was already decided; only snap-2 should reach a reviewer.
+    (CareerPublicationApproval as any).findAll.mockResolvedValue([{ snapshot_id: 'snap-1' }]);
+    pubFindAllQ.mockResolvedValueOnce([{ id: 'pub-1', enrollment_id: 'e1', slug: 'jane-doe' }]);
+
+    const { listReviewQueue } = require('../careerPublicationService');
+    const q = await listReviewQueue();
+
+    expect(q.map((i: any) => i.snapshot_id)).toEqual(['snap-2']);
+  });
+
+  it('summarises from the FROZEN payload, so the queue matches what will be opened', async () => {
+    pubFindAllQ.mockResolvedValueOnce([{ id: 'pub-1' }]);
+    (CareerPublicationSnapshot as any).findAll.mockResolvedValue([{
+      id: 'snap-1', publication_id: 'pub-1', version: 1, requested_at: new Date(),
+      payload: {
+        identity: { full_name: 'Jane Doe' },
+        capabilities: [{}, {}, {}],
+        artifacts: [{}, {}],
+        readiness_at_submission: { score: 82 },
+      },
+    }]);
+    (CareerPublicationApproval as any).findAll.mockResolvedValue([]);
+    pubFindAllQ.mockResolvedValueOnce([{ id: 'pub-1', enrollment_id: 'e1', slug: 'jane-doe' }]);
+
+    const { listReviewQueue } = require('../careerPublicationService');
+    const [item] = await listReviewQueue();
+
+    expect(item).toMatchObject({
+      full_name: 'Jane Doe', readiness_score: 82, capability_count: 3, artifact_count: 2, slug: 'jane-doe',
+    });
+    // The live studio is never consulted to build the queue.
+    expect(mockProfile).not.toHaveBeenCalled();
+  });
+
+  it('returns empty rather than throwing when nothing is in review', async () => {
+    pubFindAllQ.mockResolvedValueOnce([]);
+    (CareerPublicationSnapshot as any).findAll.mockResolvedValue([]);
+    const { listReviewQueue } = require('../careerPublicationService');
+    await expect(listReviewQueue()).resolves.toEqual([]);
+  });
+});
+
+describe('getPublicationStatus — the learner\'s own view', () => {
+  it('hands back no public URL until actually published', async () => {
+    pubFindOne.mockResolvedValue(pubRow({ status: 'in_review', current_snapshot_id: null }));
+    apprFindOne.mockResolvedValue(null);
+    const { getPublicationStatus } = require('../careerPublicationService');
+    const r = await getPublicationStatus('e1');
+    expect(r.public_url).toBeNull();
+    expect(r.status).toBe('in_review');
+  });
+
+  it('gives the public URL once published', async () => {
+    pubFindOne.mockResolvedValue(pubRow({ status: 'published', current_snapshot_id: 'snap-1', slug: 'jane-doe' }));
+    snapFindByPk.mockResolvedValue({ id: 'snap-1', version: 2, content_hash: 'h' });
+    apprFindOne.mockResolvedValue({ decision: 'approved', reviewer_notes: null, decided_at: new Date() });
+    const { getPublicationStatus } = require('../careerPublicationService');
+    const r = await getPublicationStatus('e1');
+    expect(r.public_url).toBe('/talent/jane-doe');
+    expect(r.published_version).toBe(2);
+  });
+
+  it('surfaces a reviewer\'s change request back to the learner', async () => {
+    pubFindOne.mockResolvedValue(pubRow({ status: 'draft', current_snapshot_id: null }));
+    apprFindOne.mockResolvedValue({ decision: 'changes_requested', reviewer_notes: 'Add screenshots', decided_at: new Date() });
+    const { getPublicationStatus } = require('../careerPublicationService');
+    const r = await getPublicationStatus('e1');
+    expect(r.last_review).toMatchObject({ decision: 'changes_requested', notes: 'Add screenshots' });
+  });
+
+  it('is safe for a learner who has never published anything', async () => {
+    pubFindOne.mockResolvedValue(null);
+    const { getPublicationStatus } = require('../careerPublicationService');
+    await expect(getPublicationStatus('e1')).resolves.toMatchObject({ status: 'draft', slug: null, public_url: null });
+  });
+});
