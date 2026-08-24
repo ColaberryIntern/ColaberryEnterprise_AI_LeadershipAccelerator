@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 5:40 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">58 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 6:08 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">61 changes</span></div>
   </header>
   <main>
     
@@ -927,6 +927,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`modules/tenancy/organizationScope.ts` is on main; `adminOrgService` applies `orgScopeWhere(scope)` at seven call sites including `listOrganizations` and `getOrganizationDetail`, with tenant scope applied **first** so a filter cannot widen it; `services/__tests__/adminOrgScope.test.ts` covers the superadmin and null-tenant cases.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">ESC-2 was raised at Gate 1, when relaxing `Organization.owner_enrollment_id` made client organizations expressible while `adminOrgService` still had **zero** tenant filtering. I deliberately did not absorb it — `tenantScopeWhere` had no callers outside the tenancy module, and a naive fail-closed scoping could have blanked the live admin Organizations page. It belonged to the multi-tenancy workstream and that is where it was fixed. Their module reuses the same `IntelligenceScope` type as the memory graph, so the account list and the graph cannot disagree about who may read what, and an organization with a null `tenant_id` is treated as an anomaly reachable only by a platform superadmin rather than folded into a tenant&#39;s list. **The standing constraint &quot;no client organization should be created until ESC-2 closes&quot; is lifted.** Not independently re-verified from this side: their production backfill claim of 6 of 6 organizations classified — that is their evidence, in their PR.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">59</span>
+          <h2>**Release checks, with the obligation set by the delivery profile**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/releaseChecks.ts` — the ten checks, their meanings, and the per-profile mandatory sets.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">government takes every check, internal tool takes fewer; **an unknown profile falls back to ALL checks, not none**; every profile&#39;s mandatory list names only checks this module defines.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the check list is universal and the *obligation* is per-profile — an internal tool does not need an accessibility audit, a government delivery cannot skip one. The mandatory sets live here rather than as free strings on the profile so the two cannot drift: a profile naming a check nobody defines would be a **silent no-op**, and a silent no-op in a release gate is worse than an absent gate because it looks like coverage. The unknown-profile fallback is fail-closed for the same reason — an unrecognised profile must never be the cheapest one to ship under.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">60</span>
+          <h2>**Release readiness and deployment authorization are different questions**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/releaseGate.ts` — `evaluateReleaseGate` and `assertDeploymentAuthorized`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a missing result, a `not_run` and a `fail` all block; a release nobody approved blocks; a Gate 13 waiver carries through as **waived**, never as passed; the canonical GOALS threshold applies with unscored counting as failure; every blocker is reported rather than the first. `assertDeploymentAuthorized` **never returns an empty refusal list** — there is no input for which deployment is authorized.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">a release can be *ready* — every check passed, a human approved — and still not be *authorized to deploy*, because master plan §20 withholds that from this entire body of work. Collapsing the two would mean that the day someone implements a `DeploymentProvider`, a ready release becomes a deployed one with nothing in between. The refusal is a **function that cannot currently succeed rather than a config flag**: a flag is flipped by whoever is in a hurry, whereas removing this refusal is a code change with a review attached. It still reports the specific problems alongside the unconditional one, so a caller fixing their release does not have to fix it twice. This is the policy half of the control Gate 8 started — `executionPolicy` records `production_deploy` as enforced by `no_provider`; even with a provider, policy still says no.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">61</span>
+          <h2>**Production signals propose candidates; they never mutate production**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/operateSignals.ts` — the ten signals, `SignalReading`, `assessSignal`, and `proposeCandidate`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">an unobserved signal assesses as **`unknown`, never `healthy`**; `hasReading` never infers a value; a candidate drawn from absent telemetry is **refused**; a candidate *about* the missing measurement is **allowed**; a created candidate is `proposed`, requires human review, and exposes no way to apply itself.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">a system that changes production in response to its own telemetry has nobody to ask when the telemetry is wrong. Latency spikes because a client ran a bulk import, the optimizer &quot;fixes&quot; it by widening a cache, the next import is served stale data — every step locally reasonable, nobody decided anything. A candidate keeps a person at the only point where the loop matters: before the change, not in the postmortem. `not_observed` is a first-class state rather than a null because a nullable number invites `value ?? 0`, and a zero error rate meaning &quot;no data&quot; is indistinguishable from one meaning &quot;nothing broke&quot;. **No signal has ever arrived** — nothing here is deployed — which is exactly why an operate surface that renders green on absent data is the failure most likely to occur.</span></div>
           
         </div>
       </article>
