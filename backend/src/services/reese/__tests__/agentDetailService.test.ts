@@ -275,6 +275,7 @@ describe('getAgentDetail', () => {
         avg_duration_ms: 5791,
         last_error: 'out of shared memory',
         last_error_at: lastErrorAt,
+        last_activity_at: null, // a cron-tracked agent's own last_run_at is the real signal; no ticket-derived fallback mocked here
       });
     });
 
@@ -304,6 +305,7 @@ describe('getAgentDetail', () => {
         avg_duration_ms: null,
         last_error: null,
         last_error_at: null,
+        last_activity_at: null, // mockLastActivity defaults to null — this agent also has no ticket history in this test
       });
     });
 
