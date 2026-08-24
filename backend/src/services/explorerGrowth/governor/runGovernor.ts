@@ -107,8 +107,20 @@ async function runOne(
       // CONVERTED is the state machine's verdict, already computed by EPIC 3.
       // Re-deriving it here would be a second definition to keep in step.
       converted: profile.primary_state === 'CONVERTED',
-      unsubscribed: contactability.email?.eligible !== true,
-      dnc: contactability.sms?.eligible !== true && contactability.voice?.eligible !== true,
+      // TIER 0 IS SUPPRESSION, NOT CHANNEL AVAILABILITY. A first version mapped
+      // "email ineligible" to unsubscribed and "no sms AND no voice" to dnc,
+      // which blocked ALL 153 learners: SMS and voice are correctly ineligible
+      // for everyone, because the TCPA gate permits nobody without an express
+      // consent record. Having no phone channel is not "do not contact" - it
+      // just means no phone channel, and the generators already fall back to
+      // in-app on their own.
+      //
+      // So these read the REASON, not the eligibility flag: only a genuine
+      // suppression status stops the whole decision.
+      unsubscribed: /unsubscrib|complain/i.test(contactability.email?.reason ?? ''),
+      dnc: /dnd|do_not/i.test(
+        `${contactability.email?.reason ?? ''} ${contactability.sms?.reason ?? ''}`,
+      ),
       consentRevoked: false,
       killSwitch: false,
       campaignInactive: false,

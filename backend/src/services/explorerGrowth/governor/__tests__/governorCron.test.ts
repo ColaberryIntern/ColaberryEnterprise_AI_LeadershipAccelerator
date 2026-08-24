@@ -14,6 +14,7 @@ const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const scheduler = read('services/schedulerService.ts');
 const registry = read('services/agentRegistrySeed.ts');
 const script = read('scripts/runExplorerGovernor.ts');
+const runner = read('services/explorerGrowth/governor/runGovernor.ts');
 
 /** The Governor cron block. */
 function cronBlock(): string {
@@ -126,5 +127,39 @@ describe('the script argument parser', () => {
   it('rejects an unparseable --as-of', async () => {
     const mod = await import('../../../../scripts/runExplorerGovernor');
     await expect(mod.main(['--as-of', 'yesterday'])).rejects.toThrow('ISO date');
+  });
+});
+
+describe('tier 0 is SUPPRESSION, not channel availability', () => {
+  /**
+   * THE BUG THIS PREVENTS, found by the shadow review on real data:
+   *
+   * The first version mapped `dnc: sms.eligible !== true && voice.eligible !==
+   * true`. SMS and voice are correctly ineligible for EVERY learner, because
+   * the TCPA gate permits nobody without an express-consent record. So "no
+   * phone channel" became "do not contact", and ALL 153 learners were hard
+   * stopped out of email and in-app too. The Governor decided nothing for
+   * anyone, and every unit test still passed — this is the I/O layer, which
+   * none of them cover.
+   */
+
+  it('does not derive unsubscribed or dnc from an eligibility flag', () => {
+    const block = runner.slice(runner.indexOf('hardStop: {'), runner.indexOf('hardStop: {') + 2200);
+    expect(block).toContain('unsubscribed:');
+    expect(block).toContain('dnc:');
+    // The failing shape: reading .eligible to decide a tier-0 stop.
+    expect(block).not.toMatch(/unsubscribed:\s*contactability\.\w+\?\.eligible/);
+    expect(block).not.toMatch(/dnc:\s*contactability\.\w+\?\.eligible/);
+  });
+
+  it('derives them from the suppression REASON instead', () => {
+    const block = runner.slice(runner.indexOf('hardStop: {'), runner.indexOf('hardStop: {') + 2200);
+    expect(block).toMatch(/unsubscribed:.*reason/s);
+    expect(block).toMatch(/dnc:.*reason/s);
+  });
+
+  it('still hard-stops a converted learner on the state machine verdict', () => {
+    // The one tier-0 condition that SHOULD come from state, not a reason string.
+    expect(runner).toContain("converted: profile.primary_state === 'CONVERTED'");
   });
 });
