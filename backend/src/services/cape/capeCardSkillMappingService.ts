@@ -19,6 +19,7 @@
  * function and recurse forever.
  */
 import { resolveSkillMapping } from './capeCurriculumSkillMapService';
+import { isCardServable } from '../timeline/curriculumScope';
 
 export interface StampableCard {
   id: string;
@@ -36,7 +37,7 @@ export interface StampableCard {
  * has its own idempotency-key discipline, entirely separate from this cache stamp).
  */
 export async function stampIfPublished(card: StampableCard): Promise<void> {
-  if (card.visibility !== 'published') return;
+  if (!isCardServable(card.visibility)) return;
   try {
     const resolved = await resolveSkillMapping({ cardId: card.id, typeSlug: card.type, weekNumber: card.week });
     // Lazy import avoids a static circular dependency with models/TimelineCard.ts,

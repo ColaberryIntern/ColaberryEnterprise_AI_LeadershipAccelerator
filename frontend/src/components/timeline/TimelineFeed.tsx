@@ -23,9 +23,13 @@ interface Props {
   onWorkspace?: (card: TimelineFeedCard) => void;
 }
 
-// deterministic seed so like counts are stable across renders (no API field yet)
-const baseLikes = (id: string): number => 6 + (id.charCodeAt(id.length - 1) % 17);
-
+// NO like count is passed to TimelineCard, because there is nothing to count:
+// there is no like endpoint and no like table behind the button. This used to be
+// `baseLikes = (id) => 6 + (id.charCodeAt(id.length - 1) % 17)` — a hash of the
+// card id, dressed up by its own comment as "a deterministic seed so like counts
+// are stable across renders (no API field yet)". Stable, yes; true, never. The
+// Classroom showed every student 6-22 likes on work nobody had reacted to.
+// If a real Like feature is built, pass the real count here.
 const TimelineFeed: React.FC<Props> = ({ cards, compactCompleted, onOpen, onComplete, onComments, onWorkspace }) => {
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const toggleLike = (c: TimelineFeedCard) => setLiked((m) => ({ ...m, [c.id]: !m[c.id] }));
@@ -43,7 +47,6 @@ const TimelineFeed: React.FC<Props> = ({ cards, compactCompleted, onOpen, onComp
           onWorkspace={onWorkspace}
           onLike={toggleLike}
           liked={!!liked[c.id]}
-          likes={baseLikes(c.id) + (liked[c.id] ? 1 : 0)}
         />
       ))}
     </div>

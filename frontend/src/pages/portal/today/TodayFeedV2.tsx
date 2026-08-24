@@ -209,7 +209,6 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
           onOpen={(c) => handleOpen(c, item.ref)}
           onWorkspace={onWorkspace}
           onComplete={collectHandler}
-          likes={6 + ((i * 7) % 13)}
         />
       ))}
       {mode === 'v2' && rows.length === 0 && <div className="fc-empty">Your feed is warming up — check back soon.</div>}
@@ -229,7 +228,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
 
       {mode === 'fallback' && (looped.length
         ? looped.map((c, i) => (
-            <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={onOpen} onWorkspace={onWorkspace} onComplete={collectHandler} likes={6 + ((i * 7) % 13)} />
+            <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={onOpen} onWorkspace={onWorkspace} onComplete={collectHandler} />
           ))
         : <div className="fc-empty">Loading your feed…</div>)}
 

@@ -29,6 +29,15 @@ import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
+// The "Your timeline" section below renders .te-feed / .te-feed-head /
+// .te-feed-filter / .fchip, all of which are defined ONLY in feed.css. It used
+// to reach the bundle just via the CommunityPage / RoomsPage / FeedCard lazy
+// chunks, so a cold load of /portal/today — the default portal landing — had
+// none of those rules: the header icon fell back to the UA default (measured
+// at 462x462 in production on 2026-08-24) and the filter chips rendered as
+// raw default buttons. feed.css is fully scoped to .te-feed*, so importing it
+// here cannot leak into other surfaces.
+import '../feed/feed.css';
 import SkillMeter from '../SkillMeter';
 import SetupModal from './SetupModal';
 import { useReferralForm } from './useReferralForm';
@@ -396,7 +405,11 @@ const TodayShell: React.FC = () => {
           <div className="te-feed" id="te-timeline-anchor">
             <div className="te-feed-head">
               <span className="h">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="2" /></svg>
+                {/* Explicit width/height as well as the CSS rule: an SVG with
+                    neither falls back to the UA default ~300x150 the moment its
+                    stylesheet is missing, which is exactly what shipped here and
+                    in the 2026-08-04 CAPE incident. Belt and braces. */}
+                <svg viewBox="0 0 24 24" fill="none" width={16} height={16}><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="2" /></svg>
                 Your timeline · everything in one place
               </span>
             </div>

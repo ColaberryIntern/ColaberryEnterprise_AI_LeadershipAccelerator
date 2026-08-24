@@ -7,6 +7,13 @@ import { FeedItem, FeedSource } from './FeedCard';
 // task/activity items surface. For a guest it shows their real setup items plus
 // previews of what each page holds, so Today reads as one connected system.
 // See project memory: project_portal_fb_feed_system.
+//
+// NOTE (2026-08-24): `buildTodayFeed` is currently UNREFERENCED — nothing imports
+// it; the live Today feed is TodayFeedV2 + the /api/portal/runtime/today service.
+// Eight hardcoded `likes:` values (3, 1, 2, 6, 9, 5, 4, 8) were removed from the
+// items below. They rendered nowhere today, but they would have shipped fake
+// engagement counts to students the moment anyone wired this builder up. Do not
+// reintroduce a like count here unless a real one exists to read.
 
 export type TodayFeedCtx = {
   ohTitle?: string | null;
@@ -74,13 +81,13 @@ export function buildTodayFeed(ctx: TodayFeedCtx, h: TodayFeedHandlers): FeedIte
 
   if (ctx.ohTitle && !ctx.rsvped) {
     items.push({ ...base('onboarding', 'oh-rsvp'), title: `RSVP to the ${ctx.ohTitle}`, meta: 'Open house',
-      when: ctx.ohWhen || undefined, pts: 10, likes: 3,
+      when: ctx.ohWhen || undefined, pts: 10,
       desc: 'Show up to meet the team and see the platform. Your first points and a look at what you are joining.',
       cta: { label: 'RSVP', onClick: h.onRsvp, variant: 'cherry' } });
   }
 
   if (!ctx.hasBackground) {
-    items.push({ ...base('onboarding', 'bg-upload'), title: 'Upload your resume or LinkedIn PDF', meta: 'Personalizes your experience', pts: 25, likes: 1,
+    items.push({ ...base('onboarding', 'bg-upload'), title: 'Upload your resume or LinkedIn PDF', meta: 'Personalizes your experience', pts: 25,
       desc: "We tailor your program from it in the background. LinkedIn can't be read from a link, so export it to PDF or upload a resume.",
       cta: { label: 'Upload', onClick: h.onUpload, variant: 'cherry' } });
   }
@@ -90,7 +97,7 @@ export function buildTodayFeed(ctx: TodayFeedCtx, h: TodayFeedHandlers): FeedIte
     const creating = p.status === 'creating';
     items.push({ ...base('projects', 'proj-next'),
       title: creating ? `Building ${p.name}…` : `${p.name} · ${p.nextTaskTitle || 'all tasks done'}`,
-      meta: creating ? 'Assembling in the background' : 'Your build · next task', likes: 2,
+      meta: creating ? 'Assembling in the background' : 'Your build · next task',
       desc: creating
         ? 'Your new build is being assembled from your questionnaire. Open Projects to watch its lists and tasks fill in.'
         : 'Pick up your build where you left off. Its lists and tasks live in Projects, in the same feed language as here.',
@@ -98,23 +105,23 @@ export function buildTodayFeed(ctx: TodayFeedCtx, h: TodayFeedHandlers): FeedIte
   }
 
   items.push({ ...base('schedule', 'sch-overview'), title: 'Your 12-week schedule is mapped',
-    meta: ctx.firstClassLabel ? `Starts ${ctx.firstClassLabel}` : 'All tasks on one timeline', likes: 6,
+    meta: ctx.firstClassLabel ? `Starts ${ctx.firstClassLabel}` : 'All tasks on one timeline',
     desc: 'Every task from all four tracks — learning, project, internship, and certification — on one calendar.',
     cta: { label: 'Open schedule', to: '/portal/schedule', variant: 'berry' } });
 
-  items.push({ ...base('path', 'path-overview'), title: 'Your path to AI Systems Architect', meta: '12-week spine', likes: 9,
+  items.push({ ...base('path', 'path-overview'), title: 'Your path to AI Systems Architect', meta: '12-week spine',
     desc: 'Four intensives are the spine; your project, internship, and certification run as parallel lanes around them.',
     cta: { label: 'See your path', to: '/portal/path', variant: 'leaf' } });
 
-  items.push({ ...base('classroom', 'cl-week1'), title: 'Week 1 · Claude Code Foundations', meta: 'Classroom preview', likes: 5,
+  items.push({ ...base('classroom', 'cl-week1'), title: 'Week 1 · Claude Code Foundations', meta: 'Classroom preview',
     desc: 'Your first week once the cohort starts — a course, a video, a hands-on lab, and a quiz, all scored on-site.',
     cta: { label: 'Preview classroom', to: '/portal/curriculum', variant: 'ghost' } });
 
-  items.push({ ...base('certprep', 'cp-sample'), title: 'CCA-F · Claude Certified Architect prep', meta: 'Cert prep', likes: 4,
+  items.push({ ...base('certprep', 'cp-sample'), title: 'CCA-F · Claude Certified Architect prep', meta: 'Cert prep',
     desc: 'Answer prep questions in a feed to build exam readiness across the five domains.',
     cta: { label: 'Coming soon', onClick: () => h.onSoon('Cert Prep'), variant: 'ghost' } });
 
-  items.push({ ...base('community', 'cm-live'), title: 'Catch up with your cohort', meta: 'Community', likes: 8,
+  items.push({ ...base('community', 'cm-live'), title: 'Catch up with your cohort', meta: 'Community',
     desc: 'Post a win, ask for help, or cheer someone on — the feed, leaderboard, and your cohort are all here.',
     cta: { label: 'Open Community', to: '/portal/community', variant: 'leaf' } });
 

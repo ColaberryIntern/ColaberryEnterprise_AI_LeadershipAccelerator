@@ -18,6 +18,7 @@ import TimelineCardProgress from '../../models/TimelineCardProgress';
 import PortfolioArtifact from '../../models/PortfolioArtifact';
 import { award } from '../pointsService';
 import { MAX_FIELD_GUIDE_SIZE } from '../../config/upload';
+import { isCardServable } from '../timeline/curriculumScope';
 
 export const FIELD_GUIDE_KIND = 'field_guide';
 export const FIELD_GUIDE_POINTS = 100;
@@ -79,7 +80,7 @@ export async function getFieldGuideStatus(enrollmentId: string, cardId: string):
  */
 export async function uploadFieldGuide(enrollmentId: string, cardId: string, file: UploadFile) {
   const card: any = await TimelineCard.findByPk(cardId);
-  if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
+  if (!card || !isCardServable(card.visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
   if (card.type !== 'deep_dive') throw Object.assign(new Error('This activity does not accept a Field Guide upload.'), { status: 400 });
 
   const { html, filename, size_bytes } = parseFieldGuideUpload(file);

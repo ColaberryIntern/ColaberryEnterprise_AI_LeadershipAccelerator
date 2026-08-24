@@ -21,6 +21,7 @@ import {
   AmProgress, AmState, emptyProgress, isValidTransition, invalidAnswers, isMeaningful,
   completionGaps, deriveEvidence, assessBaseline, scoreMindset, computeReceipt, ledgerEntryFor, projectLedger,
 } from './architectMindsetLogic';
+import { isCardServable } from '../timeline/curriculumScope';
 
 const TYPE_SLUG = 'architect_mindset';
 const httpErr = (message: string, status: number, extra?: Record<string, any>) => Object.assign(new Error(message), { status, ...(extra || {}) });
@@ -40,7 +41,7 @@ function normalize(raw: any, scenario: AmScenario): AmProgress {
 
 async function load(enrollmentId: string, cardId: string) {
   const card = await TimelineCard.findByPk(cardId);
-  if (!card || (card as any).visibility !== 'published') throw httpErr('Card not available', 404);
+  if (!card || !isCardServable((card as any).visibility)) throw httpErr('Card not available', 404);
   if ((card as any).type !== TYPE_SLUG) throw httpErr('Not an Architect Time Machine card', 400);
   const scenario = scenarioForCard(card);
   if (!scenario) throw httpErr('This experience is being prepared, please check back shortly.', 409);

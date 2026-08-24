@@ -10,6 +10,7 @@ import {
   RecordArtifact,
   artifactPermalink,
   isShareable,
+  publicViewDecision,
   recordGaps,
 } from '../capstoneRecordContract';
 
@@ -116,5 +117,41 @@ describe('artifactPermalink', () => {
       .toContain('/dana/workspace/blob/');
     expect(artifactPermalink('https://github.com/dana/workspace/', artifact()))
       .toContain('/dana/workspace/blob/');
+  });
+});
+
+describe('publicViewDecision', () => {
+  it('serves a published public record to crawlers', () => {
+    expect(publicViewDecision('published', 'public')).toBe('serve_indexable');
+  });
+
+  it('serves a published unlisted record but keeps it out of search', () => {
+    // The pairing is the point: the slug is readable by design, so indexing is
+    // the difference between a link handed to one person and a page that finds
+    // the student.
+    expect(publicViewDecision('published', 'unlisted')).toBe('serve_noindex');
+  });
+
+  it('hides a private record even once published', () => {
+    expect(publicViewDecision('published', 'private')).toBe('not_found');
+  });
+
+  it('hides every visibility while the record is still a draft', () => {
+    // Both axes have to pass. This is the test that fails if someone ever folds
+    // status and visibility into one field.
+    expect(publicViewDecision('draft', 'public')).toBe('not_found');
+    expect(publicViewDecision('draft', 'unlisted')).toBe('not_found');
+    expect(publicViewDecision('draft', 'private')).toBe('not_found');
+  });
+
+  it('hides an archived record regardless of visibility', () => {
+    expect(publicViewDecision('archived', 'public')).toBe('not_found');
+  });
+
+  it('fails closed on unknown or missing values', () => {
+    expect(publicViewDecision(null, null)).toBe('not_found');
+    expect(publicViewDecision(undefined, undefined)).toBe('not_found');
+    expect(publicViewDecision('published', 'everyone')).toBe('not_found');
+    expect(publicViewDecision('live', 'public')).toBe('not_found');
   });
 });
