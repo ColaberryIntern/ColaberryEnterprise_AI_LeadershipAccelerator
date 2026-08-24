@@ -525,6 +525,57 @@ const EXECUTION_RUNS: string[] = [
 ];
 
 /**
+ * GATE 9 — the Quality OS ledger.
+ *
+ * Separate from `evidence_records` because that table's `enrollment_id` is NOT NULL and a
+ * client project has no enrollment (Gate 0, EVIDENCE_INTEGRATION_MAP). Relaxing it would
+ * push a delivery concern into the student progression path, which master plan §24 lists
+ * as a stop condition.
+ *
+ * `idempotency_key` is UNIQUE, copying `evidence_records` verbatim rather than inventing
+ * a second dedup pattern: master plan §15 requires a replayed execution callback to
+ * produce no duplicate evidence.
+ *
+ * `story_id` and `release_id` are plain UUIDs with no foreign key, because
+ * `delivery_stories` and `delivery_releases` do not exist yet — Gate 7 shipped stories as
+ * pure logic and releases belong to Gate 14. This follows the convention
+ * `delivery_execution_runs.story_id` already set rather than inventing a second one.
+ */
+const QUALITY_EVIDENCE: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_evidence (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     story_id UUID,
+     release_id UUID,
+     execution_run_id UUID,
+     dimension VARCHAR(40) NOT NULL,
+     evidence_type VARCHAR(40) NOT NULL,
+     outcome VARCHAR(20) NOT NULL,
+     subject_sha VARCHAR(64),
+     source_ref TEXT,
+     payload JSONB,
+     recorded_by_identity_id UUID,
+     idempotency_key VARCHAR(255) NOT NULL,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // The dedup guarantee itself. A UNIQUE INDEX rather than a column constraint so the
+  // statement is idempotent — ALTER TABLE ADD CONSTRAINT has no IF NOT EXISTS form, and
+  // this module re-runs on every boot.
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_evidence_idempotency
+     ON delivery_evidence (idempotency_key)`,
+  // The gate's read path: all evidence for a story, then for a release.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_evidence_story
+     ON delivery_evidence (story_id, dimension)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_evidence_release
+     ON delivery_evidence (release_id, dimension)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_evidence_project
+     ON delivery_evidence (delivery_project_id, created_at)`,
+  // Staleness checks filter passing rows by the commit they ran against.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_evidence_subject_sha
+     ON delivery_evidence (subject_sha)`,
+];
+
+/**
  * Order matters across the groups: the spine must exist before its children reference
  * it, and the organization relaxation runs first because delivery engagements point at
  * organizations that may now legitimately have no owner.
@@ -553,4 +604,5 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...DISCOVERY_AND_OPPORTUNITIES,
   ...TRUST_BEFORE_INTELLIGENCE,
   ...EXECUTION_RUNS,
+  ...QUALITY_EVIDENCE,
 ];
