@@ -25,6 +25,7 @@ const PathPage = lazy(() => import('../pages/portal/path/PathPage'));
 const SchedulePage = lazy(() => import('../pages/portal/schedule/SchedulePage'));
 const PointsPage = lazy(() => import('../pages/portal/points/PointsPage'));
 const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'));
+const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
 const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage'));
 const PeopleDirectoryPage = lazy(() => import('../pages/portal/community/PeopleDirectoryPage'));
 const RoomsPage = lazy(() => import('../pages/portal/rooms/RoomsPage'));
@@ -62,6 +63,9 @@ const portalRoutes = (
       <Route path="/portal/schedule" element={<SchedulePage />} />
       <Route path="/portal/points" element={<PointsPage />} />
       <Route path="/portal/projects" element={<PageGate feature="projects"><ProjectsPage /></PageGate>} />
+      {/* Living Career Portfolio — the private Career Studio. Gated like its
+          siblings; the resume prerequisite inside it is enforced server-side. */}
+      <Route path="/portal/portfolio" element={<PageGate feature="portfolio"><PortfolioPage /></PageGate>} />
       <Route path="/portal/community" element={<CommunityPage />} />
       <Route path="/portal/community/people" element={<PeopleDirectoryPage />} />
       <Route path="/portal/rooms" element={<RoomsPage />} />

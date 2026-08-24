@@ -17,6 +17,7 @@ import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
+import careerPortfolioRoutes from './routes/careerPortfolioRoutes';
 import explorerSignalRoutes from './routes/explorerSignalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
@@ -118,6 +119,7 @@ app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
 app.use(capePortalRoutes);
+app.use(careerPortfolioRoutes);
 // Explorer Growth OS learner signal ingest (EPIC 2). Dark until
 // EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
 app.use(explorerSignalRoutes);
