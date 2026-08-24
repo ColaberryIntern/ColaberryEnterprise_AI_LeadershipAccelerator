@@ -7,7 +7,7 @@
  */
 import portalApi from '../utils/portalApi';
 
-export type CareerEvidenceLevel = 'resume' | 'colaberry_verified' | 'delivery_verified';
+export type CareerEvidenceLevel = 'none' | 'resume' | 'colaberry_verified' | 'delivery_verified';
 export type CareerAccessState = 'needs_resume' | 'ready';
 
 export interface CareerIdentity {
@@ -120,6 +120,7 @@ export interface CareerProfile {
 
 /** Employer-readable label for an evidence level. Never exposes raw band scores. */
 export const EVIDENCE_LEVEL_LABEL: Record<CareerEvidenceLevel, string> = {
+  none: 'No evidence yet',
   resume: 'Resume evidence',
   colaberry_verified: 'Colaberry Verified',
   delivery_verified: 'Delivery Verified',

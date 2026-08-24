@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 
-export const careerEvidenceLevelSchema = z.enum(['resume', 'colaberry_verified', 'delivery_verified']);
+export const careerEvidenceLevelSchema = z.enum(['none', 'resume', 'colaberry_verified', 'delivery_verified']);
 
 export const careerIdentitySchema = z.object({
   full_name: z.string(),
