@@ -36,6 +36,7 @@
 import * as fs from 'fs/promises';
 import {
   ArtifactRecord,
+  artifactPath,
   buildArtifactFiles,
   isTextArtifact,
   mergeArtifactHashesIntoManifest,
@@ -236,6 +237,32 @@ export async function syncArtifactsToRepo(
     // No cast: RenderedArtifactFile and RenderedFile are the same { path, content }
     // shape, and a test asserts they stay assignable so this stays honest.
     const result = await writeDocsToRepo(target, toWrite, manifest, { correlationId: cid });
+
+    // Record WHERE each artifact landed and in WHICH commit.
+    //
+    // The sync has always known both and thrown them away, which left the
+    // Capstone Record unable to link an artifact to its evidence: a portfolio
+    // row with no path is not a claim anyone can check, and a link pinned to a
+    // branch instead of a SHA rots the moment the student keeps working.
+    //
+    // Written on EVERY successful pass, not only when a commit happened. An
+    // `unchanged` result still means the file is present at the recorded path,
+    // and a row whose path was never stored would otherwise stay unlinkable
+    // forever simply because it synced before this existed.
+    if (result.committed || result.changedPaths.length === 0) {
+      const pathByCard = new Map<string, string>();
+      for (const record of toArtifactRecords(rows as StoredArtifact[], textByCardId)) {
+        pathByCard.set(record.cardId, artifactPath(record));
+      }
+      for (const row of rows) {
+        const path = pathByCard.get(row.card_id);
+        if (!path) continue;
+        const content = { ...(row.content || {}), repo_path: path, commit_sha: result.commitSha ?? row.content?.commit_sha ?? null };
+        // Fail-soft per row: a bookkeeping write must never turn a successful
+        // sync into an error the student sees.
+        await row.update({ content }).catch(() => {});
+      }
+    }
 
     log('artifact_sync_done', cid, 'success', {
       project_id: projectId,
