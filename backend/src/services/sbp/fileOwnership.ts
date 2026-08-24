@@ -19,8 +19,8 @@
  * is still correct when the copy in the repo is provably the one the platform
  * last wrote; it is never correct otherwise.
  *
- * They were enforced in exactly one place — `repoWriter`, at the moment of a
- * git write — and stated as prose everywhere else. That was survivable while
+ * The classes were enforced in exactly one place — `repoWriter`, at the moment
+ * of a git write — and stated as prose everywhere else. That was survivable while
  * `repoWriter` was the only thing that ever moved a rendered file toward a
  * student. It stopped being survivable the moment the docs bundle handed the
  * SAME raw render to a human with the instruction "unzip it into your repo":
