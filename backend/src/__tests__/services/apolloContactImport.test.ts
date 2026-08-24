@@ -130,6 +130,51 @@ describe('mapContactToLead', () => {
     expect(String(lead.notes)).toContain(IMPORTED_ON);
   });
 
+  // REGRESSION, 2026-08-24. The first production import put 337 leads in with
+  // NO list attribution. /v1/contacts/search returns `label_ids`, not names,
+  // and the original mapper only looked for name fields - so it found nothing,
+  // wrote nothing, and never complained, because a contact with no list is
+  // legitimately common. The original tests passed because they were written
+  // against the shape I assumed Apollo returned, not the shape it does.
+  describe('label_ids, the shape the contacts endpoint really returns', () => {
+    const REAL = {
+      id: 'apollo-real',
+      email: 'real@example.com',
+      label_ids: ['688a78d8cb19ad001d43ef77', '683876b09467c900111332da'],
+    };
+    const NAMES = new Map([
+      ['688a78d8cb19ad001d43ef77', 'Nate - Ai4 Targets'],
+      ['683876b09467c900111332da', 'ETS25'],
+    ]);
+
+    it('resolves ids to names through the label map', () => {
+      const lead = mapContactToLead(REAL, IMPORTED_ON, NAMES)!;
+      expect(lead.utm_campaign).toBe('Nate - Ai4 Targets');
+      expect(String(lead.notes)).toContain('Nate - Ai4 Targets, ETS25');
+    });
+
+    it('falls back to the raw id rather than dropping the attribution', () => {
+      // Ugly but traceable. Silently dropping it is the bug this replaces.
+      const lead = mapContactToLead(REAL, IMPORTED_ON, new Map())!;
+      expect(lead.utm_campaign).toBe('688a78d8cb19ad001d43ef77');
+    });
+
+    it('still works when no label map was fetched at all', () => {
+      const lead = mapContactToLead(REAL, IMPORTED_ON)!;
+      expect(lead.utm_campaign).toBe('688a78d8cb19ad001d43ef77');
+    });
+
+    it('prefers real names when an endpoint does supply them', () => {
+      const both = { ...REAL, contact_label_names: ['Hologic DSAIL'] };
+      expect(mapContactToLead(both, IMPORTED_ON, NAMES)!.utm_campaign).toBe('Hologic DSAIL');
+    });
+
+    it('leaves attribution empty for a contact genuinely on no list', () => {
+      const lead = mapContactToLead({ id: 'x', email: 'a@b.com' }, IMPORTED_ON, NAMES)!;
+      expect(lead.utm_campaign).toBeNull();
+    });
+  });
+
   it('lowercases the email so dedupe is not defeated by casing', () => {
     expect(mapContactToLead({ ...base, email: 'DANA.REED@EXAMPLE.COM' }, IMPORTED_ON)!.email)
       .toBe('dana.reed@example.com');
