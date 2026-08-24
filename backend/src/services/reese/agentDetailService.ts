@@ -31,6 +31,11 @@ export interface AgentDetailResult {
     persona_version: string | null;
     enabled: boolean;
     created_at: Date | null;
+    /** AI Workforce Reset, Phase C (2026-08-24) — the Permitted dimension of
+     * the Trust Contract: docs/ai-governance/abac-design.md's 4-level
+     * ladder, `null` for an agent never yet reactivated through that flow.
+     * Purely declarative — not enforced anywhere yet. */
+    autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
   };
   identity: {
     admin_user_id: string;
@@ -226,6 +231,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       persona_version: agent.persona_version ?? null,
       enabled: agent.enabled,
       created_at: agent.created_at ?? null,
+      autonomy_level: agent.autonomy_level ?? null,
     },
     identity: adminUser
       ? {
