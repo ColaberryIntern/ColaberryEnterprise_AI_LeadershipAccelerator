@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 6:09 AM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">26 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 6:28 AM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">29 changes</span></div>
   </header>
   <main>
     
@@ -447,6 +447,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryOpportunityMap.test.ts`, **32 tests**. Autonomy with no declared trust requirement is **blocking**; an acting agent that omits `permitted` is blocking; trust requirements must reference the INPACT registry rather than free text; every disposition must describe itself. Scores warn rather than block.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">`disposition` defaults to `traditional_software` — a capability nobody has classified is **not** an agent opportunity by default, and that default is precisely how &quot;AI everywhere&quot; happens without anyone deciding it. The `ai_everywhere` check **warns and does not block**: there are real projects where nearly everything is an agent opportunity, and a gate that refused them would be wrong — the signal exists so a human looks, not so the tool decides. `human_only_decision` is a first-class column rather than an absence of AI columns, so &quot;a form and a database&quot; is recorded as an answer instead of leaving a gap that later reads as an unexplored opportunity.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">27</span>
+          <h2>**`DeliveryAgentDefinition` — a contract, not a description**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryAgentDefinition.ts` + DDL. Carries `can_read`, `can_write`, `prohibited_actions`, `autonomy_boundary`, `approval_rules`, `escalation_rules`, `layer_dependencies`, `goals_measures`, `evaluation_suite`, and a `version` / `approved_version` pair.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">covered by the schema-contract and model suites; the Gate 1 tenancy-by-parent test still passes with three more tables.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">named `Delivery*` per Gate 0&#39;s C-06 — the `Agent*` namespace is already crowded with the **ops** fleet (`AgentRun`, `AgentTask`, `AgentCreationProposal`…), and an agent built for a client&#39;s system is a different thing from one that runs Colaberry. `approved_version` is separate from `version` deliberately: a production-bound agent runs the **approved** one, so editing a definition cannot silently widen a live agent&#39;s authority. `autonomy_boundary` defaults to `R0` and `deployment_intent` to `design_only` — the most restrictive values, so the trust gate is **opted into by declaring an agent production-bound**, a visible act, rather than escaped by forgetting to.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">28</span>
+          <h2>**Six INPACT dimensions as rows, not a blob**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryAgentTrustRequirement.ts` — one row per (agent, dimension), unique, with the five fields master plan §Gate 5 requires: requirement, implementation evidence, evaluation, owner, status. Plus `delivery_trust_layer_map` for the Architecture-of-Trust map.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">unique index pinned by the schema test.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">rows rather than a JSONB blob on the agent because the gate must answer &quot;which dimensions are unaddressed, and who owns each one&quot; **as a query**. A blob makes that a parse, hides partial completion in list views, and leaves nobody to assign. Six small rows are six things a person can own. The score column is the book&#39;s **1–6**, and the 100-point headline is derived rather than stored so the underlying assessment stays auditable.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">29</span>
+          <h2>**The trust gate: fails closed, absence is failure**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryTrustGate.ts` (pure) — `evaluateAgentTrust` and `assessProjectTrustCoverage`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryTrustGate.test.ts`, **41 tests**. A missing dimension blocks. No requirements at all produces six blocking findings. `specified`/`implemented` is **not** enough — a dimension must reach `evaluated` or `accepted`. An unapproved definition blocks, and so does a working version ahead of the approved one. One failing production agent blocks the whole release.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**&quot;we built it&quot; without &quot;and we checked it&quot; is the exact gap the framework exists to close**, which is why `implemented` fails the gate. The module returns every reason at once rather than throwing on the first — closing gaps should not be whack-a-mole against a system that already knows the full answer. Trust does not average across a fleet: one agent outside its boundary is not offset by five that behave. `no_prohibited_actions` warns rather than blocks — worth surfacing, since the &quot;may&quot; list silently becoming the whole world is a real failure, but not worth refusing a release over.</span></div>
           
         </div>
       </article>

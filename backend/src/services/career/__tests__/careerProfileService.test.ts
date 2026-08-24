@@ -228,8 +228,15 @@ describe('deriveEvidenceLevel', () => {
     expect(deriveEvidenceLevel({ claim: 80, knowledge: 0, application: 0, judgment: 0 })).toBe('resume');
   });
 
-  it('is "resume" when there is no evidence at all', () => {
-    expect(deriveEvidenceLevel({ claim: 0, knowledge: 0, application: 0, judgment: 0 })).toBe('resume');
+  /**
+   * REGRESSION (found on dev by looking at the rendered page, 2026-08-24).
+   * This previously returned 'resume', so a capability with nothing behind it
+   * rendered a "Resume evidence" badge next to "0 pieces of evidence" — the
+   * platform asserting a source the learner never supplied. An empty capability
+   * must claim nothing.
+   */
+  it('is "none" when there is no evidence at all — never a claimed source', () => {
+    expect(deriveEvidenceLevel({ claim: 0, knowledge: 0, application: 0, judgment: 0 })).toBe('none');
   });
 
   it.each(['knowledge', 'application', 'judgment'])(

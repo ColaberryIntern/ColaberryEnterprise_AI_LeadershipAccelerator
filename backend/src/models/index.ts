@@ -430,6 +430,8 @@ import DeliveryEvent from './DeliveryEvent';
 import BuilderAuthorityProfile from './BuilderAuthorityProfile';
 import DeliveryDiscovery from './DeliveryDiscovery';
 import DeliveryOpportunity from './DeliveryOpportunity';
+import DeliveryAgentDefinition from './DeliveryAgentDefinition';
+import DeliveryAgentTrustRequirement from './DeliveryAgentTrustRequirement';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
 // loaded, not only when an intelligence service happens to import them directly. The
 // schema/model parity test walks sequelize.models, so an unregistered model is an
@@ -1511,6 +1513,8 @@ export {
   BuilderAuthorityProfile,
   DeliveryDiscovery,
   DeliveryOpportunity,
+  DeliveryAgentDefinition,
+  DeliveryAgentTrustRequirement,
   GraphNode,
   GraphEdge,
   GraphEvent,
@@ -1854,4 +1858,28 @@ DeliveryOpportunity.belongsTo(DeliveryProject, {
 DeliveryOpportunity.belongsTo(DeliveryDiscovery, {
   foreignKey: 'discovery_id',
   as: 'discovery',
+});
+
+// Agent definitions are strict children of DeliveryProject; their six INPACT trust
+// requirements are children of the definition. Cascading from the definition is correct
+// here: a trust requirement has no meaning without the agent it describes, unlike an
+// audit row, which must outlive its subject.
+DeliveryProject.hasMany(DeliveryAgentDefinition, {
+  foreignKey: 'delivery_project_id',
+  as: 'agentDefinitions',
+  onDelete: 'CASCADE',
+});
+DeliveryAgentDefinition.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+
+DeliveryAgentDefinition.hasMany(DeliveryAgentTrustRequirement, {
+  foreignKey: 'agent_definition_id',
+  as: 'trustRequirements',
+  onDelete: 'CASCADE',
+});
+DeliveryAgentTrustRequirement.belongsTo(DeliveryAgentDefinition, {
+  foreignKey: 'agent_definition_id',
+  as: 'agent',
 });

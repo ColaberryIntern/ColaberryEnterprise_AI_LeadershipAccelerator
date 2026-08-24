@@ -26,11 +26,18 @@ import { getSettings } from '../portalSettingsService';
 // ── Contracts ───────────────────────────────────────────────────────────────
 
 /**
- * The three evidence levels of build plan §9. DERIVED at read time from CAPE
- * bands — deliberately not a stored column, so it can never drift from the
- * ledger it summarises.
+ * The three evidence levels of build plan §9, plus `none`. DERIVED at read time
+ * from CAPE bands — deliberately not a stored column, so it can never drift from
+ * the ledger it summarises.
+ *
+ * `none` is not in the plan's list and was added after seeing the rendered page
+ * on dev: with no evidence at all, every capability was falling back to `resume`
+ * and the UI showed a "Resume evidence" badge next to "0 pieces of evidence".
+ * That asserts a provenance the data does not have — the same class of
+ * unsupported claim §57 exists to prevent. A capability with nothing behind it
+ * must say so.
  */
-export type CareerEvidenceLevel = 'resume' | 'colaberry_verified' | 'delivery_verified';
+export type CareerEvidenceLevel = 'none' | 'resume' | 'colaberry_verified' | 'delivery_verified';
 
 export interface CareerIdentity {
   full_name: string;
@@ -144,7 +151,10 @@ export function deriveEvidenceLevel(bands: {
   if (bands.knowledge > 0 || bands.application > 0 || bands.judgment > 0) {
     return 'colaberry_verified';
   }
-  return 'resume';
+  if (bands.claim > 0) return 'resume';
+  // Nothing behind this capability at all. Falling through to `resume` here
+  // would label an empty capability with a provenance it does not have.
+  return 'none';
 }
 
 // ── Adapters ────────────────────────────────────────────────────────────────
