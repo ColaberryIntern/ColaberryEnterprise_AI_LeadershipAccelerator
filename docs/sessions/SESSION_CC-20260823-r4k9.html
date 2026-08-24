@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, August 23, 2026 at 8:08 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">23 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 6:09 AM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">26 changes</span></div>
   </header>
   <main>
     
@@ -402,6 +402,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryProjectGraph.test.ts`. Cycles terminate rather than hang. An impact report surfaces `touchesAcceptedWork` and `touchesDeployedWork` as their own flags, and reports `truncated` when the walk hit its depth limit. Traceability fails closed: an uncovered `must` requirement or approved design decision is a gap, and a recorded no-code rationale excuses the latter. Malformed `affected_nodes` entries are skipped and **counted**, not thrown on.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">no graph database — master plan §Gate 3 forbids one absent evidence that relational modelling is inadequate, and Gate 0 found none. `truncated` earns its place: an impact report that silently stopped walking reads as &quot;nothing else is affected&quot;, which is the most dangerous way to be wrong here. The accepted/deployed flags are surfaced separately because they change the *conversation* — altering something a client already signed off is a different request from altering a draft, and the approver should not have to notice that themselves.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">24</span>
+          <h2>**The book&#39;s frameworks encoded with their exact scales**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/modules/delivery/inpact.ts` — INPACT (6 dimensions, 1–6, 36 max, 100-point headline), the 7 layers by canonical name, GOALS (5 dimensions, 1–5, 25 max, named maturity ladder), the INPACT dependency phases, and per-dimension GOALS threshold gating.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`inpact.test.ts`, **36 tests**. Explicitly pins `INPACT_MAX_SCORE === 6` and `INPACT_MAX_TOTAL === 36` against the specific drift of reusing GOALS&#39;s 1–5 ladder. Rejects Adaptive-before-Instant and Permitted-before-Instant. Layer 1 asserted as &quot;Multi-Modal Storage&quot; and layer 2 as &quot;Real-Time Data&quot;, the book&#39;s names rather than the master plan&#39;s shorthand.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the load-bearing test is **&quot;a single collapsed dimension fails even when the total looks healthy&quot;** — GOALS 5+5+5+5+1 totals 21/25 and looks fine averaged, but Solid at 1/5 means the data is wrong, and the book&#39;s interdependence principle says that cascades. So gating is per dimension and the total is display-only. An unscored dimension is a **failure, not a pass**: &quot;not scored&quot; is not &quot;meets the bar&quot;. The headline INPACT score returns null unless all six are scored, because a partial assessment reported as a number invites comparison with a complete one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">25</span>
+          <h2>**Discovery snapshots, approved before architecture**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryDiscovery.ts` + DDL. Versioned with an `approved_snapshot`, same freeze discipline as `DeliveryContract`. The seven Project AI outputs are distinct columns: understood, recommended, **remains_human**, software_handles, ai_recommends, agents_may_act, open_decisions.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">covered by the schema-contract and model-parity suites; the Gate 1 tenancy-by-parent test still passes unchanged with the two new tables, confirming neither carries a `tenant_id`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">storing the seven outputs as separate columns rather than one blob is what lets Gate 7 check that the story graph honours them — and what stops &quot;where AI should recommend&quot; quietly collapsing into &quot;where agents may act&quot;, which is the difference between a suggestion and an action taken on someone&#39;s behalf.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">26</span>
+          <h2>**AI-native Opportunity Map, with &quot;do not force AI everywhere&quot; enforced**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryOpportunity.ts` + DDL + `services/delivery/deliveryOpportunityMap.ts` (pure). One row per capability, unique on (project, capability).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryOpportunityMap.test.ts`, **32 tests**. Autonomy with no declared trust requirement is **blocking**; an acting agent that omits `permitted` is blocking; trust requirements must reference the INPACT registry rather than free text; every disposition must describe itself. Scores warn rather than block.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`disposition` defaults to `traditional_software` — a capability nobody has classified is **not** an agent opportunity by default, and that default is precisely how &quot;AI everywhere&quot; happens without anyone deciding it. The `ai_everywhere` check **warns and does not block**: there are real projects where nearly everything is an agent opportunity, and a gate that refused them would be wrong — the signal exists so a human looks, not so the tool decides. `human_only_decision` is a first-class column rather than an absence of AI columns, so &quot;a form and a database&quot; is recorded as an answer instead of leaving a gap that later reads as an unexplored opportunity.</span></div>
           
         </div>
       </article>
