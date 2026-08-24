@@ -167,6 +167,13 @@ export const WEEK5_PACK: WeekPack = {
           'Server = its own process, exposing tools / resources / prompts',
           'Transport = STDIO (local subprocess, this week) or Streamable HTTP (Week 6)',
         ],
+        definitions: [
+          { term: 'Host', meaning: 'The AI application a human actually opens — Claude Code, Claude Desktop, or an app you write.' },
+          { term: 'Client', meaning: 'The piece inside the host that owns one connection. One client per server, always.' },
+          { term: 'Server', meaning: 'A separate program exposing capabilities. It runs on its own, whether or not anyone is connected.' },
+          { term: 'Transport', meaning: 'The pipe the messages travel down. STDIO is a local program; Streamable HTTP is a remote service.' },
+          { term: 'STDIO', meaning: 'Standard in / standard out — the server runs as a subprocess on your machine and talks over a pipe.' },
+        ],
         diagram: `flowchart LR
   H["🖥️ Host<br/>the app you run"] --> C1["🔗 Client 1"]
   H --> C2["🔗 Client 2"]
@@ -175,40 +182,89 @@ export const WEEK5_PACK: WeekPack = {
         script: 'Draw the host as one big box with two circles inside it and two boxes outside, one line each. Say the one-to-one rule twice — it is why a misbehaving server cannot corrupt another server’s namespace, and it is the mental model for the entire intensive.',
       },
       {
-        segment: 'architecture', eyebrow: '📦 The big shift', title: 'Tool definition AND execution both move off your application',
-        body: 'This is the architectural heart of the week, and it is worth slowing down on. In the old world, the tool’s JSON schema and the code that runs it both lived inside your application. Under MCP, both leave. Your app no longer knows how to query the CRM; it only knows how to speak MCP. It asks the server what exists, the server returns the schemas, the model picks one, the app forwards the call, and the server executes it. Your application shrinks toward being a protocol client, and every piece of integration-specific knowledge — schema, credentials, retries, rate limits — becomes the server’s concern, versioned in exactly one place.',
+        segment: 'architecture', eyebrow: '🧠 Start from zero', title: 'Claude cannot run your code. It can only ask you to run it.',
+        body: 'We are going to build this idea from nothing, because it is the one thing the rest of the week stands on. A model has no hands. When you give Claude a tool you are not granting it permission to execute anything — you are handing it a menu it is allowed to point at. The turn happens in four steps, and step three is always yours. You send your question along with a list of tool descriptions. Claude reads them and, instead of answering, stops and says “call lookup_order with this order id” — that is stop_reason coming back as tool_use instead of end_turn. Your program runs the real function. You send what it returned back as a tool_result, and only then does Claude write the final answer. That loop is not replaced tonight. What changes is where two of those four pieces live.',
+        bullets: [
+          'Step 1 — you send the question PLUS a list of tool descriptions',
+          'Step 2 — Claude stops and names one: stop_reason comes back tool_use, not end_turn',
+          'Step 3 — YOUR code runs the real function. Claude never touches it.',
+          'Step 4 — you hand the result back as a tool_result and Claude finishes the answer',
+          'The model chooses, your program executes — and that never inverts, tonight or ever',
+        ],
+        definitions: [
+          { term: 'Tool', meaning: 'A function you allow the model to ask for by name. You are always the one who runs it.' },
+          { term: 'Tool schema', meaning: 'Name + description + the shape of the arguments. The menu entry the model reads before choosing.' },
+          { term: 'stop_reason', meaning: 'Why the model stopped talking. “end_turn” means it finished; “tool_use” means it is waiting on you.' },
+          { term: 'tool_use block', meaning: 'The model’s request: which tool it wants, and the arguments it filled in for you.' },
+          { term: 'tool_result block', meaning: 'Your reply carrying what the function returned, tagged with the same id so the two line up.' },
+          { term: 'Round trip', meaning: 'One full pass of those four steps — ask, request, execute, return.' },
+        ],
+        diagram: `flowchart LR
+  Q["1️⃣ You send<br/>question + tool list"] --> M["2️⃣ Claude stops:<br/>stop_reason = tool_use"]
+  M --> R["3️⃣ YOUR code runs<br/>the real function"]
+  R --> T["4️⃣ You return a<br/>tool_result"]
+  T --> A["✅ Claude writes<br/>the final answer"]`,
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — teach me the round trip using MY project',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: \"Order Support Assistant \u2014 answers customer questions about order status for a small online retailer.\" >>>\n\nI am learning how tool use actually works, from scratch. Do not assume I have seen it before.\n\nUsing MY PROJECT above as the running example, walk me through ONE complete tool-use round trip with the Claude API:\n\n1. Invent one tool my project would realistically need and show me its schema \u2014 name, description, input schema \u2014 then tell me which single field the model actually uses to decide WHEN to call it.\n2. Show me the exact request my program sends, with that schema attached.\n3. Show me what comes back when the model wants the tool: point at stop_reason and at the tool_use block, and say plainly what my program is expected to do at that moment.\n4. Show me the tool_result I send back, and point at the id that ties it to the request.\n5. Show me the final answer.\n\nThen answer these three questions in one sentence each:\n- Who executed my function, me or the model?\n- What happens if I never send the tool_result back?\n- Which of these five things would still be MY job if the schema and the function lived somewhere else entirely?\n\nUse the current API surface (claude-opus-5 / claude-sonnet-5 / claude-haiku-4-5). Explain in plain English as you go. Do not create any files.',
+          expectedResult: 'A four-step trace using YOUR project’s tool, and a plain answer to “who ran the function?” that is always “you did”.',
+          stopCondition: 'You can say out loud, without looking, what stop_reason = tool_use means and what your program owes the model next.',
+          rescue: 'If it dives straight into code, say: “slow down — name the four steps first, then show me one message at a time.”',
+        },
+        script: 'Do NOT lean on Week 3 here — the room never got to it. Teach this cold. Draw the four steps on the board and number them as you say them, then put your hand over step 3 and ask “who runs this one?” until somebody says “we do”. Everything after this slide depends on that answer being reflexive.',
+      },
+      {
+        segment: 'architecture', eyebrow: '🔬 Watch it happen', title: 'Run one round trip yourself, and read the four messages as they go by',
+        body: 'A diagram of the round trip is a claim. Watching stop_reason come back as tool_use in your own terminal is proof, and that difference matters tonight because everything MCP does is a rearrangement of these four messages. Run the prompt below. It writes one small script against your own project idea, runs it if you have an API key configured, and prints each step with a label so you can see exactly where your code takes over from the model. No key yet? It will tell you precisely what to add and still show you the annotated transcript.',
+        bullets: [
+          'One file, one tool, one round trip — nothing else in the way',
+          'Every step prints with a label, so you can see where the model stops and you start',
+          'No API key yet? The prompt tells you exactly what to add and shows the trace anyway',
+          'What you are looking for: the moment YOUR function runs, in between two model turns',
+        ],
+        definitions: [
+          { term: 'API key', meaning: 'The credential your program sends to prove it may call the model. It lives in a .env file, never in your code.' },
+          { term: '.env file', meaning: 'A plain text file of secrets sitting beside your code that never gets committed to git.' },
+          { term: 'Transcript', meaning: 'The full ordered list of messages in one conversation, including the tool_use and tool_result blocks.' },
+        ],
+        diagram: `flowchart LR
+  P["⌨️ One prompt"] --> F["📄 One script,<br/>one tool"]
+  F --> RUN["▶️ Run it"]
+  RUN --> SEE["👁️ Labelled steps<br/>print in order"]
+  SEE --> PROOF["✅ You saw your own<br/>code run mid-turn"]`,
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — build and run one real round trip',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: \"Order Support Assistant \u2014 answers customer questions about order status for a small online retailer.\" >>>\n\nFIRST, CHECK MY SETUP\n1. Check whether ANTHROPIC_API_KEY is available in this project (a .env file or the environment).\n2. If it is missing, tell me exactly what file to create, exactly what line to put in it, and remind me that this file must never be committed. Then continue anyway using a printed sample transcript instead of a live call.\n3. Tell me which of the two paths you are taking before you write anything.\n\nTHEN BUILD ONE ROUND TRIP\nCreate a single file called round_trip.py in this project that does exactly one thing: one question, one tool, one complete tool-use round trip, for MY PROJECT above.\n\nIt must:\n- Define ONE tool with a real schema, for a lookup my project would actually need.\n- Print, with a clear labelled header before each one: (1) the request I sent, (2) the value of stop_reason that came back, (3) the tool_use block including the arguments the model filled in, (4) the line where MY function executes, (5) the tool_result I send back, (6) the final answer.\n- Use a small hardcoded dictionary as the data source. No database, no network beyond the model call.\n- Use the current API surface (claude-opus-5 / claude-sonnet-5 / claude-haiku-4-5).\n\nTHEN RUN IT and show me the output.\n\nFINALLY, tell me in one sentence which two parts of this file would have to move somewhere else for another program to use this same tool without copying my code.',
+          expectedResult: 'Six labelled sections printed in order, with “stop_reason: tool_use” visible and your own function running between two model turns.',
+          stopCondition: 'You have pointed at the printed line where YOUR code ran and said “that one is mine”.',
+          rescue: 'Errors about the key? You are on the no-key path — that is fine tonight. Read the printed transcript, keep moving, and get a mentor to set your key before Thursday.',
+        },
+        script: 'Run it live on screen first and read the six headers out loud as they scroll. Then stop on the last question the prompt asks — “which two parts would have to move?” — and take answers from the room. The answer is the schema and the function, and the room saying it out loud IS the setup for the next slide. Do not answer it for them.',
+      },
+      {
+        segment: 'architecture', eyebrow: '📦 The big shift', title: 'Tool definition AND execution both move off your application — that is MCP',
+        body: 'You just named the two pieces yourself: the schema and the function. In everything you have built so far, both of them live inside your application. Under MCP, both leave. Your app no longer knows how to query the CRM; it only knows how to speak MCP. It asks the server what exists, the server returns the schemas, the model picks one, the app forwards the call, and the server executes it. The four-step round trip you just watched still happens, turn for turn — the host still runs it. Your application simply shrinks toward being a protocol client, and every piece of integration-specific knowledge — schema, credentials, retries, rate limits — becomes the server’s concern, versioned in exactly one place.',
         bullets: [
           'Before: schema + execution hardcoded into every app that needs it',
           'After: the app holds neither — it discovers schemas and forwards calls',
+          'The round trip is unchanged: the model still asks, something still executes, the result still returns',
           'The server owns the integration logic, the credentials, and the version',
           'Consequence: upgrade or swap a server without touching a single client',
+        ],
+        definitions: [
+          { term: 'MCP', meaning: 'Model Context Protocol — the open standard for exposing tools, data and workflows to any AI application.' },
+          { term: 'MCP server', meaning: 'A separate program that holds the schemas and the code, and answers in the MCP protocol.' },
+          { term: 'Protocol client', meaning: 'An app that only knows how to speak MCP — it carries no integration code of its own.' },
         ],
         diagram: `flowchart LR
   B["📦 BEFORE<br/>app holds schema<br/>+ execution"] --> X["✂️ Both move out"]
   X --> A["🪶 AFTER<br/>app speaks MCP<br/>and nothing else"]
   X --> S["🗄️ Server holds schema,<br/>credentials, execution"]`,
-        script: 'Two boxes on the board: "app before," bulging with integration code, and "app after," nearly empty, with all that mass moved into the server box. Tie it straight back to M+N — this relocation is precisely what makes a connector reusable instead of a private copy.',
-      },
-      {
-        segment: 'architecture', eyebrow: '🔁 Week 3, callback', title: 'You already did this by hand. MCP is that same round trip, standardised.',
-        body: 'Nothing here is new to you conceptually, and that is worth saying out loud. In Week 3 you wrote a tool schema into your Python file, sent it with your request, checked whether stop_reason came back as tool_use, ran the real function yourself, and posted a tool_result back so Claude could finish. That loop does not disappear under MCP — the host still runs it, turn for turn. What changes is where the two important pieces live. The schema and the function moved out of your file and onto a server, where any client can find them.',
-        bullets: [
-          'The round trip is identical: model asks → your side executes → result goes back',
-          'What moved: the schema and the function, out of your app, onto a server',
-          'What stays: your code still never gets executed by Claude — it asks, you run it',
-          'What you gain: the same tool now works in every MCP client, unchanged',
-        ],
-        code: {
-          kind: 'review',
-          label: 'The same tool, before and after — read it, do not paste it',
-          code: '# WEEK 3 — the schema and the function both lived inside YOUR program\ntools = [{\n    "name": "lookup_order",\n    "description": "Look up an order by ID.",\n    "input_schema": {\n        "type": "object",\n        "properties": {"order_id": {"type": "string"}},\n        "required": ["order_id"],\n    },\n}]\n# ...then you checked stop_reason == "tool_use", ran the function yourself,\n#    and posted a tool_result block back with the matching tool_use_id.\n\n# WEEK 5 — the same two things, moved onto a server any client can use\n@mcp.tool()\ndef lookup_order(order_id: str) -> dict:\n    """Look up an order by ID and return its status, carrier and ETA."""\n    return ORDERS[order_id]',
-          expectedResult: 'Two fingers on two things: the schema you hand-wrote in Week 3, and the decorator that now generates it for you on the server.',
-        },
-        diagram: `flowchart LR
-  W3["🐍 Week 3<br/>schema + function<br/>inside your app"] --> MV["📦 Move both out"]
-  MV --> W5["🗄️ Week 5<br/>schema + function<br/>on a server"]
-  W5 --> ANY["🤖 Any MCP client<br/>can use it"]`,
-        script: 'Read the two halves side by side and let the room notice how little actually changed. Say the reassuring line explicitly: "you are not learning a new concept tonight, you are learning where to put the one you already know." That defuses most of the anxiety in the room before the primitives arrive.',
+        script: 'Two boxes on the board: “app before,” bulging with integration code, and “app after,” nearly empty, with all that mass moved into the server box. Point back at the terminal output still on screen and say “those two — out”. Then tie it to M+N: this relocation is precisely what makes a connector reusable instead of a private copy.',
       },
       {
         segment: 'architecture', eyebrow: '🧩 Three primitives', title: 'Tools, resources, prompts — and the axis that actually separates them',
@@ -218,6 +274,12 @@ export const WEEK5_PACK: WeekPack = {
           '📚 Resources = app-controlled read-only CONTEXT — the app loads them, like GET',
           '💬 Prompts = user-controlled TEMPLATES — the human invokes them, like a slash command',
           'The axis that matters: who initiates — the model, the app, or the person',
+        ],
+        definitions: [
+          { term: 'Primitive', meaning: 'One of the three kinds of capability an MCP server is allowed to expose. There are only three.' },
+          { term: 'Model-controlled', meaning: 'The model decides when it happens, mid-turn, without asking you.' },
+          { term: 'Application-controlled', meaning: 'The host app decides, usually before the model is even called.' },
+          { term: 'User-controlled', meaning: 'A human deliberately triggers it, normally by name.' },
         ],
         diagram: `flowchart TD
   S["🗄️ Your MCP server"] --> T["🔧 Tools<br/>model decides"]
@@ -235,6 +297,12 @@ export const WEEK5_PACK: WeekPack = {
           'The description is a prompt written for the model, not a code comment',
           'Validation lives here, at the boundary, because the caller is not trusted',
         ],
+        definitions: [
+          { term: 'JSON Schema', meaning: 'A machine-readable description of what arguments a tool accepts and which are required.' },
+          { term: 'Boundary', meaning: 'The line where untrusted input enters your code. Checking happens here, not deeper in.' },
+          { term: 'Input validation', meaning: 'Refusing bad arguments at the door instead of letting them reach the real work.' },
+          { term: 'Docstring', meaning: 'The text under a function name. On an MCP tool it is not a comment — it is what the model reads.' },
+        ],
         diagram: `flowchart LR
   D["📝 Description<br/>= when to use it"] --> T["🔧 Tool"]
   SC["📐 Input schema<br/>= what it accepts"] --> T
@@ -250,6 +318,12 @@ export const WEEK5_PACK: WeekPack = {
           'Resource template: one handler serving many items, addressed by id in the URI',
           'Prompt: a named template with arguments, invoked by the human, like a slash command',
           'The rule: reads = resource · does = tool · a person triggers it = prompt',
+        ],
+        definitions: [
+          { term: 'URI', meaning: 'The stable address of a resource, e.g. docs://catalog. It is how a client asks for that exact thing.' },
+          { term: 'MIME type', meaning: 'What the bytes ARE — text/markdown, application/json, image/png — so the client knows how to handle them.' },
+          { term: 'Resource template', meaning: 'A URI with a slot in it, so one handler can serve many items addressed by id.' },
+          { term: 'Slash command', meaning: 'How a prompt usually reaches a human in the host — you type /name and it fires.' },
         ],
         diagram: `flowchart TD
   R["📚 Resource"] --> RU["🔗 URI<br/>docs://catalog"]
@@ -267,11 +341,21 @@ export const WEEK5_PACK: WeekPack = {
           'Every response carries the id of the request it answers',
           'STDIO = local subprocess over stdin/stdout (this week) · Streamable HTTP = Week 6',
         ],
+        definitions: [
+          { term: 'JSON-RPC 2.0', meaning: 'A small, boring standard for “call this method with these params, here is the answer”. MCP rides on it.' },
+          { term: 'initialize', meaning: 'The opening handshake where client and server agree on protocol version and what each supports.' },
+          { term: 'Capability negotiation', meaning: 'Both sides stating what they can do up front, so neither has to guess later.' },
+          { term: 'Request id', meaning: 'A number on every request. The answer carries the same one, so replies can arrive out of order safely.' },
+          { term: 'tools/list', meaning: 'The method that asks a server what tools it has. tools/call is the one that actually runs one.' },
+        ],
         code: {
-          kind: 'review',
-          label: 'What actually crosses the wire — read it together',
-          code: '// 1. the connection opens with a handshake\n{"jsonrpc": "2.0", "id": 1, "method": "initialize",\n "params": {"protocolVersion": "...", "capabilities": {}, "clientInfo": {"name": "inspector"}}}\n\n// 2. the client asks what this server exposes\n{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}\n\n// 3. the model picked one, so the client calls it\n{"jsonrpc": "2.0", "id": 3, "method": "tools/call",\n "params": {"name": "search_docs", "arguments": {"query": "reset password", "limit": 5}}}\n\n// the server replies with structured content, carrying the SAME id',
-          expectedResult: 'Point at three things: method, params.arguments, and the id that ties a response back to its request.',
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — show me the real messages, then quiz me on them',
+          code: 'I am learning the MCP wire format tonight and I have never seen JSON-RPC before.\n\n1. Show me the real sequence of JSON-RPC 2.0 messages for one complete MCP session, in order: the initialize handshake, tools/list, and one tools/call with arguments, plus the server response to each. Use a support knowledge-base server with a search_docs tool as the example.\n2. Beside each message, in one short line, tell me who sent it and why it exists.\n3. Point explicitly at three things and name them: the method, the params.arguments object, and the id that ties a response back to its request.\n4. Explain what would break if the id were missing.\n5. Then ask me three short questions to check I actually followed it, wait for my answers, and correct me where I am wrong.\n\nPlain English throughout. Do not create any files.',
+          expectedResult: 'The handshake, tools/list and tools/call in order, with method, arguments and id called out by name — then three questions back at you.',
+          stopCondition: 'You have answered its three questions and can say what the id is for without scrolling up.',
+          rescue: 'If it gives you a wall of JSON with no commentary, say: “one message at a time, and tell me who sent each one.”',
         },
         diagram: `flowchart LR
   C["🔗 Client"] -->|"initialize"| S["🗄️ Server"]
@@ -291,11 +375,19 @@ export const WEEK5_PACK: WeekPack = {
           'The host cannot preload it the way it would preload a resource',
           'It passes the demo, which is exactly why it survives to production',
         ],
+        definitions: [
+          { term: 'Anti-pattern', meaning: 'A solution that looks reasonable, passes the demo, and causes the bug later.' },
+          { term: 'Control-model mismatch', meaning: 'Choosing a primitive that hands the decision to the wrong party. The classic beginner MCP bug.' },
+          { term: 'Side effect', meaning: 'Anything a call changes in the world. A read has none — that is what makes it a read.' },
+        ],
         code: {
-          kind: 'review',
-          label: 'The mismodelled server — read it and find the smell',
-          code: '# ANTI-PATTERN: read-only context dressed up as an action\nPOLICY = open("refund_policy.md").read()\n\n@mcp.tool()\ndef get_policy() -> str:\n    """Return the full company refund policy."""\n    return POLICY   # nothing changed. no work was done. this is data.',
-          expectedResult: 'Somebody in the room says "that is just data." That is the whole slide — hold that thought for the next one.',
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — write the wrong version on purpose, then make me find the smell',
+          code: 'We are doing a deliberate anti-pattern exercise. Follow it exactly and do not skip ahead to the answer.\n\n1. Write a short MCP server in Python that exposes a company refund policy document through a tool called get_policy, which simply returns the whole document. Show me the code.\n2. Do NOT tell me what is wrong with it yet.\n3. Instead, ask me one question — “What does this call actually change?” — and wait for my answer.\n4. After I answer, tell me whether I found it, then name the smell precisely: read-only data modelled as an action.\n5. Then list, in plain English, the four things that go wrong in production because of that choice, specifically about WHO is allowed to decide when the document loads.\n\nDo not create any files. Keep the code short enough to read from the back of a room.',
+          expectedResult: 'A short server, then a question back at you — not an answer. Somebody in the room says “that is just data”.',
+          stopCondition: 'The room has said out loud that nothing changes when get_policy runs.',
+          rescue: 'If it explains the flaw before asking you, say: “you skipped step 3 — ask me the question and wait.”',
         },
         diagram: `flowchart LR
   P[("📄 Refund policy<br/>read-only")] --> T["🔧 Exposed as<br/>a TOOL"]
@@ -312,6 +404,11 @@ export const WEEK5_PACK: WeekPack = {
           'The app cannot attach it as context; the user cannot pin it',
           'Symptom: inconsistent answers that sometimes ignore the policy entirely',
           'Diagnosis: ask "who SHOULD control this load?" and the bug becomes obvious',
+        ],
+        definitions: [
+          { term: 'Context', meaning: 'Everything the model can see this turn. If it is not in context, it does not exist to the model.' },
+          { term: 'Preload', meaning: 'The app attaching something to the turn before the model runs, so it is guaranteed to be there.' },
+          { term: 'Wasted round trip', meaning: 'An extra there-and-back for data that could simply have been attached. Latency and money for nothing.' },
         ],
         diagram: `flowchart TD
   W["❌ Modelled as a tool"] --> S1["🎲 Loads only when<br/>the model chooses"]
@@ -330,11 +427,18 @@ export const WEEK5_PACK: WeekPack = {
           'The decorator changed. The judgment behind it is the actual skill.',
           'Say it once more: reads = resource · does = tool · a person triggers it = prompt',
         ],
+        definitions: [
+          { term: 'Decorator', meaning: 'The @ line above a Python function that registers it — as a tool, a resource, or a prompt.' },
+          { term: 'Deterministic', meaning: 'Same inputs, same result, every time. The opposite of “it loads when the model feels like it”.' },
+        ],
         code: {
-          kind: 'review',
-          label: 'Corrected — the same data, as a resource',
-          code: '# CORRECT: read-only context is a resource, at a URI, with a MIME type\n@mcp.resource("docs://refund-policy", mime_type="text/markdown")\ndef refund_policy() -> str:\n    """The company refund policy, loadable as context by the host application."""\n    return open("refund_policy.md").read()',
-          expectedResult: 'Two differences from the anti-pattern: the decorator, and the URI plus MIME type that make it addressable and renderable.',
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — fix it, then prove the fix in one sentence',
+          code: 'Take the mismodelled get_policy tool from the previous exercise.\n\n1. Rewrite it as the correct primitive. Show me the corrected code.\n2. Show me the two versions side by side and point at exactly what changed — there should be very little.\n3. Name the URI you chose and the MIME type you chose, and say in one sentence why each one matters to the client.\n4. Then answer the only question that counts, in one sentence: after this change, WHO decides when the policy gets loaded, and why is that better?\n5. Finally, give me a one-line rule I can apply to any capability to decide tool vs resource vs prompt, phrased so I could say it from memory tomorrow.\n\nDo not create any files.',
+          expectedResult: 'A near-identical file with a different decorator, plus a URI and a MIME type — and a one-line rule you can repeat.',
+          stopCondition: 'Somebody in the room can say the rule without reading it: reads = resource, does = tool, a person triggers it = prompt.',
+          rescue: 'If the diff looks big, it rewrote too much. Say: “change the minimum — I want to see how small the fix is.”',
         },
         diagram: `flowchart LR
   P[("📄 Refund policy")] --> R["📚 Resource<br/>docs://refund-policy"]
@@ -345,54 +449,68 @@ export const WEEK5_PACK: WeekPack = {
 
       /* ================== micro-build · your first server ================== */
       {
-        segment: 'micro-build', eyebrow: '🧰 Toolchain first', title: 'Three version checks before anybody writes a line',
-        body: 'Two minutes here saves twenty later, so we do it as a room. You need Python 3.10 or newer, the uv package manager for a clean reproducible environment, and Node — because the MCP inspector runs on it. These are terminal commands, not a Claude Code prompt, and that distinction matters all week: Claude Code writes your server, but you run the toolchain. If any of the three comes back red, fix it now with a mentor rather than discovering it mid-build on Thursday.',
+        segment: 'micro-build', eyebrow: '🧰 Toolchain first', title: 'One prompt gets your machine ready — you do not have to know the commands',
+        body: 'Two minutes here saves twenty later, so we do it as a room. You need three things on your machine tonight: Python 3.10 or newer, Node — because the MCP inspector runs on it — and uv, the package manager that gives this project its own clean environment. You do not need to memorise the commands for any of that. Paste the prompt below and Claude Code detects your operating system, checks all three, reports a PASS/FAIL table, and hands you the exact one-line install for whatever is missing. If anything still comes back FAIL, fix it now with a mentor rather than discovering it mid-build on Thursday.',
         bullets: [
           'Python 3.10+ — the MCP Python SDK needs it',
           'uv — an isolated, reproducible project environment in one command',
           'Node — the inspector is a Node application, so no Node means no inspector',
-          'Red on any of the three? A mentor, now, not at the break',
+          'You run one prompt — Claude Code runs the checks and fixes what is missing',
+          'Still FAIL on any of the three? A mentor, now, not at the break',
+        ],
+        definitions: [
+          { term: 'Toolchain', meaning: 'The set of programs that must exist on your machine before your code can run at all.' },
+          { term: 'uv', meaning: 'A fast Python package manager that gives each project its own isolated, reproducible environment.' },
+          { term: 'Virtual environment', meaning: 'A private copy of Python packages for one project, so two projects cannot break each other.' },
+          { term: 'PATH', meaning: 'The list of folders your shell searches for a command. A freshly installed tool is invisible until PATH reloads.' },
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — verify the three things you need tonight',
-          code: '# all three must print a version, not an error\npython --version    # need 3.10 or newer\nnode --version      # the MCP inspector runs on Node\nuv --version        # if this one fails, install uv below\n\n# install uv only if the check above failed\n# macOS / Linux:\ncurl -LsSf https://astral.sh/uv/install.sh | sh\n# Windows PowerShell:\npowershell -c "irm https://astral.sh/uv/install.ps1 | iex"',
-          expectedResult: 'Three version numbers printed back. Anything that says "command not found" is a red light.',
-          stopCondition: 'Every person in the room has three green version numbers. This blocks everything after it.',
-          rescue: 'Just installed uv and the shell still cannot find it? Close the terminal and open a new one — the PATH change only applies to new sessions.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — check my machine and fix whatever is missing',
+          code: 'Get my machine ready to build an MCP server tonight. Do the checking yourself — do not hand me a list of commands to run.\n\n1. Detect my operating system and shell, and tell me what they are.\n2. Check all three of these and report the version you actually found: Python (I need 3.10 or newer), Node (the MCP inspector is a Node app), and uv (the Python package manager we will use tonight).\n3. Show me the result as a small table: tool, version found, PASS or FAIL.\n4. For anything that FAILED, give me the exact install command for MY operating system — one command, ready to run. If you can install it safely yourself, ask me first, then do it.\n5. After any install, re-run the check in a fresh shell and show me the new table. A newly installed tool is often invisible to the shell that installed it.\n6. If everything passes, say so in one line and tell me I am clear to start.',
+          expectedResult: 'A three-row table reading PASS / PASS / PASS, with your real version numbers in it.',
+          stopCondition: 'Every person in the room has three PASS rows. This blocks everything after it.',
+          rescue: 'Prefer to do it by hand? In a terminal run python --version, node --version, uv --version. Install uv with curl -LsSf https://astral.sh/uv/install.sh | sh on macOS or Linux, or powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\" on Windows. Then open a NEW terminal — PATH changes only apply to new sessions.',
         },
         diagram: `flowchart LR
   PY["🐍 Python 3.10+"] --> GO["✅ Ready to scaffold"]
   UV["📦 uv"] --> GO
   ND["🟢 Node<br/>for the inspector"] --> GO`,
-        script: 'Run all three on screen yourself first, slowly, then stop talking and let the room work. Watch the pulse rail and read the red count out loud. Do not start the scaffold with anyone stuck on a version check — that is how a micro-build turns into a support queue.',
+        script: 'Run the prompt on screen yourself first and let them watch Claude Code do the OS detection live — that is the lesson as much as the versions are. Then stop talking and let the room work. Watch the pulse rail and read the FAIL count out loud. Do not start the scaffold with anyone still red; that is how a micro-build turns into a support queue. Anyone who prefers the raw commands has them in the rescue row.',
       },
       {
-        segment: 'micro-build', eyebrow: '🛠️ Direct it', title: 'You do not type the server. You tell Claude Code exactly what must exist.',
-        body: 'Same job as every week since Week 1, pointed at a new target. You are not going to memorise the SDK — you are going to specify what the server must be, let Claude Code write it, and then read what came back and decide whether it is right. Notice what the prompt insists on: a named server, one tool with real input constraints, a docstring written for the model rather than for a human, and STDIO transport. Those four requirements are the entire quality bar for a first server.',
+        segment: 'micro-build', eyebrow: '🛠️ Direct it', title: 'You do not type the server. You tell Claude Code what must exist — for YOUR project.',
+        body: 'Same job as every week since Week 1, pointed at a new target, and pointed at your own work rather than a demo. Fill in the MY PROJECT line at the top of the prompt and Claude Code scaffolds a server for that, not for a knowledge base somebody else invented. If you do not have a project yet, the prompt carries a named fallback — use it as written and you will still finish the night with a working server. Notice what the prompt insists on: a server named for what it does, one tool with real input constraints, a docstring written for the model rather than for a human, and STDIO transport. Those four requirements are the entire quality bar for a first server.',
         bullets: [
+          'Fill in MY PROJECT first — everything downstream is built from that one line',
+          'No project yet? Use the fallback in the prompt exactly as written and keep moving',
           'Plan Mode first — read the proposal before any file exists',
-          'The server name is how every client will identify it: choose it deliberately',
           'Ask for input constraints explicitly — that is the boundary you will break on Thursday',
           'Then READ the file. Reading it is the skill; typing it never was.',
+        ],
+        definitions: [
+          { term: 'Scaffold', meaning: 'The first working skeleton of a program — it runs, and it does one small real thing.' },
+          { term: 'FastMCP', meaning: 'The helper in the MCP Python SDK that turns a decorated function into a published capability.' },
+          { term: 'Plan Mode', meaning: 'Claude Code proposing what it intends to do, and waiting, before a single file is written.' },
+          { term: 'SDK', meaning: 'Software Development Kit — the official library that saves you writing the protocol by hand.' },
         ],
         code: {
           kind: 'paste',
           pasteWhere: 'Claude Code',
           ccMode: 'Plan Mode',
-          label: 'Claude Code prompt — scaffold a first MCP server',
-          code: 'I am building my first MCP server in this project, using the official MCP Python SDK.\n\nIn Plan Mode, propose the following, then wait for my approval before creating anything:\n\n1. A uv-managed project folder with the SDK added as a dependency (the "mcp" package with its CLI extra, so the inspector helper is available).\n2. A server.py containing a FastMCP server instance named "support-kb", running over the STDIO transport when the file is executed directly.\n3. ONE tool called search_docs that takes a query string and an optional result limit, searches a small in-memory list of knowledge-base articles, and returns structured rows rather than prose.\n4. Input constraints on both arguments: the query must be non-empty and bounded in length, the limit must be a small positive integer. Tell me exactly where in the file those constraints live.\n5. A docstring on the tool written as an instruction to the model about WHEN to call it, not as a note to a human developer.\n\nShow me the plan and the proposed file contents. Do not create anything yet.',
-          expectedResult: 'A plan with a named server, one constrained tool, and a docstring that reads like an instruction to a model.',
-          stopCondition: 'You have read the proposed tool docstring out loud and it says when to use the tool, not just what it does.',
-          rescue: 'If the plan skips the input constraints, say so specifically: "add the input constraints and show me the line they live on." Do not approve a boundary-free tool.',
+          label: 'Claude Code prompt — scaffold MY first MCP server',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: \"Order Support Assistant — answers customer questions about order status for a small online retailer.\" >>>\n\nI am building my first MCP server for MY PROJECT above, using the official MCP Python SDK.\n\nIn Plan Mode, propose the following, then wait for my approval before creating anything:\n\n1. A uv-managed project folder with the SDK added as a dependency (the \"mcp\" package with its CLI extra, so the inspector helper is available).\n2. A server.py containing a FastMCP server instance named after MY PROJECT — short, lowercase, hyphenated, and descriptive of what it does rather than who wrote it. Tell me the name you chose and why.\n3. ONE tool for the single most useful lookup MY PROJECT needs — something it genuinely cannot see today. Read my project files first if there are any; otherwise infer it from the MY PROJECT line and say out loud what you inferred. The tool takes a query and an optional result limit, searches a small in-memory sample of MY PROJECT’s data that you generate, and returns structured rows rather than prose.\n4. Input constraints on both arguments: the query must be non-empty and bounded in length, the limit must be a small positive integer. Tell me exactly where in the file those constraints live.\n5. A docstring on the tool written as an instruction to the model about WHEN to call it, not as a note to a human developer.\n6. STDIO transport when the file is run directly.\n\nShow me the plan and the proposed file contents. Do not create anything yet.',
+          expectedResult: 'A plan naming YOUR server, one constrained tool for YOUR lookup, and a docstring that reads like an instruction to a model.',
+          stopCondition: 'You have read the proposed tool docstring out loud and it says WHEN to use the tool, not just what it does.',
+          rescue: 'If the plan skips the input constraints, say so specifically: “add the input constraints and show me the line they live on.” Never approve a boundary-free tool.',
         },
         diagram: `flowchart LR
   P["⌨️ Your prompt —<br/>what must exist"] --> CC["💻 Claude Code<br/>Plan Mode"]
   CC --> PL["📋 A plan you read"]
   PL --> A["✅ You approve"]
   A --> F["📄 server.py"]`,
-        script: 'Paste it on screen and narrate the requirements while Claude Code works — especially requirement 5. Then do the thing the whole program is about: read the proposal out loud and reject something in it. Rejecting one small thing in front of the room teaches more than approving perfectly.',
+        script: 'Fill in your own MY PROJECT line on screen first so the room sees the parameter being used, and say the fallback out loud for anyone without a project — nobody sits out tonight. Narrate the requirements while Claude Code works, especially requirement 5. Then do the thing the whole program is about: read the proposal out loud and reject something in it. Rejecting one small thing in front of the room teaches more than approving perfectly.',
       },
       {
         segment: 'micro-build', eyebrow: '🔬 The inspector', title: 'Your debugging surface for the entire week — open it before you write a client',
@@ -404,14 +522,19 @@ export const WEEK5_PACK: WeekPack = {
           'You see the actual request and response, not a summary of them',
           'The rule for this week: inspector-green before any client code exists',
         ],
+        definitions: [
+          { term: 'MCP Inspector', meaning: 'A browser tool that connects straight to your server so you can list and call things with no client code.' },
+          { term: 'Advertise', meaning: 'What a server says it has when asked. An empty Tools panel means your server really is exposing nothing.' },
+          { term: 'Localhost', meaning: 'Your own machine, addressed as if it were a website. Nothing here leaves your laptop.' },
+        ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — launch the inspector against your server',
-          code: '# from inside your server project folder\nuv run mcp dev server.py\n\n# no SDK CLI available? the inspector also runs standalone:\nnpx @modelcontextprotocol/inspector uv run server.py\n\n# it prints a local URL — open that in your browser',
-          expectedResult: 'A browser tab opens, the connection status reads connected, and search_docs is listed under Tools.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — launch the inspector for me and tell me what to look at',
+          code: 'Launch the MCP inspector against the server we just built in this project, and stay with me while I use it.\n\n1. Work out the right command for this project and run it — uv run mcp dev server.py, or the standalone npx @modelcontextprotocol/inspector runner if the SDK CLI is not available. Tell me which one you used and why.\n2. Print the local URL it opened on its own line so I can click it.\n3. Tell me the three things I should see in the left panel and what each one means.\n4. Tell me exactly what to click to call my tool, and what a healthy response looks like versus a failure.\n5. If it fails to start, read the error, tell me in one sentence what it means, fix it, and try once more.\n\nDo not modify server.py unless something is genuinely broken — and if you do, tell me what you changed and why.',
+          expectedResult: 'A browser tab opens, the connection status reads connected, and your own tool is listed under Tools.',
           stopCondition: 'You can see your own tool name in the inspector. Nothing else tonight matters more than this.',
-          rescue: 'Connected but the Tools tab is empty? Nine times out of ten the file changed after the server started — stop it, relaunch, and look again.',
+          rescue: 'Connected but the Tools tab is empty? Nine times out of ten the file changed after the server started. Say “restart the inspector” and look again.',
         },
         diagram: `flowchart LR
   T["⌨️ uv run mcp dev<br/>server.py"] --> S["🗄️ Your server<br/>starts on STDIO"]
@@ -422,36 +545,58 @@ export const WEEK5_PACK: WeekPack = {
       },
       {
         segment: 'micro-build', eyebrow: '▶️ Call it', title: 'Invoke your own tool and watch a complete MCP round trip',
-        body: 'Open the Tools tab, select search_docs, type a query, and run it. You get back the structured result your function returned, wrapped in the protocol’s content envelope, alongside the exact JSON-RPC that crossed the wire in both directions. That round trip — the client calls tools/call, the server executes, structured content returns — is the atom of everything we build for the rest of this intensive. You have now seen a complete MCP interaction end to end, and you have not written a single line of client code.',
+        body: 'Open the Tools tab, select your tool, fill in the arguments, and run it. You get back the structured result your function returned, wrapped in the protocol’s content envelope, alongside the exact JSON-RPC that crossed the wire in both directions. That round trip — the client calls tools/call, the server executes, structured content returns — is the same four-step loop you traced by hand earlier tonight, and it is the atom of everything we build for the rest of this intensive. You have now seen a complete MCP interaction end to end, against your own project, without writing a single line of client code.',
         bullets: [
-          'Tools tab → search_docs → fill in the arguments → Run',
+          'Tools tab → your tool → fill in the arguments → Run',
           'The response is your own return value inside the MCP content envelope',
           'Now try a query that matches nothing and read what comes back',
           'Then try an empty query and watch the boundary refuse it — that is the schema working',
+          'Same four steps as the round trip you ran by hand, with the middle two on a server',
         ],
+        definitions: [
+          { term: 'Content envelope', meaning: 'The standard wrapper MCP puts around whatever your function returned.' },
+          { term: 'Structured result', meaning: 'Rows and fields the model can use, rather than a paragraph it has to re-read.' },
+          { term: 'Schema refusal', meaning: 'The boundary rejecting bad arguments before your function ever runs. That is the schema working.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — walk me through calling my own tool, including the two failures',
+          code: 'I have the MCP inspector open against my own server. Walk me through calling my tool and reading what comes back. Do not do it for me — tell me what to do and then interpret what I report.\n\n1. Tell me exactly which tab to open, which tool to select, and give me one realistic argument value for MY server’s tool. Do not use a generic placeholder — read my server.py and use something that will actually match.\n2. Tell me what a healthy response looks like, and point out where MY function’s return value sits inside the MCP content envelope.\n3. Now have me break it twice, on purpose. Give me: (a) a query that will match nothing, and (b) an empty query. For each one, tell me what SHOULD happen before I run it, so I can check the prediction against reality.\n4. I will paste back what I actually saw. Tell me whether the boundary held, and which line of my server.py decided that.\n5. Finish with one sentence: which of the four round-trip steps from earlier tonight just happened on the server instead of in my file?',
+          expectedResult: 'A real argument value taken from your own server, a prediction for both failures, and a verdict on whether your boundary held.',
+          stopCondition: 'You have run all three calls — the good one, the empty match, and the empty query — and the refusal was the one you were told to expect.',
+          rescue: 'If the inspector shows nothing at all under Tools, your server is advertising nothing. Restart it and look again before debugging anything else.',
+        },
         diagram: `flowchart LR
   U["🙋 You, in the<br/>inspector"] --> R["📨 tools/call<br/>search_docs"]
   R --> S["🗄️ Your server<br/>runs the function"]
   S --> C["📦 Structured content<br/>back, same id"]
   C --> U`,
-        script: 'Do the call live and let them read real structured JSON coming back from code they directed into existence ten minutes ago. Then deliberately send an empty query so the room sees the schema refuse it — that thirty seconds sells Thursday’s hardening segment before you have to argue for it.',
+        script: 'Do the call live against your own server and let them read real structured JSON coming back from code they directed into existence ten minutes ago. Then deliberately send the empty query so the room sees the schema refuse it — that thirty seconds sells Thursday’s hardening segment before you have to argue for it. Close by pointing back at the four-step diagram: steps 2 and 3 now live on a server.',
       },
       {
         segment: 'micro-build', eyebrow: '🎯 Your own project', title: 'Now point it at your build plan — what does YOUR capstone actually need to reach?',
-        body: 'The support knowledge base was a warm-up. Open your own build plan and find the place where your project needs something it cannot currently see: a lookup into your own data, a record it has to fetch, a document it keeps needing, an action it has to take in another system. That is what your server exposes on Thursday. Use the prompt below to have Claude Code draft the primitive map for it — and then argue with the draft, because deciding tool versus resource versus prompt is the judgment this whole week is teaching.',
+        body: 'Your server exists. Now decide what it should really expose. Open your build plan and find the place where your project needs something it cannot currently see: a lookup into your own data, a record it has to fetch, a document it keeps needing, an action it has to take in another system. That is what your server exposes on Thursday. Use the prompt below to have Claude Code draft the primitive map for it — and then argue with the draft, because deciding tool versus resource versus prompt is the judgment this whole week is teaching. No build plan in the repo yet? Fill in the MY PROJECT line and the prompt works from that instead.',
         bullets: [
           'Open your build plan and find the reach it is missing',
+          'No build plan yet? The MY PROJECT line at the top of the prompt is enough to work from',
           'One capability is enough — a second one is a Week 6 problem',
           'Draft the primitive map now, argue with it, and bring it Thursday',
           'Thursday you build exactly this, not a demo somebody else designed',
         ],
+        definitions: [
+          { term: 'Primitive map', meaning: 'A table of your capabilities with the primitive and the controller named for each one.' },
+          { term: 'Capability', meaning: 'One thing your system can do or reach that it cannot do today.' },
+          { term: 'Build plan', meaning: 'Your own project plan in this repo — the thing Thursday’s server gets built against.' },
+        ],
         code: {
           kind: 'paste',
           pasteWhere: 'Claude Code',
-          label: 'Claude Code prompt — map YOUR capability to the three primitives',
-          code: 'Read my project build plan in this repository.\n\nIdentify the places where my project needs information or actions it cannot currently reach on its own. For the single most valuable one, propose an MCP surface as a table with one row per capability and these columns: name, primitive (tool / resource / prompt), who controls the invocation (model / application / user), and a one-sentence justification tied to that control model.\n\nRules for your proposal:\n- Anything read-only must be a resource with a URI and a MIME type, never a tool.\n- Anything that changes state or does work must be a tool, with its input constraints named explicitly.\n- Any repeatable workflow a human would trigger by name must be a prompt.\n- If you are unsure which primitive something is, say so and ask me rather than guessing.\n\nDo not write any code yet. I want to argue with the table first.',
+          label: 'Claude Code prompt — map MY capability to the three primitives',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: \"Order Support Assistant — answers customer questions about order status for a small online retailer.\" >>>\n\nRead my project build plan in this repository if one exists. If it does not, work from the MY PROJECT line above and say explicitly that you are doing so.\n\nIdentify the places where my project needs information or actions it cannot currently reach on its own. For the single most valuable one, propose an MCP surface as a table with one row per capability and these columns: name, primitive (tool / resource / prompt), who controls the invocation (model / application / user), and a one-sentence justification tied to that control model.\n\nRules for your proposal:\n- Anything read-only must be a resource with a URI and a MIME type, never a tool.\n- Anything that changes state or does work must be a tool, with its input constraints named explicitly.\n- Any repeatable workflow a human would trigger by name must be a prompt.\n- If you are unsure which primitive something is, say so and ask me rather than guessing.\n\nThen ask me one question: which row do I disagree with, and why? Wait for my answer and revise the table with me.\n\nDo not write any code yet. I want to argue with the table first.',
           expectedResult: 'A short table naming YOUR capability, its primitive, and who controls it — with at least one row you disagree with.',
           stopCondition: 'You can say out loud, in one sentence, what your Thursday server will expose and why it is that primitive.',
+          rescue: 'If it proposes five capabilities, cut it down: “one row — the single most valuable one — and defend it.”',
         },
         diagram: `flowchart LR
   BP["📋 Your build plan"] --> GAP["🕳️ The reach<br/>it is missing"]

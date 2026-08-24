@@ -108,6 +108,17 @@ function diagramHtml(slide: KitSlide): string {
       slide.bullets.map((b) => `<li>${esc(b)}</li>`).join('') +
       '</ol></aside>'
     : '';
+  // The Definitions row sits directly under Key points. A zoomed diagram is
+  // what the room (and the recording) is looking at while a new term gets
+  // spoken for the first time, so the vocabulary belongs on that same screen
+  // rather than only in the instructor's script.
+  const defs = slide.definitions && slide.definitions.length
+    ? '<aside class="kdiag-defs"><div class="kdiag-side-hd">Definitions</div><dl class="kdiag-defs-list">' +
+      slide.definitions
+        .map((d) => `<div class="kdiag-def"><dt>${esc(d.term)}</dt><dd>${esc(d.meaning)}</dd></div>`)
+        .join('') +
+      '</dl></aside>'
+    : '';
   const where = slide.prompt
     ? (slide.prompt.kind === 'review'
       ? '<span class="kdiag-where">📖 Read-along — nothing to paste</span>'
@@ -119,11 +130,12 @@ function diagramHtml(slide: KitSlide): string {
     where +
     '</div>';
   return (
-    '<div class="kdiagram" onclick="window.__toggleDiagramFull ? window.__toggleDiagramFull(this) : this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
+    '<div class="kdiagram' + (defs ? ' kdiagram--hasdefs' : '') + '" onclick="window.__toggleDiagramFull ? window.__toggleDiagramFull(this) : this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
     head +
     '<div class="kdiag-stage">' +
     `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
     side +
+    defs +
     '</div>' +
     (slide.diagramCaption ? `<div class="kdiagram-cap"><span class="kdiagram-cap-ico">🧭</span><span>${esc(slide.diagramCaption)}</span></div>` : '') +
     foot +
