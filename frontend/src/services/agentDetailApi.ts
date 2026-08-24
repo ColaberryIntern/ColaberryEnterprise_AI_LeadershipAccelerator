@@ -73,6 +73,11 @@ export interface AgentDetailTrustContract {
   avg_duration_ms: number | null;
   last_error: string | null;
   last_error_at: string | null;
+  /** Trust Contract fix (2026-08-24) — the real, unlimited "most recent ticket
+   * touched" timestamp, for agents (Reese, InboxCaseEngine) `last_run_at`
+   * never covers since they're event-driven, not cron-tracked. `null` only
+   * when the agent genuinely has zero ticket history. */
+  last_activity_at: string | null;
 }
 
 export interface AgentDetail {

@@ -8,7 +8,7 @@ import { Ticket } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
-import { countOpenTicketsForAgent } from '../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../workforce/liveAgentsService';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 
@@ -122,6 +122,17 @@ export interface AgentDetailResult {
     avg_duration_ms: number | null;
     last_error: string | null;
     last_error_at: Date | null;
+    /** Trust Contract fix (2026-08-24) — Ali, live: "Reese has several tickets
+     * that have been opened... but this says it's never been run." For an
+     * event-driven agent, `last_run_at` stays honestly null forever (it is
+     * never invoked through the cron scheduler wrapper that stamps that
+     * column) — that's correct, not a bug. The bug was the UI having no other
+     * signal to show, so it read as "never run" next to a ticket table full of
+     * recent activity. This is that other real signal: the most recent
+     * `updated_at` across ALL of this agent's tickets (any status, unlimited —
+     * not the capped `tickets` array), via `getLastTicketActivityForAgent()`.
+     * `null` only when the agent genuinely has zero ticket history either. */
+    last_activity_at: Date | null;
   };
 }
 
@@ -201,6 +212,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // use, independent of the `tickets` array's MAX_TICKETS cap above.
   const openTicketCount = adminUser ? await countOpenTicketsForAgent(adminUser.id, agent) : 0;
 
+  // Trust Contract fix (2026-08-24) — real, unlimited "last touched a ticket"
+  // signal for agents `last_run_at` will never cover (see trust_contract's
+  // last_activity_at doc comment above).
+  const lastActivityAt = adminUser ? await getLastTicketActivityForAgent(adminUser.id, agent) : null;
+
   // reports_to (org-chart hierarchy build, 2026-08-19) — null when this agent
   // has no reports_to_type configured at all, never a fabricated empty shape.
   let reportsTo: AgentDetailResult['reports_to'] = null;
@@ -271,6 +287,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       avg_duration_ms: agent.avg_duration_ms ?? null,
       last_error: agent.last_error ?? null,
       last_error_at: agent.last_error_at ?? null,
+      last_activity_at: lastActivityAt,
     },
   };
 }

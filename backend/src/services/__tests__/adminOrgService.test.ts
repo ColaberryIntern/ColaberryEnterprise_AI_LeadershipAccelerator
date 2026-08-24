@@ -11,7 +11,7 @@ jest.mock('../../config/database', () => ({
 }));
 
 jest.mock('../../models', () => ({
-  Organization: { findByPk: jest.fn(), findAndCountAll: jest.fn() },
+  Organization: { findByPk: jest.fn(), findOne: jest.fn(), findAndCountAll: jest.fn() },
   OrgMember: { findAll: jest.fn() },
   OrgCohort: { findAll: jest.fn(), findOrCreate: jest.fn(), destroy: jest.fn() },
   Cohort: { findByPk: jest.fn() },
@@ -33,14 +33,19 @@ const mockOrg = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+// These tests are about behaviour, not tenancy, so they run as a platform superadmin.
+// Scoping itself is proven separately in adminOrgScope.test.ts, where it is the subject
+// rather than a precondition.
+const ANY_TENANT = { tenantIds: [], crossTenant: true };
+
 beforeEach(() => jest.clearAllMocks());
 
 describe('setOrganizationStatus — enable/disable is idempotent', () => {
   it('suspends an active account and stamps who did it', async () => {
     const org = mockOrg();
-    (Organization.findByPk as jest.Mock).mockResolvedValue(org);
+    (Organization.findOne as jest.Mock).mockResolvedValue(org);
 
-    const result = await setOrganizationStatus('org-1', 'suspended', 'ali@colaberry.com');
+    const result = await setOrganizationStatus('org-1', 'suspended', 'ali@colaberry.com', ANY_TENANT);
 
     expect(result).toEqual({ id: 'org-1', status: 'suspended', changed: true });
     expect(org.update).toHaveBeenCalledTimes(1);
@@ -55,9 +60,9 @@ describe('setOrganizationStatus — enable/disable is idempotent', () => {
     // effect. Without it a double-click would overwrite the audit stamp with a
     // later timestamp and lose when the change actually happened.
     const org = mockOrg({ status: 'active' });
-    (Organization.findByPk as jest.Mock).mockResolvedValue(org);
+    (Organization.findOne as jest.Mock).mockResolvedValue(org);
 
-    return setOrganizationStatus('org-1', 'active', 'ali@colaberry.com').then((result) => {
+    return setOrganizationStatus('org-1', 'active', 'ali@colaberry.com', ANY_TENANT).then((result) => {
       expect(result).toEqual({ id: 'org-1', status: 'active', changed: false });
       expect(org.update).not.toHaveBeenCalled();
     });
@@ -67,57 +72,57 @@ describe('setOrganizationStatus — enable/disable is idempotent', () => {
     // Rows created before the status column existed read back as undefined and
     // must not be considered suspended.
     const org = mockOrg({ status: undefined });
-    (Organization.findByPk as jest.Mock).mockResolvedValue(org);
+    (Organization.findOne as jest.Mock).mockResolvedValue(org);
 
-    const result = await setOrganizationStatus('org-1', 'active', 'ali@colaberry.com');
+    const result = await setOrganizationStatus('org-1', 'active', 'ali@colaberry.com', ANY_TENANT);
     expect(result).toEqual({ id: 'org-1', status: 'active', changed: false });
     expect(org.update).not.toHaveBeenCalled();
   });
 
   it('returns null for an unknown account rather than creating one', async () => {
-    (Organization.findByPk as jest.Mock).mockResolvedValue(null);
-    expect(await setOrganizationStatus('nope', 'suspended', 'a@b.c')).toBeNull();
+    (Organization.findOne as jest.Mock).mockResolvedValue(null);
+    expect(await setOrganizationStatus('nope', 'suspended', 'a@b.c', ANY_TENANT)).toBeNull();
   });
 });
 
 describe('addCohortToOrganization — linking is idempotent and validated', () => {
   it('creates the link and reports created:true', async () => {
-    (Organization.findByPk as jest.Mock).mockResolvedValue(mockOrg());
+    (Organization.findOne as jest.Mock).mockResolvedValue(mockOrg());
     (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'coh-1' });
     (OrgCohort.findOrCreate as jest.Mock).mockResolvedValue([{ id: 'link-1' }, true]);
 
-    expect(await addCohortToOrganization('org-1', 'coh-1', 25, 'ali@colaberry.com')).toEqual({
+    expect(await addCohortToOrganization('org-1', 'coh-1', 25, 'ali@colaberry.com', ANY_TENANT)).toEqual({
       link_id: 'link-1',
       created: true,
     });
   });
 
   it('re-linking the same cohort is a no-op, not a duplicate', async () => {
-    (Organization.findByPk as jest.Mock).mockResolvedValue(mockOrg());
+    (Organization.findOne as jest.Mock).mockResolvedValue(mockOrg());
     (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'coh-1' });
     (OrgCohort.findOrCreate as jest.Mock).mockResolvedValue([{ id: 'link-1' }, false]);
 
-    expect(await addCohortToOrganization('org-1', 'coh-1', null, 'ali@colaberry.com')).toEqual({
+    expect(await addCohortToOrganization('org-1', 'coh-1', null, 'ali@colaberry.com', ANY_TENANT)).toEqual({
       link_id: 'link-1',
       created: false,
     });
   });
 
   it('refuses a cohort that does not exist rather than writing a dangling link', async () => {
-    (Organization.findByPk as jest.Mock).mockResolvedValue(mockOrg());
+    (Organization.findOne as jest.Mock).mockResolvedValue(mockOrg());
     (Cohort.findByPk as jest.Mock).mockResolvedValue(null);
 
-    expect(await addCohortToOrganization('org-1', 'ghost', null, 'a@b.c')).toEqual({
+    expect(await addCohortToOrganization('org-1', 'ghost', null, 'a@b.c', ANY_TENANT)).toEqual({
       error: 'cohort_not_found',
     });
     expect(OrgCohort.findOrCreate).not.toHaveBeenCalled();
   });
 
   it('refuses an organization that does not exist', async () => {
-    (Organization.findByPk as jest.Mock).mockResolvedValue(null);
+    (Organization.findOne as jest.Mock).mockResolvedValue(null);
     (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'coh-1' });
 
-    expect(await addCohortToOrganization('ghost', 'coh-1', null, 'a@b.c')).toEqual({
+    expect(await addCohortToOrganization('ghost', 'coh-1', null, 'a@b.c', ANY_TENANT)).toEqual({
       error: 'org_not_found',
     });
     expect(OrgCohort.findOrCreate).not.toHaveBeenCalled();
@@ -125,28 +130,35 @@ describe('addCohortToOrganization — linking is idempotent and validated', () =
 });
 
 describe('removeCohortFromOrganization', () => {
+  // The org lookup now runs BEFORE the destroy, so that an unlink cannot be performed
+  // against another tenant's account. These two tests are about the unlink itself, so the
+  // org resolves; the scope refusal is proven in adminOrgScope.test.ts.
+  beforeEach(() => {
+    (Organization.findOne as jest.Mock).mockResolvedValue({ id: 'org-1' });
+  });
+
   it('reports false when nothing was linked, so the route can 404', async () => {
     (OrgCohort.destroy as jest.Mock).mockResolvedValue(0);
-    expect(await removeCohortFromOrganization('org-1', 'coh-1')).toBe(false);
+    expect(await removeCohortFromOrganization('org-1', 'coh-1', ANY_TENANT)).toBe(false);
   });
 
   it('reports true when a link was removed', async () => {
     (OrgCohort.destroy as jest.Mock).mockResolvedValue(1);
-    expect(await removeCohortFromOrganization('org-1', 'coh-1')).toBe(true);
+    expect(await removeCohortFromOrganization('org-1', 'coh-1', ANY_TENANT)).toBe(true);
   });
 });
 
 describe('getOrganizationDetail', () => {
   const wire = (members: unknown[], links: unknown[]) => {
-    (Organization.findByPk as jest.Mock).mockResolvedValue(mockOrg());
+    (Organization.findOne as jest.Mock).mockResolvedValue(mockOrg());
     (OrgMember.findAll as jest.Mock).mockResolvedValue(members);
     (OrgCohort.findAll as jest.Mock).mockResolvedValue(links);
     (Lead.findOne as jest.Mock).mockResolvedValue(null);
   };
 
   it('returns null for an unknown account', async () => {
-    (Organization.findByPk as jest.Mock).mockResolvedValue(null);
-    expect(await getOrganizationDetail('nope')).toBeNull();
+    (Organization.findOne as jest.Mock).mockResolvedValue(null);
+    expect(await getOrganizationDetail('nope', ANY_TENANT)).toBeNull();
   });
 
   it('counts placed members per cohort from the enrollment, not the link', async () => {
@@ -164,7 +176,7 @@ describe('getOrganizationDetail', () => {
       ],
     );
 
-    const detail = await getOrganizationDetail('org-1');
+    const detail = await getOrganizationDetail('org-1', ANY_TENANT);
     expect(detail?.cohorts[0].members_placed).toBe(2);
     expect(detail?.cohorts[0].seats_sponsored).toBe(10);
     expect(detail?.stats).toMatchObject({
@@ -180,7 +192,7 @@ describe('getOrganizationDetail', () => {
   it('survives a cohort row that was deleted out from under the link', async () => {
     // ON DELETE CASCADE should prevent this, but a null include must not throw.
     wire([], [{ id: 'link-1', cohort_id: 'gone', seats_sponsored: null, cohort: null }]);
-    const detail = await getOrganizationDetail('org-1');
+    const detail = await getOrganizationDetail('org-1', ANY_TENANT);
     expect(detail?.cohorts[0].name).toBe('(cohort removed)');
   });
 
@@ -192,21 +204,21 @@ describe('getOrganizationDetail', () => {
       id: 24491, email: 'owner@acme.test', company: 'Acme', status: 'new', source: 'website',
     });
 
-    const detail = await getOrganizationDetail('org-1');
+    const detail = await getOrganizationDetail('org-1', ANY_TENANT);
     expect(Lead.findByPk).not.toHaveBeenCalled();
     expect(Lead.findOne).toHaveBeenCalledWith({ where: { email: 'owner@acme.test' } });
     expect(detail?.lead?.id).toBe(24491);
   });
 
   it('prefers the explicit lead_id link over the email fallback', async () => {
-    (Organization.findByPk as jest.Mock).mockResolvedValue(mockOrg({ lead_id: 999 }));
+    (Organization.findOne as jest.Mock).mockResolvedValue(mockOrg({ lead_id: 999 }));
     (OrgMember.findAll as jest.Mock).mockResolvedValue([]);
     (OrgCohort.findAll as jest.Mock).mockResolvedValue([]);
     (Lead.findByPk as jest.Mock).mockResolvedValue({
       id: 999, email: 'other@acme.test', company: 'Acme', status: 'new', source: 'website',
     });
 
-    const detail = await getOrganizationDetail('org-1');
+    const detail = await getOrganizationDetail('org-1', ANY_TENANT);
     expect(detail?.lead?.id).toBe(999);
     expect(Lead.findOne).not.toHaveBeenCalled();
   });

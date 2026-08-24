@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { handleGetCareerProfile } from '../controllers/careerPortfolioController';
+import { handleGetPublicationStatus, handleRequestReview } from '../controllers/careerPublicationController';
 
 /**
  * Living Career Portfolio — the private Career Studio at /portal/portfolio.
@@ -26,6 +27,22 @@ router.get(
   requireParticipant,
   requireContentEntitlement('portfolio'),
   handleGetCareerProfile,
+);
+
+// Gate 10 — the learner's own publication state and their request for review.
+// Same two gates as the profile read: authenticated, and entitled.
+router.get(
+  '/api/portal/career/publication',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleGetPublicationStatus,
+);
+
+router.post(
+  '/api/portal/career/publication/request-review',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleRequestReview,
 );
 
 export default router;

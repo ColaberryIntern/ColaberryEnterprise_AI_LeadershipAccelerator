@@ -261,10 +261,24 @@ export default function AgentDetailPage() {
               <StatCard label="Schedule" value={trust_contract.schedule || '—'} icon="calendar-line" tone="neutral" />
             </div>
             <div className="col-6 col-lg-3">
+              {/* Trust Contract fix (2026-08-24) — Ali, live, on Reese's real page:
+                  "Reese has several tickets... but this says it's never been run."
+                  `last_run_at` stays honestly null for an event-driven agent (it's
+                  never invoked through the cron scheduler wrapper) — that part was
+                  correct. What was wrong is showing bare "Never" with no other
+                  signal, right above a ticket table full of recent activity. When
+                  there's no scheduler run but there IS real ticket activity, show
+                  THAT instead, labeled for what it actually is. */}
               <StatCard
-                label="Last run"
-                value={trust_contract.last_run_at ? timeAgo(trust_contract.last_run_at) : 'Never'}
-                icon="history-line"
+                label={trust_contract.last_run_at || !trust_contract.last_activity_at ? 'Last run' : 'Last activity'}
+                value={
+                  trust_contract.last_run_at
+                    ? timeAgo(trust_contract.last_run_at)
+                    : trust_contract.last_activity_at
+                      ? timeAgo(trust_contract.last_activity_at)
+                      : 'Never'
+                }
+                icon={trust_contract.last_run_at || !trust_contract.last_activity_at ? 'history-line' : 'ticket-2-line'}
                 tone="neutral"
               />
             </div>

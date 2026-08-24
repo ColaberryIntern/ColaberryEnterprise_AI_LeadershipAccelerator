@@ -648,6 +648,56 @@ const CLIENT_REVIEW_ROOM: string[] = [
 ];
 
 /**
+ * GATE 12 — capacity overrides and the metric access log.
+ *
+ * `delivery_capacity_overrides` records a delivery lead raising a builder's parallel-work
+ * cap. `expires_at` is NOT NULL deliberately: an override with no expiry is not an
+ * override, it is a new cap that nobody decided on. Expiry does the revoking, so no one has
+ * to remember to.
+ *
+ * `delivery_metric_access_log` is the other half of master plan §Gate 12's *"do not turn
+ * this into employee surveillance"*. Reading a capacity signal for a **named person**
+ * writes a row here with the reason given. Project and portfolio reads are not logged —
+ * auditing ordinary work would bury the unusual, which is the only thing an audit log is
+ * for.
+ *
+ * Neither table has an UPDATE path in its design. An override that changes gets a new row;
+ * an access log entry is append-only. A mutable audit log is not an audit log.
+ */
+const CAPACITY_AND_ECONOMICS: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_capacity_overrides (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     builder_identity_id UUID NOT NULL,
+     granted_by_identity_id UUID NOT NULL,
+     base_max_parallel_projects INTEGER NOT NULL,
+     override_max_parallel_projects INTEGER NOT NULL,
+     reason TEXT NOT NULL,
+     expires_at TIMESTAMPTZ NOT NULL,
+     revoked_at TIMESTAMPTZ,
+     revoked_by_identity_id UUID,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // The read path: overrides still in force for a builder.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_capacity_overrides_active
+     ON delivery_capacity_overrides (builder_identity_id, expires_at)
+     WHERE revoked_at IS NULL`,
+
+  `CREATE TABLE IF NOT EXISTS delivery_metric_access_log (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     signal VARCHAR(60) NOT NULL,
+     scope VARCHAR(20) NOT NULL,
+     subject_identity_id UUID,
+     requested_by_identity_id UUID NOT NULL,
+     justification TEXT NOT NULL,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_metric_access_subject
+     ON delivery_metric_access_log (subject_identity_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_metric_access_requester
+     ON delivery_metric_access_log (requested_by_identity_id, created_at)`,
+];
+
+/**
  * Order matters across the groups: the spine must exist before its children reference
  * it, and the organization relaxation runs first because delivery engagements point at
  * organizations that may now legitimately have no owner.
@@ -678,4 +728,5 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...EXECUTION_RUNS,
   ...QUALITY_EVIDENCE,
   ...CLIENT_REVIEW_ROOM,
+  ...CAPACITY_AND_ECONOMICS,
 ];

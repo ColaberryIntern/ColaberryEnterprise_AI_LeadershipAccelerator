@@ -125,6 +125,32 @@ export async function countOpenTicketsForAgent(adminUserId: string, agent: AiAge
   });
 }
 
+/** Trust Contract fix (2026-08-24) — Ali, live, looking at Reese's real page: "Reese
+ * has several tickets that have been opened and that he opened for outreach but this
+ * says it's never been run." Real bug: `trust_contract.last_run_at` is honestly null
+ * for every event-driven agent (Reese, InboxCaseEngine — invoked outside the generic
+ * cron scheduler wrapper that stamps that column), so the UI fell back to a literal
+ * "Never" even while the ticket table two sections below showed activity as recent as
+ * hours ago. `last_run_at` staying null is correct (this agent genuinely has no
+ * scheduler-tracked runs); showing "Never" without that context is what was wrong. This
+ * is the same match-list query `countOpenTicketsForAgent()` uses, MAX(updated_at)
+ * instead of COUNT, and across every status (not just open) — a `done` ticket the
+ * agent closed yesterday is still real evidence the agent is active. */
+export async function getLastTicketActivityForAgent(adminUserId: string, agent: AiAgent): Promise<Date | null> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  const row = await Ticket.findOne({
+    where: {
+      [Op.or]: [
+        { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+        { created_by_id: { [Op.in]: matchList } },
+      ],
+    },
+    order: [['updated_at', 'DESC']],
+    attributes: ['updated_at'],
+  });
+  return row?.updated_at ?? null;
+}
+
 export async function listLiveAgents(): Promise<LiveAgent[]> {
   const adminUsers = await findBlueprintAdminUsers();
   if (adminUsers.length === 0) return [];

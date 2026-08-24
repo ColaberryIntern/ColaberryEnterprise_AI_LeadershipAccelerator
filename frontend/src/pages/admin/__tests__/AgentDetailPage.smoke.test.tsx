@@ -109,7 +109,10 @@ const DETAIL: AgentDetail = {
     immediate_agent: { id: 'agent-wie', name: 'workforce_intelligence_engine' },
   },
   // Trust Contract (2026-08-24) — Reese's real shape: identity-only, invoked
-  // outside the generic scheduler wrapper, so honest nulls/zeros.
+  // outside the generic scheduler wrapper, so last_run_at/run_count/error_count
+  // are honest zeros. last_activity_at is NOT zero — this mirrors Reese's real
+  // production state (Trust Contract fix, 2026-08-24): real ticket activity
+  // exists even though the scheduler never tracked a "run".
   trust_contract: {
     trigger_type: 'event_driven',
     schedule: null,
@@ -120,6 +123,7 @@ const DETAIL: AgentDetail = {
     avg_duration_ms: null,
     last_error: null,
     last_error_at: null,
+    last_activity_at: '2026-08-24T10:00:00Z',
   },
 };
 
@@ -672,6 +676,7 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
         avg_duration_ms: 5791,
         last_error: 'out of shared memory',
         last_error_at: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
+        last_activity_at: null, // irrelevant here — last_run_at is set, so the fallback never triggers
       },
     });
 
@@ -737,5 +742,58 @@ describe('AgentDetailPage — "Trust Contract" section', () => {
 
     expect(container.textContent).toContain('Autonomy level (Permitted)');
     expect(container.textContent).toContain('act_audited');
+  });
+
+  // Trust Contract fix (2026-08-24) — Ali, live, looking at Reese's real page:
+  // "Reese has several tickets that have been opened... but this says it's
+  // never been run." Fixes the literal complaint: an event-driven agent with
+  // real ticket activity must never show a bare "Never".
+  // Scoped to `.admin-stat-card` (not `container.textContent`) throughout —
+  // the Ticket activity table below has its OWN "Last activity" column header
+  // (per-ticket, unrelated), so a page-wide text check would false-positive.
+  function trustContractStatCards(): string[] {
+    return Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
+  }
+
+  it('Instant: an event-driven agent with real ticket activity shows a "Last activity" stat (not "Last run"/"Never")', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL); // base fixture: event_driven, last_run_at null, last_activity_at real
+
+    await renderAgentPage();
+
+    const cards = trustContractStatCards();
+    expect(cards.some((text) => text.includes('Last activity'))).toBe(true);
+    expect(cards.some((text) => text.includes('Last run'))).toBe(false);
+    expect(cards.some((text) => text.includes('Never'))).toBe(false);
+  });
+
+  it('boundary: an event-driven agent with genuinely zero ticket history ever still shows an honest "Last run: Never"', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      trust_contract: { ...DETAIL.trust_contract, last_activity_at: null },
+    });
+
+    await renderAgentPage();
+
+    const cards = trustContractStatCards();
+    expect(cards.some((text) => text.includes('Last run') && text.includes('Never'))).toBe(true);
+    expect(cards.some((text) => text.includes('Last activity'))).toBe(false);
+  });
+
+  it('a scheduler-tracked (cron) agent keeps showing "Last run" from last_run_at, never the ticket-derived fallback', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      trust_contract: {
+        ...DETAIL.trust_contract,
+        trigger_type: 'cron',
+        last_run_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+        last_activity_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // more recent, but must be ignored
+      },
+    });
+
+    await renderAgentPage();
+
+    const cards = trustContractStatCards();
+    expect(cards.some((text) => text.includes('Last run') && text.includes('5h ago'))).toBe(true);
+    expect(cards.some((text) => text.includes('Last activity'))).toBe(false);
   });
 });
