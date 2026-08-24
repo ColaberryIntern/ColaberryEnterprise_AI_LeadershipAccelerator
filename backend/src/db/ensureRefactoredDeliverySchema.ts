@@ -286,6 +286,40 @@ const DELIVERY_CHILDREN: string[] = [
 ];
 
 /**
+ * Gate 2 — Builder Authority Profile.
+ *
+ * Scoped to a platform identity rather than a project: authority is a property of a
+ * person's demonstrated capability and travels with them. Per-project limits are
+ * expressed through delivery roles instead.
+ *
+ * Every default is the least-privileged value, because a row that exists but has never
+ * been evaluated must not confer more than no row at all. `last_evaluated_at` is
+ * deliberately nullable and has no default — it is the signal that a human stood behind
+ * these numbers, and defaulting it to NOW() would fabricate exactly that.
+ */
+const BUILDER_AUTHORITY: string[] = [
+  `CREATE TABLE IF NOT EXISTS builder_authority_profiles (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     platform_identity_id UUID NOT NULL,
+     builder_level VARCHAR(40),
+     allowed_project_classes JSONB,
+     max_parallel_projects INTEGER NOT NULL DEFAULT 1,
+     max_risk_without_review VARCHAR(4) NOT NULL DEFAULT 'R0',
+     client_interaction_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+     release_authority BOOLEAN NOT NULL DEFAULT FALSE,
+     last_evaluated_at TIMESTAMPTZ,
+     evaluated_by_identity_id UUID,
+     evidence_summary JSONB,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // One profile per identity. Two rows would make "what is this person allowed to do?"
+  // depend on which one a query happened to read first.
+  `CREATE UNIQUE INDEX IF NOT EXISTS builder_authority_profiles_identity_unique
+     ON builder_authority_profiles (platform_identity_id)`,
+];
+
+/**
  * Order matters across the groups: the spine must exist before its children reference
  * it, and the organization relaxation runs first because delivery engagements point at
  * organizations that may now legitimately have no owner.
@@ -310,4 +344,5 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...ORGANIZATION_RELAXATION,
   ...DELIVERY_SPINE,
   ...DELIVERY_CHILDREN,
+  ...BUILDER_AUTHORITY,
 ];
