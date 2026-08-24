@@ -72,25 +72,39 @@ describe('getCareerProfile — Gate 1 access state machine', () => {
     expect(p.visibility).toBe('private');
   });
 
-  it('SECURITY: a paid learner without a resume gets NO career evidence at all', async () => {
+  /**
+   * CHANGED 2026-08-24. This previously asserted the opposite — that a learner
+   * without a resume got NOTHING. Prod data killed that design: 6,503 evidence
+   * rows against 26 resumes, so the gate hid real earned work from the students
+   * who had the most of it. The resume is now a baseline prompt, not a wall.
+   *
+   * Worth being precise about what did NOT change: this was never a security
+   * control. It withheld a learner's OWN data from themselves. The actual
+   * boundary — every read scoped to req.participant.sub, no route accepting an
+   * id — is untouched.
+   */
+  it('a learner without a resume still sees everything they have earned', async () => {
     identityAdapter.mockResolvedValue({ ...IDENTITY, resume: null });
 
     const p = await getCareerProfile('e1');
 
-    expect(p.state).toBe('needs_resume');
-    expect(p.capabilities).toEqual([]);
-    expect(p.artifacts).toEqual([]);
-    expect(p.projects).toEqual([]);
-    expect(p.github).toBeNull();
-    expect(p.readiness).toBeNull();
-    expect(p.narrative).toBeNull();
+    expect(p.state).toBe('baseline_missing');
+    // Their own evidence is NOT withheld.
+    expect(p.capabilities).toHaveLength(1);
+    expect(p.artifacts).toHaveLength(1);
+    expect(p.readiness).not.toBeNull();
+    expect(skillAdapter).toHaveBeenCalled();
+    expect(artifactAdapter).toHaveBeenCalled();
+  });
 
-    // The prerequisite must be a real boundary, not a hidden UI section: the
-    // evidence adapters are never even called.
-    expect(skillAdapter).not.toHaveBeenCalled();
-    expect(artifactAdapter).not.toHaveBeenCalled();
-    expect(projectAdapter).not.toHaveBeenCalled();
-    expect(githubAdapter).not.toHaveBeenCalled();
+  it('flags the missing baseline in readiness rather than hiding the page', async () => {
+    identityAdapter.mockResolvedValue({ ...IDENTITY, resume: null });
+    const p = await getCareerProfile('e1');
+    expect(p.readiness!.blocking).toContain('resume_uploaded');
+    const req = p.readiness!.requirements.find((r) => r.key === 'resume_uploaded')!;
+    // Students do not know a LinkedIn PDF export counts. The copy must say so.
+    expect(req.label).toContain('LinkedIn PDF');
+    expect(req.detail).toContain('LinkedIn');
   });
 
   it('404s when the enrollment has no profile', async () => {
