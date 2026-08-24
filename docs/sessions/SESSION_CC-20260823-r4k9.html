@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 2:38 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">49 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 3:59 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">52 changes</span></div>
   </header>
   <main>
     
@@ -792,6 +792,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">there is **no** `submitted -&gt; approved_for_build` edge, so the path to build runs through assessment; the client summary reports counts and flags and contains no node identifiers; truncated analysis is stated as &quot;may be incomplete&quot; rather than implied complete; build approval is refused with no impact summary and refused with no named approver.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">the impact comes from Gate 3&#39;s `analyzeImpact`, reused rather than re-derived, so the client&#39;s answer and the builder&#39;s answer cannot drift apart. The gate is enforced **twice on purpose**: the transition table makes the path to build run through assessment, and `gateChangeRequest` checks that the assessment actually produced something — a status can be set by a caller, but a recorded summary cannot be faked by setting a field to the right string. `impact_summary` and `impact_internal` live on one row rather than in two tables so they cannot drift; the projection layer decides which one leaves the building.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">50</span>
+          <h2>**The Experience Ledger: eleven evidence-backed claims**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/experienceLedger.ts` — the eleven claim types, a rubric per claim, and `evaluateClaim` / `summarizeLedger`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">every claim has a rubric a mentor could check by hand and at least one real evidence type that can substantiate it; every judgment-band claim requires human confirmation; a claim whose backing evidence recorded `fail`, `partial` or `not_run` is refused; a claim substantiated by the wrong evidence type is refused; every refusal carries a reason.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 11&#39;s governing rule is **no credit solely for attendance**, and it is enforced as a check no system-generated row can satisfy — `builderDidTheWork === false` rejects outright. Claims are **derived from Gate 9&#39;s `delivery_evidence`, never self-reported**, which is why the one-way projection exists and why it is narrow. This module maps a claim to one of the existing four evidence bands rather than computing a proficiency number: a number computed here would silently compete with `capeEvidenceBandWeightsService`&#39;s versioned weights, and two systems producing &quot;proficiency&quot; is how a metric stops meaning anything. `production_incidents` is a claim on purpose — handling an incident is real, transferable experience, and a ledger that counted only successes would quietly teach people to avoid the work where things go wrong.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">51</span>
+          <h2>**Learn Mode and Delivery Mode are support levels, not permission tiers**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/builderWorkspace.ts` — the eight nav sections, the two mode support profiles, `assertModeIsSupportOnly` and `projectTruthForMode`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`assertModeIsSupportOnly()` returns no violations; both modes execute approved work; both escalate consequential ambiguity; the two profiles are **not** identical (the negative control — without it, two identical profiles would pass every other assertion); both modes receive the same project truth object.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 11 says &quot;same project truth, different support level&quot;, and the obvious implementation gets this wrong. **Learn mode still executes approved work.** Withholding execution would make the mode a permission downgrade wearing a teaching costume, and it would teach an intern that learning is what you do *instead of* shipping. It would also be the wrong teaching tool: someone shown a simplified version of the project learns the simplified version. What a builder may *do* already belongs to `deliveryRoles.ts` and `builderAuthority.ts`, which cap by demonstrated authority — a separate axis from how much explanation they get. The invariant is a runtime check over the table rather than a type, so adding a third mode later cannot quietly break it while still compiling.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">52</span>
+          <h2>**Mentor exceptions, including two that fire on good news**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/mentorExceptions.ts` — the six detectors, named thresholds, and a stable prioritizer.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a calm builder produces **zero** exceptions (the control that keeps this an exception list rather than a dashboard); a failing trust or security gate fires urgently; the first-client-review exception fires only for a builder with no prior experience; overload fires strictly *above* the threshold, not at it; a rework rate computed from fewer than five completed stories is ignored; the prioritizer is stable across repeated calls and does not mutate its input.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**`first_client_review` and `release_ready` fire on good events.** A mentor system that only surfaces failure trains people to hide things, and it misses the two moments where a mentor is most useful — before someone&#39;s first client exposure, and at the point where shipping becomes irreversible. The first-review trigger fires *before* the review, because a mentor arriving afterwards has missed the moment they could have changed. The rework floor exists because &quot;100% rework&quot; computed from one story is noise that would land on the person least able to absorb it. **The thresholds (4 concurrent stories, 30% rework, 5-story minimum) are defensible starting points, not measured values** — no delivery has run yet, so calling them tuned would be a fabrication. They are named constants and overridable per call so they can move once there is data.</span></div>
           
         </div>
       </article>
