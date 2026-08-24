@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, August 23, 2026 at 6:55 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">16 changes</span></div>
+    <div class="meta">Generated Sunday, August 23, 2026 at 7:29 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">20 changes</span></div>
   </header>
   <main>
     
@@ -297,6 +297,66 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">the pinned typecheck caught it — `orgService.ts(241,67): TS2322 Type &#39;string | null&#39; is not assignable to type &#39;string&#39;`. After the fix, backend `tsc --noEmit` under **TypeScript 5.9.3** reports **2 errors, both the known `@anthropic-ai/sdk` junction artifact, zero real `src/` errors** — exactly the Gate 0 baseline.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">this is the ESC-1 condition &quot;audit and null-guard the read paths&quot; actually being discharged, and it is why the relaxation had to ship with a pinned compiler rather than a bare `npx tsc` (which resolves 4.9.5 and can report a false clean). The fix returns the value the function just matched on instead of re-reading it, so the non-null contract callers rely on holds by construction rather than by a cast that would also have silenced a genuine null later.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>**Delivery role registry: 13 roles, 30 permissions, separate from tenant roles**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/modules/delivery/deliveryRoles.ts`, mirroring `modules/tenancy/tenantRoles.ts` — one registry, roles compared here and nowhere else.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryRoles.test.ts`, part of **58 passing** across the two authorization suites. Pinned: unknown roles grant nothing; **a tenant role is not a delivery role** (`tenant_admin` and `platform_super_admin` both grant zero delivery permissions); client roles cannot execute stories, write requirements or architecture, read architecture or agent internals, or manage members; `client.accept` is held by exactly the two client decision roles and **not** by the delivery owner; a security reviewer can approve architecture but not write it; only the delivery owner can deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the separation master plan §4 asks for. Tenant membership answers &quot;may this identity act in this tenant at all&quot;; delivery membership answers &quot;may they approve THIS design decision&quot;. `isClientOnly()` deliberately requires *every* role to be client-side, so someone holding both a client and an internal role is not served the client projection — that would hide work they are entitled to see.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>**Risk ladder R0–R5, aligned with the ops fleet but failing closed**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryRiskLevels.ts`. R0–R4 mean exactly what they mean in `services/agentAutonomy.ts`; R5 (`destructive_or_high_consequence`) is new and delivery-only. Consequential actions are a **declared registry**, not keyword-classified strings.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">an undeclared action resolves to **R5 requiring the highest authority**, so adding a consequential action without declaring it is maximally restricted and immediately visible rather than silently permitted. An unrecognized risk level is treated as maximum risk in both directions.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**one deliberate divergence from the ops model, and it is the interesting part.** `agentAutonomy.isHighRiskTier()` treats an unrecognized tier as *not* high risk — it fails OPEN, and says so, because a malformed string there must not manufacture approvals for an established pipeline. Delivery inverts that and fails CLOSED: an action nobody can classify is not safe to run unreviewed, and there is no established delivery pipeline to protect from false positives. **I did not extend the ops ladder to R5 in this gate.** Doing so means editing three sites — `agentAutonomy.ts`, `workGraph/capabilityRouter.ts`, and the typed `maxRiskTier: &#39;R0&#39;|…|&#39;R4&#39;` union in `capabilityRegistry.ts` — one of which gates live agent dispatch. Per Gate 0&#39;s AUTHORIZATION_MATRIX that must ship shadow-logged and reviewed, which is its own change with its own blast radius.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>**Authorization gate: tenant first, delivery second, no enumeration**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryAuthorization.ts` — `buildDeliveryContext`, `requireDeliveryPermission`, `requireTenantThenDelivery`, and `authorizeAction` (which returns a decision rather than throwing, because in the execution plane a denial is a run state, not an HTTP error).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a cross-tenant caller gets **404, not 403**, even when they hold the permission — they must not learn the project exists. A non-member gets 404; a member missing one permission gets 403, because they already know it exists and the distinction is useful to them. Unauthenticated gets 401. An unreadable project or membership table fails closed with a structured log.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the function deliberately does **not** call the tenant guard itself. Hiding the ordering inside a helper would hide the security property — the caller passes its tenant-guard result in, so the ordering is visible at the call site. `platform.cross_tenant` grants nothing here: a superadmin can see a project exists, but approving a client&#39;s design decision on their behalf is a different act, enforced by this module simply never consulting the superadmin flag.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">20</span>
+          <h2>**Builder Authority Profile: caps, never grants**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/BuilderAuthorityProfile.ts`, `modules/delivery/builderAuthority.ts`, and a `builder_authority_profiles` table appended to `ensureRefactoredDeliverySchema` (additive, idempotent, unique per identity).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`builderAuthority.test.ts`. No profile → R0, one project, no client contact, no release authority. An unreadable profile fails **closed** with a visible structured log. A generous row with `last_evaluated_at = null` is still the floor. A malformed `max_risk_without_review` falls back to R0. An R5 ceiling on an observer still yields no access — **the ceiling can never grant a permission the role lacks**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 2 forbids authority based on time-in-program, so the table has no concept of cohort week or attendance. The key behaviour is that an action above the ceiling becomes a **review requirement rather than a refusal** — that is what lets an intern drive real work they cannot unilaterally land, instead of being blocked from touching it. `last_evaluated_at` is nullable with no default on purpose: defaulting it to `NOW()` would fabricate the very signal that a human reviewed the numbers.</span></div>
           
         </div>
       </article>
