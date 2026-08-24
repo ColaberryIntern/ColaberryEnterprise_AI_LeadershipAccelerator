@@ -144,14 +144,35 @@ async function runOne(
     const existing = await ExplorerJourneyDecision.findOne({
       where: { enrollment_id: enrollmentId, decision_date: decision.decision_date },
     });
+    // Column names verified against accelerator_dev1, NOT assumed. The first
+    // draft wrote `campaign_key` and `rationale`, neither of which exists - the
+    // real columns are `selected_campaign_id` and `reason` - and omitted `mode`
+    // and `reason`, both NOT NULL with no default. Every one of the 141 unit
+    // tests passed because the models barrel is mocked; the insert would have
+    // failed on the first real row.
     const payload = {
+      mode: 'shadow',
       primary_state: ctx.primary_state,
+      overlays: ctx.overlays as any,
+      e_score: Math.round(ctx.scores.e),
+      i_score: Math.round(ctx.scores.i),
+      f_score: Math.round(ctx.scores.f),
+      lead_id: profile.lead_id ?? null,
       selected_action: decision.action_type,
-      campaign_key: decision.campaign_key,
       channel: decision.channel,
       candidate_actions: decision.candidate_actions as any,
       suppressed_actions: decision.suppressed_actions as any,
-      rationale: decision.rationale as any,
+      // `reason` is the NOT NULL text column. The campaign key lives inside
+      // candidate_actions (jsonb) rather than being invented as a column, and
+      // selected_campaign_id stays null until EPIC 6 resolves a real campaign.
+      reason: [
+        ...decision.rationale,
+        decision.campaign_key ? `campaign=${decision.campaign_key}` : null,
+        decision.consent_note ? `consent: ${decision.consent_note}` : null,
+      ]
+        .filter(Boolean)
+        .join(' | '),
+      ai_involved: false,
       ruleset_version: RULESET_VERSION,
       executed: false,
     };
