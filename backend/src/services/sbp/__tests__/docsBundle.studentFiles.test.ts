@@ -16,9 +16,9 @@
  *
  * The ownership model is already stated in `profileContract.ts`:
  *
- *   .colaberry/plan.json      platform-owned  · replaced wholesale
- *   .colaberry/progress.json  co-owned        · merged field by field
- *   .colaberry/profile.json   STUDENT-OWNED   · seeded once, never overwritten
+ *   .colaberry/plan.json      platform-generated · replaced ONLY while unedited
+ *   .colaberry/progress.json  co-owned           · merged field by field
+ *   .colaberry/profile.json   STUDENT-OWNED      · seeded once, never overwritten
  *
  * These tests hold the bundle to it. The property under test is deliberately
  * stronger than "we warn about it": following the on-screen instruction
@@ -36,12 +36,20 @@ jest.mock('../planStore', () => ({
 import { buildDocsBundle } from '../docsBundle';
 import { PROGRESS_FILE_PATH } from '../verification/progressContract';
 import { PROFILE_FILE_PATH } from '../profileContract';
+import { PLAN_FILE_PATH } from '../planDocument';
 import { BuildPlan } from '../planContract';
 import raw from './fixtures/pilot-dryrun-plan.json';
 
 const pilot = raw as unknown as BuildPlan;
 const PRJ = '248d9d63-2543-45a1-b3f9-d1f691a8428a';
 const AT = new Date('2026-08-14T00:00:00Z');
+
+// Every test here renders the FULL document set and builds a real zip, and the
+// first one also pays the cold-start compile. That measured 3.9s against Jest's
+// 5s default on an idle machine — passing, but only just, and it tipped into a
+// timeout as soon as the suite ran alongside the rest of `src/services/sbp`.
+// The work is genuine rather than accidental, so the limit is what is wrong.
+jest.setTimeout(30_000);
 
 const stored = (over: Record<string, unknown> = {}) => ({
   id: 'plan-1', project_id: PRJ, version: 3, status: 'published',
@@ -88,6 +96,15 @@ describe('the archive never lands on a student-owned path', () => {
   it('carries no file at the live .colaberry/profile.json path', async () => {
     const entries = readZip((await buildDocsBundle(PRJ, { generatedAt: AT })).bytes);
     expect(Object.keys(entries)).not.toContain(PROFILE_FILE_PATH);
+  });
+
+  it('carries no file at the live .colaberry/plan.json path', async () => {
+    // `repoWriter` can ask GitHub whether the repo copy is still the one the
+    // platform wrote before replacing it. An `unzip` cannot ask anything, so
+    // the plan must not travel on its live path either — otherwise fixing the
+    // writer just moves the same data loss to the download.
+    const entries = readZip((await buildDocsBundle(PRJ, { generatedAt: AT })).bytes);
+    expect(Object.keys(entries)).not.toContain(PLAN_FILE_PATH);
   });
 
   it('reports the same paths in `paths` as it actually wrote into the zip', async () => {
@@ -155,6 +172,23 @@ describe('extracting the whole archive over a working repo', () => {
     extractOver(folder, readZip((await buildDocsBundle(PRJ, { generatedAt: AT })).bytes));
 
     expect(folder[PROFILE_FILE_PATH]).toBe(before);
+  });
+
+  it('leaves a hand-edited plan exactly where it was', async () => {
+    // Three students hold hand-built plans — extra stories, extra systems, extra
+    // requirements — and their Command Center reads this file at runtime, so an
+    // overwrite costs them the data and breaks the dashboard drawn from it.
+    const folder = studentRepo();
+    folder[PLAN_FILE_PATH] = `${JSON.stringify({
+      schema_version: 2,
+      project_name: 'AI Operations Center',
+      stories: [{ id: 'STORY-001' }, { id: 'STORY-004' }, { id: 'STORY-015' }],
+    }, null, 2)}\n`;
+    const before = folder[PLAN_FILE_PATH];
+
+    extractOver(folder, readZip((await buildDocsBundle(PRJ, { generatedAt: AT })).bytes));
+
+    expect(folder[PLAN_FILE_PATH]).toBe(before);
   });
 });
 
