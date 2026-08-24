@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 6:28 AM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">29 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 7:43 AM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">32 changes</span></div>
   </header>
   <main>
     
@@ -492,6 +492,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryTrustGate.test.ts`, **41 tests**. A missing dimension blocks. No requirements at all produces six blocking findings. `specified`/`implemented` is **not** enough — a dimension must reach `evaluated` or `accepted`. An unapproved definition blocks, and so does a working version ahead of the approved one. One failing production agent blocks the whole release.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**&quot;we built it&quot; without &quot;and we checked it&quot; is the exact gap the framework exists to close**, which is why `implemented` fails the gate. The module returns every reason at once rather than throwing on the first — closing gaps should not be whack-a-mole against a system that already knows the full answer. Trust does not average across a fleet: one agent outside its boundary is not offset by five that behave. `no_prohibited_actions` warns rather than blocks — worth surfacing, since the &quot;may&quot; list silently becoming the whole world is a real failure, but not worth refusing a release over.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">30</span>
+          <h2>**The approval hierarchy enforced as an ordering constraint**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryDesignLoop.ts` (pure). Five tiers in dependency order — product personality → design system → page families → critical workflows → exceptions — with `checkApprovalEligibility` and `prerequisiteTiers`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryDesignLoop.test.ts`, **30 tests**. Approving a page family before the design system exists is **blocking**. Product personality has no prerequisites; an exception requires all four tiers beneath it.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**this is not Figma and must not become it** — master plan §Gate 6 says build governed design *decisions*, not a design tool. The ordering matters because a page family approved before the design system is standing on nothing: every later DNA decision silently invalidates it, and nobody finds out until the screens are built. Same shape as the INPACT dependency phases, enforced the same way — deterministically, before the expensive work.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">31</span>
+          <h2>**An approval has to record what was actually agreed**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">validation for approver, chosen variant, rationale, and the 2–4 variant range.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">an approval with no approver blocks; variants offered with none chosen blocks; a missing rationale warns. One variant warns, more than four warns, zero is not flagged.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">&quot;variants offered but none chosen&quot; blocks because the record then cannot say what was agreed, which is the entire purpose of approving a design decision. One variant only warns, but it is worth saying: a single &quot;option&quot; is a proposal presented as a choice, and the approval it produces is weaker than it looks. Personality and exception tiers are excluded from variant expectations — a personality is a direction rather than a layout to compare, and an exception is by definition a one-off departure, so demanding alternatives would be ceremony.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">32</span>
+          <h2>**Visual Contracts that can actually gate a diff**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`validateVisualContract` — required regions, required actions, hierarchy, responsive rules, accessibility rules, reference snapshot, acceptable variance.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no reference snapshot blocks; no variance threshold blocks; a variance outside 0–1 blocks; no accessibility rules blocks; missing required actions only warns.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the missing-threshold rule is the load-bearing one — **without a variance threshold the Gate 9 visual diff passes everything or fails everything**, depending on whichever default someone picked, so a contract without it cannot gate anything. Accessibility blocks rather than warns because Gate 13&#39;s government profile makes it a mandatory release gate, and a visual contract that never mentions it cannot supply that evidence. The Design DNA completeness check only warns: a real design system is agreed in stages, and refusing the whole thing because charts are undecided would stall the work the DNA exists to unblock.</span></div>
           
         </div>
       </article>

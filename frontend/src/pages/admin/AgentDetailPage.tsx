@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getAgentDetail, AgentDetail } from '../../services/agentDetailApi';
+import { resetAgents } from '../../services/workforceOrgChartApi';
 import { PageHeader, StatCard, SectionCard, StatusBadge } from '../../components/admin/shell';
 import { fmtCentralDateTime } from '../../utils/centralTime';
 import { timeAgo } from '../../components/admin/shell/trust';
@@ -24,6 +25,11 @@ export default function AgentDetailPage() {
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // AI Workforce Reset (2026-08-24) — Ali, live: deactivate an agent and
+  // cancel its open tickets, reversible (enabled:false, real ticket
+  // cancellation) — see workforceOrgChartApi.ts::resetAgents().
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
@@ -43,6 +49,30 @@ export default function AgentDetailPage() {
     const interval = setInterval(fetchDetail, 30000);
     return () => clearInterval(interval);
   }, [fetchDetail]);
+
+  const handleDeactivate = useCallback(async () => {
+    if (!id || !detail) return;
+    const displayName = detail.identity?.display_name || detail.agent.agent_name;
+    const confirmed = window.confirm(
+      `Deactivate ${displayName} and cancel its open tickets? This sets enabled:false (reversible) and cancels every currently-open ticket via the real ticket status transition — not a delete.`,
+    );
+    if (!confirmed) return;
+    setResetting(true);
+    setResetMessage(null);
+    try {
+      const [result] = await resetAgents([id]);
+      setResetMessage(
+        result.error
+          ? `Failed to deactivate: ${result.error}`
+          : `Deactivated. ${result.ticketsCancelled} open ticket${result.ticketsCancelled === 1 ? '' : 's'} cancelled.`,
+      );
+      await fetchDetail();
+    } catch (err: any) {
+      setResetMessage(err?.response?.data?.error || 'Failed to deactivate agent.');
+    } finally {
+      setResetting(false);
+    }
+  }, [id, detail, fetchDetail]);
 
   if (loading) {
     return (
@@ -72,11 +102,23 @@ export default function AgentDetailPage() {
         subtitle={agent.description || undefined}
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: displayName }]}
         actions={
-          <button className="btn btn-outline-primary btn-sm" onClick={fetchDetail} disabled={loading}>
-            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
-          </button>
+          <div className="d-flex gap-2">
+            {agent.enabled && (
+              <button className="btn btn-outline-danger btn-sm" onClick={handleDeactivate} disabled={resetting}>
+                <i className="ri-shut-down-line" aria-hidden="true" /> {resetting ? 'Deactivating…' : 'Deactivate'}
+              </button>
+            )}
+            <button className="btn btn-outline-primary btn-sm" onClick={fetchDetail} disabled={loading}>
+              <i className="ri-refresh-line" aria-hidden="true" /> Refresh
+            </button>
+          </div>
         }
       >
+        {resetMessage && (
+          <div className={`alert ${resetMessage.startsWith('Failed') ? 'alert-danger' : 'alert-success'} py-2 mb-3`}>
+            {resetMessage}
+          </div>
+        )}
         <div className="row g-3">
           <div className="col-6 col-lg-3">
             <StatCard

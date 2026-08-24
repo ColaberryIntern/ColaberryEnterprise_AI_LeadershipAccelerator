@@ -43,6 +43,10 @@ describe('AgentDetailPage (Reese Phase 1 transparency page)', () => {
 jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn() }));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentDetail } = require('../../../services/agentDetailApi') as { getAgentDetail: jest.Mock };
+// AI Workforce Reset (2026-08-24) — the "Deactivate" button's real API call.
+jest.mock('../../../services/workforceOrgChartApi', () => ({ resetAgents: jest.fn() }));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { resetAgents } = require('../../../services/workforceOrgChartApi') as { resetAgents: jest.Mock };
 
 const DETAIL: AgentDetail = {
   agent: {
@@ -433,5 +437,81 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
     await renderAgentPage();
 
     expect(container.textContent).toContain('No tools recorded.');
+  });
+});
+
+// AI Workforce Reset (2026-08-24) — Ali, live: "we just need to remove all
+// of the task they are assigned with at this time... deactivate current."
+describe('AgentDetailPage — "Deactivate" action', () => {
+  let confirmSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getAgentDetail.mockResolvedValue(DETAIL);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+    confirmSpy.mockRestore();
+  });
+
+  function deactivateButton(): HTMLButtonElement | undefined {
+    return Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Deactivate')) as HTMLButtonElement | undefined;
+  }
+
+  it('renders a "Deactivate" button when the agent is enabled', async () => {
+    await renderAgentPage();
+
+    expect(deactivateButton()).toBeDefined();
+  });
+
+  it('boundary: no "Deactivate" button when the agent is already disabled — nothing left to deactivate', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, agent: { ...DETAIL.agent, enabled: false } });
+
+    await renderAgentPage();
+
+    expect(deactivateButton()).toBeUndefined();
+  });
+
+  it('happy path: confirming asks the user first, then calls resetAgents() with this agent\'s real id and shows the real cancelled-ticket count', async () => {
+    resetAgents.mockResolvedValue([{ agentId: 'agent-reese', agentName: 'Reese', found: true, deactivated: true, ticketsCancelled: 3, error: null }]);
+
+    await renderAgentPage();
+    await act(async () => {
+      deactivateButton()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(resetAgents).toHaveBeenCalledWith(['agent-reese']);
+    expect(container.textContent).toContain('3 open tickets cancelled');
+  });
+
+  it('declining the confirmation never calls resetAgents()', async () => {
+    confirmSpy.mockReturnValue(false);
+
+    await renderAgentPage();
+    await act(async () => {
+      deactivateButton()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(resetAgents).not.toHaveBeenCalled();
+  });
+
+  it('failure path: a server error is shown honestly, not swallowed', async () => {
+    resetAgents.mockResolvedValue([{ agentId: 'agent-reese', agentName: 'Reese', found: true, deactivated: false, ticketsCancelled: 0, error: 'Agent not found' }]);
+
+    await renderAgentPage();
+    await act(async () => {
+      deactivateButton()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.textContent).toContain('Failed to deactivate: Agent not found');
   });
 });

@@ -53,8 +53,8 @@ const ALI = { id: 'ali-id', org_id: 'org-colaberry', email: 'ali@colaberry.com',
 const KES = { id: 'kes-id', org_id: 'org-colaberry', email: 'kesetebirhan@gmail.com', team: 'Staff', role: 'member', enrollment_id: null };
 const REESE_MEMBER = { id: 'reese-member-id', org_id: 'org-colaberry', email: 'reese@colaberry.com', team: 'Staff', role: 'member', enrollment_id: null };
 
-const CORYBRAIN = { id: 'corybrain-id', agent_name: 'CoryBrain', reports_to_type: 'human', reports_to_id: 'ali-id' };
-const STAFF_AGENT = { id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', reports_to_type: 'agent', reports_to_id: 'corybrain-id' };
+const CORYBRAIN = { id: 'corybrain-id', agent_name: 'CoryBrain', reports_to_type: 'human', reports_to_id: 'ali-id', enabled: true };
+const STAFF_AGENT = { id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', reports_to_type: 'agent', reports_to_id: 'corybrain-id', enabled: true };
 const ORPHAN_AGENT = { id: 'orphan-id', agent_name: 'OrphanedAgent', reports_to_type: 'agent', reports_to_id: 'nonexistent-id' };
 
 function baseMocks() {
@@ -112,12 +112,36 @@ describe('getOrgChart — happy path', () => {
     expect(kes.task).toBeNull(); // honest empty state, never fabricated
 
     expect(result.leadership).toHaveLength(1);
-    expect(result.leadership[0]).toMatchObject({ id: 'corybrain-id', agent_name: 'CoryBrain', reports_to_human_id: 'ali-id', staff_ids: ['staff-1-id'] });
+    expect(result.leadership[0]).toMatchObject({ id: 'corybrain-id', agent_name: 'CoryBrain', reports_to_human_id: 'ali-id', staff_ids: ['staff-1-id'], enabled: true });
 
     expect(result.staff).toHaveLength(1);
-    expect(result.staff[0]).toMatchObject({ id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', reports_to_agent_id: 'corybrain-id' });
+    expect(result.staff[0]).toMatchObject({ id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', reports_to_agent_id: 'corybrain-id', enabled: true });
 
     expect(result.unresolved).toEqual([]);
+  });
+
+  // AI Workforce Reset (2026-08-24) — Ali, live: a deactivated agent must be
+  // visually distinguishable on the chart, not rendered identically to an
+  // active one. Proves the real AiAgent.enabled column passes through
+  // end-to-end for both the Leadership and Staff tiers.
+  it('a deactivated (enabled:false) agent still appears on the chart, correctly flagged, not silently hidden or shown as active', async () => {
+    mockOrgFindOne.mockResolvedValue({ id: 'org-colaberry', name: 'Colaberry' });
+    mockMemberFindAll.mockResolvedValue([{ id: 'ali-id', email: 'ali@colaberry.com', enrollment_id: null, team: null, role: 'manager', org_id: 'org-colaberry' }]);
+    mockAdminFindAll.mockResolvedValue([]);
+    mockEnrollmentFindAll.mockResolvedValue([]);
+    mockTicketFindAll.mockResolvedValue([]);
+    const disabledLeadership = { id: 'disabled-leadership-id', agent_name: 'ExecutiveStrategyArchitect', reports_to_type: 'human', reports_to_id: 'ali-id', enabled: false };
+    const disabledStaff = { id: 'disabled-staff-id', agent_name: 'AlumniNetworkArchitect', reports_to_type: 'agent', reports_to_id: 'disabled-leadership-id', enabled: false };
+    mockAgentFindAll.mockResolvedValue([disabledLeadership, disabledStaff]);
+    mockResolveChain
+      .mockResolvedValueOnce({ resolvedHumanId: 'ali-id', trail: ['ExecutiveStrategyArchitect (agent) -> [human]'] })
+      .mockResolvedValueOnce({ resolvedHumanId: 'ali-id', trail: ['AlumniNetworkArchitect (agent)', 'ExecutiveStrategyArchitect (agent) -> [human]'] });
+    mockCountOpenTickets.mockResolvedValue(0);
+
+    const result = await getOrgChart();
+
+    expect(result.leadership[0]).toMatchObject({ id: 'disabled-leadership-id', enabled: false });
+    expect(result.staff[0]).toMatchObject({ id: 'disabled-staff-id', enabled: false });
   });
 });
 
@@ -389,7 +413,7 @@ describe('workforceOrgChartResponseSchema — boundary', () => {
   // block isn't in T007's own diff hunks, so it's easy to miss scoping to
   // just the new lines).
   const VALID_HUMAN = { id: 'h1', name: 'Ali', email: 'ali@colaberry.com', team: 'Exec', department: 'Exec', role: 'manager', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null };
-  const VALID_LEADERSHIP = { id: 'l1', agent_name: 'CoryBrain', display_name: 'Cory Brain', reports_to_human_id: 'h1', reports_to_summary: 'Reports to: Ali', staff_ids: [], open_ticket_count: 0, hierarchy_color: null };
+  const VALID_LEADERSHIP = { id: 'l1', agent_name: 'CoryBrain', display_name: 'Cory Brain', reports_to_human_id: 'h1', reports_to_summary: 'Reports to: Ali', staff_ids: [], open_ticket_count: 0, hierarchy_color: null, enabled: true };
   const VALID_RESPONSE = {
     organization: { id: 'org1', name: 'Colaberry' },
     humans: [VALID_HUMAN],

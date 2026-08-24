@@ -39,6 +39,7 @@ const orgChartLeadershipAgentSchema = z.object({
   staff_ids: z.array(z.string()),
   open_ticket_count: z.number().int().nonnegative(),
   hierarchy_color: z.string().nullable(),
+  enabled: z.boolean(),
 });
 
 const orgChartStaffAgentSchema = z.object({
@@ -49,6 +50,7 @@ const orgChartStaffAgentSchema = z.object({
   reports_to_summary: z.string().min(1),
   open_ticket_count: z.number().int().nonnegative(),
   hierarchy_color: z.string().nullable(),
+  enabled: z.boolean(),
 });
 
 const orgChartUnresolvedAgentSchema = z.object({

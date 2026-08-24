@@ -107,8 +107,20 @@ async function runOne(
       // CONVERTED is the state machine's verdict, already computed by EPIC 3.
       // Re-deriving it here would be a second definition to keep in step.
       converted: profile.primary_state === 'CONVERTED',
-      unsubscribed: contactability.email?.eligible !== true,
-      dnc: contactability.sms?.eligible !== true && contactability.voice?.eligible !== true,
+      // TIER 0 IS SUPPRESSION, NOT CHANNEL AVAILABILITY. A first version mapped
+      // "email ineligible" to unsubscribed and "no sms AND no voice" to dnc,
+      // which blocked ALL 153 learners: SMS and voice are correctly ineligible
+      // for everyone, because the TCPA gate permits nobody without an express
+      // consent record. Having no phone channel is not "do not contact" - it
+      // just means no phone channel, and the generators already fall back to
+      // in-app on their own.
+      //
+      // So these read the REASON, not the eligibility flag: only a genuine
+      // suppression status stops the whole decision.
+      unsubscribed: /unsubscrib|complain/i.test(contactability.email?.reason ?? ''),
+      dnc: /dnd|do_not/i.test(
+        `${contactability.email?.reason ?? ''} ${contactability.sms?.reason ?? ''}`,
+      ),
       consentRevoked: false,
       killSwitch: false,
       campaignInactive: false,
@@ -144,14 +156,35 @@ async function runOne(
     const existing = await ExplorerJourneyDecision.findOne({
       where: { enrollment_id: enrollmentId, decision_date: decision.decision_date },
     });
+    // Column names verified against accelerator_dev1, NOT assumed. The first
+    // draft wrote `campaign_key` and `rationale`, neither of which exists - the
+    // real columns are `selected_campaign_id` and `reason` - and omitted `mode`
+    // and `reason`, both NOT NULL with no default. Every one of the 141 unit
+    // tests passed because the models barrel is mocked; the insert would have
+    // failed on the first real row.
     const payload = {
+      mode: 'shadow',
       primary_state: ctx.primary_state,
+      overlays: ctx.overlays as any,
+      e_score: Math.round(ctx.scores.e),
+      i_score: Math.round(ctx.scores.i),
+      f_score: Math.round(ctx.scores.f),
+      lead_id: profile.lead_id ?? null,
       selected_action: decision.action_type,
-      campaign_key: decision.campaign_key,
       channel: decision.channel,
       candidate_actions: decision.candidate_actions as any,
       suppressed_actions: decision.suppressed_actions as any,
-      rationale: decision.rationale as any,
+      // `reason` is the NOT NULL text column. The campaign key lives inside
+      // candidate_actions (jsonb) rather than being invented as a column, and
+      // selected_campaign_id stays null until EPIC 6 resolves a real campaign.
+      reason: [
+        ...decision.rationale,
+        decision.campaign_key ? `campaign=${decision.campaign_key}` : null,
+        decision.consent_note ? `consent: ${decision.consent_note}` : null,
+      ]
+        .filter(Boolean)
+        .join(' | '),
+      ai_involved: false,
       ruleset_version: RULESET_VERSION,
       executed: false,
     };

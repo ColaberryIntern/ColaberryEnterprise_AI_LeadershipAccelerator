@@ -24,3 +24,21 @@
 # (generated files, fixtures, binary-ish content, historical commits).
 #
 # --- entries below this line ---
+
+# PROGRESS.md, 2026-06-23 entry (session CC-20260623-w9f2).
+#
+# WHY THIS IS NOT A SECRET: the value is the string `local-crm-test-secret`,
+# used as a Bearer token in a `curl` against `http://localhost:3002`. It is a
+# local development fixture, it names itself as one, and it authenticates
+# against nothing that exists outside a developer's own machine.
+#
+# WHY A FINGERPRINT RATHER THAN AN INLINE `gitleaks:allow`: PROGRESS.md is an
+# append-only audit log, and CLAUDE.md's concurrent-instance rule forbids
+# editing an entry written by another session. Rewriting a historical
+# verification record to satisfy a scanner would corrupt the audit trail this
+# repo relies on. The line stays exactly as it was written.
+#
+# NOTE: this fingerprint is line-anchored. PROGRESS.md is append-only, so line
+# 7200 is stable; if an entry is ever inserted above it the finding returns and
+# gets re-reviewed, which is the correct failure mode.
+PROGRESS.md:curl-auth-header:7200

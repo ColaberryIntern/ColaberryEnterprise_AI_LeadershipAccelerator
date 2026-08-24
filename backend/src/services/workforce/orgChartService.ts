@@ -124,6 +124,12 @@ export interface OrgChartLeadershipAgent {
    * `hierarchy_color` (every leadership agent resolves to SOME human, so
    * this is never null in practice — see orgChartColorAssignment.ts). */
   hierarchy_color: string | null;
+  /** AI Workforce Reset (2026-08-24) — real `AiAgent.enabled`. Before this,
+   * `getOrgChart()` had no enabled filter or field at all, so a deactivated
+   * agent rendered identically to an active one — this closes that honesty
+   * gap alongside the reset feature itself (Ali, live: "we just need to
+   * remove all of the task they are assigned with... deactivate current"). */
+  enabled: boolean;
 }
 
 export interface OrgChartStaffAgent {
@@ -138,6 +144,9 @@ export interface OrgChartStaffAgent {
   /** Org Chart v3 (2026-08-19) — the SAME color as the leadership agent this
    * staff agent reports through (propagated down the branch). */
   hierarchy_color: string | null;
+  /** AI Workforce Reset (2026-08-24) — see OrgChartLeadershipAgent.enabled's
+   * own comment; same honesty gap, same fix, for the Staff tier. */
+  enabled: boolean;
 }
 
 export interface OrgChartUnresolvedAgent {
@@ -332,6 +341,7 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
         staff_ids: [],
         open_ticket_count: openTicketCount,
         hierarchy_color: null, // filled in below, once `humans` exists — see assignHierarchyColors() call
+        enabled: agent.enabled,
       });
       bumpRollup(resolvedHumanId, true, agent.id);
     } else {
@@ -345,6 +355,7 @@ export async function getOrgChart(): Promise<OrgChartResponse> {
         reports_to_summary: `Reports to: ${reportsToName}`,
         open_ticket_count: openTicketCount,
         hierarchy_color: null, // filled in below, once `humans` exists — see assignHierarchyColors() call
+        enabled: agent.enabled,
       });
       bumpRollup(resolvedHumanId, false, agent.id);
     }
