@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 10:24 AM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">35 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 11:49 AM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">40 changes</span></div>
   </header>
   <main>
     
@@ -582,6 +582,81 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">cycles detected including self-dependency; a dangling dependency leaves a story **blocked, not ready**; dispatch is deterministic on repeat.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**a test caught a real bug in my own implementation and I fixed the code, not the test.** `planParallelExecution` originally claimed `&#39;/&#39;` as a sentinel path for a story that declares no paths — but `&#39;/&#39;` normalises to the empty string and then collides with nothing, so the sentinel would have silently let other stories race the very run whose reach is unknown. Replaced with an explicit exclusive-claim flag. Collision detection is deliberately conservative (a declared prefix overlap counts): a false positive costs one story a slot, a false negative costs a client a corrupted branch. Dispatch is greedy and deterministic because a rerun after a failure must schedule identically or nobody can reproduce what happened.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">36</span>
+          <h2>**ESC-3 resolved to the Agent SDK, not the CLI**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">recorded in `executionProviderContract.ts`&#39;s header. The decision is **`@anthropic-ai/claude-agent-sdk`** (0.3.241), not `@anthropic-ai/claude-code` (2.1.241).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">both packages verified to exist on npm before choosing. The `claude-api` skill disambiguates them: `claude-code` is the **CLI**; the **Agent SDK** is Claude Code packaged as a library — agent loop, built-in Read/Write/Edit/Bash/Glob/Grep tools, permissions, sessions, called as `query(prompt, options)`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the names are confusable and the distinction is load-bearing — a backend driving an agentic coding loop wants the library. A third thing exists and is **not** what we want: the Messages API Tool Runner (`client.beta.messages.toolRunner`), which loops over tools *you* define and has no built-in tools or filesystem access. **No dependency added and no `query()` call written yet**: the skill states explicitly that it does not generate Agent SDK code, and writing SDK bindings from memory is how a plausible-but-wrong integration ships. That call goes behind `ExecutionProvider` once `code.claude.com/docs/en/agent-sdk` has been read.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">37</span>
+          <h2>**Five provider contracts — the replaceable seam**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/execution/executionProviderContract.ts` — `ExecutionProvider`, `WorkspaceProvider`, `RepositoryProvider`, `BrowserVerificationProvider`, `DeploymentProvider`. Types only; no runtime code, so nothing here can fail at boot.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc` clean.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §5.2&#39;s &quot;engines are replaceable&quot; is aspirational platform-wide (Gate 0 found 43 files instantiating OpenAI directly) but achievable here because it is greenfield — so the seam is defined **before** an engine is wired behind it. `DeploymentProvider` is declared and deliberately unimplemented: `executionPolicy` records `production_deploy` as enforced by `no_provider`, and that enforcement is only true while the interface has no implementation. **The absence is the control.** `ExecutionProvider.execute` takes an assembled prompt rather than raw materials, so a provider implementation cannot bypass the §11 region separation.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">38</span>
+          <h2>**Default-deny policy, now actually enforceable**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `executionPolicy.ts` — the eight denied capabilities with, for each, a rationale **and the layer that enforces it** (`runner_isolation` / `no_provider` / `branch_protection` / `policy_gate`).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">53 tests across the Gate 8 suite. A run that is **not** on an isolated runner is refused outright; a direct push to `main` is refused; wildcard egress is refused; every violation is reported at once.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Gate 0 found **three of the eight rules unenforceable** while execution shared the internet-facing backend container (S-01). ESC-4&#39;s GitHub Actions runner is what changed that, so this module is meaningful rather than aspirational. Recording `enforcedBy` per capability is deliberate: &quot;we have a policy&quot; and &quot;the policy is enforced&quot; are different claims, and the earlier gap was exactly the difference. The module is honest about its limits — it cannot stop a compromised runner, and it says so; it stops the ordinary path where a story or an operator asks for a forbidden capability, failing at plan time rather than execution time.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">39</span>
+          <h2>**Prompt envelope: untrusted content cannot close its own fence**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `executionPromptEnvelope.ts` — typed regions (system policy → approved contract → approved decisions → story contract → fenced untrusted content) plus secret redaction.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">planted `&lt;&lt;&lt;/UNTRUSTED_INPUT&gt;&gt;&gt;` markers in repository content are neutralized — exactly one open and one close survive. A caller cannot inject prose into the policy region. Seven credential shapes redact.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**we do not attempt injection detection** — that is a losing game against natural language. The envelope fences, labels, and states as a rule that everything inside the fence is data. That is checkable by the model on every token, whereas &quot;ignore malicious instructions&quot; asks it to classify intent, which is what an attacker controls. Order matters inside the builder: neutralize the fence **first**, then redact — reversed, a redaction placeholder could be split by a planted marker and reassembled outside the fence. Redaction is the third layer, not the only one: the runner holds no production credentials (ESC-4) and `secret-scan.yml` gates the commit path.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">40</span>
+          <h2>**ExecutionRun state machine and the database-as-queue**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `executionRunState.ts` (11 states, legal-transition table, staleness) plus the `delivery_execution_runs` table in the schema module.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">every non-terminal state can fail, cancel or time out; skipping `provisioning` is rejected; terminal runs cannot be resurrected; verification failure sends a run **back** to `executing`; `waiting_for_human` still holds a workspace; only `queued` is claimable.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this answers Gate 0&#39;s **E-03** without a new dependency — the row *is* the queue, claimed with `SELECT … FOR UPDATE SKIP LOCKED`, so it survives a `docker compose up -d --build`. A test asserts `SKIP LOCKED` is present because without it concurrent workers serialize behind one lock and the table is not a queue at all. Staleness is detected by **heartbeat age**, not by a worker reporting its own failure — a worker that can reliably report its own death is not the failure being modelled. `waiting_for_human` is exempt from staleness (waiting on a person is not a dead worker) but **not** from holding a workspace: parked for days, it still holds a client&#39;s source.</span></div>
           
         </div>
       </article>

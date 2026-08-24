@@ -470,6 +470,60 @@ const TRUST_BEFORE_INTELLIGENCE: string[] = [
      ON delivery_trust_layer_map (delivery_project_id, component, layer)`,
 ];
 
+
+/**
+ * Gate 8 — the execution run table, which IS the queue.
+ *
+ * Gate 0's E-03: this repo has no durable job queue (node-cron plus two in-process
+ * queues), and a run can sit in `executing` for minutes and `waiting_for_human` for days.
+ * An in-process queue loses every in-flight run on deploy, and this stack deploys with
+ * `docker compose up -d --build`. So the row is the queue: workers claim with
+ * `SELECT ... FOR UPDATE SKIP LOCKED` (see executionRunState.CLAIM_NEXT_RUN_SQL). No new
+ * dependency, and the queue survives a deploy because it lives in Postgres.
+ *
+ * `claimed_by` / `last_heartbeat_at` exist so a worker that dies mid-run is detectable by
+ * heartbeat age rather than by the worker reporting its own death — which is precisely
+ * the failure being modelled.
+ */
+const EXECUTION_RUNS: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_execution_runs (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     story_id UUID,
+     state VARCHAR(30) NOT NULL DEFAULT 'queued',
+     execution_provider VARCHAR(60) NOT NULL DEFAULT 'claude_agent_sdk',
+     risk_level VARCHAR(4),
+     repo_url TEXT,
+     base_sha VARCHAR(64),
+     branch VARCHAR(255),
+     workspace_id VARCHAR(120),
+     pull_request_url TEXT,
+     correlation_id UUID,
+     requested_by_identity_id UUID,
+     claimed_by VARCHAR(120),
+     claimed_at TIMESTAMPTZ,
+     last_heartbeat_at TIMESTAMPTZ,
+     started_at TIMESTAMPTZ,
+     finished_at TIMESTAMPTZ,
+     failure_reason TEXT,
+     policy_violations JSONB,
+     event_summary JSONB,
+     files_changed JSONB,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // The claim query's index: ordered scan of queued rows only.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_execution_runs_queue
+     ON delivery_execution_runs (state, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_execution_runs_project
+     ON delivery_execution_runs (delivery_project_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_execution_runs_correlation
+     ON delivery_execution_runs (correlation_id)`,
+  // The reaper's index: in-flight runs by heartbeat age.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_execution_runs_heartbeat
+     ON delivery_execution_runs (last_heartbeat_at)`,
+];
+
 /**
  * Order matters across the groups: the spine must exist before its children reference
  * it, and the organization relaxation runs first because delivery engagements point at
@@ -498,4 +552,5 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...BUILDER_AUTHORITY,
   ...DISCOVERY_AND_OPPORTUNITIES,
   ...TRUST_BEFORE_INTELLIGENCE,
+  ...EXECUTION_RUNS,
 ];
