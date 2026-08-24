@@ -161,11 +161,40 @@ generating opens weeks later; they carry only the old shape and must keep resolv
 
 ## Gate 5 — Organization / Account Context
 
-**Status: PARTIAL** — schema columns exist and are backfilled by
-`backfillTenancy.ts`; `orgService`/`adminOrgService` are not yet tenant-scoped. Deferred
-deliberately: the platform is single-tenant for organizations today (every existing org
-is Colaberry Enterprise), so scoping them changes no behaviour until a second tenant
-actually owns one. It is listed here rather than quietly dropped.
+**Status: COMPLETE for the admin surface** (2026-08-24). Schema columns exist and are
+backfilled by `backfillTenancy.ts`; **all six `adminOrgService` functions are now tenant
+scoped**, and scope is a **required argument** on every one of them so the compiler — not
+a reviewer's memory — enumerates any call site that has not been considered.
+
+**The leak this closed.** `listOrganizations` was an unfiltered `findAndCountAll` over
+every row and `getOrganizationDetail` fetched any org by id. A CPN operator listing
+accounts would have received Colaberry Enterprise's client companies, their owner emails
+and their headcounts. Same shape as the `globalSearch` leak closed in Gate 6, so it reuses
+the same scope type deliberately: one admin, one scope, across the account list and the
+memory graph. Three surfaces disagreeing about who may read what is how a boundary rots.
+
+Writes are scoped too, not just reads — suspending or unlinking another tenant's account
+is a worse outcome than reading it. `removeCohortFromOrganization` checks the org's scope
+**before** destroying, because `org_cohorts` carries no tenant of its own. Out-of-scope
+ids report exactly what a non-existent id reports (`null` / `org_not_found` → **404, never
+403**), so the endpoint cannot be used to enumerate which ids belong to another tenant.
+`getOrganizationStats` is raw SQL and applies the same three cases with the tenant ids as
+a **bind parameter**; a header counting every tenant's accounts above a scoped list is its
+own small leak.
+
+**`orgService` (the manager portal) needs no filter, and that is a property, not a gap.**
+`requireOrgManager` derives the org from the AUTHENTICATED enrollment, never from a route
+parameter, so there is no id for a caller to substitute.
+
+**Known limit, recorded rather than guessed at:** if one person ever manages orgs in two
+tenants, `requireOrgManager` returns the oldest without regard to which brand's site the
+request arrived on. Impossible today — all 6 production organizations belong to Colaberry
+Enterprise. Documented in `middlewares/orgAuth.ts`.
+
+**Migration ramp:** unchanged and still self-closing. `tenant_memberships` has zero rows in
+production, so `adminScopeBridge` grants cross-tenant read and logs it; the first
+membership row anyone creates switches enforcement on for everybody, with no flag to
+remember.
 
 ## Gate 6 — Skeleton Applications
 
