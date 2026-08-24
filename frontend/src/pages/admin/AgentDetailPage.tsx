@@ -88,7 +88,7 @@ export default function AgentDetailPage() {
     return <div className="alert alert-danger">{error || 'Agent not found'}</div>;
   }
 
-  const { agent, identity, live_status, tickets, capabilities } = detail;
+  const { agent, identity, live_status, tickets, capabilities, trust_contract } = detail;
   // Agent Alias & Identity Fix — same fix as the Live Agents card list: prefer the
   // real AdminUser.display_name over the raw technical agent_name. Falls back to
   // agent_name for a non-blueprint agent (identity is null — no linked AdminUser).
@@ -163,6 +163,69 @@ export default function AgentDetailPage() {
           </dl>
         ) : (
           <p className="text-muted mb-0">No linked staff identity yet.</p>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Trust Contract"
+        icon="shield-check-line"
+        subtitle="The Instant dimension — is this agent actually running, on schedule, reliably. Permitted, Transparent, and Contextual are covered by Tools, Reports to, and Reads/Produces below."
+      >
+        <p className="text-muted small mb-3">
+          Grounded in Ram Katamaraja's{' '}
+          <a href="https://www.amazon.com/dp/B0GX32N413" target="_blank" rel="noopener noreferrer">
+            Trust Before Intelligence
+          </a>{' '}
+          INPACT™ framework — every value below is a real, pre-existing field, never invented.
+        </p>
+        {trust_contract.trigger_type ? (
+          <div className="row g-3">
+            <div className="col-6 col-lg-3">
+              <StatCard label="Trigger" value={trust_contract.trigger_type} icon="timer-line" tone="neutral" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Schedule" value={trust_contract.schedule || '—'} icon="calendar-line" tone="neutral" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Last run"
+                value={trust_contract.last_run_at ? timeAgo(trust_contract.last_run_at) : 'Never'}
+                icon="history-line"
+                tone="neutral"
+              />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Avg duration"
+                value={trust_contract.avg_duration_ms ? `${(trust_contract.avg_duration_ms / 1000).toFixed(1)}s` : '—'}
+                icon="speed-line"
+                tone="neutral"
+              />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Total runs" value={trust_contract.run_count} icon="repeat-line" tone="neutral" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard
+                label="Errors"
+                value={trust_contract.error_count}
+                icon="error-warning-line"
+                tone={trust_contract.error_count > 0 ? 'warning' : 'success'}
+              />
+            </div>
+          </div>
+        ) : (
+          <p className="text-muted mb-0">
+            <i className="ri-information-line" aria-hidden="true" /> This agent isn't invoked through the
+            scheduled-run tracker (it's a real, identity-only or on-demand process) — no schedule/run data to
+            show, disclosed honestly rather than a fabricated "no runs yet."
+          </p>
+        )}
+        {trust_contract.last_error && (
+          <div className="alert alert-warning mt-3 mb-0 py-2 small">
+            <strong>Last error:</strong> {trust_contract.last_error}
+            {trust_contract.last_error_at && <> — {timeAgo(trust_contract.last_error_at)}</>}
+          </div>
         )}
       </SectionCard>
 

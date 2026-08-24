@@ -94,6 +94,30 @@ export interface AgentDetailResult {
      * (disclosed honestly, never a dead link). */
     immediate_agent: { id: string; name: string } | null;
   } | null;
+  /** Trust Contract (2026-08-24) — Ali, live: "All Agents should have a trust
+   * contract based on [Trust Before Intelligence]." Grounded in that book's
+   * real INPACT(tm) framework, not an invented shape: this field is the
+   * "Instant" dimension (is this agent actually running, on schedule,
+   * reliably) — every value is a real, pre-existing `AiAgent` column that was
+   * never surfaced anywhere before this. The Permitted (tools_granted),
+   * Transparent (reports_to), and Contextual (capabilities.reads) dimensions
+   * already exist as their own top-level fields above; the frontend groups
+   * all four under one Trust Contract section rather than this endpoint
+   * duplicating them here. Never fabricated: an agent invoked outside the
+   * generic runAgent() scheduler wrapper (e.g. Reese, InboxCaseEngine — real,
+   * high-volume identity-only registrations, not cron-tracked) honestly shows
+   * null/zero rather than a guessed value. */
+  trust_contract: {
+    trigger_type: string | null;
+    schedule: string | null;
+    status: string;
+    last_run_at: Date | null;
+    run_count: number;
+    error_count: number;
+    avg_duration_ms: number | null;
+    last_error: string | null;
+    last_error_at: Date | null;
+  };
 }
 
 const MAX_TICKETS = 50;
@@ -231,5 +255,16 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       by_tool: capabilities.byTool.map((t) => ({ tool: t.tool, reads: t.reads, produces: t.produces, documented: t.documented })),
     },
     reports_to: reportsTo,
+    trust_contract: {
+      trigger_type: agent.trigger_type ?? null,
+      schedule: agent.schedule || null,
+      status: agent.status,
+      last_run_at: agent.last_run_at ?? null,
+      run_count: agent.run_count ?? 0,
+      error_count: agent.error_count ?? 0,
+      avg_duration_ms: agent.avg_duration_ms ?? null,
+      last_error: agent.last_error ?? null,
+      last_error_at: agent.last_error_at ?? null,
+    },
   };
 }

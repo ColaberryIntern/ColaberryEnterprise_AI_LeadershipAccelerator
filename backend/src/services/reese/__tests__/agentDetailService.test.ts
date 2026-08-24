@@ -203,6 +203,79 @@ describe('getAgentDetail', () => {
     expect(result!.tickets[0].id).toBe('t-legacy');
   });
 
+  // Trust Contract (2026-08-24) — Ali, live: "All Agents should have a trust
+  // contract based on [Trust Before Intelligence]." The "Instant" dimension:
+  // real, pre-existing AiAgent schedule/run columns, never fabricated.
+  describe('trust_contract', () => {
+    it("happy path: a cron-tracked agent (e.g. a Strategy Architect) returns its real schedule/run/error data verbatim", async () => {
+      const lastRunAt = new Date('2026-08-24T11:28:07.264Z');
+      const lastErrorAt = new Date('2026-08-24T05:00:00.000Z');
+      mockAgentFindByPk.mockResolvedValue({
+        ...reeseAgent,
+        status: 'idle',
+        trigger_type: 'cron',
+        schedule: '28 */6 * * *',
+        last_run_at: lastRunAt,
+        run_count: 623,
+        error_count: 4,
+        avg_duration_ms: 5791,
+        last_error: 'out of shared memory',
+        last_error_at: lastErrorAt,
+      });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.trust_contract).toEqual({
+        trigger_type: 'cron',
+        schedule: '28 */6 * * *',
+        status: 'idle',
+        last_run_at: lastRunAt,
+        run_count: 623,
+        error_count: 4,
+        avg_duration_ms: 5791,
+        last_error: 'out of shared memory',
+        last_error_at: lastErrorAt,
+      });
+    });
+
+    it("honesty boundary: an identity-only agent never invoked through the scheduler (e.g. Reese) returns honest null/zero, never a fabricated value", async () => {
+      mockAgentFindByPk.mockResolvedValue({
+        ...reeseAgent,
+        status: 'idle',
+        trigger_type: 'event_driven',
+        schedule: '',
+        last_run_at: null,
+        run_count: 0,
+        error_count: 0,
+        avg_duration_ms: null,
+        last_error: null,
+        last_error_at: null,
+      });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.trust_contract).toEqual({
+        trigger_type: 'event_driven',
+        schedule: null, // empty string normalized to null, not shown as a fake schedule
+        status: 'idle',
+        last_run_at: null,
+        run_count: 0,
+        error_count: 0,
+        avg_duration_ms: null,
+        last_error: null,
+        last_error_at: null,
+      });
+    });
+
+    it('boundary: a null trigger_type (never registered with the scheduler at all) is disclosed as null, not defaulted to a guessed value', async () => {
+      mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, trigger_type: null, schedule: null });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.trust_contract.trigger_type).toBeNull();
+    });
+  });
+
   it('boundary: returns null for a non-existent agent id, rather than throwing or fabricating a shape', async () => {
     mockAgentFindByPk.mockResolvedValue(null);
     const result = await getAgentDetail('does-not-exist');
