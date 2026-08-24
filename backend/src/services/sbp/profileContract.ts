@@ -9,9 +9,9 @@
  *
  * ── THE THIRD OWNERSHIP CLASS ───────────────────────────────────────────────
  *
- *   .colaberry/plan.json      platform-owned  · replaced wholesale
- *   .colaberry/progress.json  co-owned        · merged field by field
- *   .colaberry/profile.json   STUDENT-OWNED   · seeded once, never overwritten
+ *   .colaberry/plan.json      platform-generated · replaced ONLY while unedited
+ *   .colaberry/progress.json  co-owned           · merged field by field
+ *   .colaberry/profile.json   STUDENT-OWNED      · seeded once, never overwritten
  *
  * The seed-once rule is the whole point. A profile contains editorial choices —
  * which build to lead with, how to describe an employer, what the hard part
