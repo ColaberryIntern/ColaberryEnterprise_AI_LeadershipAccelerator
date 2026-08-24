@@ -55,6 +55,8 @@ export interface OrgChartLeadershipAgent {
   /** Org Chart v3 (2026-08-19) — same color as the human this agent reports
    * to; never null in practice (every resolved leadership agent has one). */
   hierarchy_color: string | null;
+  /** AI Workforce Reset (2026-08-24) — real `AiAgent.enabled`. */
+  enabled: boolean;
 }
 
 export interface OrgChartStaffAgent {
@@ -68,6 +70,8 @@ export interface OrgChartStaffAgent {
   /** Org Chart v3 (2026-08-19) — same color as the leadership agent this
    * staff agent reports through. */
   hierarchy_color: string | null;
+  /** AI Workforce Reset (2026-08-24) — real `AiAgent.enabled`. */
+  enabled: boolean;
 }
 
 export interface OrgChartUnresolvedAgent {
@@ -121,4 +125,22 @@ export async function assignHierarchyTask(orgMemberId: string, input: AssignHier
     idempotency_key: input.idempotencyKey,
   });
   return res.data;
+}
+
+export interface AgentResetResult {
+  agentId: string;
+  agentName: string;
+  found: boolean;
+  deactivated: boolean;
+  ticketsCancelled: number;
+  error: string | null;
+}
+
+// AI Workforce Reset (2026-08-24) — Ali, live: deactivate a specific,
+// explicit set of AI-generated agents and cancel their open tickets. Real,
+// reversible (enabled:false), never a silent bulk operation — see
+// backend/src/services/workforce/agentResetService.ts.
+export async function resetAgents(agentIds: string[]): Promise<AgentResetResult[]> {
+  const res = await api.post<{ results: AgentResetResult[] }>('/api/admin/workforce/agents/reset', { agent_ids: agentIds });
+  return res.data.results;
 }
