@@ -74,6 +74,7 @@ import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema'
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
+import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
@@ -2435,6 +2436,7 @@ async function start(): Promise<void> {
   // Additive apart from that single relaxation; no backfill beyond stamping
   // organization_type on rows that predate the column.
   await ensureRefactoredDeliverySchema();
+  await ensureCareerPublicationSchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.

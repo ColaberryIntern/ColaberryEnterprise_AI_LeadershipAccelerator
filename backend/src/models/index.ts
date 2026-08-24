@@ -422,6 +422,9 @@ import TenantAccessAudit from './TenantAccessAudit';
 // sequelize.models, so an unregistered model is an invisible one.
 import DeliveryEngagement from './DeliveryEngagement';
 import DeliveryProject from './DeliveryProject';
+import CareerPublication from './CareerPublication';
+import CareerPublicationSnapshot from './CareerPublicationSnapshot';
+import CareerPublicationApproval from './CareerPublicationApproval';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
 import DeliveryContract from './DeliveryContract';
@@ -1506,6 +1509,11 @@ export {
   DeliveryEngagement,
   DeliveryProject,
   DeliveryProjectSourceLink,
+
+  // Living Career Portfolio (Gate 10 — versioned publication)
+  CareerPublication,
+  CareerPublicationSnapshot,
+  CareerPublicationApproval,
   DeliveryProjectMember,
   DeliveryContract,
   DeliveryDecision,
