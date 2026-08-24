@@ -1,38 +1,66 @@
 # REFACTORED_INTEGRATION_MAP (Gate 0 · plan §2.7, §18, §41)
 
-## Finding
+> **Corrected 2026-08-23, same session.** An earlier draft of this file said the Refactored
+> Experience Ledger "does not exist on main". That was true when Gate 0 discovery ran against
+> `dead58d6`, and became false while this increment was being built: merging `origin/main`
+> before pushing brought in the delivery schema. The accurate position is below.
 
-**The Refactored Experience Ledger does not exist on `origin/main`.**
+## What actually exists on main now
 
-Searched: `backend/src/models/` for `delivery|refactor|ledger`. Hits were `DocumentDeliveryLog`
-(email/document delivery), `EventLedger` and `WorkLedgerEvent` (ops/work tracking). None is a
-learner delivery-experience ledger. There is no `DeliveryProject`, `DeliveryDecision`,
-`ExecutionRun`, or `ClientAcceptance` model.
+Landed 2026-08-23 (arrived mid-session, after Gate 0 discovery):
 
-## Consequence for the evidence model
+| Model | Table |
+|---|---|
+| `DeliveryEngagement` | `delivery_engagements` |
+| `DeliveryProject` | `delivery_projects` |
+| `DeliveryProjectMember` | `delivery_project_members` |
+| `DeliveryProjectSourceLink` | `delivery_project_source_links` |
+| `DeliveryContract` | `delivery_contracts` |
+| `DeliveryDecision` | `delivery_decisions` |
+| `DeliveryEvent` | `delivery_events` |
 
-Plan §9 defines three evidence levels. Two have live sources; one does not:
+Plus `backend/src/db/ensureRefactoredDeliverySchema.ts`, invoked at boot
+(`backend/src/server.ts:2435`), so the tables are really created.
 
-| Level | Source | Live? |
-|---|---|---|
-| Resume Experience | `ResumeSkillClaim` / CAPE `claim` band | yes |
-| Colaberry Verified | CAPE `knowledge` / `application` / `judgment` bands | yes |
-| **Delivery Verified** | Refactored / internship / client delivery | **no source** |
+## Why `delivery_verified` still resolves to nothing
 
-## Decision
+The schema exists. **The data does not, and cannot yet.**
 
-Model the level in the contract now; resolve it to an empty source.
+`git grep` for writers of `DeliveryProjectMember` and `DeliveryDecision` outside
+`models/` and tests returns **nothing**. No service creates a delivery project, admits a
+member, or records a decision. The tables ship empty and stay empty until the Refactored
+services that populate them land.
 
-- `CareerEvidenceLevel` includes `'delivery_verified'` as a valid value.
-- `deliveryAdapter` exists, returns `[]`, and says why in its header comment.
-- The Studio renders no "Delivery Verified" badge today because nothing can earn one.
+There is also an unresolved mapping question that must be answered before the adapter can be
+written honestly rather than guessed:
 
-This is preferable to either (a) omitting the level and having to widen a shipped public type
-later, or (b) faking it by promoting internship-tagged classroom artifacts, which would make the
-platform assert client delivery that never happened — precisely what plan §57 forbids.
+```
+DeliveryProjectMember.platform_identity_id     ← delivery membership is keyed on IDENTITY
+                    ↕  PlatformIdentityLink (platform_identity_id ↔ linked_entity_id, by link_type)
+Enrollment.id                                   ← the Career Studio's subject is an ENROLLMENT
+```
 
-## When Refactored lands
+Bridging those requires knowing which `link_type` represents an enrollment and whether the
+link is guaranteed unique — and then a second mapping from delivery evidence
+(`DeliveryDecision`, accepted releases, `DeliveryEvent`) onto the 10 CAPE architecture skills.
+Neither is documented yet.
 
-One file changes: `deliveryAdapter`. It reads the new ledger, maps accepted releases / client
-acceptances / production incidents to skills, and the level starts resolving. Nothing in the
-Studio UI or the API contract needs to move.
+## Decision (unchanged, better justified)
+
+`deliveryAdapter` stays the seam and keeps returning `[]`.
+
+Guessing a `link_type` and inventing a delivery-evidence → skill mapping would produce a
+"Delivery Verified" badge derived from assumptions rather than from delivery. That is the
+precise failure mode plan §57 forbids: the platform asserting client delivery it cannot
+substantiate. An empty adapter is the honest state while the tables are empty.
+
+## What changes when Refactored's services land
+
+One file: `careerEvidenceAdapters.ts::deliveryAdapter`. It gains
+
+1. enrollment → `platform_identity_id` via `PlatformIdentityLink`,
+2. `DeliveryProjectMember` → the person's delivery projects,
+3. `DeliveryDecision` / `DeliveryEvent` / accepted releases → skill evidence,
+
+and `deriveEvidenceLevel` starts returning `delivery_verified`. Nothing in the API contract,
+the readiness policy, or the Studio UI needs to move — all three already model the level.

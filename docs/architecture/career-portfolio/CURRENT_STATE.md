@@ -140,12 +140,25 @@ Already exposed at `GET /api/portal/cape/skill-profile` and
 
 ### 13. How will the Refactored Experience Ledger be consumed?
 
-**It does not exist.** No `DeliveryProject`, `DeliveryDecision`, `ClientAcceptance`, or
-Refactored ledger model is present on main. (`WorkLedgerEvent` / `EventLedger` are ops
-constructs, not learner delivery evidence.)
+**This answer changed mid-session. Both states are recorded, because the second is the truth.**
 
-**Decision:** model the `delivery_verified` level in the contract now, resolve it to an empty
-source, and document the deferral. See `REFACTORED_INTEGRATION_MAP.md`.
+At Gate 0 discovery against `dead58d6`: no `DeliveryProject`, `DeliveryDecision` or
+`ClientAcceptance` model was present on main (`WorkLedgerEvent` / `EventLedger` are ops
+constructs, not learner delivery evidence).
+
+Merging `origin/main` before pushing brought in the delivery **schema**: `DeliveryEngagement`,
+`DeliveryProject`, `DeliveryProjectMember`, `DeliveryProjectSourceLink`, `DeliveryContract`,
+`DeliveryDecision`, `DeliveryEvent`, plus `ensureRefactoredDeliverySchema` wired at boot
+(`server.ts:2435`).
+
+**But the tables are empty and nothing writes them** — `git grep` finds no writer of
+`DeliveryProjectMember` or `DeliveryDecision` outside models and tests. Delivery membership is
+also keyed on `platform_identity_id`, not `enrollment_id`, so a `PlatformIdentityLink` bridge
+and a delivery-evidence → CAPE-skill mapping both need defining before an adapter can be
+written honestly rather than guessed.
+
+**Decision (unchanged, better justified):** model `delivery_verified` in the contract, keep
+`deliveryAdapter` as the seam, and let it return empty. See `REFACTORED_INTEGRATION_MAP.md`.
 
 ### 14. What GitHub token/repo models exist?
 

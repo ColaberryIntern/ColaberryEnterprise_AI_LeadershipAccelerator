@@ -149,8 +149,15 @@ single largest gap in this increment and should not be described as anything sma
    authenticated participant reaches the Studio. The resume prerequisite still applies. This
    matches Classroom/Projects exactly and is deliberate, but it means the paywall path is
    untested in a live environment.
-4. **`delivery_verified` is unreachable.** Correct today (no ledger exists) but it means one
-   third of the evidence model has no runtime coverage at all.
+4. **`delivery_verified` is unreachable**, so one third of the evidence model has no runtime
+   coverage. Note this changed mid-session: the Refactored delivery **schema** landed on main
+   while this was being built (merged in before push). The level is still unreachable because
+   the tables are empty — nothing writes `DeliveryProjectMember` or `DeliveryDecision` yet — and
+   because delivery membership is keyed on `platform_identity_id` rather than `enrollment_id`,
+   a bridge that is not yet documented. `deliveryAdapter` remains the seam. See
+   `REFACTORED_INTEGRATION_MAP.md`.
+5. **Gates were re-run after merging `origin/main`**, not only against the branch point, since
+   that merge introduced new backend models and a boot-time schema step.
 
 ## Deferred work
 

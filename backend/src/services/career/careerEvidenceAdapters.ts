@@ -326,10 +326,25 @@ export async function githubAdapter(enrollmentId: string): Promise<CareerGithub>
 /**
  * Delivery experience — Refactored / internship / client delivery.
  *
- * INTENTIONALLY EMPTY. No delivery ledger exists on `origin/main` (searched:
- * no DeliveryProject, DeliveryDecision, ExecutionRun or ClientAcceptance model).
- * This adapter is the single seam where that integration lands; when the ledger
- * ships, only this function changes and `delivery_verified` starts resolving.
+ * INTENTIONALLY EMPTY, and deliberately so rather than unfinished.
+ *
+ * The Refactored delivery SCHEMA does now exist (`DeliveryProject`,
+ * `DeliveryProjectMember`, `DeliveryDecision`, `DeliveryEvent`, … created at boot
+ * by `ensureRefactoredDeliverySchema`). But **nothing writes to it yet** — no
+ * service creates a delivery project, admits a member, or records a decision, so
+ * the tables are empty.
+ *
+ * Two mappings also remain undocumented: delivery membership is keyed on
+ * `platform_identity_id` while this Studio's subject is an `enrollment_id`
+ * (bridging needs the right `PlatformIdentityLink.link_type`), and there is no
+ * defined mapping from delivery evidence onto the 10 CAPE architecture skills.
+ *
+ * Guessing either would produce a "Delivery Verified" badge derived from
+ * assumptions instead of from delivery — the exact claim inflation this codebase
+ * must not commit. Empty is the honest state while the tables are empty.
+ *
+ * See REFACTORED_INTEGRATION_MAP.md. When Refactored's services land, only this
+ * function changes and `delivery_verified` starts resolving.
  */
 export async function deliveryAdapter(_enrollmentId: string): Promise<never[]> {
   return [];
