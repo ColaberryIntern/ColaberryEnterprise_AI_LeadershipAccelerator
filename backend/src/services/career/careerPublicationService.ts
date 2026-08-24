@@ -277,3 +277,106 @@ export async function getUnpublishedChanges(enrollmentId: string): Promise<{ has
   const currentHash = hashPayload(buildSnapshotPayload(profile));
   return { has_changes: currentHash !== snapshot.content_hash, published_version: snapshot.version };
 }
+
+export interface ReviewQueueItem {
+  snapshot_id: string;
+  publication_id: string;
+  enrollment_id: string;
+  slug: string;
+  version: number;
+  requested_at: Date;
+  full_name: string | null;
+  readiness_score: number | null;
+  capability_count: number;
+  artifact_count: number;
+}
+
+/**
+ * The reviewer's queue: every snapshot awaiting a decision, oldest first.
+ *
+ * "Awaiting a decision" is derived — a snapshot with no row in
+ * `career_publication_approvals` — rather than stored as a status on the snapshot.
+ * That keeps the snapshot table append-only (see the model header) AND means the
+ * queue cannot drift out of sync with the approvals it is derived from.
+ *
+ * Summary counts come from the frozen payload, not from a live re-read, so what a
+ * reviewer sees in the queue is exactly what they will see when they open it.
+ */
+export async function listReviewQueue(limit = 50): Promise<ReviewQueueItem[]> {
+  const pending = await CareerPublicationSnapshot.findAll({
+    where: {
+      publication_id: {
+        [Op.in]: (await CareerPublication.findAll({
+          where: { status: 'in_review' },
+          attributes: ['id'],
+          raw: true,
+        }) as unknown as Array<{ id: string }>).map((p) => p.id),
+      },
+    },
+    order: [['requested_at', 'ASC']],
+    limit,
+  });
+  if (!pending.length) return [];
+
+  const decided = new Set(
+    (await CareerPublicationApproval.findAll({
+      where: { snapshot_id: { [Op.in]: pending.map((s) => s.id) } },
+      attributes: ['snapshot_id'],
+      raw: true,
+    }) as unknown as Array<{ snapshot_id: string }>).map((a) => a.snapshot_id),
+  );
+
+  const pubs = new Map(
+    (await CareerPublication.findAll({
+      where: { id: { [Op.in]: pending.map((s) => s.publication_id) } },
+      attributes: ['id', 'enrollment_id', 'slug'],
+      raw: true,
+    }) as unknown as Array<{ id: string; enrollment_id: string; slug: string }>).map((p) => [p.id, p]),
+  );
+
+  return pending
+    .filter((s) => !decided.has(s.id))
+    .map((s) => {
+      const pub = pubs.get(s.publication_id);
+      const payload: any = s.payload || {};
+      return {
+        snapshot_id: s.id,
+        publication_id: s.publication_id,
+        enrollment_id: pub?.enrollment_id ?? '',
+        slug: pub?.slug ?? '',
+        version: s.version,
+        requested_at: s.requested_at,
+        full_name: payload.identity?.full_name ?? null,
+        readiness_score: payload.readiness_at_submission?.score ?? null,
+        capability_count: Array.isArray(payload.capabilities) ? payload.capabilities.length : 0,
+        artifact_count: Array.isArray(payload.artifacts) ? payload.artifacts.length : 0,
+      };
+    });
+}
+
+/** The learner's own view of where their publication stands. */
+export async function getPublicationStatus(enrollmentId: string) {
+  const publication = await CareerPublication.findOne({ where: { enrollment_id: enrollmentId } });
+  if (!publication) {
+    return { status: 'draft' as CareerPublicationStatus, slug: null, published_version: null, public_url: null, has_unpublished_changes: false, last_review: null };
+  }
+
+  const [snapshot, lastApproval] = await Promise.all([
+    publication.current_snapshot_id ? CareerPublicationSnapshot.findByPk(publication.current_snapshot_id) : null,
+    CareerPublicationApproval.findOne({ where: { publication_id: publication.id }, order: [['decided_at', 'DESC']] }),
+  ]);
+
+  const changes = await getUnpublishedChanges(enrollmentId);
+
+  return {
+    status: publication.status,
+    slug: publication.slug,
+    published_version: snapshot?.version ?? null,
+    // Only a genuinely published portfolio gets a URL handed back.
+    public_url: publication.status === 'published' ? `/talent/${publication.slug}` : null,
+    has_unpublished_changes: changes?.has_changes ?? false,
+    last_review: lastApproval
+      ? { decision: lastApproval.decision, notes: lastApproval.reviewer_notes, decided_at: lastApproval.decided_at }
+      : null,
+  };
+}
