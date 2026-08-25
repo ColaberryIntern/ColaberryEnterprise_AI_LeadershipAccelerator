@@ -119,7 +119,12 @@ const ClientSignIn: React.FC<ClientSignInProps> = ({ clientId, onSignedIn }) => 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // No eslint-disable here, deliberately. `exchange` and `onSignedIn` are intentionally
+    // absent from the deps - re-running this effect would re-render Google's button. But a
+    // disable comment naming `react-hooks/exhaustive-deps` is itself the error in this
+    // project ("Definition for rule ... was not found"), and `CI=true` promotes it to a
+    // failed build. CRA does not register the react-hooks rules here, so the rule cannot
+    // fire and there is nothing to suppress. Same trap as `useCountUp.ts`.
   }, [resolvedClientId]);
 
   return (
