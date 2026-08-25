@@ -56,6 +56,9 @@ export type WatcherEventType =
   | 'reply_failed'
   | 'reply_suppressed'
   | 'window_expired'
+  /** An answered thread was moved out of the inbox. Never written for an escalation. */
+  | 'thread_filed'
+  | 'thread_filed_failed'
   | 'halted';
 
 export interface EvidenceItem {

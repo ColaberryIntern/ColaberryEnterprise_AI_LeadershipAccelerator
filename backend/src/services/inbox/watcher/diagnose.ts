@@ -2,16 +2,23 @@ import type { IssueClass } from './issueClassifier';
 import type { Claim, ClaimBundle, Evidence } from './claimGate';
 
 /**
- * Diagnose one bounded issue class against live data, optionally apply the one
- * fix that is safe to apply, and produce a reply whose every sentence is backed
- * by something that was actually read.
+ * Diagnose one bounded issue class against live data and produce a reply whose
+ * every sentence is backed by something that was actually read.
  *
  * ── WHAT IS ALLOWED TO BE FIXED, AND WHAT IS ONLY ALLOWED TO BE REPORTED ────
  *
- * Exactly one repair is applied automatically: minting a fresh sign-in link.
- * It is reversible, it is idempotent, it touches nothing a student made, and it
- * can be proved afterwards by re-reading the row. Every other class is
- * diagnosis-only, and says so.
+ * NOTHING is repaired automatically. Every class is diagnosis-only.
+ *
+ * This file used to make exactly one exception, minting a fresh sign-in link, on
+ * the grounds that it was reversible, idempotent, touched nothing a student made
+ * and could be proved afterwards by re-reading the row. Every one of those things
+ * was true, and it was still withdrawn: a link minted overnight by a watcher has
+ * usually expired by the time the student reads the mail, so the repair produced
+ * the very round trip it existed to save. See diagnoseLoginLink.
+ *
+ * What that leaves is a watcher which performs no writes against a student's
+ * account at all. That is a much easier property to keep true than "it writes,
+ * but only the safe one".
  *
  * That is not timidity. Connecting a repo needs the student's own OAuth grant.
  * Re-registering a webhook and regenerating a plan both write to the project,
@@ -23,10 +30,11 @@ import type { Claim, ClaimBundle, Evidence } from './claimGate';
  * ── AMBIGUITY IS AN ESCALATION ──────────────────────────────────────────────
  *
  * A student whose address resolves to more than one active enrollment is NOT
- * given a link. That is precisely the Million Meshesha failure: two active
+ * answered at all. That is precisely the Million Meshesha failure: two active
  * rows, the tiebreaker picking the newer empty one, and three rounds of "just
  * request a new link" that could never work. If the resolution is not singular,
- * the watcher does not guess which seat to mint against.
+ * the watcher cannot say which seat the student is even asking about, so it
+ * hands the message to Ali rather than reporting on the wrong row.
  */
 
 /** Fact groups a diagnosis can require. Anything listed in `unverifiable` was not read. */
@@ -112,7 +120,7 @@ export async function diagnose(
 
   switch (issueClass) {
     case 'login_link':
-      return diagnoseLoginLink(facts, deps, readAt);
+      return diagnoseLoginLink(facts, readAt);
     case 'repo_connect':
       return diagnoseRepoConnect(facts, readAt);
     case 'webhook_not_firing':
@@ -122,11 +130,7 @@ export async function diagnose(
   }
 }
 
-async function diagnoseLoginLink(
-  facts: StudentFacts,
-  deps: WatcherDataAccess,
-  readAt: Date,
-): Promise<DiagnosisResult> {
+function diagnoseLoginLink(facts: StudentFacts, readAt: Date): DiagnosisResult {
   const preRead = ev(
     'enrollment-pre',
     'enrollments: active rows resolving from this address',
@@ -146,76 +150,37 @@ async function diagnoseLoginLink(
     };
   }
 
-  const actionAt = readAt;
-  await deps.requestFreshLoginLink(facts.email);
-
-  // Verified by re-reading, not by the call returning without throwing.
-  const after = await deps.loadStudentFacts(facts.email);
   /*
-   * The CYCLE's clock, not the wall clock.
+   * ── NO TOKEN IS MINTED HERE, DELIBERATELY ─────────────────────────────────
    *
-   * This function is handed a clock and every sibling diagnosis threads it
-   * through as `readAt`. This one branch used to call `new Date()` twice, which
-   * made the injected clock dead at the only place it decides anything -- the
-   * `landed` comparison below. Two consequences, both real:
+   * This branch used to call `requestFreshLoginLink`, which rotates the
+   * student's portal token and mails them a magic link, then re-read the row and
+   * told them the link was "live until <expiry>". It was carefully verified and
+   * it was still the wrong thing to send.
    *
-   *  1. The cycle became untestable against a pinned clock. The suite pinned
-   *     `now` to 2026-08-17 and minted a token expiring 2026-08-18T04:00:05Z;
-   *     it passed until real time crossed that instant, then every live run
-   *     started reading its own fresh token as already expired and escalating
-   *     instead of replying. It went red mid-morning on 2026-08-18 with nobody
-   *     having touched the watcher -- a test that fails by calendar.
-   *  2. A replay or backfill run, which exists precisely to reason about a past
-   *     window, would judge that window's tokens against today.
+   * A link minted by a watcher is minted at the watcher's convenience, not the
+   * student's. These expire in 24 hours, and the watcher runs unattended
+   * overnight — so the student opens the mail the next morning, the link is
+   * already dead, and they write back. That round trip is the reported failure,
+   * and generating the link faster does not fix it because the clock starts when
+   * WE press the button rather than when THEY read it.
    *
-   * Using the cycle clock does mean a token that expires DURING the cycle is
-   * still called live. That window is seconds against an expiry measured in
-   * hours, and the honest reading of `landed` is "did the link the repair just
-   * minted take effect", which is a question about the moment of repair.
+   * Pointing at the login page inverts that: the link is created at the moment
+   * it is going to be used, by the person who is going to use it. It is also the
+   * only version of this reply that makes no promise about a future instant.
+   *
+   * The happy side effect is that the watcher now performs no writes of any kind
+   * against a student's account. Every diagnosis in this file reads and reports.
+   * That is a much easier property to keep true than "writes, but only the safe
+   * one".
    */
-  const verifiedAt = readAt;
-  const postRead = ev(
-    'enrollment-post',
-    'enrollments: re-read after requesting the link',
-    `count=${after?.activeEnrollmentCount ?? 'unknown'}, ` +
-    `portal_token_expires_at=${after?.portalTokenExpiresAt ?? 'null'}`,
-    verifiedAt,
-    true,
-  );
-
-  const newExpiry = after?.portalTokenExpiresAt ? Date.parse(after.portalTokenExpiresAt) : NaN;
-  const oldExpiry = facts.portalTokenExpiresAt ? Date.parse(facts.portalTokenExpiresAt) : NaN;
-  const landed =
-    after != null &&
-    !after.unverifiable.includes('enrollment') &&
-    after.activeEnrollmentCount === 1 &&
-    Number.isFinite(newExpiry) &&
-    newExpiry > verifiedAt.getTime() &&
-    (!Number.isFinite(oldExpiry) || newExpiry > oldExpiry);
-
-  if (!landed) {
-    return {
-      outcome: 'escalate',
-      detail:
-        `A fresh link was requested for ${facts.email} but the re-read does not show a live ` +
-        `token (expires_at=${after?.portalTokenExpiresAt ?? 'null'}). Refusing to tell them it ` +
-        'is fixed when the row does not agree.',
-      evidence: [preRead, postRead],
-    };
-  }
-
-  const expiryText = new Date(newExpiry).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
   const checkedClaim: Claim = {
     id: 'single-enrollment',
     kind: 'checked',
-    text: 'I checked your account and it now resolves to exactly one active enrollment.',
+    text:
+      'I checked your account just now and it resolves to exactly one active enrollment, so ' +
+      'there is nothing on our side stopping you from signing in.',
     evidenceIds: ['enrollment-pre'],
-  };
-  const fixedClaim: Claim = {
-    id: 'link-minted',
-    kind: 'fixed',
-    text: `I have just sent you a fresh sign in link, and I confirmed it is live until ${expiryText}.`,
-    evidenceIds: ['enrollment-post'],
   };
 
   const body = [
@@ -224,24 +189,23 @@ async function diagnoseLoginLink(
     'Sorry about the sign in trouble, and sorry it took a while to come back to you.',
     '',
     checkedClaim.text,
-    fixedClaim.text,
     '',
-    'Open the newest email from us and use the link in it. If you would rather request one',
-    'yourself at any time, go to https://enterprise.colaberry.ai/portal/login and ask for a',
-    'fresh link there. The links are single use and short lived, so always use the most recent.',
+    'Sign in links are single use and they expire quickly, so the reliable way to do this is to',
+    'ask for one at the moment you want to use it rather than working from an older email. Go to',
+    'https://enterprise.colaberry.ai/portal/login, enter this address, and use the link it sends',
+    'you straight away.',
     '',
-    'If it still will not let you in, reply here and I will pick it up.',
+    'I have deliberately not generated a link for you here. One created now would very likely',
+    'have expired by the time you read this, and that is what has been causing the back and forth.',
+    '',
+    'If you request one and it still will not let you in, reply here and I will pick it up.',
     SIGNOFF.trim(),
   ].join('\n');
 
   return {
     outcome: 'reply',
     body,
-    bundle: {
-      claims: [checkedClaim, fixedClaim],
-      evidence: [preRead, postRead],
-      actionAt: actionAt.toISOString(),
-    },
+    bundle: { claims: [checkedClaim], evidence: [preRead] },
   };
 }
 
