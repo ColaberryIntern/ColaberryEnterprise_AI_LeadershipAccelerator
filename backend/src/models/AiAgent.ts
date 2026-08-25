@@ -249,10 +249,18 @@ interface AiAgentAttributes {
   reports_to_type?: 'human' | 'agent' | null;
   reports_to_id?: string | null;
   // AI Workforce Reset, Phase C (2026-08-24) — the 4-level autonomy ladder
-  // docs/ai-governance/abac-design.md already proposed (still awaiting sign-off
-  // on enforcement — this column is purely declarative, set at reactivation
-  // time). See ensureAiAgentAutonomyLevelSchema.ts for the real schema.
+  // docs/ai-governance/abac-design.md proposed. Governs the REAL
+  // agentAuthorizationService.ts gate only when autonomy_level_set_at is
+  // non-null (see that field's own comment) — otherwise the gate's
+  // pre-existing tier-derived level keeps governing, unchanged. See
+  // ensureAiAgentAutonomyLevelSchema.ts for the real schema.
   autonomy_level?: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
+  // 2026-08-25 — null until agentReactivationService.ts's reactivateAgent()
+  // sets it in the same update as autonomy_level. Distinguishes "an operator
+  // deliberately chose this level" from "the migration's untouched 'observe'
+  // default sitting on every agent that has never been through that flow" —
+  // see agentAuthorizationService.ts's resolveLevel() for why this matters.
+  autonomy_level_set_at?: Date | null;
   // AI Workforce Reset, Phase D.1 "Inventory" (2026-08-24) — one of the 18 real
   // `departments` table slugs, or null when not yet classified / genuinely
   // cross-cutting (never forced). `scope` is JSONB, reserved for a future
@@ -296,6 +304,7 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare reports_to_type: 'human' | 'agent' | null;
   declare reports_to_id: string | null;
   declare autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
+  declare autonomy_level_set_at: Date | null;
   declare department: string | null;
   declare scope: Record<string, any>;
 }
@@ -451,6 +460,10 @@ AiAgent.init(
       type: DataTypes.STRING(20),
       allowNull: true,
       defaultValue: 'observe',
+    },
+    autonomy_level_set_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
     department: {
       type: DataTypes.STRING(50),

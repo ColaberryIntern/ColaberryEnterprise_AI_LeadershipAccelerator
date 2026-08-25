@@ -1,6 +1,6 @@
 # Outbound Consent Capture — Design for Sign-off
 
-**Status:** Draft for Ali's sign-off — **no code yet**. Closes the remaining TBI **P0-3** gap (consent half).
+**Status:** **Built and live in shadow mode** — `backend/src/services/consentService.ts`'s own header cites "Ali-approved §7," and it's wired into `communicationSafetyService.evaluateSend()`'s pre-send gate today, `consent_enforcement` setting (default `shadow`, matching this doc's own shadow-first pattern). This status line said "no code yet" for two months after that shipped — corrected 2026-08-25 alongside the same stale claim in the companion `abac-design.md`. Closes the remaining TBI **P0-3** gap (consent half).
 **Scope:** affirmative consent + lawful-basis tracking for AI-driven **outbound voice (Synthflow), email (Mandrill), and SMS (GHL)**.
 **Author:** Claude Code · **Date:** 2026-06-22
 
