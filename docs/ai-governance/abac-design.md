@@ -1,8 +1,21 @@
 # ABAC + Narrowed Autonomy — Design for Sign-Off
 
 **TBI audit gap:** P2-1 (Governance/Security) — *"No ABAC on AI actions; broad autonomy; RBAC scaffold unapplied."*
-**Status:** Design phase (green-lit 2026-06-22). No code yet — this is the proposal for DRI review.
-**Companion docs:** [consent-capture-design.md](consent-capture-design.md), [../trust-audit/governance-audit.md](../trust-audit/governance-audit.md), [../trust-audit/gap-analysis.md](../trust-audit/gap-analysis.md).
+**Status:** **Phase 0 + Phase 1 (shadow) are LIVE, not "no code yet."** Built and merged PR #69 (2026-06-23, session CC-20260622-r468), the day after this design was green-lit — this file's own status line was simply never updated afterward, and stayed wrong for two months until caught 2026-08-25. See §0 below for exactly what's real today before reading the rest of this doc as a still-open proposal.
+**Companion docs:** [consent-capture-design.md](consent-capture-design.md) (also has real code — `consentService.ts` — despite its own header still saying "no code yet"), [../trust-audit/governance-audit.md](../trust-audit/governance-audit.md), [../trust-audit/gap-analysis.md](../trust-audit/gap-analysis.md).
+
+---
+
+## 0. Implementation status (added 2026-08-25 — read this before §1-6 below)
+
+**What's real and running right now**, in `backend/src/services/agentAuthorizationService.ts` + `agentAutonomy.ts`:
+- `authorizeAgentAction()` — the exact chokepoint §3.3 below describes, evaluating kill-switch → agent-enabled → autonomy-level → (scope is still a no-op, see below) → HITL, in that order. Fails open, swallow-safe, exactly as §3.3 specifies.
+- **§5's 7 decisions were already answered and built as:** shadow-first · the 4-rung ladder verbatim (`observe`/`suggest`/`act_audited`/`communicate`) · per-department scope deferred to a later phase (labeled "Phase 4" in the shipped code, not this doc's Phase 4) · kill-switch keeps reads running · HITL = the 4-rule set in §5 Q2, implemented in `agentAutonomy.ts::actionRequiresApproval()` · columns on `AiAgent` (not a separate table) · only side-effecting `.js` scripts need registering, not all ~200. **Ali gave these same answers again independently on 2026-08-25 (this doc's §5, asked without knowing they'd been asked before) — they matched exactly**, which is real evidence the shipped defaults are the right ones, not a coincidence to paper over.
+- **Only ONE of the six §3.4 chokepoints is actually wired**: `agentPermissionService.validateAgentWrite()` (the generic DB-write path). Comms (`evaluateSend()`), ticket creation, SQL, social posts, and agent lifecycle are **not yet inserted** — PR #69's own "Scope/follow-ups" section named this explicitly as next-phase work, and it's still open.
+- **Reconciled 2026-08-25:** the AI Workforce Reset initiative (Phases A-C, session CC-20260818-x4nk) independently added a *second* `autonomy_level` column to `AiAgent` for its own reactivation UI, unaware this gate already existed and already derived its own level from the pre-existing permission-tier map. `agentAuthorizationService.ts::resolveLevel()` now prefers the reactivation flow's deliberate, human-chosen level (marked by a new `autonomy_level_set_at` timestamp) over the tier-derived default — but ONLY for agents actually reactivated through that flow, so the fix cannot silently change the shadow signal for the rest of the fleet. Full writeup: PROGRESS.md, 2026-08-25.
+- **Scope (§3.3 step 4) is still an explicit no-op** ("advisory" in the code's own comment) regardless of the `AiAgent.department` column the same Phase D.1 work populated on every enabled agent (2026-08-24/25) — that data exists now but nothing reads it yet. Real next step if this gets picked back up.
+
+**What's still genuinely a proposal below** (§1-3, §6): the architecture rationale, the five-chokepoint wiring plan for the remaining sites, and the non-goals/risks — none of that is stale, only the "no code yet" framing was.
 
 ---
 
@@ -123,7 +136,7 @@ Phase 1 is **fail-open by design** (observe only); enforcement (Phases 2+) is **
 6. **Kill-switch behavior** — when the kill switch is on, should in-flight agent *reads/analysis* keep running (recommended) or freeze entirely?
 7. **The `.js` cron scripts** — register all ~200 in the registry so they're governed (bigger lift), or only the ones that take external actions (sends/posts)? Recommended: only the side-effecting ones.
 
-Reply with answers (or "your recommendations are fine") and I'll turn this into the Phase 0 + Phase 1 build.
+**Answered — see §0 above.** These 7 decisions were already built as the recommendations above (PR #69, 2026-06-23) and independently re-confirmed by Ali on 2026-08-25. Left here as the historical record of what was asked, not an open question.
 
 ---
 
