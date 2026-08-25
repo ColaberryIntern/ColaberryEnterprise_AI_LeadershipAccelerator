@@ -6,6 +6,8 @@
  * out for CLAUDE.md's size targets on the same precedent as
  * `caseStudySnapshotBuilder` + `caseStudySnapshotSections`. The dependency runs
  * one way: the projection imports this; nothing here imports the projection.
+ * `caseStudyArtifactPresentation.ts` is a second leaf below this one, holding
+ * the atmosphere/evidence rules; this imports that, never the reverse.
  *
  * EVERY FUNCTION HERE BUILDS AN OBJECT LITERAL FIELD BY NAMED FIELD. There is no
  * spread of an internal object anywhere in this file, no `Object.assign`, no
@@ -23,6 +25,11 @@
  * to a leak or a 500.
  */
 
+import {
+  HERO_IMAGE_PRIORITY,
+  artifactPresentation,
+  describesDeliveredWork,
+} from './caseStudyArtifactPresentation';
 import { normalizeFacetList } from './caseStudyFilterService';
 import {
   assertNever,
@@ -196,6 +203,32 @@ export function projectTimeline(
   return out;
 }
 
+/** How much mermaid source a public page will carry. Longer is a paste accident. */
+export const MAX_DIAGRAM_SOURCE_CHARS = 8000;
+
+/**
+ * The human-authored chart's source, sanitised, or null.
+ *
+ * `<` IS REFUSED OUTRIGHT. The renderer hands mermaid's output to `innerHTML`,
+ * so the chart source is a markup channel whether or not anyone intended one.
+ * Mermaid's own `securityLevel: 'strict'` default escapes labels, but this
+ * module cannot see the renderer's configuration and must not depend on it — a
+ * later change to a shared component would silently reopen the hole. Flowchart
+ * syntax needs no angle bracket, so refusing the character costs a `<br/>` in a
+ * node label and closes the channel at the boundary instead of trusting a
+ * setting three modules away.
+ *
+ * Length is capped for the same reason the facet lists are: a public payload
+ * with an unbounded string in it is a denial-of-service surface, not a diagram.
+ */
+export function projectDiagramSource(value: unknown): string | null {
+  const source = text(value);
+  if (!source) return null;
+  if (source.length > MAX_DIAGRAM_SOURCE_CHARS) return null;
+  if (source.includes('<')) return null;
+  return source;
+}
+
 export function projectArchitecture(
   content: CaseStudySnapshotContent,
 ): PublicCaseStudyArchitecture | null {
@@ -215,10 +248,12 @@ export function projectArchitecture(
     .filter((e) => e && text(e.from) && text(e.to))
     .map((e) => ({ from: text(e.from), to: text(e.to), label: text(e.label) || null }));
   const diagram = nodes.length > 0 ? { nodes, edges } : null;
-  if (!narrative.length && !stack.length && !capabilities.length && !integrations.length && !diagram) {
+  const diagramSource = projectDiagramSource(a.diagramSource);
+  if (!narrative.length && !stack.length && !capabilities.length && !integrations.length
+    && !diagram && !diagramSource) {
     return null;
   }
-  return { narrative, stack, capabilities, integrations, diagram };
+  return { narrative, stack, capabilities, integrations, diagram, diagramSource };
 }
 
 export function projectSituation(content: CaseStudySnapshotContent): PublicCaseStudyNarrative | null {
@@ -302,12 +337,24 @@ export function projectArtifacts(
     const title = text(a.title);
     if (!title) continue;
     const description = text(a.description) || null;
+    const presentation = artifactPresentation(a.artifactType);
+    // FAIL CLOSED ON A PHOTOGRAPH THAT CLAIMS TO BE EVIDENCE. The title and the
+    // description are scanned together because a reader reads them together;
+    // either one carrying a delivered-work claim drops the whole row, rather
+    // than publishing the picture under a caption we had to edit. Only
+    // atmosphere is scanned: a screenshot titled "the shipped dashboard" is
+    // describing itself accurately and must not be suppressed.
+    if (presentation === 'atmosphere'
+      && (describesDeliveredWork(title) || describesDeliveredWork(description))) {
+      continue;
+    }
     if (a.visibility === 'public') {
       const url = safeHttpUrl(a.publicUrl);
       if (!url) continue;
       out.push({
         access: 'open',
         artifactType: a.artifactType,
+        presentation,
         title,
         description,
         url,
@@ -316,7 +363,7 @@ export function projectArtifacts(
       continue;
     }
     if (a.visibility === 'request_only') {
-      out.push({ access: 'request', artifactType: a.artifactType, title, description });
+      out.push({ access: 'request', artifactType: a.artifactType, presentation, title, description });
     }
     // `private` falls through: no shape, no dead control, no row.
   }
@@ -381,7 +428,7 @@ export function resolveOrganizationLabel(content: CaseStudySnapshotContent): str
 /** The first approved, public, http(s) image among the artifacts. Never a guess. */
 export function resolveHeroImage(content: CaseStudySnapshotContent): string | null {
   const approved = projectArtifacts(content?.artifacts ?? []);
-  for (const kind of ['screenshot', 'architecture'] as const) {
+  for (const kind of HERO_IMAGE_PRIORITY) {
     for (const a of approved) {
       if (a.access !== 'open' || a.artifactType !== kind) continue;
       const url = safeHttpUrl(a.previewUrl ?? a.url);

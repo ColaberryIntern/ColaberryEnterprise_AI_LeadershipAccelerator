@@ -98,6 +98,7 @@ export const DETAIL_FIXTURE: PublicCaseStudyDetail = {
       nodes: [{ key: 'api', label: 'API', kind: 'service' }],
       edges: [{ from: 'api', to: 'db', label: null }],
     },
+    diagramSource: 'flowchart TD\n  api[API] --> db[(Store)]',
   },
   measurement: {
     narrative: ['Measured against matched store cohorts.'],
@@ -117,12 +118,28 @@ export const DETAIL_FIXTURE: PublicCaseStudyDetail = {
     {
       access: 'open',
       artifactType: 'architecture',
+      presentation: 'evidence',
       title: 'System diagram',
       description: null,
       url: 'https://example.com/diagram.png',
       previewUrl: null,
     },
-    { access: 'request', artifactType: 'deck', title: 'Executive summary', description: null },
+    {
+      access: 'open',
+      artifactType: 'photo',
+      presentation: 'atmosphere',
+      title: 'The Dallas studio during a working session',
+      description: null,
+      url: 'https://example.com/studio.jpg',
+      previewUrl: null,
+    },
+    {
+      access: 'request',
+      artifactType: 'deck',
+      presentation: 'evidence',
+      title: 'Executive summary',
+      description: null,
+    },
   ],
   repositories: [
     {

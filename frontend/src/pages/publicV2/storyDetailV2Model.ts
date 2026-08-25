@@ -75,10 +75,10 @@ export const SECTION_HEADINGS: Readonly<Record<CaseStudySectionKey, string>> = O
 });
 
 /**
- * Mirrors the emptiness rule inside `CaseStudyArchitecture`, which renders
- * nothing when every field is empty. Without this the page would print a "What
- * was built" heading over a component that returned null.
- */
+ * Whether "What was built" has anything to show, across BOTH its renderers:
+ * `CaseStudyArchitecture` returns null when its fields are empty, `StoryDiagram`
+ * renders on `diagramSource` alone. Drop that clause and the band hides on
+ * exactly the records it exists for, every other test still green. */
 export function architectureHasContent(architecture: PublicCaseStudyArchitecture | null): boolean {
   if (!architecture) return false;
   const diagram = architecture.diagram;
@@ -87,7 +87,8 @@ export function architectureHasContent(architecture: PublicCaseStudyArchitecture
     || architecture.capabilities.length > 0
     || architecture.integrations.length > 0
     || (diagram?.nodes.length ?? 0) > 0
-    || (diagram?.edges.length ?? 0) > 0;
+    || (diagram?.edges.length ?? 0) > 0
+    || (architecture.diagramSource ?? '').trim().length > 0;
 }
 
 /**

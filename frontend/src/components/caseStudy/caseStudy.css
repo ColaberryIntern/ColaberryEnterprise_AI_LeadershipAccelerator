@@ -78,6 +78,7 @@
 .cbv2-cs-filters input:focus-visible,
 .cbv2-cs-filters summary:focus-visible,
 .cbv2-cs-artifact__link:focus-visible,
+.cbv2-cs-artifact__request:focus-visible,
 .cbv2-cs-cta__button:focus-visible {
   outline: var(--border-2) solid var(--border-focus);
   outline-offset: 2px;
@@ -551,18 +552,26 @@
   overflow-wrap: anywhere;
 }
 
-.cbv2-cs-artifact__link {
-  color: var(--text-link);
-  font-size: var(--fs-body-sm);
-  font-weight: var(--fw-bold);
+/* THE PRIMITIVE OWNS THE APPEARANCE. Both controls carry
+   `cbv2-btn cbv2-btn--secondary cbv2-btn--sm` from publicV2.css, so nothing here
+   sets colour, weight or size: a `color` declaration on a single-class selector
+   in this file would win or lose against the primitive purely on bundle order,
+   which is not a thing a button's contrast should depend on.
+
+   `--secondary` and not `--ghost` deliberately. `cbv2-btn--ghost` paints
+   `--text-on-inverse` on a transparent ground and belongs on the dark masthead;
+   on this light band it would be near-white on near-white, which is the exact
+   contrast failure the /stories masthead shipped and had to be fixed. */
+.cbv2-cs-artifact__link,
+.cbv2-cs-artifact__request {
+  align-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
-.cbv2-cs-artifact__link:hover {
-  color: var(--text-link-hover);
-}
-
-/* A STATE, not a control. Spec section 23 forbids a fake request or download
-   button, so this is deliberately not styled to look pressable. */
+/* The fallback when no caller supplied a request destination: a STATE, not a
+   control. Spec section 23 forbids a fake request or download button, so this is
+   deliberately not styled to look pressable. */
 .cbv2-cs-artifact__state {
   font-size: var(--fs-caption);
   color: var(--text-muted);

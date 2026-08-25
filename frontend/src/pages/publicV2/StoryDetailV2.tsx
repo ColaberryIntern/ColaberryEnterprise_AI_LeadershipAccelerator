@@ -25,6 +25,7 @@ import {
   visibleSections,
 } from './storyDetailV2Model';
 import type { DetailState } from './storyDetailV2Model';
+import StoryHeroActions from './StoryHeroActions';
 import { StoryHeroMetrics, StorySectionBody } from './storyDetailV2Sections';
 import './storyDetailV2.css';
 
@@ -306,6 +307,13 @@ function StoryDetailV2(): React.ReactElement {
             ) : null}
 
             <StoryHeroMetrics metrics={metrics} />
+
+            {/* The surface's offer, and the repository when the projection was
+                willing to publish one. Both are real destinations; the copy-link
+                control keeps its own row below, with its own live region. */}
+            <div className="cbv2-story__actions">
+              <StoryHeroActions cta={record.cta} repositories={record.repositories} />
+            </div>
 
             <div className="cbv2-story__share">
               <button

@@ -7,6 +7,8 @@ import CaseStudyRoadmap from '../../components/caseStudy/CaseStudyRoadmap';
 import CaseStudyTimeline from '../../components/caseStudy/CaseStudyTimeline';
 import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVerificationBadge';
 import { BUILT_BY_LABELS, REPO_ROLE_LABELS } from '../../config/caseStudySurfaces';
+import StoryDiagram from './StoryDiagram';
+import StoryMediaCarousel from './StoryMediaCarousel';
 import {
   anonymousContributorNote,
   contributorLabel,
@@ -14,6 +16,7 @@ import {
   formatPublishedDate,
   withheldRepositoryNote,
 } from './storyDetailV2Model';
+import { carouselSlides, diagramSourceOf } from './storyMediaModel';
 import type {
   CaseStudySectionKey,
   PublicCaseStudyContributor,
@@ -236,8 +239,14 @@ export function StorySectionBody({
     case 'build':
       return <CaseStudyTimeline entries={record.timeline} />;
     case 'architecture':
+      // The verified lists FIRST, the drawing second. A reader meets what the
+      // repository evidenced before they meet what somebody sketched, and the
+      // drawing is absent entirely on the records that have none.
       return record.architecture ? (
-        <CaseStudyArchitecture architecture={record.architecture} headingLevel={3} />
+        <>
+          <CaseStudyArchitecture architecture={record.architecture} headingLevel={3} />
+          <StoryDiagram source={diagramSourceOf(record.architecture)} />
+        </>
       ) : null;
     case 'measurement':
       return record.measurement ? (
@@ -253,9 +262,14 @@ export function StorySectionBody({
         />
       );
     case 'artifacts':
+      // The carousel is a second VIEW of the same approved artifacts, not a
+      // second set: it shows the ones that are images, and every artifact still
+      // appears in the list beneath it. Below two images `carouselSlides`
+      // returns nothing and only the list renders.
       return (
         <div data-story-zone="artifacts">
-          <CaseStudyArtifacts artifacts={record.artifacts} />
+          <StoryMediaCarousel slides={carouselSlides(record.artifacts)} />
+          <CaseStudyArtifacts artifacts={record.artifacts} requestHref={record.cta.href} />
         </div>
       );
     case 'repositories':
