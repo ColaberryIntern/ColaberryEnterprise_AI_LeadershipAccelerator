@@ -18,13 +18,14 @@ export const SECTION_KEYS = [
   'program', 'intelligence', 'system',     // groups
   'students',                              // support-only surface
   'leads',                                 // lead-queue subset of the Revenue group
+  'career_review',                         // portfolio publication review queue (admins + mentors)
 ] as const;
 export type SectionKey = typeof SECTION_KEYS[number];
 
 export const ALL_SECTIONS: SectionKey[] = [...SECTION_KEYS];
 
 // The management roles. 'owner' sees everything; the rest are scoped.
-export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer'] as const;
+export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer', 'mentor'] as const;
 export type MgmtRole = typeof MGMT_ROLES[number];
 
 export interface MgmtRoleDef {
@@ -54,6 +55,12 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
   // enforced directly against mgmt_role in the community moderation surface
   // (see COMMUNITY_MODERATOR_ROLES below / staffAccess.isCommunityModerator),
   // not via this admin-section gate. 'dashboard' just gives a landing page.
+  // Mentor -> the portfolio review queue ONLY, and within it only the learners they
+  // are actually over. The section grant here is the coarse gate (may they open the
+  // surface at all); WHICH learners they see is a second, per-mentor scope enforced
+  // in careerMentorScopeService. A section key alone would let any mentor review
+  // every learner on the platform, which is not what was asked for.
+  mentor: { role: 'mentor', label: 'Mentor', sections: ['dashboard', 'career_review'] },
   community_organizer: { role: 'community_organizer', label: 'Community Organizer', sections: ['dashboard'] },
 };
 
