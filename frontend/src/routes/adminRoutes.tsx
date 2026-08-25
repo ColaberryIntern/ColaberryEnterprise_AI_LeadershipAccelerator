@@ -66,6 +66,13 @@ const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
 const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
 const AdminVaErpDashboardPage = lazy(() => import('../pages/admin/AdminVaErpDashboardPage'));
 const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
+// Refactored AI Delivery OS (Gates 10-11). Both surfaces sit under /admin for now because
+// no authentication path resolves a PlatformIdentity yet, so a client reviewer cannot log
+// in — see docs/architecture/refactored-delivery-os/CLIENT_IDENTITY_ANSWER.md. Serving the
+// client room from a staff-authenticated route makes it reviewable by staff WITHOUT
+// implying an external client can reach it.
+const RefactoredClientReviewRoom = lazy(() => import('../pages/refactored/ClientReviewRoom'));
+const RefactoredBuilderWorkspace = lazy(() => import('../pages/refactored/BuilderWorkspace'));
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
@@ -158,6 +165,8 @@ const adminRoutes = (
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
         <Route path="/admin/va-erp" element={<AdminVaErpDashboardPage />} />
+        <Route path="/admin/refactored/client" element={<RefactoredClientReviewRoom />} />
+        <Route path="/admin/refactored/builder" element={<RefactoredBuilderWorkspace />} />
       </Route>
     </Route>
   </>
