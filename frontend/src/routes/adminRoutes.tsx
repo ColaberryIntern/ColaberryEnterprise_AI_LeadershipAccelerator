@@ -82,6 +82,16 @@ const adminRoutes = (
           token, redirects to /portal/today. Sits outside AdminLayout, like the
           portal's mirror-image /portal/mgmt-enter sits outside PortalLayout. */}
       <Route path="/admin/ai-training-enter" element={<AdminPortalEnterPage />} />
+      {/* The Client Review Room renders OUTSIDE AdminLayout, deliberately.
+          Wrapping a client-facing surface in the operations sidebar (Revenue, Lead
+          Ingestion, Campaigns, Intelligence) contradicts the one thing Gate 10 exists
+          to guarantee: a client sees a different, narrower world than an operator.
+          It is not a leak while the route is staff-only and no client can authenticate,
+          but it makes the eventual mistake easy — the day someone shares this URL the
+          projection layer would be doing its job while the chrome advertised the lead
+          pipeline. Found by deploying to dev and LOOKING; CI cannot see this.
+          Staff auth is retained via ProtectedRoute. */}
+      <Route path="/admin/refactored/client" element={<RefactoredClientReviewRoom />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         {/* Account self-service: reachable by every admin identity regardless
@@ -165,7 +175,6 @@ const adminRoutes = (
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
         <Route path="/admin/va-erp" element={<AdminVaErpDashboardPage />} />
-        <Route path="/admin/refactored/client" element={<RefactoredClientReviewRoom />} />
         <Route path="/admin/refactored/builder" element={<RefactoredBuilderWorkspace />} />
       </Route>
     </Route>
