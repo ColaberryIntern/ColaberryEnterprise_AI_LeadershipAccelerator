@@ -59,7 +59,7 @@ function buildHtml(data) {
 
   const chartBoxes = [
     { id: 'chart-status', title: 'Project status mix', interp: 'Anything in the red or amber bands is a project that will not move without an intervention from you.' },
-    { id: 'chart-people', title: 'Completion by person (owned work)', interp: 'Share of their own assigned tasks each person has closed. People owning a single task are excluded because a percentage there is meaningless.' },
+    { id: 'chart-people', title: 'Completion by person (their own tasks)', interp: 'Share of their own assigned tasks each person has closed, counted task by task rather than by the lists they sit on. People holding a single task are excluded because a percentage there is meaningless.' },
     { id: 'chart-momentum', title: `Momentum, last ${data.lookbackDays} days`, interp: 'Updates posted against tasks actually closed. Updates running well ahead of closures means talk outpacing delivery.' },
     { id: 'chart-stream', title: 'Closed vs open by stream', interp: 'Where the remaining work is concentrated between the Internship programme and the Gov Contracts push.' },
   ];
@@ -90,7 +90,7 @@ function buildHtml(data) {
 <header class="hero"><div class="wrap">
   <div class="eyebrow">Colaberry &middot; Scrum call briefing</div>
   <h1>Every intern, every project, one page</h1>
-  <div class="sub">Ali, this is the state of all intern delivery across the Internship / Apprenticeship programme and the Gov Contracts push, as of ${esc(generatedLabel)} Central. Start at "Needs your call" and work down.</div>
+  <div class="sub">Ali, this is every intern <b>project</b> across the Internship / Apprenticeship programme and the Gov Contracts push, as of ${esc(generatedLabel)} Central. Onboarding checklists, legacy lists and staff work are held back and listed under "How to read this". Start at "Needs your call" and work down.</div>
   <div class="herometa">
     <span>${data.portfolio.peopleReporting} of ${data.portfolio.peopleActive} delivering reported in</span>
     <span>${data.portfolio.projectsTotal} projects</span>
@@ -136,7 +136,7 @@ ${sectionOpen(S.people).replace('__AUX__', '<div style="font-size:12.5px;color:v
         <th data-k="name">Person</th>
         <th data-k="statusRank">Status</th>
         <th data-k="projectCount">Projects</th>
-        <th data-k="percentComplete">Owned work complete</th>
+        <th data-k="percentComplete">Their tasks complete</th>
         <th data-k="updatesInLookback">Update cadence</th>
         <th data-k="doneLast7">Closed 7d</th>
         <th class="nosort">Trajectory</th>
@@ -175,11 +175,21 @@ ${sectionOpen(S.dormant).replace('__AUX__', '<div style="font-size:12.5px;color:
 </div></section>
 
 ${sectionOpen(S.method).replace('__AUX__', '')}
+  ${(data.withheld || []).length ? `<div class="card pad" style="margin-bottom:16px">
+    <h3 style="font-size:14px;margin-bottom:6px">Lists deliberately left off this report (${data.withheld.length})</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Shown so a missing list reads as a decision rather than a broken harvest. Each one was checked and held back for the reason given.</p>
+    <table><thead><tr><th class="nosort">List</th><th class="nosort">Stream</th><th class="nosort">Tasks</th><th class="nosort">Why it is not here</th></tr></thead><tbody>
+    ${data.withheld.map((w) => `<tr class="norow"><td><a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.name)}</a></td><td>${esc(w.stream)}</td><td>${w.taskCount}</td><td style="color:var(--muted)">${esc(w.reason)}</td></tr>`).join('')}
+    </tbody></table>
+  </div>` : ''}
   <div class="card pad">
     <dl class="dl">
-      <dt>Who appears</dt><dd>Anyone assigned a task or posting an update in Basecamp projects <a href="https://app.basecamp.com/3945211/projects/24865175" target="_blank" rel="noopener">24865175 (Internship / Apprenticeship)</a> and <a href="https://app.basecamp.com/3945211/projects/47346103" target="_blank" rel="noopener">47346103 (Gov Contracts)</a>. Ali, Ram, Jackie and the CB System and "+ai" twin accounts are excluded as staff or bots.</dd>
+      <dt>What counts as in scope</dt><dd>Intern <b>project</b> work only, drawn from Basecamp projects <a href="https://app.basecamp.com/3945211/projects/24865175" target="_blank" rel="noopener">24865175 (Internship / Apprenticeship)</a> and <a href="https://app.basecamp.com/3945211/projects/47346103" target="_blank" rel="noopener">47346103 (Gov Contracts)</a>. Onboarding checklists, legacy one-todo lists, and staff work sitting in the Gov Contracts bucket are all held back, because none of them are an intern delivering a build. ${data.meta.withheldCount || 0} ${(data.meta.withheldCount === 1 ? 'list was' : 'lists were')} withheld on this run and every one of them is named in the section above with the reason.</dd>
+      <dt>Who appears</dt><dd>Anyone assigned a task or posting an update on an in-scope list. Ali, Ram, Jackie, the CB System and the "+ai" twin accounts are dropped from the harvest as audience or bots. Colaberry staff who work alongside the interns still show on the tasks they hold, but are kept off the roster, because this is an intern report.</dd>
       <dt>Active</dt><dd>Posted an update or closed a task in the last ${data.lookbackDays} days. Someone closing tasks without commenting is marked "no comment" rather than hidden, because they are still working.</dd>
-      <dt>Percent complete</dt><dd>Closed delivery tasks divided by total delivery tasks. Approval gates are excluded from the denominator, since those are yours to close, not theirs. Projects with fewer than two tasks report "not calculable" rather than a misleading 0 or 100 percent.</dd>
+      <dt>Percent complete</dt><dd>Closed delivery tasks divided by total delivery tasks. Approval gates are excluded from the denominator, since those are yours to close, not theirs. Projects with fewer than two tasks report "not calculable" rather than a misleading 0 or 100 percent. A <b>person's</b> percentage counts only the tasks assigned to them, never the whole list they sit on.</dd>
+      <dt>Owner</dt><dd>Named only where owning it means something: one person holding every delivery task, or holding at least 60 percent of them. Anything flatter is reported as a shared list with no owner, because a list carrying four people's separate builds has no single owner and inventing one misattributes the other three.</dd>
+      <dt>Message to the intern</dt><dd>Composed on this snapshot's figures, not written by a language model, so the completion percentage and the projected date in the message can never drift from the panel above it. Regenerating the page produces the same words.</dd>
       <dt>Velocity and cadence</dt><dd>Tasks closed, and updates posted, in the last 7 days against the 7 days before that. A zero baseline reports as "new activity" rather than an infinite percentage.</dd>
       <dt>Status</dt><dd><b>Stalled</b> no activity in 14+ days. <b>At Risk</b> quiet 7 to 13 days, or nothing closed in a fortnight. <b>Watch</b> moving but with past-due tasks or a velocity drop over 50 percent. <b>On Track</b> active and closing work. <b>Complete</b> every task closed.</dd>
       <dt>Projected finish</dt><dd>Remaining tasks divided by the completion rate over the last ${data.historyDays} days. Deliberately conservative. Blank where the rate is zero, because "stalled" is the honest answer there.</dd>
