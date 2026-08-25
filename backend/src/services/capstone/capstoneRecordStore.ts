@@ -31,6 +31,44 @@ import { buildCapstoneSlug, resolveUniqueSlug } from './capstoneSlug';
 
 export type CompileOutcome = 'created' | 'updated' | 'unchanged' | 'no_project';
 
+/**
+ * Serialise with keys sorted recursively, so two records are compared by
+ * CONTENT rather than by key order.
+ *
+ * ── WHY A PLAIN JSON.stringify IS WRONG HERE ────────────────────────────────
+ *
+ * `content_json` is a JSONB column, and JSONB does not preserve key insertion
+ * order — Postgres normalises it (by key length, then bytewise). So a record
+ * read back from the database has a different key order than the one the
+ * compiler just built, even when every value is identical:
+ *
+ *   stored: posts,system,bookend,identity,artifacts,competencies,schema_version
+ *   fresh:  schema_version,identity,system,artifacts,competencies,posts,bookend
+ *
+ * `JSON.stringify(a) === JSON.stringify(b)` is therefore false ALWAYS, and the
+ * unchanged-check it guards never fires once. Measured in production before
+ * this fix: two consecutive compiles of a student who had done nothing in
+ * between produced versions 1 and 2 with byte-identical content — confirmed
+ * identical by comparing their md5 in Postgres, where both sides get the same
+ * normalisation. Left alone, every compile appends a version forever and buries
+ * the versions that represent real work, which is the precise outcome the
+ * comparison was written to prevent.
+ *
+ * Arrays are NOT reordered. JSONB preserves array order, and the record's arrays
+ * are meaningful sequences — artifacts run in week order, posts in week order.
+ * Sorting them would hide a real reordering as "unchanged".
+ */
+export function canonicalJson(value: unknown): string {
+  const normalise = (v: any): any => {
+    if (Array.isArray(v)) return v.map(normalise);
+    if (v && typeof v === 'object') {
+      return Object.keys(v).sort().reduce((acc: any, k) => { acc[k] = normalise(v[k]); return acc; }, {});
+    }
+    return v;
+  };
+  return JSON.stringify(normalise(value));
+}
+
 export interface CompileResult {
   outcome: CompileOutcome;
   slug: string | null;
@@ -140,10 +178,12 @@ export async function compileAndStore(projectId: string): Promise<CompileResult>
   const existing: any = await CapstoneRecord.findOne({ where: { project_id: projectId } });
 
   if (existing) {
-    // Byte comparison on the serialised record, not a field-by-field diff: the
-    // compiler's own determinism is what makes this reliable, and a structural
-    // comparison would quietly ignore a field added later.
-    if (JSON.stringify(existing.content_json) === JSON.stringify(compiled)) {
+    // Whole-record comparison rather than a field-by-field diff: the compiler's
+    // own determinism is what makes this reliable, and a structural comparison
+    // would quietly ignore a field added later. Canonical, not raw — see
+    // canonicalJson: the stored side is JSONB, whose key order Postgres has
+    // already rewritten, so a raw stringify compares key order and never matches.
+    if (canonicalJson(existing.content_json) === canonicalJson(compiled)) {
       return { outcome: 'unchanged', slug: existing.slug, version: existing.version, gaps };
     }
     const nextVersion = (existing.version ?? 1) + 1;
