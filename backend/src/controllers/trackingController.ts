@@ -20,6 +20,11 @@ import {
   ResolvedTenantContext,
   ResolutionPath,
 } from '../modules/tenancy/tenantResolver';
+import {
+  validateEventShape,
+  validateFingerprint,
+  validateTrackEvent,
+} from './tracking/trackingEventValidation';
 
 /** Fire-and-forget signal detection + intent scoring + behavioral triggers for high-value events */
 function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
@@ -34,36 +39,6 @@ function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
     })
     .catch((err) => console.error('[Tracking] Signal analysis error:', err.message));
 }
-
-const VALID_EVENT_TYPES = [
-  'pageview',
-  'scroll',
-  'click',
-  'cta_click',
-  'form_start',
-  'form_submit',
-  'time_on_page',
-  'heartbeat',
-  'media_play',
-  'embed_click',
-  'booking_modal_opened',
-  'booking_date_selected',
-  'booking_time_selected',
-  'book_strategy_call_click',
-  'demo_start',
-  'demo_complete',
-  'demo_skip',
-  'demo_to_input_focus',
-  'demo_watch_click',
-  'demo_industry_click',
-  // Explorer Growth OS §6.3 friction (EPIC 2). Checkout is a PaySimple hosted
-  // redirect, so the app only ever observes the ATTEMPT; "attempted and did not
-  // complete" is derived by pairing this with enrollments.payment_status rather
-  // than by a client-side failure event the hosted flow cannot produce.
-  // The ingest rejects unknown types, so without this entry the signal would be
-  // emitted by the client and silently dropped here.
-  'payment_attempt',
-] as const;
 
 function extractReferrerDomain(referrerUrl?: string): string | undefined {
   if (!referrerUrl) return undefined;
@@ -207,25 +182,6 @@ function emitUnresolvedContext(
       context: { site_slug: siteSlug ?? null, hostname, resolution_path: path },
     }),
   );
-}
-
-function validateTrackEvent(body: Record<string, unknown>): string | null {
-  const { fingerprint, event_type, page_url, page_path } = body;
-
-  if (!fingerprint || typeof fingerprint !== 'string' || fingerprint.length > 64) {
-    return 'fingerprint is required (string, max 64 chars)';
-  }
-  if (!event_type || typeof event_type !== 'string' || !VALID_EVENT_TYPES.includes(event_type as any)) {
-    return `event_type must be one of: ${VALID_EVENT_TYPES.join(', ')}`;
-  }
-  if (!page_url || typeof page_url !== 'string' || page_url.length > 500) {
-    return 'page_url is required (string, max 500 chars)';
-  }
-  if (!page_path || typeof page_path !== 'string' || page_path.length > 255) {
-    return 'page_path is required (string, max 255 chars)';
-  }
-
-  return null;
 }
 
 export async function handleTrackEvent(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -384,8 +340,9 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       site_slug: rawSiteSlug,
     } = req.body;
 
-    if (!fingerprint || typeof fingerprint !== 'string' || fingerprint.length > 64) {
-      res.status(400).json({ error: 'fingerprint is required (string, max 64 chars)' });
+    const fingerprintError = validateFingerprint(fingerprint);
+    if (fingerprintError) {
+      res.status(400).json({ error: fingerprintError });
       return;
     }
     if (!Array.isArray(events) || events.length === 0 || events.length > 50) {
@@ -393,8 +350,49 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       return;
     }
 
+    // Endpoint parity (D-3). `/api/t/event` rejects an event this endpoint used
+    // to accept without inspection, and the tracker chooses between the two by
+    // buffer size - so the same event survived or died depending on timing. The
+    // same per-event rules now run here.
+    //
+    // Rejection is per element, not per request, and deliberately so. A batch
+    // holds up to 50 events from one page load; failing the whole request over
+    // one bad element would discard up to 49 good ones and turn a validation
+    // fix into data loss. The invariant that matters - and the one AC4 states -
+    // is that an event's SURVIVAL cannot depend on which endpoint carried it.
+    //
+    // The one case where a batch is exactly equivalent to a single-event call is
+    // a batch of one: there, rejecting the only element rejects the request, and
+    // the status code and message are byte-identical to `/api/t/event`.
+    const acceptedEvents: any[] = [];
+    const rejections: string[] = [];
+    for (const candidate of events) {
+      const eventError =
+        candidate && typeof candidate === 'object'
+          ? validateEventShape(candidate)
+          : 'event must be an object';
+      if (eventError) rejections.push(eventError);
+      else acceptedEvents.push(candidate);
+    }
+    if (acceptedEvents.length === 0) {
+      res.status(400).json({ error: rejections[0] });
+      return;
+    }
+    if (rejections.length > 0) {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'backend',
+          event: 'track_batch_events_rejected',
+          outcome: 'partial',
+          context: { rejected: rejections.length, accepted: acceptedEvents.length, first_error: rejections[0] },
+        }),
+      );
+    }
+
     const referrer_domain = extractReferrerDomain(referrer_url);
-    const firstPageUrl = events[0] && events[0].page_url;
+    const firstPageUrl = acceptedEvents[0] && acceptedEvents[0].page_url;
     const site_slug = normalizeSiteSlug(rawSiteSlug, firstPageUrl);
 
     const visitorId = await findOrCreateVisitor(fingerprint, {
@@ -425,7 +423,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       }
     }
 
-    const firstEvent = events[0];
+    const firstEvent = acceptedEvents[0];
     // Resolved once per batch, not per event: every event in a batch comes from the
     // same page load on the same site, so re-resolving would be pure overhead on the
     // highest-write path in the system.
@@ -447,7 +445,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
     });
 
     let eventsRecorded = 0;
-    for (const event of events) {
+    for (const event of acceptedEvents) {
       const page_category = categorizePagePath(event.page_path);
       await recordPageEvent({
         session_id: sessionId,
@@ -468,7 +466,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
     }
 
     // Trigger real-time signal analysis if batch contains high-value events
-    const hasHighValue = events.some((e: any) =>
+    const hasHighValue = acceptedEvents.some((e: any) =>
       ['cta_click', 'form_start', 'form_submit'].includes(e.event_type)
     );
     if (hasHighValue) {
@@ -479,6 +477,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       visitor_id: visitorId,
       session_id: sessionId,
       events_recorded: eventsRecorded,
+      events_rejected: rejections.length,
     });
   } catch (err) {
     console.error('[Tracking]', err);

@@ -1,0 +1,248 @@
+/**
+ * T023 areas 4 and 5 (server half) — what the inbound boundaries actually
+ * enforce.
+ *
+ * Two separate questions, deliberately in one file because the answer to the
+ * second depends on the first:
+ *
+ *   AREA 4 — the PUBLIC read API validates its query with Zod `safeParse` and
+ *   refuses malformed input with a 400 before any store is touched, and its 400
+ *   does not hand back the platform's internal vocabulary.
+ *
+ *   AREA 5 (server half) — the `event_data` allowlist that T019 built is in the
+ *   BROWSER. `frontend/src/utils/caseStudyTracking.ts` is the only thing that
+ *   applies it. This file drives the real ingest controller with a hostile body
+ *   and records what `recordPageEvent` is handed, because the difference between
+ *   "the payload is sanitised" and "the payload is sanitised if the caller is
+ *   our own JavaScript" is the whole finding.
+ *
+ * The service module is mocked, not the database: the question is what the
+ * controller PASSES DOWN, and a mock is the only way to read that exactly.
+ */
+import express from 'express';
+import request from 'supertest';
+
+/*
+ * `config/env` is pinned rather than inherited. `enableVisitorTracking` reads
+ * `ENABLE_VISITOR_TRACKING === 'true'` from a `.env` that may or may not exist in
+ * a given checkout, and when it is false `handleTrackEvent` returns 204 before
+ * validating anything. This suite ran green alone and red in a batch for exactly
+ * that reason — an ambient-environment dependency, which is a flaky test, not a
+ * finding. Pinning it is what makes "the ingest refuses an unknown event_type" a
+ * statement about the code.
+ */
+jest.mock('../../config/env', () => ({
+  env: {
+    enableVisitorTracking: true,
+    visitorSessionTimeoutMinutes: 30,
+    publicAppUrl: 'https://enterprise.colaberry.ai',
+    jwtSecret: 'test-secret',
+    nodeEnv: 'test',
+  },
+}));
+
+jest.mock('../../services/visitorTrackingService', () => ({
+  findOrCreateVisitor: jest.fn(async () => 'visitor-1'),
+  getOrCreateSession: jest.fn(async () => 'session-1'),
+  recordPageEvent: jest.fn(async () => undefined),
+  categorizePagePath: jest.fn(() => 'other'),
+  updateHeartbeat: jest.fn(async () => undefined),
+  resolveIdentity: jest.fn(async () => undefined),
+}));
+jest.mock('../../services/behavioralSignalService', () => ({ detectSessionSignals: jest.fn(async () => []) }));
+jest.mock('../../services/intentScoringService', () => ({ computeIntentScore: jest.fn(async () => 0) }));
+jest.mock('../../services/behavioralTriggerService', () => ({ evaluateVisitorForTriggers: jest.fn(async () => undefined) }));
+jest.mock('../../services/governanceService', () => ({ logAgentExecution: jest.fn(async () => undefined) }));
+jest.mock('../../modules/tenancy/tenantResolver', () => ({
+  resolvePublicContext: jest.fn(async () => null),
+}));
+
+/* eslint-disable import/first */
+import { recordPageEvent } from '../../services/visitorTrackingService';
+import { handleTrackEvent, handleTrackBatch } from '../../controllers/trackingController';
+import { PublicCaseStudyListQuery } from '../../schemas/publicCaseStudySchema';
+/* eslint-enable import/first */
+
+const recorded = recordPageEvent as jest.MockedFunction<typeof recordPageEvent>;
+
+function ingestApp(): express.Express {
+  const app = express();
+  app.use(express.json());
+  app.post('/api/t/event', (req, res, next) => { void handleTrackEvent(req, res, next); });
+  app.post('/api/t/batch', (req, res, next) => { void handleTrackBatch(req, res, next); });
+  return app;
+}
+
+const app = ingestApp();
+
+const BASE = {
+  fingerprint: 'fp-t023',
+  event_type: 'case_study_view',
+  page_url: 'https://enterprise.colaberry.ai/stories/acme',
+  page_path: '/stories/acme',
+};
+
+/** Everything the browser-side allowlist would have removed. */
+const HOSTILE_EVENT_DATA = {
+  slug: 'acme-rollout',
+  repo_url: 'https://github.com/acme-holdings/billing-core',
+  repo_owner: 'acme-holdings',
+  email: 'jane@example.com',
+  github_token: 'ghp_notARealTokenButShapedLikeOne',
+  contact_ref: '+1-214-555-0182',
+  nested: { lead_id: 4711, notes: 'internal only' },
+};
+
+beforeEach(() => { recorded.mockClear(); });
+
+/* ------------------------------------------------------------------ area 4 --- */
+
+describe('T023 area 4 — the public read API validates with Zod safeParse', () => {
+  it('the schema is Zod v4: a failure exposes `issues`, and `errors` is undefined', () => {
+    const parsed = PublicCaseStudyListQuery.safeParse({ limit: 'not-a-number' });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error('unreachable');
+    expect(Array.isArray(parsed.error.issues)).toBe(true);
+    expect(parsed.error.issues.length).toBeGreaterThan(0);
+    // Reading `.errors` on Zod 4 yields undefined; code written against v3 would
+    // silently iterate nothing and report every request as valid.
+    expect((parsed.error as unknown as { errors?: unknown }).errors).toBeUndefined();
+  });
+
+  it.each([
+    ['unknown sort key', { sort: 'DROP TABLE case_studies' }],
+    ['negative page', { page: '-1' }],
+    ['page zero', { page: '0' }],
+    ['oversized limit', { limit: '100000' }],
+    ['fractional limit', { limit: '2.5' }],
+    ['unpublishable surface', { surface: 'ai-flotation' }],
+    ['array where a scalar belongs', { industry: ['a', 'b'] }],
+    ['prototype pollution key', { __proto__: 'polluted', page: '1' }],
+    ['a facet list longer than the cap', { industry: new Array(40).fill('facet').map((f, i) => f + i).join(',') }],
+    ['a facet value longer than 80 characters', { industry: 'a'.repeat(200) }],
+    ['verification=pending, which has no public representation', { verification: 'pending' }],
+    ['a NUL byte smuggled into a facet value', { industry: 'insur\u0000ance' }],
+  ])('refuses or normalises %s', (_label, query) => {
+    const parsed = PublicCaseStudyListQuery.safeParse(query);
+    // Either the value is refused outright, or it is coerced to something inside
+    // the declared bounds. What must never happen is the raw value passing
+    // through as-is into a query.
+    if (parsed.success) {
+      const data = parsed.data as Record<string, unknown>;
+      for (const [k, v] of Object.entries(query as Record<string, unknown>)) {
+        if (k === '__proto__') continue;
+        expect(data[k]).not.toBe(v);
+      }
+    } else {
+      expect(parsed.error.issues.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('a valid query survives (the schema is not refusing everything)', () => {
+    const parsed = PublicCaseStudyListQuery.safeParse({
+      industry: 'insurance', page: '2', limit: '12', sort: 'newest',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('prototype pollution through the query object does not reach Object.prototype', () => {
+    PublicCaseStudyListQuery.safeParse(JSON.parse('{"__proto__":{"polluted":true},"page":"1"}'));
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  /**
+   * The 400 BODY is itself a disclosure surface. Echoing Zod's issues would
+   * publish every enum member the API knows — including `ai_flotation_team`, a
+   * surface that has not launched. This asserts the route names the offending
+   * PARAMETER and nothing else.
+   */
+  it('the public 400 body names the parameter, never the accepted vocabulary', async () => {
+    const publicRoutes = (await import('../publicCaseStudyRoutes')).default;
+    const pub = express();
+    pub.use(publicRoutes);
+    const res = await request(pub)
+      .get('/api/public/case-studies?built_by=nonsense&sort=nonsense&verification=pending');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid filters');
+    expect(res.body.invalidParameters.sort()).toEqual(['built_by', 'sort', 'verification']);
+    const serialised = JSON.stringify(res.body);
+    for (const leak of ['ai_flotation_team', 'colaberry_team', 'strongest-proof', 'anonymized', 'instrumented']) {
+      expect(serialised).not.toContain(leak);
+    }
+    // No stack, no Zod internals, no field-by-field message list.
+    expect(Object.keys(res.body).sort()).toEqual(['error', 'invalidParameters']);
+  }, 30_000);
+});
+
+/* ------------------------------------------------------------------ area 5 --- */
+
+describe('T023 area 5 (server half) — what the ingest does with event_data', () => {
+  it('rejects an unknown event_type with a 400 before touching the store', async () => {
+    const res = await request(app).post('/api/t/event')
+      .send({ ...BASE, event_type: 'case_study_exfiltrate' });
+    expect(res.status).toBe(400);
+    expect(recorded).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it('rejects a missing fingerprint, an oversized page_url and an oversized page_path', async () => {
+    const cases = [
+      { ...BASE, fingerprint: undefined },
+      { ...BASE, page_url: `https://x.test/${'a'.repeat(600)}` },
+      { ...BASE, page_path: `/${'a'.repeat(300)}` },
+    ];
+    for (const body of cases) {
+      const res = await request(app).post('/api/t/event').send(body);
+      expect(res.status).toBe(400);
+    }
+    expect(recorded).not.toHaveBeenCalled();
+  });
+
+  it('applies the SAME event-shape rules on /api/t/batch as on /api/t/event', async () => {
+    const res = await request(app).post('/api/t/batch').send({
+      fingerprint: 'fp-t023',
+      events: [{ ...BASE, event_type: 'case_study_exfiltrate' }],
+    });
+    // The batch endpoint must not persist what the single endpoint refuses.
+    const persistedTypes = recorded.mock.calls.map((c) => (c[0] as { event_type: string }).event_type);
+    expect(persistedTypes).not.toContain('case_study_exfiltrate');
+    expect([200, 400]).toContain(res.status);
+  });
+
+  /**
+   * THE FINDING, executed rather than argued.
+   *
+   * The allowlist that T019 built lives in the browser. Anything that can send
+   * an HTTP request — curl, a modified bundle, a browser console — bypasses it
+   * entirely, because the server does not apply it.
+   */
+  it('DEFEAT ATTEMPT — a direct POST persists event_data verbatim, allowlist and all', async () => {
+    const res = await request(app).post('/api/t/event')
+      .send({ ...BASE, event_data: HOSTILE_EVENT_DATA });
+    expect(res.status).toBe(200);
+    expect(recorded).toHaveBeenCalledTimes(1);
+    const persisted = (recorded.mock.calls[0][0] as { event_data?: Record<string, unknown> }).event_data;
+
+    // eslint-disable-next-line no-console
+    console.log(['', '=== T023 area 5 defeat attempt: direct POST to /api/t/event ===',
+      `HTTP ${res.status}`,
+      `event_data handed to recordPageEvent: ${JSON.stringify(persisted)}`,
+      `keys the browser allowlist would have dropped, but which the server kept: ${
+        JSON.stringify(Object.keys(persisted ?? {}).filter((k) => k !== 'slug'))}`,
+      '=== end area 5 server-half measurement ===', ''].join('\n'));
+
+    // Asserted as it is, not as one would wish. If a server-side sanitiser is
+    // ever added, this test fails and the proof document must be revised —
+    // which is the correct signal, not a regression.
+    expect(persisted).toEqual(HOSTILE_EVENT_DATA);
+    expect(persisted).toHaveProperty('github_token');
+    expect(persisted).toHaveProperty('repo_url');
+  });
+
+  it('event_data is not echoed back to the caller in the response body', async () => {
+    const res = await request(app).post('/api/t/event')
+      .send({ ...BASE, event_data: HOSTILE_EVENT_DATA });
+    expect(JSON.stringify(res.body)).not.toContain('ghp_');
+    expect(JSON.stringify(res.body)).not.toContain('acme-holdings');
+    expect(Object.keys(res.body).sort()).toEqual(['session_id', 'visitor_id']);
+  });
+});

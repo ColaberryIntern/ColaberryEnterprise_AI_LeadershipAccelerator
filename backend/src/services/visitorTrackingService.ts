@@ -17,6 +17,15 @@ export function categorizePagePath(path: string): string {
     '': 'homepage',
     '/pricing': 'pricing',
     '/program': 'program',
+    // The canonical Case Study route is `/stories`; `/case-studies` is only a
+    // redirect to it (frontend/src/routes/publicRoutes.tsx). Because the browser
+    // reports the RESOLVED path, every real visit was tracked as `/stories`,
+    // which matched nothing here and fell through to 'other' below - so the
+    // `case_studies` category has never once been produced in production, and
+    // the six consumers that branch on it were dead code. Both keys are kept:
+    // a direct hit on the legacy URL, logged before the redirect resolves, must
+    // categorise identically or the same visit changes category mid-session.
+    '/stories': 'case_studies',
     '/case-studies': 'case_studies',
     '/contact': 'contact',
     '/enroll': 'enroll',
@@ -49,6 +58,13 @@ export function categorizePagePath(path: string): string {
   if (cleaned.startsWith('/referrals')) return 'referrals';
   if (cleaned.startsWith('/portal')) return 'portal';
   if (cleaned.startsWith('/admin')) return 'admin';
+  // Case Study detail pages: `/stories/:slug`. The trailing slash in the prefix
+  // is load-bearing - a bare `startsWith('/stories')` would also swallow any
+  // future sibling route such as `/stories-of-x` or `/storiesboard`, silently
+  // mislabelling an unrelated page as a Case Study view and inflating the
+  // strength-20 `deep_scroll_case_study` lead signal. The index route itself is
+  // matched by the exact `/stories` key in the map above.
+  if (cleaned.startsWith('/stories/')) return 'case_studies';
 
   return categoryMap[cleaned] || 'other';
 }

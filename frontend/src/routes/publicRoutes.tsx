@@ -5,7 +5,6 @@ import ProgramPage from '../pages/ProgramPage';
 import PricingPage from '../pages/PricingPage';
 import SponsorshipPage from '../pages/SponsorshipPage';
 import AdvisoryPage from '../pages/AdvisoryPage';
-import CaseStudiesPage from '../pages/CaseStudiesPage';
 import EnrollPage from '../pages/EnrollPage';
 import EnrollSuccessPage from '../pages/EnrollSuccessPage';
 import EnrollCancelPage from '../pages/EnrollCancelPage';
@@ -21,7 +20,6 @@ import BeginnersPage from '../pages/membership/BeginnersPage';
 import BuildersPage from '../pages/membership/BuildersPage';
 import SponsorChallengePage from '../pages/SponsorChallengePage';
 import LeaderboardPage from '../pages/LeaderboardPage';
-import CapstoneRecordPage from '../pages/CapstoneRecordPage';
 import DemoDayPage from '../pages/DemoDayPage';
 import SponsorDashboardPage from '../pages/SponsorDashboardPage';
 import ConsultingPage from '../pages/ConsultingPage';
@@ -68,9 +66,9 @@ const publicRoutes = (
     <Route path="/membership/builders" element={<BuildersPage />} />
     <Route path="/challenge" element={<SponsorChallengePage />} />
     <Route path="/leaderboard" element={<LeaderboardPage />} />
-    {/* A student's shareable Capstone Record. Kept short and readable because the
-        slug is the thing they paste into an email. */}
-    <Route path="/p/:slug" element={<CapstoneRecordPage />} />
+    {/* /p/:slug (Capstone Record) is NOT here — it is defined under
+        PublicLayoutV2 in App.tsx so it gets the current site header rather than
+        this block's retired one. See the comment there. */}
     <Route path="*" element={<NotFoundPage />} />
   </>
 );

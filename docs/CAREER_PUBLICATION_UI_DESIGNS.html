@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Career Publication — UI Designs</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Straight from frontend/src/pages/portal/today/TodayShell.css so these mockups
+     render in the real Design E palette, not an approximation. */
+  --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-text:#E5121D;
+  --leaf:#5BA63C; --leaf-deep:#3C7A26; --leaf-text:#468A2E;
+  --berry:#367895; --berry-hover:#2E6A86; --amber:#E8920C; --amber-deep:#B5710A;
+  --page:#F8F8F7; --surface:#FFFFFF; --sunken:#F1F1F0;
+  --strong:#1A1A1A; --body:#2B2B2B; --muted:#6B6B6B; --border:#D8D8D8; --border-sub:#E4E4E3;
+  --shadow-md:0 3px 8px rgba(26,26,26,.06),0 1px 3px rgba(26,26,26,.04);
+  --shadow-lg:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);
+  --sans:'Roboto',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Roboto Mono',ui-monospace,'Consolas',monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --page:#151515; --surface:#1E1E1E; --sunken:#272727;
+    --strong:#F4F4F4; --body:#D7D7D7; --muted:#9C9C9C; --border:#3A3A3A; --border-sub:#2C2C2C;
+    --cherry-text:#FF6A71; --leaf-text:#82CC63;
+    --shadow-md:0 3px 8px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 30px rgba(0,0,0,.5),0 3px 8px rgba(0,0,0,.4);
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--body);font:16px/1.6 var(--sans)}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+
+header.doc{border-bottom:1px solid var(--border);padding-bottom:28px;margin-bottom:8px}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cherry-text)}
+h1.doc{font-size:36px;line-height:1.1;margin:8px 0 10px;color:var(--strong);letter-spacing:-.02em}
+.lede{font-size:17px;color:var(--muted);max-width:760px;margin:0}
+.meta{margin-top:18px;font-size:13px;color:var(--muted);font-family:var(--mono)}
+
+nav.toc{position:sticky;top:0;background:var(--page);border-bottom:1px solid var(--border-sub);padding:12px 0;margin-bottom:36px;z-index:10;display:flex;gap:6px;flex-wrap:wrap}
+nav.toc a{font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:999px;border:1px solid transparent}
+nav.toc a:hover{color:var(--strong);background:var(--sunken);border-color:var(--border-sub)}
+
+section{margin:56px 0}
+h2.sec{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cherry-text);margin:0 0 6px}
+h3.sec{font-size:26px;color:var(--strong);margin:0 0 10px;letter-spacing:-.01em}
+.sec-lede{color:var(--muted);max-width:780px;margin:0 0 26px}
+
+.note{border-left:3px solid var(--berry);background:var(--sunken);padding:14px 18px;border-radius:0 10px 10px 0;font-size:14px;line-height:1.6;margin:22px 0}
+.note strong{color:var(--strong)}
+.note.warn{border-left-color:var(--amber)}
+.note.stop{border-left-color:var(--cherry)}
+
+/* ── mock chrome ─────────────────────────────────────────── */
+.mock{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);margin:22px 0}
+.mock-bar{background:var(--sunken);border-bottom:1px solid var(--border-sub);padding:9px 14px;display:flex;align-items:center;gap:8px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--border)}
+.mock-url{flex:1;text-align:center;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.mock-body{padding:26px 28px}
+.state-tag{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 10px;border-radius:999px;margin-bottom:14px}
+.st-a{background:var(--sunken);color:var(--muted);border:1px solid var(--border)}
+.st-b{background:var(--sunken);color:var(--amber-deep);border:1px solid var(--amber)}
+.st-c{background:var(--sunken);color:var(--leaf-text);border:1px solid var(--leaf-text)}
+
+/* ── shared portal bits ──────────────────────────────────── */
+.crumb{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--cherry-text)}
+.ph1{font-size:28px;font-weight:700;color:var(--strong);margin:6px 0 0;letter-spacing:-.01em}
+.psub{color:var(--muted);font-size:15px;margin-top:6px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:20px 0}
+.tab{padding:10px 14px;font-weight:600;font-size:14px;color:var(--muted);border-bottom:2px solid transparent}
+.tab.on{color:var(--cherry-text);border-bottom-color:var(--cherry-text)}
+.card{background:var(--surface);border:1px solid var(--border-sub);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow-md);margin-bottom:16px}
+.card h4{font-size:17px;font-weight:700;color:var(--strong);margin:0 0 6px}
+.muted{color:var(--muted);font-size:14px;margin:0}
+.btn{display:inline-block;border:0;border-radius:10px;padding:11px 20px;font:inherit;font-weight:700;font-size:15px;cursor:pointer;text-decoration:none}
+.btn-primary{background:var(--cherry);color:#fff}
+.btn-ghost{background:var(--sunken);color:var(--body);border:1px solid var(--border)}
+.btn[disabled],.btn.off{background:var(--sunken);color:var(--muted);border:1px solid var(--border);cursor:not-allowed}
+.btn-ok{background:var(--leaf);color:#fff}
+.btn-warn{background:var(--surface);color:var(--amber-deep);border:1px solid var(--amber)}
+.btn-no{background:var(--surface);color:var(--cherry-text);border:1px solid var(--cherry-text)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.pill{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:3px 9px;border:1px solid}
+.p-verified{color:var(--leaf-text);border-color:var(--leaf-text);background:var(--sunken)}
+.p-delivery{color:var(--berry);border-color:var(--berry);background:var(--sunken)}
+.p-resume{color:var(--muted);border-color:var(--border);background:var(--sunken)}
+.ring{width:92px;height:92px;flex:none}
+.chk{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:8px;font-size:14px}
+.chk li{display:flex;gap:9px;align-items:flex-start}
+.tick{color:var(--leaf-text);font-weight:700}
+.untick{color:var(--border);font-weight:700}
+.req{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--cherry-text);background:var(--sunken);border-radius:999px;padding:2px 7px;margin-left:6px}
+
+table.q{width:100%;border-collapse:collapse;font-size:14px}
+table.q th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 10px 10px;border-bottom:1px solid var(--border)}
+table.q td{padding:12px 10px;border-bottom:1px solid var(--border-sub)}
+table.q tr:last-child td{border-bottom:0}
+.who{font-weight:700;color:var(--strong)}
+.ver{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+/* ── public page ─────────────────────────────────────────── */
+.pub{background:var(--surface)}
+.pub-hero{display:flex;gap:26px;align-items:flex-start;padding:34px 32px;border-bottom:1px solid var(--border-sub)}
+.avatar{width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,var(--berry),var(--leaf));flex:none;display:grid;place-items:center;color:#fff;font-size:30px;font-weight:700}
+.pub-name{font-size:32px;font-weight:700;color:var(--strong);margin:0;letter-spacing:-.02em}
+.pub-title{font-size:17px;color:var(--berry);font-weight:600;margin:4px 0 0}
+.pub-meta{color:var(--muted);font-size:14px;margin-top:8px}
+.verified-stamp{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--leaf-text);border:1px solid var(--leaf-text);background:var(--sunken);border-radius:999px;padding:5px 12px;margin-top:14px}
+.pub-sec{padding:28px 32px;border-bottom:1px solid var(--border-sub)}
+.pub-sec:last-child{border-bottom:0}
+.pub-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 16px}
+.cap{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--border-sub)}
+.cap:last-child{border-bottom:0}
+.cap-name{font-weight:700;color:var(--strong);font-size:15px}
+.ev-link{font-size:13px;color:var(--berry);text-decoration:underline;cursor:pointer;background:none;border:0;font-family:inherit}
+.build{border:1px solid var(--border-sub);border-radius:12px;padding:16px 18px;background:var(--sunken);margin-bottom:12px}
+.build h5{margin:0;font-size:16px;color:var(--strong)}
+.build .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--berry)}
+.stack{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.stack span{font-size:11px;font-weight:600;color:var(--muted);background:var(--surface);border:1px solid var(--border-sub);border-radius:999px;padding:3px 9px}
+.evidence-pop{border:1px solid var(--berry);border-radius:12px;padding:16px 18px;background:var(--sunken);margin-top:12px}
+.evidence-pop ul{margin:10px 0 0;padding-left:18px;font-size:14px}
+.footer-ver{padding:18px 32px;background:var(--sunken);font-size:12px;color:var(--muted);font-family:var(--mono);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}.pub-hero{flex-direction:column}}
+.q-list{margin:0;padding-left:20px;font-size:14px;line-height:1.7}
+.kbd{font-family:var(--mono);font-size:12px;background:var(--sunken);border:1px solid var(--border-sub);border-radius:5px;padding:1px 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <div class="eyebrow">Living Career Portfolio · Gates 9b, 10, 11</div>
+  <h1 class="doc">Publication UI — three surfaces</h1>
+  <p class="lede">
+    The backend is live in production: snapshots are immutable, only a human can publish, and
+    <span class="kbd">/api/public/talent/:slug</span> already serves frozen data. None of it is reachable,
+    because nothing is wired. These are the three screens that make it reachable.
+  </p>
+  <div class="meta">
+    Rendered in the real Design E tokens from TodayShell.css &middot; light/dark aware &middot; session CC-20260823-p4k9
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#learner">1 · Learner publishing</a>
+  <a href="#admin">2 · Reviewer queue</a>
+  <a href="#public">3 · Public talent page</a>
+  <a href="#decisions">Decisions I need</a>
+</nav>
+
+<!-- ═══════════════ 1. LEARNER ═══════════════ -->
+<section id="learner">
+  <h2 class="sec">Surface 1 · Learner</h2>
+  <h3 class="sec">The Publishing tab becomes usable</h3>
+  <p class="sec-lede">
+    Today this tab honestly says publishing is not switched on. It gains one button and four states.
+    The states are driven by <span class="kbd">GET /api/portal/career/publication</span>, which already ships.
+  </p>
+
+  <!-- state A -->
+  <div class="mock">
+    <div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="mock-url">enterprise.colaberry.ai/portal/portfolio</span></div>
+    <div class="mock-body">
+      <span class="state-tag st-a">State A · not ready yet</span>
+      <div class="crumb">Your career</div>
+      <div class="ph1">Your portfolio</div>
+      <div class="tabs"><span class="tab">Overview</span><span class="tab">Capabilities</span><span class="tab">Builds</span><span class="tab on">Publishing</span></div>
+
+      <div class="card">
+        <div class="row" style="align-items:flex-start;gap:20px">
+          <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="var(--sunken)" stroke-width="9"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="var(--leaf)" stroke-width="9" stroke-linecap="round"
+              stroke-dasharray="198 264" transform="rotate(-90 50 50)"/>
+            <text x="50" y="48" text-anchor="middle" dominant-baseline="central" font-size="25" font-weight="700" fill="var(--strong)">75</text>
+            <text x="50" y="65" text-anchor="middle" dominant-baseline="central" font-size="9" fill="var(--muted)">of 100</text>
+          </svg>
+          <div style="flex:1;min-width:220px">
+            <h4>Not ready to publish yet</h4>
+            <p class="muted">One required step is outstanding. Publishing is reviewed by a mentor, so the bar exists before you take up their time.</p>
+            <ul class="chk">
+              <li><span class="tick">&#10003;</span><span><strong>7 verified capabilities</strong> <span class="muted">&mdash; 3 required</span></span></li>
+              <li><span class="tick">&#10003;</span><span><strong>12 build artifacts</strong> <span class="muted">&mdash; 3 required</span></span></li>
+              <li><span class="untick">&#9675;</span><span><strong>Resume or LinkedIn PDF</strong> <span class="muted">&mdash; upload a resume, or export your LinkedIn profile to PDF</span><span class="req">Required</span></span></li>
+            </ul>
+            <div class="row" style="margin-top:18px">
+              <button class="btn off" disabled>Request review</button>
+              <a class="btn btn-ghost" href="#">Add resume or LinkedIn PDF</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>This is Ikenna's real position right now</strong>, straight from the live API after this
+    morning's account merge: readiness 75, blocking <span class="kbd">["resume_uploaded"]</span>. The
+    button is disabled because the server would 422 anyway. Disabling it is a courtesy, not the
+    enforcement.
+  </div>
+
+  <!-- states B & C -->
+  <div class="cols">
+    <div class="mock">
+      <div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="mock-url">/portal/portfolio</span></div>
+      <div class="mock-body">
+        <span class="state-tag st-b">State B · awaiting review</span>
+        <div class="card">
+          <h4>Submitted for review</h4>
+          <p class="muted">You sent <strong>version 2</strong> on 25 August. A mentor will approve it, or come back with changes.</p>
+          <p class="muted" style="margin-top:12px">Keep building in the meantime. Your private portfolio carries on growing; what a reviewer sees stays exactly as you submitted it.</p>
+          <div class="row" style="margin-top:16px"><button class="btn off" disabled>Awaiting review</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mock">
+      <div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="mock-url">/portal/portfolio</span></div>
+      <div class="mock-body">
+        <span class="state-tag st-b">State C · changes requested</span>
+        <div class="card">
+          <h4>Your reviewer asked for changes</h4>
+          <p class="muted" style="margin-bottom:10px">Reviewed 25 August by a Colaberry mentor.</p>
+          <div class="note warn" style="margin:0">
+            &ldquo;Strong evidence, but two of your featured builds have no summary, so a recruiter cannot tell what they did. Add a sentence to each and resubmit.&rdquo;
+          </div>
+          <div class="row" style="margin-top:16px"><button class="btn btn-primary">Resubmit for review</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- state D -->
+  <div class="mock">
+    <div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="mock-url">/portal/portfolio</span></div>
+    <div class="mock-body">
+      <span class="state-tag st-c">State D · published</span>
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div><h4>Your portfolio is live</h4>
+          <p class="muted">Version 3, approved 25 August.</p></div>
+          <span class="verified-stamp" style="margin:0">&#10003; Colaberry Verified</span>
+        </div>
+        <div class="note" style="margin:16px 0 0">
+          <strong>enterprise.colaberry.ai/talent/ikenna-nzeribe</strong><br>
+          <span class="muted" style="font-size:13px">Share this with anyone. It shows only what your reviewer approved.</span>
+        </div>
+        <div class="row" style="margin-top:16px">
+          <a class="btn btn-ghost" href="#">View public page</a>
+          <a class="btn btn-ghost" href="#">Copy link</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>7 updates since version 3</h4>
+        <p class="muted">Your private portfolio has grown. <strong>None of it is public yet</strong>, and it will not be until you submit and a mentor approves version 4.</p>
+        <ul class="chk">
+          <li><span class="tick">+</span><span>2 new build artifacts</span></li>
+          <li><span class="tick">+</span><span>4 capabilities with new evidence</span></li>
+          <li><span class="tick">+</span><span>1 new project</span></li>
+        </ul>
+        <div class="row" style="margin-top:16px">
+          <button class="btn btn-primary">Review changes and publish v4</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note stop">
+    <strong>The most important sentence on this screen</strong> is &ldquo;none of it is public yet.&rdquo;
+    A learner must never be surprised by what an employer can see. The whole immutable-snapshot design
+    exists to make that promise true, so the UI should state it plainly rather than let them infer it.
+  </div>
+</section>
+
+<!-- ═══════════════ 2. ADMIN ═══════════════ -->
+<section id="admin">
+  <h2 class="sec">Surface 2 · Reviewer</h2>
+  <h3 class="sec">A queue, and one screen per decision</h3>
+  <p class="sec-lede">
+    Lives in the admin surface behind <span class="kbd">requireAdmin</span>. Fed by
+    <span class="kbd">GET /api/admin/career/review-queue</span>, which summarises from the
+    <em>frozen</em> payload, so the list matches what opens.
+  </p>
+
+  <div class="mock">
+    <div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="mock-url">enterprise.colaberry.ai/admin/career/review</span></div>
+    <div class="mock-body">
+      <div class="crumb">Admin</div>
+      <div class="ph1">Portfolio review queue</div>
+      <div class="psub">3 portfolios awaiting a decision, oldest first.</div>
+      <div class="card" style="margin-top:20px">
+        <table class="q">
+          <thead><tr><th>Learner</th><th>Version</th><th>Evidence</th><th>Readiness</th><th>Waiting</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="who">Quincy Nkwain Ninying</td><td class="ver">v1</td><td>9 capabilities · 54 artifacts</td><td>90</td><td>3 days</td><td><button class="btn btn-ghost" style="padding:7px 14px;font-size:13px">Open</button></td></tr>
+            <tr><td class="who">Chukwuemeka Eneh</td><td class="ver">v2</td><td>9 capabilities · 17 artifacts</td><td>85</td><td>1 day</td><td><button class="btn btn-ghost" style="padding:7px 14px;font-size:13px">Open</button></td></tr>
+            <tr><td class="who">Maria C Garcia</td><td class="ver">v1</td><td>7 capabilities · 15 artifacts</td><td>75</td><td>4 hours</td><td><button class="btn btn-ghost" style="padding:7px 14px;font-size:13px">Open</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="mock-url">/admin/career/review/9f3a…</span></div>
+    <div class="mock-body">
+      <div class="crumb">Reviewing</div>
+      <div class="ph1">Quincy Nkwain Ninying &mdash; version 1</div>
+      <div class="psub">Submitted 22 August. This is the exact snapshot, frozen at submission.</div>
+
+      <div class="cols" style="margin-top:20px">
+        <div>
+          <div class="card">
+            <h4>What a recruiter would see</h4>
+            <p class="muted">Rendered from the frozen payload, not from live data.</p>
+            <div class="cap" style="margin-top:12px"><span class="cap-name">Agent Architecture</span><span class="pill p-verified">Colaberry Verified</span></div>
+            <div class="cap"><span class="cap-name">RAG</span><span class="pill p-verified">Colaberry Verified</span></div>
+            <div class="cap"><span class="cap-name">Prompting</span><span class="pill p-verified">Colaberry Verified</span></div>
+            <p class="muted" style="margin-top:12px">…and 6 more, plus 54 artifacts</p>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <h4>Automated checks</h4>
+            <ul class="chk" style="margin-top:10px">
+              <li><span class="tick">&#10003;</span><span>No unsupported claims detected</span></li>
+              <li><span class="tick">&#10003;</span><span>No client names or confidential repos</span></li>
+              <li><span class="untick">&#9675;</span><span><strong>4 builds have no summary</strong> <span class="muted">&mdash; a recruiter cannot tell what they did</span></span></li>
+            </ul>
+            <p class="muted" style="margin-top:14px;font-style:italic">Findings, not a verdict. You decide.</p>
+          </div>
+          <div class="card">
+            <h4>Your decision</h4>
+            <textarea style="width:100%;min-height:80px;border:1px solid var(--border);border-radius:9px;padding:10px;font:inherit;font-size:14px;background:var(--surface);color:var(--body)" placeholder="Notes to the learner. Required when requesting changes."></textarea>
+            <div class="row" style="margin-top:12px">
+              <button class="btn btn-ok">Approve and publish</button>
+              <button class="btn btn-warn">Request changes</button>
+              <button class="btn btn-no">Reject</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Two rules already enforced server-side</strong>, mirrored here so the UI never promises
+    something the API refuses: <em>Request changes</em> is rejected with a 400 unless notes are written,
+    and a second click on <em>Approve</em> returns the decision already on record rather than
+    double-publishing.
+  </div>
+</section>
+
+<!-- ═══════════════ 3. PUBLIC ═══════════════ -->
+<section id="public">
+  <h2 class="sec">Surface 3 · Public</h2>
+  <h3 class="sec">The page an employer actually opens</h3>
+  <p class="sec-lede">
+    Unauthenticated, at <span class="kbd">/talent/:slug</span>. This is the one that has to look like a
+    professional credential rather than a classroom export, so it deliberately shares no layout with
+    the portal.
+  </p>
+
+  <div class="mock">
+    <div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="mock-url">enterprise.colaberry.ai/talent/quincy-nkwain-ninying</span></div>
+    <div class="pub">
+      <div class="pub-hero">
+        <div class="avatar">QN</div>
+        <div style="flex:1;min-width:240px">
+          <h2 class="pub-name">Quincy Nkwain Ninying</h2>
+          <div class="pub-title">AI Systems Architect</div>
+          <div class="pub-meta">Colaberry AI Systems Architect Accelerator &middot; Cohort July 2026</div>
+          <div class="verified-stamp">&#10003; Evidence verified by Colaberry</div>
+        </div>
+      </div>
+
+      <div class="pub-sec">
+        <div class="pub-h">Verified capabilities</div>
+        <div class="cap"><span class="cap-name">Agent Architecture</span>
+          <span class="row"><span class="pill p-verified">Colaberry Verified</span><button class="ev-link">Why?</button></span></div>
+        <div class="cap"><span class="cap-name">Retrieval &amp; RAG</span>
+          <span class="row"><span class="pill p-verified">Colaberry Verified</span><button class="ev-link">Why?</button></span></div>
+        <div class="cap"><span class="cap-name">Evaluation &amp; Guardrails</span>
+          <span class="row"><span class="pill p-verified">Colaberry Verified</span><button class="ev-link">Why?</button></span></div>
+        <div class="cap"><span class="cap-name">SQL</span>
+          <span class="row"><span class="pill p-resume">Resume evidence</span><button class="ev-link">Why?</button></span></div>
+
+        <div class="evidence-pop">
+          <strong style="color:var(--strong)">Agent Architecture &mdash; why this is verified</strong>
+          <ul>
+            <li>12 pieces of evidence from completed classroom work</li>
+            <li>Demonstrated across 6 build artifacts</li>
+            <li>Most recently 22 August 2026</li>
+          </ul>
+          <p class="muted" style="margin-top:10px;font-size:13px">Colaberry observed this work. It is not a self-reported skill.</p>
+        </div>
+      </div>
+
+      <div class="pub-sec">
+        <div class="pub-h">Featured builds</div>
+        <div class="build">
+          <div class="k">Architecture doc</div>
+          <h5>Claims triage agent</h5>
+          <p class="muted" style="margin-top:6px">A multi-agent pipeline that routes inbound claims, with an approval gate before any customer-facing action.</p>
+          <div class="stack"><span>Agent design</span><span>Evaluation</span><span>Guardrails</span></div>
+        </div>
+        <div class="build">
+          <div class="k">Case study</div>
+          <h5>Government workforce intelligence</h5>
+          <p class="muted" style="margin-top:6px">Retrieval over public workforce data with citation enforcement on every generated answer.</p>
+          <div class="stack"><span>RAG</span><span>Vectors</span><span>Context engineering</span></div>
+        </div>
+        <p class="muted">54 artifacts in total. 6 selected for this portfolio.</p>
+      </div>
+
+      <div class="pub-sec">
+        <div class="pub-h">Get in touch</div>
+        <p class="muted" style="margin-bottom:14px">Contact details are not published. Colaberry passes your message on, and Quincy decides.</p>
+        <button class="btn btn-primary">Request an introduction</button>
+      </div>
+
+      <div class="footer-ver">
+        <span>Version 3 &middot; approved 25 August 2026 by Colaberry</span>
+        <span>A fixed snapshot. Later work does not change this page.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note stop">
+    <strong>What is deliberately absent:</strong> no readiness score, no proficiency percentage, no band
+    numbers, no XP, no cohort dashboard styling, no email address. Plan §24 forbids raw gamification on
+    an employer-facing surface, and the snapshot payload already strips
+    <span class="kbd">bands</span> and <span class="kbd">proficiency</span> before they could reach here.
+    An employer sees a capability, its provenance, and the work &mdash; nothing that looks like a grade.
+  </div>
+
+  <div class="note">
+    <strong>The footer line is load-bearing.</strong> &ldquo;A fixed snapshot. Later work does not change
+    this page.&rdquo; It tells an employer what they are looking at, and it is the visible half of the
+    immutability guarantee the database already enforces.
+  </div>
+</section>
+
+<!-- ═══════════════ DECISIONS ═══════════════ -->
+<section id="decisions">
+  <h2 class="sec">Before I build</h2>
+  <h3 class="sec">Four things I would rather you decided</h3>
+  <ol class="q-list">
+    <li><strong>&ldquo;Request an introduction&rdquo; &mdash; build it or drop it?</strong> The plan wants
+      contact details withheld behind an intro request. That needs a notification path and a place for
+      Quincy to accept. Cheapest v1: the button emails you, and you broker it manually.</li>
+    <li><strong>Who reviews?</strong> I built it behind <span class="kbd">requireAdmin</span>. If mentors
+      should review, the queue needs the <span class="kbd">mgmt_role</span> bridge instead.</li>
+    <li><strong>Featured builds &mdash; who picks?</strong> The mockup shows 6 of 54 selected. Nothing
+      selects them yet. Either the learner curates, or v1 just shows the most recent N.</li>
+    <li><strong>Should the public page be indexable by Google?</strong> Plan §58 says only on explicit
+      opt-in. Default I would ship: <span class="kbd">noindex</span> until a learner asks for otherwise.</li>
+  </ol>
+  <div class="note warn">
+    None of these block me starting. Surfaces 1 and 2 are fully specified by what already ships. I would
+    build those first and bring the public page back to you once these are settled.
+  </div>
+</section>
+
+</div>
+</body>
+</html>

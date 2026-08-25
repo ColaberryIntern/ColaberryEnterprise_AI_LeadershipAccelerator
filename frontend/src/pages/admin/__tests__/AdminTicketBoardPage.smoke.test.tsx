@@ -86,7 +86,10 @@ function mockFetch(tickets: { backlog?: any[]; todo?: any[]; in_progress?: any[]
     if (url.startsWith('/api/admin/tickets/board')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ board }) });
     }
-    if (url === '/api/admin/tickets/stats') {
+    // Ticket KPI filter-scoping fix (2026-08-25) — the stats fetch now carries
+    // the same query string the board fetch does, so this must match by
+    // prefix, not exact equality (which broke the moment a `?` appeared).
+    if (url.startsWith('/api/admin/tickets/stats')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(EMPTY_STATS) });
     }
     return Promise.reject(new Error(`unexpected fetch ${url}`));
@@ -413,7 +416,7 @@ describe('AdminTicketBoardPage — last-7-days default view', () => {
       if (url.startsWith('/api/admin/tickets/board')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ board: { backlog: [makeTicket({ id: 'recent-1' })], todo: [], in_progress: [], in_review: [], done: [], cancelled: [] } }) });
       }
-      if (url === '/api/admin/tickets/stats') {
+      if (url.startsWith('/api/admin/tickets/stats')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ total: 16186, open: 5325, byStatus: {}, byPriority: {}, byType: {} }) });
       }
       return Promise.reject(new Error(`unexpected fetch ${url}`));
@@ -691,5 +694,88 @@ describe('AdminTicketBoardPage — creator filter (real, roster-backed select)',
     await renderBoard();
 
     expect(columnHeaderLabels()).toEqual(['Backlog', 'To Do', 'In Progress', 'In Review', 'Done']);
+  });
+});
+
+// Ticket KPI filter-scoping fix (2026-08-25) — Ali, live, filtering the board
+// by Creator: "When we filter down on a list the KPIs should reflect what the
+// data is showing" (screenshot: 388 Open globally vs. 15 real tickets in the
+// filtered board). The actual regression test: the stats fetch must carry the
+// SAME query string the board fetch does, not a bare, unparameterized call.
+describe('AdminTicketBoardPage — KPI cards scope to the active filters', () => {
+  const ROSTER = [{ agent_name: 'Reese', display_name: 'Reese' }];
+
+  function statsFetchCalls(): string[] {
+    return ((global as any).fetch as jest.Mock).mock.calls
+      .map((c: any[]) => c[0])
+      .filter((url: string) => url.startsWith('/api/admin/tickets/stats'));
+  }
+
+  function boardFetchCalls(): string[] {
+    return ((global as any).fetch as jest.Mock).mock.calls
+      .map((c: any[]) => c[0])
+      .filter((url: string) => url.startsWith('/api/admin/tickets/board'));
+  }
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/'); // reset the deep-link URL between tests
+  });
+
+  it('a Creator deep link sends creator= to BOTH the board fetch and the stats fetch — the exact reported bug', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=Reese&range=all');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    mockFetch({ backlog: [makeTicket({ id: 'r-1' })] });
+    await renderBoard();
+
+    expect(boardFetchCalls()[boardFetchCalls().length - 1]).toMatch(/creator=Reese/);
+    expect(statsFetchCalls()[statsFetchCalls().length - 1]).toMatch(/creator=Reese/);
+  });
+
+  it('the KPI cards render the FILTERED numbers the stats endpoint returned, not a separate global total', async () => {
+    window.history.pushState({}, '', '/admin/tickets?creator=Reese&range=all');
+    getTicketCreatorOptions.mockResolvedValue(ROSTER);
+    (global as any).fetch = jest.fn((url: string) => {
+      if (url.startsWith('/api/admin/tickets/board')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ board: { backlog: [makeTicket({ id: 'r-2' })], todo: [], in_progress: [], in_review: [], done: [], cancelled: [] } }),
+        });
+      }
+      if (url.startsWith('/api/admin/tickets/stats')) {
+        // The real, filtered numbers from the screenshot: 15 total for Reese,
+        // not the global 16659/388.
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ total: 15, open: 15, byStatus: {}, byPriority: { medium: 15 }, byType: {} }) });
+      }
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    });
+    await renderBoard();
+
+    const statCards = Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
+    expect(statCards.some((text) => text.includes('Total') && text.includes('15'))).toBe(true);
+    expect(statCards.some((text) => text.includes('Total') && text.includes('16659'))).toBe(false);
+  });
+
+  it('composes a Priority filter into the stats fetch too, not just Creator', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'r-3' })] });
+    await renderBoard();
+
+    const prioritySelect = container.querySelector('select:not([aria-label="Creator"])') as HTMLSelectElement;
+    await act(async () => {
+      prioritySelect.value = 'critical';
+      prioritySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(statsFetchCalls()[statsFetchCalls().length - 1]).toMatch(/priority=critical/);
+  });
+
+  it('boundary: no filters active -> the stats fetch still carries the same (empty) params the board fetch does, matching today\'s global-totals behavior', async () => {
+    mockFetch({ backlog: [makeTicket({ id: 'r-4' })] });
+    await renderBoard();
+
+    const lastBoardCall = boardFetchCalls()[boardFetchCalls().length - 1];
+    const lastStatsCall = statsFetchCalls()[statsFetchCalls().length - 1];
+    // Both carry the same querystring (created_after from the 7-day default,
+    // nothing else) — proving they were built from the exact same `params`.
+    expect(lastStatsCall.split('?')[1]).toBe(lastBoardCall.split('?')[1]);
   });
 });

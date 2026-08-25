@@ -1,11 +1,25 @@
 /**
- * v2Stories.ts -- the case-study format, with placeholder content.
+ * v2Stories.ts -- ILLUSTRATIVE FIXTURE. NOT A PRODUCTION DATA SOURCE.
  *
- * THESE ARE PLACEHOLDERS AND THE PAGE SAYS SO ON EVERY CARD.
- * Ali has his own plan for the real case studies and will replace these. Until
- * he does, every entry carries `evidence: 'illustrative'`, which renders a
- * visible "Illustrative demo" badge through the same primitive the rest of the
- * site uses.
+ * DEMOTED 2026-08-24 (spec section 26). `/stories` is API-backed: `StoriesV2`
+ * reads `/api/public/case-studies` and renders only records a human published
+ * through the Case Study OS. This module is retained as a dev/test fixture --
+ * useful for asserting that none of its wording can reach a page again, and as
+ * a worked example of the card format -- and it is imported by NOTHING in the
+ * production path.
+ *
+ * That is enforced, not asked for. `pages/publicV2/__tests__/storiesV2Contract.test.ts`
+ * greps every source file under `src/` and fails if any module outside a
+ * `__tests__` or `__fixtures__` directory imports this one. If you find yourself
+ * wanting to render these on a public surface, the answer is a published Case
+ * Study record, not this file: every entry below is invented, and section 26 is
+ * explicit that invented people, companies, quotations and metrics are never
+ * seeded as verified production Case Studies.
+ *
+ * The entries carry `evidence: 'illustrative'` in spirit -- the page that used
+ * them rendered a visible "Illustrative demo" badge on every card through the
+ * same primitive the rest of the site uses -- and each one states the evidence a
+ * real version would need before it could be published.
  *
  * WHY NOT COPY THE LIVE ONES
  * The live /case-studies page carries "Priya Nair shipped the Claims Triage

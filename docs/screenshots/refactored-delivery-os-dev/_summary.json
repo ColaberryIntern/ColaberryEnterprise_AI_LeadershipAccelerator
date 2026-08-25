@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-08-25T14:53:35.602Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": {
+    "base_url": "http://95.216.199.47:9999",
+    "console_errors": [],
+    "entries": [
+      {
+        "file": "01-client-overview.png",
+        "label": "Client Review Room — Overview",
+        "url": "/admin/refactored/client"
+      },
+      {
+        "file": "02-client-decisions.png",
+        "label": "Client — Decisions",
+        "url": "/admin/refactored/client"
+      },
+      {
+        "file": "03-client-changes.png",
+        "label": "Client — Changes",
+        "url": "/admin/refactored/client"
+      },
+      {
+        "file": "04-client-results.png",
+        "label": "Client — Results",
+        "url": "/admin/refactored/client"
+      },
+      {
+        "file": "05-builder-command.png",
+        "label": "Builder Workspace — Command",
+        "url": "/admin/refactored/builder"
+      },
+      {
+        "file": "06-builder-proof.png",
+        "label": "Builder — Proof",
+        "url": "/admin/refactored/builder"
+      },
+      {
+        "file": "07-builder-release.png",
+        "label": "Builder — Release",
+        "url": "/admin/refactored/builder"
+      },
+      {
+        "file": "08-builder-operate.png",
+        "label": "Builder — Operate",
+        "url": "/admin/refactored/builder"
+      }
+    ]
+  }
+}
