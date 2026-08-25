@@ -23,14 +23,27 @@
   function person(id) { return D.people.filter(function (p) { return p.personId === id; })[0]; }
   function personName(id) { var p = person(id); return p ? p.name : 'Unassigned'; }
   function plural(n, s, p) { return n === 1 ? s : (p || s + 's'); }
+  // A due date or a projected finish is a CALENDAR DAY, not an instant.
+  // "2026-10-07" parses as UTC midnight, which renders as October 6 for any
+  // reader west of Greenwich, so the panel said "Oct 6" while the message
+  // underneath it said "October 7" about the same forecast. Anchor date-only
+  // values at noon UTC and format them in UTC; leave real timestamps (comment
+  // times) local, because for those the reader's own clock is the right frame.
+  function dayParts(iso) {
+    var s = String(iso);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s)
+      ? { d: new Date(s + 'T12:00:00Z'), tz: 'UTC' }
+      : { d: new Date(s), tz: undefined };
+  }
   function shortDate(iso) {
     if (!iso) return 'n/a';
-    var d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    var p = dayParts(iso);
+    return p.d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: p.tz });
   }
   function longDate(iso) {
     if (!iso) return 'n/a';
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    var p = dayParts(iso);
+    return p.d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: p.tz });
   }
 
   // Trend chip. The "new" case matters: 0 -> 3 is not "infinity percent".
@@ -67,6 +80,19 @@
     }).join('') + '</span>';
   }
   function badge(text, tone) { return '<span class="badge ' + (tone || 'neutral') + '">' + esc(text) + '</span>'; }
+
+  // One-line attribution for a project card. A shared list names the people on
+  // it rather than borrowing one of their names as "the owner".
+  function ownerLabel(p) {
+    if (p.ownershipModel === 'shared') {
+      var names = (p.holders || []).map(function (h) { return h.name; });
+      return names.length > 2
+        ? 'Shared: ' + names.slice(0, 2).join(', ') + ' +' + (names.length - 2)
+        : 'Shared: ' + names.join(', ');
+    }
+    if (p.ownershipModel === 'unowned') return 'Nobody assigned';
+    return personName(p.ownerId);
+  }
 
   var SENTIMENT_TONE = function (score) {
     if (score >= 0.35) return 'good';
@@ -237,12 +263,19 @@
     else if (projFilter === 'moving') rows = rows.filter(function (p) { return p.status === 'ON_TRACK' || p.status === 'WATCH'; });
     else if (projFilter === 'done') rows = rows.filter(function (p) { return p.status === 'COMPLETE'; });
     else if (projFilter !== 'all') rows = rows.filter(function (p) { return p.stream === projFilter; });
-    if (q) rows = rows.filter(function (p) { return (p.name + ' ' + personName(p.ownerId) + ' ' + (p.summary || '')).toLowerCase().indexOf(q) !== -1; });
+    // Search every holder, not just the owner, or a shared list becomes
+    // unfindable by the name of anyone actually working on it.
+    if (q) {
+      rows = rows.filter(function (p) {
+        var names = (p.holders || []).map(function (h) { return h.name; }).join(' ');
+        return (p.name + ' ' + personName(p.ownerId) + ' ' + names + ' ' + (p.summary || '')).toLowerCase().indexOf(q) !== -1;
+      });
+    }
 
     $('#proj-count').textContent = rows.length;
     $('#proj-body').innerHTML = rows.map(function (p) {
       return '<div class="card pcard ' + p.statusTone + '" data-project="' + p.projectId + '">'
-        + '<div class="ptop"><div><h4>' + esc(p.name) + '</h4><div class="owner">' + esc(personName(p.ownerId)) + ' &middot; ' + esc(p.stream) + '</div></div>' + badge(p.statusLabel, p.statusTone) + '</div>'
+        + '<div class="ptop"><div><h4>' + esc(p.name) + '</h4><div class="owner">' + esc(ownerLabel(p)) + ' &middot; ' + esc(p.stream) + '</div></div>' + badge(p.statusLabel, p.statusTone) + '</div>'
         + bar(p.percentComplete, p.percentReason)
         + '<div class="sum">' + esc(p.summary || '') + '</div>'
         + (p.riskFlags.length ? '<div class="flags">' + p.riskFlags.map(function (f) { return badge(f.label, f.tone); }).join('') + '</div>' : '')
@@ -271,20 +304,77 @@
     document.body.style.overflow = '';
   }
 
-  function projectDrawer(id) {
+  // Which person the open drawer is scoped to, and whether the reader has asked
+  // to see past their tasks to the rest of the list.
+  var drawerCtx = { projectId: null, focusPersonId: null, showAll: false };
+
+  function holdingFor(pers, projectId) {
+    if (!pers || !pers.holdings) return null;
+    return pers.holdings.filter(function (h) { return h.projectId === projectId; })[0] || null;
+  }
+
+  function projectDrawer(id, focusPersonId, showAll) {
     var p = pid(id);
     if (!p) return;
-    var qs = D.decisionQueue.filter(function (q) { return q.projectId === id; });
+    drawerCtx = { projectId: id, focusPersonId: focusPersonId || null, showAll: !!showAll };
 
-    var releases = p.releases.length
-      ? p.releases.map(function (r) {
-        var tasks = p.tasks.filter(function (t) { return t.groupName === r.name; });
-        return '<details class="acc"' + (r.done < r.total && r.done > 0 ? ' open' : '') + '>'
-          + '<summary><span style="flex:1">' + esc(r.name) + '</span>' + bar(r.pct) + '<span style="color:var(--muted);font-size:12px">' + r.done + '/' + r.total + '</span></summary>'
+    var focus = focusPersonId ? person(focusPersonId) : null;
+    var holding = holdingFor(focus, id);
+    // Scope only when it changes what you see. Someone who holds the whole list
+    // gets the normal view; the "showing only your tasks" chrome would be noise.
+    var scoped = !!(holding && !holding.isWholeList) && !showAll;
+
+    var mineOnly = function (list) {
+      if (!scoped) return list;
+      return list.filter(function (t) { return (t.assigneeIds || []).indexOf(focusPersonId) !== -1; });
+    };
+
+    // Task ids belonging to the focused person, so the update threads and the
+    // open questions can be scoped the same way the task list is. Scoping only
+    // the tasks and leaving other people's threads on the page would still be
+    // showing Harpreet somebody else's build.
+    var myTaskIds = scoped
+      ? mineOnly(p.tasks).map(function (t) { return t.taskId; })
+      : null;
+    var mineTask = function (taskId) { return !scoped || myTaskIds.indexOf(taskId) !== -1; };
+
+    var qs = D.decisionQueue.filter(function (q) {
+      if (q.projectId !== id) return false;
+      // Keep a question if it is on their task or they are the one asking.
+      return !scoped || mineTask(q.taskId) || q.askedById === focusPersonId;
+    });
+
+    var visibleReleases = p.releases.filter(function (r) {
+      return !scoped || mineOnly(p.tasks.filter(function (t) { return t.groupName === r.name; })).length > 0;
+    });
+
+    var releases = visibleReleases.length
+      ? visibleReleases.map(function (r) {
+        var tasks = mineOnly(p.tasks.filter(function (t) { return t.groupName === r.name; }));
+        var shown = scoped
+          ? '<span style="color:var(--muted);font-size:12px">' + tasks.filter(function (t) { return t.completed; }).length + '/' + tasks.length + ' yours</span>'
+          : '<span style="color:var(--muted);font-size:12px">' + r.done + '/' + r.total + '</span>';
+        return '<details class="acc"' + ((scoped || (r.done < r.total && r.done > 0)) ? ' open' : '') + '>'
+          + '<summary><span style="flex:1">' + esc(r.name) + '</span>' + (scoped ? '' : bar(r.pct)) + shown + '</summary>'
           + '<div class="accbody"><ul class="tasklist">' + tasks.map(taskLi).join('') + '</ul></div>'
           + '</details>';
       }).join('')
-      : '<ul class="tasklist" style="border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card)">' + p.tasks.filter(function (t) { return t.groupKind !== 'approval_gate'; }).map(taskLi).join('') + '</ul>';
+      : '<ul class="tasklist" style="border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card)">'
+        + mineOnly(p.tasks.filter(function (t) { return t.groupKind !== 'approval_gate'; })).map(taskLi).join('')
+        + '</ul>';
+
+    // The banner is what stops the scoped view from being a lie by omission.
+    var scopeBanner = '';
+    if (holding && !holding.isWholeList) {
+      // The sentence lives in one span: .scopebar is a flex row with a gap, so
+      // loose text nodes around the <b> would be spaced apart as flex items and
+      // render as "Harpreet Kaur 's 1 task".
+      scopeBanner = scoped
+        ? '<div class="scopebar"><span>Showing only <b>' + esc(focus.name) + '</b>&rsquo;s ' + holding.taskTotal + ' ' + plural(holding.taskTotal, 'task')
+          + ' on this list of ' + p.taskTotal + '.</span><button class="btn" data-scope-toggle="all">Show the whole list</button></div>'
+        : '<div class="scopebar"><span>Showing all ' + p.taskTotal + ' tasks on the list. <b>' + esc(focus.name) + '</b> holds ' + holding.taskTotal + '.</span>'
+          + '<button class="btn" data-scope-toggle="mine">Show only their tasks</button></div>';
+    }
 
     var gates = p.gates.length
       ? '<div class="dsec"><h5>Approval gates</h5><ul class="tasklist" style="border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card)">' + p.gates.map(taskLi).join('') + '</ul></div>'
@@ -299,13 +389,18 @@
       }).join('') + '</div>'
       : '';
 
-    var comments = p.recentComments.length
-      ? '<div class="dsec"><h5>Latest updates</h5>' + p.recentComments.map(function (c) {
+    var visibleComments = scoped
+      ? p.recentComments.filter(function (c) { return mineTask(c.todoId) || c.authorId === focusPersonId; })
+      : p.recentComments;
+
+    var comments = visibleComments.length
+      ? '<div class="dsec"><h5>Latest updates' + (scoped ? ' on their work' : '') + '</h5>' + visibleComments.map(function (c) {
         return '<div class="cmt"><div class="ch">' + esc(c.author) + ' <span style="color:var(--muted);font-weight:400">' + longDate(c.createdAt) + ' &middot; ' + esc(c.todoTitle) + '</span></div><div class="cb" data-expand>' + esc(c.text) + '</div></div>';
       }).join('') + '</div>'
       : '';
 
     var body = ''
+      + scopeBanner
       + '<div class="dsec"><div class="card callout ' + (p.statusTone === 'risk' ? 'risk' : p.statusTone === 'warning' ? 'warn' : '') + '" style="margin:0">'
       + '<h3>' + esc(p.headline || p.statusLabel) + '</h3><p>' + esc(p.summary || '') + '</p>'
       + (p.nextAction ? '<p style="font-size:13px;color:var(--muted)"><b>Next action:</b> ' + esc(p.nextAction) + '</p>' : '')
@@ -313,19 +408,25 @@
       + '</div></div>'
 
       + '<div class="dsec"><div class="minigrid">'
-      + '<div class="m"><b>' + (p.percentComplete == null ? 'n/a' : p.percentComplete + '%') + '</b><small>complete</small></div>'
-      + '<div class="m"><b>' + p.taskDone + '/' + p.taskTotal + '</b><small>tasks</small></div>'
+      + (scoped
+        ? '<div class="m"><b>' + (holding.percentComplete == null ? 'n/a' : holding.percentComplete + '%') + '</b><small>their share done</small></div>'
+          + '<div class="m"><b>' + holding.taskDone + '/' + holding.taskTotal + '</b><small>their tasks</small></div>'
+        : '<div class="m"><b>' + (p.percentComplete == null ? 'n/a' : p.percentComplete + '%') + '</b><small>complete</small></div>'
+          + '<div class="m"><b>' + p.taskDone + '/' + p.taskTotal + '</b><small>tasks</small></div>')
       + '<div class="m"><b>' + p.doneLast7 + '</b><small>closed 7d</small></div>'
       + '<div class="m"><b>' + p.updatesLast7 + '</b><small>updates 7d</small></div>'
       + '<div class="m"><b>' + (p.daysSinceActivity == null ? '∞' : p.daysSinceActivity) + '</b><small>days quiet</small></div>'
       + '<div class="m"><b>' + p.overdue.length + '</b><small>past due</small></div>'
       + '</div></div>'
 
-      + '<div class="dsec"><h5>Read of the room</h5><div class="card pad">'
+      // Labelled explicitly when scoped: the trends and the forecast in this
+      // panel describe the whole list, and sitting directly under a banner that
+      // says "showing only Harpreet's task" they would otherwise read as hers.
+      + '<div class="dsec"><h5>Read of the room' + (scoped ? ' (the whole list)' : '') + '</h5><div class="card pad">'
       + badge(p.sentiment ? p.sentiment.label : 'Neutral', SENTIMENT_TONE(p.sentiment ? p.sentiment.score : 0))
       + ' <span style="color:var(--muted);font-size:13px">' + esc(p.sentiment ? p.sentiment.rationale : '') + '</span>'
       + '<dl class="dl" style="margin-top:14px">'
-      + '<dt>Owner</dt><dd>' + esc(personName(p.ownerId)) + '</dd>'
+      + ownershipRow(p)
       + '<dt>Current release</dt><dd>' + (p.currentRelease ? esc(p.currentRelease.name) + ' (' + p.currentRelease.done + '/' + p.currentRelease.total + ')' : 'no release structure') + '</dd>'
       + '<dt>Velocity trend</dt><dd>' + p.doneLast7 + ' closed this week vs ' + p.donePrior7 + ' last ' + delta(p.velocityDelta) + '</dd>'
       + '<dt>Update trend</dt><dd>' + p.updatesLast7 + ' updates this week vs ' + p.updatesPrior7 + ' last ' + delta(p.cadenceDelta) + '</dd>'
@@ -333,12 +434,116 @@
       + '<dt>Projected finish</dt><dd>' + (p.projectedFinish ? longDate(p.projectedFinish) + ' <small style="color:var(--muted)">(' + p.projectedDays + ' days at current pace)</small>' : '<span class="badge risk">not projectable at current pace</span>') + '</dd>'
       + '</dl></div></div>'
 
+      + coachNoteSection(p, scoped ? focusPersonId : null)
       + questions
-      + '<div class="dsec"><h5>Releases and tasks (' + p.taskTotal + ')</h5>' + releases + '</div>'
+      + '<div class="dsec"><h5>' + (scoped ? 'Their tasks (' + holding.taskTotal + ' of ' + p.taskTotal + ' on this list)' : 'Releases and tasks (' + p.taskTotal + ')') + '</h5>' + releases + '</div>'
       + gates
       + comments;
 
-    openDrawer(esc(p.name), 'Portfolio <b>&rsaquo;</b> ' + esc(p.stream) + ' <b>&rsaquo;</b> ' + esc(personName(p.ownerId)) + ' <b>&rsaquo;</b> Project', body);
+    var who = scoped ? focus.name : (p.ownershipModel === 'shared' ? 'Shared list' : personName(p.ownerId));
+    openDrawer(esc(p.name), 'Portfolio <b>&rsaquo;</b> ' + esc(p.stream) + ' <b>&rsaquo;</b> ' + esc(who) + ' <b>&rsaquo;</b> Project', body);
+  }
+
+  // Ownership, stated only as strongly as the data supports. A list where four
+  // people hold one todo each has no owner, and saying otherwise hands one
+  // person credit and blame for three other people's builds.
+  function ownershipRow(p) {
+    var holders = p.holders || [];
+    if (p.ownershipModel === 'shared') {
+      return '<dt>Ownership</dt><dd>Shared list, no single owner. '
+        + holders.map(function (h) { return esc(h.name) + ' ' + h.doneCount + '/' + h.taskCount; }).join(', ')
+        + '</dd>';
+    }
+    if (p.ownershipModel === 'unowned') {
+      return '<dt>Ownership</dt><dd><span class="badge risk">nobody is assigned</span></dd>';
+    }
+    if (p.taskTotal === 1) {
+      return '<dt>Assigned to</dt><dd>' + esc(personName(p.ownerId)) + '</dd>';
+    }
+    var suffix = p.ownershipModel === 'lead' && holders.length > 1
+      ? ' <small style="color:var(--muted)">(holds ' + holders[0].taskCount + ' of ' + p.taskTotal + '; ' + (holders.length - 1) + ' other ' + plural(holders.length - 1, 'contributor') + ')</small>'
+      : '';
+    return '<dt>Owner</dt><dd>' + esc(personName(p.ownerId)) + suffix + '</dd>';
+  }
+
+  // The Basecamp comment Ali posts on the list. Precomputed in the snapshot, so
+  // what is shown here is exactly what lands on the clipboard.
+  function coachNoteSection(p, focusPersonId) {
+    var note = focusPersonId && p.coachNotesByPerson ? p.coachNotesByPerson[focusPersonId] : null;
+    if (!note) note = p.coachNote;
+    if (!note) return '';
+    var heading = note.recipientName ? 'Message to ' + esc(note.recipientName) : 'Message to the list';
+    return '<div class="dsec"><h5>' + heading + '</h5>'
+      + '<div class="card pad coachnote" data-note-project="' + p.projectId + '" data-note-person="' + (focusPersonId || '') + '">'
+      + '<div class="notebody">'
+      + '<p class="greet">' + esc(note.greeting) + '</p>'
+      + note.paragraphs.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('')
+      + '</div>'
+      + '<div class="noteacts">'
+      + '<button class="btn primary" data-copy-note>Copy message</button>'
+      + '<a class="btn" href="' + esc(note.listUrl) + '" target="_blank" rel="noopener">Open the list in Basecamp</a>'
+      + '<span class="notehint">Paste as a comment on the list. Every figure comes from this snapshot.</span>'
+      + '</div>'
+      + '</div></div>';
+  }
+
+  function noteFromCard(card) {
+    var p = pid(parseInt(card.getAttribute('data-note-project'), 10));
+    if (!p) return null;
+    var who = card.getAttribute('data-note-person');
+    var scopedNote = who && p.coachNotesByPerson ? p.coachNotesByPerson[who] : null;
+    return scopedNote || p.coachNote || null;
+  }
+
+  function copyNote(btn) {
+    var card = btn.closest('[data-note-project]');
+    var note = card ? noteFromCard(card) : null;
+    if (!note) return;
+
+    var done = function (ok) {
+      btn.textContent = ok ? 'Copied' : 'Copy failed, select the text above';
+      btn.classList.toggle('copied', ok);
+      setTimeout(function () { btn.textContent = 'Copy message'; btn.classList.remove('copied'); }, 2400);
+    };
+
+    // Rich HTML first so Basecamp keeps the paragraph breaks. Plain text rides
+    // along in the same clipboard item for anywhere that will not take HTML.
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      try {
+        var item = new ClipboardItem({
+          'text/html': new Blob([note.html], { type: 'text/html' }),
+          'text/plain': new Blob([note.plainText], { type: 'text/plain' }),
+        });
+        navigator.clipboard.write([item]).then(function () { done(true); }, function () { copyPlain(note.plainText, done); });
+        return;
+      } catch (_e) { /* older browser, fall through */ }
+    }
+    copyPlain(note.plainText, done);
+  }
+
+  function copyPlain(text, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { copyViaTextarea(text, done); });
+      return;
+    }
+    copyViaTextarea(text, done);
+  }
+
+  // Last resort. This report is usually read as a file:// attachment out of
+  // Outlook, where the async clipboard API is not always available, and a copy
+  // button that silently does nothing there would be worse than no button.
+  function copyViaTextarea(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (_e) { ok = false; }
+    document.body.removeChild(ta);
+    done(ok);
   }
 
   // Renders both delivery tasks and approval gates, which reach here from
@@ -391,11 +596,22 @@
 
       + '<div class="dsec"><h5>Their projects (' + mine.length + ')</h5>'
       + mine.map(function (x) {
-        return '<div class="card pad" style="margin-bottom:9px;cursor:pointer" data-project="' + x.projectId + '">'
+        // Their bar, their counts. On a shared list the list-level percentage
+        // describes other people's work and belongs nowhere near this card.
+        var h = holdingFor(p, x.projectId);
+        var partial = !!(h && !h.isWholeList);
+        var role = x.ownerId === p.personId ? 'owner'
+          : x.ownershipModel === 'shared' ? 'shares this list'
+            : 'contributor';
+        return '<div class="card pad" style="margin-bottom:9px;cursor:pointer" data-project="' + x.projectId + '" data-focus-person="' + p.personId + '">'
           + '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px"><b style="font-size:14px">' + esc(x.name) + '</b>' + badge(x.statusLabel, x.statusTone) + '</div>'
-          + bar(x.percentComplete, x.percentReason)
+          + (partial
+            ? bar(h.percentComplete, h.taskTotal === 1 ? 'Single task only - percentage is not meaningful' : null)
+            : bar(x.percentComplete, x.percentReason))
           + '<div style="font-size:12.5px;color:var(--muted);margin-top:8px">' + esc(x.summary || '') + '</div>'
-          + '<div style="font-size:11.5px;color:var(--muted);margin-top:7px">' + (x.ownerId === p.personId ? 'owner' : 'contributor') + ' &middot; ' + x.taskDone + '/' + x.taskTotal + ' tasks &middot; ' + (x.daysSinceActivity == null ? 'no activity' : x.daysSinceActivity + 'd since update') + '</div>'
+          + '<div style="font-size:11.5px;color:var(--muted);margin-top:7px">' + role + ' &middot; '
+          + (h ? h.taskDone + '/' + h.taskTotal + ' of their tasks' + (partial ? ' (list has ' + x.taskTotal + ')' : '') : x.taskDone + '/' + x.taskTotal + ' tasks')
+          + ' &middot; ' + (x.daysSinceActivity == null ? 'no activity' : x.daysSinceActivity + 'd since update') + '</div>'
           + '</div>';
       }).join('') + '</div>';
 
@@ -530,14 +746,25 @@
           var owns = p.ownerId === person.personId;
           var contributes = p.contributorIds.indexOf(person.personId) !== -1;
           if (!owns && !contributes) return '<td class="cell" style="background:var(--neutral-bg)" title="not on this project"></td>';
-          var v = p.percentComplete;
+          // The cell is THEIR progress on that list, not the list's. On a
+          // shared list the two are different numbers, and the list's belongs
+          // to other people.
+          var h = holdingFor(person, p.projectId);
+          var v = h ? h.percentComplete : p.percentComplete;
+          var detail = h
+            ? h.taskDone + ' of ' + h.taskTotal + (h.isWholeList ? '' : ' (list has ' + p.taskTotal + ')')
+            : p.taskDone + ' of ' + p.taskTotal;
           var bg = v == null ? 'var(--neutral)' : barColor(v);
-          return '<td class="cell" data-project="' + p.projectId + '" style="background:' + bg + ';opacity:' + (owns ? 1 : .55) + '" title="' + esc(person.name + ' - ' + p.name + ': ' + (v == null ? 'not calculable' : v + '%') + (owns ? ' (owner)' : ' (contributor)')) + '">' + (v == null ? '-' : Math.round(v)) + '</td>';
+          var role = owns ? ' (owner)' : p.ownershipModel === 'shared' ? ' (shares this list)' : ' (contributor)';
+          return '<td class="cell" data-project="' + p.projectId + '" data-focus-person="' + person.personId + '"'
+            + ' style="background:' + bg + ';opacity:' + (owns ? 1 : .55) + '"'
+            + ' title="' + esc(person.name + ' - ' + p.name + ': ' + detail + role) + '">'
+            + (v == null ? '-' : Math.round(v)) + '</td>';
         }).join('') + '</tr>';
     }).join('');
 
     $('#heat').innerHTML = '<div class="tablewrap"><table class="heat"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>'
-      + '<div class="note">Each cell is that person\'s project at its completion percentage. Full opacity means they own it, faded means they contribute. Grey means they are not on it. Click any cell to drill in.</div>';
+      + '<div class="note">Each cell is how far that person is through <b>their own</b> tasks on that list, not the list as a whole. Full opacity means they own it, faded means they share or contribute to it. Grey means they are not on it. A dash means they hold a single task, where a percentage would say nothing. Click any cell to drill into their work.</div>';
   }
 
   // ------------------------------------------------------------ 10. TOC
@@ -555,8 +782,24 @@
   function wire() {
     // delegated drill-through
     document.addEventListener('click', function (e) {
+      // Order matters: the copy button and the scope toggle both live inside a
+      // card that carries data-project, so they have to be claimed first or the
+      // click re-opens the drawer instead of doing its job.
+      var cp = e.target.closest('[data-copy-note]');
+      if (cp) { e.preventDefault(); copyNote(cp); return; }
+      var tg = e.target.closest('[data-scope-toggle]');
+      if (tg) {
+        e.preventDefault();
+        projectDrawer(drawerCtx.projectId, drawerCtx.focusPersonId, tg.getAttribute('data-scope-toggle') === 'all');
+        return;
+      }
       var pr = e.target.closest('[data-project]');
-      if (pr) { e.preventDefault(); projectDrawer(parseInt(pr.getAttribute('data-project'), 10)); return; }
+      if (pr) {
+        e.preventDefault();
+        var fp = pr.getAttribute('data-focus-person');
+        projectDrawer(parseInt(pr.getAttribute('data-project'), 10), fp ? parseInt(fp, 10) : null, false);
+        return;
+      }
       var pe = e.target.closest('[data-person]');
       if (pe) { e.preventDefault(); personDrawer(parseInt(pe.getAttribute('data-person'), 10)); return; }
       var ex = e.target.closest('[data-expand]');

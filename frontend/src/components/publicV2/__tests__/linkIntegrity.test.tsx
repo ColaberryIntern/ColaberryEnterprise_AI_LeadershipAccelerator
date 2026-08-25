@@ -26,14 +26,23 @@ import ProofV2 from '../../../pages/publicV2/ProofV2';
 import OpportunityLabV2 from '../../../pages/publicV2/OpportunityLabV2';
 import TryV2 from '../../../pages/publicV2/TryV2';
 import PrivacyV2 from '../../../pages/publicV2/PrivacyV2';
+import StoriesV2 from '../../../pages/publicV2/StoriesV2';
+import StoryDetailV2 from '../../../pages/publicV2/StoryDetailV2';
 import PublicHeaderV2, { V2_NAV } from '../PublicHeaderV2';
 import PublicFooterV2 from '../PublicFooterV2';
 import { SERVICE_DETAILS } from '../../../config/v2Services';
+import { CASE_STUDY_SURFACES, caseStudyDetailPath } from '../../../config/caseStudySurfaces';
 
 /**
  * Mirrors the <Route> tree in App.tsx, plus the live routes V2 legitimately
  * links out to. Kept as an explicit list so adding a link to a page that does
  * not exist fails here rather than in a customer's browser.
+ *
+ * `/stories/:slug` is a PATTERN, not a path. Every other entry here is a
+ * literal because the page behind it is a literal; a published project record
+ * has no fixed slug, so the only honest way to declare its route is the shape
+ * App.tsx actually registers. `routeResolves()` below matches it segment by
+ * segment, so the guard stays exactly as strict as it was for everything else.
  */
 const V2_ROUTES = [
   '/',
@@ -47,6 +56,7 @@ const V2_ROUTES = [
   '/start',
   '/pricing',
   '/stories',
+  '/stories/:slug',
   ...SERVICE_DETAILS.map((s) => `/services/${s.slug}`),
 ];
 
@@ -54,6 +64,25 @@ const V2_ROUTES = [
 const LIVE_ROUTES = ['/pricing', '/contact', '/try', '/portal/login'];
 
 const ALL_ROUTES = [...V2_ROUTES, ...LIVE_ROUTES];
+
+/**
+ * Whether an href resolves to a declared route. An exact match, or a declared
+ * pattern whose segments line up one for one with `:param` standing in for
+ * exactly one segment. Nothing wildcards across a `/`, so `/stories/a/b` is
+ * still dead.
+ */
+function routeResolves(href: string): boolean {
+  if (ALL_ROUTES.includes(href)) return true;
+  const parts = href.split('/');
+  return ALL_ROUTES.some((route) => {
+    if (!route.includes(':')) return false;
+    const pattern = route.split('/');
+    if (pattern.length !== parts.length) return false;
+    return pattern.every((segment, index) => segment.startsWith(':') || segment === parts[index]);
+  });
+}
+
+const deadLinks = (html: string): string[] => internalHrefs(html).filter((h) => !routeResolves(h));
 
 const PAGES: [string, React.ReactElement, string][] = [
   ['HomeV2', <HomeV2 />, '/'],
@@ -65,6 +94,12 @@ const PAGES: [string, React.ReactElement, string][] = [
   ['OpportunityLabV2', <OpportunityLabV2 />, '/lab'],
   ['TryV2', <TryV2 />, '/try'],
   ['PrivacyV2', <PrivacyV2 />, '/privacy'],
+  // StoriesV2 was the only V2 page this suite had never walked. It renders its
+  // records from an API, so a static render reaches the loading state - which is
+  // exactly the state whose links (the closing CTA) are hardcoded and therefore
+  // the ones this suite can prove. Card hrefs are built by
+  // `caseStudyDetailPath()` and covered by StoriesV2.test.tsx.
+  ['StoriesV2', <StoriesV2 />, '/stories'],
   ['PublicHeaderV2', <PublicHeaderV2 />, '/'],
   ['PublicFooterV2', <PublicFooterV2 />, '/'],
 ];
@@ -88,7 +123,7 @@ describe('link integrity — every internal link resolves to a declared route', 
       const html = renderToStaticMarkup(
         <MemoryRouter initialEntries={[path]}>{element}</MemoryRouter>,
       );
-      const dead = internalHrefs(html).filter((h) => !ALL_ROUTES.includes(h));
+      const dead = deadLinks(html);
       expect(dead).toEqual([]);
     });
   });
@@ -124,7 +159,7 @@ describe('link integrity — every service drill-through', () => {
       expect(html).toContain(s.name);
       expect(html).not.toContain('Service not found');
 
-      const dead = internalHrefs(html).filter((h) => !ALL_ROUTES.includes(h));
+      const dead = deadLinks(html);
       expect(dead).toEqual([]);
     });
   });
@@ -170,5 +205,46 @@ describe('link integrity — the specific paths that were broken', () => {
     expect(html).toContain('href="/platform"');
     expect(html).toContain('href="/lab"');
     expect(html).not.toContain('href="/opportunity-lab"');
+  });
+});
+
+/**
+ * `/stories/:slug` — the one route in this table that is a pattern.
+ *
+ * The index builds its card hrefs through `caseStudyDetailPath()`, which is the
+ * only place in the app that composes a detail URL. So the check that matters is
+ * not "does some rendered anchor resolve" — a static render of either stories
+ * page reaches its loading state and emits no card links at all — but "does the
+ * function that composes those links target a route App.tsx actually declares".
+ * That is the link the ServiceDetailV2 bug broke, one layer up.
+ */
+describe('link integrity — the published-record detail route', () => {
+  it('resolves the path the index link builder produces', () => {
+    const href = caseStudyDetailPath(CASE_STUDY_SURFACES.enterprise, 'a-published-record');
+    expect(href).toBe('/stories/a-published-record');
+    expect(routeResolves(href as string)).toBe(true);
+  });
+
+  it('is still strict: an undeclared path and a deeper one stay dead', () => {
+    // Guarding the guard. A pattern matcher that wildcards too eagerly would
+    // make every assertion in this file pass, including the broken ones.
+    expect(routeResolves('/stories/a-record/extra')).toBe(false);
+    expect(routeResolves('/solutions')).toBe(false);
+    expect(routeResolves('/services/not-a-service')).toBe(false);
+  });
+
+  it('renders through its real <Route> without dead links or a blank page', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/stories/a-published-record']}>
+        <Routes>
+          <Route path="/stories/:slug" element={<StoryDetailV2 />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    // A server render runs no effects, so this is the pre-fetch state. What it
+    // proves is that the route matches and the page paints something rather
+    // than nothing while the record is on its way.
+    expect(html).toContain('story-loading');
+    expect(deadLinks(html)).toEqual([]);
   });
 });

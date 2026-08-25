@@ -3,6 +3,7 @@ import { Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
 const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
+const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const AdminLoginPage = lazy(() => import('../pages/admin/AdminLoginPage'));
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
 const WarRoomPage = lazy(() => import('../pages/admin/WarRoomPage'));
@@ -47,6 +48,8 @@ const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
 const GovernanceCommandCenter = lazy(() => import('../pages/admin/GovernanceCommandCenter'));
 const AdminGovernancePolicyPage = lazy(() => import('../pages/admin/AdminGovernancePolicyPage'));
 const AdminProjectOverview = lazy(() => import('../pages/admin/AdminProjectOverview'));
+const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesPage'));
+const AdminCaseStudyDetailPage = lazy(() => import('../pages/admin/AdminCaseStudyDetailPage'));
 const InboxCOSPage = lazy(() => import('../pages/admin/inbox/InboxCOSPage'));
 const ContentQueuePage = lazy(() => import('../pages/admin/ContentQueuePage'));
 const AdminSourcesPage = lazy(() => import('../pages/admin/AdminSourcesPage'));
@@ -64,15 +67,33 @@ const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
 const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
 const AdminVaErpDashboardPage = lazy(() => import('../pages/admin/AdminVaErpDashboardPage'));
 const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
+// Refactored AI Delivery OS (Gates 10-11). Both surfaces sit under /admin for now because
+// no authentication path resolves a PlatformIdentity yet, so a client reviewer cannot log
+// in — see docs/architecture/refactored-delivery-os/CLIENT_IDENTITY_ANSWER.md. Serving the
+// client room from a staff-authenticated route makes it reviewable by staff WITHOUT
+// implying an external client can reach it.
+const RefactoredClientReviewRoom = lazy(() => import('../pages/refactored/ClientReviewRoom'));
+const RefactoredBuilderWorkspace = lazy(() => import('../pages/refactored/BuilderWorkspace'));
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
     <Route path="/admin/login" element={<AdminLoginPage />} />
+    <Route path="/admin/career-review" element={<CareerReviewPage />} />
     <Route element={<ProtectedRoute />}>
       {/* Staff → own student portal ("AI Training"): mints a full-access portal
           token, redirects to /portal/today. Sits outside AdminLayout, like the
           portal's mirror-image /portal/mgmt-enter sits outside PortalLayout. */}
       <Route path="/admin/ai-training-enter" element={<AdminPortalEnterPage />} />
+      {/* The Client Review Room renders OUTSIDE AdminLayout, deliberately.
+          Wrapping a client-facing surface in the operations sidebar (Revenue, Lead
+          Ingestion, Campaigns, Intelligence) contradicts the one thing Gate 10 exists
+          to guarantee: a client sees a different, narrower world than an operator.
+          It is not a leak while the route is staff-only and no client can authenticate,
+          but it makes the eventual mistake easy — the day someone shares this URL the
+          projection layer would be doing its job while the chrome advertised the lead
+          pipeline. Found by deploying to dev and LOOKING; CI cannot see this.
+          Staff auth is retained via ProtectedRoute. */}
+      <Route path="/admin/refactored/client" element={<RefactoredClientReviewRoom />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         {/* Account self-service: reachable by every admin identity regardless
@@ -127,6 +148,17 @@ const adminRoutes = (
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
         <Route path="/admin/governance-policy" element={<AdminGovernancePolicyPage />} />
         <Route path="/admin/projects" element={<AdminProjectOverview />} />
+        {/* Case Studies: the review desk for the publishable projection of a
+            Project. The LIST is declared before the ":id" detail route.
+            Under react-router v6 that ordering is a READABILITY convention, not
+            a correctness requirement: v6 ranks by specificity, so a literal
+            "/admin/case-studies/new" beats ":id" whichever order they appear in
+            (probe-verified against 6.28.1). An earlier version of this comment
+            claimed the literal would "resolve as an id" — that is v5 behaviour
+            and is wrong here. Kept in this order anyway so the file reads the
+            same way as the business-account pair above. */}
+        <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
+        <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />
         <Route path="/admin/sources" element={<AdminSourcesPage />} />
@@ -145,6 +177,7 @@ const adminRoutes = (
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
         <Route path="/admin/va-erp" element={<AdminVaErpDashboardPage />} />
+        <Route path="/admin/refactored/builder" element={<RefactoredBuilderWorkspace />} />
       </Route>
     </Route>
   </>

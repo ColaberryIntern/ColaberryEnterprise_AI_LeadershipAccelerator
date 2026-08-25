@@ -26,6 +26,9 @@ export const PINNED_LINKS: NavLink[] = [
   { path: '/admin/war-room', label: 'War Room', icon: 'radar-line', section: 'war_room' },
   // Support role's sole surface (also visible to owner/admin who hold 'students').
   { path: '/admin/students', label: 'Student Story', icon: 'file-user-line', section: 'students' },
+  // Portfolio review. Its own section so a Mentor can be granted THIS and nothing
+  // else; mgmtRoles gives them ['dashboard','career_review'].
+  { path: '/admin/career-review', label: 'Portfolio Review', icon: 'award-line', section: 'career_review' },
   // advisor.colaberry.ai's own "My Day" queue — a separate app with its own
   // Google SSO, so this is a plain external link, no session bridge needed.
   { path: 'https://advisor.colaberry.ai/my-day/', label: 'My Day', icon: 'calendar-check-line', section: 'students', newTab: true },
@@ -75,6 +78,14 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
     { path: '/admin/brain', label: 'Enterprise Intelligence', icon: 'brain-line' },
     { path: '/admin/projects', label: 'Projects', icon: 'rocket-2-line' },
+    // Case Studies sit in Program because a Case Study is the publishable
+    // projection of a Project, so the roles that manage Projects manage these.
+    // The section MUST stay 'program': the backend's mgmtSectionGate maps
+    // /api/admin/case-studies to 'program', and without a matching nav entry
+    // sectionForPath() returns null, which hides the link AND makes
+    // ProtectedRoute bounce every scoped identity while a legacy admin who
+    // types the URL still sees a working page.
+    { path: '/admin/case-studies', label: 'Case Studies', icon: 'award-line' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },

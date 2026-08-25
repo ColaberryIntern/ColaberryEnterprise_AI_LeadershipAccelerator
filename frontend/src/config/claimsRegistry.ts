@@ -600,14 +600,22 @@ export const CLAIMS: readonly Claim[] = [
     verification: 'DO_NOT_PUBLISH',
     capability: 'n/a',
     evidenceSource:
-      'CaseStudiesPage.tsx — the file header concedes entries are illustrative, but nothing ' +
-      'on the rendered page says so. Still listed in sitemap.xml and still ingested by ' +
-      'admissionsKnowledgeSyncAgent.ts:25 as fact.',
+      'REMEDIATED 2026-08-23. CaseStudiesPage.tsx has been deleted, its dead import removed ' +
+      'from publicRoutes.tsx, and its entry removed from admissionsKnowledgeSyncAgent.ts. The ' +
+      'sitemap entry was already purged at the V2 cutover. /case-studies now redirects to ' +
+      '/stories, which is served from the Case Study OS: published snapshots only, each ' +
+      'carrying provenance and a verification class. Retained as a DO_NOT_PUBLISH record so ' +
+      'the wording can never return.',
     owner: 'Ali',
-    lastVerifiedAt: '2026-08-07',
+    lastVerifiedAt: '2026-08-23',
     approvedRoutes: [],
     requiresSampleLabel: false,
-    note: 'Delete the component, purge the sitemap entry, remove it from the agent knowledge source.',
+    note:
+      'Remediation complete. The gap that mattered was not the page — it was that the agent ' +
+      'knowledge source kept ingesting it for over two weeks after this record prescribed the ' +
+      'fix, so invented client quotations were being repeated to real prospects as fact. ' +
+      'A DO_NOT_PUBLISH claim is not self-executing; check that anything listed here has ' +
+      'actually been removed from every consumer, not just from the page it names.',
   },
   {
     key: 'testimonial.undisclosed',

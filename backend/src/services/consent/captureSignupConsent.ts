@@ -24,7 +24,15 @@ import { recordConsent } from '../consentService';
  * simply stays what it was.
  */
 
-export type ConsentChoice = boolean | 'true' | 'false' | 'on' | undefined | null;
+/**
+ * Whatever the caller has. Deliberately wide: a checkbox reaches a handler as a
+ * boolean, "true" or "on" depending on the form, and a value arriving over the
+ * wire from another service could be anything at all. `isAffirmative` below is
+ * the single narrow gate - widening what may be PASSED does not widen what
+ * COUNTS, and it keeps callers from having to cast (or worse, pre-filter, and
+ * get the filter subtly wrong).
+ */
+export type ConsentChoice = boolean | string | undefined | null;
 
 export interface SignupConsentInput {
   email: string;

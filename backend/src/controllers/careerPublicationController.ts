@@ -1,26 +1,43 @@
 /**
- * careerPublicationController — HTTP boundary for Gate 10 (publication) and
- * Gate 9b (review).
+ * careerPublicationController — the review gate on the Capstone Record.
  *
- * Three distinct audiences, three distinct authorization stories, deliberately kept
- * in separate handlers rather than one polymorphic endpoint:
+ * CONVERGENCE, 2026-08-25. This controller previously drove a second public portfolio at
+ * /talent/:slug. That surface is gone: the Capstone Record at /p/:slug shipped first, is
+ * live, and had already solved the snapshot half. What remains here is the half it
+ * lacked — a human approval before anything publishes, scoped so a mentor only reviews
+ * the learners they are over.
  *
- *  - the LEARNER submits their own portfolio  (subject = req.participant.sub, always)
- *  - an ADMIN decides                          (requireAdmin on the route)
- *  - the PUBLIC reads an approved snapshot     (no auth, slug only, frozen data)
+ * Three audiences, three authorization stories, deliberately separate handlers:
+ *
+ *   LEARNER   asks for review, and controls their own visibility  (req.participant.sub)
+ *   REVIEWER  admin sees everyone, mentor sees only their learners (requireCareerReviewer)
+ *   PUBLIC    reads the frozen record at /api/public/capstone/:slug (owned by Capstone,
+ *             untouched by this file)
  */
 import { Request, Response, NextFunction } from 'express';
 import {
-  requestReview,
-  recordReviewDecision,
-  suspendPublication,
-  listReviewQueue,
-  getPublicationStatus,
-  getPublicSnapshotBySlug,
-} from '../services/career/careerPublicationService';
+  requestCapstoneReview,
+  recordCapstoneDecision,
+  listCapstoneReviewQueue,
+  getReviewState,
+  setVisibility,
+} from '../services/career/capstoneReviewService';
+import { reviewerKind, type ReviewerIdentity } from '../services/career/careerMentorScopeService';
 
-/** The learner is ALWAYS the caller. No route here accepts an enrollment id. */
+/** The learner is ALWAYS the caller. No learner route accepts an enrollment id. */
 const eid = (req: Request) => req.participant!.sub;
+
+/** The reviewer, as the scope service understands them. */
+function reviewer(req: Request): ReviewerIdentity {
+  const a: any = req.admin || {};
+  return {
+    sub: String(a.sub || a.id || 'admin'),
+    email: a.email ?? null,
+    role: a.role,
+    mgmt_role: a.mgmt_role ?? null,
+    enrollmentId: a.enrollment_id ?? null,
+  };
+}
 
 function fail(res: Response, e: any, next: NextFunction) {
   if (e?.status) {
@@ -29,7 +46,7 @@ function fail(res: Response, e: any, next: NextFunction) {
   }
   console.warn(JSON.stringify({
     timestamp: new Date().toISOString(), level: 'error', service: 'backend',
-    event: 'career_publication_controller_error', error_class: e?.error_class || e?.name || 'Error',
+    event: 'capstone_review_controller_error', error_class: e?.error_class || e?.name || 'Error',
     outcome: 'failure', context: { message: e?.message },
   }));
   next(e);
@@ -37,44 +54,58 @@ function fail(res: Response, e: any, next: NextFunction) {
 
 // ── Learner ────────────────────────────────────────────────────────────────
 
-/** GET /api/portal/career/publication — where does my publication stand? */
+/** GET /api/portal/career/publication — where does my record stand? */
 export async function handleGetPublicationStatus(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await getPublicationStatus(eid(req)));
+    res.json(await getReviewState(eid(req)));
   } catch (e) { fail(res, e, next); }
 }
 
-/**
- * POST /api/portal/career/publication/request-review
- *
- * Freezes the learner's current studio into an immutable snapshot. 422 if readiness
- * policy is unmet — publishing is earned, and the refusal lives in the service so a
- * direct API call cannot skip it.
- */
+/** POST /api/portal/career/publication/request-review — ask a human to look at it. */
 export async function handleRequestReview(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await requestReview(eid(req)));
+    res.json(await requestCapstoneReview(eid(req)));
   } catch (e) { fail(res, e, next); }
 }
 
-// ── Reviewer (admin) ───────────────────────────────────────────────────────
+const VISIBILITIES = new Set(['private', 'unlisted', 'public']);
 
-/** GET /api/admin/career/review-queue — snapshots awaiting a decision, oldest first. */
-export async function handleGetReviewQueue(_req: Request, res: Response, next: NextFunction) {
+/**
+ * PUT /api/portal/career/publication/visibility — the learner's own choice of audience.
+ *
+ * Ali, 2026-08-25: default noindex, the learner opts in to being indexable. `public` IS
+ * that opt-in, which is why this is a LEARNER route and not a reviewer one. A mentor
+ * approves that the work is publishable; who gets to see it stays the learner's call.
+ */
+export async function handleSetVisibility(req: Request, res: Response, next: NextFunction) {
+  const visibility = String(req.body?.visibility || '');
+  if (!VISIBILITIES.has(visibility)) {
+    res.status(400).json({ error: `visibility must be one of: ${[...VISIBILITIES].join(', ')}` });
+    return;
+  }
   try {
-    const items = await listReviewQueue();
-    res.json({ ok: true, items });
+    res.json({ ok: true, ...await setVisibility(eid(req), visibility as any) });
+  } catch (e) { fail(res, e, next); }
+}
+
+// ── Reviewer ───────────────────────────────────────────────────────────────
+
+/** GET /api/admin/career/review-queue — scoped to the learners this reviewer is over. */
+export async function handleGetReviewQueue(req: Request, res: Response, next: NextFunction) {
+  try {
+    const who = reviewer(req);
+    const items = await listCapstoneReviewQueue(who);
+    res.json({ ok: true, items, reviewer_kind: reviewerKind(who) });
   } catch (e) { fail(res, e, next); }
 }
 
 const DECISIONS = new Set(['approved', 'changes_requested', 'rejected']);
 
 /**
- * POST /api/admin/career/review/:snapshotId
+ * POST /api/admin/career/review/:recordId — the ONLY path that publishes a record.
  *
- * The ONLY path that can make a portfolio public. Records who decided what about
- * which exact snapshot (plan §22). A replayed decision returns `duplicate: true` with
- * the decision already on record rather than overwriting it.
+ * The per-learner scope check lives in the service, so a mentor cannot act on a record
+ * belonging to someone else's learner even with a valid reviewer token.
  */
 export async function handleReviewDecision(req: Request, res: Response, next: NextFunction) {
   const decision = String(req.body?.decision || '');
@@ -83,56 +114,19 @@ export async function handleReviewDecision(req: Request, res: Response, next: Ne
     return;
   }
   const notes = req.body?.notes == null ? null : String(req.body.notes).slice(0, 4000);
-  // changes_requested with no explanation is useless to the learner receiving it.
+  // Sending work back with no explanation is useless to the learner who receives it.
   if (decision === 'changes_requested' && !notes?.trim()) {
     res.status(400).json({ error: 'Requesting changes requires notes explaining what to change' });
     return;
   }
 
   try {
-    const admin: any = (req as any).admin || (req as any).user || {};
-    const result = await recordReviewDecision({
-      snapshotId: String(req.params.snapshotId),
+    const result = await recordCapstoneDecision({
+      recordId: String(req.params.recordId),
       decision: decision as any,
-      reviewerId: String(admin.sub || admin.id || 'admin'),
-      reviewerEmail: admin.email ?? null,
+      reviewer: reviewer(req),
       notes,
     });
     res.json({ ok: true, ...result });
   } catch (e) { fail(res, e, next); }
-}
-
-/** POST /api/admin/career/publication/:enrollmentId/suspend — withdraw a live portfolio. */
-export async function handleSuspendPublication(req: Request, res: Response, next: NextFunction) {
-  try {
-    res.json({ ok: true, ...await suspendPublication(String(req.params.enrollmentId)) });
-  } catch (e) { fail(res, e, next); }
-}
-
-// ── Public ─────────────────────────────────────────────────────────────────
-
-/**
- * GET /api/public/talent/:slug — unauthenticated.
- *
- * Serves the frozen approved snapshot and nothing else. Returns an identical generic
- * 404 for unknown slug, unpublished and suspended, so a guess cannot distinguish them
- * — the same non-enumerable behaviour the existing project share link has.
- */
-export async function handleGetPublicTalent(req: Request, res: Response, next: NextFunction) {
-  try {
-    const found = await getPublicSnapshotBySlug(String(req.params.slug));
-    if (!found) {
-      res.status(404).json({ error: 'Portfolio not found' });
-      return;
-    }
-    res.json({
-      slug: String(req.params.slug),
-      version: found.version,
-      published_at: found.published_at,
-      ...found.payload,
-    });
-  } catch (e) {
-    console.error('[CareerPublication] public talent read failed:', (e as any)?.message);
-    res.status(500).json({ error: 'Failed to load portfolio' });
-  }
 }

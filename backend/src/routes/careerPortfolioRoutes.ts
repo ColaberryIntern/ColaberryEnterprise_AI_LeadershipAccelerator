@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { handleGetCareerProfile } from '../controllers/careerPortfolioController';
-import { handleGetPublicationStatus, handleRequestReview } from '../controllers/careerPublicationController';
+import { handleGetPublicationStatus, handleRequestReview, handleSetVisibility } from '../controllers/careerPublicationController';
 
 /**
  * Living Career Portfolio — the private Career Studio at /portal/portfolio.
@@ -43,6 +43,15 @@ router.post(
   requireParticipant,
   requireContentEntitlement('portfolio'),
   handleRequestReview,
+);
+
+// The learner's own choice of audience. Default stays unlisted/noindex; `public` is
+// their explicit opt-in to being indexable (Ali, 2026-08-25).
+router.put(
+  '/api/portal/career/publication/visibility',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleSetVisibility,
 );
 
 export default router;

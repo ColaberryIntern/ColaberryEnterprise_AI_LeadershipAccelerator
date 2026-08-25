@@ -8,7 +8,9 @@ user-invocable: true
 
 When invoked, read and reference these canonical source files before answering any design question:
 
-- `frontend/src/styles/global.css` — design tokens (CSS custom properties)
+- **`frontend/src/styles/tokens.css` — the design tokens. This is the source of truth.**
+  `global.css` *consumes* the tokens; it does not define them. Read `tokens.css`.
+- `frontend/src/styles/global.css` — element styling and custom classes built on the tokens
 - `frontend/src/styles/responsive.css` — breakpoints, accessibility rules
 - `frontend/src/components/Layout/AdminLayout.tsx` — admin shell layout
 
@@ -18,8 +20,8 @@ When invoked, read and reference these canonical source files before answering a
 
 | Token | Value | Usage |
 |---|---|---|
-| `--color-primary` | `#1a365d` | Navy — headings, primary buttons, brand |
-| `--color-primary-light` | `#2b6cb0` | Links, hover states, focus outlines |
+| `--color-primary` | `#FB2832` | **Colaberry cherry** — headings, primary buttons, brand |
+| `--color-primary-light` | `#C20E1E` | Cherry deep — links, hover states, focus outlines |
 | `--color-secondary` | `#e53e3e` | Red — CTAs, warnings, destructive actions |
 | `--color-accent` | `#38a169` | Green — success states, positive indicators |
 | `--color-bg` | `#ffffff` | Page background |
@@ -28,7 +30,23 @@ When invoked, read and reference these canonical source files before answering a
 | `--color-text-light` | `#718096` | Muted/secondary text |
 | `--color-border` | `#e2e8f0` | Card borders, dividers |
 
+**Brand palette** (also in `tokens.css`, used by the cherry/leaf/berry designs):
+
+| Token | Value | Usage |
+|---|---|---|
+| `--cherry` | `#FB2832` | Same as `--color-primary` |
+| `--cherry-deep` | `#C20E1E` | Pressed/active states |
+| `--cherry-bg` | `#FFF0F1` | Tinted backgrounds, active nav items |
+| `--leaf` | `#77BB4A` | Positive progress bars |
+
 **Rule**: Never hardcode hex values. Always use `var(--color-*)` in CSS or reference Bootstrap utility classes that map to these values.
+
+> **This table was wrong until 2026-08-25.** It listed `--color-primary: #1a365d` (navy) and
+> `--color-primary-light: #2b6cb0`, values that appear nowhere in `tokens.css`. Anything
+> built from the old table rendered in a colour scheme the product does not use — caught
+> only because the 16 Delivery OS screens were checked against `tokens.css` before being
+> drawn, and then looked at on a real deployment. **Verify against `tokens.css` rather than
+> trusting this table**; a summary can go stale, the source file cannot.
 
 ---
 

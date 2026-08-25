@@ -69,12 +69,21 @@ function OrgChartHumanDrawer({ human, leadership, staff, onClose, onTeamChanged 
   // downstream hierarchy (directLeadership + teamStaff, computed above from
   // the same props the rest of this drawer already renders — no new fetch
   // needed). The server independently re-validates this same boundary
-  // (orgChartTaskAssignmentService.ts's isAgentInHumanDownstream()) before
-  // ever writing a ticket — this picker is a UI convenience, not the real
+  // (orgChartTaskAssignmentService.ts's assignTaskToAgent()) before ever
+  // writing a ticket — this picker is a UI convenience, not the real
   // authorization boundary.
+  //
+  // Real bug, caught live 2026-08-25: this list used to include DEACTIVATED
+  // agents (Phase A's 17) with no indication they were inactive — Taiwo
+  // picked FinanceIntelligenceArchitect (deactivated) and the resulting
+  // ticket sat unworked forever, since that agent is switched off. `.enabled`
+  // is filtered here (the same field the "Inactive" badge on the agent cards
+  // above already reads); the server now independently rejects a deactivated
+  // agent too (AgentDeactivatedError), so this filter is a UX improvement on
+  // top of a real fix, not the only thing preventing it.
   const assignableAgents = [
-    ...directLeadership.map((l) => ({ id: l.id, label: `${l.display_name} (AI Leadership)` })),
-    ...teamStaff.map((s) => ({ id: s.id, label: `${s.display_name} (AI Staff)` })),
+    ...directLeadership.filter((l) => l.enabled).map((l) => ({ id: l.id, label: `${l.display_name} (AI Leadership)` })),
+    ...teamStaff.filter((s) => s.enabled).map((s) => ({ id: s.id, label: `${s.display_name} (AI Staff)` })),
   ];
 
   const [assignFormOpen, setAssignFormOpen] = useState(false);

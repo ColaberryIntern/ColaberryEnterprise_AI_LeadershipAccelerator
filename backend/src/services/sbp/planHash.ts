@@ -9,29 +9,23 @@
  * insertion order, so two structurally identical plans built in a different
  * order would otherwise hash differently and a legitimate publish would be
  * rejected as tampered.
+ *
+ * THE ALGORITHM NOW LIVES IN `utils/canonicalHash.ts`. It used to be a private
+ * `canonicalize()` in this file; the Case Study OS needs the identical function
+ * for `case_study_snapshots.content_hash` (spec §30), and two copies of one
+ * invariant eventually disagree. This file keeps its own names and its own
+ * `BuildPlan` narrowing — callers see no change, and the plan-hash tests in
+ * `__tests__/planStore.test.ts` pass unedited, which is the proof of that.
  */
-import { createHash } from 'crypto';
+import { canonicalJson, hashCanonical } from '../../utils/canonicalHash';
 import { BuildPlan } from './planContract';
-
-/** Recursively sort object keys so serialization is order-independent. */
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      out[key] = canonicalize((value as Record<string, unknown>)[key]);
-    }
-    return out;
-  }
-  return value;
-}
 
 /** Stable JSON for a plan — the exact bytes that get hashed. */
 export function canonicalPlanJson(plan: BuildPlan): string {
-  return JSON.stringify(canonicalize(plan));
+  return canonicalJson(plan);
 }
 
 /** SHA-256 of the canonical form. Same plan ⇒ same hash, whatever the key order. */
 export function hashPlan(plan: BuildPlan): string {
-  return createHash('sha256').update(canonicalPlanJson(plan), 'utf8').digest('hex');
+  return hashCanonical(plan);
 }
