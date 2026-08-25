@@ -232,6 +232,26 @@ function toInbound(row: any): InboundMessage {
   };
 }
 
+/**
+ * The plain-text reply, as HTML.
+ *
+ * `buildCampaignMessage` requires both parts, and Mandrill's auto-HTML is
+ * switched off by TRACKING_SUPPRESSION, so the HTML part has to be built here
+ * or the student receives an empty one. Escaped, then newlines become breaks:
+ * the body is composed from live student data, and a student whose own words
+ * contain a `<` must not be able to inject markup into a message signed by Ali.
+ */
+function watcherReplyHtml(body: string): string {
+  const escaped = body
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  return `<div style="font-family:arial,sans-serif;font-size:15px;color:#2d3748;line-height:1.6">${
+    escaped.replace(/\n/g, '<br>')
+  }</div>`;
+}
+
 function buildPorts(stateDir: string, windowStart: Date): WatcherPorts {
   return {
     async fetchRecentInbound(): Promise<InboundMessage[]> {
@@ -258,31 +278,66 @@ function buildPorts(stateDir: string, windowStart: Date): WatcherPorts {
       return rows.length > 0 ? rows.map(toInbound) : [fallback];
     },
 
+    /**
+     * Reply to a student, through MANDRILL.
+     *
+     * ── WHY NOT GMAIL, WHICH THIS USED TO DO ───────────────────────────────
+     *
+     * The Gmail path was genuinely tempting: it threads natively, and the reply
+     * lands in Ali's own Sent folder, which is stronger provenance than a BCC.
+     * It is also the path Ali explicitly ruled out on 2026-07-29, after ten
+     * student emails went out that way, and he reaffirmed that ruling on
+     * 2026-08-25 with the Sent-folder trade spelled out. Mandrill is the send
+     * transport for mail from Ali. This module does not get a local exemption
+     * because a different path was already wired up and convenient.
+     *
+     * So the provenance is restored the way every other student send does it:
+     * a true envelope BCC to Ali, asserted before the wire by assertSendSafety,
+     * which fails the send rather than delivering a copy he never sees.
+     *
+     * ── THREADING IS NOT OPTIONAL HERE ─────────────────────────────────────
+     *
+     * Gmail threaded these for free; Mandrill does not. Without In-Reply-To the
+     * reply opens a NEW conversation, the student's original thread keeps one
+     * message, and the next inbox sweep reads it as unanswered — which is
+     * exactly the false backlog that wasted a morning on 2026-08-25. So a reply
+     * with no `inReplyTo` is refused rather than sent unthreaded: a reply that
+     * does not thread is not a reply, and the failure is silent otherwise.
+     */
     async sendReply({ to, subject, body, threadId, inReplyTo }) {
-      const { sendGmail } = await import('../services/gmailService');
-      const sent = await sendGmail({
-        to, subject, body,
-        inReplyTo: inReplyTo ?? undefined,
-        threadId: threadId ?? undefined,
-      });
-      // Read the RFC822 Message-ID back, so a re-ingested copy of this very
-      // reply is recognised as ours. sendGmail returns Gmail's internal id,
-      // which is not what lands in the Message-ID header.
-      let messageIdHeader: string | null = null;
-      try {
-        const { getColaberryGmailClient } = await import('../services/inbox/inboxSyncService');
-        const gmail = getColaberryGmailClient();
-        if (gmail) {
-          const meta = await gmail.users.messages.get({
-            userId: 'me', id: sent.messageId, format: 'metadata', metadataHeaders: ['Message-ID'],
-          });
-          messageIdHeader =
-            meta.data.payload?.headers?.find((h) => (h.name || '').toLowerCase() === 'message-id')?.value ?? null;
-        }
-      } catch (err: any) {
-        console.warn(`[watcher] could not read back Message-ID for ${sent.messageId}: ${err?.message}`);
+      if (!inReplyTo) {
+        throw new Error(
+          'Refusing to send a reply with no In-Reply-To. Mandrill does not thread on subject, ' +
+          'so this would start a new conversation and leave the student\'s thread reading as ' +
+          'unanswered to the next sweep.',
+        );
       }
-      return { providerMessageId: sent.messageId, messageIdHeader };
+      const {
+        buildCampaignMessage, createMandrillTransport, sendCampaignMessage,
+      } = await import('../services/email/campaignTransport');
+
+      const apiKey = process.env.MANDRILL_API_KEY;
+      if (!apiKey) throw new Error('MANDRILL_API_KEY is not set; refusing to send.');
+
+      const msg = buildCampaignMessage({
+        recipient: to,
+        subject,
+        text: body,
+        html: watcherReplyHtml(body),
+        businessEventId: `watcher-reply-${RUN_ID}`,
+        // Keyed on the thread, so a retry of the same reply cannot become a
+        // second copy in the student's inbox.
+        idempotencyKey: `watcher-reply-${threadId ?? to}`,
+        inReplyTo,
+        tag: 'watcher-reply',
+      });
+
+      const sent = await sendCampaignMessage(createMandrillTransport(apiKey), msg, to);
+      if (!sent.ok) throw new Error(`Mandrill refused the reply: ${sent.errorClass}: ${sent.error}`);
+      // nodemailer's messageId IS the RFC822 Message-ID it generated, so the
+      // self-reply guard gets its value directly rather than by reading the
+      // sent copy back out of the mailbox.
+      return { providerMessageId: sent.messageId ?? '', messageIdHeader: sent.messageId ?? null };
     },
 
     /**

@@ -218,7 +218,9 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
     // reached ceiling, never an empty one.
     let replay;
     try {
-      replay = replayWatcherLog(opts.stateDir);
+      // Escalations are scoped to THIS window; reply ceilings stay cumulative.
+      // See replayWatcherLog's header for why the two guards differ.
+      replay = replayWatcherLog(opts.stateDir, window.state?.started_at);
     } catch (err) {
       if (!(err instanceof WatcherLogUnreadableError)) throw err;
       // escalatedThreads EMPTY here is safe only because escalateOnly is set
