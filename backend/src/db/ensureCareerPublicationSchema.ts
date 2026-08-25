@@ -132,7 +132,44 @@ const APPROVALS: string[] = [
      ON career_publication_approvals (publication_id, decided_at DESC)`,
 ];
 
-const STATEMENTS: string[] = [...PUBLICATIONS, ...SNAPSHOTS, ...APPROVALS];
+/**
+ * Which learners a mentor is over.
+ *
+ * Ali, 2026-08-25: "mentors should be able to see all the projects and details that
+ * they are over" and "mentor privilege can be controlled by admin". Two separate
+ * grants, deliberately: mgmt_role = mentor decides whether they may open the review
+ * surface AT ALL, and THIS table decides whose portfolios they see inside it. Without
+ * the second, a mentor role alone would expose every learner on the platform.
+ *
+ * scope_type is COHORT or ENROLLMENT so an admin can grant breadth ("you mentor the
+ * July cohort") or precision ("you mentor these four people") without needing two
+ * different tables or a migration when the answer changes.
+ *
+ * Revocation is a timestamp, never a delete: who could see whose portfolio, and when,
+ * is exactly the kind of question that gets asked months later.
+ */
+const MENTOR_SCOPES: string[] = [
+  `CREATE TABLE IF NOT EXISTS career_mentor_scopes (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     mentor_enrollment_id UUID NOT NULL,
+     scope_type VARCHAR(16) NOT NULL,
+     scope_id UUID NOT NULL,
+     granted_by VARCHAR(255) NOT NULL,
+     granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     revoked_at TIMESTAMPTZ,
+     revoked_by VARCHAR(255),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // One LIVE grant per (mentor, scope). Re-granting something already granted must be
+  // a no-op rather than a second row that has to be revoked twice.
+  `CREATE UNIQUE INDEX IF NOT EXISTS career_mentor_scopes_live_unique
+     ON career_mentor_scopes (mentor_enrollment_id, scope_type, scope_id)
+     WHERE revoked_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS career_mentor_scopes_mentor
+     ON career_mentor_scopes (mentor_enrollment_id) WHERE revoked_at IS NULL`,
+];
+
+const STATEMENTS: string[] = [...PUBLICATIONS, ...SNAPSHOTS, ...APPROVALS, ...MENTOR_SCOPES];
 
 /**
  * Runs every statement, logging and continuing on failure. A schema step must never be

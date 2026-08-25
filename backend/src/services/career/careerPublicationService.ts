@@ -302,12 +302,28 @@ export interface ReviewQueueItem {
  * Summary counts come from the frozen payload, not from a live re-read, so what a
  * reviewer sees in the queue is exactly what they will see when they open it.
  */
-export async function listReviewQueue(limit = 50): Promise<ReviewQueueItem[]> {
+export async function listReviewQueue(
+  limit = 50,
+  /**
+   * Enrollment ids this reviewer may see. `null` means unscoped (admin/owner);
+   * `[]` means a mentor with no grants, who must see NOTHING. The two are
+   * deliberately different — treating an empty scope as "no filter" is exactly how
+   * a scoped surface accidentally shows everyone.
+   */
+  visibleEnrollmentIds: string[] | null = null,
+): Promise<ReviewQueueItem[]> {
+  if (visibleEnrollmentIds !== null && visibleEnrollmentIds.length === 0) return [];
+
   const pending = await CareerPublicationSnapshot.findAll({
     where: {
       publication_id: {
         [Op.in]: (await CareerPublication.findAll({
-          where: { status: 'in_review' },
+          where: {
+            status: 'in_review',
+            ...(visibleEnrollmentIds !== null
+              ? { enrollment_id: { [Op.in]: visibleEnrollmentIds } }
+              : {}),
+          },
           attributes: ['id'],
           raw: true,
         }) as unknown as Array<{ id: string }>).map((p) => p.id),

@@ -18,9 +18,29 @@ import {
   getPublicationStatus,
   getPublicSnapshotBySlug,
 } from '../services/career/careerPublicationService';
+import {
+  visibleEnrollmentIds,
+  canReview,
+  reviewerKind,
+  type ReviewerIdentity,
+} from '../services/career/careerMentorScopeService';
+import CareerPublication from '../models/CareerPublication';
+import CareerPublicationSnapshot from '../models/CareerPublicationSnapshot';
 
 /** The learner is ALWAYS the caller. No route here accepts an enrollment id. */
 const eid = (req: Request) => req.participant!.sub;
+
+/** The reviewer, as the scope service understands them. */
+function reviewer(req: Request): ReviewerIdentity {
+  const a: any = req.admin || {};
+  return {
+    sub: String(a.sub || a.id || 'admin'),
+    email: a.email ?? null,
+    role: a.role,
+    mgmt_role: a.mgmt_role ?? null,
+    enrollmentId: a.enrollment_id ?? null,
+  };
+}
 
 function fail(res: Response, e: any, next: NextFunction) {
   if (e?.status) {
@@ -60,10 +80,13 @@ export async function handleRequestReview(req: Request, res: Response, next: Nex
 // ── Reviewer (admin) ───────────────────────────────────────────────────────
 
 /** GET /api/admin/career/review-queue — snapshots awaiting a decision, oldest first. */
-export async function handleGetReviewQueue(_req: Request, res: Response, next: NextFunction) {
+export async function handleGetReviewQueue(req: Request, res: Response, next: NextFunction) {
   try {
-    const items = await listReviewQueue();
-    res.json({ ok: true, items });
+    const who = reviewer(req);
+    // A mentor sees only the learners they are over. An admin passes `null` (no filter).
+    const scope = await visibleEnrollmentIds(who);
+    const items = await listReviewQueue(50, scope);
+    res.json({ ok: true, items, scoped: scope !== null, reviewer_kind: reviewerKind(who) });
   } catch (e) { fail(res, e, next); }
 }
 
@@ -90,12 +113,26 @@ export async function handleReviewDecision(req: Request, res: Response, next: Ne
   }
 
   try {
-    const admin: any = (req as any).admin || (req as any).user || {};
+    const who = reviewer(req);
+
+    // Passing requireCareerReviewer only proves they may open the surface. Whether they
+    // may act on THIS learner is a second question, and it has to be asked here — a
+    // mentor could otherwise POST a snapshot id belonging to someone else's learner.
+    const snapshot = await CareerPublicationSnapshot.findByPk(String(req.params.snapshotId));
+    if (!snapshot) { res.status(404).json({ error: 'Snapshot not found' }); return; }
+    const publication = await CareerPublication.findByPk(snapshot.publication_id);
+    if (!publication) { res.status(404).json({ error: 'Publication not found' }); return; }
+
+    if (!await canReview(who, publication.enrollment_id)) {
+      res.status(403).json({ error: 'That learner is outside your mentor scope' });
+      return;
+    }
+
     const result = await recordReviewDecision({
       snapshotId: String(req.params.snapshotId),
       decision: decision as any,
-      reviewerId: String(admin.sub || admin.id || 'admin'),
-      reviewerEmail: admin.email ?? null,
+      reviewerId: who.sub,
+      reviewerEmail: who.email ?? null,
       notes,
     });
     res.json({ ok: true, ...result });
@@ -105,7 +142,12 @@ export async function handleReviewDecision(req: Request, res: Response, next: Ne
 /** POST /api/admin/career/publication/:enrollmentId/suspend — withdraw a live portfolio. */
 export async function handleSuspendPublication(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json({ ok: true, ...await suspendPublication(String(req.params.enrollmentId)) });
+    const enrollmentId = String(req.params.enrollmentId);
+    if (!await canReview(reviewer(req), enrollmentId)) {
+      res.status(403).json({ error: 'That learner is outside your mentor scope' });
+      return;
+    }
+    res.json({ ok: true, ...await suspendPublication(enrollmentId) });
   } catch (e) { fail(res, e, next); }
 }
 

@@ -425,6 +425,7 @@ import DeliveryProject from './DeliveryProject';
 import CareerPublication from './CareerPublication';
 import CareerPublicationSnapshot from './CareerPublicationSnapshot';
 import CareerPublicationApproval from './CareerPublicationApproval';
+import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
 import DeliveryContract from './DeliveryContract';
@@ -1540,6 +1541,7 @@ export {
   CareerPublication,
   CareerPublicationSnapshot,
   CareerPublicationApproval,
+  CareerMentorScope,
   DeliveryProjectMember,
   DeliveryContract,
   DeliveryDecision,
