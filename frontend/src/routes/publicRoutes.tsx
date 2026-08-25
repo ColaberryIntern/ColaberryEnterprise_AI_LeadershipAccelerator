@@ -23,7 +23,6 @@ import LeaderboardPage from '../pages/LeaderboardPage';
 import DemoDayPage from '../pages/DemoDayPage';
 import SponsorDashboardPage from '../pages/SponsorDashboardPage';
 import ConsultingPage from '../pages/ConsultingPage';
-import ClientSignIn from '../pages/refactored/ClientSignIn';
 
 const publicRoutes = (
   <>
@@ -67,11 +66,6 @@ const publicRoutes = (
     <Route path="/membership/builders" element={<BuildersPage />} />
     <Route path="/challenge" element={<SponsorChallengePage />} />
     <Route path="/leaderboard" element={<LeaderboardPage />} />
-    {/* Client reviewer sign-in. The first genuinely client-facing (non-staff) surface:
-        an external reviewer has no enrollment and no admin user, so this cannot live
-        under /admin or /portal. Signing in grants nothing — the backend requires a
-        delivery membership that already exists. */}
-    <Route path="/client" element={<ClientSignIn />} />
     {/* /p/:slug (Capstone Record) is NOT here — it is defined under
         PublicLayoutV2 in App.tsx so it gets the current site header rather than
         this block's retired one. See the comment there. */}
