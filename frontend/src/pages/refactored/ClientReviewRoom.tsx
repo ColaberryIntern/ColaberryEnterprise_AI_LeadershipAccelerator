@@ -61,10 +61,27 @@ const DOCUMENTS = [
   { title: 'Scope summary', kind: 'Scope', published: '28 Jul' },
 ];
 
+/**
+ * The page frame.
+ *
+ * The client room renders OUTSIDE `AdminLayout` (see `adminRoutes.tsx`), so it supplies its
+ * own background and padding rather than inheriting the admin shell's. That is the point:
+ * a client-facing surface wrapped in the operations sidebar — Revenue, Lead Ingestion,
+ * Campaigns, Intelligence — contradicts the one thing Gate 10 exists to guarantee.
+ *
+ * Found by deploying to dev and looking at it. Every check was green while it was wrong.
+ */
+const ClientPage: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="min-vh-100 bg-light py-4">
+    <div className="container-xl">{children}</div>
+  </div>
+);
+
 const ClientReviewRoom: React.FC = () => {
   const [active, setActive] = useState('overview');
 
   return (
+    <ClientPage>
     <DeliveryShell
       audienceLabel="Client view"
       audienceTone="client"
@@ -313,6 +330,7 @@ const ClientReviewRoom: React.FC = () => {
         </div>
       )}
     </DeliveryShell>
+    </ClientPage>
   );
 };
 
