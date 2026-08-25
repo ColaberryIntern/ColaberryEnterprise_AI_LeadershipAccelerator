@@ -18,6 +18,7 @@ import PrivacyV2 from './pages/publicV2/PrivacyV2';
 import PricingV2 from './pages/publicV2/PricingV2';
 import StoriesV2 from './pages/publicV2/StoriesV2';
 import StoryDetailV2 from './pages/publicV2/StoryDetailV2';
+import CapstoneRecordPage from './pages/CapstoneRecordPage';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -123,6 +124,23 @@ function App() {
                 top of proofV2.css.
             */}
             <Route path="stories/:slug" element={<StoryDetailV2 />} />
+            {/*
+                A student's shareable Capstone Record. Lives under PublicLayoutV2
+                rather than in the legacy publicRoutes block, and the layout is the
+                whole point rather than a detail:
+
+                  - V2 is the site's real header. A page a student sends to a hiring
+                    manager showing the retired navbar reads as a dead corner of the
+                    site, which is the opposite of what the page is for.
+                  - PublicLayout (V1) calls initTracker() UNCONDITIONALLY. That would
+                    fingerprint the hiring manager opening someone's portfolio before
+                    asking them anything. V2 gates all attribution on consent.
+                  - V1 mounts the Maya chat widget. A marketing chat bot does not
+                    belong on top of a person's credential.
+
+                Same no-leading-slash rule as the route above, for the same reason.
+            */}
+            <Route path="p/:slug" element={<CapstoneRecordPage />} />
           </Route>
           <Route element={<PublicLayout />}>
             {publicRoutes}
