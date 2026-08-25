@@ -118,6 +118,18 @@ section{padding:38px 0 6px;scroll-margin-top:calc(var(--nav-h) + 12px)}
 .qtab{padding:7px 13px;border-radius:999px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:12.5px;font-weight:650;color:var(--muted);font-family:var(--font)}
 .qtab.on{background:var(--accent);border-color:var(--accent);color:#fff}
 
+/* ---------- scoped drawer + coach note ---------- */
+.scopebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--accent-soft);color:var(--accent-deep);border-radius:var(--r-sm);padding:10px 14px;font-size:13px;margin-bottom:16px}
+.scopebar .btn{padding:4px 10px;font-size:12px;background:var(--card)}
+.coachnote{border-left:4px solid var(--accent)}
+.coachnote .notebody{font-size:14px;line-height:1.62;max-height:330px;overflow-y:auto;padding-right:8px}
+.coachnote .notebody p{margin:0 0 12px}
+.coachnote .notebody p:last-child{margin-bottom:0;font-weight:650}
+.coachnote .notebody p.greet{font-weight:650}
+.noteacts{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.noteacts .notehint{font-size:11.5px;color:var(--muted)}
+.btn.copied{background:var(--good);border-color:var(--good);color:#fff}
+
 /* ---------- tables ---------- */
 .tablewrap{overflow-x:auto;border-radius:var(--r)}
 table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--card)}
@@ -160,9 +172,13 @@ tbody tr.norow:hover{background:transparent}
 .mermaid{text-align:center;min-height:60px}
 
 /* ---------- heatmap ---------- */
-.heat{border-collapse:separate;border-spacing:3px;font-size:12px}
+/* width:auto overrides the global table{width:100%}. The cells are a fixed
+   38px, so a stretched table dumps every spare pixel into the name column and
+   strands the grid on the right. That only became visible once the report was
+   scoped down to intern projects and the column count dropped. */
+.heat{border-collapse:separate;border-spacing:3px;font-size:12px;width:auto}
 .heat td.cell{width:38px;height:34px;text-align:center;border-radius:5px;font-weight:700;font-size:11px;cursor:pointer;color:#fff}
-.heat td.lbl{font-size:12.5px;font-weight:650;white-space:nowrap;padding-right:10px;text-align:right;border:0}
+.heat td.lbl{font-size:12.5px;font-weight:650;white-space:nowrap;padding-right:10px;text-align:right;border:0;max-width:230px;overflow:hidden;text-overflow:ellipsis}
 .heat th{position:static;background:transparent;border:0;font-size:10px;padding:0 0 6px;text-align:center;writing-mode:vertical-rl;transform:rotate(180deg);height:112px;cursor:default}
 .heat td{border:0}
 

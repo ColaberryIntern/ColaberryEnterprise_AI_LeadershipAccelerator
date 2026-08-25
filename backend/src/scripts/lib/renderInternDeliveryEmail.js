@@ -35,10 +35,24 @@ const {
 // left out, and the attached dashboard carries the complete record.
 const QUESTION_LIMIT = 8;   // open questions shown in full
 const GATE_LIMIT = 8;       // Ali's approval gates listed in full
-const ATTENTION_LIMIT = 6;  // stalled/at-risk projects given a full card
+// Lowered from 6 once the Messages section landed. The two sections cover the
+// same projects, and a message that states where the build stands, what closing
+// the current release is worth and the projected date is strictly more useful
+// than a fourth status card restating it. The bytes moved to where they buy
+// more, and every project is still listed in "Everything else" below.
+const ATTENTION_LIMIT = 4;  // stalled/at-risk projects given a full card
 const COMPACT_LIMIT = 20;   // remaining projects in the one-line list
 const PEOPLE_LIMIT = 20;    // active people in the roster table
 const EXCERPT_CHARS = 160;  // per-question quote from the Basecamp thread
+// Ready-to-post messages carried in full, worst status first.
+//
+// This cap was set by measurement, not by taste. The rest of the body already
+// runs about 74 KB against a 100 KB hard stop, and each message costs roughly
+// 2.4 KB of markup, so six pushed the send to 104 KB and the size guard in
+// internDeliveryEmailSend.js refused it. Four lands near 92 KB, which leaves
+// real headroom for a week when the decision queue is long. The remainder are
+// listed by name with a copy button waiting in the attached dashboard.
+const MESSAGE_LIMIT = 4;
 
 function plural(n, word, pluralForm) {
   return n === 1 ? word : (pluralForm || word + 's');
@@ -88,7 +102,7 @@ function renderHero(data) {
       <div style="font-size:28px;font-weight:700;color:#ffffff;margin:14px 0 6px 0;letter-spacing:-.02em;line-height:1.2">Every intern, every project, one email</div>
       <div style="font-size:14px;color:#cbd5e1;margin:0 0 18px 0">${esc(centralLabel(data.generatedAt))} Central</div>
       <div style="font-size:16px;line-height:1.55;color:#e2e8f0;margin:0 0 16px 0">
-        The state of all intern delivery across the Internship / Apprenticeship programme and the Gov Contracts push. Start at "Needs your call" and work down.
+        Every intern <b>project</b> across the Internship / Apprenticeship programme and the Gov Contracts push. Onboarding checklists, legacy lists and staff work are held back and named under "How to read this". Start at "Needs your call" and work down.
       </div>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
         ${badge(`${questions.length} ${plural(questions.length, 'question')} waiting on you`, true)}
@@ -287,9 +301,9 @@ function renderPeople(data) {
   const shown = active.slice(0, PEOPLE_LIMIT);
 
   let out = sectionOpen('04 / People');
-  out += hTitle(`${active.length} people delivering`, `Everyone with an update or a closed task in the last ${data.lookbackDays} days, worst status first.`);
+  out += hTitle(`${active.length} people delivering`, `Everyone with an update or a closed task in the last ${data.lookbackDays} days, worst status first. Each bar is that person's own assigned tasks, not the lists they sit on.`);
   out += `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse">
-    <tr>${th('Person')}${th('Status')}${th('Owned work')}${th('7d', 'right')}${th('Last seen', 'right')}</tr>
+    <tr>${th('Person')}${th('Status')}${th('Their tasks')}${th('7d', 'right')}${th('Last seen', 'right')}</tr>
     ${shown.map((p) => `<tr>
       <td style="padding:10px 8px 10px 0;border-bottom:1px solid ${C.lineSoft};font-size:13px;font-weight:600;color:${C.ink}">${esc(p.name)}
         <div style="font-size:11px;color:${C.muted};font-weight:400;margin-top:2px">${p.projectCount} ${plural(p.projectCount, 'project')} &middot; ${esc(p.trajectory)}</div></td>
@@ -306,7 +320,22 @@ function renderPeople(data) {
 }
 
 // ---------------------------------------------------------- 05. projects
-function projectCard(p) {
+
+// Who a list belongs to, stated only as strongly as the data supports. A list
+// carrying four people's separate builds has no owner, and borrowing one of
+// their names for the label hands that person credit for the other three.
+function attribution(p, data) {
+  const holders = p.holders || [];
+  if (p.ownershipModel === 'shared') {
+    const names = holders.map((h) => h.name);
+    return names.length > 2 ? `shared: ${names.slice(0, 2).join(', ')} +${names.length - 2}` : `shared: ${names.join(', ')}`;
+  }
+  if (p.ownershipModel === 'unowned' || !p.ownerId) return 'nobody assigned';
+  const owner = data.people.find((x) => x.personId === p.ownerId);
+  return owner ? owner.name : 'unassigned';
+}
+
+function projectCard(p, data) {
   const flags = (p.riskFlags || []).slice(0, 4)
     .map((f) => `<span style="margin-right:5px;display:inline-block;margin-bottom:4px">${chip(f.label, f.tone)}</span>`).join('');
   const finish = p.projectedFinish ? shortDate(p.projectedFinish) : null;
@@ -318,7 +347,7 @@ function projectCard(p) {
       <td style="font-size:14px;font-weight:700;color:${C.ink};line-height:1.35;padding-right:8px">${link(p.url, p.name, C.ink)}</td>
       <td width="70" align="right" valign="top">${chip(p.statusLabel, p.statusTone)}</td>
     </tr></table>
-    <div style="font-size:11.5px;color:${C.muted};margin:4px 0 9px 0">${esc(p.stream)} &middot; ${p.taskDone} of ${p.taskTotal} closed &middot; quiet ${p.daysSinceActivity}d${finish ? ` &middot; projected finish ${esc(finish)}` : ' &middot; no forecast'}</div>
+    <div style="font-size:11.5px;color:${C.muted};margin:4px 0 9px 0">${esc(attribution(p, data))} &middot; ${esc(p.stream)} &middot; ${p.taskDone} of ${p.taskTotal} closed &middot; quiet ${p.daysSinceActivity}d${finish ? ` &middot; projected finish ${esc(finish)}` : ' &middot; no forecast'}</div>
     <div style="margin-bottom:9px">${bar(p.percentCalculable ? p.percentComplete : null, p.percentReason, 150)}</div>
     ${p.summary ? `<div style="font-size:12.5px;color:${C.ink2};line-height:1.5;margin-bottom:8px">${esc(p.summary)}</div>` : ''}
     ${p.nextAction ? `<div style="font-size:12.5px;color:${C.ink};line-height:1.5;margin-bottom:9px"><b>Next:</b> ${esc(p.nextAction)}</div>` : ''}
@@ -336,7 +365,7 @@ function renderProjects(data) {
 
   let out = sectionOpen('05 / Project detail');
   out += hTitle(`${attention.length} projects need attention`, 'Stalled and at-risk work first, with the read and the next action on each.');
-  out += cards.map(projectCard).join('');
+  out += cards.map((p) => projectCard(p, data)).join('');
   if (attention.length > cards.length) {
     out += `<div style="font-size:12.5px;color:${C.muted};margin:0 0 16px 0">and ${attention.length - cards.length} more at risk, in the compact list below.</div>`;
   }
@@ -357,20 +386,95 @@ function renderProjects(data) {
   return out;
 }
 
-// ------------------------------------------------------------ 06. method
+// ----------------------------------------------------------- 06. messages
+//
+// The part of this briefing that is meant to leave the inbox. Each project
+// carries a ready-to-post Basecamp comment composed from the same figures shown
+// above, so the completion percentage and the projected date in the message can
+// never drift from the numbers in the rest of the email.
+//
+// Rendered as selectable text rather than as a button, because an email client
+// cannot write to the clipboard. Select, copy, then follow the link to the list.
+// The attached dashboard carries the same messages with a real copy button.
+function messageCard(p, data) {
+  const note = p.coachNote;
+  if (!note) return '';
+  const to = note.recipientName || (note.scope === 'shared_list' ? 'everyone on the list' : 'the list');
+
+  return `
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#ffffff;border:1px solid ${C.line};border-left:3px solid ${C.accent};margin-bottom:14px">
+  <tr><td style="padding:14px 16px">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+      <td style="font-size:13.5px;font-weight:700;color:${C.ink};line-height:1.35;padding-right:8px">${esc(p.name)}</td>
+      <td width="70" align="right" valign="top">${chip(p.statusLabel, p.statusTone)}</td>
+    </tr></table>
+    <div style="font-size:11.5px;color:${C.muted};margin:4px 0 10px 0">To ${esc(to)}</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fafbff;border:1px solid ${C.lineSoft}">
+      <tr><td style="padding:12px 14px;font-size:13px;color:${C.ink};line-height:1.6">
+        <div style="font-weight:600;margin-bottom:10px">${esc(note.greeting)}</div>
+        ${note.paragraphs.map((t) => `<div style="margin-bottom:10px">${esc(t)}</div>`).join('')}
+      </td></tr>
+    </table>
+    <div style="margin-top:10px">${link(note.listUrl, 'Open the list in Basecamp to post it →')}</div>
+  </td></tr>
+</table>`;
+}
+
+function renderMessages(data) {
+  const rank = { STALLED: 0, AT_RISK: 1, WATCH: 2, NOT_STARTED: 3, ON_TRACK: 4, COMPLETE: 5 };
+  const withNotes = data.projects.filter((p) => p.coachNote);
+  const sorted = [...withNotes].sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || a.name.localeCompare(b.name));
+  const shown = sorted.slice(0, MESSAGE_LIMIT);
+  const rest = sorted.slice(MESSAGE_LIMIT);
+
+  let out = sectionOpen('06 / Messages to post');
+  out += hTitle(
+    'Ready to send, worst first',
+    'One Basecamp comment per project, built from the figures above. Each names the part they are on, where that sits against the whole build, the projected finish date and the KPIs. Select the text, copy it, then follow the link to the list.'
+  );
+
+  if (!shown.length) {
+    out += `<div style="font-size:13px;color:${C.muted}">No projects in scope on this run, so there is nothing to post.</div>`;
+    out += sectionClose();
+    return out;
+  }
+
+  out += shown.map((p) => messageCard(p, data)).join('');
+
+  // A one-line roll-up rather than a table: every one of these projects is
+  // already listed with its status in "Project detail" above, and printing them
+  // twice cost 4 KB against a body that has to stay under Gmail's clip point.
+  if (rest.length) {
+    out += `<div style="font-size:12.5px;color:${C.ink2};margin-top:18px;padding-top:14px;border-top:1px solid ${C.lineSoft};line-height:1.6">
+      <b>${rest.length} further ${plural(rest.length, 'message')}</b> ${plural(rest.length, 'is', 'are')} written and waiting in the attached dashboard, each with a copy button:
+      ${rest.map((p) => esc(`${p.coachNote.recipientName || 'the list'} on ${p.name.replace(/ - (BUILD|PROPOSAL).*/i, '')}`)).join(', ')}.
+      Nothing is missing here, only unprinted: four full messages is what fits in an email before Gmail starts clipping it.
+    </div>`;
+  }
+
+  out += `<div style="font-size:11.5px;color:${C.muted};margin-top:16px;line-height:1.5">Wording is composed from the snapshot rather than written by a language model, so a percentage or a date in a message can never disagree with the panel it came from. The same snapshot produces the same words.</div>`;
+  out += sectionClose();
+  return out;
+}
+
+// ------------------------------------------------------------ 07. method
 function renderMethod(data) {
   const m = data.meta;
   const scope = m.scope.map((s) => `${s.label} (${s.bucketId})`).join(' and ');
+  const withheld = data.withheld || [];
   const defs = [
-    ['Who appears', `Anyone assigned a task or posting an update in ${scope}. Ali, Ram, Jackie and the CB System and "+ai" twin accounts are excluded as staff or bots.`],
+    ['What is in scope', `Intern project work only, drawn from ${scope}. Onboarding checklists, legacy one-todo lists and staff work sitting in the Gov Contracts bucket are all held back, because none of them are an intern delivering a build.${withheld.length ? ` ${withheld.length} ${plural(withheld.length, 'list was', 'lists were')} withheld on this run, each named with its reason in the attached dashboard under "How to read this".` : ''}`],
+    ['Who appears', 'Anyone assigned a task or posting an update on an in-scope list. Ali, Ram, Jackie, the CB System and the "+ai" twin accounts are dropped as audience or bots. Colaberry staff working alongside the interns still show on tasks they hold but are kept off the roster, because this is an intern report.'],
     ['Active', `Posted an update or closed a task in the last ${data.lookbackDays} days.`],
-    ['Percent complete', 'Closed delivery tasks over total delivery tasks. Approval gates are excluded from the denominator, since those are yours to close, not theirs. Under two tasks reports "not calculable" rather than a misleading 0 or 100 percent.'],
+    ['Percent complete', 'Closed delivery tasks over total delivery tasks. Approval gates are excluded from the denominator, since those are yours to close, not theirs. Under two tasks reports "not calculable" rather than a misleading 0 or 100 percent. A person\'s percentage counts only the tasks assigned to them, never the whole list they sit on.'],
+    ['Owner', 'Named only where owning it means something: one person holding every delivery task, or at least 60 percent of them. Anything flatter reports as a shared list with no owner, because a list carrying several people\'s separate builds has no single owner and inventing one misattributes the rest.'],
+    ['Messages', 'Composed from this snapshot rather than written by a language model, so the completion percentage and the projected date in a message cannot drift from the figures above. Regenerating produces the same words.'],
     ['Status', 'Stalled: no activity in 14+ days. At Risk: quiet 7 to 13 days, or nothing closed in a fortnight. Watch: moving but with past-due tasks or a velocity drop over 50 percent. On Track: active and closing work. Complete: every task closed.'],
     ['Questions for you', `Found by rule: a comment from someone other than you carrying a question or blocked-on-you signal, where you have not replied in that thread since. ${m.narrativeMode === 'llm' ? `Screened by ${m.narrativeModel}; ${m.questionsScreenedOut || 0} were dropped as not genuinely yours.` : 'The model screen was unavailable on this run, so the list is unscreened.'}`],
     ['Data freshness', `Live read of the Basecamp API at ${centralLabel(data.generatedAt)} Central. ${m.commentCount} comments and ${data.portfolio.taskTotal} tasks across ${data.portfolio.projectsTotal} project lists.`],
   ];
 
-  let out = sectionOpen('06 / How to read this');
+  let out = sectionOpen('07 / How to read this');
   out += hTitle('Definitions and provenance', 'Every number above traces to a live Basecamp read. The model narrates, it never calculates.');
   out += `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse">
     ${defs.map(([t, d]) => `<tr>
@@ -409,6 +513,7 @@ function renderInternDeliveryEmail(data) {
     renderShape(data),
     renderPeople(data),
     renderProjects(data),
+    renderMessages(data),
     renderMethod(data),
     renderFooter(data),
   ].join('\n');
@@ -451,10 +556,39 @@ function renderInternDeliveryEmailText(data) {
     'NEEDS ATTENTION',
     ...attention.slice(0, 10).map((x) => `- ${x.name} (${x.statusLabel}, ${x.percentCalculable ? x.percentComplete + '%' : 'n/a'}, quiet ${x.daysSinceActivity}d)`),
     '',
+    ...messageLines(data),
     'The full interactive dashboard is attached as an HTML file.',
   ];
 
   return deName(lines.join('\n').replace(/—/g, '-').replace(/–/g, '-'));
+}
+
+// Plain text is the easiest thing to copy from on a phone, so the messages are
+// carried here in full rather than summarised away.
+function messageLines(data) {
+  const rank = { STALLED: 0, AT_RISK: 1, WATCH: 2, NOT_STARTED: 3, ON_TRACK: 4, COMPLETE: 5 };
+  const sorted = data.projects.filter((p) => p.coachNote)
+    .sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || a.name.localeCompare(b.name));
+  const shown = sorted.slice(0, MESSAGE_LIMIT);
+  if (!shown.length) return [];
+
+  const out = [
+    'MESSAGES TO POST',
+    'One Basecamp comment per project, worst first. Copy the block, open the list, paste.',
+    '',
+  ];
+  for (const p of shown) {
+    out.push(`--- ${p.name} (${p.statusLabel}) ---`);
+    out.push(p.coachNote.listUrl);
+    out.push('');
+    out.push(p.coachNote.plainText);
+    out.push('');
+  }
+  if (sorted.length > shown.length) {
+    out.push(`(${sorted.length - shown.length} further messages are in the attached dashboard, each with a copy button.)`);
+    out.push('');
+  }
+  return out;
 }
 
 module.exports = { renderInternDeliveryEmail, renderInternDeliveryEmailText };

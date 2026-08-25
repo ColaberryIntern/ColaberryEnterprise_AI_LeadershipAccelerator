@@ -21,6 +21,8 @@
 //                       not "finishes never").
 
 const { DAY_MS, utcMidnight, isoDay } = require('./internDeliveryData');
+const { isStaffPerson } = require('./internDeliveryScope');
+const { buildCoachNote } = require('./internDeliveryCoachNote');
 
 // Whose queue is this dashboard about. Ali answers; Ram is the other approver.
 const ALI_BC_ID = 17454835;
@@ -86,19 +88,38 @@ function buildDailySeries(timestamps, nowMs, days) {
   return series;
 }
 
-// The person credited with a project is whoever owns the most delivery tasks on
-// it. Ties break toward the person with the most recent activity, then by name
-// so the output is deterministic across runs (required for idempotency).
-function resolveOwner(todos, peopleById, commentsByAuthor) {
+// A person is only called the OWNER of a project when owning it actually means
+// something.
+//
+// The old rule was "whoever holds the most delivery tasks", which produced the
+// nonsense Ali flagged on 2026-08-25: the "Autonomous" list holds four todos
+// that are four separate people's projects, and it named Meera the owner of the
+// whole thing on the strength of holding two of them. Nobody owns that list.
+//
+// So ownership now has to clear a bar. One intern holding everything is an
+// owner. One intern holding a clear majority is a lead. Anything flatter is a
+// shared list and gets no owner at all, because inventing one misattributes
+// three other people's work.
+const LEAD_OWNERSHIP_SHARE = 0.6;
+
+function resolveOwnership(todos, peopleById, commentsByAuthor) {
   const tally = new Map();
+  const doneTally = new Map();
+  let deliveryTotal = 0;
   for (const t of todos) {
     if (t.groupKind === 'approval_gate') continue;
+    deliveryTotal += 1;
     for (const a of t.assignees || []) {
-      if (!peopleById.has(a.id)) continue;
+      // Staff hold tasks on intern projects (Sohail on Social Pilot AI, for
+      // instance). They are never the owner of an intern's project.
+      if (!peopleById.has(a.id) || isStaffPerson(a.id)) continue;
       tally.set(a.id, (tally.get(a.id) || 0) + 1);
+      if (t.completed) doneTally.set(a.id, (doneTally.get(a.id) || 0) + 1);
     }
   }
-  if (tally.size === 0) return null;
+
+  // Ties break toward the person with the most recent activity, then by name,
+  // so the output is deterministic across runs (required for idempotency).
   const ranked = [...tally.entries()].sort((x, y) => {
     if (y[1] !== x[1]) return y[1] - x[1];
     const xa = commentsByAuthor.get(x[0]) || 0;
@@ -108,7 +129,30 @@ function resolveOwner(todos, peopleById, commentsByAuthor) {
     const yn = (peopleById.get(y[0]) || {}).name || '';
     return xn.localeCompare(yn);
   });
-  return ranked[0][0];
+
+  const holders = ranked.map(([id, count]) => ({
+    personId: id,
+    name: (peopleById.get(id) || {}).name || `Basecamp user ${id}`,
+    taskCount: count,
+    doneCount: doneTally.get(id) || 0,
+  }));
+
+  if (holders.length === 0) {
+    return { ownerId: null, ownershipModel: 'unowned', ownerTaskCount: 0, ownerShare: null, holders };
+  }
+
+  const top = holders[0];
+  const share = deliveryTotal > 0 ? top.taskCount / deliveryTotal : 0;
+
+  // One person holding every delivery task: unambiguous owner, whatever the
+  // task count.
+  if (holders.length === 1) {
+    return { ownerId: top.personId, ownershipModel: 'single', ownerTaskCount: top.taskCount, ownerShare: share, holders };
+  }
+  if (share >= LEAD_OWNERSHIP_SHARE) {
+    return { ownerId: top.personId, ownershipModel: 'lead', ownerTaskCount: top.taskCount, ownerShare: share, holders };
+  }
+  return { ownerId: null, ownershipModel: 'shared', ownerTaskCount: top.taskCount, ownerShare: share, holders };
 }
 
 function summariseReleases(project) {
@@ -291,8 +335,13 @@ function computeProject(project, ctx) {
     riskFlags.push({ code: 'awaiting_ali', label: `${openQuestionCandidates.length} unanswered question${openQuestionCandidates.length === 1 ? '' : 's'} for you`, tone: 'risk' });
   }
 
-  const ownerId = resolveOwner(project.todos, peopleById, commentsByAuthor);
-  if (!ownerId && total > 0) riskFlags.push({ code: 'unowned', label: 'No one is assigned to this work', tone: 'risk' });
+  const ownership = resolveOwnership(project.todos, peopleById, commentsByAuthor);
+  const { ownerId, ownershipModel, ownerShare, holders } = ownership;
+  // "Shared" is a description, not a defect. Only genuinely unassigned work is
+  // a risk flag; flagging every shared list would cry wolf on Autonomous.
+  if (ownershipModel === 'unowned' && total > 0) {
+    riskFlags.push({ code: 'unowned', label: 'No one is assigned to this work', tone: 'risk' });
+  }
   const contributorIds = [...new Set(
     project.todos.flatMap((t) => (t.assignees || []).map((a) => a.id)).filter((id) => peopleById.has(id))
   )];
@@ -309,6 +358,9 @@ function computeProject(project, ctx) {
     bucketName: project.bucketName,
     url: project.url,
     ownerId,
+    ownershipModel,
+    ownerShare: ownerShare === null ? null : Math.round(ownerShare * 100) / 100,
+    holders,
     contributorIds,
     startedOn,
     taskTotal: total,
@@ -358,6 +410,9 @@ function computeProject(project, ctx) {
       releaseIndex: t.releaseIndex,
       commentsCount: t.commentsCount,
       assignees: (t.assignees || []).map((a) => a.name),
+      // IDs as well as names: the drawer filters a list down to one person's
+      // tasks, and two interns sharing a first name must not collide.
+      assigneeIds: (t.assignees || []).map((a) => a.id),
       overdue: !t.completed && !!t.dueOn && t.dueOn < isoDay(nowMs),
     })),
     recentComments: project.comments
@@ -370,6 +425,10 @@ function computeProject(project, ctx) {
         createdAt: c.createdAt,
         text: c.text.slice(0, 700),
         todoTitle: c.todoTitle,
+        // Carried so a person-scoped drawer can drop updates posted on other
+        // people's todos. Without it, Harpreet's view of a shared list still
+        // showed Meera's threads.
+        todoId: c.todoId,
         url: c.url,
       })),
   };
@@ -382,7 +441,34 @@ function computePerson(person, projects, comments, ctx) {
   const lookbackCutoff = nowMs - lookbackDays * DAY_MS;
 
   const mine = projects.filter((p) => p.ownerId === person.id || p.contributorIds.includes(person.id));
-  const owned = projects.filter((p) => p.ownerId === person.id);
+
+  // What this person actually holds, list by list. Every person-level figure
+  // below is computed from THEIR tasks, never from the whole list they happen
+  // to sit on. Harpreet holds one todo on a four-todo shared list; crediting
+  // her with that list's progress, or blaming her for it, is wrong in both
+  // directions, and it is what made her row unreadable before 2026-08-25.
+  const holdings = mine
+    .map((p) => {
+      const theirs = p.tasks.filter(
+        (t) => t.groupKind !== 'approval_gate' && (t.assigneeIds || []).includes(person.id)
+      );
+      const done = theirs.filter((t) => t.completed);
+      return {
+        projectId: p.projectId,
+        taskTotal: theirs.length,
+        taskDone: done.length,
+        percentComplete: theirs.length >= 2 ? pct(done.length, theirs.length) : null,
+        overdueCount: theirs.filter((t) => t.overdue).length,
+        // Whether their tasks effectively ARE the list, which is what lets the
+        // drawer skip the "showing only your tasks" chrome where it would be
+        // noise. Deliberately not an exact match: Omolola holds 12 of the 13
+        // todos on the Detroit proposal, and hiding one unassigned straggler
+        // behind a scope toggle helps nobody. Same threshold as ownership, so
+        // the rule is "if you would be called the owner, you see the list".
+        isWholeList: p.taskTotal > 0 && theirs.length >= p.taskTotal * LEAD_OWNERSHIP_SHARE,
+      };
+    })
+    .filter((h) => h.taskTotal > 0);
   const myComments = comments.filter((c) => c.authorId === person.id);
   const times = myComments.map((c) => new Date(c.createdAt).getTime());
 
@@ -396,7 +482,9 @@ function computePerson(person, projects, comments, ctx) {
   for (const p of mine) {
     for (const t of p.tasks) {
       if (!t.completed || !t.completedAt) continue;
-      if (!t.assignees.includes(person.name)) continue;
+      // Match on ID, not name. Two interns sharing a display name would
+      // otherwise be credited with each other's closures.
+      if (!(t.assigneeIds || []).includes(person.id)) continue;
       myCompletions.push(new Date(t.completedAt).getTime());
     }
   }
@@ -419,8 +507,8 @@ function computePerson(person, projects, comments, ctx) {
   const hasUpdateInWindow = updatesInLookback > 0;
   const active = hasUpdateInWindow || completionsInLookback > 0;
 
-  const taskTotal = owned.reduce((s, p) => s + p.taskTotal, 0);
-  const taskDone = owned.reduce((s, p) => s + p.taskDone, 0);
+  const taskTotal = holdings.reduce((s, h) => s + h.taskTotal, 0);
+  const taskDone = holdings.reduce((s, h) => s + h.taskDone, 0);
   const percentComplete = taskTotal >= 2 ? pct(taskDone, taskTotal) : null;
 
   const worst = mine.slice().sort((a, b) => a.statusRank - b.statusRank)[0] || null;
@@ -445,9 +533,9 @@ function computePerson(person, projects, comments, ctx) {
   else if (movedDown) trajectory = 'Slowing';
   else trajectory = 'Steady';
 
-  const ownedOpen = owned.filter((p) => p.taskRemaining > 0);
+  const openHoldings = holdings.filter((h) => h.taskDone < h.taskTotal);
   let personStatus;
-  if (owned.length > 0 && ownedOpen.length === 0) personStatus = STATUS.COMPLETE;
+  if (holdings.length > 0 && openHoldings.length === 0) personStatus = STATUS.COMPLETE;
   else if (daysSinceUpdate === null || daysSinceUpdate >= 14) personStatus = STATUS.STALLED;
   else if (daysSinceUpdate >= 7) personStatus = STATUS.AT_RISK;
   else if (doneLast7 === 0 && updatesLast7 === 0) personStatus = STATUS.AT_RISK;
@@ -464,13 +552,16 @@ function computePerson(person, projects, comments, ctx) {
     completionsInLookback,
     activityState: active ? (hasUpdateInWindow ? 'ACTIVE' : 'SHIPPING_QUIET') : 'DORMANT',
     projectIds: mine.map((p) => p.projectId),
-    ownedProjectIds: owned.map((p) => p.projectId),
+    ownedProjectIds: projects.filter((p) => p.ownerId === person.id).map((p) => p.projectId),
+    // Per-list breakdown of what THEY hold. The drawer reads this to show one
+    // person their own tasks instead of the whole shared list.
+    holdings,
     projectCount: mine.length,
     taskTotal,
     taskDone,
     percentComplete,
     percentCalculable: taskTotal >= 2,
-    percentReason: taskTotal >= 2 ? null : taskTotal === 1 ? 'Single task only - percentage is not meaningful' : 'No owned delivery tasks',
+    percentReason: taskTotal >= 2 ? null : taskTotal === 1 ? 'Single task only - percentage is not meaningful' : 'No delivery tasks assigned',
     updatesLast7,
     updatesPrior7,
     updatesInLookback,
@@ -490,7 +581,8 @@ function computePerson(person, projects, comments, ctx) {
     worstStatusTone: worst ? worst.statusTone : 'neutral',
     worstStatusProject: worst ? worst.name : null,
     openGateCount: mine.reduce((s, p) => s + p.openGateCount, 0),
-    overdueCount: mine.reduce((s, p) => s + p.overdue.length, 0),
+    // Their own past-due tasks, not every past-due task on lists they sit on.
+    overdueCount: holdings.reduce((s, h) => s + h.overdueCount, 0),
     dailyUpdates: buildDailySeries(times, nowMs, lookbackDays),
     dailyCompletions: buildDailySeries(myCompletions, nowMs, lookbackDays),
   };
@@ -528,6 +620,10 @@ function computeDelivery(raw) {
   ]);
   const people = raw.people
     .filter((p) => candidateIds.has(p.id))
+    // Colaberry staff hold tasks on intern projects and post updates on them.
+    // Their names still render on those tasks, but this is an intern report and
+    // they do not belong on the roster.
+    .filter((p) => !isStaffPerson(p.id))
     .map((p) => computePerson(p, projects, allComments, ctx))
     .filter((p) => p.projectCount > 0 || p.updatesInLookback > 0)
     .sort((a, b) => {
@@ -613,8 +709,10 @@ function computeDelivery(raw) {
       title: q.text.replace(/\s+/g, ' ').slice(0, 180),
       rawText: q.text,
       askedBy: q.askedBy,
+      askedById: q.askedById,
       askedAt: q.askedAt,
       commentId: q.commentId,
+      taskId: q.todoId,
       taskTitle: q.todoTitle,
       projectId: p.projectId,
       projectName: p.name,
@@ -627,6 +725,26 @@ function computeDelivery(raw) {
       urgency: q.ageDays !== null && q.ageDays > 14 ? 'high' : q.ageDays !== null && q.ageDays > 5 ? 'medium' : 'low',
     }))
   );
+
+  // The Basecamp comment Ali posts on each list. Composed here, from the same
+  // computed figures the page shows, so the note can never quote a percentage
+  // or a finish date that disagrees with the panel above it.
+  //
+  // Two flavours per project: one addressed to the list (the owner, or everyone
+  // on a shared list), and one per holder scoped to just their tasks, which is
+  // what the drawer uses when Ali arrives from a person rather than a project.
+  for (const p of projects) {
+    p.coachNote = buildCoachNote(p, { people, portfolio, generatedAt: raw.generatedAt });
+    p.coachNotesByPerson = {};
+    for (const h of p.holders || []) {
+      p.coachNotesByPerson[h.personId] = buildCoachNote(p, {
+        people,
+        portfolio,
+        generatedAt: raw.generatedAt,
+        focusPersonId: h.personId,
+      });
+    }
+  }
 
   const urgencyRank = { high: 0, medium: 1, low: 2 };
   const decisionQueue = [...questionQueue, ...gateQueue].sort(
@@ -645,11 +763,15 @@ function computeDelivery(raw) {
     people,
     projects,
     decisionQueue,
+    // Lists deliberately left off the report, with the reason for each. Shown
+    // on the page so a missing list reads as a decision, not a broken harvest.
+    withheld: raw.withheld || [],
     meta: {
       commentCount: allComments.length,
       scope: raw.scope,
+      withheldCount: (raw.withheld || []).length,
     },
   };
 }
 
-module.exports = { computeDelivery, deltaPct, pct, buildDailySeries, STATUS };
+module.exports = { computeDelivery, deltaPct, pct, buildDailySeries, resolveOwnership, STATUS, LEAD_OWNERSHIP_SHARE };

@@ -170,3 +170,102 @@ describe('renderInternDeliveryEmailText', () => {
     expect(text).toContain('https://app.basecamp.com/3945211/buckets/1/todos/2');
   });
 });
+
+// The section that is meant to leave the inbox: a ready-to-post Basecamp
+// comment per project. What is pinned here is the difference between a briefing
+// Ali reads and a message he sends to a named intern.
+describe('messages to post', () => {
+  function makeNote(over: Record<string, unknown> = {}) {
+    return {
+      projectId: 1,
+      projectName: 'Test Project - BUILD',
+      listUrl: 'https://app.basecamp.com/3945211/buckets/1/todolists/1',
+      recipientName: 'Test Person',
+      recipientId: 1,
+      scope: 'project',
+      greeting: 'Hi Test,',
+      paragraphs: ['You are 40% of the way through.', 'Projected finish: September 1, 2026.', 'Ali'],
+      plainText: 'Hi Test,\n\nYou are 40% of the way through.\n\nProjected finish: September 1, 2026.\n\nAli',
+      html: '<div><p>Hi Test,</p></div>',
+      ...over,
+    };
+  }
+
+  function withNotes(count: number) {
+    const projects = Array.from({ length: count }, (_, i) => makeProject({
+      projectId: i + 1,
+      name: `Project ${i + 1} - BUILD`,
+      status: 'AT_RISK',
+      coachNote: makeNote({ projectId: i + 1, projectName: `Project ${i + 1} - BUILD`, recipientName: `Person ${i + 1}` }),
+    }));
+    return makeSnapshot({ projects });
+  }
+
+  it('renders the message body and a link to the list', () => {
+    const { html } = renderInternDeliveryEmail(withNotes(1));
+    expect(html).toContain('Messages to post');
+    expect(html).toContain('You are 40% of the way through.');
+    expect(html).toContain('https://app.basecamp.com/3945211/buckets/1/todolists/1');
+    expect(html).toContain('To Person 1');
+  });
+
+  it('renders the arrow rather than a double-escaped entity', () => {
+    const { html } = renderInternDeliveryEmail(withNotes(1));
+    expect(html).toContain('Open the list in Basecamp to post it →');
+    expect(html).not.toContain('&amp;rarr;');
+  });
+
+  // The cap exists because the send hard-fails over 100 KB. If someone raises
+  // it without measuring, this is what tells them.
+  it('caps the full messages and rolls the rest up by name', () => {
+    const { html } = renderInternDeliveryEmail(withNotes(9));
+    expect((html.match(/Open the list in Basecamp to post it/g) || [])).toHaveLength(4);
+    expect(html).toContain('5 further messages');
+    expect(html).toContain('Person 9 on Project 9');
+  });
+
+  it('stays under the Gmail clip threshold with a full portfolio', () => {
+    const { html } = renderInternDeliveryEmail(withNotes(14));
+    expect(Buffer.byteLength(html)).toBeLessThan(GMAIL_CLIP_BYTES);
+  });
+
+  it('orders worst status first', () => {
+    const snap = makeSnapshot({
+      projects: [
+        makeProject({ projectId: 1, name: 'Healthy - BUILD', status: 'ON_TRACK', statusLabel: 'On Track', coachNote: makeNote({ recipientName: 'Healthy Person' }) }),
+        makeProject({ projectId: 2, name: 'Dead - BUILD', status: 'STALLED', statusLabel: 'Stalled', coachNote: makeNote({ recipientName: 'Stalled Person' }) }),
+      ],
+    });
+    const { html } = renderInternDeliveryEmail(snap);
+    expect(html.indexOf('Stalled Person')).toBeLessThan(html.indexOf('Healthy Person'));
+  });
+
+  it('carries every message in full in the plain-text part', () => {
+    const text = renderInternDeliveryEmailText(withNotes(2));
+    expect(text).toContain('MESSAGES TO POST');
+    expect(text).toContain('Projected finish: September 1, 2026.');
+    expect(text).toContain('https://app.basecamp.com/3945211/buckets/1/todolists/1');
+  });
+
+  it('says nothing rather than breaking when no project carries a note', () => {
+    const { html } = renderInternDeliveryEmail(makeSnapshot());
+    expect(html).toContain('nothing to post');
+  });
+
+  it('names a shared list without borrowing one person as its owner', () => {
+    const snap = makeSnapshot({
+      projects: [makeProject({
+        ownerId: null,
+        ownershipModel: 'shared',
+        holders: [
+          { personId: 1, name: 'Meera Hussain', taskCount: 2, doneCount: 2 },
+          { personId: 2, name: 'Harpreet Kaur', taskCount: 1, doneCount: 0 },
+        ],
+        coachNote: makeNote({ recipientName: null, scope: 'shared_list', greeting: 'Hi Meera, Harpreet,' }),
+      })],
+    });
+    const { html } = renderInternDeliveryEmail(snap);
+    expect(html).toContain('To everyone on the list');
+    expect(html).toContain('shared: Meera Hussain, Harpreet Kaur');
+  });
+});
