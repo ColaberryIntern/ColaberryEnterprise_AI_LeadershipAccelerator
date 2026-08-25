@@ -113,7 +113,9 @@ const STOPS = [
   console.log(`\n[console] ${consoleErrors.length} error(s)`);
   consoleErrors.slice(0, 10).forEach((e) => console.log(`  ${e}`));
 
-  writeCaptureSummary(OUT_DIR, { base_url: BASE_URL, console_errors: consoleErrors, entries });
+  // The helper takes the ENTRY ARRAY. Passing an object nests the ledger one level
+  // deep and the per-PNG width record stops being where the protocol says it is.
+  writeCaptureSummary(OUT_DIR, entries);
   await browser.close();
   process.exit(consoleErrors.length > 0 ? 2 : 0);
 })().catch((err) => {
