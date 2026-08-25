@@ -15,6 +15,7 @@ import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
+import publicCaseStudyRoutes from './routes/publicCaseStudyRoutes';
 import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
 import careerPortfolioRoutes from './routes/careerPortfolioRoutes';
@@ -66,8 +67,10 @@ import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
+import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
 import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
 import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotificationSchema';
@@ -161,6 +164,14 @@ app.use(v1Routes);
 app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
+// Case Study OS public read API (/api/public/case-studies*, /api/public/case-study-*).
+// Same rule as the block above, and it is not theoretical here: this router serves
+// /stories to anonymous visitors, so mounting it below adminRoutes would make the
+// public proof library return 401 to every real reader while every authenticated
+// smoke test kept passing. publicCaseStudyRoutes.test.ts builds both orders against
+// an adminRoutes-shaped stand-in and asserts 200 above / 401 below, so the failure
+// mode is pinned by a test rather than by this comment.
+app.use(publicCaseStudyRoutes);
 
 app.use(adminRoutes);
 
@@ -2391,6 +2402,16 @@ async function start(): Promise<void> {
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
+  // Case Study OS: 10 tables for the canonical, GitHub-fed, evidence-aware Case
+  // Study domain that backs /stories. Placed after ensureEvidenceSchema because it
+  // references evidence_records and runtime_portfolio_artifacts by id (as bare
+  // UUID columns, not FKs — see that module's header for why). The assert is not
+  // decoration: every statement in the ensure step is swallowed into a
+  // console.warn, so ensure resolving proves nothing about whether the tables
+  // exist. Non-fatal by design, matching every other schema step here — a failed
+  // post-check must not take the whole API down, it must be loud in the logs.
+  await ensureCaseStudySchema();
+  await assertCaseStudySchema();
   // Ticket Board Performance fix (2026-08-18): idx_tickets_created_at +
   // idx_tickets_status_created_at, CONCURRENTLY (tickets is write-heavy). Powers the
   // new "last 7 days" default board view. See ensureTicketIndexesSchema.ts header.
@@ -2602,6 +2623,9 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase C — autonomy_level (docs/ai-governance/abac-design.md's
   // 4-level ladder), required at agent reactivation time. Additive, idempotent, no flag.
   await ensureAiAgentAutonomyLevelSchema();
+  // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
+  // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
+  await ensureAiAgentDepartmentScopeSchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

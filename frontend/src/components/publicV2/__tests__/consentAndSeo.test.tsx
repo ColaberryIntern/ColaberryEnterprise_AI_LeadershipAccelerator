@@ -43,6 +43,11 @@ const DECLARED_ROUTES = [
   '/start',
   '/pricing',
   '/stories',
+  // The published-record detail surface. A PATTERN, not a path: a project
+  // record has no fixed slug, so this is the shape App.tsx registers rather
+  // than any one address. Nothing in the footer may link it directly, and the
+  // check below proves that is still true.
+  '/stories/:slug',
   '/pricing',
   '/contact',
   '/try',
@@ -155,5 +160,19 @@ describe('footer — every link resolves', () => {
 
   it('claims no terms page, because none exists', () => {
     expect(FOOTER_LINKS.some((h) => h.includes('terms'))).toBe(false);
+  });
+
+  it('links the stories index, and never one particular record', () => {
+    /*
+     * The index is a stable destination; a single record is not. A footer link
+     * to one published slug would rot the day that record is unpublished, and
+     * it would be a dead link in the site chrome rather than on one page. The
+     * detail route is declared above so the table is complete, but the footer
+     * must reach it only through the index.
+     */
+    expect(DECLARED_ROUTES).toContain('/stories');
+    expect(DECLARED_ROUTES).toContain('/stories/:slug');
+    expect(FOOTER_LINKS).toContain('/stories');
+    expect(FOOTER_LINKS.filter((h) => h.startsWith('/stories/'))).toEqual([]);
   });
 });

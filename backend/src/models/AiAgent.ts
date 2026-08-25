@@ -253,6 +253,14 @@ interface AiAgentAttributes {
   // on enforcement — this column is purely declarative, set at reactivation
   // time). See ensureAiAgentAutonomyLevelSchema.ts for the real schema.
   autonomy_level?: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
+  // AI Workforce Reset, Phase D.1 "Inventory" (2026-08-24) — one of the 18 real
+  // `departments` table slugs, or null when not yet classified / genuinely
+  // cross-cutting (never forced). `scope` is JSONB, reserved for a future
+  // per-campaign/per-lead-segment grant (abac-design.md decision 4's deferred
+  // half) — unused today; `department` alone IS the scope for this phase. Both
+  // purely declarative — see ensureAiAgentDepartmentScopeSchema.ts.
+  department?: string | null;
+  scope?: Record<string, any>;
 }
 
 class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
@@ -288,6 +296,8 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare reports_to_type: 'human' | 'agent' | null;
   declare reports_to_id: string | null;
   declare autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
+  declare department: string | null;
+  declare scope: Record<string, any>;
 }
 
 AiAgent.init(
@@ -441,6 +451,15 @@ AiAgent.init(
       type: DataTypes.STRING(20),
       allowNull: true,
       defaultValue: 'observe',
+    },
+    department: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    scope: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: {},
     },
   },
   {
