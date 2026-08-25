@@ -182,17 +182,20 @@ export default function AdminTicketBoardPage() {
       // the last 7 days (backend/src/db/ensureTicketIndexesSchema.ts adds the
       // supporting idx_tickets_created_at index so this stays fast as the table
       // grows). 'all' omits the param entirely, matching today's unbounded
-      // behavior exactly. /api/admin/tickets/stats is deliberately NOT scoped by
-      // this — the KPI cards stay honest, whole-system totals regardless of the
-      // currently-viewed slice, same as they already ignore Priority/Type/Source.
+      // behavior exactly.
       if (dateRange === 'recent') {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         params.set('created_after', sevenDaysAgo.toISOString());
       }
 
+      // Ticket KPI filter-scoping fix (2026-08-25) — Ali, live, filtering by
+      // Creator: "When we filter down on a list the KPIs should reflect what
+      // the data is showing." The stats fetch now reuses the SAME `params` the
+      // board fetch just built, so the KPI cards and the Kanban columns below
+      // them always describe the same slice of tickets.
       const [boardRes, statsRes] = await Promise.all([
         fetch(`/api/admin/tickets/board?${params}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/tickets/stats', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/admin/tickets/stats?${params}`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       const boardData = await boardRes.json();
       const statsData = await statsRes.json();

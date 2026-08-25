@@ -26,6 +26,14 @@ import {
 import { buildTicketAutoCheckResolver } from './ticketAutoCheckService';
 import { enforceReportsToGate } from './ticketCreatorReportsToResolver';
 import { recordAutoDecisionOnStatusChange } from './evidence/ticketDecisionAutoRecorder';
+// Ticket KPI filter-scoping fix (2026-08-25) — TicketFilters + its where-clause
+// builder live in ticketFilters.ts (a real circular-dependency risk with
+// ticketStatsService.ts otherwise — see that file's own header comment for
+// why). Re-exported below so every existing importer of `TicketFilters` from
+// this module keeps working unchanged.
+import type { TicketFilters } from './ticketFilters';
+import { buildTicketFilterWhere } from './ticketFilters';
+export type { TicketFilters } from './ticketFilters';
 
 // ── State Machine ────────────────────────────────────────────────────────
 
@@ -62,28 +70,6 @@ export interface CreateTicketData {
   confidence?: number | null;
   estimated_effort?: string | null;
   due_date?: Date | null;
-}
-
-export interface TicketFilters {
-  status?: TicketStatus | TicketStatus[];
-  priority?: TicketPriority | TicketPriority[];
-  type?: TicketType | TicketType[];
-  source?: string;
-  assigned_to_id?: string;
-  parent_ticket_id?: string | null;
-  entity_type?: string;
-  entity_id?: string;
-  // Ticket Board Performance fix (2026-08-18) — powers the board's "last 7 days"
-  // default view. Additive/optional: every existing caller that doesn't pass this
-  // keeps today's unbounded behavior unchanged. See ensureTicketIndexesSchema.ts
-  // for the supporting idx_tickets_created_at index this filter relies on to stay
-  // fast as the table grows.
-  createdAfter?: Date;
-  // Org Chart v4 (2026-08-20) — the ticket-filter-by-agent button. Pre-resolved
-  // by the route (ticketCreatorFilterResolver.ts) BEFORE reaching this
-  // function — this file stays a pure query builder, the identity-resolution
-  // logic lives in its own module (see that file's header comment for why).
-  creatorMatchIds?: string[];
 }
 
 // ── Create ───────────────────────────────────────────────────────────────
@@ -429,38 +415,7 @@ export async function getTicketById(ticketId: string) {
 }
 
 export async function getTicketsForBoard(filters?: TicketFilters) {
-  const where: Record<string, any> = {};
-
-  if (filters?.status) {
-    where.status = Array.isArray(filters.status) ? { [Op.in]: filters.status } : filters.status;
-  }
-  if (filters?.priority) {
-    where.priority = Array.isArray(filters.priority) ? { [Op.in]: filters.priority } : filters.priority;
-  }
-  if (filters?.type) {
-    where.type = Array.isArray(filters.type) ? { [Op.in]: filters.type } : filters.type;
-  }
-  if (filters?.source) where.source = filters.source;
-  if (filters?.assigned_to_id) where.assigned_to_id = filters.assigned_to_id;
-  if (filters?.entity_type) where.entity_type = filters.entity_type;
-  if (filters?.entity_id) where.entity_id = filters.entity_id;
-  if (filters?.parent_ticket_id !== undefined) {
-    where.parent_ticket_id = filters.parent_ticket_id;
-  }
-  if (filters?.createdAfter) {
-    where.created_at = { [Op.gte]: filters.createdAfter };
-  }
-  // Org Chart v4 (2026-08-20) — ticket-filter-by-agent button. `where` is
-  // typed `Record<string, any>` (declared above), so indexing it with the
-  // `Op.or` symbol key needs an explicit cast under this repo's strict
-  // tsconfig — same convention already used at this exact shape elsewhere in
-  // this codebase (openclawRoutes.ts, communityService.ts, notebookService.ts).
-  if (filters?.creatorMatchIds && filters.creatorMatchIds.length > 0) {
-    (where as any)[Op.or] = [
-      { created_by_id: { [Op.in]: filters.creatorMatchIds } },
-      { assigned_to_id: { [Op.in]: filters.creatorMatchIds } },
-    ];
-  }
+  const where = buildTicketFilterWhere(filters);
 
   const tickets = await Ticket.findAll({
     where,

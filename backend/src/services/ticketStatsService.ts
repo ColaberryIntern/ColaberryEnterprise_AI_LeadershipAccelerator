@@ -1,6 +1,7 @@
 import { fn as sequelizeFn, col as sequelizeCol } from 'sequelize';
 import { Ticket } from '../models';
 import type { TicketStatus, TicketPriority, TicketType } from '../models/Ticket';
+import { buildTicketFilterWhere, type TicketFilters } from './ticketFilters';
 
 // Ticket Board Performance fix (2026-08-18) — extracted out of ticketService.ts
 // (which had already exceeded CLAUDE.md's 500-line hard ceiling; per that rule
@@ -18,6 +19,16 @@ import type { TicketStatus, TicketPriority, TicketType } from '../models/Ticket'
 // change, but Postgres now returns ~25 numbers instead of 16,000+ full rows,
 // and Node never allocates a JS object per ticket just to discard it after
 // counting.
+//
+// Ticket KPI filter-scoping fix (2026-08-25) — Ali, live, filtering the board
+// by Creator: "When we filter down on a list the KPIs should reflect what the
+// data is showing" — the cards were staying global/unfiltered regardless of
+// the active filter set, so "Open: 388" sat above a board showing 15 real
+// tickets. `filters` is optional (every pre-existing bare `getTicketStats()`
+// call keeps returning true global totals — this is additive, not a breaking
+// change) and, when passed, is applied via the SAME `buildTicketFilterWhere()`
+// getTicketsForBoard() uses, so the two can never drift apart on what a given
+// filter set means.
 interface StatusCountRow { status: TicketStatus; count: string }
 interface PriorityCountRow { priority: TicketPriority; count: string }
 interface TypeCountRow { type: TicketType; count: string }
@@ -30,20 +41,25 @@ export interface TicketStats {
   byType: Record<string, number>;
 }
 
-export async function getTicketStats(): Promise<TicketStats> {
+export async function getTicketStats(filters?: TicketFilters): Promise<TicketStats> {
+  const where = buildTicketFilterWhere(filters);
+
   const [total, statusRows, priorityRows, typeRows] = await Promise.all([
-    Ticket.count(),
+    Ticket.count({ where }),
     Ticket.findAll({
+      where,
       attributes: ['status', [sequelizeFn('COUNT', sequelizeCol('id')), 'count']],
       group: ['status'],
       raw: true,
     }) as unknown as Promise<StatusCountRow[]>,
     Ticket.findAll({
+      where,
       attributes: ['priority', [sequelizeFn('COUNT', sequelizeCol('id')), 'count']],
       group: ['priority'],
       raw: true,
     }) as unknown as Promise<PriorityCountRow[]>,
     Ticket.findAll({
+      where,
       attributes: ['type', [sequelizeFn('COUNT', sequelizeCol('id')), 'count']],
       group: ['type'],
       raw: true,
