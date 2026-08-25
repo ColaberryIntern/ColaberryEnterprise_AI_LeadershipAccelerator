@@ -5,6 +5,7 @@ import { scheduleOutcomeMeasurement } from '../../services/outcomes/outcomeMeasu
 import { resolveActorDisplayName, resolveActorDisplayNamesBatch, actorRefKey } from '../../services/actorIdentity/resolveActorDisplayName';
 import { buildTicketAutoCheckResolver } from '../../services/ticketAutoCheckService';
 import { enforceReportsToGate } from '../../services/ticketCreatorReportsToResolver';
+import { recordAutoDecisionOnStatusChange } from '../../services/evidence/ticketDecisionAutoRecorder';
 import { createTicket, updateTicketStatus, addAgentOutput, getTicketById, getTicketsForBoard, getTicketStats } from '../../services/ticketService';
 import { TicketCreatorNotReportableError } from '../../services/errors/ticketCreatorErrors';
 
@@ -27,6 +28,13 @@ jest.mock('../../services/workLedger/workLedgerService', () => ({
 }));
 jest.mock('../../services/outcomes/outcomeMeasurementService', () => ({
   scheduleOutcomeMeasurement: jest.fn(),
+}));
+// ProofDesk Decisions-tab gap fix (2026-08-23) — updateTicketStatus() now
+// calls this on every in_review/done transition. Mocked here (this file
+// tests WIRING) — the module's own classification/decision-writing behavior
+// has its own unit tests in evidence/ticketDecisionAutoRecorder.test.ts.
+jest.mock('../../services/evidence/ticketDecisionAutoRecorder', () => ({
+  recordAutoDecisionOnStatusChange: jest.fn(),
 }));
 // getTicketById's own name-resolution behavior is covered exhaustively by
 // resolveActorDisplayName's own unit tests — mocked here so this file tests the
@@ -70,6 +78,7 @@ const mockResolveActorDisplayName = resolveActorDisplayName as unknown as jest.M
 const mockResolveActorDisplayNamesBatch = resolveActorDisplayNamesBatch as unknown as jest.Mock;
 const mockBuildTicketAutoCheckResolver = buildTicketAutoCheckResolver as unknown as jest.Mock;
 const mockEnforceReportsToGate = enforceReportsToGate as unknown as jest.Mock;
+const mockRecordAutoDecision = recordAutoDecisionOnStatusChange as unknown as jest.Mock;
 
 const NO_AUTO_CHECK = {
   hasAutoCheck: false,
@@ -86,6 +95,7 @@ beforeEach(() => {
   mockResolveActorDisplayName.mockImplementation(async (_type: string, id: string) => id);
   mockResolveActorDisplayNamesBatch.mockResolvedValue(new Map());
   mockBuildTicketAutoCheckResolver.mockResolvedValue(jest.fn(() => NO_AUTO_CHECK));
+  mockRecordAutoDecision.mockResolvedValue(undefined);
   // Agent Ticket Standard's reports_to gate: sane default so every pre-existing
   // test (written before this gate existed, e.g. the student_support
   // reuse/reopen suite below, which creates tickets as created_by_type:'ai_staff')
@@ -432,6 +442,40 @@ describe('updateTicketStatus', () => {
       // diff) and out of scope to re-assert here.
       expect(mockScheduleOutcome).toHaveBeenCalledTimes(1);
       expect(mockScheduleOutcome).toHaveBeenCalledWith('t2');
+    });
+  });
+
+  describe('ProofDesk Decisions-tab gap fix — auto-decision-record wiring', () => {
+    it("happy path: a transition to in_review calls recordAutoDecisionOnStatusChange with the real from/to status and actor, AWAITED before returning", async () => {
+      const ticket = makeTicket('in_progress');
+      ticket.type = 'strategic';
+      ticketFindByPk.mockResolvedValue(ticket);
+      activityCreate.mockResolvedValue({ id: 'act-dec-1' });
+
+      const result = await updateTicketStatus('t2', 'in_review', 'cory', 'cory-engine');
+
+      expect(result.status).toBe('in_review');
+      expect(mockRecordAutoDecision).toHaveBeenCalledTimes(1);
+      expect(mockRecordAutoDecision).toHaveBeenCalledWith(ticket, 't2', 'in_progress', 'in_review', 'cory', 'cory-engine');
+    });
+
+    it('non-in_review/done transitions still call the hook — the hook itself owns the status/type gating (single source of truth, not duplicated here)', async () => {
+      const ticket = makeTicket('todo');
+      ticketFindByPk.mockResolvedValue(ticket);
+      activityCreate.mockResolvedValue({ id: 'act-dec-2' });
+
+      await updateTicketStatus('t2', 'in_progress', 'human', 'ali');
+
+      expect(mockRecordAutoDecision).toHaveBeenCalledWith(ticket, 't2', 'todo', 'in_progress', 'human', 'ali');
+    });
+
+    it('boundary/failure isolation: recordAutoDecisionOnStatusChange rejecting does not propagate and does not prevent updateTicketStatus from returning successfully', async () => {
+      mockRecordAutoDecision.mockRejectedValue(new Error('should never happen — the hook is internally failure-isolated, but prove the caller is resilient too'));
+      const ticket = makeTicket('in_review');
+      ticketFindByPk.mockResolvedValue(ticket);
+      activityCreate.mockResolvedValue({ id: 'act-dec-3' });
+
+      await expect(updateTicketStatus('t2', 'done', 'human', 'ali')).resolves.toBe(ticket);
     });
   });
 });

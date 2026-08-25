@@ -35,6 +35,48 @@
  * a fake that returned the whole row regardless would make that allow-list
  * untestable from here.
  *
+ * ── WHERE IT DIVERGES FROM POSTGRES — READ BEFORE REUSING ───────────────────
+ *
+ * The heading above is accurate for the four indexes it names and no wider. An
+ * independent probe of this file (17 assertions, T020 verification) confirmed
+ * every positive claim above and found five divergences. Four FAIL OPEN, which
+ * is the dangerous direction: the fake ACCEPTS what Postgres would refuse, so a
+ * test can pass while asserting a property production does not have.
+ *
+ *   1. `update()` NEVER CHECKS UNIQUENESS. Renaming one row's slug onto
+ *      another's succeeds here and violates `case_studies.slug` in Postgres.
+ *      Only `create()`/`seed()` are guarded.
+ *
+ *   2. SYMBOL-KEYED TOP-LEVEL OPERATORS ARE SILENTLY DROPPED. `where` is walked
+ *      with `Object.keys`, which skips symbols, so `{ [Op.or]: [...] }` matches
+ *      EVERY row rather than the ones asked for. This is the sharpest trap in
+ *      the file: `caseStudyAdminService.ts:169` builds the admin title/slug
+ *      search with exactly that shape, so a future test of that search written
+ *      against this harness would pass while testing nothing at all. `Op.in` IS
+ *      supported — it is nested inside a string key, so it survives.
+ *
+ *   3. THE THREE PARTIAL UNIQUE INDEXES ARE NOT MODELLED —
+ *      `cs_repositories_one_primary_per_collection`,
+ *      `cs_evidence_unique_source_record` and
+ *      `cs_artifacts_unique_portfolio_source`. Duplicates insert cleanly here
+ *      and are rejected by the database. Those three indexes exist precisely
+ *      because they close write races the service layer could not, so a
+ *      concurrency test written here would prove the opposite of the truth.
+ *
+ *   4. ONLY `order[0]` IS APPLIED. Immaterial today — every `order` in shipped
+ *      Case Study code is single-key — and wrong the moment one is not.
+ *
+ * And one that FAILS CLOSED, which merely wastes time: `repoCollections` is
+ * declared unique on `case_study_id`, but `ensureCaseStudySchema.ts:114` creates
+ * a NON-unique index there. The fake invents a constraint production does not
+ * have. (`NULL` also collapses to `''` in composite keys, so it refuses some
+ * pairs Postgres allows.)
+ *
+ * None of these affect the eleven assertions in `caseStudyIntegration.test.ts` —
+ * they were each checked against it. They are recorded here because the next
+ * person to reuse this harness will not re-derive them, and items 1 to 4 are
+ * invisible when they bite: the test goes green.
+ *
  * ── READ-ONLY MODELS THROW ──────────────────────────────────────────────────
  *
  * `Project`, `GitHubConnection`, `EvidenceRecord` and `PortfolioArtifact` are

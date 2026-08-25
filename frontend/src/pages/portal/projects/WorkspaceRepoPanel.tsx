@@ -265,10 +265,23 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
         {connect?.write_access === 'pull_only' && (
           <div className="rt-muted" style={{ margin: '8px 0' }}>
             <p style={{ margin: '0 0 8px' }}>
-              <strong>The platform has read-only access to this repo.</strong> That is fine — it reads your
-              commits and confirms your stories exactly as normal, and everything you earn is recorded here
-              rather than in the repo. It does mean the platform cannot put files INTO your repo, so the whole
-              of <code>.colaberry/</code> is yours to place.
+              <strong>The platform has read-only access to this repo.</strong> Your verification and points are
+              unaffected — it reads your commits and confirms your stories exactly as normal, and everything you
+              earn is recorded here rather than in the repo.
+            </p>
+            <p style={{ margin: '0 0 8px' }}>
+              <strong>What it does cost you is your portfolio.</strong> The artifacts you build in Claude Code
+              are saved here, but they cannot be written into your repo — so they never appear on your GitHub,
+              which is the version an employer or client actually looks at. Granting write access syncs every
+              artifact you have already built, not just future ones.
+            </p>
+            <p style={{ margin: '0 0 8px' }}>
+              To grant it: on GitHub, open your repo&rsquo;s <strong>Settings &rarr; Collaborators</strong>, add{' '}
+              <code>ColaberryIntern</code>, and we accept the invitation automatically within the hour.
+              GitHub invitations expire after 7 days, so if one has lapsed just send it again.
+            </p>
+            <p style={{ margin: '0 0 8px' }}>
+              Until then, the whole of <code>.colaberry/</code> is yours to place.
             </p>
             <p style={{ margin: '0 0 8px' }}>
               <strong>Your progress file is the one that matters, and the button below builds it for you.</strong>
@@ -386,6 +399,27 @@ const WorkspaceRepoPanel: React.FC<Props> = ({ projectId, repo, onRepoChange, on
           <code>.env</code>, scratch files in <code>tmp/</code>) out of it.
         </p>
         <CommandBlock label={`Run in your project folder`} commands={connect.challenge.commands} />
+        {/* THE SECOND GRANT, ASKED FOR HERE BECAUSE NOTHING ELSE ASKS FOR IT.
+            The push above proves the repo is THEIRS. It says nothing about
+            whether COLABERRY can write to it — those are two different grants on
+            GitHub, and adding a collaborator only creates an invitation that
+            somebody still has to accept. Measured 2026-08-23: 18 connections
+            read "connected" while exactly ONE had platform push, so this step
+            was being skipped by essentially everyone who ever connected. It sits
+            in the same card as the push rather than after it, because a student
+            who reaches "connected" considers themselves finished and never
+            comes back. */}
+        <p className="rt-muted" style={{ margin: '12px 0 0' }}>
+          <strong>One more grant, and it is the one that builds your portfolio.</strong> Pushing proves the repo
+          is yours. Separately, on GitHub open <strong>Settings &rarr; Collaborators</strong> and add{' '}
+          <code>ColaberryIntern</code> — that is what lets the platform write the artifacts you build in Claude
+          Code into your repo, so they show up on your GitHub rather than only here. We accept the invitation
+          automatically within the hour, and GitHub expires invitations after 7 days.
+        </p>
+        <p className="rt-muted" style={{ margin: '8px 0 0' }}>
+          You can connect without it and add it later — nothing you earn depends on it, and every artifact you
+          have already built syncs the moment access lands.
+        </p>
         <div className="rt-row" style={{ marginTop: 12 }}>
           <button className="rt-btn pri" disabled={busy === 'confirm'} onClick={doConfirm}>
             {busy === 'confirm' ? 'Checking…' : "I've pushed — connect it"}

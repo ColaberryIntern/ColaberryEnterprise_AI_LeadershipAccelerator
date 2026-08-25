@@ -10,6 +10,7 @@ import { Op } from 'sequelize';
 import { Lead, Campaign, CommunicationLog, UnsubscribeEvent } from '../models';
 import { getTestOverrides, getSetting } from './settingsService';
 import { assertConsentForSend } from './consentService';
+import { checkBrandPreference } from '../modules/communications/brandPreferenceGate';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -327,6 +328,34 @@ export async function evaluateSend(req: SendRequest): Promise<SendDecision> {
         redirect: null,
         testMode: false,
         blockedReason: `consent_${consent.reason}`,
+        deliveryMode: 'blocked',
+      };
+    }
+  }
+
+  // 3.6 Per-brand communication permission (master plan §16, DEC-05).
+  //
+  // Runs AFTER checkLeadSendable on purpose. That check is the authority on global
+  // suppression -- hard bounces, complaints, unsubscribes -- which are facts about the
+  // ADDRESS and which no brand-level preference may override. This gate only ever
+  // narrows what that already allowed.
+  //
+  // Applies only to campaigns carrying a brand_id, so today's mail is untouched: every
+  // existing campaign was backfilled to a brand but none were authored against one, and
+  // the gate short-circuits without one. Every future CPN or AI Flotation campaign is
+  // enforced from its first send instead of from whenever someone remembers.
+  if (!req.simulationId) {
+    const brandPref = await checkBrandPreference({
+      leadId: req.leadId,
+      campaignId: req.campaignId,
+      channel: req.channel === 'sms' ? 'sms' : req.channel === 'voice' ? 'voice' : 'email',
+    });
+    if (!brandPref.allowed) {
+      return {
+        allowed: false,
+        redirect: null,
+        testMode: false,
+        blockedReason: `brand_${brandPref.reason}`,
         deliveryMode: 'blocked',
       };
     }

@@ -73,11 +73,11 @@ const CHART: OrgChartResponse = {
     { id: '4e255894-ac0b-4367-ae06-27459ea05f66', name: 'Sohail', email: 'sohail@colaberry.com', team: 'Marketing', department: 'Marketing', role: 'member', leadership_agent_ids: [], staff_count: 0, task: null, hierarchy_color: null },
   ],
   leadership: [
-    { id: 'corybrain-id', agent_name: 'CoryBrain', display_name: 'Cory Brain — Strategic Initiatives', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: ['staff-1-id'], open_ticket_count: 129, hierarchy_color: null },
-    { id: 'wie-id', agent_name: 'workforce_intelligence_engine', display_name: 'Workforce Intelligence Engine', reports_to_human_id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', reports_to_summary: 'Reports to: kesetebirhan@gmail.com', staff_ids: [], open_ticket_count: 202, hierarchy_color: null },
+    { id: 'corybrain-id', agent_name: 'CoryBrain', display_name: 'Cory Brain — Strategic Initiatives', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: ['staff-1-id'], open_ticket_count: 129, hierarchy_color: null, enabled: true },
+    { id: 'wie-id', agent_name: 'workforce_intelligence_engine', display_name: 'Workforce Intelligence Engine', reports_to_human_id: '3df017df-affa-49ab-884f-a99a4bd2ef4e', reports_to_summary: 'Reports to: kesetebirhan@gmail.com', staff_ids: [], open_ticket_count: 202, hierarchy_color: null, enabled: true },
   ],
   staff: [
-    { id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', display_name: 'Admissions Conversion Architect', reports_to_agent_id: 'corybrain-id', reports_to_summary: 'Reports to: Cory Brain — Strategic Initiatives', open_ticket_count: 12, hierarchy_color: null },
+    { id: 'staff-1-id', agent_name: 'AdmissionsConversionArchitect', display_name: 'Admissions Conversion Architect', reports_to_agent_id: 'corybrain-id', reports_to_summary: 'Reports to: Cory Brain — Strategic Initiatives', open_ticket_count: 12, hierarchy_color: null, enabled: true },
   ],
   unresolved: [],
   generated_at: '2026-08-19T14:00:00.000Z',
@@ -332,12 +332,12 @@ describe('OrgChartSection — longest real production names render intact (no JS
   const LONG_NAME_CHART: OrgChartResponse = {
     ...CHART,
     leadership: [
-      { id: 'cory-engine-id', agent_name: 'cory-engine', display_name: 'Cory Engine — Autonomous Operations', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: [], open_ticket_count: 42, hierarchy_color: null },
-      { id: 'abm-id', agent_name: 'AgentBehaviorMonitorAgent', display_name: 'Agent Behavior Monitor — Security', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: [], open_ticket_count: 3, hierarchy_color: null },
+      { id: 'cory-engine-id', agent_name: 'cory-engine', display_name: 'Cory Engine — Autonomous Operations', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: [], open_ticket_count: 42, hierarchy_color: null, enabled: true },
+      { id: 'abm-id', agent_name: 'AgentBehaviorMonitorAgent', display_name: 'Agent Behavior Monitor — Security', reports_to_human_id: 'f179c222-284e-4180-a335-cca9e4918b2e', reports_to_summary: 'Reports to: Ali Muwwakkil', staff_ids: [], open_ticket_count: 3, hierarchy_color: null, enabled: true },
     ],
     staff: [
-      { id: 'marketing-architect-id', agent_name: 'MarketingGrowthStrategyArchitect', display_name: 'Marketing & Growth Strategy Architect', reports_to_agent_id: 'cory-engine-id', reports_to_summary: 'Reports to: Cory Engine — Autonomous Operations', open_ticket_count: 7, hierarchy_color: null },
-      { id: 'platform-architect-id', agent_name: 'PlatformInfrastructureStrategyArchitect', display_name: 'Platform & Infrastructure Strategy Architect', reports_to_agent_id: 'cory-engine-id', reports_to_summary: 'Reports to: Cory Engine — Autonomous Operations', open_ticket_count: 2, hierarchy_color: null },
+      { id: 'marketing-architect-id', agent_name: 'MarketingGrowthStrategyArchitect', display_name: 'Marketing & Growth Strategy Architect', reports_to_agent_id: 'cory-engine-id', reports_to_summary: 'Reports to: Cory Engine — Autonomous Operations', open_ticket_count: 7, hierarchy_color: null, enabled: true },
+      { id: 'platform-architect-id', agent_name: 'PlatformInfrastructureStrategyArchitect', display_name: 'Platform & Infrastructure Strategy Architect', reports_to_agent_id: 'cory-engine-id', reports_to_summary: 'Reports to: Cory Engine — Autonomous Operations', open_ticket_count: 2, hierarchy_color: null, enabled: true },
     ],
   };
 
@@ -740,7 +740,7 @@ describe('OrgChartSection — ticket-filter button', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain&range=all&status=open', '_blank', 'noopener,noreferrer');
     // The card's own click handler (open the Leadership drawer) must NOT
     // also have fired — stopPropagation on the button click.
     expect(container.querySelector('.wf-scrim')).toBeFalsy();
@@ -758,7 +758,7 @@ describe('OrgChartSection — ticket-filter button', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect&range=all&status=open', '_blank', 'noopener,noreferrer');
   });
 
   it('encodes an agent_name with special characters safely in the URL', async () => {
@@ -776,7 +776,7 @@ describe('OrgChartSection — ticket-filter button', () => {
     });
 
     expect(windowOpenSpy).toHaveBeenCalledWith(
-      `/admin/tickets?creator=${encodeURIComponent('agent name/with?special&chars')}`,
+      `/admin/tickets?creator=${encodeURIComponent('agent name/with?special&chars')}&range=all&status=open`,
       '_blank',
       'noopener,noreferrer',
     );
@@ -817,7 +817,7 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain&range=all&status=open', '_blank', 'noopener,noreferrer');
     expect(container.querySelector('.wf-scrim')).toBeFalsy(); // still doesn't also open the drawer
   });
 
@@ -834,7 +834,7 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect&range=all&status=open', '_blank', 'noopener,noreferrer');
   });
 
   it('pressing Enter on the focused control (keyboard operability, previously missing on the icon-only control) opens the filtered tickets', async () => {
@@ -848,7 +848,7 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=CoryBrain&range=all&status=open', '_blank', 'noopener,noreferrer');
   });
 
   it('pressing Space on the focused control also opens the filtered tickets', async () => {
@@ -862,7 +862,7 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect', '_blank', 'noopener,noreferrer');
+    expect(windowOpenSpy).toHaveBeenCalledWith('/admin/tickets?creator=AdmissionsConversionArchitect&range=all&status=open', '_blank', 'noopener,noreferrer');
   });
 
   it('a key other than Enter/Space does nothing', async () => {
@@ -877,5 +877,41 @@ describe('OrgChartSection — the ticket-count NUMBER itself is now clickable (T
     });
 
     expect(windowOpenSpy).not.toHaveBeenCalled();
+  });
+});
+
+// AI Workforce Reset (2026-08-24) — Ali, live: a deactivated agent must be
+// visually distinguishable on the chart, not rendered identically to an
+// active one.
+describe('OrgChartSection — inactive (deactivated) agents are visually distinct', () => {
+  it('a disabled Leadership agent shows an "Inactive" badge and is dimmed', async () => {
+    getOrgChart.mockResolvedValue({
+      ...CHART,
+      leadership: [{ ...CHART.leadership[0], enabled: false }, CHART.leadership[1]],
+    });
+    await render();
+
+    const card = Array.from(container.querySelectorAll('button.wf-emp')).find((b) => b.textContent?.includes('Cory Brain')) as HTMLElement;
+    expect(card.textContent).toContain('Inactive');
+    expect((card.style as any).opacity).toBe('0.55');
+  });
+
+  it('a disabled Staff agent shows an "Inactive" badge and is dimmed', async () => {
+    getOrgChart.mockResolvedValue({
+      ...CHART,
+      staff: [{ ...CHART.staff[0], enabled: false }],
+    });
+    await render();
+
+    const card = Array.from(container.querySelectorAll('a.wf-emp')).find((a) => a.textContent?.includes('Admissions Conversion Architect')) as HTMLElement;
+    expect(card.textContent).toContain('Inactive');
+    expect((card.style as any).opacity).toBe('0.55');
+  });
+
+  it('an active (enabled:true) agent never shows the "Inactive" badge', async () => {
+    getOrgChart.mockResolvedValue(CHART); // every fixture entry is enabled:true
+    await render();
+
+    expect(container.textContent).not.toContain('Inactive');
   });
 });

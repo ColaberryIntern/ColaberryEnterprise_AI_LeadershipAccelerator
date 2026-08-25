@@ -99,9 +99,35 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   if (result.failed > 0) process.exitCode = 1;
 }
 
+/**
+ * Close the connection pool so the process can exit.
+ *
+ * Sequelize keeps pooled sockets open, which keeps Node's event loop alive
+ * indefinitely. Without this the script does its work - measured at 219ms for
+ * two learners on production - prints its summary, and then HANGS FOREVER. An
+ * operator sees no completion and no error, and a wrapper that waits on exit
+ * never returns. Found by running it against production, not by any test.
+ */
+async function shutdown(): Promise<void> {
+  try {
+    const { sequelize } = await import('../config/database');
+    await sequelize.close();
+  } catch {
+    // Nothing useful to do here: the work is already done and reported, and a
+    // failure to close must not turn a successful run into a failed one.
+  }
+}
+
 if (require.main === module) {
-  main().catch((err) => {
-    console.error(`[recomputeExplorerProfiles] ${err?.message ?? err}`);
-    process.exit(1);
-  });
+  main()
+    .catch((err) => {
+      console.error(`[recomputeExplorerProfiles] ${err?.message ?? err}`);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await shutdown();
+      // Belt and braces: if any other handle is still open, leave anyway rather
+      // than hanging. The work and its report are already complete by here.
+      process.exit(process.exitCode ?? 0);
+    });
 }

@@ -24,6 +24,7 @@ import {
   type ArchivedProjectSummary,
 } from './projectArchiveApi';
 import { deriveLegacyScope } from './deriveLegacyScope';
+import portalApi from '../../../utils/portalApi';
 import './projects.css';
 import '../today/TodayShell.css';
 
@@ -78,6 +79,33 @@ const OriginChip: React.FC<{ p: StudentProject }> = ({ p }) => {
 };
 
 /**
+ * "Not syncing to GitHub", on the one page a returning student actually lands on.
+ *
+ * Every other surface that says this fires on an ACTION — uploading an artifact,
+ * connecting a repo — and the students it needs to reach are precisely the ones
+ * who have stopped taking those actions. Measured 2026-08-23: of 17 students
+ * with a connected repo, 16 could not be written to, and eight of those had not
+ * uploaded in over five days. Nothing in the product told any of them.
+ *
+ * Renders ONLY on a recorded `blocked`. `unknown` (permission never recorded)
+ * and `no_repo` (weeks 1-3, expected) both render nothing — a badge that cries
+ * wolf on a repo that is fine is worse than no badge, because the next real one
+ * gets ignored too.
+ */
+const RepoSyncChip: React.FC<{ state?: string }> = ({ state }) => {
+  if (state !== 'blocked') return null;
+  return (
+    <span
+      className="pj-bc-st pj-origin starter"
+      title="Your artifacts are saved on the platform but are not being written to your GitHub repo, because Colaberry does not have push access. Open the project to see how to grant it — everything you have already built syncs as soon as you do."
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+      not syncing to GitHub
+    </span>
+  );
+};
+
+/**
  * One build in the list — in the SAME visual language as the project interior.
  *
  * Ali: "the cards on the pre project select screen look different from the post
@@ -103,8 +131,10 @@ const OriginChip: React.FC<{ p: StudentProject }> = ({ p }) => {
  * removes a build. Opening is now an explicit action in the footer, matching how
  * the interior's task cards already behave.
  */
-export function BuildCard({ p, onOpen, onRemove }: {
+export function BuildCard({ p, onOpen, onRemove, repoSync }: {
   p: StudentProject; onOpen: () => void; onRemove: (() => void) | null;
+  /** 'blocked' when artifacts are not reaching GitHub. Optional: absent renders nothing. */
+  repoSync?: string;
 }) {
   const prog = projectProgress(p);
   const rv = reqVerified(p);
@@ -128,6 +158,7 @@ export function BuildCard({ p, onOpen, onRemove }: {
             <span className={`pj-st ${progState}`}>{prog.done}/{prog.total} tasks</span>
             {rv.total > 0 && <span className={`pj-due ${rv.v === rv.total ? 'done' : 'up'}`}>{rv.v}/{rv.total} verified</span>}
             <OriginChip p={p} />
+            <RepoSyncChip state={repoSync} />
           </div>
           <div className="pjt-title">{p.name}</div>
           {p.descriptor && <div className="pjt-sub">{p.descriptor}</div>}
@@ -289,6 +320,14 @@ const ProjectsPage: React.FC = () => {
   // ── remove / restore a build ──────────────────────────────────────────────
   const [removing, setRemoving] = useState<StudentProject | null>(null);
   const [archived, setArchived] = useState<ArchivedProjectSummary[]>([]);
+  /**
+   * Badge data only, fetched on its own and DELIBERATELY kept out of
+   * projectSync/reconcileProjects. That machinery decides which builds exist and
+   * which survive a prune; it was repaired recently and is not worth destabilising
+   * so a card can show a chip. Read-only, display-only, and its failure mode is an
+   * empty map, which renders no badges at all.
+   */
+  const [repoSync, setRepoSync] = useState<Record<string, string>>({});
 
   const loadArchived = useCallback(async () => {
     const r = await fetchArchivedProjects();
@@ -297,6 +336,27 @@ const ProjectsPage: React.FC = () => {
     setArchived(r.ok ? r.value : []);
   }, []);
   useEffect(() => { void loadArchived(); }, [loadArchived]);
+
+  // Badge data. One request, once, purely for display — see the `repoSync` state
+  // above for why this does not go through projectSync. Silent on failure: a
+  // missing chip is invisible, whereas an error here would be noise on a page
+  // whose actual job is listing builds.
+  useEffect(() => {
+    let alive = true;
+    portalApi.get('/api/portal/projects')
+      .then((res: any) => {
+        if (!alive) return;
+        const rows = res?.data?.projects;
+        if (!Array.isArray(rows)) return;
+        const next: Record<string, string> = {};
+        for (const r of rows) {
+          if (r?.id && typeof r.repo_sync === 'string') next[String(r.id)] = r.repo_sync;
+        }
+        setRepoSync(next);
+      })
+      .catch(() => { /* no badge is the correct degraded state */ });
+    return () => { alive = false; };
+  }, []);
 
   /**
    * The card goes NOW, not on the next pull.
@@ -665,6 +725,7 @@ const ProjectsPage: React.FC = () => {
               return (
                 <BuildCard
                   key={p.id} p={p} onOpen={() => openInterior(p.id)}
+                  repoSync={repoSync[p.id]}
                   onRemove={route === null ? null : () => {
                     if (route === 'local') handleRemoveLocalOnly(p);
                     else setRemoving(p);

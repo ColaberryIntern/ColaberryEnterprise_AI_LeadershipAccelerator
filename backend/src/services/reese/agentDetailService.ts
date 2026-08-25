@@ -8,7 +8,7 @@ import { Ticket } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
-import { countOpenTicketsForAgent } from '../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../workforce/liveAgentsService';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 
@@ -31,6 +31,11 @@ export interface AgentDetailResult {
     persona_version: string | null;
     enabled: boolean;
     created_at: Date | null;
+    /** AI Workforce Reset, Phase C (2026-08-24) — the Permitted dimension of
+     * the Trust Contract: docs/ai-governance/abac-design.md's 4-level
+     * ladder, `null` for an agent never yet reactivated through that flow.
+     * Purely declarative — not enforced anywhere yet. */
+    autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
   };
   identity: {
     admin_user_id: string;
@@ -70,6 +75,10 @@ export interface AgentDetailResult {
     produces: string[];
     undocumented_tools: string[];
     produced_ticket_types: string[];
+    /** Per-tool breakdown of the same reads/produces facts, in tools_granted
+     * order — lets AgentDetailPage show which tool a given fact came from
+     * instead of only the flattened union above (2026-08-23 drill-down ask). */
+    by_tool: Array<{ tool: string; reads: string[]; produces: string[]; documented: boolean }>;
   };
   /** This agent's own real reports_to chain (org-chart hierarchy build,
    * 2026-08-19) — the "Reports to" section on AgentDetailPage. `null` only
@@ -81,7 +90,50 @@ export interface AgentDetailResult {
   reports_to: {
     trail: string[];
     resolved_human: { id: string; name: string; email: string } | null;
+    /** The DIRECT next hop, when it's another agent (AI Staff -> AI
+     * Leadership) — real id + name so AgentDetailPage can link straight to
+     * that agent's own detail page (Ali, 2026-08-23: "I'd like to have a
+     * link to the agent they report to"). `null` when this agent reports
+     * directly to a human (resolved_human already covers that case), or
+     * when the configured reports_to_id doesn't resolve to a real agent row
+     * (disclosed honestly, never a dead link). */
+    immediate_agent: { id: string; name: string } | null;
   } | null;
+  /** Trust Contract (2026-08-24) — Ali, live: "All Agents should have a trust
+   * contract based on [Trust Before Intelligence]." Grounded in that book's
+   * real INPACT(tm) framework, not an invented shape: this field is the
+   * "Instant" dimension (is this agent actually running, on schedule,
+   * reliably) — every value is a real, pre-existing `AiAgent` column that was
+   * never surfaced anywhere before this. The Permitted (tools_granted),
+   * Transparent (reports_to), and Contextual (capabilities.reads) dimensions
+   * already exist as their own top-level fields above; the frontend groups
+   * all four under one Trust Contract section rather than this endpoint
+   * duplicating them here. Never fabricated: an agent invoked outside the
+   * generic runAgent() scheduler wrapper (e.g. Reese, InboxCaseEngine — real,
+   * high-volume identity-only registrations, not cron-tracked) honestly shows
+   * null/zero rather than a guessed value. */
+  trust_contract: {
+    trigger_type: string | null;
+    schedule: string | null;
+    status: string;
+    last_run_at: Date | null;
+    run_count: number;
+    error_count: number;
+    avg_duration_ms: number | null;
+    last_error: string | null;
+    last_error_at: Date | null;
+    /** Trust Contract fix (2026-08-24) — Ali, live: "Reese has several tickets
+     * that have been opened... but this says it's never been run." For an
+     * event-driven agent, `last_run_at` stays honestly null forever (it is
+     * never invoked through the cron scheduler wrapper that stamps that
+     * column) — that's correct, not a bug. The bug was the UI having no other
+     * signal to show, so it read as "never run" next to a ticket table full of
+     * recent activity. This is that other real signal: the most recent
+     * `updated_at` across ALL of this agent's tickets (any status, unlimited —
+     * not the capped `tickets` array), via `getLastTicketActivityForAgent()`.
+     * `null` only when the agent genuinely has zero ticket history either. */
+    last_activity_at: Date | null;
+  };
 }
 
 const MAX_TICKETS = 50;
@@ -160,13 +212,27 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // use, independent of the `tickets` array's MAX_TICKETS cap above.
   const openTicketCount = adminUser ? await countOpenTicketsForAgent(adminUser.id, agent) : 0;
 
+  // Trust Contract fix (2026-08-24) — real, unlimited "last touched a ticket"
+  // signal for agents `last_run_at` will never cover (see trust_contract's
+  // last_activity_at doc comment above).
+  const lastActivityAt = adminUser ? await getLastTicketActivityForAgent(adminUser.id, agent) : null;
+
   // reports_to (org-chart hierarchy build, 2026-08-19) — null when this agent
   // has no reports_to_type configured at all, never a fabricated empty shape.
   let reportsTo: AgentDetailResult['reports_to'] = null;
   if (agent.reports_to_type) {
     const { resolvedHumanId, trail } = await resolveReportsToChainWithTrail(agent);
     const resolvedHuman = resolvedHumanId ? await resolveHumanIdentity(resolvedHumanId) : null;
-    reportsTo = { trail, resolved_human: resolvedHuman };
+    // Immediate next hop, only when it's an agent (2026-08-23 "link to the
+    // agent they report to" ask) — a single extra lookup, not a second copy
+    // of the recursive chain-walk (that stays the one canonical
+    // implementation in ticketCreatorReportsToResolver.ts).
+    let immediateAgent: { id: string; name: string } | null = null;
+    if (agent.reports_to_type === 'agent' && agent.reports_to_id) {
+      const nextAgent = await AiAgent.findByPk(agent.reports_to_id);
+      if (nextAgent) immediateAgent = { id: nextAgent.id, name: nextAgent.agent_name };
+    }
+    reportsTo = { trail, resolved_human: resolvedHuman, immediate_agent: immediateAgent };
   }
 
   return {
@@ -181,6 +247,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       persona_version: agent.persona_version ?? null,
       enabled: agent.enabled,
       created_at: agent.created_at ?? null,
+      autonomy_level: agent.autonomy_level ?? null,
     },
     identity: adminUser
       ? {
@@ -207,7 +274,20 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       produces: capabilities.produces,
       undocumented_tools: capabilities.undocumentedTools,
       produced_ticket_types: producedTicketTypeRows.map((t: any) => t.type),
+      by_tool: capabilities.byTool.map((t) => ({ tool: t.tool, reads: t.reads, produces: t.produces, documented: t.documented })),
     },
     reports_to: reportsTo,
+    trust_contract: {
+      trigger_type: agent.trigger_type ?? null,
+      schedule: agent.schedule || null,
+      status: agent.status,
+      last_run_at: agent.last_run_at ?? null,
+      run_count: agent.run_count ?? 0,
+      error_count: agent.error_count ?? 0,
+      avg_duration_ms: agent.avg_duration_ms ?? null,
+      last_error: agent.last_error ?? null,
+      last_error_at: agent.last_error_at ?? null,
+      last_activity_at: lastActivityAt,
+    },
   };
 }

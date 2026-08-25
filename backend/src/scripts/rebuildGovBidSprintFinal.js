@@ -18,6 +18,16 @@ if (!process.env.BASECAMP_ACCESS_TOKEN) {
   process.env.BASECAMP_ACCESS_TOKEN = '';
 }
 
+// Opportunity Pulse admin login. The password comes from the environment only;
+// it used to be a literal in this file, which published it to a public repo.
+const OP_ADMIN_EMAIL = process.env.OP_ADMIN_EMAIL || 'ali@colaberry.com';
+const OP_ADMIN_PASSWORD = process.env.OP_ADMIN_PASSWORD;
+if (!OP_ADMIN_PASSWORD) {
+  console.error('FATAL: OP_ADMIN_PASSWORD is not set.');
+  console.error('This script logs in to Opportunity Pulse and cannot run without it.');
+  process.exit(1);
+}
+
 const axios = require(path.resolve(__dirname, '../../../node_modules/axios'));
 const { sendWithBcAttach } = require(path.resolve(__dirname, './lib/sendWithBcAttach'));
 
@@ -97,8 +107,8 @@ const OLD_LIST_IDS_TO_TRASH = []; // already trashed in the prior run
 // ------------------ Helpers ------------------
 async function opLogin() {
   const r = await axios.post(`${OP_BASE}/api/v1/auth/login`, {
-    email: 'ali@colaberry.com',
-    password: '3yhEcVki3Vp4emDuuXWk',
+    email: OP_ADMIN_EMAIL,
+    password: OP_ADMIN_PASSWORD,
   });
   return r.data.data.accessToken;
 }

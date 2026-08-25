@@ -36,6 +36,7 @@
 import * as fs from 'fs/promises';
 import {
   ArtifactRecord,
+  artifactPath,
   buildArtifactFiles,
   isTextArtifact,
   mergeArtifactHashesIntoManifest,
@@ -64,6 +65,20 @@ export interface ArtifactSyncResult {
   commitSha?: string;
   /** Plain-language, safe to show a student. Never carries an API body. */
   reason?: string;
+  /**
+   * Which repo this concerned, when we got far enough to know.
+   *
+   * Returned specifically so the UI can offer the FIX rather than only the
+   * diagnosis: `no_access` is actionable in one click, but only if the student
+   * is handed a link to their own repo's collaborator settings. Telling someone
+   * "we cannot write to your repository" without saying which repo or where to
+   * go is a diagnosis they have to go and act on later, which is how sixteen
+   * students ended up stuck in the first place.
+   *
+   * Owner and repo only. Never the URL of anything the platform authenticated
+   * with, and nothing derived from the token.
+   */
+  repo?: { owner: string; name: string };
 }
 
 export interface ArtifactSyncOptions {
@@ -223,6 +238,32 @@ export async function syncArtifactsToRepo(
     // shape, and a test asserts they stay assignable so this stays honest.
     const result = await writeDocsToRepo(target, toWrite, manifest, { correlationId: cid });
 
+    // Record WHERE each artifact landed and in WHICH commit.
+    //
+    // The sync has always known both and thrown them away, which left the
+    // Capstone Record unable to link an artifact to its evidence: a portfolio
+    // row with no path is not a claim anyone can check, and a link pinned to a
+    // branch instead of a SHA rots the moment the student keeps working.
+    //
+    // Written on EVERY successful pass, not only when a commit happened. An
+    // `unchanged` result still means the file is present at the recorded path,
+    // and a row whose path was never stored would otherwise stay unlinkable
+    // forever simply because it synced before this existed.
+    if (result.committed || result.changedPaths.length === 0) {
+      const pathByCard = new Map<string, string>();
+      for (const record of toArtifactRecords(rows as StoredArtifact[], textByCardId)) {
+        pathByCard.set(record.cardId, artifactPath(record));
+      }
+      for (const row of rows) {
+        const path = pathByCard.get(row.card_id);
+        if (!path) continue;
+        const content = { ...(row.content || {}), repo_path: path, commit_sha: result.commitSha ?? row.content?.commit_sha ?? null };
+        // Fail-soft per row: a bookkeeping write must never turn a successful
+        // sync into an error the student sees.
+        await row.update({ content }).catch(() => {});
+      }
+    }
+
     log('artifact_sync_done', cid, 'success', {
       project_id: projectId,
       committed: result.committed,
@@ -271,6 +312,7 @@ export async function syncArtifactsToRepo(
         outcome: cause === 'no_push_access' ? 'no_access' : 'repo_gone',
         changedPaths: [],
         reason: messageForCause(cause),
+        ...(repoTarget ? { repo: { owner: repoTarget.owner, name: repoTarget.repo } } : {}),
       };
     }
 

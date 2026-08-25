@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { randomUUID } from 'crypto';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import nodemailer from 'nodemailer';
@@ -42,6 +43,7 @@ import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 import { instrumentCronJob } from './cronInstrumentation';
 import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
+import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
 import {
   isWithinSendWindow,
   isWithinCallSchedule,
@@ -1725,6 +1727,28 @@ export function startScheduler(): void {
   //
   // 03:20 UTC: deliberately offset from the :00 and */5 jobs above so a
   // 153-learner batch does not contend with them on the shared Postgres.
+  // Explorer Growth OS - Journey Governor (EPIC 4 T005).
+  //
+  // 03:50 UTC, THIRTY MINUTES AFTER the recompute above. Ordering is the whole
+  // point: the Governor reads the scores and journey states the recompute
+  // writes, and deciding on yesterday's scores would defeat the freshness gate
+  // it enforces. The recompute takes ~4s for 153 learners, so 30 minutes is
+  // generous headroom rather than a tight coupling.
+  //
+  // DECIDES AND RECORDS ONLY. It enqueues nothing and sends nothing; every row
+  // is written with executed:false. Execution is EPIC 6, behind its own flag.
+  //
+  // runScheduledGovernor checks isExplorerFeatureEnabled('journeyGovernor')
+  // itself and returns immediately when off, so this is dark until BOTH the
+  // master flag and the sub-flag are on.
+  cron.schedule('50 3 * * *', () => {
+    instrumentCronJob('ExplorerGovernorDecide', async () => {
+      await runScheduledGovernor();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerGovernorDecide failed:', err);
+    });
+  });
+
   cron.schedule('20 3 * * *', () => {
     // Wrapped so the callback resolves to void: instrumentCronJob expects
     // Promise<void>, and runScheduledRecompute returns a BatchResult the cron
@@ -1762,6 +1786,48 @@ export function startScheduler(): void {
       }
     }).catch((err) => {
       console.error('[Scheduler] ProofDesk outcome measurements error:', err);
+    });
+  });
+
+  // GitHub repository-invitation sweep (SBP-GH). Accepts the collaborator
+  // invitations students send us, which is the ONLY way the platform ever gets
+  // push access to a student repo.
+  //
+  // WHY THIS RUNS HOURLY, AND WHY IT WAS THE HIGHEST-VALUE CRON WE WERE MISSING.
+  // `sweepPendingInvitations` has existed and been tested since the SBP-GH work,
+  // but it was only ever runnable by hand — it was scheduled nowhere. GitHub
+  // expires a repository invitation after 7 days, and an expired one cannot be
+  // recovered: only a fresh invitation from the student restores that access.
+  // Measured on production 2026-08-23: of 28 connections with a repo,
+  // `platform_can_push` was TRUE for exactly ONE — and that one only because a
+  // human accepted the invitation by hand. `Samrawit26/jobflow_Agent` was
+  // invited 2026-07-21 and expired unaccepted; that grant is gone.
+  //
+  // Hourly rather than daily because the cost of a miss is asymmetric: an empty
+  // queue costs a single API request, while a missed window costs a student
+  // their portfolio sync for the rest of the cohort.
+  //
+  // Safe to run unattended (see repoInvitations' header): it accepts only
+  // invitations that already exist, never solicits one, never patches an EXPIRED
+  // invitation — a PATCH on an expired invite returns a lying 204 and destroys
+  // the evidence the student ever invited us — and never trusts a status code,
+  // re-reading `permissions.push` to settle whether access was actually gained.
+  cron.schedule('7 * * * *', () => {
+    instrumentCronJob('GithubInvitationSweep', async () => {
+      const { sweepPendingInvitations } = await import('./sbp/repoConnect/repoInvitations');
+      const result = await sweepPendingInvitations({ correlationId: randomUUID() });
+      // Silent on the common empty-queue case; loud when something happened or
+      // when a grant was lost, because an expiry is a student we must go ask.
+      if (result.accepted.length || result.expired.length || result.failed.length) {
+        console.log('[Scheduler] GitHub invitation sweep:', {
+          accepted: result.accepted.length,
+          expired: result.expired.length,
+          failed: result.failed.length,
+          expired_repos: result.expired.map((i) => `${i.owner}/${i.repo}`),
+        });
+      }
+    }).catch((err) => {
+      console.error('[Scheduler] GitHub invitation sweep error:', err);
     });
   });
 
@@ -2033,6 +2099,28 @@ export function startScheduler(): void {
     }, { timezone: 'America/Chicago' });
     console.log('[Scheduler] RenewalReminders scheduled (0 9 * * * America/Chicago)');
   }
+
+  // Billing watch, daily at 8am Central, an hour before the renewal reminders so a
+  // broken collection path is known BEFORE the day's money depends on it.
+  //
+  // It is read only and it stays silent when the book is healthy. Every check in it
+  // exists because that exact thing happened during the 2026-08 billing work and a
+  // human found it by accident: subscriptions anchored to a repair date, a member
+  // holding two active rows, three members lapsing into permanent silence, a card
+  // that expired the month before its renewal. None of those announced themselves.
+  //
+  // Unlike the reminder job this needs no feature flag: it cannot touch a customer
+  // and it cannot move money. The worst it does is email Ali.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('BillingWatch', async () => {
+      const { runBillingWatch } = await import('./billing/billingHealthReport');
+      const r = await runBillingWatch({ send: true });
+      console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
+    }).catch((err) => {
+      console.error('[Scheduler] Billing watch error:', err);
+    });
+  }, { timezone: 'America/Chicago' });
+  console.log('[Scheduler] BillingWatch scheduled (0 8 * * * America/Chicago)');
 
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', () => {
@@ -2360,9 +2448,16 @@ export function startScheduler(): void {
       instrumentCronJob('CurriculumVideoLinkHealth', async () => {
         const { runVideoLinkHealthCheck } = require('./curriculumHealth/videoLinkHealthService');
         const result = await runVideoLinkHealthCheck();
+        // `unverified`, `untrusted_batches` and the three-way ownership split are
+        // logged because a quiet run and a blindfolded run look identical
+        // otherwise. A run with untrusted batches found nothing because it could
+        // not see, not because everything is fine. `quota_units` is logged so the
+        // YouTube Data API cost is an observed number, not an estimate.
         console.log('[Scheduler] Curriculum video link health:', JSON.stringify({
-          skipped: result.skipped, checked: result.checked, healthy: result.healthy,
+          skipped: result.skipped, reason: result.reason, checked: result.checked, healthy: result.healthy,
           unknown: result.unknown, failures: result.failures.length, sealed_weeks: result.sealed_weeks,
+          throttled: result.throttled, untrusted_batches: result.untrusted_batches,
+          unverified: result.unverified, quota_units: result.quota_units, ownership: result.ownership,
         }));
       }).catch((err: any) => {
         console.error('[Scheduler] Curriculum video link health error:', err.message);

@@ -27,6 +27,7 @@ import {
   serialiseProgressFile,
 } from './verification/progressContract';
 import { PROFILE_FILE_PATH } from './profileContract';
+import { PLAN_FILE_PATH } from './planDocument';
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_RETRIES = 3;
@@ -103,9 +104,70 @@ function log(event: string, correlationId: string | undefined, outcome: string, 
 }
 
 /**
- * Bounded GitHub call. Retries only transient failures (429/5xx); a 4xx is
- * terminal because retrying a rejected request just burns rate limit.
+ * Is this the "there is no such file" failure, as opposed to a real problem?
+ *
+ * Matched against the exact message `gh` throws below — `GitHub <path> failed
+ * (404): ...` — rather than looking for `404` anywhere in the string, because a
+ * response BODY that happens to mention 404 must not be read as "the file is
+ * absent". That distinction is load-bearing: `readRepoFileState` turns absent
+ * into permission to write, so a false positive here is a student's file
+ * overwritten.
+ *
+ * (This check previously read `/<BS>404<BS>/` — two literal backspace bytes
+ * where `\b` word boundaries were intended, from a heredoc that ate the
+ * escapes. It could never match, so every 404 took the "unreadable" branch and
+ * logged a spurious read failure. Harmless while both branches returned null;
+ * not harmless now that they mean different things.)
  */
+function isNotFound(err: unknown): boolean {
+  return / failed \(404\)/.test(String((err as any)?.message ?? ''));
+}
+
+/**
+ * What we know about a file in the repo — and crucially, what we DO NOT know.
+ *
+ * `readRepoFile` flattens all three of these to `null`, which is right for a
+ * caller that treats "no file" and "could not read the file" the same way: the
+ * CLAUDE.md splice appends in both cases, which is harmless either way. It is
+ * wrong for a caller whose decision depends on the difference. "The student has
+ * no plan.json" means WRITE, while "GitHub returned a 500" must mean DO NOT
+ * WRITE — collapsing the two turns a transient upstream blip into exactly the
+ * data loss the drift guard exists to prevent.
+ */
+export type RepoFileState =
+  | { state: 'present'; content: string }
+  | { state: 'absent' }
+  | { state: 'unreadable' };
+
+/**
+ * Read a file from the default branch, keeping "not there" distinct from
+ * "could not look".
+ *
+ * Deliberately soft on failure: no read problem may abort a publish. A 404, and
+ * a response carrying no content, are `absent`. Anything else is `unreadable`,
+ * and the caller decides how much caution that deserves.
+ */
+async function readRepoFileState(
+  target: RepoTarget,
+  path: string,
+  token: string,
+  fetchImpl: typeof fetch,
+  correlationId?: string,
+): Promise<RepoFileState> {
+  try {
+    const res = await gh(
+      `/repos/${target.owner}/${target.repo}/contents/${encodeURIComponent(path)}`,
+      { method: 'GET' }, token, fetchImpl,
+    );
+    if (!res?.content) return { state: 'absent' };
+    return { state: 'present', content: Buffer.from(String(res.content), 'base64').toString('utf8') };
+  } catch (err: any) {
+    if (isNotFound(err)) return { state: 'absent' };
+    log('sbp_repo_read_failed', correlationId, 'partial', { path, message: err?.message });
+    return { state: 'unreadable' };
+  }
+}
+
 /**
  * Read a file from the default branch, or null when it is not there.
  *
@@ -120,20 +182,14 @@ async function readRepoFile(
   fetchImpl: typeof fetch,
   correlationId?: string,
 ): Promise<string | null> {
-  try {
-    const res = await gh(
-      `/repos/${target.owner}/${target.repo}/contents/${encodeURIComponent(path)}`,
-      { method: 'GET' }, token, fetchImpl,
-    );
-    if (!res?.content) return null;
-    return Buffer.from(String(res.content), 'base64').toString('utf8');
-  } catch (err: any) {
-    if (/404/.test(String(err?.message ?? ''))) return null;
-    log('sbp_repo_read_failed', correlationId, 'partial', { path, message: err?.message });
-    return null;
-  }
+  const result = await readRepoFileState(target, path, token, fetchImpl, correlationId);
+  return result.state === 'present' ? result.content : null;
 }
 
+/**
+ * Bounded GitHub call. Retries only transient failures (429/5xx); a 4xx is
+ * terminal because retrying a rejected request just burns rate limit.
+ */
 async function gh(
   path: string,
   init: RequestInit,
@@ -250,6 +306,65 @@ export function changedFiles(files: RenderedFile[], existing: Record<string, str
 }
 
 /**
+ * Why a plan write was allowed or refused. Recorded verbatim in the log line so
+ * "the student's plan stopped updating" is answerable from the logs alone.
+ */
+export type PlanWriteDecision =
+  | 'write'
+  | 'skip_edited'
+  | 'skip_unknown_provenance'
+  | 'skip_unreadable';
+
+/**
+ * May we replace `.colaberry/plan.json`? PURE, so every branch is testable
+ * without a network.
+ *
+ * ## The hole this closes
+ *
+ * `changedFiles` compares our new render against `.colaberry/manifest.json` —
+ * a record of what the PLATFORM last wrote, never of what is actually in the
+ * repo. A student who hand-edits `plan.json` does not touch the manifest, so
+ * their edit is invisible to that comparison: the next render that differs from
+ * the manifest drags `plan.json` into the change set and replaces their file
+ * wholesale. That is not hypothetical. It happened, the student restored his
+ * file by hand and reported it as platform corruption, and the next sync
+ * overwrote him again.
+ *
+ * ## Why a hash and not a merge
+ *
+ * `planDocument` guarantees byte-identical output for identical input, and the
+ * whole idempotency story rests on it, so a field-level merge is out — it would
+ * produce bytes no renderer can reproduce and every later sync would see drift.
+ * The manifest hash is exactly the bytes the platform last committed, so
+ * "repo hash === manifest hash" is not a heuristic: a mismatch is PROOF that
+ * something other than us wrote this file. One GET buys that proof.
+ *
+ * ## Why the unknown cases refuse
+ *
+ * `absent` is the only case that writes on incomplete information, and it is
+ * safe by inspection: there is no file, so there is nothing to destroy, and a
+ * first publish must still deliver the plan. Every other unknown refuses. A
+ * repo whose manifest predates plan tracking has no recorded hash, so we cannot
+ * prove the file is ours — and a file we cannot prove is ours belongs to the
+ * student, the same reasoning that made unknown write-access mean not-writable.
+ * A read we could not make refuses for the stronger reason: this module already
+ * holds that "a read failure must never be treated as 'they had nothing'".
+ *
+ * The cost of refusing wrongly is a stale plan for one sync. The cost of
+ * writing wrongly is a student's work destroyed. Those are not comparable, so
+ * the tie goes to refusing every time.
+ */
+export function planWriteDecision(
+  repoFile: RepoFileState,
+  manifestHash: string | undefined,
+): PlanWriteDecision {
+  if (repoFile.state === 'unreadable') return 'skip_unreadable';
+  if (repoFile.state === 'absent') return 'write';
+  if (!manifestHash) return 'skip_unknown_provenance';
+  return sha256(repoFile.content) === manifestHash ? 'write' : 'skip_edited';
+}
+
+/**
  * Read `.colaberry/manifest.json` out of the repo, or null when it is not there.
  *
  * This is the input that makes the content-hash idempotency real: without it,
@@ -362,6 +477,31 @@ export async function writeDocsToRepo(
     };
   }
 
+  // `.colaberry/plan.json` is ours to regenerate ONLY while the copy in the repo
+  // is still the one we wrote. Students hand-edit it — extra stories, a fixed
+  // requirement mapping, whole dashboard tabs — and their Command Center reads
+  // it at runtime, so replacing an edited file costs them the data and breaks
+  // the page built on it. `changedFiles` cannot see any of that: it compares our
+  // render against the MANIFEST, which records what the platform last wrote and
+  // says nothing about what is actually in the repo.
+  //
+  // So ask the repo directly, once, and only for a file we were about to write
+  // anyway — the no-op path above stays network-silent.
+  if (changed.some((f) => f.path === PLAN_FILE_PATH)) {
+    const repoFile = await readRepoFileState(target, PLAN_FILE_PATH, token, fetchImpl, opts.correlationId);
+    const decision = planWriteDecision(repoFile, parseManifestHashes(existingManifest)[PLAN_FILE_PATH]);
+    if (decision !== 'write') {
+      // DROPPED, not substituted — writing their own bytes back would still be a
+      // commit that changes nothing. Logged at `partial` because the publish did
+      // go ahead, just not for this file: a student asking why their plan stopped
+      // updating is answered by this line, without a repo forensics session.
+      log('sbp_repo_plan_write_skipped', opts.correlationId, 'partial', {
+        owner, repo, path: PLAN_FILE_PATH, reason: decision,
+      });
+      changed = changed.filter((f) => f.path !== PLAN_FILE_PATH);
+    }
+  }
+
   // `.colaberry/profile.json` is SEED-ONCE. It carries the student's portfolio
   // prose and their publication consent, and neither is ours to rewrite — a
   // consent flag the platform can flip back is not consent.
@@ -388,8 +528,9 @@ export async function writeDocsToRepo(
     }
   }
 
-  // Dropping the profile can empty the change set, leaving only the manifest —
-  // which alone is never worth a commit, since it describes files nobody touched.
+  // Dropping the plan or the profile can empty the change set, leaving only the
+  // manifest — which alone is never worth a commit, since it describes files
+  // nobody touched.
   if (changed.length === 0 || (changed.length === 1 && changed[0].path === MANIFEST_PATH)) {
     log('sbp_repo_write_noop', opts.correlationId, 'success', {
       owner, repo, files: files.length, reason: 'nothing left to write after seed-once and merge',

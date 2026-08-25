@@ -167,11 +167,29 @@ interface Props {
       "Completed" section so finished work stops eating vertical space but the
       cohort can still like and comment on it. */
   compact?: boolean;
+  /**
+   * A REAL like count, from a real source. Optional, and deliberately WITHOUT a
+   * default: when it is undefined the heart renders with no number beside it,
+   * rather than asserting a zero (or anything else) that nothing counted.
+   *
+   * There is currently no like endpoint and no like table, so no caller supplies
+   * this and no number is shown. Until 2026-08-24 two different callers passed a
+   * FABRICATED value here — `6 + ((i * 7) % 13)` keyed on the array index in
+   * TodayFeedV2, and `6 + (id.charCodeAt(id.length - 1) % 17)` keyed on a hash of
+   * the card id in TimelineFeed. Students were shown invented engagement on work
+   * nobody had reacted to, which is the exact thing the platform's own trust
+   * criterion forbids: no surface shows a number the project has not produced.
+   *
+   * This prop is the seam for whichever way the Like decision goes. To BUILD the
+   * feature, pass the real count here and a real `onLike`. To HIDE it, delete the
+   * button below and this prop with it. Neither path needs anything unpicked
+   * first.
+   */
   likes?: number;
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWorkspace, compact = false, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWorkspace, compact = false, likes, liked = false }) => {
   const v = visualFor(card.render_band);
   // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE —
   // and while playing, clicking the artwork toggles pause/play (the bar has the
@@ -456,7 +474,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       )}
       <div className="fc-foot">
         <button type="button" className={`like${liked ? ' liked' : ''}`} disabled={locked} onClick={() => !locked && onLike?.(card)}>
-          <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg> {likes}
+          <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg>{typeof likes === 'number' ? <> {likes}</> : null}
         </button>
         {/* Comment opens the class thread RIGHT HERE in the feed (the workspace
             shows the same thread beside the AI Mentor). Disabled while locked. */}

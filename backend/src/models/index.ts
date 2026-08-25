@@ -417,6 +417,34 @@ import TenantMembership from './TenantMembership';
 import LeadTenantContext from './LeadTenantContext';
 import CommunicationPreference from './CommunicationPreference';
 import TenantAccessAudit from './TenantAccessAudit';
+// Refactored AI Delivery OS (Gate 1). Imported here so the models register with
+// Sequelize when the index loads — the schema/model parity test walks
+// sequelize.models, so an unregistered model is an invisible one.
+import DeliveryEngagement from './DeliveryEngagement';
+import DeliveryProject from './DeliveryProject';
+import CareerPublication from './CareerPublication';
+import CareerPublicationSnapshot from './CareerPublicationSnapshot';
+import CareerPublicationApproval from './CareerPublicationApproval';
+import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
+import DeliveryProjectMember from './DeliveryProjectMember';
+import DeliveryContract from './DeliveryContract';
+import DeliveryDecision from './DeliveryDecision';
+import DeliveryEvent from './DeliveryEvent';
+import BuilderAuthorityProfile from './BuilderAuthorityProfile';
+import DeliveryDiscovery from './DeliveryDiscovery';
+import DeliveryOpportunity from './DeliveryOpportunity';
+import DeliveryAgentDefinition from './DeliveryAgentDefinition';
+import DeliveryAgentTrustRequirement from './DeliveryAgentTrustRequirement';
+import DeliveryEvidence from './DeliveryEvidence';
+import DeliveryClientAcceptance from './DeliveryClientAcceptance';
+import DeliveryChangeRequest from './DeliveryChangeRequest';
+// Memory Graph. Imported here so the models register with Sequelize when the index is
+// loaded, not only when an intelligence service happens to import them directly. The
+// schema/model parity test walks sequelize.models, so an unregistered model is an
+// invisible one -- which is exactly how it caught these two.
+import GraphNode from './GraphNode';
+import GraphEdge from './GraphEdge';
+import GraphEvent from './GraphEvent';
 
 // --- Case Study OS ---
 import CaseStudy from './CaseStudy';
@@ -1503,6 +1531,30 @@ export {
   CaseStudyPublication,
   CaseStudySyncRun,
   CaseStudyCollection,
+  // Refactored AI Delivery OS (Gate 1)
+  DeliveryEngagement,
+  DeliveryProject,
+  DeliveryProjectSourceLink,
+
+  // Living Career Portfolio (Gate 10 — versioned publication)
+  CareerPublication,
+  CareerPublicationSnapshot,
+  CareerPublicationApproval,
+  DeliveryProjectMember,
+  DeliveryContract,
+  DeliveryDecision,
+  DeliveryEvent,
+  BuilderAuthorityProfile,
+  DeliveryDiscovery,
+  DeliveryOpportunity,
+  DeliveryAgentDefinition,
+  DeliveryAgentTrustRequirement,
+  DeliveryEvidence,
+  DeliveryClientAcceptance,
+  DeliveryChangeRequest,
+  GraphNode,
+  GraphEdge,
+  GraphEvent,
 };
 
 // --- Enrollment Lead associations ---
@@ -1781,3 +1833,165 @@ CaseStudySyncRun.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseSt
 // contains is evaluated from `filter_config` at read time. An association would
 // imply a foreign key that does not exist and invite an `include` that returns
 // nothing while looking correct.
+// --- Refactored AI Delivery OS (Gate 1) associations ---------------------------------
+//
+// TENANCY BY PARENT. Only DeliveryEngagement and DeliveryProject belong to a Tenant/Brand
+// directly; every child below reaches its tenant by joining back up to DeliveryProject.
+// See docs/architecture/refactored-delivery-os/DATA_OWNERSHIP_MATRIX.md for why the
+// children deliberately carry no tenant_id of their own.
+DeliveryEngagement.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+DeliveryEngagement.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+DeliveryEngagement.belongsTo(Organization, { foreignKey: 'organization_id', as: 'organization' });
+
+DeliveryEngagement.hasMany(DeliveryProject, {
+  foreignKey: 'engagement_id',
+  as: 'projects',
+  onDelete: 'CASCADE',
+});
+DeliveryProject.belongsTo(DeliveryEngagement, { foreignKey: 'engagement_id', as: 'engagement' });
+DeliveryProject.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+DeliveryProject.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+DeliveryProject.hasMany(DeliveryProjectMember, {
+  foreignKey: 'delivery_project_id',
+  as: 'members',
+  onDelete: 'CASCADE',
+});
+DeliveryProjectMember.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+DeliveryProjectMember.belongsTo(PlatformIdentity, {
+  foreignKey: 'platform_identity_id',
+  as: 'identity',
+});
+
+DeliveryProject.hasMany(DeliveryContract, {
+  foreignKey: 'delivery_project_id',
+  as: 'contracts',
+  onDelete: 'CASCADE',
+});
+DeliveryContract.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+DeliveryProject.hasMany(DeliveryDecision, {
+  foreignKey: 'delivery_project_id',
+  as: 'decisions',
+  onDelete: 'CASCADE',
+});
+DeliveryDecision.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+// The student-project bridge. `Project` itself gains NOTHING here: no column, no
+// required association, no behaviour change. A student project that is never linked is
+// bit-for-bit what it was before this feature existed (master plan §Gate 1).
+DeliveryProject.hasMany(DeliveryProjectSourceLink, {
+  foreignKey: 'delivery_project_id',
+  as: 'sourceLinks',
+  onDelete: 'CASCADE',
+});
+DeliveryProjectSourceLink.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'deliveryProject',
+});
+DeliveryProjectSourceLink.belongsTo(Project, {
+  foreignKey: 'student_project_id',
+  as: 'studentProject',
+});
+
+// DeliveryEvent has NO associations, deliberately. It is append-only and must outlive
+// what it describes — archiving a project or removing an identity cannot cascade away
+// the record of what happened. Same discipline as TenantAccessAudit.
+
+// Gate 9's Quality OS ledger. Scoped to the project so evidence is reachable, but
+// deliberately NOT cascaded from story or release: `delivery_stories` and
+// `delivery_releases` are not tables yet (Gate 7 shipped stories as pure logic, releases
+// belong to Gate 14), so those columns stay plain UUIDs — the same convention
+// `delivery_execution_runs.story_id` already set.
+DeliveryProject.hasMany(DeliveryEvidence, {
+  foreignKey: 'delivery_project_id',
+  as: 'evidence',
+  onDelete: 'CASCADE',
+});
+DeliveryEvidence.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+// Gate 10's Client Review Room. Acceptances are NOT cascaded away with a project: master
+// plan §24 makes durability the point of the table, and "the project was archived" is not
+// a reason a client's signed acceptance should stop existing. Same reasoning as
+// DeliveryEvent. Change requests cascade, because an unbuilt request against a deleted
+// project is not a record of anything.
+DeliveryProject.hasMany(DeliveryClientAcceptance, {
+  foreignKey: 'delivery_project_id',
+  as: 'clientAcceptances',
+});
+DeliveryClientAcceptance.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+
+DeliveryProject.hasMany(DeliveryChangeRequest, {
+  foreignKey: 'delivery_project_id',
+  as: 'changeRequests',
+  onDelete: 'CASCADE',
+});
+DeliveryChangeRequest.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+
+// A builder's authority travels with the identity, not with a project — so this is a
+// one-to-one on PlatformIdentity rather than anything project-scoped.
+PlatformIdentity.hasOne(BuilderAuthorityProfile, {
+  foreignKey: 'platform_identity_id',
+  as: 'builderAuthority',
+});
+BuilderAuthorityProfile.belongsTo(PlatformIdentity, {
+  foreignKey: 'platform_identity_id',
+  as: 'identity',
+});
+
+// Discovery and the Opportunity Map are strict children of DeliveryProject — no
+// tenant_id of their own, scoped by join. An opportunity optionally cites the discovery
+// it came from, so the map can be read back against the understanding it was built on.
+DeliveryProject.hasMany(DeliveryDiscovery, {
+  foreignKey: 'delivery_project_id',
+  as: 'discoveries',
+  onDelete: 'CASCADE',
+});
+DeliveryDiscovery.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+DeliveryProject.hasMany(DeliveryOpportunity, {
+  foreignKey: 'delivery_project_id',
+  as: 'opportunities',
+  onDelete: 'CASCADE',
+});
+DeliveryOpportunity.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+DeliveryOpportunity.belongsTo(DeliveryDiscovery, {
+  foreignKey: 'discovery_id',
+  as: 'discovery',
+});
+
+// Agent definitions are strict children of DeliveryProject; their six INPACT trust
+// requirements are children of the definition. Cascading from the definition is correct
+// here: a trust requirement has no meaning without the agent it describes, unlike an
+// audit row, which must outlive its subject.
+DeliveryProject.hasMany(DeliveryAgentDefinition, {
+  foreignKey: 'delivery_project_id',
+  as: 'agentDefinitions',
+  onDelete: 'CASCADE',
+});
+DeliveryAgentDefinition.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+
+DeliveryAgentDefinition.hasMany(DeliveryAgentTrustRequirement, {
+  foreignKey: 'agent_definition_id',
+  as: 'trustRequirements',
+  onDelete: 'CASCADE',
+});
+DeliveryAgentTrustRequirement.belongsTo(DeliveryAgentDefinition, {
+  foreignKey: 'agent_definition_id',
+  as: 'agent',
+});

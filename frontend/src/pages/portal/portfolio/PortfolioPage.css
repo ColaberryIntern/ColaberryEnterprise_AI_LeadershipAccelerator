@@ -1,0 +1,230 @@
+/* Career Studio (/portal/portfolio).
+   Uses the portal's existing tokens from TodayShell.css (--surface, --border,
+   --strong, --body, --muted, --cherry-text, --leaf-text, --berry, --shadow-md)
+   so light/dark theming and the Design E palette come for free — no new colour
+   constants are introduced here. */
+
+.cp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+/* At phone width the badge was being pushed past the right edge — caught on a
+   real 390px capture, not in review. Let it drop under the heading instead. */
+@media (max-width: 560px) { .cp-head .cp-privacy { order: -1; } }
+
+.cp-privacy {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); background: var(--sunken);
+  border: 1px solid var(--border-sub); border-radius: 999px; padding: 6px 12px;
+}
+
+/* ── tabs ─────────────────────────────────────────────────────────────── */
+.cp-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; }
+.cp-tab {
+  appearance: none; background: none; border: 0; border-bottom: 2px solid transparent;
+  padding: 10px 14px; font: inherit; font-weight: 600; font-size: 15px;
+  color: var(--muted); cursor: pointer; white-space: nowrap;
+}
+.cp-tab:hover { color: var(--body); }
+.cp-tab.active { color: var(--cherry-text); border-bottom-color: var(--cherry-text); }
+.cp-tab:focus-visible, .cp-panel:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.cp-panel { outline: none; }
+
+/* ── cards ────────────────────────────────────────────────────────────── */
+.cp-card {
+  background: var(--surface); border: 1px solid var(--border-sub); border-radius: 14px;
+  padding: 20px 22px; box-shadow: var(--shadow-md); margin-bottom: 18px;
+}
+.cp-card h2 { font-size: 18px; font-weight: 700; color: var(--strong); margin: 0 0 6px; }
+.cp-sub-h { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 8px; }
+.cp-muted { color: var(--muted); font-size: 14px; margin: 0; }
+.cp-empty { color: var(--muted); font-size: 14px; margin: 8px 0 0; line-height: 1.55; }
+.cp-note { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 10px 0 0; font-style: italic; }
+.cp-ok { color: var(--leaf-text); font-size: 14px; margin: 8px 0 0; }
+.cp-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.cp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 900px) { .cp-two { grid-template-columns: 1fr; } }
+
+/* ── loading / error / degraded ───────────────────────────────────────── */
+.cp-skeleton, .cp-error {
+  background: var(--surface); border: 1px solid var(--border-sub); border-radius: 14px;
+  padding: 28px; color: var(--muted);
+}
+.cp-error h2 { color: var(--strong); font-size: 18px; margin: 0 0 8px; }
+.cp-error p { margin: 0 0 16px; }
+.cp-degraded {
+  background: var(--sunken); border: 1px solid var(--border-sub); border-radius: 10px;
+  padding: 10px 14px; font-size: 14px; color: var(--body); margin-bottom: 16px;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+
+/* ── buttons / links ──────────────────────────────────────────────────── */
+.cp-btn {
+  display: inline-block; border: 0; border-radius: 10px; padding: 11px 20px;
+  font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; text-decoration: none;
+}
+.cp-btn-primary { background: var(--cherry); color: #fff; }
+.cp-btn-primary:hover { background: var(--cherry-deep); color: #fff; }
+.cp-btn:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.cp-link {
+  appearance: none; background: none; border: 0; padding: 0; font: inherit;
+  color: var(--berry); text-decoration: underline; cursor: pointer;
+}
+
+/* ── readiness ────────────────────────────────────────────────────────── */
+.cp-readiness-main { display: flex; gap: 20px; align-items: center; }
+.cp-readiness-main h2 { margin-bottom: 4px; }
+.cp-readiness-count { font-size: 14px; font-weight: 600; color: var(--body); margin: 8px 0 0; }
+.cp-ring { flex: none; }
+.cp-ring-track { fill: none; stroke: var(--sunken); stroke-width: 9; }
+.cp-ring-fill { fill: none; stroke: var(--leaf); stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .5s ease; }
+.cp-ring-num { font-size: 26px; font-weight: 700; fill: var(--strong); }
+.cp-ring-unit { font-size: 9px; fill: var(--muted); }
+
+.cp-checklist { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 9px; }
+.cp-checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; }
+.cp-check { flex: none; margin-top: 2px; }
+.cp-checklist li.met .cp-check { color: var(--leaf-text); }
+.cp-checklist li.unmet .cp-check { color: var(--border); }
+.cp-checklist li.met .cp-check-body strong { color: var(--body); }
+.cp-checklist li.unmet .cp-check-body strong { color: var(--strong); }
+.cp-req-badge {
+  display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--cherry-text);
+  background: var(--sunken); border-radius: 999px; padding: 2px 8px;
+}
+
+/* ── what changed ─────────────────────────────────────────────────────── */
+.cp-changed { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.cp-plus { font-weight: 700; color: var(--leaf-text); margin-right: 6px; }
+.cp-changed-items { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; font-size: 14px; color: var(--body); }
+.cp-changed-items li { display: flex; gap: 9px; align-items: center; }
+.cp-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.cp-dot-artifact { background: var(--berry); }
+.cp-dot-capability { background: var(--leaf); }
+
+/* ── stats ────────────────────────────────────────────────────────────── */
+.cp-stats { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cp-stat {
+  width: 100%; text-align: left; appearance: none; cursor: pointer;
+  background: var(--sunken); border: 1px solid var(--border-sub); border-radius: 10px;
+  padding: 12px 14px; font: inherit; display: block;
+}
+.cp-stat:hover { border-color: var(--border); }
+.cp-stat:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.cp-stat-n { display: block; font-size: 24px; font-weight: 700; color: var(--strong); line-height: 1.1; }
+.cp-stat-l { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+.cp-headline { font-size: 20px; font-weight: 700; color: var(--strong); margin: 6px 0 0; }
+.cp-about { font-size: 15px; line-height: 1.6; color: var(--body); margin: 0; }
+
+/* ── capabilities ─────────────────────────────────────────────────────── */
+.cp-cap-lede { margin-bottom: 14px; }
+.cp-caps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.cp-cap { border-bottom: 1px solid var(--border-sub); padding-bottom: 14px; }
+.cp-cap:last-child { border-bottom: 0; padding-bottom: 0; }
+.cp-cap-head {
+  width: 100%; appearance: none; background: none; border: 0; padding: 0; font: inherit;
+  cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+}
+.cp-cap-head:focus-visible { outline: 2px solid var(--berry); outline-offset: 3px; border-radius: 4px; }
+.cp-cap-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cp-cap-name { font-size: 15px; font-weight: 700; color: var(--strong); }
+.cp-cap-meta { display: flex; align-items: center; gap: 8px; flex: none; }
+.cp-chev { color: var(--muted); transition: transform .18s ease; }
+.cp-chev.open { transform: rotate(180deg); }
+
+.cp-level {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  border-radius: 999px; padding: 3px 9px; border: 1px solid transparent;
+}
+.cp-level-colaberry_verified { color: var(--leaf-text); background: var(--sunken); border-color: var(--leaf-text); }
+.cp-level-delivery_verified { color: var(--berry); background: var(--sunken); border-color: var(--berry); }
+.cp-level-resume { color: var(--muted); background: var(--sunken); border-color: var(--border); }
+.cp-level-none { color: var(--muted); background: transparent; border-color: var(--border-sub); }
+
+.cp-cap-bar { height: 6px; border-radius: 999px; background: var(--sunken); margin-top: 9px; overflow: hidden; }
+.cp-cap-fill { display: block; height: 100%; border-radius: 999px; }
+.cp-fill-colaberry_verified { background: var(--leaf); }
+.cp-fill-delivery_verified { background: var(--berry); }
+.cp-fill-resume { background: var(--border); }
+.cp-fill-none { background: transparent; }
+
+.cp-cap-body { margin-top: 12px; padding-left: 2px; }
+.cp-sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; color: var(--body); }
+.cp-sources li { display: flex; gap: 9px; align-items: center; }
+.cp-source-n {
+  min-width: 24px; text-align: center; font-weight: 700; font-size: 12px;
+  background: var(--sunken); border-radius: 6px; padding: 2px 6px; color: var(--strong);
+}
+.cp-last { margin-top: 10px; }
+
+/* ── builds ───────────────────────────────────────────────────────────── */
+.cp-artifacts, .cp-projects, .cp-repos { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 14px; }
+.cp-artifact, .cp-project { border: 1px solid var(--border-sub); border-radius: 11px; padding: 14px 16px; background: var(--sunken); }
+.cp-artifact-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.cp-kind {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--berry); background: var(--surface); border: 1px solid var(--border-sub);
+  border-radius: 999px; padding: 3px 9px;
+}
+.cp-date { font-size: 12px; }
+.cp-artifact-title, .cp-project-title { font-size: 15px; font-weight: 700; color: var(--strong); margin: 9px 0 0; }
+.cp-artifact-sum, .cp-project-prob { font-size: 14px; line-height: 1.55; color: var(--body); margin: 6px 0 0; }
+.cp-project-meta { margin-top: 4px; font-size: 13px; }
+.cp-chips { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-chip {
+  font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--border-sub); border-radius: 999px; padding: 3px 9px;
+}
+.cp-repo { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.cp-repo-name { font-weight: 600; color: var(--berry); text-decoration: none; }
+.cp-repo-name:hover { text-decoration: underline; }
+.cp-activity { margin-top: 14px; }
+
+/* ── publishing ───────────────────────────────────────────────────────── */
+.cp-status-row { display: flex; gap: 14px; align-items: flex-start; }
+.cp-status-badge {
+  flex: none; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--sunken); color: var(--muted); border: 1px solid var(--border-sub);
+}
+.cp-steps { margin: 12px 0 0; padding-left: 20px; display: grid; gap: 9px; font-size: 14px; line-height: 1.55; color: var(--body); }
+.cp-blocking { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 7px; font-size: 14px; }
+
+/* ── baseline banner (resume / LinkedIn PDF prompt, non-blocking) ─────── */
+.cp-baseline {
+  display: flex; gap: 16px; align-items: flex-start;
+  background: var(--sunken); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px 20px; margin-bottom: 18px;
+}
+.cp-baseline-icon {
+  flex: none; width: 44px; height: 44px; border-radius: 11px; display: grid; place-items: center;
+  background: var(--surface); color: var(--cherry-text); border: 1px solid var(--border-sub);
+}
+.cp-baseline-body { flex: 1; min-width: 0; }
+.cp-baseline h2 { font-size: 17px; font-weight: 700; color: var(--strong); margin: 0 0 6px; }
+.cp-baseline p { font-size: 14px; line-height: 1.6; color: var(--body); margin: 0 0 10px; }
+.cp-baseline-tip {
+  background: var(--surface); border: 1px solid var(--border-sub); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 14px !important;
+}
+@media (max-width: 560px) { .cp-baseline { flex-direction: column; gap: 12px; } }
+
+/* ── resume prerequisite ──────────────────────────────────────────────── */
+.cp-prereq {
+  background: var(--surface); border: 1px solid var(--border-sub); border-radius: 16px;
+  padding: 34px; box-shadow: var(--shadow-md); max-width: 680px;
+}
+.cp-prereq-icon {
+  width: 60px; height: 60px; border-radius: 14px; display: grid; place-items: center;
+  background: var(--sunken); color: var(--cherry-text); margin-bottom: 18px;
+}
+.cp-prereq h2 { font-size: 22px; font-weight: 700; color: var(--strong); margin: 0 0 10px; }
+.cp-prereq-lede { font-size: 16px; line-height: 1.6; color: var(--body); margin: 0 0 20px; }
+.cp-prereq-list { list-style: none; margin: 0 0 24px; padding: 0; display: grid; gap: 12px; }
+.cp-prereq-list li { font-size: 14px; line-height: 1.55; color: var(--body); padding-left: 18px; position: relative; }
+.cp-prereq-list li::before { content: ''; position: absolute; left: 0; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--leaf); }
+.cp-prereq-foot { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-ring-fill, .cp-chev { transition: none; }
+}

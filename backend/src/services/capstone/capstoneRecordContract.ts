@@ -135,6 +135,38 @@ export function isShareable(record: CapstoneRecord): boolean {
   return recordGaps(record).length === 0;
 }
 
+/** What a public request for a record is allowed to get. */
+export type PublicViewDecision = 'serve_indexable' | 'serve_noindex' | 'not_found';
+
+/**
+ * May an anonymous request see this record, and may a crawler keep it? PURE.
+ *
+ * Status and visibility are separate axes and BOTH have to pass. Folding them
+ * is how "published" quietly comes to mean "public": a student who published so
+ * they could send one link to one hiring manager would find their work indexed
+ * under their real name, next to their real employer, permanently.
+ *
+ * `unlisted` is the default and serves with noindex. That pairing is the whole
+ * point — the slug is readable by design, so it is guessable by design, and
+ * search indexing is the difference between a link a student handed out and a
+ * page that finds them. Guessing an unlisted slug gets you a page its owner
+ * deliberately published; a crawler indexing it gets them found by people they
+ * never sent it to.
+ *
+ * Everything else is `not_found`, and the route must not distinguish it from a
+ * slug that never existed — "this exists but you may not see it" confirms a
+ * student is enrolled, which is not a fact an anonymous request has earned.
+ */
+export function publicViewDecision(
+  status: RecordStatus | string | null | undefined,
+  visibility: RecordVisibility | string | null | undefined,
+): PublicViewDecision {
+  if (status !== 'published') return 'not_found';
+  if (visibility === 'public') return 'serve_indexable';
+  if (visibility === 'unlisted') return 'serve_noindex';
+  return 'not_found';
+}
+
 /**
  * A GitHub permalink pinned to the commit. Returns null rather than falling
  * back to a branch: a link that silently points at a moving target is the exact

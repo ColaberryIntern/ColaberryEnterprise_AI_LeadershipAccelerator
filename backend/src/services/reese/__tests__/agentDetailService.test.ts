@@ -18,7 +18,9 @@ jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChain
 // `.count` (only `findAll`), so without this mock, that call would throw
 // `TypeError: Ticket.count is not a function` for every test where adminUser
 // is truthy (i.e. almost all of them, per beforeEach below).
-jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn() }));
+// Trust Contract fix (2026-08-24) — getAgentDetail() now also calls the REAL
+// getLastTicketActivityForAgent() (same module), mocked alongside its sibling.
+jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn() }));
 
 import { Op } from 'sequelize';
 import AiAgent from '../../../models/AiAgent';
@@ -29,7 +31,7 @@ import OrgMember from '../../../models/OrgMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
-import { countOpenTicketsForAgent } from '../../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../../workforce/liveAgentsService';
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
@@ -42,6 +44,7 @@ const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
+const mockLastActivity = getLastTicketActivityForAgent as unknown as jest.Mock;
 
 const reeseAgent = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success',
@@ -59,6 +62,7 @@ beforeEach(() => {
   mockDerivePresence.mockReturnValue('online');
   mockTicketFindAll.mockResolvedValue([]);
   mockCountOpenTickets.mockResolvedValue(0);
+  mockLastActivity.mockResolvedValue(null);
 });
 
 describe('getAgentDetail', () => {
@@ -73,9 +77,21 @@ describe('getAgentDetail', () => {
     expect(result!.agent.agent_name).toBe('Reese');
     expect(result!.agent.system_prompt).toBe('PROMPT');
     expect(result!.agent.tools_granted).toEqual(['respond_to_dm']);
+    expect(result!.agent.autonomy_level).toBeNull(); // never reactivated through the Phase C flow — honest null
     expect(result!.identity).toMatchObject({ admin_user_id: 'admin-1', email: 'reese@colaberry.com', is_ai_operated: true });
     expect(result!.live_status).toBe('online');
     expect(result!.tickets).toHaveLength(1);
+  });
+
+  // AI Workforce Reset, Phase C (2026-08-24) — Permitted dimension of the
+  // Trust Contract: a real, previously-reactivated agent's chosen autonomy
+  // level passes through verbatim.
+  it("agent.autonomy_level passes through the real, previously-reactivated value verbatim", async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, autonomy_level: 'act_audited' });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.autonomy_level).toBe('act_audited');
   });
 
   // Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) —
@@ -109,6 +125,30 @@ describe('getAgentDetail', () => {
     expect(mockCountOpenTickets).not.toHaveBeenCalled();
   });
 
+  // Trust Contract fix (2026-08-24) — Ali, live: "Reese has several tickets
+  // that have been opened... but this says it's never been run." Proves
+  // trust_contract.last_activity_at carries the real, ticket-derived signal
+  // for an event-driven agent whose scheduler-tracked last_run_at is null.
+  it('trust_contract.last_activity_at reflects the real most-recent ticket activity, independent of last_run_at', async () => {
+    const recentActivity = new Date('2026-08-24T10:00:00Z');
+    mockLastActivity.mockResolvedValue(recentActivity);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.trust_contract.last_run_at).toBeNull(); // reeseAgent has no scheduler columns set — honestly null
+    expect(result!.trust_contract.last_activity_at).toBe(recentActivity);
+    expect(mockLastActivity).toHaveBeenCalledWith('admin-1', reeseAgent);
+  });
+
+  it('trust_contract.last_activity_at is null, and getLastTicketActivityForAgent is never called, when there is no linked AdminUser identity', async () => {
+    mockAdminFindOne.mockResolvedValue(null);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.trust_contract.last_activity_at).toBeNull();
+    expect(mockLastActivity).not.toHaveBeenCalled();
+  });
+
   it('capabilities (reads/produces): derives from the agent\'s real tools_granted, not hand-written text', async () => {
     mockTicketFindAll.mockResolvedValue([]);
 
@@ -126,6 +166,20 @@ describe('getAgentDetail', () => {
     const result = await getAgentDetail('agent-1');
 
     expect(result!.capabilities.undocumented_tools).toEqual(['a_tool_from_the_future']);
+  });
+
+  // Tool & capability drill-down (2026-08-23) — capabilities.by_tool carries
+  // the per-tool breakdown AgentDetailPage's drill-down renders, straight
+  // through from deriveAgentCapabilities().
+  it('capabilities.by_tool: passes through the per-tool breakdown for the AgentDetailPage drill-down, in tools_granted order', async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, tools_granted: ['respond_to_dm', 'a_tool_from_the_future'] });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.capabilities.by_tool).toEqual([
+      { tool: 'respond_to_dm', reads: ["The student's direct-message conversation history"], produces: ['A reply message in the student DM thread'], documented: true },
+      { tool: 'a_tool_from_the_future', reads: [], produces: [], documented: false },
+    ]);
   });
 
   it('capabilities.produced_ticket_types: reflects the real, live DISTINCT ticket types this agent has created — a second, unlimited grouped query, not the capped 50-row tickets list', async () => {
@@ -187,6 +241,81 @@ describe('getAgentDetail', () => {
 
     expect(result!.tickets).toHaveLength(1);
     expect(result!.tickets[0].id).toBe('t-legacy');
+  });
+
+  // Trust Contract (2026-08-24) — Ali, live: "All Agents should have a trust
+  // contract based on [Trust Before Intelligence]." The "Instant" dimension:
+  // real, pre-existing AiAgent schedule/run columns, never fabricated.
+  describe('trust_contract', () => {
+    it("happy path: a cron-tracked agent (e.g. a Strategy Architect) returns its real schedule/run/error data verbatim", async () => {
+      const lastRunAt = new Date('2026-08-24T11:28:07.264Z');
+      const lastErrorAt = new Date('2026-08-24T05:00:00.000Z');
+      mockAgentFindByPk.mockResolvedValue({
+        ...reeseAgent,
+        status: 'idle',
+        trigger_type: 'cron',
+        schedule: '28 */6 * * *',
+        last_run_at: lastRunAt,
+        run_count: 623,
+        error_count: 4,
+        avg_duration_ms: 5791,
+        last_error: 'out of shared memory',
+        last_error_at: lastErrorAt,
+      });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.trust_contract).toEqual({
+        trigger_type: 'cron',
+        schedule: '28 */6 * * *',
+        status: 'idle',
+        last_run_at: lastRunAt,
+        run_count: 623,
+        error_count: 4,
+        avg_duration_ms: 5791,
+        last_error: 'out of shared memory',
+        last_error_at: lastErrorAt,
+        last_activity_at: null, // a cron-tracked agent's own last_run_at is the real signal; no ticket-derived fallback mocked here
+      });
+    });
+
+    it("honesty boundary: an identity-only agent never invoked through the scheduler (e.g. Reese) returns honest null/zero, never a fabricated value", async () => {
+      mockAgentFindByPk.mockResolvedValue({
+        ...reeseAgent,
+        status: 'idle',
+        trigger_type: 'event_driven',
+        schedule: '',
+        last_run_at: null,
+        run_count: 0,
+        error_count: 0,
+        avg_duration_ms: null,
+        last_error: null,
+        last_error_at: null,
+      });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.trust_contract).toEqual({
+        trigger_type: 'event_driven',
+        schedule: null, // empty string normalized to null, not shown as a fake schedule
+        status: 'idle',
+        last_run_at: null,
+        run_count: 0,
+        error_count: 0,
+        avg_duration_ms: null,
+        last_error: null,
+        last_error_at: null,
+        last_activity_at: null, // mockLastActivity defaults to null — this agent also has no ticket history in this test
+      });
+    });
+
+    it('boundary: a null trigger_type (never registered with the scheduler at all) is disclosed as null, not defaulted to a guessed value', async () => {
+      mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, trigger_type: null, schedule: null });
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.trust_contract.trigger_type).toBeNull();
+    });
   });
 
   it('boundary: returns null for a non-existent agent id, rather than throwing or fabricating a shape', async () => {
@@ -254,13 +383,56 @@ describe('getAgentDetail', () => {
 
     it('boundary: the chain fails to resolve (dangling) -> reports_to.trail is populated but resolved_human is null, never fabricated', async () => {
       const orphanAgent = { ...reeseAgent, agent_name: 'OrphanedAgent', reports_to_type: 'agent', reports_to_id: 'nonexistent-id' };
-      mockAgentFindByPk.mockResolvedValue(orphanAgent);
+      mockAgentFindByPk.mockImplementation(async (id: string) => (id === 'agent-1' ? orphanAgent : null));
       mockResolveChain.mockResolvedValue({ resolvedHumanId: null, trail: ['OrphanedAgent (agent) -> [dangling]'] });
 
       const result = await getAgentDetail('agent-1');
 
-      expect(result!.reports_to).toEqual({ trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null });
+      expect(result!.reports_to).toEqual({ trail: ['OrphanedAgent (agent) -> [dangling]'], resolved_human: null, immediate_agent: null });
       expect(mockOrgMemberFindByPk).not.toHaveBeenCalled();
+    });
+
+    // 2026-08-23 — "I'd like to have a link to the agent they report to"
+    // (Ali, reported 3rd time alongside the ticket-filter bug). immediate_agent
+    // is the DIRECT next hop, only populated when it's another agent — lets
+    // AgentDetailPage link straight to that agent's own detail page.
+    describe('immediate_agent', () => {
+      it('happy path: reports_to_type=agent resolves the real next-hop agent id + name for linking', async () => {
+        const staffAgent = { ...reeseAgent, id: 'agent-1', reports_to_type: 'agent', reports_to_id: 'corybrain-id' };
+        const leadershipAgent = { id: 'corybrain-id', agent_name: 'CoryBrain' };
+        mockAgentFindByPk.mockImplementation(async (id: string) => {
+          if (id === 'agent-1') return staffAgent;
+          if (id === 'corybrain-id') return leadershipAgent;
+          return null;
+        });
+        mockResolveChain.mockResolvedValue({ resolvedHumanId: 'ali-org-member-id', trail: ['Reese (agent)', 'CoryBrain (agent) -> [human]'] });
+        mockOrgMemberFindByPk.mockResolvedValue({ id: 'ali-org-member-id', email: 'ali@colaberry.com', enrollment_id: null });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.reports_to!.immediate_agent).toEqual({ id: 'corybrain-id', name: 'CoryBrain' });
+      });
+
+      it('null when reports_to_type=human — a human is not an agent to link to (resolved_human already covers that case)', async () => {
+        const leadershipAgent = { ...reeseAgent, id: 'agent-1', reports_to_type: 'human', reports_to_id: 'ali-org-member-id' };
+        mockAgentFindByPk.mockResolvedValue(leadershipAgent);
+        mockResolveChain.mockResolvedValue({ resolvedHumanId: 'ali-org-member-id', trail: ['Reese (agent) -> [human]'] });
+        mockOrgMemberFindByPk.mockResolvedValue({ id: 'ali-org-member-id', email: 'ali@colaberry.com', enrollment_id: null });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.reports_to!.immediate_agent).toBeNull();
+      });
+
+      it('honesty boundary: reports_to_type=agent but the target id doesn\'t resolve to a real row -> null, never a dead link', async () => {
+        const staffAgent = { ...reeseAgent, id: 'agent-1', reports_to_type: 'agent', reports_to_id: 'nonexistent-id' };
+        mockAgentFindByPk.mockImplementation(async (id: string) => (id === 'agent-1' ? staffAgent : null));
+        mockResolveChain.mockResolvedValue({ resolvedHumanId: null, trail: ['Reese (agent) -> [dangling]'] });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(result!.reports_to!.immediate_agent).toBeNull();
+      });
     });
   });
 });

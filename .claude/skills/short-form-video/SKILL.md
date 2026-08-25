@@ -239,7 +239,7 @@ Build the contact sheet without glob (many Windows ffmpeg builds lack it):
 - `docs/marketing/<name>.mp4` — the master
 - `docs/marketing/<NAME>.md` — brief: strategy, script table with timings, claim
   verification table, design decisions, pipeline, regeneration steps
-- `PROGRESS.md` entry with the **measured** verification evidence
+- `docs/sessions/CC-<id>.md` entry with the **measured** verification evidence
 
 Keep the working directory (shots.json, images, clips) outside the repo. It is
 reproducible from `shots.json` and the stills are large.

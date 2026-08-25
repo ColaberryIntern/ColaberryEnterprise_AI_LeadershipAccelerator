@@ -13,7 +13,7 @@
  * themselves.
  */
 
-export type ReminderKind = 'advance_7d' | 'final_1d';
+export type ReminderKind = 'advance_7d' | 'final_1d' | 'after_lapse_1d' | 'after_lapse_7d';
 
 /**
  * Lead times, chosen from the actual book (measured 2026-08-15 against prod).
@@ -68,7 +68,23 @@ export function centralDayNumber(ms: number): number {
   return Math.round(Date.parse(`${centralYmd.format(new Date(ms))}T00:00:00Z`) / DAY_MS);
 }
 
-export const REMINDER_KINDS: ReminderKind[] = ['advance_7d', 'final_1d'];
+export const REMINDER_KINDS: ReminderKind[] = ['advance_7d', 'final_1d', 'after_lapse_1d', 'after_lapse_7d'];
+
+/**
+ * How long after a missed date we keep asking, and then stop.
+ *
+ * Until this existed, a member who missed their date heard NOTHING further, ever:
+ * the run reported them as `already_lapsed` and moved on. Three real members were
+ * in exactly that state on 2026-08-23 and had to be chased by hand. Combined with
+ * entitlement gating on `enrollments.payment_status` rather than the billing
+ * period, a lapse was silent on both sides - they kept full access, we kept no
+ * money, and nothing surfaced it.
+ *
+ * Two nudges, then silence. Past a week without a response the answer is either no
+ * or something a human needs to handle, and a monthly membership that keeps
+ * dunning forever is worse than one that lets go.
+ */
+export const LAPSE_FOLLOWUP_DAYS = [1, 7] as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -189,6 +205,30 @@ export function reminderKindFor(daysUntil: number, dayDelta: number): ReminderKi
 }
 
 /**
+ * Which follow-up a member gets AFTER their date has passed, or null for silence.
+ *
+ * This does not reopen the retroactive-billing question, and it is worth being
+ * explicit about why, because the original code refused to mail lapsed members on
+ * exactly that ground. Two different things were being conflated:
+ *
+ *   - Charging for the period that already elapsed. That is retroactive billing,
+ *     it is still forbidden, and nothing here does it.
+ *   - Selling the NEXT period. That is just resuming, and it is the only way a
+ *     lapsed member can come back.
+ *
+ * `startCheckout` mints a forward period anchored at activation, never a backdated
+ * one, so the link in a post-lapse note buys the member a month starting when they
+ * pay. That is not the trap the exposure doc warned about; going silent was.
+ *
+ * @param dayDeltaSinceEnd whole Central calendar days since the period ended
+ */
+export function lapseFollowupKindFor(dayDeltaSinceEnd: number): ReminderKind | null {
+  if (dayDeltaSinceEnd === LAPSE_FOLLOWUP_DAYS[0]) return 'after_lapse_1d';
+  if (dayDeltaSinceEnd === LAPSE_FOLLOWUP_DAYS[1]) return 'after_lapse_7d';
+  return null;
+}
+
+/**
  * Split the active book into "mail this one now" and "here is why not".
  *
  * Every exclusion is reported rather than dropped, because the dry run is the
@@ -247,7 +287,33 @@ export function selectRenewalReminders(
     // elapsed is the retroactive-billing trap called out in the exposure doc,
     // and a checkout link for it would buy the student nothing.
     if (daysUntil <= 0) {
-      skip(row, 'already_lapsed', `${Math.abs(daysUntil).toFixed(1)}d ago`);
+      // Past the date. We no longer go silent here (see lapseFollowupKindFor):
+      // two nudges offering a FORWARD period, then we let go. The elapsed period
+      // itself is still written off and is never charged for.
+      const sinceEnd = centralDayNumber(nowMs) - centralDayNumber(endMs);
+      const lapseKind = lapseFollowupKindFor(sinceEnd);
+      if (!lapseKind) {
+        skip(row, 'already_lapsed', `${Math.abs(daysUntil).toFixed(1)}d ago`);
+        continue;
+      }
+      if (!isUsableEmail(row.email)) {
+        skip(row, 'unusable_email', `"${row.email ?? ''}"`);
+        continue;
+      }
+      due.push({
+        subscription_id: row.id,
+        enrollment_id: row.enrollment_id,
+        email: String(row.email).trim(),
+        full_name: row.full_name ?? null,
+        plan: row.plan,
+        amount_cents: row.amount_cents,
+        period_end: new Date(endMs).toISOString(),
+        days_until: Math.round(daysUntil * 100) / 100,
+        // Negative: this is how the template knows the date has passed and must
+        // not speak as though the renewal is still ahead.
+        day_delta: -sinceEnd,
+        kind: lapseKind,
+      });
       continue;
     }
 

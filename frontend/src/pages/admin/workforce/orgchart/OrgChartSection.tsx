@@ -80,7 +80,21 @@ const TICKET_ICON = (
  * and keyboard users than two adjacent controls doing the identical thing.
  */
 function navigateToAgentTickets(agentName: string): void {
-  window.open(`/admin/tickets?creator=${encodeURIComponent(agentName)}`, '_blank', 'noopener,noreferrer');
+  // Org Chart v7 (2026-08-23) — `range=all` mirrors this agent's card count,
+  // which is itself date-unrestricted (see orgChartService.ts). Without it,
+  // the board's own 7-day-default performance fix would show a SMALLER count
+  // than the card just displayed, defeating the reason this button exists.
+  //
+  // Ticket Count Sync fix, Task 3 (2026-08-24) — `status=open` mirrors the
+  // card's own `open_ticket_count` label. Without it, the board showed every
+  // status INCLUDING Done — reported 3 times as "the card says N but the
+  // board shows way more" (confirmed live: InboxCaseEngine's card says 304,
+  // the board without this param would show up to 1262).
+  window.open(
+    `/admin/tickets?creator=${encodeURIComponent(agentName)}&range=all&status=open`,
+    '_blank',
+    'noopener,noreferrer',
+  );
 }
 
 // `e.preventDefault()` + `e.stopPropagation()` because this control renders
@@ -260,13 +274,19 @@ const OrgChartSection: React.FC = () => {
               key={l.id}
               type="button"
               className="wf-emp wf-emp-grid"
-              style={{ textAlign: 'left', border: undefined }}
+              style={{ textAlign: 'left', border: undefined, opacity: l.enabled ? 1 : 0.55 }}
               onClick={() => setSelectedLeadership(l)}
             >
               <div className="wf-emp-head">
                 <span className="wf-av" style={{ background: leadershipColors[l.id] }}>{initials(l.display_name)}</span>
                 <div style={{ minWidth: 0 }}>
-                  <div className="nm" title={l.display_name}>{l.display_name}</div>
+                  <div className="nm" title={l.display_name}>
+                    {l.display_name}
+                    {/* AI Workforce Reset (2026-08-24) — real AiAgent.enabled. Before
+                        this, a deactivated agent rendered identically to an active
+                        one anywhere on this chart. */}
+                    {!l.enabled && <span className="wf-chip" style={{ marginLeft: 6, fontSize: '0.7rem' }}>Inactive</span>}
+                  </div>
                   <div className="rl">{l.staff_ids.length} AI Staff reporting</div>
                 </div>
               </div>
@@ -296,11 +316,14 @@ const OrgChartSection: React.FC = () => {
       ) : (
         <div className="wf-dirs">
           {data.staff.map((s) => (
-            <Link key={s.id} to={`/admin/agents/${s.id}`} className="wf-emp wf-emp-grid" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Link key={s.id} to={`/admin/agents/${s.id}`} className="wf-emp wf-emp-grid" style={{ textDecoration: 'none', color: 'inherit', opacity: s.enabled ? 1 : 0.55 }}>
               <div className="wf-emp-head">
                 <span className="wf-av" style={{ background: staffColors[s.id] }}>{initials(s.display_name)}</span>
                 <div style={{ minWidth: 0 }}>
-                  <div className="nm" title={s.display_name}>{s.display_name}</div>
+                  <div className="nm" title={s.display_name}>
+                    {s.display_name}
+                    {!s.enabled && <span className="wf-chip" style={{ marginLeft: 6, fontSize: '0.7rem' }}>Inactive</span>}
+                  </div>
                   <div className="rl">AI Staff</div>
                 </div>
               </div>

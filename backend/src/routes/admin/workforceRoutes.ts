@@ -5,7 +5,7 @@ import {
   handleRoster, handleOffice, handleBriefing, handleDailyMeeting, handleMeetings,
   handleListTasks, handleCreateTask, handleUpdateTask, handleMessages, handleReview, handleAnalytics,
   handleListLiveAgents, handleListLiveAgentActivity, handleListLiveAgentTimeline, handleOrgChart,
-  handleUpdateOrgMemberTeam, handleAssignHierarchyTask,
+  handleUpdateOrgMemberTeam, handleAssignHierarchyTask, handleResetAgents, handleReactivateAgent,
 } from '../../controllers/workforceController';
 
 const router = Router();
@@ -51,5 +51,15 @@ router.patch('/api/admin/workforce/org-chart/members/:id/team', requireAdmin, ha
 // another AI Agent." Server-side authorization re-validated inside
 // assignTaskToAgent() — never trusts req.params/req.body alone.
 router.post('/api/admin/workforce/org-chart/members/:id/tasks', requireAdmin, handleAssignHierarchyTask);
+
+// AI Workforce Reset (2026-08-24) — Ali, live: deactivate a specific,
+// explicit set of AI-generated agents and cancel their open tickets. See
+// agentResetService.ts and handleResetAgents()'s own header comment.
+router.post('/api/admin/workforce/agents/reset', requireAdmin, handleResetAgents);
+
+// AI Workforce Reset, Phase C (2026-08-24) — reactivate one deactivated
+// agent, requiring a real autonomy level. See handleReactivateAgent()'s own
+// header comment.
+router.post('/api/admin/workforce/agents/:id/reactivate', requireAdmin, handleReactivateAgent);
 
 export default router;

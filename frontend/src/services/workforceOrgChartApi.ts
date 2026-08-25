@@ -55,6 +55,8 @@ export interface OrgChartLeadershipAgent {
   /** Org Chart v3 (2026-08-19) — same color as the human this agent reports
    * to; never null in practice (every resolved leadership agent has one). */
   hierarchy_color: string | null;
+  /** AI Workforce Reset (2026-08-24) — real `AiAgent.enabled`. */
+  enabled: boolean;
 }
 
 export interface OrgChartStaffAgent {
@@ -68,6 +70,8 @@ export interface OrgChartStaffAgent {
   /** Org Chart v3 (2026-08-19) — same color as the leadership agent this
    * staff agent reports through. */
   hierarchy_color: string | null;
+  /** AI Workforce Reset (2026-08-24) — real `AiAgent.enabled`. */
+  enabled: boolean;
 }
 
 export interface OrgChartUnresolvedAgent {
@@ -121,4 +125,55 @@ export async function assignHierarchyTask(orgMemberId: string, input: AssignHier
     idempotency_key: input.idempotencyKey,
   });
   return res.data;
+}
+
+export interface AgentResetResult {
+  agentId: string;
+  agentName: string;
+  found: boolean;
+  deactivated: boolean;
+  ticketsCancelled: number;
+  error: string | null;
+}
+
+// AI Workforce Reset (2026-08-24) — Ali, live: deactivate a specific,
+// explicit set of AI-generated agents and cancel their open tickets. Real,
+// reversible (enabled:false), never a silent bulk operation — see
+// backend/src/services/workforce/agentResetService.ts.
+export async function resetAgents(agentIds: string[]): Promise<AgentResetResult[]> {
+  const res = await api.post<{ results: AgentResetResult[] }>('/api/admin/workforce/agents/reset', { agent_ids: agentIds });
+  return res.data.results;
+}
+
+// AI Workforce Reset, Phase C (2026-08-24) — Ali, live: "add new ones slowly
+// in a way so I can see how they perform." docs/ai-governance/abac-design.md's
+// already-proposed 4-level ladder, reused verbatim rather than a second,
+// competing governance vocabulary — see agentReactivationService.ts.
+export const AUTONOMY_LEVELS = ['observe', 'suggest', 'act_audited', 'communicate'] as const;
+export type AutonomyLevel = (typeof AUTONOMY_LEVELS)[number];
+
+export const AUTONOMY_LEVEL_DESCRIPTIONS: Record<AutonomyLevel, string> = {
+  observe: 'Read only — the safest starting point for any agent coming back online.',
+  suggest: 'May propose actions for human review, never executes them directly.',
+  act_audited: 'May write to an allowlisted set of tables; every write is audited.',
+  communicate: 'May send outbound email/SMS/voice/social, within scope + consent + approval rules.',
+};
+
+export interface AgentReactivationResult {
+  agentId: string;
+  agentName: string;
+  found: boolean;
+  reactivated: boolean;
+  autonomyLevel: AutonomyLevel | null;
+  error: string | null;
+}
+
+// Real, reversible (enabled:true + a real autonomy_level stamped in the same
+// update) — reactivation is deliberate, never a silent flip back to
+// unlimited trust.
+export async function reactivateAgent(agentId: string, autonomyLevel: AutonomyLevel): Promise<AgentReactivationResult> {
+  const res = await api.post<{ result: AgentReactivationResult }>(`/api/admin/workforce/agents/${agentId}/reactivate`, {
+    autonomy_level: autonomyLevel,
+  });
+  return res.data.result;
 }

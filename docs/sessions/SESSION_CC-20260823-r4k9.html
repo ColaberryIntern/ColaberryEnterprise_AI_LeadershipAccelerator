@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260823-r4k9 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Monday, August 24, 2026 at 5:40 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">58 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**16 discovery documents establishing the repository truth map**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`docs/architecture/refactored-delivery-os/` — 16 documents, 3,191 lines: `CURRENT_STATE`, `DOMAIN_REUSE_MAP`, `DATA_OWNERSHIP_MATRIX`, `AUTHORIZATION_MATRIX`, `SBP_INTEGRATION_MAP`, `EXECUTION_CAPABILITY_MAP`, `EVIDENCE_INTEGRATION_MAP`, `CLIENT_PORTAL_MAP`, `CASE_STUDY_INTEGRATION_MAP`, `ROUTE_IMPACT`, `SCHEMA_CONFLICTS`, `MIGRATION_STRATEGY`, `TARGET_ARCHITECTURE` (14 Mermaid diagrams), `TEST_PLAN`, `BASELINE_TEST_RESULTS`, `IMPLEMENTATION_STATUS`. **No feature code** — the gate forbids it, and the branch contains none.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">all 13 Gate 0 questions from the master plan answered with file-and-line evidence in `CURRENT_STATE.md` §10; a verification-evidence table mapping every load-bearing claim to the command that proved it is in `IMPLEMENTATION_STATUS.md`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">of 34 required capabilities, **9 are pure reuse, 12 are extensions of something real, and 13 are genuinely new** — the plan is roughly one third greenfield, which is a materially different project from what &quot;build an AI Delivery OS&quot; implies.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Worked against `origin/main`, not the requested checkout**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">created an external worktree `C:/Users/ali_m/refactored-os-wt` off `origin/main` rather than editing the OneDrive tree the request arrived in.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`git rev-list --left-right --count origin/main...HEAD` → **`2722  76`**. Path-by-path `git cat-file -e` confirmed every `docs/architecture/multi-tenancy/*`, `docs/BUILD_PIPELINE_*`, `docs/REPO_CONNECT_CONTRACT.md` and `backend/src/services/sbp/*` path the plan names is **absent from that checkout and present on main**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**This is the finding that justifies the gate existing.** `buildPlanIngestService.ts` — named in master plan §2.3 as a service to trace and reuse — exists **only** in the stale checkout and on no commit of `main`. A plan written by reading that tree would have been designed around a service that has not existed for thousands of commits, and nothing about reading it would have felt wrong. The multi-tenancy Gate 0 hit the same thing at 2,586 commits behind; this is the second occurrence, so `MIGRATION_STRATEGY.md` §1 records it as a standing rule rather than an anecdote.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Confirmed `Project` cannot generalize, and found the same trap one level up**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">documented as C-01 and C-02 in `SCHEMA_CONFLICTS.md`, with the recommended `DeliveryProject` + optional-source-link structure that leaves `Project` untouched.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`models/Project.ts:98-109` — `enrollment_id` and `program_id` both `allowNull: false`, `program_id` FK&#39;d to `program_blueprints`. **32 files** read or write `Project` (ripgrep across `backend/src`), all assuming an enrollment exists. `models/Organization.ts:72-77` — `owner_enrollment_id` is `allowNull: false, unique: true` with an FK to `enrollments`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the `Project` constraint the master plan predicted (§2.2). The `Organization` one **it does not mention**, and it blocks commercial delivery just as hard: §6 hangs the entire ownership chain `Tenant → Brand → Organization → DeliveryEngagement` off a table that today models &quot;a manager&#39;s management account&quot; and cannot exist without a student enrollment. An external client company with an acceptance owner who never enrolled cannot be represented. Escalated as ESC-1.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Verified multi-tenancy Gate 5 is genuinely open, not stale documentation**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">recorded as ESC-2 and as a hard Gate 1 prerequisite in `MIGRATION_STRATEGY.md` §6.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`grep -c &quot;tenant_id&quot; services/orgService.ts services/adminOrgService.ts` → **`0` and `0`**. Neither org service filters by tenant.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the multi-tenancy work deferred this deliberately and said so, reasoning that every organization today is Colaberry Enterprise so scoping changes no behaviour. That was correct when made and **expires the moment this plan creates an AI Flotation client org**. It belongs to that workstream, not this one — raising it rather than silently absorbing it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Mapped the execution plane: less missing than expected, one security finding**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`EXECUTION_CAPABILITY_MAP.md` — provider contracts, the default-deny enforcement table, and findings E-01/S-01/E-03.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no `@anthropic-ai/claude-code`, no Agent SDK, no `claude-code`/`ClaudeCode` symbol in `backend/src` or `frontend/src` (only `@anthropic-ai/sdk ^0.106.0`). No `bull`/`bullmq`/`agenda`; scheduling is `node-cron ^4.2.1` plus two in-process queues. `services/previewStackService.ts` (398 lines) already provisions isolated per-project docker-compose workspaces cloned from a user&#39;s own repo, with lifecycle on `PreviewStack`/`PreviewEvent`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**S-01** — that service&#39;s stated assumption is the Docker socket mounted into the backend container, which also serves public HTTP. Docker socket access is root-equivalent on the host, so the isolation boundary protecting client repositories is one API call wide behind an internet-facing process. Today&#39;s blast radius is students&#39; own repos; Gate 8&#39;s would be client source under commercial and government contracts. **Three of the eight default-deny rules in master plan §Gate 8 are unenforceable until this is decided.** Recommendation: GitHub Actions runner for MVP — of the three shapes the plan permits, the only one that requires no new isolation code to be correct.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Found the approval and risk model the plan proposes already exists**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`AUTHORIZATION_MATRIX.md` maps master plan Gate 2&#39;s R0–R5 onto the live vocabulary instead of defining a parallel one, and specifies the full 13-role × 13-permission grid alongside the tenant-then-delivery guard order.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`services/agentAutonomy.ts:65` carries the comment &quot;per-action R0-R4 risk tier (already on `tickets.risk_tier` / `work_ledger_events.risk_tier`)&quot;. `models/ApprovalRequest.ts` has `risk_tier`, `autonomy_level`, `prepared_action`, `approval_scope`, `expires_at`, `decided_by`, and `ApprovalStatus = &#39;shadow_logged&#39; | &#39;pending&#39; | &#39;approved&#39; | &#39;rejected&#39; | &#39;expired&#39;`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">only R5 is missing. More useful: `shadow_logged` means the platform already knows how to run an authorization model in observe-only mode, recording what it *would* have decided before enforcing. Gate 2 should ship that way, which also makes adding R5 to a live ops-agent authorization path safe.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**Baseline gate captured before any work, with the compiler version pinned**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`BASELINE_TEST_RESULTS.md`, plus the per-checkpoint regression contract naming the four SBP assertions that act as tripwires.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `tsc --noEmit` under **TypeScript 5.9.3 invoked by explicit path** — **2 errors, both `Cannot find module &#39;@anthropic-ai/sdk&#39;`**, the known artifact of junctioning `node_modules` from a donor whose install predates that dependency; **zero real `src/` errors**. Jest on `src/services/sbp/__tests__` + `src/modules/tenancy/__tests__`: **50 of 51 suites, 879 tests passed**, 5 skipped, 1 failed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the compiler version is recorded because a bare `npx tsc` from `backend/` resolves the root-hoisted **4.9.5**, which can report zero `src/` errors while never having properly checked them — a false clean, not a gate. The single failure is `docsBundle.studentFiles` hitting Jest&#39;s default 5,000 ms per-test timeout under parallel load; **re-run in isolation it passes 8/8 in 8.3 s**, so it is environmental and is recorded as D-09 rather than re-run into a green number. Playwright is reported as **not executed** — no running stack, no staging credentials — never as passing.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>**Read the canonical Trust Before Intelligence book — D-04 closed**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `TRUST_BEFORE_INTELLIGENCE_INTEGRATION.md`; corrected the D-04 caveat in `DOMAIN_REUSE_MAP.md`, the layer names and warning box in `TARGET_ARCHITECTURE.md` diagram 7, and the Gate 5 row in `TEST_PLAN.md`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">read `manuscript/` at `main` of `colaberry/trust-before-intelligence-book` (public) — chapters 2 (INPACT), 4/5/6 (the seven layers) and 7 (GOALS). Confirmed the master plan&#39;s vocabulary is correct, and that the book&#39;s canonical layer names are fuller than the plan&#39;s shorthand: **Layer 1 Multi-Modal Storage**, **Layer 2 Real-Time Data**. `archive/` holds superseded drafts and is explicitly not the source.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the plan&#39;s caution inverted the real finding.** It says &quot;do not invent scores if the book does not define them&quot; — the book **does** define them, exactly: INPACT is **1–6 per dimension** (36 max, reported on a 100-point scale), GOALS is **1–5 per dimension** (25 max) on a named maturity ladder (Absent/Basic/Developing/Proficient/Advanced). So the risk was never inventing a score, it was inventing a *different* one and quietly diverging from the framework Colaberry sells. Two further constraints surfaced: the INPACT dependency order (Instant → Natural+Permitted → Contextual → Adaptive+Transparent) is a **build constraint** — a story graph scheduling Adaptive before Instant is invalid, not merely ambitious; and GOALS must be stored as five separate scores, never averaged, because averaging hides the single-dimension collapse the framework exists to catch. The book also ties minimum GOALS thresholds to regulation (EU AI Act 2024/1689 Arts. 9–15, NIST AI RMF), which is the shape `DeliveryProfile` should take at Gate 13 — thresholds, not a compliance claim. **Still unread:** Chapter 9 (`measuring_agent_readiness`, fetch timed out) and the appendix scoring methodology — both needed before the assessment UI is built.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**Recorded ESC-1 decision: relax `Organization.owner_enrollment_id` (Option A)**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">decision recorded in `IMPLEMENTATION_STATUS.md` ESC-1, `SCHEMA_CONFLICTS.md` C-02 and `MIGRATION_STRATEGY.md` §5. **No schema code written** — this is Gate 1 work and Gate 1 remains blocked on ESC-2.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">n/a — a decision record, not an implementation.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Ali approved Option A on 2026-08-23. Conditions carried into Gate 1: existing rows keep their owner and FK (it is a relaxation, so nothing currently valid becomes invalid); every read path in `orgService`/`adminOrgService` assuming a non-null owner must be null-guarded in the same change; `organization_type` becomes the discriminator with existing rows backfilled to the management-account value. **Not cleanly reversible** — once a client org exists, re-adding `NOT NULL UNIQUE` fails. This decision makes ESC-2 *more* urgent rather than less: the moment `organizations` can hold a client company, an unscoped `orgService` is a real cross-tenant read path rather than a theoretical one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>**Seven delivery tables, additive and idempotent**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/db/ensureRefactoredDeliverySchema.ts` creates `delivery_engagements`, `delivery_projects`, `delivery_project_source_links`, `delivery_project_members`, `delivery_contracts`, `delivery_decisions` and `delivery_events`, following the `ensureMultiTenantSchema.ts` pattern (raw idempotent DDL, never `sync({alter:true})`, which once produced ~50k duplicate constraints and OOM-ed Postgres). Wired into `server.ts` boot after `ensureMultiTenantSchema()`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`ensureRefactoredDeliverySchema.test.ts` — **20 tests**, no database required. Every `CREATE TABLE`/`CREATE INDEX` asserted to be `IF NOT EXISTS`; statement ordering asserted (the organization relaxation precedes anything pointing at organizations; `delivery_projects` precedes every child that joins back to it); nothing drops, renames or adds `NOT NULL` to an existing column.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**boot ordering is load-bearing and is why the module runs last of the organization-touching group.** Two earlier statements recreate `organizations` with `owner_enrollment_id UUID NOT NULL` on a *fresh* database — the inline DDL in `server.ts` and `ensureOrgAccountSchema`. Both are `CREATE TABLE IF NOT EXISTS`, so on an existing database they are no-ops and ordering is irrelevant; on a fresh one (dev, preview stacks, CI) the `DROP NOT NULL` has to come after them, or a brand-new environment would silently keep the constraint and the failure would only surface the first time somebody created a client organization.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>**Tenancy by parent: two tables carry `tenant_id`, the rest scope by join**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">only `delivery_engagements` and `delivery_projects` carry `tenant_id`/`brand_id`. The four strict children carry none. `delivery_events` carries a denormalised `tenant_id` because it must stay scopeable after its project is archived, and it is append-only and FK-free so it cannot drift by being updated out of step with its parent.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a test parses the DDL and asserts the exact set of tables declaring a `tenant_id` column, so adding one to a child table fails and has to argue for itself. A matching model-layer test asserts the children declare no `tenant_id` attribute at all. `delivery_projects` slug uniqueness is per tenant (`(tenant_id, slug)`), not global — two tenants both naming a project `customer-portal` is normal and must not collide.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this is the multi-tenancy work&#39;s D-05 finding applied a second time. 17 of its 18 campaign tables were strict children, and giving each its own `tenant_id` would have meant 17 backfills and 17 chances for two answers to &quot;who owns this row&quot; to drift apart. The cost of getting it wrong is not storage, it is a client seeing another client&#39;s screen.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>**ESC-1: `organizations.owner_enrollment_id` relaxed to nullable**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">one statement — `ALTER TABLE organizations ALTER COLUMN owner_enrollment_id DROP NOT NULL` — plus `organization_type` guaranteed present and backfilled to `management_account` for every existing row. `models/Organization.ts` updated to match (`allowNull: true`), because Sequelize enforces `allowNull` in application code and a model left at `false` would reject a client organization before the relaxed database column was ever reached.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryModels.test.ts` — **29 tests**. A client organization with a null owner passes model validation; a management account with an owner still passes; and a **negative control** proves validation is real (a row missing a still-required field rejects), so the first two cannot pass vacuously.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Gate 0&#39;s C-02 recommendation was wrong on this and I corrected it mid-build.** It said to drop the unique constraint alongside `NOT NULL`. That was wrong twice over. First, PostgreSQL treats NULLs as distinct in a unique index, so any number of null-owner client organizations were *already* permitted — `NOT NULL` was the only thing blocking them. Second, the constraint is load-bearing: `orgService.registerManager()` is idempotent via `Organization.findOrCreate({ where: { owner_enrollment_id } })`, and findOrCreate is only race-safe because a concurrent duplicate insert hits a unique violation Sequelize catches and converts back into a find. Dropping it would have let two simultaneous registrations for one manager create two organizations — the &quot;works once, breaks on the second run&quot; class root `CLAUDE.md` calls a production defect. A test now pins that the constraint is **not** dropped. Related: the real index is named `organizations_owner_enrollment_unique` (created by the inline DDL in `server.ts`), not Sequelize&#39;s `_key` convention, so the drop I originally wrote would have missed anyway.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>**The student-`Project` bridge, without touching `Project`**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`delivery_project_source_links` is a separate table with a nullable relationship, unique on `student_project_id`. `models/index.ts` associates it to both sides. **No column was added to `projects`** and no existing association changed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">tests assert `Project` gains no delivery column, and that it still requires `enrollment_id` and `program_id` — the two constraints Gate 0 confirmed must not be relaxed, with 32 files depending on them.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">unique on `student_project_id` satisfies master plan §15&#39;s &quot;same source link ⇒ one link&quot;, but the reason that matters beyond replay-safety is that two delivery projects claiming one student project would make &quot;whose evidence is this?&quot; unanswerable at exactly the moment builder credit is awarded.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>**Seven models registered, with fail-safe defaults**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`DeliveryEngagement`, `DeliveryProject`, `DeliveryProjectSourceLink`, `DeliveryProjectMember`, `DeliveryContract`, `DeliveryDecision`, `DeliveryEvent`, all imported and exported from `models/index.ts` with associations. `DeliveryEvent` deliberately has **no** associations.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a test asserts every model is registered with Sequelize under the right table name (an unregistered model is invisible to the schema/model parity test that walks `sequelize.models`), and that each model declares every column its DDL creates. Defaults asserted: `data_sensitivity` defaults to `internal` never `public`, a new project starts in `discovery` not `building`, and `project_class` defaults to `sandbox`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`DeliveryEvent` and `DeliveryProjectSourceLink` have no `updated_at`, and `DeliveryEvent` has no foreign keys, for the reason `tenant_access_audits` has neither — the record must outlive what it describes, and a stream you can rewrite is not a stream. `source_lead_id` is INTEGER rather than UUID because `leads.id` is an autoincrement integer (multi-tenancy D-03); it looks like a typo next to every other id column and is called out in the model so it is not &quot;fixed&quot; later.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>**Failure path: one bad statement cannot stop the server booting**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">each statement is executed inside its own try/catch with a structured JSON failure log, matching `ensureMultiTenantSchema`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">three tests — a rejecting statement neither throws nor stops the remaining statements (asserted by call count against the exported statement list); the failure is logged as structured JSON with a stable `error_class` rather than swallowed; and the logged SQL is truncated to 160 characters so a future seeded value cannot leak through the log.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">boot failure is an outage; a missing index is not. This is the same trade the other 53 `ensure*Schema` modules make.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>**Null-guarded the one real consumer the relaxation broke**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/orgService.ts` `registerManager()` now returns the local `ownerEnrollmentId` rather than reading `organization.owner_enrollment_id` back off the model.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the pinned typecheck caught it — `orgService.ts(241,67): TS2322 Type &#39;string | null&#39; is not assignable to type &#39;string&#39;`. After the fix, backend `tsc --noEmit` under **TypeScript 5.9.3** reports **2 errors, both the known `@anthropic-ai/sdk` junction artifact, zero real `src/` errors** — exactly the Gate 0 baseline.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this is the ESC-1 condition &quot;audit and null-guard the read paths&quot; actually being discharged, and it is why the relaxation had to ship with a pinned compiler rather than a bare `npx tsc` (which resolves 4.9.5 and can report a false clean). The fix returns the value the function just matched on instead of re-reading it, so the non-null contract callers rely on holds by construction rather than by a cast that would also have silenced a genuine null later.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>**Delivery role registry: 13 roles, 30 permissions, separate from tenant roles**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/modules/delivery/deliveryRoles.ts`, mirroring `modules/tenancy/tenantRoles.ts` — one registry, roles compared here and nowhere else.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryRoles.test.ts`, part of **58 passing** across the two authorization suites. Pinned: unknown roles grant nothing; **a tenant role is not a delivery role** (`tenant_admin` and `platform_super_admin` both grant zero delivery permissions); client roles cannot execute stories, write requirements or architecture, read architecture or agent internals, or manage members; `client.accept` is held by exactly the two client decision roles and **not** by the delivery owner; a security reviewer can approve architecture but not write it; only the delivery owner can deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the separation master plan §4 asks for. Tenant membership answers &quot;may this identity act in this tenant at all&quot;; delivery membership answers &quot;may they approve THIS design decision&quot;. `isClientOnly()` deliberately requires *every* role to be client-side, so someone holding both a client and an internal role is not served the client projection — that would hide work they are entitled to see.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>**Risk ladder R0–R5, aligned with the ops fleet but failing closed**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryRiskLevels.ts`. R0–R4 mean exactly what they mean in `services/agentAutonomy.ts`; R5 (`destructive_or_high_consequence`) is new and delivery-only. Consequential actions are a **declared registry**, not keyword-classified strings.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">an undeclared action resolves to **R5 requiring the highest authority**, so adding a consequential action without declaring it is maximally restricted and immediately visible rather than silently permitted. An unrecognized risk level is treated as maximum risk in both directions.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**one deliberate divergence from the ops model, and it is the interesting part.** `agentAutonomy.isHighRiskTier()` treats an unrecognized tier as *not* high risk — it fails OPEN, and says so, because a malformed string there must not manufacture approvals for an established pipeline. Delivery inverts that and fails CLOSED: an action nobody can classify is not safe to run unreviewed, and there is no established delivery pipeline to protect from false positives. **I did not extend the ops ladder to R5 in this gate.** Doing so means editing three sites — `agentAutonomy.ts`, `workGraph/capabilityRouter.ts`, and the typed `maxRiskTier: &#39;R0&#39;|…|&#39;R4&#39;` union in `capabilityRegistry.ts` — one of which gates live agent dispatch. Per Gate 0&#39;s AUTHORIZATION_MATRIX that must ship shadow-logged and reviewed, which is its own change with its own blast radius.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>**Authorization gate: tenant first, delivery second, no enumeration**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryAuthorization.ts` — `buildDeliveryContext`, `requireDeliveryPermission`, `requireTenantThenDelivery`, and `authorizeAction` (which returns a decision rather than throwing, because in the execution plane a denial is a run state, not an HTTP error).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a cross-tenant caller gets **404, not 403**, even when they hold the permission — they must not learn the project exists. A non-member gets 404; a member missing one permission gets 403, because they already know it exists and the distinction is useful to them. Unauthenticated gets 401. An unreadable project or membership table fails closed with a structured log.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the function deliberately does **not** call the tenant guard itself. Hiding the ordering inside a helper would hide the security property — the caller passes its tenant-guard result in, so the ordering is visible at the call site. `platform.cross_tenant` grants nothing here: a superadmin can see a project exists, but approving a client&#39;s design decision on their behalf is a different act, enforced by this module simply never consulting the superadmin flag.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">20</span>
+          <h2>**Builder Authority Profile: caps, never grants**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/BuilderAuthorityProfile.ts`, `modules/delivery/builderAuthority.ts`, and a `builder_authority_profiles` table appended to `ensureRefactoredDeliverySchema` (additive, idempotent, unique per identity).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`builderAuthority.test.ts`. No profile → R0, one project, no client contact, no release authority. An unreadable profile fails **closed** with a visible structured log. A generous row with `last_evaluated_at = null` is still the floor. A malformed `max_risk_without_review` falls back to R0. An R5 ceiling on an observer still yields no access — **the ceiling can never grant a permission the role lacks**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 2 forbids authority based on time-in-program, so the table has no concept of cohort week or attendance. The key behaviour is that an action above the ceiling becomes a **review requirement rather than a refusal** — that is what lets an intern drive real work they cannot unilaterally land, instead of being blocked from touching it. `last_evaluated_at` is nullable with no default on purpose: defaulting it to `NOW()` would fabricate the very signal that a human reviewed the numbers.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>**Versioned contracts with frozen approval snapshots**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/services/delivery/deliveryContractService.ts` — `draftContract`, `approveContract`, `approvedTerms`, `hasDriftedFromApproval`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryContractService.test.ts`. Approval freezes a snapshot; the working row then changing does **not** change what `approvedTerms()` returns. Re-approving is idempotent and returns the **original** approver and timestamp. Approving supersedes older approved versions so exactly one governs. Drift between the live row and the approved terms is detectable.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the point of the file. If approval were a status flag on a mutable row, &quot;the client approved this&quot; would decay into &quot;the client approved something, and here is what the row says now&quot; — worthless in exactly the situations a contract exists for. The snapshot uses an **explicit field list, not a spread**: a spread would silently start capturing any column added later, including internal bookkeeping, and the snapshot is the thing a client may be shown. `data_sensitivity` defaults to `internal`, never `public`, so an unclassified contract cannot become publishable by omission.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">22</span>
+          <h2>**Decision ledger: supersession, never mutation**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryDecisionService.ts` — `openDecision`, `decide`, `supersedeDecision`, `getGoverningDecisions`, `getOpenDecisions`, `getDecisionHistory`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryDecisionService.test.ts`. `decide()` **refuses** on an already-settled decision and directs the caller to supersede. Supersession preserves the prior decision&#39;s answer, rationale, decider and timestamp — the only mutation is the link and the status. Creating the successor happens **before** linking the prior, so a mid-failure leaves a recoverable orphan rather than a project with no current decision. History walking is cycle-safe and bounded at 50 hops.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §24 lists &quot;design approval can be silently overwritten&quot; as a stop condition. The difference between &quot;we changed our mind&quot; and &quot;we never said that&quot; is the entire value of a ledger, and an in-place edit erases it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">23</span>
+          <h2>**Project graph: impact analysis and fail-closed traceability**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryProjectGraph.ts` — pure, no I/O, no model imports. `reachableFrom`, `analyzeImpact`, `findTraceabilityGaps`, `graphFromAffectedNodes`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryProjectGraph.test.ts`. Cycles terminate rather than hang. An impact report surfaces `touchesAcceptedWork` and `touchesDeployedWork` as their own flags, and reports `truncated` when the walk hit its depth limit. Traceability fails closed: an uncovered `must` requirement or approved design decision is a gap, and a recorded no-code rationale excuses the latter. Malformed `affected_nodes` entries are skipped and **counted**, not thrown on.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">no graph database — master plan §Gate 3 forbids one absent evidence that relational modelling is inadequate, and Gate 0 found none. `truncated` earns its place: an impact report that silently stopped walking reads as &quot;nothing else is affected&quot;, which is the most dangerous way to be wrong here. The accepted/deployed flags are surfaced separately because they change the *conversation* — altering something a client already signed off is a different request from altering a draft, and the approver should not have to notice that themselves.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">24</span>
+          <h2>**The book&#39;s frameworks encoded with their exact scales**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/modules/delivery/inpact.ts` — INPACT (6 dimensions, 1–6, 36 max, 100-point headline), the 7 layers by canonical name, GOALS (5 dimensions, 1–5, 25 max, named maturity ladder), the INPACT dependency phases, and per-dimension GOALS threshold gating.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`inpact.test.ts`, **36 tests**. Explicitly pins `INPACT_MAX_SCORE === 6` and `INPACT_MAX_TOTAL === 36` against the specific drift of reusing GOALS&#39;s 1–5 ladder. Rejects Adaptive-before-Instant and Permitted-before-Instant. Layer 1 asserted as &quot;Multi-Modal Storage&quot; and layer 2 as &quot;Real-Time Data&quot;, the book&#39;s names rather than the master plan&#39;s shorthand.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the load-bearing test is **&quot;a single collapsed dimension fails even when the total looks healthy&quot;** — GOALS 5+5+5+5+1 totals 21/25 and looks fine averaged, but Solid at 1/5 means the data is wrong, and the book&#39;s interdependence principle says that cascades. So gating is per dimension and the total is display-only. An unscored dimension is a **failure, not a pass**: &quot;not scored&quot; is not &quot;meets the bar&quot;. The headline INPACT score returns null unless all six are scored, because a partial assessment reported as a number invites comparison with a complete one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">25</span>
+          <h2>**Discovery snapshots, approved before architecture**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryDiscovery.ts` + DDL. Versioned with an `approved_snapshot`, same freeze discipline as `DeliveryContract`. The seven Project AI outputs are distinct columns: understood, recommended, **remains_human**, software_handles, ai_recommends, agents_may_act, open_decisions.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">covered by the schema-contract and model-parity suites; the Gate 1 tenancy-by-parent test still passes unchanged with the two new tables, confirming neither carries a `tenant_id`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">storing the seven outputs as separate columns rather than one blob is what lets Gate 7 check that the story graph honours them — and what stops &quot;where AI should recommend&quot; quietly collapsing into &quot;where agents may act&quot;, which is the difference between a suggestion and an action taken on someone&#39;s behalf.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">26</span>
+          <h2>**AI-native Opportunity Map, with &quot;do not force AI everywhere&quot; enforced**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryOpportunity.ts` + DDL + `services/delivery/deliveryOpportunityMap.ts` (pure). One row per capability, unique on (project, capability).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryOpportunityMap.test.ts`, **32 tests**. Autonomy with no declared trust requirement is **blocking**; an acting agent that omits `permitted` is blocking; trust requirements must reference the INPACT registry rather than free text; every disposition must describe itself. Scores warn rather than block.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`disposition` defaults to `traditional_software` — a capability nobody has classified is **not** an agent opportunity by default, and that default is precisely how &quot;AI everywhere&quot; happens without anyone deciding it. The `ai_everywhere` check **warns and does not block**: there are real projects where nearly everything is an agent opportunity, and a gate that refused them would be wrong — the signal exists so a human looks, not so the tool decides. `human_only_decision` is a first-class column rather than an absence of AI columns, so &quot;a form and a database&quot; is recorded as an answer instead of leaving a gap that later reads as an unexplored opportunity.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">27</span>
+          <h2>**`DeliveryAgentDefinition` — a contract, not a description**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryAgentDefinition.ts` + DDL. Carries `can_read`, `can_write`, `prohibited_actions`, `autonomy_boundary`, `approval_rules`, `escalation_rules`, `layer_dependencies`, `goals_measures`, `evaluation_suite`, and a `version` / `approved_version` pair.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">covered by the schema-contract and model suites; the Gate 1 tenancy-by-parent test still passes with three more tables.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">named `Delivery*` per Gate 0&#39;s C-06 — the `Agent*` namespace is already crowded with the **ops** fleet (`AgentRun`, `AgentTask`, `AgentCreationProposal`…), and an agent built for a client&#39;s system is a different thing from one that runs Colaberry. `approved_version` is separate from `version` deliberately: a production-bound agent runs the **approved** one, so editing a definition cannot silently widen a live agent&#39;s authority. `autonomy_boundary` defaults to `R0` and `deployment_intent` to `design_only` — the most restrictive values, so the trust gate is **opted into by declaring an agent production-bound**, a visible act, rather than escaped by forgetting to.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">28</span>
+          <h2>**Six INPACT dimensions as rows, not a blob**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryAgentTrustRequirement.ts` — one row per (agent, dimension), unique, with the five fields master plan §Gate 5 requires: requirement, implementation evidence, evaluation, owner, status. Plus `delivery_trust_layer_map` for the Architecture-of-Trust map.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">unique index pinned by the schema test.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">rows rather than a JSONB blob on the agent because the gate must answer &quot;which dimensions are unaddressed, and who owns each one&quot; **as a query**. A blob makes that a parse, hides partial completion in list views, and leaves nobody to assign. Six small rows are six things a person can own. The score column is the book&#39;s **1–6**, and the 100-point headline is derived rather than stored so the underlying assessment stays auditable.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">29</span>
+          <h2>**The trust gate: fails closed, absence is failure**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryTrustGate.ts` (pure) — `evaluateAgentTrust` and `assessProjectTrustCoverage`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryTrustGate.test.ts`, **41 tests**. A missing dimension blocks. No requirements at all produces six blocking findings. `specified`/`implemented` is **not** enough — a dimension must reach `evaluated` or `accepted`. An unapproved definition blocks, and so does a working version ahead of the approved one. One failing production agent blocks the whole release.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**&quot;we built it&quot; without &quot;and we checked it&quot; is the exact gap the framework exists to close**, which is why `implemented` fails the gate. The module returns every reason at once rather than throwing on the first — closing gaps should not be whack-a-mole against a system that already knows the full answer. Trust does not average across a fleet: one agent outside its boundary is not offset by five that behave. `no_prohibited_actions` warns rather than blocks — worth surfacing, since the &quot;may&quot; list silently becoming the whole world is a real failure, but not worth refusing a release over.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">30</span>
+          <h2>**The approval hierarchy enforced as an ordering constraint**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryDesignLoop.ts` (pure). Five tiers in dependency order — product personality → design system → page families → critical workflows → exceptions — with `checkApprovalEligibility` and `prerequisiteTiers`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryDesignLoop.test.ts`, **30 tests**. Approving a page family before the design system exists is **blocking**. Product personality has no prerequisites; an exception requires all four tiers beneath it.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**this is not Figma and must not become it** — master plan §Gate 6 says build governed design *decisions*, not a design tool. The ordering matters because a page family approved before the design system is standing on nothing: every later DNA decision silently invalidates it, and nobody finds out until the screens are built. Same shape as the INPACT dependency phases, enforced the same way — deterministically, before the expensive work.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">31</span>
+          <h2>**An approval has to record what was actually agreed**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">validation for approver, chosen variant, rationale, and the 2–4 variant range.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">an approval with no approver blocks; variants offered with none chosen blocks; a missing rationale warns. One variant warns, more than four warns, zero is not flagged.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">&quot;variants offered but none chosen&quot; blocks because the record then cannot say what was agreed, which is the entire purpose of approving a design decision. One variant only warns, but it is worth saying: a single &quot;option&quot; is a proposal presented as a choice, and the approval it produces is weaker than it looks. Personality and exception tiers are excluded from variant expectations — a personality is a direction rather than a layout to compare, and an exception is by definition a one-off departure, so demanding alternatives would be ceremony.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">32</span>
+          <h2>**Visual Contracts that can actually gate a diff**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`validateVisualContract` — required regions, required actions, hierarchy, responsive rules, accessibility rules, reference snapshot, acceptable variance.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no reference snapshot blocks; no variance threshold blocks; a variance outside 0–1 blocks; no accessibility rules blocks; missing required actions only warns.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the missing-threshold rule is the load-bearing one — **without a variance threshold the Gate 9 visual diff passes everything or fails everything**, depending on whichever default someone picked, so a contract without it cannot gate anything. Accessibility blocks rather than warns because Gate 13&#39;s government profile makes it a mandatory release gate, and a visual contract that never mentions it cannot supply that evidence. The Design DNA completeness check only warns: a real design system is agreed in stages, and refusing the whole thing because charts are undecided would stall the work the DNA exists to unblock.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">33</span>
+          <h2>**Story Contract extends SBP&#39;s `PlanStory` rather than forking it**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryStoryContract.ts`. Declares only the fields a *delivery* story carries beyond a student one — `risk_level`, `execution_policy`, `approval_policy`, `evidence_required`, architecture/design/agent impacts — plus validation.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`deliveryStoryGraph.test.ts`, **39 tests**. A story fulfilling nothing blocks. A missing or unknown risk level blocks. **Autonomous execution of an R3+ story blocks**, as does a high-risk story with no approval policy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Gate 0&#39;s SBP_INTEGRATION_MAP put `planContract.ts` in Tier 1 — reuse unchanged, no delivery copy — and that is honoured: this module does not redefine a story. The extra fields are all governance, and each exists because delivery has a client. A student story needs none of them because the student is the only stakeholder and nothing they build reaches a paying customer.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">34</span>
+          <h2>**Three fail-closed traceability rules, including the one with teeth**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`findDeliveryTraceabilityGaps` — every `must` requirement → a story; every approved design decision → a story or a recorded no-code rationale; **every production agent trust requirement → an implementation or evaluation story**.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">covering the right agent but the **wrong dimension** does not close the gap. Every gap is reported at once rather than the first.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the third rule is the one that matters. Gate 5 makes an agent *declare* what trust it needs; without this nothing forces anyone to actually build it, and the declaration becomes paperwork. This is what connects Gate 5&#39;s contract to real work.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">35</span>
+          <h2>**Story graph: cycles, readiness, and collision-aware dispatch**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `deliveryStoryGraph.ts` (pure) — `findDependencyCycles`, `findDanglingDependencies`, `computeStoryStatuses`, `findCollisions`, `planParallelExecution`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">cycles detected including self-dependency; a dangling dependency leaves a story **blocked, not ready**; dispatch is deterministic on repeat.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**a test caught a real bug in my own implementation and I fixed the code, not the test.** `planParallelExecution` originally claimed `&#39;/&#39;` as a sentinel path for a story that declares no paths — but `&#39;/&#39;` normalises to the empty string and then collides with nothing, so the sentinel would have silently let other stories race the very run whose reach is unknown. Replaced with an explicit exclusive-claim flag. Collision detection is deliberately conservative (a declared prefix overlap counts): a false positive costs one story a slot, a false negative costs a client a corrupted branch. Dispatch is greedy and deterministic because a rerun after a failure must schedule identically or nobody can reproduce what happened.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">36</span>
+          <h2>**ESC-3 resolved to the Agent SDK, not the CLI**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">recorded in `executionProviderContract.ts`&#39;s header. The decision is **`@anthropic-ai/claude-agent-sdk`** (0.3.241), not `@anthropic-ai/claude-code` (2.1.241).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">both packages verified to exist on npm before choosing. The `claude-api` skill disambiguates them: `claude-code` is the **CLI**; the **Agent SDK** is Claude Code packaged as a library — agent loop, built-in Read/Write/Edit/Bash/Glob/Grep tools, permissions, sessions, called as `query(prompt, options)`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the names are confusable and the distinction is load-bearing — a backend driving an agentic coding loop wants the library. A third thing exists and is **not** what we want: the Messages API Tool Runner (`client.beta.messages.toolRunner`), which loops over tools *you* define and has no built-in tools or filesystem access. **No dependency added and no `query()` call written yet**: the skill states explicitly that it does not generate Agent SDK code, and writing SDK bindings from memory is how a plausible-but-wrong integration ships. That call goes behind `ExecutionProvider` once `code.claude.com/docs/en/agent-sdk` has been read.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">37</span>
+          <h2>**Five provider contracts — the replaceable seam**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/execution/executionProviderContract.ts` — `ExecutionProvider`, `WorkspaceProvider`, `RepositoryProvider`, `BrowserVerificationProvider`, `DeploymentProvider`. Types only; no runtime code, so nothing here can fail at boot.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc` clean.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §5.2&#39;s &quot;engines are replaceable&quot; is aspirational platform-wide (Gate 0 found 43 files instantiating OpenAI directly) but achievable here because it is greenfield — so the seam is defined **before** an engine is wired behind it. `DeploymentProvider` is declared and deliberately unimplemented: `executionPolicy` records `production_deploy` as enforced by `no_provider`, and that enforcement is only true while the interface has no implementation. **The absence is the control.** `ExecutionProvider.execute` takes an assembled prompt rather than raw materials, so a provider implementation cannot bypass the §11 region separation.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">38</span>
+          <h2>**Default-deny policy, now actually enforceable**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `executionPolicy.ts` — the eight denied capabilities with, for each, a rationale **and the layer that enforces it** (`runner_isolation` / `no_provider` / `branch_protection` / `policy_gate`).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">53 tests across the Gate 8 suite. A run that is **not** on an isolated runner is refused outright; a direct push to `main` is refused; wildcard egress is refused; every violation is reported at once.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Gate 0 found **three of the eight rules unenforceable** while execution shared the internet-facing backend container (S-01). ESC-4&#39;s GitHub Actions runner is what changed that, so this module is meaningful rather than aspirational. Recording `enforcedBy` per capability is deliberate: &quot;we have a policy&quot; and &quot;the policy is enforced&quot; are different claims, and the earlier gap was exactly the difference. The module is honest about its limits — it cannot stop a compromised runner, and it says so; it stops the ordinary path where a story or an operator asks for a forbidden capability, failing at plan time rather than execution time.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">39</span>
+          <h2>**Prompt envelope: untrusted content cannot close its own fence**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `executionPromptEnvelope.ts` — typed regions (system policy → approved contract → approved decisions → story contract → fenced untrusted content) plus secret redaction.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">planted `&lt;&lt;&lt;/UNTRUSTED_INPUT&gt;&gt;&gt;` markers in repository content are neutralized — exactly one open and one close survive. A caller cannot inject prose into the policy region. Seven credential shapes redact.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**we do not attempt injection detection** — that is a losing game against natural language. The envelope fences, labels, and states as a rule that everything inside the fence is data. That is checkable by the model on every token, whereas &quot;ignore malicious instructions&quot; asks it to classify intent, which is what an attacker controls. Order matters inside the builder: neutralize the fence **first**, then redact — reversed, a redaction placeholder could be split by a planted marker and reassembled outside the fence. Redaction is the third layer, not the only one: the runner holds no production credentials (ESC-4) and `secret-scan.yml` gates the commit path.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">40</span>
+          <h2>**ExecutionRun state machine and the database-as-queue**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `executionRunState.ts` (11 states, legal-transition table, staleness) plus the `delivery_execution_runs` table in the schema module.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">every non-terminal state can fail, cancel or time out; skipping `provisioning` is rejected; terminal runs cannot be resurrected; verification failure sends a run **back** to `executing`; `waiting_for_human` still holds a workspace; only `queued` is claimable.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this answers Gate 0&#39;s **E-03** without a new dependency — the row *is* the queue, claimed with `SELECT … FOR UPDATE SKIP LOCKED`, so it survives a `docker compose up -d --build`. A test asserts `SKIP LOCKED` is present because without it concurrent workers serialize behind one lock and the table is not a queue at all. Staleness is detected by **heartbeat age**, not by a worker reporting its own failure — a worker that can reliably report its own death is not the failure being modelled. `waiting_for_human` is exempt from staleness (waiting on a person is not a dead worker) but **not** from holding a workspace: parked for days, it still holds a client&#39;s source.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">41</span>
+          <h2>**Quality OS vocabulary: fourteen dimensions, fourteen evidence types**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/deliveryEvidence.ts` — the dimension and evidence-type unions from master plan §Gate 9, the `DIMENSION_SATISFIED_BY` map, the SHA-pinned and post-release sets, and the idempotency-key builder.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">14 dimensions, 14 evidence types; every dimension has at least one satisfier (a dimension with none could never pass, making the gate unsatisfiable rather than strict); every satisfier is a real evidence type; `pass` is the only satisfying outcome.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`not_run` exists as an outcome deliberately rather than being modelled as an absent row. A recorded `not_run` says &quot;we looked and chose not to measure,&quot; which is auditable; an absent row says nothing at all. **Both fail the gate — but only one of them is a decision.**</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">42</span>
+          <h2>**`delivery_evidence` table and model, separate from `evidence_records`**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryEvidence.ts` and the `QUALITY_EVIDENCE` group in `ensureRefactoredDeliverySchema.ts`; wired into `models/index.ts` with a project-scoped `hasMany`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">TypeScript passes; the delivery model suite passes; the unique index on `idempotency_key` is a `CREATE UNIQUE INDEX IF NOT EXISTS` rather than a column constraint, so the statement stays idempotent across boots.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this is Gate 0&#39;s design, not a new one. `evidence_records.enrollment_id` is NOT NULL and a client project has no enrollment. Both alternatives were worse: relaxing it pushes a delivery concern into the student progression path (master plan §24 lists &quot;student `Project` behavior regresses&quot; as a stop condition), and widening its closed `EvidenceSource` union with eleven delivery-only values would make the progression table answer two questions at once. `story_id` and `release_id` are plain UUIDs with no FK because `delivery_stories` and `delivery_releases` are not tables yet — following the convention `delivery_execution_runs.story_id` already set rather than inventing a second one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">43</span>
+          <h2>**The release gate that fails closed**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryQualityGate.ts` — `requiredDimensionsFor()` derives the required set from the story contract, `evaluateQualityGate()` decides.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no evidence at all produces exactly one blocking finding per baseline dimension; `not_run` and `partial` both fail; a low-risk non-UI story requires **only** the baseline (the negative control — without it, a bug that required everything unconditionally would pass every &quot;adds X&quot; test); R2 adds integration, R3 adds security, UI adds browser + visual contract + accessibility, agent impact adds AI evals + trust coverage, `client_approval` adds client acceptance, release scope adds architecture drift + defects.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">requirements are **derived from the contract**, not configured per project. A per-project required-list drifts into &quot;whatever we happened to run last time,&quot; which is how a quality bar quietly becomes a description of current practice rather than a standard.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">44</span>
+          <h2>**Three refusals the gate makes that an obvious implementation would not**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the validation and staleness rules inside `deliveryQualityGate.ts`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a `screenshot` declared as `security` is rejected (`evidence_type_mismatch`); an R2 story with baseline evidence is still blocked on `integration` even though its `test_run` rows share `test_run` as a satisfier; a `fail` row blocks on a story whose risk tier did not require that dimension; passing evidence pinned to another commit is rejected as `stale_evidence`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**(1) It never infers a dimension from an evidence type.** A `test_run` can satisfy unit tests, integration, acceptance or defects — an inferring gate would let one `jest` run silently claim four dimensions and report integration coverage nobody wrote. Inference here is a generous lie; declaration is checkable. **(2) A recorded `fail` blocks whether or not its dimension was required** — the alternative is a red security scan sitting in the table while the release ships because security was not on the required list for that risk tier. You do not get to un-know a result. **(3) `client_acceptance` is deliberately NOT SHA-pinned** unlike the ten code-derived dimensions: re-requiring a client&#39;s sign-off on every commit means either badgering them or quietly dropping the requirement, and a control that gets dropped is worse than one never claimed. Scope changes are Gate 10&#39;s change-impact flow, not SHA pinning&#39;s.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">45</span>
+          <h2>**The one-way projection into progression**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/deliveryEvidenceProjection.ts` — a pure decision function, no writes.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">only `commit` and `pull_request` project; non-passing outcomes do not; a builder with no enrollment yields `projects: false` with a reason rather than an error; the projected row reuses the **same** idempotency key; `projectProgressionToDelivery()` throws.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §2.5 — one event, one delivery row, at most one derived progression row. Reusing the delivery row&#39;s idempotency key rather than minting a second makes the replay guarantee structural: two replays collide on the same unique index on **both** sides. The reverse direction is written as a function that throws rather than left as a comment, because a future caller looking for `projectStudentEvidenceToDelivery` would otherwise find nothing and write it. Builder-credit types are deliberately narrow: a passing security scan is real evidence about the release but nobody authored it, and crediting it would inflate the ledger with work that was not done. Gate 11 can widen this with a reason; it should not widen by default.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">46</span>
+          <h2>**The client visibility contract: allowlist, not blocklist**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/clientVisibility.ts` — the eight nav sections, the five forbidden categories, per-object field allowlists, and `findForbiddenFields` as a tripwire.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a builder project object carrying `mentor_notes`, `builder_assessment`, `agent_scratchpad`, `api_key` and `stack_trace` projects to exactly four allowlisted keys; a field invented later is dropped by default; the projection builds a new object rather than mutating the source; a test asserts no allowlist contains a field that would trip the tripwire.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**a blocklist protects only against the fields that exist today.** Every field added afterwards is exposed by default, and the person adding it is thinking about the builder view, not about a client reading it six months later. The allowlist inverts that: a new field is invisible until someone names it, and naming it is a reviewable line in a diff. The tripwire is deliberately redundant with the allowlist — the allowlist is the control, the tripwire catches someone adding `internal_notes` *to* an allowlist. Truncation of the walk is reported as a hit rather than returning clean, because an incomplete check that answers &quot;clean&quot; is worse than no check.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">47</span>
+          <h2>**The projection happens server-side and produces a different object**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/clientProjection.ts` — `audienceFor`, `projectForAudience`, `guardClientPayload`, `stripForbidden`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">client-only roles receive the reduced shape; staff receive the full object; **no roles at all receives the client shape**; a mixed staff-and-client role set is staff; the guard throws in development and strips in production; `stripForbidden` removes nested offenders and keeps everything else.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Gate 0&#39;s CLIENT_PORTAL_MAP is the source of this shape. A client-role check applied in React puts a mentor&#39;s private assessment of an intern into a network payload that anyone can open DevTools and read — the data has already left the building by the time the UI decides not to draw it. **Two deliberate deviations from the obvious default.** (1) `audienceFor([])` returns `client`: an unknown caller is not a trusted caller, and a role-lookup failure must never be the thing that widens access. (2) CLAUDE.md&#39;s contract rule says outbound responses &quot;log and continue&quot; in production — **continuing unchanged here IS the leak**, so production strips and logs while development throws. Recorded as a considered deviation rather than followed into a data disclosure.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">48</span>
+          <h2>**Client acceptance as a durable object**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `models/DeliveryClientAcceptance.ts`, `services/delivery/clientAcceptanceService.ts`, and the `delivery_client_acceptances` table.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`accepted` can be superseded or withdrawn but not mutated; `superseded` is terminal; an acceptance with no named acceptor, no promise snapshot or no preview reference is refused; `accepted_with_exceptions` with an empty exception list is refused, as is a clean `accepted` that quietly carries exceptions; an ambiguous scope (both release and story) is refused.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §24 lists &quot;client acceptance is not durable&quot; as a stop condition; `AcceptanceChecklist.tsx` in the student portal is a UI component, not a record, and deliberately not the precedent. **Acceptance is not terminal on purpose** — if it were, the only way to correct one would be an UPDATE on the accepted row, which is the silent-overwrite failure §24 forbids. Making supersession legal is what makes mutation unnecessary. The promise, preview and evidence columns are **snapshots, not foreign keys**: a client accepted a specific promise against a specific preview, and read through live references the record would silently re-describe itself every time the underlying story was edited. Missing evidence **warns rather than blocks** — a client may accept on their own judgement, and refusing to record that would push the sign-off out of the system entirely, which is the failure the table exists to prevent.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">49</span>
+          <h2>**Change requests must show impact before build**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/clientChangeRequest.ts`, `models/DeliveryChangeRequest.ts`, and the `delivery_change_requests` table.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">there is **no** `submitted -&gt; approved_for_build` edge, so the path to build runs through assessment; the client summary reports counts and flags and contains no node identifiers; truncated analysis is stated as &quot;may be incomplete&quot; rather than implied complete; build approval is refused with no impact summary and refused with no named approver.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the impact comes from Gate 3&#39;s `analyzeImpact`, reused rather than re-derived, so the client&#39;s answer and the builder&#39;s answer cannot drift apart. The gate is enforced **twice on purpose**: the transition table makes the path to build run through assessment, and `gateChangeRequest` checks that the assessment actually produced something — a status can be set by a caller, but a recorded summary cannot be faked by setting a field to the right string. `impact_summary` and `impact_internal` live on one row rather than in two tables so they cannot drift; the projection layer decides which one leaves the building.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">50</span>
+          <h2>**The Experience Ledger: eleven evidence-backed claims**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/experienceLedger.ts` — the eleven claim types, a rubric per claim, and `evaluateClaim` / `summarizeLedger`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">every claim has a rubric a mentor could check by hand and at least one real evidence type that can substantiate it; every judgment-band claim requires human confirmation; a claim whose backing evidence recorded `fail`, `partial` or `not_run` is refused; a claim substantiated by the wrong evidence type is refused; every refusal carries a reason.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 11&#39;s governing rule is **no credit solely for attendance**, and it is enforced as a check no system-generated row can satisfy — `builderDidTheWork === false` rejects outright. Claims are **derived from Gate 9&#39;s `delivery_evidence`, never self-reported**, which is why the one-way projection exists and why it is narrow. This module maps a claim to one of the existing four evidence bands rather than computing a proficiency number: a number computed here would silently compete with `capeEvidenceBandWeightsService`&#39;s versioned weights, and two systems producing &quot;proficiency&quot; is how a metric stops meaning anything. `production_incidents` is a claim on purpose — handling an incident is real, transferable experience, and a ledger that counted only successes would quietly teach people to avoid the work where things go wrong.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">51</span>
+          <h2>**Learn Mode and Delivery Mode are support levels, not permission tiers**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/builderWorkspace.ts` — the eight nav sections, the two mode support profiles, `assertModeIsSupportOnly` and `projectTruthForMode`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`assertModeIsSupportOnly()` returns no violations; both modes execute approved work; both escalate consequential ambiguity; the two profiles are **not** identical (the negative control — without it, two identical profiles would pass every other assertion); both modes receive the same project truth object.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 11 says &quot;same project truth, different support level&quot;, and the obvious implementation gets this wrong. **Learn mode still executes approved work.** Withholding execution would make the mode a permission downgrade wearing a teaching costume, and it would teach an intern that learning is what you do *instead of* shipping. It would also be the wrong teaching tool: someone shown a simplified version of the project learns the simplified version. What a builder may *do* already belongs to `deliveryRoles.ts` and `builderAuthority.ts`, which cap by demonstrated authority — a separate axis from how much explanation they get. The invariant is a runtime check over the table rather than a type, so adding a third mode later cannot quietly break it while still compiling.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">52</span>
+          <h2>**Mentor exceptions, including two that fire on good news**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/mentorExceptions.ts` — the six detectors, named thresholds, and a stable prioritizer.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a calm builder produces **zero** exceptions (the control that keeps this an exception list rather than a dashboard); a failing trust or security gate fires urgently; the first-client-review exception fires only for a builder with no prior experience; overload fires strictly *above* the threshold, not at it; a rework rate computed from fewer than five completed stories is ignored; the prioritizer is stable across repeated calls and does not mutate its input.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**`first_client_review` and `release_ready` fire on good events.** A mentor system that only surfaces failure trains people to hide things, and it misses the two moments where a mentor is most useful — before someone&#39;s first client exposure, and at the point where shipping becomes irreversible. The first-review trigger fires *before* the review, because a mentor arriving afterwards has missed the moment they could have changed. The rework floor exists because &quot;100% rework&quot; computed from one story is noise that would land on the person least able to absorb it. **The thresholds (4 concurrent stories, 30% rework, 5-story minimum) are defensible starting points, not measured values** — no delivery has run yet, so calling them tuned would be a fabrication. They are named constants and overridable per call so they can move once there is data.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">53</span>
+          <h2>**Capacity signals, constructed so they cannot become surveillance**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/capacitySignals.ts` — the eleven signals, a per-signal policy, and `decideSignalAccess`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`estimated_human_attention_hours` and `meeting_load` are refused at individual scope **whatever justification is offered**; an individual read without a named requester, without a real justification, or below the sample floor is refused; a justified, named, well-sampled individual read is **allowed and flagged for audit** (the negative control — without it a module that refused everything would pass every refusal test while being useless); portfolio and project reads need no ceremony.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 12 asks for eleven signals and, in the same section, says **do not turn this into employee surveillance**. Those pull against each other and the tension is the design problem — per-person rework, attention hours and meeting load *are* surveillance infrastructure once they exist, whatever anyone intends. An instruction not to misuse them lives in a document that the people who would misuse them do not read. So the constraint lives in the construction. Three controls, in order of strength: **(1)** two signals can never resolve to a person, because they measure how much human time a *body of work* consumes — attributed to an individual they become a productivity score with no denominator, and whoever spent six hours in review because their project was in crisis looks worse than whoever&#39;s project was quiet. **(2)** Individual resolution requires a *justification*, not a permission: a permission is granted once and then invisible, a reason is written per lookup and readable afterwards. **(3)** Individual rates need a minimum sample, because noise presented as a metric invites a conversation the data cannot support. None of this stops a determined operator with database access; it stops the ordinary path — the dashboard someone builds because the data was sitting there — which is how surveillance actually arrives. Portfolio and project reads are deliberately frictionless: if ordinary reads needed justification, people would route around the module with raw SQL and the control would achieve nothing.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">54</span>
+          <h2>**Capacity overrides that expire by construction**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/capacityOverride.ts` plus the `delivery_capacity_overrides` and `delivery_metric_access_log` tables.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">an override expiring in the past, running longer than 30 days, exceeding the absolute ceiling, carrying a placeholder reason, or not actually raising the cap is refused; an expired override falls back to the profile cap automatically; a live override is clamped to the ceiling; `reliesOnOverride` is true only when the builder would be over their base cap without it.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Gate 2&#39;s `checkCapacity` already returned a decision rather than throwing, precisely so an override was possible — this is that override. It is built around one observation: **an override with no expiry is not an override, it is a new cap.** The failure is mundane and universal — someone is over capacity during a crunch, a lead grants an exception, the crunch passes, and nobody remembers to remove it; six months later the authority profile that said four is decorative, and nothing was ever decided. So expiry is required at creation rather than offered, because the version that gets left on forever is always the one where expiry was optional. `auditRequired: true` is in the *type* rather than a boolean the caller computes, so no call site can skip it. `reliesOnOverride` is surfaced separately because &quot;within capacity&quot; and &quot;within capacity only because someone signed an exception three weeks ago&quot; are different situations, and a lead planning next week should not have to go looking to tell them apart. Neither new table has an UPDATE path: a mutable audit log is not an audit log.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">55</span>
+          <h2>**Factory economics, with the caveat attached to the number**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/factoryEconomics.ts` — the six measures, the internal ratio, and `assertPublishable`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`THROUGHPUT_RATIO_VALIDATION` is `&#39;unvalidated&#39;`; every computed ratio carries that state and a caveat string; a zero denominator returns **null, not Infinity**; the ratio is not interpretable below ten verified stories; client **and** external publication are refused while unvalidated; internal use is permitted (the negative control); absent measures are omitted rather than reported as zero.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">&quot;do not market externally until validated&quot; is a sentence in a plan, and plans are read once. The ratio, once it exists and produces a flattering number, will be put on a slide by someone who never read the plan — that is not cynicism, it is how every internal metric escapes. So the validation state is a value this module exports, it travels with every computed ratio, and publication is refused while it is unvalidated. A number that cannot be separated from its own caveat is much harder to misquote. **A client is not an internal audience** — a number shown to a client becomes a claim about what they are buying, and an unvalidated efficiency ratio is not a claim we can support. The denominator is *judgment acts, not hours*: a time denominator improves when people work faster, which measures pace; a judgment denominator improves when the system needs fewer human decisions per unit of verified output, which is the actual claim being tested and does not reward overwork. `null` rather than `Infinity` for a zero denominator because zero human judgment effort does not mean infinite efficiency — it means nobody has reviewed anything yet, and `Infinity` on a dashboard is exactly the number that gets screenshotted.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">56</span>
+          <h2>**Versioned delivery profiles that never claim compliance**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/deliveryProfiles.ts` — three profiles (`commercial_standard`, `internal_tool`, `government_public_sector`), the twelve government baseline categories, the seven injections, and `assertNoComplianceClaim`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the government profile carries all twelve baseline categories; every profile is versioned, states its intent and protects at least one category from silent removal; the internal-tool profile is lighter than government but **not empty**; conformance claims against eleven named standards are refused, as is &quot;fully compliant&quot;; an accurate description of what we examine is permitted (the negative control — a guard that flagged every mention of a standard would make an honest scope statement impossible and would be routed around).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 13 says **do not claim universal compliance**, and that instruction shapes the module. A profile is *a list of things we check* — not a certification, an attestation, or a statement that a delivery satisfies any named standard. Meeting `government_public_sector` does not make a system FedRAMP authorized, Section 508 conformant, StateRAMP approved or CJIS compliant; those are determinations made by assessors and authorizing officials, not by a table in this repo. `ComplianceClaim` is therefore a type whose **only legal value is `&#39;none&#39;`** — &quot;we are FedRAMP compliant&quot; cannot be expressed by this system at all. `assertNoComplianceClaim` is a tripwire over the words someone would actually write on a capability statement or bid response; it cannot catch every phrasing, and **the module says so**, because a control that overstates its own coverage is the same failure it is guarding against. The internal-tool profile is deliberately lighter but not empty: &quot;internal&quot; lowers the ceremony, not the floor — an internal tool that mishandles staff data is still a breach.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">57</span>
+          <h2>**Contract requirements: add and tighten freely, waive only on the record**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/profileResolution.ts` — `resolveProfile` and `specializationEvidenceFor`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a version mismatch **refuses to resolve** rather than falling back to the current baseline; adding leaves the whole baseline intact; a tighten against a category the profile lacks is accepted but flagged; a waiver with no reason or no named approver is refused; a properly recorded waiver succeeds and emits `baseline_category_waived`; a structural test asserts resolved categories **plus** waived categories always account for the entire baseline.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the dangerous reading of &quot;contract-specific requirements override&quot; is **deletion** — accessibility quietly dropped from a government engagement, discovered later by an assessor. The mundane version is worse: nobody deletes anything on purpose, a category just never makes it into the resolved set because an override replaced a list instead of extending it. So the module distinguishes **add**, **tighten** and **waive**, and a waiver requires a reason and a named approver. A waiver is not a loophole; it is the honest form of a decision that would otherwise happen silently. Public bodies do sometimes waive a requirement for good reason — what they cannot do is discover afterwards that nobody recorded it. Pinning matters for the same reason: requirements must not shift under a signed contract, so a profile revision is adopted **by decision**, not by being deployed. Silently upgrading a pinned engagement would be invisible, because the result would look perfectly reasonable.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">58</span>
+          <h2>**ESC-2 closed — by the multi-tenancy workstream, not by this one**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in this workstream. Recorded because the constraint it imposed is now lifted.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`modules/tenancy/organizationScope.ts` is on main; `adminOrgService` applies `orgScopeWhere(scope)` at seven call sites including `listOrganizations` and `getOrganizationDetail`, with tenant scope applied **first** so a filter cannot widen it; `services/__tests__/adminOrgScope.test.ts` covers the superadmin and null-tenant cases.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ESC-2 was raised at Gate 1, when relaxing `Organization.owner_enrollment_id` made client organizations expressible while `adminOrgService` still had **zero** tenant filtering. I deliberately did not absorb it — `tenantScopeWhere` had no callers outside the tenancy module, and a naive fail-closed scoping could have blanked the live admin Organizations page. It belonged to the multi-tenancy workstream and that is where it was fixed. Their module reuses the same `IntelligenceScope` type as the memory graph, so the account list and the graph cannot disagree about who may read what, and an organization with a null `tenant_id` is treated as an anomaly reachable only by a platform superadmin rather than folded into a tenant&#39;s list. **The standing constraint &quot;no client organization should be created until ESC-2 closes&quot; is lifted.** Not independently re-verified from this side: their production backfill claim of 6 of 6 organizations classified — that is their evidence, in their PR.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260823-r4k9.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

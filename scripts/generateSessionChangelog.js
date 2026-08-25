@@ -2,28 +2,42 @@
 /**
  * generateSessionChangelog.js — per-session change report (HTML).
  *
- * Reads PROGRESS.md, selects the entries tagged with a given Session ID
- * (the `- Session: CC-YYYYMMDD-xxxx` line, per CLAUDE.md's session protocol),
- * renders a detailed, styled HTML changelog to docs/sessions/SESSION_<id>.html,
- * and opens it in the default browser.
+ * Reads THIS session's log — docs/sessions/CC-YYYYMMDD-xxxx.md — and renders a
+ * detailed, styled HTML changelog to docs/sessions/SESSION_<id>.html, then opens
+ * it in the default browser.
  *
- * Why per-session: multiple Claude instances run against this repo at once.
- * Keying the report on the Session ID means each instance owns its own HTML and
- * they never overwrite each other.
+ * Why per-session: multiple Claude instances run against this repo at once. Each
+ * session writes its own markdown log and owns its own HTML, so two instances can
+ * never collide. Before 2026-08-23 every session appended to a single shared
+ * PROGRESS.md and this script filtered by the `- Session:` tag; that shared file
+ * is now a sealed archive (see its header) and file identity replaces the tag.
+ *
+ * Naming inside docs/sessions/ (deliberate, they share one folder):
+ *   CC-<id>.md            hand-written source log   (input)
+ *   SESSION_CC-<id>.html  generated report          (output)
+ * Distinct prefixes, so the input glob `CC-*.md` can never match this script's
+ * own output, nor a README.
  *
  * Usage:
  *   node scripts/generateSessionChangelog.js CC-20260522-2b04
  *   node scripts/generateSessionChangelog.js CC-20260522-2b04 --no-open
  *
  * Pure, repeatable, safe to re-run: it overwrites only that session's HTML.
+ *
+ * Fails LOUDLY (exit 1) when the session log is missing or has no entries.
+ * It used to render an empty report and exit 0. Because CLAUDE.md mandates
+ * running this after every change, a silent empty render would quietly commit a
+ * blank HTML into the very directory the log lives in — the failure looks like
+ * success. A missing log means the work was not recorded, which is exactly the
+ * condition the progress gate exists to catch.
  */
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
-const PROGRESS = path.join(REPO_ROOT, 'PROGRESS.md');
 const OUT_DIR = path.join(REPO_ROOT, 'docs', 'sessions');
+const sessionLogPath = (id) => path.join(OUT_DIR, `${id}.md`);
 
 function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -32,10 +46,13 @@ function escapeHtml(s) {
 }
 
 /**
- * Parse PROGRESS.md into structured entries. An entry starts at a
+ * Parse a session log into structured entries. An entry starts at a
  * `- [x] <title>` / `- [ ] <title>` line and runs until the next such line or
  * the next H1/H2 heading. A markdown table immediately following an entry is
  * captured as its "files touched" list.
+ *
+ * Unchanged by the 2026-08-23 per-session migration: the entry format is
+ * identical, only the file it is read from moved.
  */
 function parseEntries(md) {
   const lines = md.split(/\r?\n/);
@@ -104,8 +121,7 @@ function renderHtml(sessionId, entries) {
       </article>`;
   }).join('\n');
 
-  const empty = `<div class="empty">No PROGRESS.md entries tagged <code>${escapeHtml(sessionId)}</code> yet.</div>`;
-
+  // No empty-state: main() refuses to render a report with zero entries.
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -168,10 +184,10 @@ function renderHtml(sessionId, entries) {
     <div><span class="sid">${escapeHtml(sessionId)}</span><span class="count">${entries.length} change${entries.length === 1 ? '' : 's'}</span></div>
   </header>
   <main>
-    ${entries.length ? cards : empty}
+    ${cards}
   </main>
   <footer>
-    Sourced from <code>PROGRESS.md</code> entries tagged <code>${escapeHtml(sessionId)}</code>.
+    Sourced from <code>docs/sessions/${escapeHtml(sessionId)}.md</code>.
     Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
   </footer>
 </body>
@@ -200,17 +216,32 @@ function main() {
     console.error('Usage: node scripts/generateSessionChangelog.js CC-YYYYMMDD-xxxx [--no-open]');
     process.exit(1);
   }
-  if (!fs.existsSync(PROGRESS)) { console.error('PROGRESS.md not found at repo root'); process.exit(1); }
 
-  const md = fs.readFileSync(PROGRESS, 'utf8');
-  const all = parseEntries(md);
-  const mine = all.filter(e => e.session === sessionId);
+  const logFile = sessionLogPath(sessionId);
+  if (!fs.existsSync(logFile)) {
+    console.error(`[changelog] no session log at docs/sessions/${sessionId}.md`);
+    console.error('[changelog] Write your entries there first — that file IS the progress log.');
+    console.error('[changelog] (PROGRESS.md is a sealed pre-2026-08-23 archive; nothing reads it here.)');
+    process.exit(1);
+  }
+
+  // File identity selects the session, so there is no `Session:` tag to filter on.
+  const entries = parseEntries(fs.readFileSync(logFile, 'utf8'));
+  if (entries.length === 0) {
+    console.error(`[changelog] docs/sessions/${sessionId}.md has no entries.`);
+    console.error('[changelog] Expected at least one "- [x] <task>" block. Refusing to write an empty report.');
+    process.exit(1);
+  }
+
+  const missingVerification = entries.filter(e => !e.verification).map(e => e.title);
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const outFile = path.join(OUT_DIR, `SESSION_${sessionId}.html`);
-  fs.writeFileSync(outFile, renderHtml(sessionId, mine), 'utf8');
+  fs.writeFileSync(outFile, renderHtml(sessionId, entries), 'utf8');
 
-  console.log(`[changelog] ${mine.length} entr${mine.length === 1 ? 'y' : 'ies'} → ${outFile}`);
+  console.log(`[changelog] ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} → ${outFile}`);
+  // Hard Gate 2 (no [x] without verification evidence) is file-agnostic and still applies.
+  for (const t of missingVerification) console.warn(`[changelog] WARN: no Verification line on "${t}"`);
   if (!noOpen) openInBrowser(outFile);
 }
 

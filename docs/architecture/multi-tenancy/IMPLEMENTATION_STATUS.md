@@ -161,11 +161,40 @@ generating opens weeks later; they carry only the old shape and must keep resolv
 
 ## Gate 5 — Organization / Account Context
 
-**Status: PARTIAL** — schema columns exist and are backfilled by
-`backfillTenancy.ts`; `orgService`/`adminOrgService` are not yet tenant-scoped. Deferred
-deliberately: the platform is single-tenant for organizations today (every existing org
-is Colaberry Enterprise), so scoping them changes no behaviour until a second tenant
-actually owns one. It is listed here rather than quietly dropped.
+**Status: COMPLETE for the admin surface** (2026-08-24). Schema columns exist and are
+backfilled by `backfillTenancy.ts`; **all six `adminOrgService` functions are now tenant
+scoped**, and scope is a **required argument** on every one of them so the compiler — not
+a reviewer's memory — enumerates any call site that has not been considered.
+
+**The leak this closed.** `listOrganizations` was an unfiltered `findAndCountAll` over
+every row and `getOrganizationDetail` fetched any org by id. A CPN operator listing
+accounts would have received Colaberry Enterprise's client companies, their owner emails
+and their headcounts. Same shape as the `globalSearch` leak closed in Gate 6, so it reuses
+the same scope type deliberately: one admin, one scope, across the account list and the
+memory graph. Three surfaces disagreeing about who may read what is how a boundary rots.
+
+Writes are scoped too, not just reads — suspending or unlinking another tenant's account
+is a worse outcome than reading it. `removeCohortFromOrganization` checks the org's scope
+**before** destroying, because `org_cohorts` carries no tenant of its own. Out-of-scope
+ids report exactly what a non-existent id reports (`null` / `org_not_found` → **404, never
+403**), so the endpoint cannot be used to enumerate which ids belong to another tenant.
+`getOrganizationStats` is raw SQL and applies the same three cases with the tenant ids as
+a **bind parameter**; a header counting every tenant's accounts above a scoped list is its
+own small leak.
+
+**`orgService` (the manager portal) needs no filter, and that is a property, not a gap.**
+`requireOrgManager` derives the org from the AUTHENTICATED enrollment, never from a route
+parameter, so there is no id for a caller to substitute.
+
+**Known limit, recorded rather than guessed at:** if one person ever manages orgs in two
+tenants, `requireOrgManager` returns the oldest without regard to which brand's site the
+request arrived on. Impossible today — all 6 production organizations belong to Colaberry
+Enterprise. Documented in `middlewares/orgAuth.ts`.
+
+**Migration ramp:** unchanged and still self-closing. `tenant_memberships` has zero rows in
+production, so `adminScopeBridge` grants cross-tenant read and logs it; the first
+membership row anyone creates switches enforcement on for everybody, with no flag to
+remember.
 
 ## Gate 6 — Skeleton Applications
 
@@ -176,14 +205,29 @@ validator verified to **fail** on a planted violation, not merely to pass.
 
 ## Gate 7 — Full E2E
 
-**Status: PARTIAL**
+**Status: COMPLETE for the ecosystem isolation suite** (2026-08-24). D-10 is closed.
 
 Unit + integration: **196/196 passing across 16 suites**, backend `tsc --noEmit` clean.
 Tenant-isolation evidence generated from real test output: **73 checks, 0 failures** —
 see [ISOLATION_EVIDENCE.md](ISOLATION_EVIDENCE.md).
 
-The Playwright ecosystem suite is **not executed** (D-10) — no running stack or staging
-credentials in this environment. Reported as not-executed, never as passing.
+`ecosystemIsolation.e2e.js` has now been **executed against the dev stack: 11/11 checks,
+exit 0**, and the resulting rows were verified directly in `accelerator_dev1` rather than
+trusted from the exit code. One canonical lead carries two brand relationships
+(`cpn/scholarship_interest`, `ai-flotation/workflow_intake`), and the hostile body's
+claimed tenant is stored nowhere — 0 rows.
+
+**The first execution found three defects that 196 passing unit tests could not**, which
+is the whole argument for the gate: two brands could not capture a lead at all because no
+seeder ever created their `lead_sources` rows; the spec posted to a route that does not
+exist; and its most important assertion was testing the verbatim raw-payload echo rather
+than what the server resolved, so it failed while the system was correct. All three are
+fixed. Detail in [TEST_MATRIX.md](TEST_MATRIX.md).
+
+**Still not executed:** the browser-level journey specs in the table in TEST_MATRIX.md
+(CPN / AI Flotation / Refactored skeleton journeys, admin context switch). Those need the
+skeleton apps served somewhere; the isolation suite covers the API boundary they sit on,
+but they are not the same thing and are not being reported as done.
 
 ## Gate 8 — Deployment
 

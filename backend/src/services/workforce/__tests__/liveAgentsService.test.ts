@@ -10,7 +10,7 @@ jest.mock('../../../models/AdminUser', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/AiAgent', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/Enrollment', () => ({ findAll: jest.fn() }));
 jest.mock('../../../models/CommunityMember', () => ({ findAll: jest.fn() }));
-jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn(), count: jest.fn() } }));
+jest.mock('../../../models', () => ({ Ticket: { findAll: jest.fn(), count: jest.fn(), findOne: jest.fn() } }));
 jest.mock('../../communityService', () => ({ derivePresence: jest.fn() }));
 
 import fs from 'fs';
@@ -22,7 +22,7 @@ import Enrollment from '../../../models/Enrollment';
 import CommunityMember from '../../../models/CommunityMember';
 import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
-import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent } from '../liveAgentsService';
+import { listLiveAgents, listLiveAgentActivity, countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../liveAgentsService';
 
 const mockAdminUserFindAll = AdminUser.findAll as unknown as jest.Mock;
 const mockAiAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
@@ -30,6 +30,7 @@ const mockEnrollmentFindAll = Enrollment.findAll as unknown as jest.Mock;
 const mockCommunityMemberFindAll = CommunityMember.findAll as unknown as jest.Mock;
 const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
 const mockTicketCount = Ticket.count as unknown as jest.Mock;
+const mockTicketFindOne = Ticket.findOne as unknown as jest.Mock;
 const mockDerivePresence = derivePresence as unknown as jest.Mock;
 
 const reeseAdmin = { id: 'admin-reese', email: 'reese@colaberry.com', agent_id: 'agent-reese', is_ai_operated: true, display_name: 'Reese' };
@@ -56,6 +57,7 @@ beforeEach(() => {
   mockDerivePresence.mockReturnValue('online');
   mockTicketCount.mockResolvedValue(0);
   mockTicketFindAll.mockResolvedValue([]);
+  mockTicketFindOne.mockResolvedValue(null);
 });
 
 describe('listLiveAgents', () => {
@@ -322,6 +324,51 @@ describe('countOpenTicketsForAgent — the shared per-agent count reused by 3 ca
     const countArgs = mockTicketCount.mock.calls[0][0];
     const statusClause = countArgs.where[Op.and].find((c: any) => 'status' in c);
     expect(statusClause.status[Op.notIn]).toEqual(['done', 'cancelled']);
+  });
+});
+
+// Trust Contract fix (2026-08-24) — Ali, live, on Reese's real page: "Reese has
+// several tickets that have been opened... but this says it's never been run."
+// getLastTicketActivityForAgent() is the real, unlimited, any-status signal
+// agentDetailService.ts falls back to when last_run_at (scheduler-only) is null.
+describe('getLastTicketActivityForAgent — real "most recently touched a ticket" signal for event-driven agents', () => {
+  it('returns the real most-recent updated_at for an agent with ticket history', async () => {
+    const recent = new Date('2026-08-24T10:00:00Z');
+    mockTicketFindOne.mockResolvedValue({ updated_at: recent });
+
+    const result = await getLastTicketActivityForAgent('admin-reese', reeseAgent as any);
+
+    expect(result).toBe(recent);
+    const findOneArgs = mockTicketFindOne.mock.calls[0][0];
+    expect(findOneArgs.order).toEqual([['updated_at', 'DESC']]);
+  });
+
+  it('matches EITHER the real AdminUser id OR a legacy alias, same as countOpenTicketsForAgent', async () => {
+    mockTicketFindOne.mockResolvedValue({ updated_at: new Date() });
+
+    await getLastTicketActivityForAgent('admin-process-1', processAgent as any);
+
+    const findOneArgs = mockTicketFindOne.mock.calls[0][0];
+    const orClauses = findOneArgs.where[Op.or];
+    const createdClause = orClauses.find((c: any) => 'created_by_id' in c);
+    expect(createdClause.created_by_id[Op.in]).toEqual(expect.arrayContaining(['admin-process-1', 'cory-engine']));
+  });
+
+  it('never filters by status — a done/cancelled ticket the agent closed yesterday still counts as real activity', async () => {
+    mockTicketFindOne.mockResolvedValue({ updated_at: new Date() });
+
+    await getLastTicketActivityForAgent('admin-reese', reeseAgent as any);
+
+    const findOneArgs = mockTicketFindOne.mock.calls[0][0];
+    expect(findOneArgs.where.status).toBeUndefined();
+  });
+
+  it('boundary: an agent with zero ticket history ever returns null, never a fabricated timestamp', async () => {
+    mockTicketFindOne.mockResolvedValue(null);
+
+    const result = await getLastTicketActivityForAgent('admin-reese', reeseAgent as any);
+
+    expect(result).toBeNull();
   });
 });
 

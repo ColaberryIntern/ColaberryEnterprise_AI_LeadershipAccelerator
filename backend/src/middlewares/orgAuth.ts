@@ -19,6 +19,20 @@ declare global {
  * or an OrgMember row with role='manager'. 403 when the caller manages no org.
  *
  * MUST run after `requireParticipant` (reads `req.participant.sub`).
+ *
+ * TENANCY (Gate 5). This path needs no tenant filter, and that is a property of how it
+ * resolves rather than an oversight: the org is derived from the AUTHENTICATED enrollment,
+ * never from a route parameter, so a manager can only ever reach the org they own or
+ * manage. There is no id for a caller to substitute. That is why the admin surface
+ * (`adminOrgService`) required explicit scoping while this one did not.
+ *
+ * KNOWN LIMIT, recorded rather than fixed. If one person ever manages orgs in two
+ * different tenants, this returns the OLDEST — deterministically, but without regard to
+ * which brand's site the request arrived on. It cannot happen today: every organization
+ * belongs to Colaberry Enterprise (verified in production, 6 of 6). Fixing it properly
+ * means resolving against the request's brand context, which is only meaningful once a
+ * second tenant actually owns an org, so it is deferred with the rest of Gate 5's
+ * multi-tenant-org work rather than guessed at now.
  */
 export async function requireOrgManager(req: Request, res: Response, next: NextFunction): Promise<void> {
   const enrollmentId = req.participant?.sub;

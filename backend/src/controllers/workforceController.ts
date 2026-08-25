@@ -14,6 +14,8 @@ import { getOrgChart, NAMED_DEPARTMENTS } from '../services/workforce/orgChartSe
 import { workforceOrgChartResponseSchema } from '../schemas/workforceOrgChartSchema';
 import { updateOrgMemberTeam } from '../services/workforce/orgChartHierarchyService';
 import { assignTaskToAgent } from '../services/workforce/orgChartTaskAssignmentService';
+import { resetAgents } from '../services/workforce/agentResetService';
+import { reactivateAgent, AUTONOMY_LEVELS } from '../services/workforce/agentReactivationService';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -178,5 +180,45 @@ export async function handleAssignHierarchyTask(req: Request, res: Response, nex
       idempotencyKey: parsed.idempotency_key,
     });
     res.status(201).json(ticket);
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * AI Workforce Reset (2026-08-24) — POST /api/admin/workforce/agents/reset.
+ * Ali, live: deactivate a specific, explicit set of AI-generated agents and
+ * cancel their open tickets, so he can rebuild the roster deliberately. No
+ * "reset everything" mode — `agent_ids` is required and explicit, never
+ * inferred, so this can never silently touch an agent outside the list a
+ * human actually chose. See agentResetService.ts for the real, reversible
+ * (enabled:false, real ticket cancellation via updateTicketStatus()) mechanism.
+ */
+const resetAgentsSchema = z.object({
+  agent_ids: z.array(z.string().min(1)).min(1).max(100),
+});
+export async function handleResetAgents(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = resetAgentsSchema.parse(req.body || {});
+    const actorId = req.admin?.email || req.admin?.sub || 'unknown-admin';
+    const results = await resetAgents(parsed.agent_ids, actorId);
+    res.json({ results });
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * AI Workforce Reset, Phase C (2026-08-24) — POST
+ * /api/admin/workforce/agents/:id/reactivate. Ali, live: "add new ones
+ * slowly... so I can see how they perform." `autonomy_level` is required
+ * (one of docs/ai-governance/abac-design.md's already-proposed 4-level
+ * ladder) — bringing an agent back online is a deliberate, visible act, not
+ * a silent flip. See agentReactivationService.ts for the real mechanism.
+ */
+const reactivateAgentSchema = z.object({
+  autonomy_level: z.enum(AUTONOMY_LEVELS),
+});
+export async function handleReactivateAgent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = reactivateAgentSchema.parse(req.body || {});
+    const result = await reactivateAgent(String(req.params.id), parsed.autonomy_level);
+    res.json({ result });
   } catch (e) { fail(res, e, next); }
 }

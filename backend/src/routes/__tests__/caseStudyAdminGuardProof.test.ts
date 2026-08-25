@@ -23,13 +23,54 @@
  * why (1) reads the router stack rather than inferring mounting from a status
  * code.
  */
+/*
+ * WHAT IS MOCKED AND WHY. The two middlewares under test — `authMiddleware` and
+ * `mgmtSectionGate` — are NEVER mocked; mocking either would make this suite
+ * assert on itself. What is mocked is `config/env` (so the signing secret is
+ * known), the Case Study services (so importing the router does not drag in the
+ * 1000-line Sequelize model graph and reach for a database) and `aiEventService`
+ * (fire-and-forget auth telemetry that would otherwise touch a model).
+ */
+jest.mock('../../config/env', () => ({ env: { jwtSecret: 'test-secret', nodeEnv: 'test' } }));
+jest.mock('../../services/aiEventService', () => ({ emitAiEvent: jest.fn().mockResolvedValue(undefined) }));
+
+const svc = (): Record<string, unknown> => ({});
+jest.mock('../../services/caseStudy/caseStudyRepoCollection', () => ({
+  CASE_STUDY_REPO_ROLES: ['primary', 'frontend', 'backend', 'agents', 'data', 'infra', 'docs', 'evals', 'demo', 'other'],
+  attachRepository: jest.fn(async () => svc()), listRepositories: jest.fn(async () => svc()),
+  removeRepository: jest.fn(async () => svc()), setRepositoryRole: jest.fn(async () => svc()),
+  isCaseStudyRepoError: () => false,
+}));
+jest.mock('../../services/caseStudy/caseStudyAdminService', () => ({
+  listCaseStudies: jest.fn(async () => svc()), getCaseStudy: jest.fn(async () => svc()),
+  createCaseStudyFromProject: jest.fn(async () => svc()), createCaseStudyFromRepoCollection: jest.fn(async () => svc()),
+  updateCaseStudy: jest.fn(async () => svc()), archiveCaseStudy: jest.fn(async () => svc()),
+  isCaseStudyAdminError: () => false,
+}));
+jest.mock('../../services/caseStudy/caseStudyAdminReview', () => ({
+  applyHumanOverride: jest.fn(async () => svc()), approveSnapshot: jest.fn(async () => svc()),
+  listSyncRuns: jest.fn(async () => svc()), previewSurfaceProjection: jest.fn(async () => svc()),
+}));
+jest.mock('../../services/caseStudy/caseStudySyncService', () => ({
+  syncCaseStudy: jest.fn(async () => svc()), isCaseStudySyncError: () => false,
+}));
+jest.mock('../../services/caseStudy/caseStudyPublicationService', () => ({
+  publishCaseStudy: jest.fn(async () => svc()), unpublishCaseStudy: jest.fn(async () => svc()),
+  isCaseStudyPublicationError: () => false,
+}));
+jest.mock('../../services/caseStudy/caseStudyProjectSource', () => ({ isCaseStudyProjectSourceError: () => false }));
+jest.mock('../../services/caseStudy/caseStudyEvidenceSource', () => ({ isCaseStudyEvidenceSourceError: () => false }));
+
+/* eslint-disable import/first */
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { mgmtSectionGate, pathToSection } from '../../middlewares/mgmtSectionGate';
 import caseStudyAdminRoutes from '../admin/caseStudyAdminRoutes';
-import { env } from '../../config/env';
+/* eslint-enable import/first */
+
+const JWT_SECRET = 'test-secret';
 
 /* ------------------------------------------------------- router inspection --- */
 
@@ -94,7 +135,7 @@ function buildApp(): express.Express {
 const app = buildApp();
 
 const token = (payload: Record<string, unknown>): string =>
-  jwt.sign(payload, env.jwtSecret, { expiresIn: '10m' });
+  jwt.sign(payload, JWT_SECRET, { expiresIn: '10m' });
 
 const LEGACY_ADMIN = token({ sub: 'a1', email: 'ali@colaberry.com', role: 'admin' });
 const MGMT_CURRICULUM = token({ sub: 'e1', email: 'c@colaberry.com', role: 'admin', mgmt_role: 'curriculum' });
@@ -165,7 +206,7 @@ describe('T023 area 3.2 — every route refuses an unauthenticated caller', () =
   });
 
   it('an expired admin token is refused', async () => {
-    const expired = jwt.sign({ sub: 'x', email: 'x@x', role: 'admin' }, env.jwtSecret, { expiresIn: -60 });
+    const expired = jwt.sign({ sub: 'x', email: 'x@x', role: 'admin' }, JWT_SECRET, { expiresIn: -60 });
     const res = await send(app, 'GET', '/api/admin/case-studies', expired);
     expect(res.status).toBe(401);
   });

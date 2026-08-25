@@ -285,4 +285,37 @@ describe('T023 area 1 — repository identity in the ANALYZER\'s own log lines',
     ].join('\n'));
     expect(capture.text).not.toContain(TOKEN); // the part that IS a hard rule
   });
+
+  /**
+   * V-04's SCOPE, measured rather than inherited.
+   *
+   * The run's note describes the shared client as logging "the full API path"
+   * on three branches. On the file-read branch it is wider than that: `owner`
+   * and `repo` are logged as first-class context fields, and the Case Study
+   * analyzer DOES reach that branch — `caseStudyRepoReader.ts:441` calls
+   * `fetchRepoFile` for every selected document.
+   */
+  it('MEASUREMENT ONLY — the file-read failure branch, which the analyzer reaches', async () => {
+    const { fetchRepoFile } = await import('../../services/sbp/repoConnect/githubRepoClient');
+    const { capture } = await capturing(async () => {
+      try {
+        await fetchRepoFile(PRIVATE_OWNER, PRIVATE_REPO, 'README.md', {
+          correlationId: 'T023-V04-fileread',
+          fetchImpl: (async () => new Response('{"message":"Bad credentials"}', { status: 401 })) as typeof fetch,
+        });
+      } catch { /* the classified error is expected; the LOG is what is measured */ }
+      return null;
+    });
+    // eslint-disable-next-line no-console
+    console.log([
+      '',
+      '=== T023 V-04 measurement: fetchRepoFile failure branch ===',
+      ...capture.lines.map((l) => `  ${l}`),
+      `owner logged as a field: ${capture.text.includes(`"owner":"${PRIVATE_OWNER}"`)}`,
+      `repo  logged as a field: ${capture.text.includes(`"repo":"${PRIVATE_REPO}"`)}`,
+      '=== end V-04 file-read measurement ===',
+      '',
+    ].join('\n'));
+    expect(capture.text).not.toContain(TOKEN);
+  });
 });

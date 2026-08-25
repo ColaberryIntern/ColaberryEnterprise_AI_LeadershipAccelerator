@@ -12,6 +12,10 @@ import {
 import { listOpenCohorts } from '../services/cohortService';
 import { Cohort } from '../models';
 import { sendInvoiceRequestConfirmation } from '../services/emailService';
+import {
+  captureSignupConsent,
+  SIGNUP_CONSENT_TEXT,
+} from '../services/consent/captureSignupConsent';
 
 export async function handleListOpenCohorts(
   _req: Request,
@@ -33,6 +37,22 @@ export async function handleCreateInvoice(
 ): Promise<void> {
   try {
     const data = createInvoiceSchema.parse(req.body);
+
+    // Same capture on the paid enrolment path. Someone buying a course has not
+    // thereby asked for marketing email - that is a separate choice, and this
+    // records it only when they actually make it.
+    await captureSignupConsent({
+      email: data.email,
+      marketingOptIn: (data as any).marketing_opt_in,
+      source: 'enrollment_form',
+      consentText: SIGNUP_CONSENT_TEXT,
+      ipAddress: req.ip ?? null,
+      // `req.get` is an Express helper, not part of the bare request shape.
+      // Calling it unguarded threw on a hand-rolled req in an existing test, and
+      // the controller's catch turned that into a silent failure to respond -
+      // consent capture must never be able to break a signup that way.
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
+    });
 
     // Validate cohort availability
     const cohort = await validateCohortAvailability(data.cohort_id);
@@ -148,6 +168,23 @@ export async function handleCreateFreeAccount(
       utm_source: typeof req.body.utm_source === 'string' ? req.body.utm_source : undefined,
       utm_campaign: typeof req.body.utm_campaign === 'string' ? req.body.utm_campaign : undefined,
       page_url: typeof req.body.page_url === 'string' ? req.body.page_url : undefined,
+    });
+
+    // Capture marketing consent if they ticked the box. AWAITED but never
+    // allowed to fail the signup: captureSignupConsent is swallow-safe, and a
+    // person must get their account regardless. An unticked box records
+    // nothing - it is not a revocation.
+    await captureSignupConsent({
+      email: data.email,
+      marketingOptIn: (data as any).marketing_opt_in,
+      source: 'free_signup',
+      consentText: SIGNUP_CONSENT_TEXT,
+      ipAddress: req.ip ?? null,
+      // `req.get` is an Express helper, not part of the bare request shape.
+      // Calling it unguarded threw on a hand-rolled req in an existing test, and
+      // the controller's catch turned that into a silent failure to respond -
+      // consent capture must never be able to break a signup that way.
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
     });
 
     console.log(

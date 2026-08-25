@@ -15,12 +15,19 @@ class GraphNode extends Model {
   declare trust_score: number;
   declare status: string;
   declare version: number;
+  declare tenant_id: string | null;
+  declare brand_id: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
 
 GraphNode.init({
   id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+  // Tenant scoping for the Memory Graph. Declared here as well as in the DDL because
+  // Sequelize only touches attributes the model knows about -- a column present in
+  // Postgres but absent here reads back undefined and silently drops writes.
+  tenant_id: { type: DataTypes.UUID, allowNull: true },
+  brand_id: { type: DataTypes.UUID, allowNull: true },
   node_type: { type: DataTypes.STRING(40), allowNull: false },
   entity_id: { type: DataTypes.STRING(120), allowNull: false },
   label: { type: DataTypes.STRING(400), allowNull: false },

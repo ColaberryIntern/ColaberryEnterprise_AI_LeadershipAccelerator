@@ -21,6 +21,7 @@ import { DEFAULT_MODEL } from '../components/costEstimationService';
 import { getBlueprintContext } from '../timeline/blueprintContext';
 import { resolve as resolveType } from '../timeline/typeRegistry';
 import { completeActivity } from './runtimeService';
+import { isCardServable } from '../timeline/curriculumScope';
 
 export const EVAL_PASS_THRESHOLD = 0.70;
 
@@ -154,7 +155,7 @@ function attemptReview(a: AssessmentAttempt) {
 
 export async function getAssessment(enrollmentId: string, cardId: string) {
   const card = await TimelineCard.findByPk(cardId);
-  if (!card || (card as any).visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
+  if (!card || !isCardServable((card as any).visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
   const kind = kindForCard(card);
   const questions = await ensureQuestions(card);
   // The QUIZ is a low-stakes learning check — reveal the answer + explanation so the
@@ -182,7 +183,7 @@ export interface SubmitBody {
 
 export async function submitAssessment(enrollmentId: string, cardId: string, body: SubmitBody) {
   const card = await TimelineCard.findByPk(cardId);
-  if (!card || (card as any).visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
+  if (!card || !isCardServable((card as any).visibility)) throw Object.assign(new Error('Card not available'), { status: 404 });
   const kind = kindForCard(card);
   const questions = await ensureQuestions(card);
   const { items, correct, total, score, competency_scores } = scoreResponses(questions, body.responses || []);

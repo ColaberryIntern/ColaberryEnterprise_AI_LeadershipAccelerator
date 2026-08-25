@@ -136,10 +136,21 @@ export const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
   },
 };
 
+/** One tool's own reads/produces, plus whether it has a dictionary entry at
+ * all — the per-tool drill-down AgentDetailPage's "Tools & capabilities"
+ * section renders (Ali, 2026-08-23: "I also would like to see the tool &
+ * capability drill down so I can understand the tool better" — the aggregate
+ * reads/produces lists alone don't say which tool a given fact came from). */
+export interface ToolCapabilityDetail extends ToolCapability {
+  tool: string;
+  documented: boolean;
+}
+
 export interface AgentCapabilities {
   reads: string[];
   produces: string[];
   undocumentedTools: string[];
+  byTool: ToolCapabilityDetail[];
 }
 
 /**
@@ -147,26 +158,33 @@ export interface AgentCapabilities {
  * array — never hand-written per-agent prose. De-duplicates across all of the
  * agent's tools. Any tool name with no dictionary entry (a future agent whose
  * tools haven't been documented here yet) is surfaced honestly in
- * `undocumentedTools`, never silently dropped from the result.
+ * `undocumentedTools`, never silently dropped from the result. `byTool` carries
+ * the same facts broken out per tool, in `tools_granted` order, so a caller can
+ * show "this specific tool reads X and produces Y" rather than only the
+ * flattened, de-duplicated union.
  */
 export function deriveAgentCapabilities(toolsGranted: string[] | null | undefined): AgentCapabilities {
   const reads = new Set<string>();
   const produces = new Set<string>();
   const undocumentedTools: string[] = [];
+  const byTool: ToolCapabilityDetail[] = [];
 
   for (const tool of toolsGranted || []) {
     const capability = TOOL_CAPABILITIES[tool];
     if (!capability) {
       undocumentedTools.push(tool);
+      byTool.push({ tool, reads: [], produces: [], documented: false });
       continue;
     }
     capability.reads.forEach((r) => reads.add(r));
     capability.produces.forEach((p) => produces.add(p));
+    byTool.push({ tool, reads: capability.reads, produces: capability.produces, documented: true });
   }
 
   return {
     reads: Array.from(reads),
     produces: Array.from(produces),
     undocumentedTools,
+    byTool,
   };
 }

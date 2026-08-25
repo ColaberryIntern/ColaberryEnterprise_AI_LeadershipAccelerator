@@ -16,9 +16,19 @@
  * Same shape as pointsEarnFlow.e2e.js: raw Playwright + Node fetch, no test framework,
  * exit 0 on pass and 1 on failure.
  *
- * PREREQUISITES. This exercises real endpoints, so it needs the ecosystem seeded:
- *   node backend/src/seeds/seedEcosystem.ts     (tenants, brands, domains)
- *   node backend/src/seeds/seedLeadSources.ts   (the cpn / ai-flotation sources)
+ * PREREQUISITES. This exercises real endpoints, so it needs the ecosystem seeded AND
+ * classified — all three steps, in order:
+ *   1. seedEcosystem      tenants, brands, domains, sender profiles
+ *   2. seedLeadSources    the cpn / ai-flotation sources themselves
+ *   3. backfillTenancy    stamps tenant_id/brand_id ONTO those sources
+ *
+ * Step 3 is easy to miss and produces the most confusing failure. The ingest path
+ * writes a brand relationship only when the SOURCE carries tenant_id and brand_id
+ * (leadIngestionService, the `sourceTenantId && sourceBrandId` guard). An unclassified
+ * source still accepts the submission and still creates the lead — it just silently
+ * logs `tenant_context_unresolved` and skips the relationship, so this spec sees a
+ * successful post and no context row.
+ *
  * If a required source is missing the run ABORTS with a clear message rather than
  * reporting a pass. A green run that skipped its checks is worse than a red one.
  *
@@ -81,7 +91,7 @@ async function main() {
 
   // --- 1. CPN intake creates one lead and one brand relationship -------------
   console.log('\n1. CPN intake');
-  const cpnSubmit = await api('/api/ingest?source=cpn&entry=scholarship_interest', {
+  const cpnSubmit = await api('/api/leads/ingest?source=cpn&entry=scholarship_interest', {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -97,12 +107,12 @@ async function main() {
     abort('the `cpn` lead source is not seeded — run seedLeadSources first');
   }
   check('CPN scholarship form accepted', cpnSubmit.status === 200, `status ${cpnSubmit.status}`);
-  const leadId = cpnSubmit.body?.leadId;
+  const leadId = cpnSubmit.body?.lead_id;
   check('a canonical lead was created', Boolean(leadId), JSON.stringify(cpnSubmit.body));
 
   // --- 2. the same person at a second brand is NOT a second lead -------------
   console.log('\n2. same person, second brand');
-  const flotationSubmit = await api('/api/ingest?source=ai-flotation&entry=workflow_intake', {
+  const flotationSubmit = await api('/api/leads/ingest?source=ai-flotation&entry=workflow_intake', {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -127,18 +137,22 @@ async function main() {
   // The whole point of keeping `leads` global: one human, one canonical row.
   check(
     'the SAME canonical lead id came back — no duplicate person',
-    Boolean(leadId) && flotationSubmit.body?.leadId === leadId,
-    `cpn=${leadId} flotation=${flotationSubmit.body?.leadId}`,
+    Boolean(leadId) && flotationSubmit.body?.lead_id === leadId,
+    `cpn=${leadId} flotation=${flotationSubmit.body?.lead_id}`,
   );
   check(
     'the second submission was recognised as an existing lead',
-    flotationSubmit.body?.isNewLead === false,
-    `isNewLead=${flotationSubmit.body?.isNewLead}`,
+    flotationSubmit.body?.is_new_lead === false,
+    `is_new_lead=${flotationSubmit.body?.is_new_lead}`,
   );
+
+  // The id a hostile page would try to write into. Named once so the submission and
+  // the assertion below can never drift apart.
+  const SPOOFED_TENANT = '00000000-0000-4000-8000-000000000000';
 
   // --- 3. a browser may NOT name its own tenant -----------------------------
   console.log('\n3. the body cannot claim a tenant (the check that matters most)');
-  const spoofed = await api('/api/ingest?source=cpn&entry=scholarship_interest', {
+  const spoofed = await api('/api/leads/ingest?source=cpn&entry=scholarship_interest', {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -146,20 +160,32 @@ async function main() {
       email: TEST_EMAIL,
       consent_contact: true,
       // A hostile page would send these hoping to write into another tenant.
-      tenant_id: '00000000-0000-4000-8000-000000000000',
+      tenant_id: SPOOFED_TENANT,
       brand_id: '00000000-0000-4000-8000-000000000001',
       page_url: 'https://cpn.org/scholarships',
     }),
   });
   check('submission still accepted', spoofed.status === 200, `status ${spoofed.status}`);
+
+  // The raw payload is captured VERBATIM, by design — `normalized.metadata` is a record
+  // of what the browser SENT, not a decision the server made. An earlier version of this
+  // check searched the whole response body and therefore failed on that legitimate echo,
+  // which is a false alarm: it would report a breach every time the system behaved
+  // correctly. The property that actually matters is that the claimed value is never
+  // ADOPTED as a resolved one, so the verbatim echo is excluded before asserting.
+  const resolvedOnly = { ...spoofed.body };
+  if (resolvedOnly.normalized) {
+    resolvedOnly.normalized = { ...resolvedOnly.normalized, metadata: '<raw echo omitted>' };
+  }
   check(
-    'the claimed tenant_id was not echoed back',
-    !JSON.stringify(spoofed.body).includes('00000000-0000-4000-8000-000000000000'),
-    JSON.stringify(spoofed.body),
+    'the claimed tenant_id was not adopted as a resolved value',
+    !JSON.stringify(resolvedOnly).includes(SPOOFED_TENANT),
+    JSON.stringify(resolvedOnly),
   );
-  // A full assertion that the stored row carries the SERVER-resolved tenant needs a
-  // privileged read; that is covered by the admin-scoped check in step 5 and by the
-  // unit tests. What is proven here is that the value is not honoured on the way in.
+  // The stronger assertion — that no lead_tenant_contexts row carries the spoofed id —
+  // needs a privileged read this spec deliberately does not have. It is covered by the
+  // unit tests and was confirmed directly against the database during Gate 7: the
+  // spoofed tenant produced 0 rows.
 
   // --- 4. tracking is fail-soft, authorization is fail-closed ---------------
   console.log('\n4. fail-soft tracking, fail-closed authorization');

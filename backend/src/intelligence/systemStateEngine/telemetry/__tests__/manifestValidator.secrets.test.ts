@@ -61,7 +61,7 @@ describe('validateManifestShape — secret detection', () => {
 
   test('detects GitHub PAT (ghp_…)', () => {
     const out = validateManifestShape(baseValid({
-      decision_trace: { summary: 'ghp_abcdef1234567890abcdef1234567890abcdef' },
+      decision_trace: { summary: 'ghp_abcdef1234567890abcdef1234567890abcdef' }, // gitleaks:allow
     }));
     expect(out.ok).toBe(false);
     if (out.ok) return;
@@ -70,7 +70,7 @@ describe('validateManifestShape — secret detection', () => {
 
   test('detects GitHub OAuth token (gho_…)', () => {
     const out = validateManifestShape(baseValid({
-      decision_trace: { summary: 'gho_abcdef1234567890abcdef1234567890abcdef' },
+      decision_trace: { summary: 'gho_abcdef1234567890abcdef1234567890abcdef' }, // gitleaks:allow
     }));
     expect(out.ok).toBe(false);
     if (out.ok) return;

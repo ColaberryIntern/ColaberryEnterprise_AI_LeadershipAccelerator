@@ -5,6 +5,7 @@ const mockUpdateTicketStatus = jest.fn(async () => ({}));
 const mockAddTicketComment = jest.fn(async () => ({}));
 const mockGetTicketsByEntity = jest.fn();
 const mockGetTicketCreatorAdminUserId = jest.fn();
+const mockRecordWorkUnitForCaseState = jest.fn();
 
 jest.mock('../../ticketService', () => ({
   createTicket: (...args: any[]) => mockCreateTicket(...args),
@@ -15,11 +16,18 @@ jest.mock('../../ticketService', () => ({
 jest.mock('../../agentBlueprint/ticketCreatorIdentitySeed', () => ({
   getTicketCreatorAdminUserId: (...args: any[]) => mockGetTicketCreatorAdminUserId(...args),
 }));
+// Work Graph auto-recorder (2026-08-23) — syncTicketForCase() now calls this
+// alongside the status sync. Mocked here (this file tests WIRING) — the
+// recorder's own state-machine/idempotency/honesty-gate behavior has its own
+// unit tests in workGraph/__tests__/inboxCaseWorkGraphAutoRecorder.test.ts.
+jest.mock('../../workGraph/inboxCaseWorkGraphAutoRecorder', () => ({
+  recordWorkUnitForCaseState: (...args: any[]) => mockRecordWorkUnitForCaseState(...args),
+}));
 
 import { ensureCaseTicket, syncTicketForCase, postCaseProgressNote } from '../caseTicketService';
 
 function ticket(overrides: Partial<any> = {}) {
-  return { id: randomUUID(), status: 'backlog', created_at: new Date(), ...overrides };
+  return { id: randomUUID(), status: 'backlog', type: 'inbox_case', created_at: new Date(), ...overrides };
 }
 
 beforeEach(() => {
@@ -28,6 +36,7 @@ beforeEach(() => {
   mockAddTicketComment.mockReset().mockResolvedValue({});
   mockGetTicketsByEntity.mockReset();
   mockGetTicketCreatorAdminUserId.mockReset().mockResolvedValue('admin-inboxcaseengine-1');
+  mockRecordWorkUnitForCaseState.mockReset().mockResolvedValue(undefined);
 });
 
 describe('ensureCaseTicket', () => {
@@ -162,6 +171,44 @@ describe('syncTicketForCase — case-state to ticket-status mapping', () => {
     mockGetTicketsByEntity.mockResolvedValue([older, newer]);
     await syncTicketForCase('case-1', 'ASSESSING');
     expect(mockUpdateTicketStatus).toHaveBeenCalledWith(newer.id, 'in_progress', 'agent', 'InboxCaseEngine');
+  });
+
+  // Work Graph auto-recorder wiring (2026-08-23) — Ali, live: "I don't see any
+  // ... work graphs in your examples."
+  describe('Work Graph auto-recorder wiring', () => {
+    it('happy path: calls recordWorkUnitForCaseState with the real ticket id/type and the real CaseState', async () => {
+      const t = ticket({ status: 'todo' });
+      mockGetTicketsByEntity.mockResolvedValue([t]);
+
+      await syncTicketForCase('case-1', 'ASSESSING');
+
+      expect(mockRecordWorkUnitForCaseState).toHaveBeenCalledWith(t.id, 'inbox_case', 'ASSESSING');
+    });
+
+    it('still records the work unit even when the ticket-board BUCKET does not change — the work graph tracks the finer-grained real CaseState, not the coarse 3-bucket ticket status', async () => {
+      const t = ticket({ status: 'in_progress' });
+      mockGetTicketsByEntity.mockResolvedValue([t]);
+
+      await syncTicketForCase('case-1', 'EXECUTING'); // also maps to in_progress — a no-op for updateTicketStatus
+
+      expect(mockUpdateTicketStatus).not.toHaveBeenCalled();
+      expect(mockRecordWorkUnitForCaseState).toHaveBeenCalledWith(t.id, 'inbox_case', 'EXECUTING');
+    });
+
+    it('never called when no ticket exists for the case', async () => {
+      mockGetTicketsByEntity.mockResolvedValue([]);
+
+      await syncTicketForCase('case-1', 'ASSESSING');
+
+      expect(mockRecordWorkUnitForCaseState).not.toHaveBeenCalled();
+    });
+
+    it('failure isolation: recordWorkUnitForCaseState rejecting does not propagate out of syncTicketForCase', async () => {
+      mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'todo' })]);
+      mockRecordWorkUnitForCaseState.mockRejectedValueOnce(new Error('should never happen — internally isolated, but prove the caller is resilient too'));
+
+      await expect(syncTicketForCase('case-1', 'ASSESSING')).resolves.toBeUndefined();
+    });
   });
 });
 

@@ -14,12 +14,23 @@ import {
   getOrganizationStats,
 } from '../services/adminOrgService';
 import type { OrganizationStatus } from '../models/Organization';
+// Shared with the Memory Graph on purpose: one admin, one scope. If the account list and
+// the graph derived tenancy separately they would eventually disagree, and the looser of
+// the two would quietly become the real boundary.
+import { intelligenceScopeForAdmin as adminReadScope } from '../modules/tenancy/adminScopeBridge';
 
 /**
  * Admin business-account endpoints.
  *
  * Route-level auth is `requireAdmin` (see routes/admin/organizationRoutes.ts).
- * These handlers assume that has already run and never re-derive authorization.
+ * These handlers assume that has already run and never re-derive authentication.
+ *
+ * TENANCY, which `requireAdmin` knows nothing about. An admin token proves *who* is
+ * calling, not *which tenants* they may read. Every handler here resolves a scope through
+ * `adminReadScope` and passes it down; the service signatures make that mandatory, so a
+ * handler cannot forget. While `tenant_memberships` is empty the bridge grants
+ * cross-tenant read and logs it — a self-closing ramp that ends for everyone the moment
+ * the first membership row exists.
  *
  * Zod v4 in this repo: parse failures carry `err.issues`, not `err.errors`.
  */
@@ -59,10 +70,10 @@ export async function handleAdminListOrganizations(
 ): Promise<void> {
   try {
     const params = orgListQuerySchema.parse(req.query);
-    const result = await listOrganizations({
-      ...params,
-      status: params.status as OrganizationStatus | undefined,
-    });
+    const result = await listOrganizations(
+      { ...params, status: params.status as OrganizationStatus | undefined },
+      await adminReadScope(req.admin),
+    );
     res.json(result);
   } catch (error) {
     handleZod(error, res, next);
@@ -70,12 +81,12 @@ export async function handleAdminListOrganizations(
 }
 
 export async function handleAdminGetOrganizationStats(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
   try {
-    res.json({ stats: await getOrganizationStats() });
+    res.json({ stats: await getOrganizationStats(await adminReadScope(req.admin)) });
   } catch (error) {
     next(error as Error);
   }
@@ -87,7 +98,7 @@ export async function handleAdminGetOrganization(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const detail = await getOrganizationDetail(routeParam(req, 'id'));
+    const detail = await getOrganizationDetail(routeParam(req, 'id'), await adminReadScope(req.admin));
     if (!detail) {
       res.status(404).json({ error: 'Business account not found' });
       return;
@@ -109,6 +120,7 @@ export async function handleAdminSetOrganizationStatus(
       routeParam(req, 'id'),
       status as OrganizationStatus,
       actingAdmin(req),
+      await adminReadScope(req.admin),
     );
     if (!result) {
       res.status(404).json({ error: 'Business account not found' });
@@ -134,6 +146,7 @@ export async function handleAdminAddCohort(
       body.cohort_id,
       body.seats_sponsored ?? null,
       actingAdmin(req),
+      await adminReadScope(req.admin),
     );
 
     if ('error' in result) {
@@ -158,7 +171,11 @@ export async function handleAdminRemoveCohort(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const removed = await removeCohortFromOrganization(routeParam(req, 'id'), routeParam(req, 'cohortId'));
+    const removed = await removeCohortFromOrganization(
+      routeParam(req, 'id'),
+      routeParam(req, 'cohortId'),
+      await adminReadScope(req.admin),
+    );
     if (!removed) {
       res.status(404).json({ error: 'That cohort is not linked to this business account' });
       return;

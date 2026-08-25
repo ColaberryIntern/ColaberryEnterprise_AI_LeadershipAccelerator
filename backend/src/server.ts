@@ -18,7 +18,9 @@ import trackingRoutes from './routes/trackingRoutes';
 import publicCaseStudyRoutes from './routes/publicCaseStudyRoutes';
 import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
+import careerPortfolioRoutes from './routes/careerPortfolioRoutes';
 import explorerSignalRoutes from './routes/explorerSignalRoutes';
+import consentPromptRoutes from './routes/consentPromptRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
@@ -30,6 +32,7 @@ import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
 import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
+import publicTalentRoutes from './routes/publicTalentRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
@@ -63,6 +66,7 @@ import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchem
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
+import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
@@ -73,8 +77,11 @@ import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
+import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
+import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
+import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
 import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValueRankerSchema';
@@ -120,9 +127,13 @@ app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
 app.use(capePortalRoutes);
+app.use(careerPortfolioRoutes);
 // Explorer Growth OS learner signal ingest (EPIC 2). Dark until
 // EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
 app.use(explorerSignalRoutes);
+// In-app consent prompt (participant-authed). A PROMPT, not a gate: the portal
+// stays fully usable whether a learner accepts, declines or ignores it.
+app.use(consentPromptRoutes);
 app.use(capeAdminRoutes);
 app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
@@ -132,6 +143,10 @@ app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
+// Gate 11 public talent read. Mounted HERE, beside the other public routes and
+// BEFORE adminRoutes, for the reason documented just below: a public route
+// registered downstream of adminRoutes inherits its requireAdmin guard and 401s.
+app.use(publicTalentRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
@@ -2433,6 +2448,24 @@ async function start(): Promise<void> {
   // were reversed. Additive only; no NOT NULL, no backfill (backfills are separate
   // explicitly-invoked scripts, never boot work).
   await ensureMultiTenantSchema();
+  // Refactored AI Delivery OS — Gate 1: 7 delivery tables (engagements, projects, the
+  // student-project bridge, project membership, contracts, the decision ledger and the
+  // append-only event stream), plus the ESC-1 relaxation of
+  // `organizations.owner_enrollment_id` to nullable.
+  //
+  // Runs LAST of the organization-touching modules, and that ordering is load-bearing.
+  // Two earlier statements recreate `organizations` with `owner_enrollment_id UUID NOT
+  // NULL` on a fresh database (the inline DDL above, and ensureOrgAccountSchema). Both
+  // are CREATE TABLE IF NOT EXISTS, so on an existing database they are no-ops and the
+  // ordering is irrelevant — but on a fresh one (dev, preview stacks, CI) the DROP NOT
+  // NULL has to come after them or a brand-new environment would silently keep the
+  // constraint that blocks client organizations, and the failure would only appear the
+  // first time somebody created one.
+  //
+  // Additive apart from that single relaxation; no backfill beyond stamping
+  // organization_type on rows that predate the column.
+  await ensureRefactoredDeliverySchema();
+  await ensureCareerPublicationSchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.
@@ -2448,6 +2481,13 @@ async function start(): Promise<void> {
   // Comment moderation (Community Organizer role) — status/removed_at/removed_by
   // on community_comments, mirroring the existing post-moderation columns.
   await ensureCommunityCommentModerationSchema();
+  // Capstone Record — the two capstone tables plus community_posts.shared_to_portfolio.
+  //
+  // Runs AFTER the community ensures above because the consent column is an ALTER
+  // against community_posts: on a fresh database a reversed ordering drops that
+  // statement into its catch and leaves consent unreadable, which reads at runtime
+  // as "nobody consented" rather than as a missing column.
+  await ensureCapstoneSchema();
   // Free-trial Organization / Manager layer — org + roster tables (idempotent).
   await ensureOrgSchema();
   // Student self-serve subscriptions (idempotent).
@@ -2579,6 +2619,9 @@ async function start(): Promise<void> {
   // AI Leadership / AI Staff hierarchy — reports_to_type/reports_to_id, superseding
   // reports_to_org_member_id above as the resolver's source of truth. Additive, idempotent, no flag.
   await ensureAiAgentHierarchySchema();
+  // AI Workforce Reset, Phase C — autonomy_level (docs/ai-governance/abac-design.md's
+  // 4-level ladder), required at agent reactivation time. Additive, idempotent, no flag.
+  await ensureAiAgentAutonomyLevelSchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

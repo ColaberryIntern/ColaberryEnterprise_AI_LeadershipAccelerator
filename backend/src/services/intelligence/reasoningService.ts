@@ -9,14 +9,15 @@ import { Op } from 'sequelize';
 import GraphNode from '../../models/GraphNode';
 import { neighbors } from './graphService';
 import { findEmployee } from '../workforce/orgRegistry';
+import { IntelligenceScope, graphScopeWhere } from '../../modules/tenancy/intelligenceScope';
 
 /** A domain's reasoning: its recommendations + the graph context behind each. */
-export async function reason(domain: string) {
-  const recNodes = await GraphNode.findAll({ where: { node_type: 'Recommendation', owner: domain }, order: [['trust_score', 'DESC']], limit: 20 });
+export async function reason(domain: string, scope: IntelligenceScope) {
+  const recNodes = await GraphNode.findAll({ where: { ...graphScopeWhere(scope), node_type: 'Recommendation', owner: domain }, order: [['trust_score', 'DESC']], limit: 20 });
   const director = findEmployee(domain);
   const recommendations = [];
   for (const rn of recNodes) {
-    const hood = await neighbors(rn.id);
+    const hood = await neighbors(rn.id, scope);
     const gen = hood.relationships.find((r) => r.edge_type === 'GENERATED_BY');
     recommendations.push({
       id: rn.id, title: rn.label, trust: Math.round(rn.trust_score * 100) / 100, metadata: rn.metadata,
@@ -28,8 +29,8 @@ export async function reason(domain: string) {
 }
 
 /** Explain any node by walking its neighborhood — self-explaining intelligence. */
-export async function explainNode(id: string) {
-  const hood = await neighbors(id);
+export async function explainNode(id: string, scope: IntelligenceScope) {
+  const hood = await neighbors(id, scope);
   const outs = hood.relationships.filter((r) => r.direction === 'out');
   const ins = hood.relationships.filter((r) => r.direction === 'in');
   const lines = [

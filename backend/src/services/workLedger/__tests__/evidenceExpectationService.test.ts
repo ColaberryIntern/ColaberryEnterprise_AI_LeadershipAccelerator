@@ -12,21 +12,24 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-// One row per real TicketType value from models/Ticket.ts's own union — 17 types,
+// One row per real TicketType value from models/Ticket.ts's own union — 18 types,
 // spelled out here (not imported as a type, since types don't exist at runtime) so a
 // mismatch between this list and the real union is visible in review. The
 // anti-vacuity floor below asserts this list's length matches the real enum's
 // cardinality, so silently dropping a case here fails loudly rather than passing
-// vacuously.
+// vacuously. 'inbox_case' added 2026-08-23 — the real writer had bypassed this
+// union AND this classifier entirely via a `type: 'inbox_case' as any` cast; this
+// exact test would have caught that the moment it was added properly, instead of
+// silently.
 const ALL_TICKET_TYPES = [
   'task', 'bug', 'feature', 'curriculum', 'agent_action', 'strategic',
   'strategic_initiative', 'ai_optimization', 'agent_restructure', 'agent_creation',
   'workflow_redesign', 'system_automation', 'company_directive', 'workforce_decision',
-  'bpos_execution', 'student_support', 'reese_autonomous_outreach',
+  'bpos_execution', 'student_support', 'reese_autonomous_outreach', 'inbox_case',
 ] as const;
 
 describe('getEvidenceExpectations — anti-vacuity floor', () => {
-  it('exercises exactly the 17 real TicketType values from models/Ticket.ts (fails loudly if the enum grows without a matching test case)', () => {
+  it('exercises exactly the 18 real TicketType values from models/Ticket.ts (fails loudly if the enum grows without a matching test case)', () => {
     const source = require('fs').readFileSync(
       require('path').join(__dirname, '../../../models/Ticket.ts'),
       'utf8',
@@ -34,7 +37,7 @@ describe('getEvidenceExpectations — anti-vacuity floor', () => {
     const unionMatch = source.match(/export type TicketType =([\s\S]*?);/);
     expect(unionMatch).toBeTruthy();
     const realTypes = Array.from(unionMatch![1].matchAll(/'([a-z_]+)'/g)).map((m) => m[1]);
-    expect(realTypes.length).toBeGreaterThanOrEqual(17);
+    expect(realTypes.length).toBeGreaterThanOrEqual(18);
     expect(new Set(ALL_TICKET_TYPES)).toEqual(new Set(realTypes));
   });
 });
@@ -58,6 +61,7 @@ describe('getEvidenceExpectations — per-type defaults (created_by_type: agent,
     bpos_execution: { visualProof: 'not_applicable', workGraph: 'expected', decisions: 'not_applicable' },
     student_support: { visualProof: 'not_applicable', workGraph: 'not_applicable', decisions: 'not_applicable' },
     reese_autonomous_outreach: { visualProof: 'expected', workGraph: 'not_applicable', decisions: 'not_applicable' },
+    inbox_case: { visualProof: 'not_applicable', workGraph: 'expected', decisions: 'expected' },
   };
 
   it.each(ALL_TICKET_TYPES)('%s classifies exactly as the grounded B3 table specifies', (type) => {

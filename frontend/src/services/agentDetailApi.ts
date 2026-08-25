@@ -23,6 +23,15 @@ export interface AgentDetailTicket {
   updated_at: string | null;
 }
 
+/** One tool's own reads/produces, so the UI can show a per-tool drill-down
+ * instead of only the flattened union below. */
+export interface AgentDetailToolCapability {
+  tool: string;
+  reads: string[];
+  produces: string[];
+  documented: boolean;
+}
+
 /** What this agent reads / produces — derived from its real, live tools_granted
  * (+ real, live observed ticket types it creates), never hand-written free text.
  * See backend/src/services/reese/agentToolCapabilities.ts. */
@@ -31,6 +40,7 @@ export interface AgentDetailCapabilities {
   produces: string[];
   undocumented_tools: string[];
   produced_ticket_types: string[];
+  by_tool: AgentDetailToolCapability[];
 }
 
 /** This agent's own real reports_to chain (org-chart hierarchy build,
@@ -40,6 +50,34 @@ export interface AgentDetailCapabilities {
 export interface AgentDetailReportsTo {
   trail: string[];
   resolved_human: { id: string; name: string; email: string } | null;
+  /** The direct next hop, when it's another agent — real id/name so the UI
+   * can link straight to that agent's own detail page. `null` when this
+   * agent reports directly to a human, or the configured target doesn't
+   * resolve to a real agent row. */
+  immediate_agent: { id: string; name: string } | null;
+}
+
+/** Trust Contract, "Instant" dimension (2026-08-24) — grounded in Ram
+ * Katamaraja's *Trust Before Intelligence* INPACT(tm) framework, per Ali's
+ * explicit ask. Every field is a real, pre-existing `AiAgent` column that was
+ * never surfaced on this page before. `null`/`0` for an agent invoked outside
+ * the generic scheduler wrapper (e.g. Reese, InboxCaseEngine) is honest, not
+ * a fabricated "no data yet" placeholder. */
+export interface AgentDetailTrustContract {
+  trigger_type: string | null;
+  schedule: string | null;
+  status: string;
+  last_run_at: string | null;
+  run_count: number;
+  error_count: number;
+  avg_duration_ms: number | null;
+  last_error: string | null;
+  last_error_at: string | null;
+  /** Trust Contract fix (2026-08-24) — the real, unlimited "most recent ticket
+   * touched" timestamp, for agents (Reese, InboxCaseEngine) `last_run_at`
+   * never covers since they're event-driven, not cron-tracked. `null` only
+   * when the agent genuinely has zero ticket history. */
+  last_activity_at: string | null;
 }
 
 export interface AgentDetail {
@@ -54,6 +92,9 @@ export interface AgentDetail {
     persona_version: string | null;
     enabled: boolean;
     created_at: string | null;
+    /** AI Workforce Reset, Phase C (2026-08-24) — Permitted dimension of the
+     * Trust Contract; `null` until this agent is reactivated through that flow. */
+    autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
   };
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';
@@ -66,6 +107,7 @@ export interface AgentDetail {
   tickets: AgentDetailTicket[];
   capabilities: AgentDetailCapabilities;
   reports_to: AgentDetailReportsTo | null;
+  trust_contract: AgentDetailTrustContract;
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
