@@ -201,6 +201,10 @@ export const ROADMAP_STATUS_GLYPHS: Readonly<Record<CaseStudyRoadmapStatus, stri
 export const ARTIFACT_TYPE_LABELS: Readonly<Record<CaseStudyArtifactType, string>> = Object.freeze({
   screenshot: 'Screenshot',
   architecture: 'Architecture',
+  // Named for what it IS, not for what it shows. "Photograph" makes no claim
+  // about the delivered system; "Product photo" would make one this artifact
+  // type exists precisely to prevent.
+  photo: 'Photograph',
   demo: 'Demo',
   deck: 'Deck',
   roadmap: 'Roadmap',
@@ -221,6 +225,34 @@ export const ARTIFACT_ACCESS_LABELS: Readonly<Record<CaseStudyArtifactAccess, st
     open: 'Open',
     request: 'Available on request',
   });
+
+/**
+ * What a control over one artifact says, DERIVED from the type label rather than
+ * written out a second time.
+ *
+ * A second table would drift: somebody adds an artifact type, fills in
+ * `ARTIFACT_TYPE_LABELS`, and the button silently keeps saying "Open artifact"
+ * with nothing failing. Deriving it means the two can never disagree, and the
+ * `Record<CaseStudyArtifactType, string>` above is what makes the derivation
+ * total.
+ *
+ * IT NAMES THE KIND OF THING, NEVER THE OUTCOME. "Open screenshot" is a promise
+ * this code can keep - the href is an approved public URL and pressing it opens
+ * it. "See the results" would be a promise about what the reader will find,
+ * which nothing here has looked at.
+ */
+export function openArtifactLabel(artifactType: CaseStudyArtifactType): string {
+  return `Open ${ARTIFACT_TYPE_LABELS[artifactType].toLowerCase()}`;
+}
+
+/**
+ * The label on the request control, which is a LINK TO A CONTACT ROUTE and not a
+ * fulfilment endpoint - none exists. "Request access" names the errand the
+ * reader is starting, and the accessible name says which artifact it is about;
+ * neither promises that the artifact will arrive. The control renders at all
+ * only when a caller supplies a real destination.
+ */
+export const ARTIFACT_REQUEST_LABEL = 'Request access';
 
 export const TIMELINE_SOURCE_LABELS: Readonly<Record<CaseStudyTimelineSourceKind, string>> =
   Object.freeze({

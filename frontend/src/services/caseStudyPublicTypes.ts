@@ -71,9 +71,18 @@ export type CaseStudyRoadmapStatus =
   | 'not_pursued'
   | 'unknown';
 
+/**
+ * `photo` is ATMOSPHERE AND NEVER EVIDENCE. The server decides what that means
+ * (`caseStudyPublicSections.ts`): a photograph ranks below a screenshot and an
+ * architecture image for the hero, it arrives stamped
+ * `presentation: 'atmosphere'`, and one whose caption claims to show delivered
+ * work never reaches the wire at all. Nothing on the client re-derives any of
+ * that — it reads `presentation`.
+ */
 export type CaseStudyArtifactType =
   | 'screenshot'
   | 'architecture'
+  | 'photo'
   | 'demo'
   | 'deck'
   | 'roadmap'
@@ -170,6 +179,17 @@ export interface PublicCaseStudyArchitecture {
     readonly nodes: readonly PublicCaseStudyArchitectureNode[];
     readonly edges: readonly PublicCaseStudyArchitectureEdge[];
   } | null;
+  /**
+   * Mermaid source for a chart a PERSON drew, or null — which is the normal
+   * case, and the band hides entirely when it is null.
+   *
+   * It is an addition to `diagram`, never a replacement for it.
+   * `CaseStudyArchitecture` renders the verified node and edge lists as text on
+   * purpose, and that stays. This is the human-authored view, labelled as such,
+   * so a reader can tell which picture the repository evidenced and which one
+   * somebody chose to draw.
+   */
+  readonly diagramSource: string | null;
 }
 
 export interface PublicCaseStudyMeasurement {
@@ -203,10 +223,19 @@ export type PublicCaseStudyContributor =
     };
 
 /** An approved artifact. `request` carries no url, so no control can link one. */
+/**
+ * What an image on this page is allowed to MEAN. `evidence` is a picture of the
+ * delivered work; `atmosphere` is a photograph, which shows a room and
+ * evidences nothing. The server derives it from `artifactType` and the client
+ * never re-derives it, so there is one definition and it is not on the client.
+ */
+export type PublicArtifactPresentation = 'evidence' | 'atmosphere';
+
 export type PublicCaseStudyArtifact =
   | {
       readonly access: 'open';
       readonly artifactType: CaseStudyArtifactType;
+      readonly presentation: PublicArtifactPresentation;
       readonly title: string;
       readonly description: string | null;
       readonly url: string;
@@ -215,6 +244,7 @@ export type PublicCaseStudyArtifact =
   | {
       readonly access: 'request';
       readonly artifactType: CaseStudyArtifactType;
+      readonly presentation: PublicArtifactPresentation;
       readonly title: string;
       readonly description: string | null;
     };

@@ -108,9 +108,14 @@ function perfectContent(): CaseStudySnapshotContent {
       { label: 'Hourly incremental runs', status: 'in_progress', verification: { class: 'pending', method: 'internal' } },
     ],
     contributors: [{ displayMode: 'role_only', role: 'Data engineer', kind: 'colaberry_team' }],
+    // Both carry a `publicUrl`, because `artifacts.two_images` counts only an
+    // image a reader can actually see: `projectArtifacts` drops a public
+    // artifact with no http(s) address, so an approved row without one is a
+    // blank space on the page. A fixture that claimed to be complete while
+    // showing nothing would make that rule agree with an empty page.
     artifacts: [
-      { id: 'a1', artifactType: 'screenshot', title: 'Run duration dashboard', sourceType: 'repo', visibility: 'public', status: 'approved' },
-      { id: 'a2', artifactType: 'architecture', title: 'Pipeline architecture', sourceType: 'repo', visibility: 'public', status: 'approved' },
+      { id: 'a1', artifactType: 'screenshot', title: 'Run duration dashboard', sourceType: 'repo', visibility: 'public', status: 'approved', publicUrl: 'https://media.example.org/run-duration.png' },
+      { id: 'a2', artifactType: 'architecture', title: 'Pipeline architecture', sourceType: 'repo', visibility: 'public', status: 'approved', publicUrl: 'https://media.example.org/pipeline.png' },
     ],
     repositories: [{
       repoOwner: 'colaberry', repoName: 'reconciliation',

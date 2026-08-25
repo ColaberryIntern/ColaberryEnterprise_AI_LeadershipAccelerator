@@ -122,6 +122,15 @@ export interface PublicCaseStudyArchitecture {
       readonly label: string | null;
     }[];
   } | null;
+  /**
+   * Mermaid source for the human-authored chart, or null.
+   *
+   * SEPARATE FROM `diagram` BECAUSE THEY ARE DIFFERENT CLAIMS. `diagram` is what
+   * the repository evidenced, rendered as text. This is what a person drew. The
+   * renderer shows both, labels this one as the human-authored view, and hides
+   * this band entirely when the field is null — which is the normal case.
+   */
+  readonly diagramSource: string | null;
 }
 
 export interface PublicCaseStudyMeasurement {
@@ -155,6 +164,19 @@ export type PublicCaseStudyContributor =
     };
 
 /**
+ * WHAT AN IMAGE ON THIS PAGE IS ALLOWED TO MEAN.
+ *
+ * `evidence` is a picture of the delivered work — a screenshot, an architecture
+ * image. `atmosphere` is a photograph, which shows a room or a working session
+ * and evidences nothing about the system. The distinction is the whole reason
+ * `photo` exists as an artifact type, and it is DERIVED FROM THE TYPE by
+ * `artifactPresentation()`, never supplied by whoever uploaded the file — an
+ * author-set flag would make "is this evidence?" an editorial field, which is
+ * exactly the decision that must not be editable.
+ */
+export type PublicArtifactPresentation = 'evidence' | 'atmosphere';
+
+/**
  * An approved artifact. No `status` field exists, so a `candidate` or `rejected`
  * artifact has no shape to occupy; and `private` is not an `access` variant, so a
  * private artifact is dropped rather than rendered as a dead control. Spec §23:
@@ -164,6 +186,7 @@ export type PublicCaseStudyArtifact =
   | {
       readonly access: 'open';
       readonly artifactType: CaseStudyArtifactType;
+      readonly presentation: PublicArtifactPresentation;
       readonly title: string;
       readonly description: string | null;
       readonly url: string;
@@ -172,6 +195,7 @@ export type PublicCaseStudyArtifact =
   | {
       readonly access: 'request';
       readonly artifactType: CaseStudyArtifactType;
+      readonly presentation: PublicArtifactPresentation;
       readonly title: string;
       readonly description: string | null;
     };
