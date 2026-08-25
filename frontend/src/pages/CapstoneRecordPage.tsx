@@ -17,10 +17,18 @@ import portalApi from '../utils/portalApi';
  * target is worse than no link.
  */
 
-const INK = '#16232B';
-const TEAL = '#367895';
-const MUTED = '#6B7B85';
-const LINE = '#E3E9EC';
+/**
+ * Colours come from the design tokens (colaberry/tokens/colors.css), not from
+ * hex literals. The tokens carry a `[data-theme="dark"]` variant, so hardcoding
+ * near-black ink here would render invisible the moment anything sets that
+ * attribute — and this is the one page in the app most likely to be opened by a
+ * stranger on an unknown device.
+ */
+const INK = 'var(--text-strong)';
+const BODY = 'var(--text-body)';
+const ACCENT = 'var(--text-link)';
+const MUTED = 'var(--text-muted)';
+const LINE = 'var(--border-subtle)';
 
 interface RecordArtifact {
   week: number; title: string; filename: string; path: string;
@@ -100,7 +108,7 @@ function CapstoneRecordPage() {
   if (loading) {
     return (
       <div className="container py-5 text-center">
-        <div className="spinner-border" style={{ color: TEAL }} role="status">
+        <div className="spinner-border" style={{ color: ACCENT }} role="status">
           <span className="visually-hidden">Loading…</span>
         </div>
       </div>
@@ -130,7 +138,7 @@ function CapstoneRecordPage() {
           {identity.full_name}
         </h1>
         {identity.headline && (
-          <p style={{ fontSize: 18, color: TEAL, fontWeight: 600, margin: '6px 0 0' }}>
+          <p style={{ fontSize: 18, color: ACCENT, fontWeight: 600, margin: '6px 0 0' }}>
             {identity.headline}
           </p>
         )}
@@ -141,7 +149,7 @@ function CapstoneRecordPage() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 20 }}>
           {identity.demo_url && (
             <a href={identity.demo_url} target="_blank" rel="noopener noreferrer"
-              className="btn btn-sm" style={{ background: TEAL, color: '#fff', fontWeight: 600 }}>
+              className="btn btn-sm" style={{ background: 'var(--brand-accent)', color: 'var(--text-on-accent)', fontWeight: 600 }}>
               <i className="ri-external-link-line me-1" />See it running
             </a>
           )}
@@ -167,7 +175,7 @@ function CapstoneRecordPage() {
             <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>{system.project_name}</h3>
           )}
           {system.descriptor && (
-            <p style={{ fontSize: 15.5, lineHeight: 1.65, color: '#33454F', margin: 0 }}>
+            <p style={{ fontSize: 15.5, lineHeight: 1.65, color: BODY, margin: 0 }}>
               {system.descriptor}
             </p>
           )}
@@ -184,7 +192,7 @@ function CapstoneRecordPage() {
         <Section title="Where they started">
           <blockquote style={{
             margin: 0, paddingLeft: 16, borderLeft: `3px solid ${LINE}`,
-            fontSize: 15.5, lineHeight: 1.65, color: '#33454F',
+            fontSize: 15.5, lineHeight: 1.65, color: BODY,
           }}>{bookend.opening}</blockquote>
         </Section>
       )}
@@ -205,7 +213,7 @@ function CapstoneRecordPage() {
                       <td>
                         {href
                           ? <a href={href} target="_blank" rel="noopener noreferrer"
-                              style={{ color: TEAL, fontWeight: 600, textDecoration: 'none' }}>{a.title}</a>
+                              style={{ color: ACCENT, fontWeight: 600, textDecoration: 'none' }}>{a.title}</a>
                           : <span style={{ fontWeight: 600 }}>{a.title}</span>}
                         <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2 }}>
                           {a.built_on}
@@ -251,7 +259,7 @@ function CapstoneRecordPage() {
               </div>
               <div style={{ fontSize: 15.5, fontWeight: 600, marginTop: 4 }}>{p.headline}</div>
               {p.body && (
-                <p style={{ fontSize: 14.5, lineHeight: 1.65, color: '#33454F', margin: '4px 0 0', whiteSpace: 'pre-line' }}>
+                <p style={{ fontSize: 14.5, lineHeight: 1.65, color: BODY, margin: '4px 0 0', whiteSpace: 'pre-line' }}>
                   {p.body}
                 </p>
               )}
@@ -264,8 +272,8 @@ function CapstoneRecordPage() {
       {bookend.closing && (
         <Section title="Where they landed">
           <blockquote style={{
-            margin: 0, paddingLeft: 16, borderLeft: `3px solid ${TEAL}`,
-            fontSize: 15.5, lineHeight: 1.65, color: '#33454F',
+            margin: 0, paddingLeft: 16, borderLeft: `3px solid ${ACCENT}`,
+            fontSize: 15.5, lineHeight: 1.65, color: BODY,
           }}>{bookend.closing}</blockquote>
         </Section>
       )}
