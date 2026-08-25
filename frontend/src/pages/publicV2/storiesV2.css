@@ -26,11 +26,39 @@
 /* ------------------------------------------------------------- masthead --- */
 
 /* The ledger sits in the dark masthead, so its type has to invert. The counts
-   themselves come from the API on every response; nothing here supplies one. */
+   themselves come from the API on every response; nothing here supplies one.
+
+   THE BACKGROUND MUST INVERT TOO, and forgetting it is why this shipped broken.
+   `.cbv2-cs-ledger__item` carries `background: var(--surface-subtle)` from
+   caseStudy.css. This masthead is a DARK ISLAND INSIDE A LIGHT-THEME PAGE, so
+   that token still resolves to its light value (--neutral-50, #F8F8F7) even
+   though .cbv2-pagehero paints --surface-inverse behind it. Inverting only the
+   type therefore put white text on a near-white tile: measured 1.06:1, against
+   the 3:1 WCAG AA needs for large text. The figures were invisible.
+
+   `transparent` rather than a dark fill, because there is no token for "subtle
+   surface on an inverse background" and a raw rgba() would be a second palette
+   by another name - which caseStudyTokens.test.ts bans outright. The hero shows
+   through and --border-strong still describes the tile.
+
+   THIS IS THE SECOND TIME. servicesV2.css:24-26 records the same dark-on-dark
+   defect at 1.03:1 during prototype review, on headings rather than tiles. The
+   shape recurs because inverting a component on a dark surface means overriding
+   every colour-bearing property it inherits, and `background` is the one that
+   looks fine in review: the markup is right, the tokens are all valid, and the
+   DOM probe passes. Only a rendered pixel disagrees.
+
+   NOT CATCHABLE BY THE TOKEN TEST, which is why the guard lives elsewhere. Every
+   token here is real and correctly spelled; it is the COMBINATION that fails.
+   The regression guard is the computed-contrast assertion in
+   tests/systemV2/caseStudyPublic.e2e.js, which is what found it. */
 .cbv2-stories__ledger { margin-top: var(--space-12); }
 .cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__value { color: var(--text-on-inverse); }
 .cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__label { color: var(--text-on-inverse); }
-.cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__item { border-color: var(--border-strong); }
+.cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__item {
+  background: transparent;
+  border-color: var(--border-strong);
+}
 
 /* --------------------------------------------------------------- layout --- */
 
