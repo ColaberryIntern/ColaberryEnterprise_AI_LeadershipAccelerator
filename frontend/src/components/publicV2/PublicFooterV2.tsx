@@ -60,6 +60,21 @@ const GROUPS: readonly FooterGroup[] = [
     links: [
       { label: 'Proof Room', to: '/proof' },
       { label: 'Map an opportunity', to: '/lab' },
+      /*
+       * `/stories` and NOT `/stories/<a-slug>`.
+       *
+       * The detail route registered in App.tsx is `/stories/:slug` - a pattern,
+       * because a published project record has no fixed address the way a
+       * service page does. Site chrome may only link a stable destination: a
+       * footer pointing at one record would become a dead link in the chrome of
+       * every page the day that record is unpublished, and unpublishing is a
+       * normal operation here (spec section 35), not an incident. The index
+       * links every published record, so the detail pages are one click away and
+       * a crawler reaches all of them from a URL that cannot rot.
+       *
+       * `consentAndSeo.test.tsx` fails if a `/stories/...` link ever appears in
+       * this list.
+       */
       { label: 'Builder stories', to: '/stories' },
     ],
   },

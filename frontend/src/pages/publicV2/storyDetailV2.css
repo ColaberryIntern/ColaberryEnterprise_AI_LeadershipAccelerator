@@ -1,0 +1,230 @@
+/* ============================================================================
+   storyDetailV2.css -- the Enterprise detail surface at /stories/:slug.
+   Design-system tokens only (colaberry/tokens/*.css); cbv2- namespace only.
+
+   THE TOKEN THAT DOES NOT EXIST. The V2 spacing scale runs 0,1,2,3,4,5,6,8,10,
+   12,16,20,24,32. There is no --space-7. A rule asking for one resolves to
+   NOTHING -- not a fallback, not a default, an absence -- which is why
+   `padding: var(--space-7)` looked correct in review for as long as the old
+   stories card shipped it. Sixteen live references remain across eight other V2
+   stylesheets (deferred, D-07); this file adds no seventeenth, and
+   `storyDetailV2Contract.test.ts` fails if any var(--...) here names a token the
+   V2 system does not declare.
+
+   KNOWN COUPLING, recorded rather than relied on silently. This page uses
+   .cbv2-pagehero / .cbv2-pagehero__lede / .cbv2-eyebrow--onDark (servicesV2.css),
+   .cbv2-section / .cbv2-section--inverse / .cbv2-lede / .cbv2-wrap--narrow
+   (homeV2.css), .cbv2-wrap / .cbv2-btn (publicV2.css), .cbv2-rv
+   (cinematicV2.css) and the .cbv2-cs-* component classes
+   (components/caseStudy/caseStudy.css). Those resolve only because App.tsx
+   imports every V2 page STATICALLY. If any V2 route is ever lazy-loaded, the
+   shared primitives must move into publicV2.css first or this page's layout
+   silently degrades -- which is why this route is not lazy either.
+   ========================================================================== */
+
+.cbv2-story { display: block; }
+
+/* ------------------------------------------------------------------ hero --- */
+
+.cbv2-story__hero { display: grid; justify-items: start; gap: var(--space-5); min-width: 0; }
+
+/* The way back to the index, above the title rather than buried at the end. */
+.cbv2-story__crumb {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  color: var(--text-on-inverse);
+}
+.cbv2-story__crumb a { color: inherit; }
+
+.cbv2-story__hero h1 { margin: 0; overflow-wrap: anywhere; }
+.cbv2-story__hero .cbv2-pagehero__lede { margin: 0; }
+
+/* The badge sits on the dark masthead, so both halves have to invert. Colour
+   carries nothing here: the class and the method are words. */
+.cbv2-pagehero .cbv2-story__badge { color: var(--text-on-inverse); }
+.cbv2-pagehero .cbv2-story__badge .cbv2-cs-verify__method { color: var(--text-on-inverse); }
+
+/* The context strip. `minmax(0, ...)` so a long programme name cannot widen a
+   column and push the page sideways at 320px. */
+.cbv2-story__facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  margin: 0;
+  width: 100%;
+}
+
+@media (min-width: 48rem) {
+  .cbv2-story__facts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+}
+
+.cbv2-story__fact { display: grid; gap: var(--space-1); min-width: 0; }
+
+.cbv2-story__term {
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cbv2-story__value { margin: 0; overflow-wrap: anywhere; }
+
+.cbv2-pagehero .cbv2-story__term { color: var(--text-on-inverse); opacity: 0.75; }
+.cbv2-pagehero .cbv2-story__value { color: var(--text-on-inverse); }
+
+/* --------------------------------------------------------- hero figures --- */
+
+/* A headline figure only reaches this list with its evidence context attached
+   (spec section 23), so the context rows are part of the card rather than a
+   footnote somewhere below it. */
+.cbv2-story__metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  list-style: none;
+}
+
+@media (min-width: 48rem) {
+  .cbv2-story__metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+}
+
+.cbv2-story__metric {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story__metric-context { display: grid; gap: var(--space-2); margin: 0; }
+.cbv2-story__limits {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------- sections --- */
+
+.cbv2-story__section { min-width: 0; }
+.cbv2-story__body { display: grid; gap: var(--space-6); min-width: 0; }
+.cbv2-story__body h2 { margin: 0; overflow-wrap: anywhere; }
+.cbv2-story__block { display: grid; gap: var(--space-4); min-width: 0; }
+
+/* ----------------------------------------------------------- contributors --- */
+
+.cbv2-story__people {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 48rem) {
+  .cbv2-story__people { grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); }
+}
+
+.cbv2-story__person {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
+}
+.cbv2-story__person-name { font-weight: var(--fw-medium); }
+.cbv2-story__person-role { font-size: var(--fs-body-sm); color: var(--text-muted); }
+
+/* ---------------------------------------------------------- repositories --- */
+
+.cbv2-story__repos {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cbv2-story__repo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
+}
+.cbv2-story__repo-link { font-weight: var(--fw-medium); }
+.cbv2-story__repo-date { font-size: var(--fs-caption); color: var(--text-muted); }
+
+/* ------------------------------------------------------- notes and state --- */
+
+/* Disclosures about what is NOT shown -- a withheld repository, an unnamed
+   contributor. They read as notes, never as controls, because there is nothing
+   to press: the withheld thing has no public address to request. */
+.cbv2-story__note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-sunken);
+  border-left: var(--border-3) solid var(--chart-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-relaxed);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story__state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-8);
+  background: var(--surface-sunken);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  line-height: var(--lh-relaxed);
+  overflow-wrap: anywhere;
+}
+.cbv2-story__state p { margin: 0; }
+
+/* ------------------------------------------------------------------ share --- */
+
+.cbv2-story__share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+/* The live region is present from first paint, so a change to its text is
+   announced rather than merely inserted. */
+.cbv2-story__share-state {
+  font-size: var(--fs-body-sm);
+  color: var(--text-on-inverse);
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------- not found --- */
+
+.cbv2-story__missing { display: grid; justify-items: start; gap: var(--space-6); }
+.cbv2-story__missing h1 { margin: 0; }
+.cbv2-story__missing p { margin: 0; }
+
+/* ------------------------------------------------------------------- cta --- */
+
+.cbv2-story__cta { display: grid; justify-items: center; text-align: center; }

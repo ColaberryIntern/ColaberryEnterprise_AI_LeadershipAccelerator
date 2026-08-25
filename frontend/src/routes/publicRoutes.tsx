@@ -5,7 +5,6 @@ import ProgramPage from '../pages/ProgramPage';
 import PricingPage from '../pages/PricingPage';
 import SponsorshipPage from '../pages/SponsorshipPage';
 import AdvisoryPage from '../pages/AdvisoryPage';
-import CaseStudiesPage from '../pages/CaseStudiesPage';
 import EnrollPage from '../pages/EnrollPage';
 import EnrollSuccessPage from '../pages/EnrollSuccessPage';
 import EnrollCancelPage from '../pages/EnrollCancelPage';

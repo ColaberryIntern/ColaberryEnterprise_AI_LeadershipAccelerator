@@ -47,6 +47,8 @@ const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
 const GovernanceCommandCenter = lazy(() => import('../pages/admin/GovernanceCommandCenter'));
 const AdminGovernancePolicyPage = lazy(() => import('../pages/admin/AdminGovernancePolicyPage'));
 const AdminProjectOverview = lazy(() => import('../pages/admin/AdminProjectOverview'));
+const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesPage'));
+const AdminCaseStudyDetailPage = lazy(() => import('../pages/admin/AdminCaseStudyDetailPage'));
 const InboxCOSPage = lazy(() => import('../pages/admin/inbox/InboxCOSPage'));
 const ContentQueuePage = lazy(() => import('../pages/admin/ContentQueuePage'));
 const AdminSourcesPage = lazy(() => import('../pages/admin/AdminSourcesPage'));
@@ -127,6 +129,17 @@ const adminRoutes = (
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
         <Route path="/admin/governance-policy" element={<AdminGovernancePolicyPage />} />
         <Route path="/admin/projects" element={<AdminProjectOverview />} />
+        {/* Case Studies: the review desk for the publishable projection of a
+            Project. The LIST is declared before the ":id" detail route.
+            Under react-router v6 that ordering is a READABILITY convention, not
+            a correctness requirement: v6 ranks by specificity, so a literal
+            "/admin/case-studies/new" beats ":id" whichever order they appear in
+            (probe-verified against 6.28.1). An earlier version of this comment
+            claimed the literal would "resolve as an id" — that is v5 behaviour
+            and is wrong here. Kept in this order anyway so the file reads the
+            same way as the business-account pair above. */}
+        <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
+        <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />
         <Route path="/admin/sources" element={<AdminSourcesPage />} />

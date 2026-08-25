@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://colaberry.com/schemas/case-study/case-study.schema.json",
+  "title": "Colaberry Case Study repository manifest",
+  "description": "Optional `case-study.json` at the root of a repository. Every field is optional: a manifest is authoritative ONLY for the fields it declares, and only relative to deterministic repository inference (source-priority tier 5, spec §9). Declaring `publication.requested_surfaces` never grants publication, and declaring an entry under `outcomes` never verifies it — outcome metrics are recorded with verification_class `pending` until a human verifies them. Unknown properties are ACCEPTED but stripped, reported back to the admin, and never authoritative; that is why `additionalProperties` is true. Canonical prose: docs/case-study/case-study-schema.md. Enforcing implementation: backend/src/services/caseStudy/caseStudyManifestReader.ts.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "description": "Manifest format version. Only 1 exists. Anything else is rejected rather than guessed at.",
+      "const": 1
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "slug": {
+          "description": "Lowercase kebab-case identifier. A suggestion: the platform still owns slug allocation and collision handling.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "industry": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "capabilities": {
+          "description": "Capability facets, e.g. rag, document-ai, agents.",
+          "type": "array",
+          "maxItems": 40,
+          "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+        },
+        "stack": {
+          "description": "Technologies. Repository inference also derives these; a declared list takes precedence over inference only.",
+          "type": "array",
+          "maxItems": 40,
+          "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+        },
+        "method": {
+          "description": "Delivery method label, e.g. AADM.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    },
+    "built_by": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "description": "Who did the work. Same vocabulary as CaseStudyBuiltByType in backend/src/types/caseStudy.ts.",
+          "type": "string",
+          "enum": ["learner", "intern", "client_team", "colaberry_team", "ai_flotation_team", "joint_team"]
+        },
+        "program": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
+    "publication": {
+      "description": "A REQUEST, never an authorisation. The reader returns `authorizesPublication: false` for every manifest without exception; only the publish gate can publish, and in Phase 1 only the `enterprise` surface is publishable at all.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "requested_surfaces": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "string",
+            "enum": ["enterprise", "training", "ai-flotation", "refactored"]
+          }
+        }
+      }
+    },
+    "consent": {
+      "description": "Consent signals from the repository author. They can only ever REMOVE permission relative to the platform record; they never grant naming rights that consent records do not already carry.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "organization_named": { "type": "boolean" },
+        "builders_named": { "type": "boolean" },
+        "public_repo_link": { "type": "boolean" }
+      }
+    },
+    "repos": {
+      "description": "Evidence repositories. Recorded, never fetched by the reader: no URL in a manifest is ever dereferenced.",
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["url"],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["primary", "frontend", "backend", "agents", "data", "infra", "docs", "evals", "demo", "other"]
+          },
+          "url": {
+            "description": "An https:// URL or an owner/repo shorthand. http://, javascript:, file: and anything carrying whitespace or quoting characters are rejected.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "allOf": [
+              { "pattern": "^(https://[^/]+/.+|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$" },
+              { "not": { "pattern": "[\\s<>\"'`\\\\]" } }
+            ]
+          }
+        }
+      }
+    },
+    "outcomes": {
+      "description": "Claimed outcome metrics. Declaring one records a CLAIM, never a verified fact: the reader stamps verification_class `pending` on every entry regardless of what the file says, and a human must verify before any figure can be published.",
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["key", "label", "value_display"],
+        "properties": {
+          "key": {
+            "description": "Stable snake_case identifier, e.g. triage_time.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$"
+          },
+          "label": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "value_display": {
+            "description": "Human-readable figure exactly as it should render, e.g. \"40 → 12 min\".",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "verification_method": {
+            "description": "WHO the author says established the figure. Orthogonal to verification_class, and it never promotes the class out of `pending`.",
+            "type": "string",
+            "enum": ["client", "repo", "platform", "internal", "self", "manual"]
+          },
+          "evidence_ref": {
+            "description": "Free-text pointer for a human verifier to follow. Never fetched.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      }
+    }
+  }
+}
