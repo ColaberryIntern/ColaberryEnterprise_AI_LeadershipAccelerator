@@ -228,3 +228,25 @@
 @media (prefers-reduced-motion: reduce) {
   .cp-ring-fill, .cp-chev { transition: none; }
 }
+
+/* ── publishing: reviewer notes + visibility choice ───────────────────── */
+.cp-note-block {
+  background: var(--sunken); border: 1px solid var(--border); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; padding: 12px 15px; font-size: 14px; line-height: 1.6;
+  color: var(--body); margin: 12px 0;
+}
+.cp-row-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+.cp-vis { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 9px; }
+.cp-vis-opt {
+  width: 100%; text-align: left; appearance: none; cursor: pointer; font: inherit;
+  background: var(--sunken); border: 1px solid var(--border-sub); border-radius: 11px; padding: 13px 15px;
+}
+.cp-vis-opt:hover { border-color: var(--border); }
+.cp-vis-opt:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.cp-vis-opt[disabled] { opacity: .6; cursor: not-allowed; }
+/* Selected state carries a text label change too (aria-pressed), never colour alone. */
+.cp-vis-opt.on { border-color: var(--leaf-text); background: var(--surface); box-shadow: inset 3px 0 0 var(--leaf-text); }
+.cp-vis-label { display: block; font-weight: 700; color: var(--strong); font-size: 14.5px; }
+.cp-vis-opt.on .cp-vis-label::after { content: ' — current'; color: var(--leaf-text); font-weight: 600; }
+.cp-vis-detail { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; }

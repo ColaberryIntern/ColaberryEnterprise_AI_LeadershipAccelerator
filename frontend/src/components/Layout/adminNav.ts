@@ -26,6 +26,9 @@ export const PINNED_LINKS: NavLink[] = [
   { path: '/admin/war-room', label: 'War Room', icon: 'radar-line', section: 'war_room' },
   // Support role's sole surface (also visible to owner/admin who hold 'students').
   { path: '/admin/students', label: 'Student Story', icon: 'file-user-line', section: 'students' },
+  // Portfolio review. Its own section so a Mentor can be granted THIS and nothing
+  // else; mgmtRoles gives them ['dashboard','career_review'].
+  { path: '/admin/career-review', label: 'Portfolio Review', icon: 'award-line', section: 'career_review' },
   // advisor.colaberry.ai's own "My Day" queue — a separate app with its own
   // Google SSO, so this is a plain external link, no session bridge needed.
   { path: 'https://advisor.colaberry.ai/my-day/', label: 'My Day', icon: 'calendar-check-line', section: 'students', newTab: true },
