@@ -22,13 +22,13 @@ beforeEach(() => {
 });
 
 describe('reactivateAgent', () => {
-  it('happy path: sets enabled:true and the real chosen autonomy_level in the same update', async () => {
+  it('happy path: sets enabled:true, the real chosen autonomy_level, and a real autonomy_level_set_at timestamp in the same update', async () => {
     const agent = makeAgent();
     mockAgentFindByPk.mockResolvedValue(agent);
 
     const result = await reactivateAgent('agent-1', 'observe');
 
-    expect(agent.update).toHaveBeenCalledWith({ enabled: true, autonomy_level: 'observe' });
+    expect(agent.update).toHaveBeenCalledWith({ enabled: true, autonomy_level: 'observe', autonomy_level_set_at: expect.any(Date) });
     expect(result).toEqual({
       agentId: 'agent-1', agentName: 'ExecutiveStrategyArchitect', found: true, reactivated: true, autonomyLevel: 'observe', error: null,
     });
@@ -42,10 +42,23 @@ describe('reactivateAgent', () => {
 
       const result = await reactivateAgent('agent-1', level);
 
-      expect(agent.update).toHaveBeenCalledWith({ enabled: true, autonomy_level: level });
+      expect(agent.update).toHaveBeenCalledWith({ enabled: true, autonomy_level: level, autonomy_level_set_at: expect.any(Date) });
       expect(result.autonomyLevel).toBe(level);
     },
   );
+
+  it('stamps autonomy_level_set_at with the real current time — the marker the real authorization gate uses to distinguish a deliberate choice from the untouched default', async () => {
+    const agent = makeAgent();
+    mockAgentFindByPk.mockResolvedValue(agent);
+    const before = Date.now();
+
+    await reactivateAgent('agent-1', 'act_audited');
+
+    const stamped = agent.update.mock.calls[0][0].autonomy_level_set_at as Date;
+    expect(stamped).toBeInstanceOf(Date);
+    expect(stamped.getTime()).toBeGreaterThanOrEqual(before);
+    expect(stamped.getTime()).toBeLessThanOrEqual(Date.now());
+  });
 
   it('boundary: a non-existent agent id reports found:false and reactivated:false, never throws', async () => {
     mockAgentFindByPk.mockResolvedValue(null);

@@ -3,6 +3,7 @@ import { Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
 const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
+const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const AdminLoginPage = lazy(() => import('../pages/admin/AdminLoginPage'));
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
 const WarRoomPage = lazy(() => import('../pages/admin/WarRoomPage'));
@@ -77,6 +78,7 @@ const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
     <Route path="/admin/login" element={<AdminLoginPage />} />
+    <Route path="/admin/career-review" element={<CareerReviewPage />} />
     <Route element={<ProtectedRoute />}>
       {/* Staff → own student portal ("AI Training"): mints a full-access portal
           token, redirects to /portal/today. Sits outside AdminLayout, like the

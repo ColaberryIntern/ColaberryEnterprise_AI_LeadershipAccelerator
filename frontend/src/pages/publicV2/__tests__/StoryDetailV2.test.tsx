@@ -454,6 +454,7 @@ describe('sections hide when unsupported rather than rendering empty', () => {
     detailMock.mockResolvedValue(response({
       architecture: {
         narrative: [], stack: [], capabilities: [], integrations: [], diagram: null,
+        diagramSource: null,
       },
     }));
     mount();
@@ -589,16 +590,17 @@ describe('repositories and artifacts respect visibility and consent', () => {
     expect(sectionsShown()).not.toContain('repositories');
   });
 
-  it('gives a request-only artifact a sentence and no control', async () => {
+  // REVISED by the media task: spec 23 forbids a control it cannot honour, not
+  // every control. A link to the surface's contact route, never a button posting
+  // nowhere; with no destination it degrades to the sentence (sections suite).
+  it('gives a request-only artifact a real destination, and no fake control', async () => {
     mount();
     await settle();
-    const items = all('.cbv2-cs-artifact');
-    expect(items).toHaveLength(2);
-    const request = items.find((node) => node.getAttribute('data-artifact-access') === 'request');
-    expect(request).toBeDefined();
-    expect(request?.querySelector('a')).toBeNull();
+    const request = all('.cbv2-cs-artifact')
+      .find((n) => n.getAttribute('data-artifact-access') === 'request');
     expect(request?.querySelector('button')).toBeNull();
-    expect(request?.textContent).toContain('Available on request');
+    expect(request?.querySelector('a')?.getAttribute('href')).toBe(cta().href);
+    expect(request?.textContent).not.toMatch(/download|we will send|will be sent/i);
   });
 
   it('names a contributor only through the consent-resolved payload', async () => {

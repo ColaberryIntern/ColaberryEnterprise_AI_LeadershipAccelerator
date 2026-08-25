@@ -100,7 +100,36 @@ export interface CaseStudyReadinessInput {
 /* ─────────────────────────────────────────────────────────────── helpers ──── */
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const VISUAL_ARTIFACTS = ['screenshot', 'architecture', 'demo'];
+const VISUAL_ARTIFACTS = ['screenshot', 'architecture', 'demo', 'photo'];
+
+/**
+ * The artifact types that render as a STILL IMAGE on the public page.
+ *
+ * `demo` is deliberately absent: it is a video or a hosted walkthrough, and the
+ * detail page cannot lay it out as an image. `photo` is present because a
+ * photograph is a real image even though it is never evidence — the two-image
+ * standard is about the page not being a wall of text, and atmosphere counts
+ * toward that. What atmosphere does NOT count toward is proof, and no check in
+ * the evidence or outcome categories reads this list.
+ */
+const IMAGE_ARTIFACTS = ['screenshot', 'architecture', 'photo'];
+
+/**
+ * Whether an approved artifact will actually appear as an image to a reader.
+ *
+ * ALL FOUR CONDITIONS, because any one of them missing means nothing renders.
+ * `caseStudyPublicSections.projectArtifacts` drops a public artifact whose
+ * `publicUrl` is absent or is not http(s) — so an approved, public, correctly
+ * typed image with no address is a row in the database and a blank space on the
+ * page. Counting it would make this rule agree with a record that shows nothing,
+ * which is the failure mode the rule exists to catch.
+ */
+function isPubliclyViewableImage(a: CaseStudyArtifactRef | undefined): boolean {
+  if (!a || a.status !== 'approved' || a.visibility !== 'public') return false;
+  if (!IMAGE_ARTIFACTS.includes(a.artifactType)) return false;
+  const url = typeof a.publicUrl === 'string' ? a.publicUrl.trim() : '';
+  return /^https?:\/\/\S/i.test(url);
+}
 
 const filled = (v: unknown): boolean => typeof v === 'string' && v.trim().length > 0;
 const many = <T>(v: readonly T[] | undefined): readonly T[] => (Array.isArray(v) ? v : []);
@@ -243,21 +272,35 @@ export const CASE_STUDY_READINESS_CHECKS: readonly ReadinessCheck[] = [
     detail: 'there is no roadmap',
     remedy: 'record what happened next; paused and not_pursued are valid and often more credible' },
 
-  /* Artifacts/media — 5 + 3 + 2 = 10 */
-  { key: 'artifacts.approved', category: 'artifacts', points: 5,
-    score: (c) => step(c.approvedArtifacts.length, [2, 5], [1, 3])
+  /* Artifacts/media — 4 + 2 + 1 + 3 = 10 */
+  { key: 'artifacts.approved', category: 'artifacts', points: 4,
+    score: (c) => step(c.approvedArtifacts.length, [2, 4], [1, 2])
       || (many(c.content.artifacts).length > 0 ? 1 : 0),
     detail: 'fewer than two artifacts have been approved',
     remedy: 'review the candidate artifacts and approve the ones that may be shown' },
-  { key: 'artifacts.public', category: 'artifacts', points: 3,
-    score: (c) => Math.max(0, ...c.approvedArtifacts.map((a) => (a.visibility === 'public' ? 3
+  { key: 'artifacts.public', category: 'artifacts', points: 2,
+    score: (c) => Math.max(0, ...c.approvedArtifacts.map((a) => (a.visibility === 'public' ? 2
       : a.visibility === 'request_only' ? 1 : 0))),
     detail: 'no approved artifact is publicly viewable',
     remedy: 'mark an approved artifact public, or offer it as request_only' },
-  { key: 'artifacts.visual', category: 'artifacts', points: 2,
-    score: (c) => (c.approvedArtifacts.some((a) => VISUAL_ARTIFACTS.includes(a.artifactType)) ? 2 : 0),
-    detail: 'there is no approved screenshot, architecture image or demo',
-    remedy: 'approve a screenshot, diagram or demo; the detail page is text-only without one' },
+  { key: 'artifacts.visual', category: 'artifacts', points: 1,
+    score: (c) => (c.approvedArtifacts.some((a) => VISUAL_ARTIFACTS.includes(a.artifactType)) ? 1 : 0),
+    detail: 'there is no approved screenshot, architecture image, photograph or demo',
+    remedy: 'approve a screenshot, diagram, photograph or demo; the detail page is text-only without one' },
+  /**
+   * THE TWO-IMAGE STANDARD, ENFORCED RATHER THAN REMEMBERED.
+   *
+   * A detail page with one image is a page with a hero and then a wall of text;
+   * with two it has a hero and something to look at inside the story, and the
+   * carousel has something to carousel. Graded rather than pass/fail so a
+   * one-image record is SCORED DOWN and told what is missing, instead of being
+   * failed with the same words as a record that has no images at all.
+   */
+  { key: 'artifacts.two_images', category: 'artifacts', points: 3,
+    score: (c) => step(c.approvedArtifacts.filter(isPubliclyViewableImage).length, [2, 3], [1, 1]),
+    detail: 'fewer than two approved images are publicly viewable',
+    remedy: 'approve and publish at least two images (screenshot, architecture or photograph), '
+      + 'each with an http(s) public URL; one image leaves the page a wall of text' },
 
   /* Evidence — 8 + 6 + 3 + 3 = 20 */
   { key: 'evidence.headline_linked', category: 'evidence', points: 8,

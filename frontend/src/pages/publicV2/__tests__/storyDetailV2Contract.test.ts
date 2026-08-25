@@ -35,6 +35,20 @@ const PAGE = path.join(PAGE_DIR, 'StoryDetailV2.tsx');
 const MODEL = path.join(PAGE_DIR, 'storyDetailV2Model.ts');
 const SECTIONS = path.join(PAGE_DIR, 'storyDetailV2Sections.tsx');
 const CSS = path.join(PAGE_DIR, 'storyDetailV2.css');
+/**
+ * The media band added by the carousel/diagram task. These files are page-local
+ * for the SAME reason the three above are - `components/caseStudy/` is a closed
+ * set of ten filenames - so they inherit the same rules and are listed here
+ * rather than left unchecked. That was a deliberate extension of this contract,
+ * not a side effect: without it, four new files could carry a hex literal, an
+ * inline style object or a control character and nothing would say so.
+ */
+const MEDIA_SOURCES = [
+  path.join(PAGE_DIR, 'storyMediaModel.ts'),
+  path.join(PAGE_DIR, 'StoryMediaCarousel.tsx'),
+  path.join(PAGE_DIR, 'StoryDiagram.tsx'),
+  path.join(PAGE_DIR, 'StoryHeroActions.tsx'),
+];
 const APP = path.join(SRC, 'App.tsx');
 const LEGACY_TOKENS = path.join(SRC, 'styles', 'tokens.css');
 const V2_TOKEN_DIR = path.join(SRC, 'colaberry', 'tokens');
@@ -350,6 +364,98 @@ describe('storyDetailV2.css names only tokens that exist', () => {
 
 /* --------------------------------------------------------------- byte hygiene --- */
 
+/* ----------------------------------------------------------- media band --- */
+
+describe('the page-local media files play by the same rules as the page', () => {
+  it('finds all four, so nothing below passes by reading an empty string', () => {
+    for (const file of MEDIA_SOURCES) {
+      expect({ file: path.basename(file), exists: fs.existsSync(file) })
+        .toEqual({ file: path.basename(file), exists: true });
+    }
+  });
+
+  it('uses no CSS Modules, no Bootstrap, no CSS-in-JS and no inline style objects', () => {
+    for (const file of MEDIA_SOURCES) {
+      const text = read(file);
+      expect(text).not.toMatch(/\.module\.css/);
+      expect(text).not.toMatch(/import\s+\w+\s+from\s+['"][^'"]*\.css['"]/);
+      expect(text).not.toMatch(/from\s+['"](?:react-)?bootstrap/);
+      expect(text).not.toMatch(/from\s+['"]styled-components['"]/);
+      expect(text).not.toMatch(/from\s+['"]@emotion/);
+      expect(text).not.toMatch(/style=\{\{/);
+    }
+  });
+
+  it('names every class it assigns inside the cbv2- namespace', () => {
+    for (const file of MEDIA_SOURCES) {
+      expect(read(file)).not.toMatch(/className="(?![^"]*cbv2-)[^"]*"/);
+    }
+  });
+
+  it('hardcodes no colour, which would be a second palette by another name', () => {
+    for (const file of MEDIA_SOURCES) {
+      const source = stripComments(read(file));
+      expect({ file: path.basename(file), hex: source.match(/#[0-9a-f]{3,8}\b/gi) ?? [] })
+        .toEqual({ file: path.basename(file), hex: [] });
+    }
+  });
+
+  it('adds no carousel dependency — the track is CSS scroll-snap', () => {
+    // A carousel library is a new runtime dependency, which CLAUDE.md makes a
+    // governance escalation. The whole component is native scroll behaviour, and
+    // this is the assertion that keeps it that way when somebody hits a rough
+    // edge and reaches for swiper/slick/embla.
+    const carousel = stripComments(read(path.join(PAGE_DIR, 'StoryMediaCarousel.tsx')));
+    for (const library of ['swiper', 'slick', 'embla', 'keen-slider', 'glide', 'flickity']) {
+      expect({ library, imported: new RegExp(`from\\s+['"][^'"]*${library}`).test(carousel) })
+        .toEqual({ library, imported: false });
+    }
+    expect(read(CSS)).toContain('scroll-snap-type');
+  });
+
+  it('adds no mermaid dependency — the renderer fetches it at runtime', () => {
+    const pkg = JSON.parse(read(path.join(SRC, '..', 'package.json'))) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const declared = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    expect(Object.keys(declared).filter((name) => name.includes('mermaid'))).toEqual([]);
+    // ...and the band reaches the shipped component rather than re-implementing.
+    expect(stripComments(read(path.join(PAGE_DIR, 'StoryDiagram.tsx'))))
+      .toContain('components/visuals/MermaidDiagram');
+  });
+
+  it('keeps each one inside the size budget a reader can hold', () => {
+    const oversize = MEDIA_SOURCES
+      .map((file) => ({ file: path.basename(file), lines: read(file).split('\n').length }))
+      .filter((entry) => entry.lines >= 300);
+    expect(oversize).toEqual([]);
+  });
+});
+
+/* --------------------------------------------------------------- carousel --- */
+
+describe('the carousel cannot become a control that does nothing', () => {
+  it('states its own floor rather than leaving it to each caller', () => {
+    const model = stripComments(read(path.join(PAGE_DIR, 'storyMediaModel.ts')));
+    expect(model).toContain('CAROUSEL_MINIMUM_SLIDES');
+    // The floor is applied where the slides are built, so no call site can skip
+    // it. Behaviour is asserted in `storyMedia.test.tsx`; this is the shape.
+    expect(model).toMatch(/>= CAROUSEL_MINIMUM_SLIDES/);
+  });
+
+  it('leaves reduced-motion readers a stylesheet rule as well as a runtime check', () => {
+    // Both halves are needed: a programmatic `scrollBy` carries its own
+    // behaviour and ignores the stylesheet, and a native drag ignores the
+    // runtime check. Either one alone leaves half the interaction unhandled.
+    expect(read(CSS)).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(stripComments(read(path.join(PAGE_DIR, 'StoryMediaCarousel.tsx'))))
+      .toContain('prefers-reduced-motion: reduce');
+  });
+});
+
+/* --------------------------------------------------------------- byte hygiene --- */
+
 describe('the files carry no stray control characters', () => {
   it('contains nothing below space except tab, newline and carriage return', () => {
     // A shell heredoc turns `\b` into 0x08 and the result compiles, renders and
@@ -360,7 +466,7 @@ describe('the files carry no stray control characters', () => {
       + `${String.fromCharCode(11)}${String.fromCharCode(12)}`
       + `${String.fromCharCode(14)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]`,
     );
-    for (const file of [PAGE, MODEL, SECTIONS, CSS]) {
+    for (const file of [PAGE, MODEL, SECTIONS, CSS, ...MEDIA_SOURCES]) {
       expect({ file: path.basename(file), clean: !forbidden.test(read(file)) })
         .toEqual({ file: path.basename(file), clean: true });
     }
