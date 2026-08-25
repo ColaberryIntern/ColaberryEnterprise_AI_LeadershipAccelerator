@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CareerProfile } from '../../../services/careerApi';
 import {
   fetchPublicationStatus, requestReview, setVisibility,
   CapstoneReviewStatus, RecordVisibility,
@@ -26,7 +25,7 @@ const VIS_COPY: Record<RecordVisibility, { label: string; detail: string }> = {
   public: { label: 'Public and searchable', detail: 'Search engines may index it. This is the only setting that allows that.' },
 };
 
-const PublishingPanel: React.FC<{ profile: CareerProfile }> = ({ profile }) => {
+const PublishingPanel: React.FC = () => {
   const [status, setStatus] = useState<CapstoneReviewStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -50,8 +49,20 @@ const PublishingPanel: React.FC<{ profile: CareerProfile }> = ({ profile }) => {
     finally { setBusy(false); }
   };
 
-  const r = profile.readiness;
-  const blocked = (r?.blocking.length ?? 0) > 0;
+  /**
+   * NO CLIENT-SIDE GATE on requesting review.
+   *
+   * This button was originally disabled whenever `profile.readiness.blocking` was
+   * non-empty. That was wrong twice over. Those counts are CAREER-portfolio readiness
+   * (verified capabilities, build artifacts); what is being reviewed here is a CAPSTONE
+   * RECORD compiled from a project, which is a different artifact. And the server has no
+   * such gate — `requestCapstoneReview` only refuses if there is no record or it is
+   * already published.
+   *
+   * So the UI was locking a door the API leaves open, and a learner with a perfectly
+   * reviewable record saw a dead button (reported by Ali, 2026-08-25). The server decides;
+   * this renders the outcome.
+   */
 
   return (
     <div className="cp-publishing">
@@ -77,33 +88,15 @@ const PublishingPanel: React.FC<{ profile: CareerProfile }> = ({ profile }) => {
             <div className="cp-note-block" role="note">{status.last_review.notes}</div>
           )}
 
-          {blocked ? (
-            <>
-              <p className="cp-muted">
-                A mentor reviews your record before it goes live, so there is a bar to clear first.
-              </p>
-              <ul className="cp-blocking">
-                {r!.requirements.filter((x) => r!.blocking.includes(x.key)).map((x) => (
-                  <li key={x.key}><strong>{x.label}</strong><span className="cp-muted"> — {x.detail}</span></li>
-                ))}
-              </ul>
-              <div className="cp-row-actions">
-                <button type="button" className="cp-btn" disabled>Request review</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="cp-muted">
-                A mentor will read the exact version you send and either approve it or come back
-                with changes. Keep building in the meantime — what they see stays as you sent it.
-              </p>
-              <div className="cp-row-actions">
-                <button type="button" className="cp-btn cp-btn-primary" onClick={ask} disabled={busy}>
-                  {busy ? 'Sending…' : 'Request review'}
-                </button>
-              </div>
-            </>
-          )}
+          <p className="cp-muted">
+            A mentor will read the exact version you send and either approve it or come back
+            with changes. Keep building in the meantime — what they see stays as you sent it.
+          </p>
+          <div className="cp-row-actions">
+            <button type="button" className="cp-btn cp-btn-primary" onClick={ask} disabled={busy}>
+              {busy ? 'Sending…' : 'Request review'}
+            </button>
+          </div>
         </section>
       )}
 

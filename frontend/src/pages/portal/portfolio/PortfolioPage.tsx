@@ -170,7 +170,7 @@ const PortfolioPage: React.FC = () => {
             github={profile.github}
           />
         )}
-        {tab === 'publishing' && <PublishingPanel profile={profile} />}
+        {tab === 'publishing' && <PublishingPanel />}
       </div>
     </PortalShell>
   );
