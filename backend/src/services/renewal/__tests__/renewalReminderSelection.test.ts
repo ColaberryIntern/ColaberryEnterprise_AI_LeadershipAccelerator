@@ -324,3 +324,73 @@ describe('empty and degenerate input', () => {
     }
   });
 });
+
+/**
+ * Regression: the enrollment lifecycle gates.
+ *
+ * Origin, 2026-08-25. A student who had been deferred to the November cohort in
+ * writing was mailed "your membership payment is due tomorrow" twice, because
+ * the selector's only notion of a live obligation was `subscriptions.status`,
+ * and nothing retires that row when a person is moved. These assert the three
+ * signals that describe the human rather than the term.
+ */
+describe('enrollment lifecycle gates', () => {
+  it.each(['withdrawn', 'suspended', 'completed'])(
+    'never mails a %s enrollment, even with a live subscription row',
+    (enrollment_status) => {
+      const row = sub({ enrollment_status });
+      const result = selectRenewalReminders([row], NOW);
+      expect(result.due).toHaveLength(0);
+      expect(reasonFor(result, row.id)).toBe('enrollment_not_active');
+    },
+  );
+
+  it('still mails an active enrollment', () => {
+    const row = sub({ enrollment_status: 'active' });
+    expect(selectRenewalReminders([row], NOW).due).toHaveLength(1);
+  });
+
+  it('treats a missing enrollment_status as notifiable, so the gate is additive', () => {
+    const row = sub({ enrollment_status: null });
+    expect(selectRenewalReminders([row], NOW).due).toHaveLength(1);
+  });
+
+  it('honours notifications_paused_at, the per-student kill switch', () => {
+    const row = sub({ notifications_paused_at: new Date(NOW - 5 * DAY) });
+    const result = selectRenewalReminders([row], NOW);
+    expect(result.due).toHaveLength(0);
+    expect(reasonFor(result, row.id)).toBe('notifications_paused');
+  });
+
+  it('does not suppress when notifications_paused_at is null or empty', () => {
+    expect(selectRenewalReminders([sub({ notifications_paused_at: null })], NOW).due).toHaveLength(1);
+    expect(selectRenewalReminders([sub({ notifications_paused_at: '' })], NOW).due).toHaveLength(1);
+  });
+
+  it('does not bill ahead of delivery when access_starts_at is in the future', () => {
+    const row = sub({ access_starts_at: '2026-11-12' });
+    const result = selectRenewalReminders([row], NOW);
+    expect(result.due).toHaveLength(0);
+    expect(reasonFor(result, row.id)).toBe('access_not_started');
+  });
+
+  it('mails once access_starts_at has arrived', () => {
+    expect(selectRenewalReminders([sub({ access_starts_at: '2026-08-01' })], NOW).due).toHaveLength(1);
+    // Today counts as started: the gate is "not yet", not "not today".
+    expect(selectRenewalReminders([sub({ access_starts_at: '2026-08-14' })], NOW).due).toHaveLength(1);
+  });
+
+  it('excludes a deferred student before a checkout link could be minted', () => {
+    // The real shape from 2026-08-25: paid July, deferred to November, the
+    // subscription row left active with its period ending inside the window.
+    const kepha = sub({
+      enrollment_status: 'withdrawn',
+      access_starts_at: '2026-11-12',
+      current_period_end: new Date(NOW + 1 * DAY),
+    });
+    const result = selectRenewalReminders([kepha], NOW);
+    expect(result.due).toHaveLength(0);
+    expect(result.skipped).toHaveLength(1);
+  });
+});
+
