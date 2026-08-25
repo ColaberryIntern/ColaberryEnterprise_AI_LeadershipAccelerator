@@ -1,196 +1,128 @@
-# Implementation Status
+# Implementation Status — FINAL
 
-**Session:** CC-20260823-r4k9 · **Base:** `d1d46d1e` · **Branch:** `workstream/refactored-delivery-os-gate0`
+**Session:** CC-20260823-r4k9 · **Base at Gate 0:** `d1d46d1e` · **Completed:** 2026-08-25
 
 Status vocabulary: `NOT STARTED` · `DISCOVERY` · `IMPLEMENTING` · `TESTING` · `BLOCKED` · `COMPLETE`
 
-**Deployment state: NOT DEPLOYED.** No DDL has been written, no production database
-touched, no DNS, no client invitations, no production email, no billing. Master plan §20
-respected in full.
+> **Deployment state: NOT DEPLOYED.** No production DDL executed, no production database
+> touched, no DNS, no client invitations, no production email, no billing, no production
+> agent run. Master plan §20 respected in full, at every gate.
+
+---
+
+## The headline, stated before the good news
+
+**All 16 gates are built and merged to `main`.**
+**The 7 required end-to-end scenarios are NOT executed.**
+
+Those are both true, and the second one is not a footnote. What this build establishes is
+that **each component behaves as specified under unit and integration test** — 2,146 tests
+across 124 suites, a pinned type check, and CI green on every gate. That is a real and
+useful thing.
+
+It is not the same as the system working. A system whose parts are each individually
+verified can still fail at every seam between them, and the seams are exactly what an E2E
+run exercises. See [E2E_SCENARIOS.md](E2E_SCENARIOS.md), where every scenario's status
+reads *not executed*, with the reason.
 
 ---
 
 ## Gate status
 
-| Checkpoint | Gate | Status |
-|---|---|---|
-| A | 0 Discovery | **COMPLETE** — this deliverable |
-| B | 1 Delivery Domain + Tenancy | **BLOCKED** — 2 prerequisites |
-| B | 2 Delivery Roles + Authority | NOT STARTED |
-| B | 3 Delivery Contract + Project Graph | NOT STARTED |
-| C | 4 Intake + Discovery | NOT STARTED |
-| C | 5 Trust Before Intelligence | NOT STARTED — **unblocked**, D-04 closed 2026-08-23 |
-| C | 6 Design Decision Loop | NOT STARTED |
-| D | 7 Release/Story Graph + SBP | NOT STARTED |
-| D | 8 Execution Plane + Claude Code | **BLOCKED** — E-01, S-01 |
-| D | 9 Quality OS + Evidence | NOT STARTED |
-| E | 10 Client Review Room | NOT STARTED |
-| E | 11 Builder Workspace + Ledger | NOT STARTED |
-| E | 12 Capacity + Economics | NOT STARTED |
-| F | 13 Delivery Profiles | NOT STARTED |
-| F | 14 Release + Operate + GOALS | NOT STARTED |
-| F | 15 Case Study + Attribution + E2E | NOT STARTED |
+| Checkpoint | Gate | Status | Landed |
+|---|---|---|---|
+| A | 0 Discovery | **COMPLETE** | PR #1745 |
+| B | 1 Delivery Domain + Tenancy | **COMPLETE** | PR #1752 |
+| B | 2 Delivery Roles + Authority | **COMPLETE** | PR #1753 |
+| B | 3 Delivery Contract + Project Graph | **COMPLETE** | PR #1756 |
+| C | 4 Intake + Discovery + Opportunity Map | **COMPLETE** | PR #1759 |
+| C | 5 Trust Before Intelligence | **COMPLETE** | PR #1760 |
+| C | 6 Design Decision Loop | **COMPLETE** | PR #1763 |
+| D | 7 Release/Story Graph + SBP | **COMPLETE** | PR #1767 |
+| D | 8 Execution Plane + Claude Code | **COMPLETE** | PR #1776 |
+| D | 9 Quality OS + Evidence | **COMPLETE** | PR #1781 |
+| E | 10 Client Review Room | **COMPLETE (backend)** | PR #1786 |
+| E | 11 Builder Workspace + Ledger | **COMPLETE (backend)** | PR #1788 |
+| E | 12 Capacity + Economics | **COMPLETE** | PR #1792 |
+| F | 13 Delivery Profiles | **COMPLETE** | PR #1794 |
+| F | 14 Release + Operate + GOALS | **COMPLETE** | PR #1797 |
+| F | 15 Case Study + Attribution | **COMPLETE (adapter + spec)** | PR #1803 |
 
-**No feature code was written.** Gate 0 forbids it and none exists on this branch.
+Gates 10 and 11 say *backend* deliberately: neither UI half was built. Gate 15 says
+*adapter + spec* for the same reason — the adapter exists, the E2E proof does not.
 
 ---
 
-## Gate 0 deliverables
+## What was verified, at every gate
 
-| Document | Content |
+| Gate check | Standard held |
 |---|---|
-| `CURRENT_STATE.md` | Verified state of tenancy, `Project`, SBP, execution, approvals, evidence; answers to all 13 Gate 0 questions |
-| `DOMAIN_REUSE_MAP.md` | 34 capabilities: 9 REUSE, 12 EXTEND, 13 BUILD |
-| `DATA_OWNERSHIP_MATRIX.md` | Tenancy-by-parent rule; 2 tables carry `tenant_id`, 16 scope by join |
-| `AUTHORIZATION_MATRIX.md` | Tenant vs delivery roles; full 13-role × 13-permission grid; R0–R5 mapped onto the existing R0–R4 |
-| `SBP_INTEGRATION_MAP.md` | Module-by-module reuse tiers + backward-compat contract |
-| `EXECUTION_CAPABILITY_MAP.md` | Claude Code absent; `previewStackService` as workspace base; S-01; no durable queue |
-| `EVIDENCE_INTEGRATION_MAP.md` | `delivery_evidence` + the one-way projection rule |
-| `CLIENT_PORTAL_MAP.md` | No client surface exists; server-side projection requirement |
-| `CASE_STUDY_INTEGRATION_MAP.md` | Case Study OS does not exist; adapter + allowlist design |
-| `ROUTE_IMPACT.md` | `/refactored` clean; route trees; what must not change |
-| `SCHEMA_CONFLICTS.md` | C-01 … C-06 |
-| `MIGRATION_STRATEGY.md` | Additive DDL, rehearsal requirement, rollout order, rollback |
-| `TARGET_ARCHITECTURE.md` | 14 Mermaid diagrams |
-| `TEST_PLAN.md` | Per-gate checks, SBP regression tripwires, failure-first list |
-| `BASELINE_TEST_RESULTS.md` | tsc 2 known artifacts; 879 tests passing |
-| `IMPLEMENTATION_STATUS.md` | This file |
+| `tsc --noEmit` under **pinned TypeScript 5.9.3** | 2 known `@anthropic-ai/sdk` junction errors, **0 real**, every gate |
+| Jest regression | grew 1,455 → **2,146** passing, **0 failures** at every gate |
+| gitleaks (staged) | **0 findings**, every commit |
+| GitHub CI | **7/7 checks green** on every PR |
 
-Deferred to later gates per master plan §18 (required "by completion", not at Gate 0):
-`IMPLEMENTATION_DEVIATIONS.md`, `VALIDATION_REPORT.md`, `SECURITY_MODEL.md`,
-`EXECUTION_PROVIDER_CONTRACT.md`, `DELIVERY_PROFILE_CONTRACT.md`,
-`TRUST_BEFORE_INTELLIGENCE_INTEGRATION.md`.
+A bare `npx tsc` from `backend/` resolves the root-hoisted **4.9.5** and can report a false
+clean. Every type check in this build used the pinned compiler.
 
----
+## What was NOT verified — the honest list
 
-## Escalations — Ali's decisions, not Claude's
-
-Root `CLAUDE.md` classes all four as governance boundaries. Recommendations given;
-none acted on.
-
-### ESC-1 — `Organization.owner_enrollment_id` must be relaxed (C-02) — ✅ **DECIDED**
-
-`allowNull: false, unique: true`, FK to `enrollments`. An external client company cannot
-be represented. Master plan §6 hangs the whole commercial chain off `Organization`, and
-**the plan does not flag this** — it flags the equivalent on `Project` but not on its
-parent.
-
-*Recommendation was:* relax to nullable, drop the unique constraint, discriminate on the
-existing `organization_type` column.
-
-**Decision: Option A, approved by Ali on 2026-08-23.** Gate 1 will relax
-`owner_enrollment_id` to nullable and drop the unique constraint, on the existing
-`organizations` table. No `ClientOrganization` table; no re-parenting of engagements onto
-`Brand`.
-
-Conditions carried into Gate 1:
-
-- Existing rows keep their owner and their FK. The change is a **relaxation**, so nothing
-  currently valid becomes invalid.
-- Every read path in `orgService.ts` / `adminOrgService.ts` that assumes a non-null owner
-  must be audited and null-guarded in the same change.
-- `organization_type` becomes the discriminator between a manager's management account and
-  a client company. Existing rows are backfilled to the management-account value.
-- **Not cleanly reversible.** Once a client org exists, re-adding `NOT NULL UNIQUE` fails.
-  Recorded so that a later rollback plan does not assume otherwise.
-
-*Class:* schema change to a live production table. Decided by the DRI.
-
-### ESC-2 — Multi-tenancy Gate 5 (Organization scoping) must close first
-
-`orgService.ts` and `adminOrgService.ts` contain **zero** `tenant_id` references
-(verified, not inferred). Deferred deliberately by the multi-tenancy work on the
-reasoning that every org today is Colaberry Enterprise — sound then, expiring the moment
-this plan creates an AI Flotation client org.
-
-*Recommendation:* close it in the multi-tenancy workstream, not silently here. It is
-listed as a Gate 1 prerequisite by the master plan itself.
-
-*Class:* cross-workstream dependency + security posture.
-
-### ESC-3 — Claude Code SDK is a new external dependency (E-01)
-
-Not installed. `@anthropic-ai/sdk ^0.106.0` is present but is not the coding agent.
-
-*Recommendation:* adopt the official SDK behind the `ExecutionProvider` seam.
-Reimplementing an agentic coding loop on raw Messages API means rebuilding tool dispatch,
-file editing and permission gating — precisely the parts carrying master plan §11's
-security requirements.
-
-*Class:* external dependency introduction.
-
-### ESC-4 — Execution isolation model (S-01)
-
-`previewStackService` requires the Docker socket mounted into the **main backend
-container**, which also serves public HTTP. Root-equivalent host control behind an
-internet-facing process. Today's blast radius is students' own repos; Gate 8's would be
-client repositories under commercial and government contracts.
-
-*Recommendation:* GitHub Actions runner for MVP — the only option of the three the master
-plan permits that requires no new isolation code to be correct. Three of the eight
-default-deny rules are unenforceable until this is decided.
-
-*Class:* production infrastructure + security posture.
-
----
-
-## Deviations
-
-| ID | Deviation | Impact |
+| Not done | Why | Risk |
 |---|---|---|
-| **D-00** | Requested in a checkout **2,722 commits behind** `origin/main` with ~50 files dirty from concurrent sessions. Work moved to an external worktree off `origin/main` | All findings are against `d1d46d1e`, not the OneDrive tree |
-| **D-01** | `buildPlanIngestService.ts` — named in master plan §2.3 as a reuse target — exists **only** in the stale checkout, not on `main` | A plan written from the OneDrive tree would have designed around a service that no longer exists |
-| **D-02** | Master plan §6 requires `Organization` as parent, but `Organization` is an enrollment-bound management account | ESC-1 |
-| **D-03** | Master plan Gate 2 proposes R0–R5 as new; R0–R4 already exist on `tickets.risk_tier` with a `shadow_logged` approval mode | Extend, do not duplicate. Reduces Gate 2 scope |
-| **D-04** | **CLOSED 2026-08-23.** The canonical book was read (`manuscript/` @ `main`). The plan's vocabulary is correct, but the plan's caution "do not invent scores if the book does not define them" inverted the real finding: the book **does** define them — INPACT 1–6 per dimension (36 max, scaled to 100), GOALS 1–5 per dimension (25 max), plus a mandatory INPACT dependency order and regulatory thresholds citing EU AI Act 2024/1689 Arts. 9–15 and NIST AI RMF | Gate 5 **unblocked**, and constrained: it must use those exact scales, not design its own. See `TRUST_BEFORE_INTELLIGENCE_INTEGRATION.md`. Two follow-ups remain: Chapter 9 (`measuring_agent_readiness`) and the appendices' scoring methodology were not read — required before the assessment UI is built |
-| **D-05** | Case Study OS does not exist; the plan treats it as an existing consumer. A `casestudy-os-wt` worktree exists locally but nothing of it is on `main` | Gate 15 is adapter + candidate only. Check that branch before building |
-| **D-06** | No durable job queue. `ExecutionRun` needs one | DB-as-queue with `SELECT … FOR UPDATE SKIP LOCKED`. No new dependency |
-| **D-07** | AI provider abstraction partial — 43 files instantiate OpenAI directly | Observation. Out of scope; the plan should not claim "engines are replaceable" platform-wide |
-| **D-08** | Playwright not executable here — no running stack, no staging credentials | Reported as **not executed**, never as passing. Same as multi-tenancy D-10 |
-| **D-09** | One baseline test timed out under parallel load; passes 8/8 in isolation at 8.3 s | Environmental, not a code defect. Recorded rather than re-run into a green number |
-| **D-10** | `EvidenceRecord.enrollment_id` is NOT NULL and `EvidenceSource` is a closed 9-value union | Sibling `delivery_evidence` with a one-way projection (C-03) |
-| **D-11** | Accessibility exists as a Claude **skill**, not a service that can emit an evidence row | Gate 13 makes it a mandatory government release gate. A skill cannot gate a release; Gate 9 must make it runnable |
+| **The 7 E2E scenarios** | 4 need a deploy §20 forbids; all 7 need a running stack | The system has never run end to end |
+| **Schema rehearsal** | No throwaway Postgres, no production-structure dump | **19 tables** of DDL wired into `server.ts` boot, never run against a real schema — arms on the next production deploy |
+| **Playwright** | No running stack, no staging credentials | No browser-level evidence for any surface |
+| **Both UI halves** | §20 forbids deploying; green CI is not visual verification | Client review room and builder workspace do not exist |
+| **Agent SDK binding** | Deliberately unwritten — the documented API was never read | `ExecutionProvider` has a seam and no engine |
+| **Operate signals against live telemetry** | Nothing deployed | Absence-reads-as-unknown is a design property, not field evidence |
+
+## Escalations
+
+| ID | Subject | Outcome |
+|---|---|---|
+| ESC-1 | Relax `Organization.owner_enrollment_id` | **Closed** — Option A, Gate 1. UNIQUE kept deliberately (Postgres treats NULLs as distinct, and the constraint makes `registerManager` race-safe) |
+| ESC-2 | Organization tenant scoping | **Closed 2026-08-24 by the multi-tenancy workstream** — `modules/tenancy/organizationScope.ts`, `adminOrgService` scoped at 7 call sites. The standing "no client organization until this closes" constraint is **lifted** |
+| ESC-3 | Which Claude Code surface | **Closed** — `@anthropic-ai/claude-agent-sdk` (the library), not `@anthropic-ai/claude-code` (the CLI), not the Messages API Tool Runner |
+| ESC-4 | Execution isolation | **Closed** — GitHub Actions runner. This is what made 3 of Gate 8's 8 default-deny rules enforceable rather than aspirational |
+
+## Still open
+
+- **Gate 2's client-identity question.** Whether `PlatformIdentity` supports an identity
+  linked to neither an enrollment nor an admin user — which every external client reviewer
+  requires. Flagged at Gate 0, never closed. Blocks E2E scenario B and the client routes.
 
 ---
 
-## Verification evidence
+## What closing the gap requires, in order
 
-| Claim | Evidence |
-|---|---|
-| Tree 2,722 behind | `git rev-list --left-right --count origin/main...HEAD` → `2722  76` |
-| Base SHA | `d1d46d1e72ead44d6e4c04d2ca7c54966843d51e` |
-| `Project` NOT NULL | `models/Project.ts:98-109` |
-| `Organization` enrollment-bound | `models/Organization.ts:72-77` |
-| Org services unscoped | `grep -c tenant_id` → `0` and `0` |
-| Claude Code absent | no match in `backend/src`, `frontend/src`, any `package.json` |
-| Docker socket assumption | `services/previewStackService.ts` header |
-| R0–R4 exists | `services/agentAutonomy.ts:65`, `models/ApprovalRequest.ts` |
-| `/refactored` clean | no match in route trees |
-| 32 `Project` consumers | ripgrep across `backend/src` |
-| 53 `ensure*Schema` modules | `find backend/src -name "ensure*Schema*.ts" \| wc -l` |
-| Backend typecheck | 2 errors, both `@anthropic-ai/sdk` junction artifacts. TS **5.9.3** pinned |
-| SBP + tenancy tests | 50/51 suites, **879 passed**, 1 environmental timeout, 5 skipped |
+1. **Rehearse the schema.** A throwaway Postgres and a structure-only production dump, then
+   run `ensureRefactoredDeliverySchema` against it. This is the largest unverified risk in
+   the build and it grows nothing further only because Gates 13–15 added no DDL.
+2. **Answer the identity question** (Gate 2). Client routes cannot be built correctly
+   without it.
+3. **Write the Agent SDK binding** behind `ExecutionProvider`, against
+   `code.claude.com/docs/en/agent-sdk` rather than from memory.
+4. **Stand up the GitHub Actions runner workflow** (ESC-4's decision, unimplemented).
+5. **Build both UI halves** — in an environment where they can be deployed and looked at.
+6. **Run the seven E2E scenarios.** Four require an authorization only Ali can give.
+
+Items 1–5 are engineering. Item 6 begins with a decision.
 
 ---
 
-## Gate 0 verdict
+## A note on how this was built
 
-**The source-of-truth map is not ambiguous. Checkpoint B may proceed** once ESC-2 closes.
-ESC-1 is decided (Option A, 2026-08-23). ESC-3 and ESC-4 block Gate 8 only and can be
-decided later, though deciding S-01 early changes the Gate 8 design materially rather than
-cosmetically.
+Sixteen gates, one session, one branch each, merged to `main` in sequence. Every gate
+followed the same rhythm: build → verify (pinned `tsc` + full Jest sweep) → log → commit →
+merge `main` → push → PR → confirm CI. No gate was reported complete on intent, and no
+number in this document was written before the command that produced it had finished.
 
-**Remaining blocker for Gate 1: ESC-2 alone** — organization tenant scoping, which belongs
-to the multi-tenancy workstream. ESC-1's approved relaxation makes that scoping *more*
-urgent, not less: the moment `organizations` can hold a client company, an unscoped
-`orgService` is a cross-tenant read path rather than a theoretical one.
+Two process errors are recorded rather than smoothed over, because both would have produced
+a green report from an unverified state:
 
-The most useful thing Gate 0 found is that **the plan is roughly one third greenfield**.
-Tenancy, the plan/gate/decomposition engine, approvals with a shadow mode, bounded
-concurrency, idempotent repo writing and a container-based workspace provider all already
-exist. What does not exist is the delivery domain on top of them, the client surface, and
-the Claude Code execution seam.
-
-The most dangerous thing it found is **D-01**: the master plan names a file as a reuse
-target that has not existed on `main` for thousands of commits. That is not a criticism of
-the plan — it is the reason Gate 0 is a gate.
+- A **stacked PR** (Gate 9, #1779) showed `MERGED` while merging into an already-merged
+  branch, never reaching `main`. Caught by `git branch -r --contains`, re-landed via #1781.
+  Lesson: a `MERGED` badge means a PR merged *somewhere*.
+- A **`jq all([])`** guard returned true over an empty check array, exiting a CI wait before
+  GitHub had registered any checks. Both times, the failure mode was *a check that passes
+  because there was nothing to check*.
