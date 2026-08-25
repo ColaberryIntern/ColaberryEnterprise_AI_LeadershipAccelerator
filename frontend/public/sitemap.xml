@@ -63,6 +63,31 @@
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
+  <!--
+    /stories, and the published-record detail pages beneath it.
+
+    The detail route registered in App.tsx is /stories/:slug. Its URLs are DATA,
+    not routes: one exists per published Case Study, they appear when a record is
+    published and disappear when it is unpublished (spec section 35), and nothing
+    in this repository generates this file - it is a static asset copied into the
+    nginx image at build time.
+
+    So there are three ways to include them, and only one of them is safe today:
+      1. hardcode today's slugs here. Rejected. Spec section 28 forbids putting
+         fixtures in the production sitemap, and any hand-written list starts
+         rotting at the next publish or unpublish - a sitemap pointing at
+         withdrawn records is worse than one that omits them, because it asks a
+         crawler to index pages that answer "not found";
+      2. serve a generated sitemap from the backend. That is a backend route and
+         a deploy-time concern, deliberately out of scope for this task;
+      3. let the index carry them. Chosen. /stories links every published record
+         with a real anchor, and it is listed here with a monthly changefreq, so
+         a crawler reaches every detail page in one hop from a URL that cannot
+         go stale. Unpublished records are simply not linked, which is the same
+         answer their own pages give.
+
+    Option 2 stays the upgrade path if a sitemap-completeness need ever appears.
+  -->
   <url>
     <loc>https://enterprise.colaberry.ai/stories</loc>
     <changefreq>monthly</changefreq>

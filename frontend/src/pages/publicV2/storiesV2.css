@@ -1,72 +1,167 @@
 /* ============================================================================
-   storiesV2.css -- the case-study format.
-   Design-system tokens only; cbv2-* namespace only.
+   storiesV2.css -- the Enterprise public index at /stories.
+   Design-system tokens only (colaberry/tokens/*.css); cbv2- namespace only.
+
+   THE BUG THIS FILE USED TO CARRY. The previous card rule read
+   `padding: var(--space-7)`. There is no `--space-7`: the scale runs
+   ...5, 6, 8, 10... so the declaration resolved to nothing and the padding it
+   asked for silently collapsed. An invalid custom property is not an error, it
+   is an absence, which is why it read as correct in review for as long as it
+   shipped. The rule is gone with the illustrative card it padded, and
+   `StoriesV2.test.tsx` now fails this file if ANY `var(--...)` in it names a
+   token the V2 system does not declare -- the general defect, not the instance.
+
+   KNOWN COUPLING, recorded rather than relied on silently. This page uses
+   .cbv2-pagehero / .cbv2-eyebrow--onDark (servicesV2.css), .cbv2-section /
+   .cbv2-section--inverse / .cbv2-lede / .cbv2-wrap--narrow (homeV2.css),
+   .cbv2-wrap / .cbv2-btn (publicV2.css), .cbv2-rv (cinematicV2.css) and the
+   .cbv2-cs-* component classes (components/caseStudy/caseStudy.css). Those
+   resolve only because App.tsx imports every V2 page statically. If any V2 route
+   is ever lazy-loaded, the shared primitives must move into publicV2.css first
+   or this page's layout silently degrades.
    ========================================================================== */
 
-.cbv2-stories { display: grid; gap: var(--space-6); }
+.cbv2-stories { display: grid; gap: var(--space-8); }
 
-.cbv2-story {
-  background: var(--surface-card);
-  border: var(--border-1) solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: var(--space-7);
-  display: grid;
-  gap: var(--space-5);
+/* ------------------------------------------------------------- masthead --- */
+
+/* The ledger sits in the dark masthead, so its type has to invert. The counts
+   themselves come from the API on every response; nothing here supplies one.
+
+   THE BACKGROUND MUST INVERT TOO, and forgetting it is why this shipped broken.
+   `.cbv2-cs-ledger__item` carries `background: var(--surface-subtle)` from
+   caseStudy.css. This masthead is a DARK ISLAND INSIDE A LIGHT-THEME PAGE, so
+   that token still resolves to its light value (--neutral-50, #F8F8F7) even
+   though .cbv2-pagehero paints --surface-inverse behind it. Inverting only the
+   type therefore put white text on a near-white tile: measured 1.06:1, against
+   the 3:1 WCAG AA needs for large text. The figures were invisible.
+
+   `transparent` rather than a dark fill, because there is no token for "subtle
+   surface on an inverse background" and a raw rgba() would be a second palette
+   by another name - which caseStudyTokens.test.ts bans outright. The hero shows
+   through and --border-strong still describes the tile.
+
+   THIS IS THE SECOND TIME. servicesV2.css:24-26 records the same dark-on-dark
+   defect at 1.03:1 during prototype review, on headings rather than tiles. The
+   shape recurs because inverting a component on a dark surface means overriding
+   every colour-bearing property it inherits, and `background` is the one that
+   looks fine in review: the markup is right, the tokens are all valid, and the
+   DOM probe passes. Only a rendered pixel disagrees.
+
+   NOT CATCHABLE BY THE TOKEN TEST, which is why the guard lives elsewhere. Every
+   token here is real and correctly spelled; it is the COMBINATION that fails.
+   The regression guard is the computed-contrast assertion in
+   tests/systemV2/caseStudyPublic.e2e.js, which is what found it. */
+.cbv2-stories__ledger { margin-top: var(--space-12); }
+.cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__value { color: var(--text-on-inverse); }
+.cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__label { color: var(--text-on-inverse); }
+.cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__item {
+  background: transparent;
+  border-color: var(--border-strong);
 }
 
-.cbv2-story__head {
+/* --------------------------------------------------------------- layout --- */
+
+/* Filters beside results on a wide screen, stacked below it. `minmax(0, ...)`
+   on both tracks so a long facet label or an unbroken word in a card cannot
+   widen a column and push the page sideways at 320px. */
+.cbv2-stories__layout {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
   align-items: start;
 }
-.cbv2-story__who {
-  margin: 0 0 var(--space-1);
-  font-size: var(--fs-caption);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-subtle);
-}
-.cbv2-story__sector { color: var(--chart-1); }
-.cbv2-story__headline {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-h3);
-  line-height: 1.2;
-  color: var(--text-strong);
-  text-wrap: balance;
+
+@media (min-width: 64rem) {
+  .cbv2-stories__layout { grid-template-columns: minmax(0, 18rem) minmax(0, 1fr); }
+  /* Sticky only where there is room for it; on a short viewport it would trap
+     the results behind a panel that never scrolls away. */
+  .cbv2-stories__aside { position: sticky; top: var(--space-20); }
 }
 
-.cbv2-story__body {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-5);
-}
-.cbv2-story__part h3 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--fs-caption);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-subtle);
-}
-.cbv2-story__part p { margin: 0; color: var(--text-muted); line-height: 1.65; }
+.cbv2-stories__aside { display: grid; gap: var(--space-4); min-width: 0; }
+.cbv2-stories__main { display: grid; gap: var(--space-6); min-width: 0; }
 
-/* The evidence requirement is part of the card rather than a footnote: it is
-   what separates this format from the fabricated version it replaces. */
-.cbv2-story__needed {
+/* ------------------------------------------------------------- toolbar --- */
+
+.cbv2-stories__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+}
+
+/* The aria-live result count. It is rendered in every state, including while
+   loading, so a change to its text is announced rather than merely inserted. */
+.cbv2-stories__count {
   margin: 0;
-  padding: var(--space-4);
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Disclosures about what the page is doing: a withheld verification class, a
+   facet menu that did not load. Read as notes, never as controls. */
+.cbv2-stories__note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
   background: var(--surface-sunken);
   border-left: var(--border-3) solid var(--chart-1);
   border-radius: var(--radius-sm);
-  font-size: var(--fs-body-sm);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-relaxed);
   color: var(--text-muted);
-  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
-.cbv2-story__needed strong { color: var(--text-strong); }
 
-@media (max-width: 900px) {
-  .cbv2-story__body { grid-template-columns: minmax(0, 1fr); }
-  .cbv2-story__head { grid-template-columns: auto minmax(0, 1fr); }
-  .cbv2-story__head .cbv2-evidence { grid-column: 1 / -1; }
+/* ------------------------------------- loading / failed / empty states ---- */
+
+/* One box, four different sentences. The states are told apart by their words
+   and by `data-empty`, never by colour: a reader who cannot see the tint must
+   still be able to tell "nothing is published" from "nothing matched". */
+.cbv2-stories__state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-8);
+  background: var(--surface-sunken);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  line-height: var(--lh-relaxed);
+  overflow-wrap: anywhere;
+}
+.cbv2-stories__state p { margin: 0; }
+
+/* -------------------------------------------------------------- results --- */
+
+.cbv2-stories__results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 48rem) {
+  .cbv2-stories__results { grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+}
+
+.cbv2-stories__result { display: grid; min-width: 0; }
+
+/* ------------------------------------------------------------------ cta --- */
+
+.cbv2-stories__cta { display: grid; justify-items: center; gap: var(--space-5); text-align: center; }
+.cbv2-stories__cta .cbv2-lede { margin: 0; }
+
+.cbv2-stories__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-4);
 }

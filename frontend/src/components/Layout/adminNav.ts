@@ -75,6 +75,14 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
     { path: '/admin/brain', label: 'Enterprise Intelligence', icon: 'brain-line' },
     { path: '/admin/projects', label: 'Projects', icon: 'rocket-2-line' },
+    // Case Studies sit in Program because a Case Study is the publishable
+    // projection of a Project, so the roles that manage Projects manage these.
+    // The section MUST stay 'program': the backend's mgmtSectionGate maps
+    // /api/admin/case-studies to 'program', and without a matching nav entry
+    // sectionForPath() returns null, which hides the link AND makes
+    // ProtectedRoute bounce every scoped identity while a legacy admin who
+    // types the URL still sees a working page.
+    { path: '/admin/case-studies', label: 'Case Studies', icon: 'award-line' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },

@@ -17,6 +17,7 @@ import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
 import PricingV2 from './pages/publicV2/PricingV2';
 import StoriesV2 from './pages/publicV2/StoriesV2';
+import StoryDetailV2 from './pages/publicV2/StoryDetailV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -108,6 +109,20 @@ function App() {
             <Route path="start" element={<Navigate to="/try" replace />} />
             <Route path="pricing" element={<PricingV2 />} />
             <Route path="stories" element={<StoriesV2 />} />
+            {/*
+                The published-record detail surface. Declared WITHOUT a leading
+                slash, like every other child of this layout route -- a leading
+                slash here would make it an absolute path and it would not nest.
+
+                DELIBERATELY NOT LAZY. The shared cbv2- primitives this page
+                leans on (.cbv2-pagehero, .cbv2-section, .cbv2-btn, .cbv2-rv)
+                live in homeV2.css / servicesV2.css / publicV2.css /
+                cinematicV2.css and are only in the bundle because these V2 pages
+                are imported statically here. Splitting this route out would ship
+                it without its own layout primitives -- see the warning at the
+                top of proofV2.css.
+            */}
+            <Route path="stories/:slug" element={<StoryDetailV2 />} />
           </Route>
           <Route element={<PublicLayout />}>
             {publicRoutes}
