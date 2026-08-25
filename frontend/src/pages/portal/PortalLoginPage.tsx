@@ -61,10 +61,54 @@ function PortalLoginPage() {
               </svg>
             </div>
             <h1 className="cbpl-sent-title">Check your email</h1>
+            {/*
+              CONDITIONAL, because the send is conditional and this screen used to
+              pretend otherwise.
+
+              `requestMagicLink` returns `success: true` for an address it did not
+              recognise, on purpose: answering "no such account" here would turn the
+              login form into an email-enumeration oracle. It says so honestly in its
+              own message ("If an active enrollment exists for this email, a link has
+              been sent") and this page threw that sentence away, replacing it with
+              the flat assertion "We sent a secure access link to <address>".
+
+              So a student who typed the wrong address was told, as a statement of
+              fact, that mail was on its way to them. Nothing was sent, nothing could
+              arrive, and there was no signal anywhere on screen to explain it. On
+              2026-08-24 a student lost an evening of a live class to exactly this:
+              he reached the class check-in page, asked for a sign-in link, read this
+              screen, and waited for mail that had never been generated.
+
+              The wording below is the same promise the server actually makes, and it
+              leaks nothing: it is true and identical whether or not the address
+              matched. The follow-up line names the one cause a student can act on,
+              which is the only part that was ever missing.
+
+              WHAT IS PROVEN, as opposed to inferred: Mandrill holds no "[Accelerator]
+              Your Portal Access Link" to that student anywhere in the evening of
+              2026-08-24 (the only one that day was 13:10:55Z), and his enrollment's
+              `portal_token_expires_at` still read exactly 24h after that morning
+              link. `requestMagicLink` rewrites the token on every successful lookup,
+              so an unmoved expiry is proof that no evening request ever matched the
+              account. What is NOT established is the exact keystroke he typed, and
+              this copy deliberately does not need to know.
+
+              NOT FIXED HERE, and deliberately: `sendPortalMagicLink` also returns
+              normally when `transporter` is null, so a misconfigured SMTP env
+              produces this same screen for mail that was never attempted. That is a
+              server-contract change with its own blast radius (it would start
+              throwing in every environment without SMTP, including tests) and it
+              belongs in its own PR.
+            */}
             <p className="cbpl-text">
-              We sent a secure access link to <strong>{email}</strong>. Click it to sign in.
+              If <strong>{email}</strong> is the address you enrolled with, a secure
+              access link is on its way. Click it to sign in.
             </p>
-            <p className="cbpl-text cbpl-text-sub">The link expires in 24 hours.</p>
+            <p className="cbpl-text cbpl-text-sub">
+              The link expires in 24 hours. If nothing arrives, check spam, then try
+              again with the address your enrollment is under. We can only send to
+              that one.
+            </p>
             <button
               type="button"
               className="cbpl-linkbtn"
