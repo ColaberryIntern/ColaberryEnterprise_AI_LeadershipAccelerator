@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 6:08 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">61 changes</span></div>
+    <div class="meta">Generated Tuesday, August 25, 2026 at 6:42 AM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">64 changes</span></div>
   </header>
   <main>
     
@@ -972,6 +972,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">an unobserved signal assesses as **`unknown`, never `healthy`**; `hasReading` never infers a value; a candidate drawn from absent telemetry is **refused**; a candidate *about* the missing measurement is **allowed**; a created candidate is `proposed`, requires human review, and exposes no way to apply itself.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">a system that changes production in response to its own telemetry has nobody to ask when the telemetry is wrong. Latency spikes because a client ran a bulk import, the optimizer &quot;fixes&quot; it by widening a cache, the next import is served stale data — every step locally reasonable, nobody decided anything. A candidate keeps a person at the only point where the loop matters: before the change, not in the postmortem. `not_observed` is a first-class state rather than a null because a nullable number invites `value ?? 0`, and a zero error rate meaning &quot;no data&quot; is indistinguishable from one meaning &quot;nothing broke&quot;. **No signal has ever arrived** — nothing here is deployed — which is exactly why an operate surface that renders green on absent data is the failure most likely to occur.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">62</span>
+          <h2>**Delivery acceptance is not publication consent**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/caseStudy.ts` and `services/delivery/caseStudyAdapter.ts` — the publishable-fact vocabulary, three independent consents, `buildCaseStudyCandidate`, `approveForPublication`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a case study about work the client never accepted is **refused**; a candidate runs **anonymous** when name-use was not approved even though a name is on file; publication consent with no recorded approver is refused; a named study cannot be approved on publication consent alone; a non-publishable fact is dropped **and reported**; re-approving an approved candidate is refused; a test asserts the adapter exports **no `publish` function**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this is the distinction most likely to be lost. A client accepting a release says *&quot;this is what we asked for&quot;* — not *&quot;use our name in your marketing.&quot;* Different decisions, different people, different timescales: the acceptance often by a technical owner, the publication permission by someone in communications or legal who has never seen the project. Conflating them is not a hypothetical risk, it is the **default outcome** of any design where one flag gates both. Hence three independent consents. **Anonymity is modelled as a first-class supported outcome, not a degraded one** — &quot;a state transportation agency&quot; is a real case study, and making the honest choice the easy one removes the pressure to chase a name-use permission that was never given. A descriptor is required even when the client is named, because it is what the study falls back to if name-use is later withdrawn. The module exposes no `publish`: §Gate 15 says publication remains separately approved, and the way to make that true is for the code to be structurally incapable of publishing.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">63</span>
+          <h2>**Marketing analytics refuses the payload rather than stripping it**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`findClientIdentifiers` and `guardAnalyticsPayload` in `modules/delivery/caseStudy.ts`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">client-identifying fields are found at any depth with a path; `engagement_id`, `repo_url`, `contract_value` and `preview_ref` are all caught; an ordinary marketing payload passes untouched (the negative control); a truncated walk reports a hit rather than returning clean; a cyclic payload terminates.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this deliberately behaves **differently from Gate 10&#39;s client projection**. Gate 10 strips, because there the request is legitimate and only some fields are not. Here the whole payload is suspect: an analytics event carrying `client_name` was built by code that believes client identity belongs in analytics, and silently removing the field leaves that code in place to do it again somewhere this guard is not watching. The identifying-fragment list is also separate from Gate 10&#39;s forbidden categories on purpose — `engagement_id` and `repo_url` are perfectly legitimate on a delivery API and a disclosure the moment they reach marketing. Same field, different surface, different verdict.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">64</span>
+          <h2>**E2E scenarios: specified in full, executed not at all**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `docs/architecture/refactored-delivery-os/E2E_SCENARIOS.md`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**none — and that is the point.** The document reports zero results. Every row of its status table reads &quot;no&quot; under &quot;E2E executed&quot;.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §8 requires seven end-to-end scenarios. All seven are specified precisely enough to execute, each with the chain, the observable that proves it, and **why that observable rather than an easier one** — scenario F must assert **404 not 403**, because 403 confirms the resource exists, and the difference between &quot;you may not see this&quot; and &quot;this is not here&quot; is the whole difference between a denial and a disclosure. Four of the seven require a deploy that §20 forbids; all seven require a running stack; scenario B is additionally blocked on the client identity question Gate 2 never closed. The document states plainly: *nothing in this repository should be read as evidence that the delivery OS works end to end. What the gates establish is that each component behaves as specified under test. That is a real and useful thing. It is not the same thing.* A system whose parts are each individually verified can still fail at every seam between them, and the seams are what an E2E run exercises.</span></div>
           
         </div>
       </article>
