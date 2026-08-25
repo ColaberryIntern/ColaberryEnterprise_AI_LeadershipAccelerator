@@ -90,4 +90,21 @@ describe('POST /api/admin/workforce/org-chart/members/:id/tasks — happy/failur
 
     expect(res.status).toBe(403);
   });
+
+  // Real bug, caught live 2026-08-25: a deactivated agent that was genuinely
+  // in the hierarchy (not the cross-hierarchy case above) was still
+  // assignable — same 403 posture as AgentNotInHierarchyError, generic
+  // `.status` handling in the controller's fail() needs no route-specific code.
+  it('deactivated agent: service throws AgentDeactivatedError (status 403) -> route returns 403', async () => {
+    const err: any = new Error('Agent "FinanceIntelligenceArchitect" (agent-1) is currently deactivated and cannot be assigned a task.');
+    err.status = 403;
+    assignTaskToAgent.mockRejectedValue(err);
+
+    const res = await request(app)
+      .post('/api/admin/workforce/org-chart/members/human-1/tasks')
+      .send(VALID_BODY);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain('deactivated');
+  });
 });
