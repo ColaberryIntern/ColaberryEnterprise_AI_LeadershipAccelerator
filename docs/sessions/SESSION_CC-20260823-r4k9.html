@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 24, 2026 at 4:26 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">55 changes</span></div>
+    <div class="meta">Generated Monday, August 24, 2026 at 5:40 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">58 changes</span></div>
   </header>
   <main>
     
@@ -882,6 +882,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`THROUGHPUT_RATIO_VALIDATION` is `&#39;unvalidated&#39;`; every computed ratio carries that state and a caveat string; a zero denominator returns **null, not Infinity**; the ratio is not interpretable below ten verified stories; client **and** external publication are refused while unvalidated; internal use is permitted (the negative control); absent measures are omitted rather than reported as zero.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">&quot;do not market externally until validated&quot; is a sentence in a plan, and plans are read once. The ratio, once it exists and produces a flattering number, will be put on a slide by someone who never read the plan — that is not cynicism, it is how every internal metric escapes. So the validation state is a value this module exports, it travels with every computed ratio, and publication is refused while it is unvalidated. A number that cannot be separated from its own caveat is much harder to misquote. **A client is not an internal audience** — a number shown to a client becomes a claim about what they are buying, and an unvalidated efficiency ratio is not a claim we can support. The denominator is *judgment acts, not hours*: a time denominator improves when people work faster, which measures pace; a judgment denominator improves when the system needs fewer human decisions per unit of verified output, which is the actual claim being tested and does not reward overwork. `null` rather than `Infinity` for a zero denominator because zero human judgment effort does not mean infinite efficiency — it means nobody has reviewed anything yet, and `Infinity` on a dashboard is exactly the number that gets screenshotted.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">56</span>
+          <h2>**Versioned delivery profiles that never claim compliance**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `modules/delivery/deliveryProfiles.ts` — three profiles (`commercial_standard`, `internal_tool`, `government_public_sector`), the twelve government baseline categories, the seven injections, and `assertNoComplianceClaim`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the government profile carries all twelve baseline categories; every profile is versioned, states its intent and protects at least one category from silent removal; the internal-tool profile is lighter than government but **not empty**; conformance claims against eleven named standards are refused, as is &quot;fully compliant&quot;; an accurate description of what we examine is permitted (the negative control — a guard that flagged every mention of a standard would make an honest scope statement impossible and would be routed around).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">master plan §Gate 13 says **do not claim universal compliance**, and that instruction shapes the module. A profile is *a list of things we check* — not a certification, an attestation, or a statement that a delivery satisfies any named standard. Meeting `government_public_sector` does not make a system FedRAMP authorized, Section 508 conformant, StateRAMP approved or CJIS compliant; those are determinations made by assessors and authorizing officials, not by a table in this repo. `ComplianceClaim` is therefore a type whose **only legal value is `&#39;none&#39;`** — &quot;we are FedRAMP compliant&quot; cannot be expressed by this system at all. `assertNoComplianceClaim` is a tripwire over the words someone would actually write on a capability statement or bid response; it cannot catch every phrasing, and **the module says so**, because a control that overstates its own coverage is the same failure it is guarding against. The internal-tool profile is deliberately lighter but not empty: &quot;internal&quot; lowers the ceremony, not the floor — an internal tool that mishandles staff data is still a breach.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">57</span>
+          <h2>**Contract requirements: add and tighten freely, waive only on the record**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `services/delivery/profileResolution.ts` — `resolveProfile` and `specializationEvidenceFor`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a version mismatch **refuses to resolve** rather than falling back to the current baseline; adding leaves the whole baseline intact; a tighten against a category the profile lacks is accepted but flagged; a waiver with no reason or no named approver is refused; a properly recorded waiver succeeds and emits `baseline_category_waived`; a structural test asserts resolved categories **plus** waived categories always account for the entire baseline.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the dangerous reading of &quot;contract-specific requirements override&quot; is **deletion** — accessibility quietly dropped from a government engagement, discovered later by an assessor. The mundane version is worse: nobody deletes anything on purpose, a category just never makes it into the resolved set because an override replaced a list instead of extending it. So the module distinguishes **add**, **tighten** and **waive**, and a waiver requires a reason and a named approver. A waiver is not a loophole; it is the honest form of a decision that would otherwise happen silently. Public bodies do sometimes waive a requirement for good reason — what they cannot do is discover afterwards that nobody recorded it. Pinning matters for the same reason: requirements must not shift under a signed contract, so a profile revision is adopted **by decision**, not by being deployed. Silently upgrading a pinned engagement would be invisible, because the result would look perfectly reasonable.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">58</span>
+          <h2>**ESC-2 closed — by the multi-tenancy workstream, not by this one**</h2>
+          <span class="badge">2026-08-24</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in this workstream. Recorded because the constraint it imposed is now lifted.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`modules/tenancy/organizationScope.ts` is on main; `adminOrgService` applies `orgScopeWhere(scope)` at seven call sites including `listOrganizations` and `getOrganizationDetail`, with tenant scope applied **first** so a filter cannot widen it; `services/__tests__/adminOrgScope.test.ts` covers the superadmin and null-tenant cases.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ESC-2 was raised at Gate 1, when relaxing `Organization.owner_enrollment_id` made client organizations expressible while `adminOrgService` still had **zero** tenant filtering. I deliberately did not absorb it — `tenantScopeWhere` had no callers outside the tenancy module, and a naive fail-closed scoping could have blanked the live admin Organizations page. It belonged to the multi-tenancy workstream and that is where it was fixed. Their module reuses the same `IntelligenceScope` type as the memory graph, so the account list and the graph cannot disagree about who may read what, and an organization with a null `tenant_id` is treated as an anomaly reachable only by a platform superadmin rather than folded into a tenant&#39;s list. **The standing constraint &quot;no client organization should be created until ESC-2 closes&quot; is lifted.** Not independently re-verified from this side: their production backfill claim of 6 of 6 organizations classified — that is their evidence, in their PR.</span></div>
           
         </div>
       </article>
