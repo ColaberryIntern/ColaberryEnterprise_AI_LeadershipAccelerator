@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, August 25, 2026 at 6:42 AM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">64 changes</span></div>
+    <div class="meta">Generated Tuesday, August 25, 2026 at 12:23 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">70 changes</span></div>
   </header>
   <main>
     
@@ -1017,6 +1017,96 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**none — and that is the point.** The document reports zero results. Every row of its status table reads &quot;no&quot; under &quot;E2E executed&quot;.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">master plan §8 requires seven end-to-end scenarios. All seven are specified precisely enough to execute, each with the chain, the observable that proves it, and **why that observable rather than an easier one** — scenario F must assert **404 not 403**, because 403 confirms the resource exists, and the difference between &quot;you may not see this&quot; and &quot;this is not here&quot; is the whole difference between a denial and a disclosure. Four of the seven require a deploy that §20 forbids; all seven require a running stack; scenario B is additionally blocked on the client identity question Gate 2 never closed. The document states plainly: *nothing in this repository should be read as evidence that the delivery OS works end to end. What the gates establish is that each component behaves as specified under test. That is a real and useful thing. It is not the same thing.* A system whose parts are each individually verified can still fail at every seam between them, and the seams are what an E2E run exercises.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">65</span>
+          <h2>**Schema rehearsal — the largest unverified risk, closed**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/scripts/rehearseRefactoredDeliverySchema.ts`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">against `pgvector/pgvector:pg15` (the image production runs) — pass 1 **62/62** statements on an empty database, pass 2 **62/62** again, **19 tables / 58 indexes identical after both**, **idempotent: YES**. ESC-1 checked rather than asserted: `owner_enrollment_id` nullable YES, `organization_type` added YES, unique index **KEPT**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the second pass is the one that matters — a `CREATE TABLE` missing `IF NOT EXISTS`, or an `ALTER TABLE ADD CONSTRAINT` (which has no `IF NOT EXISTS` form), passes once and fails **every boot afterwards**. The script refuses to run without an explicitly supplied throwaway URL: no default, no `DATABASE_URL` fallback, and a host check. Two harness bugs were found and fixed while writing it, **both of which reported success from a broken check** — destructuring `sequelize.query` without `QueryTypes.SELECT` yields the first *row* not the rows array, and `information_schema` identifiers come back as `sql_identifier` so every name read `undefined` while the count stayed right. Ground truth confirmed with `psql`, not through the harness.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">66</span>
+          <h2>**Gate 2&#39;s client-identity question — answered YES, no schema change**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `docs/architecture/refactored-delivery-os/CLIENT_IDENTITY_ANSWER.md`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`PlatformIdentity` has no FK to enrollment or admin user; links live in a separate child table and an identity with **zero links is structurally valid**; `ensurePlatformIdentity({ email })` creates one from an email alone; `grantTenantMembership` needs only the identity id.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">open since Gate 0, blocked E2E scenario B through Gate 15. The model was built for exactly this — its docstring names a CPN community partner *&quot;who will never enroll in a course&quot;*. **The real blocker is narrower:** no auth path authenticates a `PlatformIdentity` (verified as zero references in `backend/src/middlewares/`). Represented ✅, authorized ✅, **can log in ❌**. Not built here on purpose: it modifies authentication, a governance boundary, and the model&#39;s author called it &quot;a separate change with its own blast radius&quot;. Three options written up — magic-link or Google SSO, **never** extending the admin session, because the client surface&#39;s safety property is that a client session is not a builder session.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">67</span>
+          <h2>**Agent SDK binding — written from the documentation, not from memory**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `claudeAgentSdkProvider.ts` + 17 tests, filling the seam Gate 8 deliberately left empty.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">17/17 tests, every one injecting a fake SDK — nothing loads the real package or touches the network.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">two facts found by looking rather than assuming. **The SDK is ESM-only** (`main: sdk.mjs`) while this backend is `&quot;module&quot;: &quot;commonjs&quot;`; and **TypeScript compiling to CJS rewrites `import()` into `require()`**, so the obvious dynamic import is silently downlevelled into exactly the thing that cannot load an ES module — failing at runtime in production rather than at compile time. The `new Function(&#39;s&#39;,&#39;return import(s)&#39;)` indirection is the standard escape; it looks like a hack and is load-bearing.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">68</span>
+          <h2>**GitHub Actions runner workflow — ESC-4 becomes an enforcer**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `.github/workflows/delivery-execution-runner.yml`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">YAML parses; `workflow_dispatch` is the only trigger; zero production secrets referenced; a step fails if `DATABASE_URL`, `MANDRILL_API_KEY`, `BASECAMP_TOKEN`, `OPENAI_API_KEY` or `AWS_ACCESS_KEY_ID` appear.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`executionPolicy.ts` records `runner_isolation` as the enforcer for five of eight denied capabilities — **this file is that enforcer**. It asserts `RUNNER_ENVIRONMENT=github-hosted` rather than trusting a caller&#39;s flag. The execute step **fails loudly** with &quot;entrypoint not implemented&quot; rather than echoing success: a green workflow that ran nothing would be worse than a red one.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">69</span>
+          <h2>**Both UI halves — 16 screens, approved from a mockup first**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`DeliveryShell`, `DeliveryPrimitives`, `ClientReviewRoom`, `BuilderWorkspace`, routes, and the mockup at `docs/REFACTORED_DELIVERY_OS_UI_MOCKUP.html`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc` clean in every touched file; CI 7/7; **deployed to dev and looked at**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the `baseline-ui` skill&#39;s palette table was wrong** — it listed `#1a365d` navy; the real token is `#FB2832` cherry. Reading the source file the skill points at, rather than its summary, is the only reason these match the product. Fixed separately in PR #1812.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">70</span>
+          <h2>**A defect only visible by looking, and the fix**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">client route moved outside `AdminLayout`; `ClientReviewRoom` given its own page frame.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">screenshots before and after, on dev then production. **0 console errors** on both surfaces.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the Client Review Room rendered **inside the admin shell** — a surface badged &quot;Client view&quot; beside a sidebar reading Revenue, Campaigns, Lead Ingestion, Intelligence. `tsc` passed, 7/7 CI passed, every component was correct in isolation; the fault existed only in the composition. Not a leak while the route is staff-only and no client can authenticate — but it makes the eventual mistake easy. **While fixing it I deleted `/admin/va-erp`**, another workstream&#39;s route: my original registration wrote LF lines into a CRLF file, so splitting on `\r\n` treated three logical lines as one element. Restored, normalized, byte-level verified. `git diff --stat` said &quot;3 deletions&quot; and looked unremarkable.</span></div>
           
         </div>
       </article>
