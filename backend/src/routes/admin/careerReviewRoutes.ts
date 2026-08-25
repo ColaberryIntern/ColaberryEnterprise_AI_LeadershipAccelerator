@@ -4,7 +4,6 @@ import { requireCareerReviewer } from '../../middlewares/requireCareerReviewer';
 import {
   handleGetReviewQueue,
   handleReviewDecision,
-  handleSuspendPublication,
 } from '../../controllers/careerPublicationController';
 import { grantScope, revokeScope, listScopes } from '../../services/career/careerMentorScopeService';
 
@@ -21,12 +20,12 @@ const router = Router();
  *                          admin-only even though they sit in the same file.
  *
  * Clients/employers reach none of this. With no admin token they fail the first check,
- * and their only career surface is the frozen public snapshot at /api/public/talent/:slug.
+ * and their only career surface is the published Capstone Record at /p/:slug, served by
+ * Capstone's own public reader.
  */
 
 router.get('/api/admin/career/review-queue', requireCareerReviewer, handleGetReviewQueue);
-router.post('/api/admin/career/review/:snapshotId', requireCareerReviewer, handleReviewDecision);
-router.post('/api/admin/career/publication/:enrollmentId/suspend', requireCareerReviewer, handleSuspendPublication);
+router.post('/api/admin/career/review/:recordId', requireCareerReviewer, handleReviewDecision);
 
 // ── Mentor privilege, admin-only ───────────────────────────────────────────
 
