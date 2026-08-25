@@ -673,6 +673,57 @@ describe('OrgChartHumanDrawer — assign task', () => {
     expect(optionLabels).not.toContain(expect.stringContaining('Workforce Intelligence Engine'));
   });
 
+  // Real bug, caught live 2026-08-25: Taiwo assigned a task to
+  // FinanceIntelligenceArchitect, one of the 17 agents deactivated in Phase
+  // A — the picker listed it with no indication it was inactive, and the
+  // resulting ticket sat unworked forever since that agent is switched off.
+  it('excludes a deactivated (enabled:false) agent from the picker, even though it is genuinely in the hierarchy', async () => {
+    getOrgChart.mockResolvedValue({
+      ...CHART,
+      leadership: [{ ...CHART.leadership[0], enabled: false }, CHART.leadership[1]], // CoryBrain deactivated
+    });
+    await render();
+
+    const aliCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Ali Muwwakkil')) as HTMLElement;
+    await act(async () => {
+      aliCard.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const openButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Assign task') as HTMLElement;
+    await act(async () => {
+      openButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const select = container.querySelector('select[aria-label="Assign task to agent"]') as HTMLSelectElement;
+    const optionLabels = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+
+    // The deactivated CoryBrain is gone; the still-enabled AI Staff under it
+    // (Admissions Conversion Architect) is unaffected — only the agent that
+    // is ACTUALLY deactivated drops out, not everyone downstream of it.
+    expect(optionLabels).toEqual(['Admissions Conversion Architect (AI Staff)']);
+    expect(optionLabels).not.toContain(expect.stringContaining('Cory Brain'));
+  });
+
+  it('boundary: when EVERY agent in the hierarchy is deactivated, the whole "Assign task" section disappears rather than offering an empty picker', async () => {
+    getOrgChart.mockResolvedValue({
+      ...CHART,
+      leadership: [{ ...CHART.leadership[0], enabled: false }, CHART.leadership[1]],
+      staff: [{ ...CHART.staff[0], enabled: false }],
+    });
+    await render();
+
+    const aliCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Ali Muwwakkil')) as HTMLElement;
+    await act(async () => {
+      aliCard.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const openButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Assign task');
+    expect(openButton).toBeUndefined();
+  });
+
   it('submitting calls assignHierarchyTask with a generated idempotency key, and a retry (form stays open on failure) reuses the SAME key', async () => {
     await openAliDrawerAndAssignForm();
 
