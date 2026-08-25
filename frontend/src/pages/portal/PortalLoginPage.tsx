@@ -76,7 +76,7 @@ function PortalLoginPage() {
               fact, that mail was on its way to them. Nothing was sent, nothing could
               arrive, and there was no signal anywhere on screen to explain it. On
               2026-08-24 a student lost an evening of a live class to exactly this:
-              he reached the class check-in page, asked for a sign-in link, read this
+              she reached the class check-in page, asked for a sign-in link, read this
               screen, and waited for mail that had never been generated.
 
               The wording below is the same promise the server actually makes, and it
@@ -86,11 +86,11 @@ function PortalLoginPage() {
 
               WHAT IS PROVEN, as opposed to inferred: Mandrill holds no "[Accelerator]
               Your Portal Access Link" to that student anywhere in the evening of
-              2026-08-24 (the only one that day was 13:10:55Z), and his enrollment's
+              2026-08-24 (the only one that day was 13:10:55Z), and her enrollment's
               `portal_token_expires_at` still read exactly 24h after that morning
               link. `requestMagicLink` rewrites the token on every successful lookup,
               so an unmoved expiry is proof that no evening request ever matched the
-              account. What is NOT established is the exact keystroke he typed, and
+              account. What is NOT established is the exact keystroke she typed, and
               this copy deliberately does not need to know.
 
               NOT FIXED HERE, and deliberately: `sendPortalMagicLink` also returns
