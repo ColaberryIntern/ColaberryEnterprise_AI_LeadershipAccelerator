@@ -124,6 +124,22 @@ async function main(): Promise<void> {
     console.log(`[seed] reusing PlatformIdentity ${identity.id}`);
   }
 
+  // --- tenant -------------------------------------------------------------------------
+  // Resolved by slug from the real tenants table, never invented. `delivery_engagements`
+  // declares tenant_id NOT NULL, and a seed that minted its own tenant id would create a
+  // row belonging to a tenant that does not exist - which is worse than failing here,
+  // because every tenancy-scoped query would then quietly skip it.
+  const [tenant] = await sequelize.query<{ id: string; name: string }>(
+    "SELECT id, name FROM tenants WHERE slug = 'refactored' LIMIT 1",
+    { type: QueryTypes.SELECT },
+  );
+  if (!tenant) {
+    throw new Error(
+      "No tenant with slug 'refactored' exists in this database. Refusing to invent one.",
+    );
+  }
+  console.log(`[seed] tenant: ${tenant.name} (${tenant.id})`);
+
   // --- organization + engagement + project --------------------------------------------
   // ESC-1 in practice: a client organization with no owning enrollment. This row is the
   // reason that column was relaxed to nullable.
@@ -133,16 +149,21 @@ async function main(): Promise<void> {
       name: 'Northwind Transit (demo)',
       organization_type: 'client',
       owner_enrollment_id: null,
+      tenant_id: tenant.id,
     });
     console.log(`[seed] created client Organization ${org.id}`);
+  } else if (!org.tenant_id) {
+    // A partial run from before the tenant was resolved. Repair rather than duplicate.
+    await org.update({ tenant_id: tenant.id });
+    console.log(`[seed] backfilled tenant on Organization ${org.id}`);
   }
 
   let engagement = await DeliveryEngagement.findOne({ where: { organization_id: org.id } });
   if (!engagement) {
     engagement = await DeliveryEngagement.create({
       organization_id: org.id,
-      tenant_id: org.tenant_id ?? null,
-      name: 'Northwind Transit — arrivals platform',
+      tenant_id: tenant.id,
+      name: 'Northwind Transit - arrivals platform',
       status: 'active',
     });
     console.log(`[seed] created DeliveryEngagement ${engagement.id}`);
