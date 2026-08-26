@@ -7,6 +7,7 @@ import { timeAgo } from '../../components/admin/shell/trust';
 import AgentToolsCapabilitiesCard from '../../components/admin/AgentToolsCapabilitiesCard';
 import AgentTicketActivityTable from '../../components/admin/AgentTicketActivityTable';
 import AgentScheduledTasksCard from '../../components/admin/AgentScheduledTasksCard';
+import AgentTrustSummaryCard from '../../components/admin/AgentTrustSummaryCard';
 import { getTicketTypeLabel, getTicketTypeTone } from '../../utils/ticketTypeMeta';
 
 // Agent Detail — Ali's requested transparency page: who this agent is, its real
@@ -116,7 +117,10 @@ export default function AgentDetailPage() {
     return <div className="alert alert-danger">{error || 'Agent not found'}</div>;
   }
 
-  const { agent, identity, live_status, tickets, ticket_breakdown, related_tasks, capabilities, trust_contract } = detail;
+  const {
+    agent, identity, live_status, tickets, ticket_breakdown, related_tasks,
+    persona_version_history, cost_summary, authorization_summary, capabilities, trust_contract,
+  } = detail;
   // Agent Alias & Identity Fix — same fix as the Live Agents card list: prefer the
   // real AdminUser.display_name over the raw technical agent_name. Falls back to
   // agent_name for a non-blueprint agent (identity is null — no linked AdminUser).
@@ -318,6 +322,12 @@ export default function AgentDetailPage() {
           </div>
         )}
       </SectionCard>
+
+      <AgentTrustSummaryCard
+        costSummary={cost_summary}
+        authorizationSummary={authorization_summary}
+        versionHistory={persona_version_history}
+      />
 
       <SectionCard title="System prompt" icon="chat-3-line" subtitle="The real, current text sent to the model for every conversation this agent has.">
         {agent.system_prompt ? (
