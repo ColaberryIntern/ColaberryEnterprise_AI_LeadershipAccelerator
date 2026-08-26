@@ -377,6 +377,58 @@ export async function fetchCaseStudyCollection(
   return body;
 }
 
+/**
+ * A list field that a SERVER OLDER THAN THIS BUNDLE may not send yet.
+ *
+ * WHY THIS EXISTS, AND IT IS NOT DEFENSIVE PROGRAMMING FOR ITS OWN SAKE.
+ * `situation.constraints`, `situation.goals` and `architecture.dataStores`
+ * are new to the public projection. `assertShape` above only checks TOP-LEVEL
+ * keys, so a response from a backend that predates them passes it, arrives with
+ * three fields set to `undefined`, and the first component to read `.length` on
+ * one throws - which took down the whole route rather than one band. That was
+ * observed in a browser, not reasoned about: against the live production API,
+ * `StorySituation` and `TagGroup` both threw and the page rendered nothing at
+ * all.
+ *
+ * THIS IS A DEPLOY-ORDERING PROBLEM AND IT IS PERMANENT. Frontend and backend
+ * ship as separate containers, an nginx bundle can outlive a backend restart,
+ * and a browser can hold a cached bundle for as long as it likes. "Both sides
+ * deployed together" is not a property this system has.
+ *
+ * IT INVENTS NOTHING. An absent list means "none recorded", and `[]` is exactly
+ * how the NEW server encodes that same fact - `projectSituation` and
+ * `projectArchitecture` both emit `[]` rather than omitting the key. So this
+ * normalises a version difference, it does not manufacture content. Non-string
+ * entries are dropped for the same reason the server drops them: a renderer that
+ * meets a number where it expects a sentence is a defect either way.
+ */
+const wireList = (value: unknown): readonly string[] =>
+  (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+
+/**
+ * Fill the list fields an older server omits, leaving everything else untouched.
+ * Exported so the suite can prove it against a genuinely old-shaped payload.
+ */
+export function normalizeDetailResponse(
+  body: PublicCaseStudyDetailResponse,
+): PublicCaseStudyDetailResponse {
+  const record = body.caseStudy;
+  const situation = record.situation
+    ? {
+      ...record.situation,
+      constraints: wireList((record.situation as { constraints?: unknown }).constraints),
+      goals: wireList((record.situation as { goals?: unknown }).goals),
+    }
+    : null;
+  const architecture = record.architecture
+    ? {
+      ...record.architecture,
+      dataStores: wireList((record.architecture as { dataStores?: unknown }).dataStores),
+    }
+    : null;
+  return { ...body, caseStudy: { ...record, situation, architecture } };
+}
+
 export async function fetchCaseStudyDetail(
   slug: string, options: CaseStudyRequestOptions = {},
 ): Promise<PublicCaseStudyDetailResponse> {
@@ -384,7 +436,7 @@ export async function fetchCaseStudyDetail(
     `${INDEX_PATH}/${encodeURIComponent(slug)}`, null, options,
   );
   assertShape(body, ['surface', 'caseStudy'], 'detail');
-  return body;
+  return normalizeDetailResponse(body);
 }
 
 export async function fetchCaseStudyTaxonomy(

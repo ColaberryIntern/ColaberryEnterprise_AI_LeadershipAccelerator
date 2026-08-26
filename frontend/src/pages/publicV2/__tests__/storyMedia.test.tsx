@@ -321,7 +321,8 @@ describe('the human-authored diagram appears only when a human drew one', () => 
     // the section hidden - the band unreachable on exactly the records it
     // exists for - while every test about an ordinary record stayed green.
     const bare = {
-      narrative: [], stack: [], capabilities: [], integrations: [], diagram: null,
+      narrative: [], stack: [], capabilities: [], integrations: [], dataStores: [],
+      diagram: null,
       diagramSource: 'flowchart TD\n  api --> worker',
     };
     expect(architectureHasContent(bare)).toBe(true);

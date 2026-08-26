@@ -52,15 +52,31 @@ export interface CaseStudyArtifactsProps {
    * invent a destination of its own.
    */
   requestHref?: string;
+  /**
+   * The heading level for each artifact title.
+   *
+   * IT CLOSES A RECORDED OUTLINE BREAK. This component printed a fixed `h4`, and
+   * `/stories/:slug` gives every section an `h2`, so the artifacts band skipped
+   * `h3` - a real defect for anybody navigating by heading, documented at
+   * `StoryDetailV2.tsx` rather than hidden, and left open because this component
+   * belonged to a closed set another task owned. It is a prop rather than a new
+   * file, so the set is still exactly ten.
+   *
+   * Default `4` keeps every existing caller rendering exactly what it rendered
+   * before, which is what makes this a non-breaking contract change.
+   */
+  headingLevel?: 3 | 4 | 5;
   className?: string;
 }
 
 export function CaseStudyArtifacts({
   artifacts,
   requestHref,
+  headingLevel = 4,
   className,
 }: CaseStudyArtifactsProps): React.ReactElement | null {
   if (artifacts.length === 0) return null;
+  const Heading = `h${headingLevel}` as 'h3' | 'h4' | 'h5';
 
   return (
     <ul className={`cbv2-cs-artifacts${className ? ` ${className}` : ''}`}>
@@ -80,7 +96,7 @@ export function CaseStudyArtifacts({
             <img className="cbv2-cs-card__media" src={artifact.previewUrl} alt="" loading="lazy" />
           ) : null}
 
-          <h4 className="cbv2-cs-artifact__title">{artifact.title}</h4>
+          <Heading className="cbv2-cs-artifact__title">{artifact.title}</Heading>
 
           {artifact.description ? (
             <p className="cbv2-cs-artifact__desc">{artifact.description}</p>

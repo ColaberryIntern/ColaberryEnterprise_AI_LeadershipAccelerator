@@ -120,6 +120,10 @@ const detail = (over: Partial<PublicCaseStudyDetail> = {}): PublicCaseStudyDetai
   situation: {
     heading: 'The situation',
     body: ['Planners rebuilt the same route by hand every morning.'],
+    // Empty by default: both lists are optional on every real record, so the
+    // ordinary fixture must exercise the path where they render nothing.
+    constraints: [],
+    goals: [],
   },
   timeline: [timelineEntry()],
   architecture: architecture(),
@@ -453,8 +457,8 @@ describe('sections hide when unsupported rather than rendering empty', () => {
   it('hides an architecture section whose every field is empty', async () => {
     detailMock.mockResolvedValue(response({
       architecture: {
-        narrative: [], stack: [], capabilities: [], integrations: [], diagram: null,
-        diagramSource: null,
+        narrative: [], stack: [], capabilities: [], integrations: [], dataStores: [],
+        diagram: null, diagramSource: null,
       },
     }));
     mount();

@@ -410,7 +410,9 @@ describe('the indicators count, and never score', () => {
   it('counts prose sections not at all, because that would be counting paragraphs', () => {
     // `heading` is a non-nullable string on the wire; the page falls back to its
     // own label when the publisher left it empty, which is what '' models here.
-    const record = detail({ situation: { heading: '', body: ['one', 'two', 'three'] } });
+    const record = detail({
+      situation: { heading: '', body: ['one', 'two', 'three'], constraints: [], goals: [] },
+    });
     expect(sectionCount(record, 'situation')).toBeNull();
     expect(SECTION_COUNT_NOUNS.situation).toBeUndefined();
   });

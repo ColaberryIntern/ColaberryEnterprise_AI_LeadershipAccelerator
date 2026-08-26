@@ -9,6 +9,7 @@ import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVeri
 import { BUILT_BY_LABELS, REPO_ROLE_LABELS } from '../../config/caseStudySurfaces';
 import StoryDiagram from './StoryDiagram';
 import StoryMediaCarousel from './StoryMediaCarousel';
+import StorySituation from './StorySituation';
 import {
   anonymousContributorNote,
   contributorLabel,
@@ -237,13 +238,10 @@ export function StorySectionBody({
 }): React.ReactElement | null {
   switch (sectionKey) {
     case 'situation':
-      return (
-        <div className="cbv2-cs-arch__prose">
-          {(record.situation?.body ?? []).map((paragraph, index) => (
-            <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
-          ))}
-        </div>
-      );
+      // The narrative plus `constraints` and `goals` - two fields that have
+      // always been authored and gated and were never projected. Page-local for
+      // the same reason everything here is.
+      return <StorySituation situation={record.situation} />;
     case 'build':
       return <CaseStudyTimeline entries={record.timeline} />;
     case 'architecture':
@@ -278,7 +276,13 @@ export function StorySectionBody({
       return (
         <div data-story-zone="artifacts">
           <StoryMediaCarousel slides={carouselSlides(record.artifacts, placedHrefs)} />
-          <CaseStudyArtifacts artifacts={record.artifacts} requestHref={record.cta.href} />
+          {/* `headingLevel={3}` closes the h2 -> h4 skip this band used to
+              carry. The component's default is still 4 for every other caller. */}
+          <CaseStudyArtifacts
+            artifacts={record.artifacts}
+            requestHref={record.cta.href}
+            headingLevel={3}
+          />
         </div>
       );
     case 'repositories':

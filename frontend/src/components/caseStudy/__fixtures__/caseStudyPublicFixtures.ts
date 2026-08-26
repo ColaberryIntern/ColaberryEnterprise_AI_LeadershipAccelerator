@@ -80,6 +80,12 @@ export const architecture = (
   stack: ['Claude', 'Postgres'],
   capabilities: ['Agentic workflow'],
   integrations: ['Warehouse export'],
+  // EMPTY BY DEFAULT, and for the same reason `diagramSource` is null by
+  // default: it is the ordinary case. Data stores are derived from repository
+  // evidence, so a front-end-only repository yields none, and a fixture that
+  // supplied them by default would make "the list hides when empty" the unusual
+  // path rather than the one every other suite exercises.
+  dataStores: [],
   diagram: {
     nodes: [
       { key: 'api', label: 'Planner API', kind: 'service' },

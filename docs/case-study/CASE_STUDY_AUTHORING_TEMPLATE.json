@@ -23,7 +23,8 @@
     "builderIdentityMode": "named | role_only | anonymous",
     "builderNamingConsent": false,
     "productionStatus": {
-      "status": "shipped | in_production | pilot | prototype",
+      "status": "shipped | in_progress | paused | not_pursued | unknown",
+      "_status_note": "CORRECTED. This renders through the same label map as roadmap statuses, so it takes those values. Earlier drafts of this template said 'in_production | pilot | prototype' - none of those have a label and would render blank.",
       "verification": { "class": "verified", "method": "repo", "evidenceId": "<case_study_evidence id>" }
     }
   },
@@ -34,7 +35,8 @@
     "capabilities": ["Adaptive learning", "Skill verification"],
     "stack": ["React", "Express", "PostgreSQL"],
     "deliverables": ["Learner portal", "Adaptive path engine"],
-    "builtByType": "colaberry_team | learner | client | partner"
+    "builtByType": "colaberry_team | learner | intern | client_team | ai_flotation_team | joint_team",
+    "_builtByType_note": "CORRECTED. Earlier drafts offered 'client' and 'partner'; neither is a member of the union and both would be rejected. Note that ai_flotation_team is a real, separate value - which is what lets an AI Flotation surface tell a truthful story about a build it did not do, because attribution travels with the record rather than with the page."
   },
 
   "situation": {

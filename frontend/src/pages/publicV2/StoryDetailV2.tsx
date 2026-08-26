@@ -20,17 +20,21 @@ import {
   NOT_FOUND_HEADING,
   heroFacts,
   heroMetricsFor,
-  storySeoExtras,
   visibleSections,
 } from './storyDetailV2Model';
 import type { DetailState } from './storyDetailV2Model';
+import { storySeoExtras } from './storySeoModel';
 import StoryHeroActions from './StoryHeroActions';
-import { StoryHeroMetrics } from './storyDetailV2Sections';
+import StoryContextStrip from './StoryContextStrip';
 import StorySectionList from './StorySectionList';
-import { StoryIndicatorRail } from './StoryIndicators';
 import { storyIndicators } from './storyIndicatorModel';
 import { placeStoryFigures } from './storyFigurePlacement';
 import './storyDetailV2.css';
+/* The picture rules, split out when the page stylesheet passed CLAUDE.md's
+   500-line ceiling. A second side-effect import rather than an `@import` from
+   the first: the contract test forbids `@import` here, and an `@import` also
+   costs a second serial round trip before either sheet can paint. */
+import './storyMediaV2.css';
 
 /**
  * StoryDetailV2 - the Enterprise detail surface at `/stories/:slug` (spec 23).
@@ -305,25 +309,11 @@ function StoryDetailV2(): React.ReactElement {
               verificationMethod={record.verificationMethod}
             />
 
-            {/* Counts, never scores. Directly under the badge because the two
-                answer the neighbouring questions - "is this checked" and "how
-                much of it is here" - and a reader who is scanning stops after
-                one of them. Empty for a record with nothing countable, and then
-                nothing renders. */}
-            <StoryIndicatorRail indicators={indicators} />
-
-            {facts.length > 0 ? (
-              <dl className="cbv2-story__facts">
-                {facts.map((fact) => (
-                  <div className="cbv2-story__fact" key={fact.term}>
-                    <dt className="cbv2-story__term">{fact.term}</dt>
-                    <dd className="cbv2-story__value">{fact.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            ) : null}
-
-            <StoryHeroMetrics metrics={metrics} />
+            {/* The counts, the facts grid and the headline figures used to stack
+                here. They are one band down now, on light ground - see
+                `StoryContextStrip`. The masthead was measured at 1142px and
+                2201px and is the heaviest thing on the page, so the format's
+                rule for it is subtract, never add. */}
 
             {/* The surface's offer, and the repository when the projection was
                 willing to publish one. Both are real destinations; the copy-link
@@ -350,6 +340,8 @@ function StoryDetailV2(): React.ReactElement {
             </div>
           </div>
         </section>
+
+        <StoryContextStrip indicators={indicators} facts={facts} metrics={metrics} />
 
         <StorySectionList record={record} sections={sections} figures={figures} />
 
