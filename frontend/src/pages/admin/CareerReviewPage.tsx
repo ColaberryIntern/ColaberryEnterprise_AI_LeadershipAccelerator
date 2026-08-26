@@ -3,6 +3,7 @@ import {
   fetchReviewQueue, submitReviewDecision, fetchRecordForReview,
   ReviewQueueItem, ReviewDecision, RecordForReview,
 } from '../../services/careerApi';
+import ReviewRecordPreview from './ReviewRecordPreview';
 import './CareerReviewPage.css';
 
 /**
@@ -144,11 +145,7 @@ const CareerReviewPage: React.FC = () => {
                     <span className="cr-mono">/p/{preview.slug}</span>
                     <span className="cr-muted">version {preview.version} · {preview.status} · {preview.visibility}</span>
                   </div>
-                  {preview.content ? (
-                    <pre className="cr-json">{JSON.stringify(preview.content, null, 2)}</pre>
-                  ) : (
-                    <p className="cr-muted">This record has no compiled content yet.</p>
-                  )}
+                  <ReviewRecordPreview record={preview} />
                   <p className="cr-note">
                     This is the stored snapshot, exactly as it would publish. Approving publishes
                     <strong> this</strong>, not a fresh render.
