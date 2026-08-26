@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-26T02:45:17.175Z",
+  "generated_at": "2026-08-26T12:45:43.200Z",
   "max_safe_width": 1800,
   "safe_viewport": {
     "width": 1440,
@@ -13,8 +13,18 @@
       "url": "/client"
     },
     {
-      "file": "02-client-projects.png",
-      "label": "Client portal - signed in",
+      "file": "02-client-overview.png",
+      "label": "Client portal - Overview",
+      "url": "/client/projects"
+    },
+    {
+      "file": "03-client-decisions.png",
+      "label": "Client portal - Decisions",
+      "url": "/client/projects"
+    },
+    {
+      "file": "04-client-releases.png",
+      "label": "Client portal - Releases (empty state)",
       "url": "/client/projects"
     }
   ]
