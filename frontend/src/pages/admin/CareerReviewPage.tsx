@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  fetchReviewQueue, submitReviewDecision,
-  ReviewQueueItem, ReviewDecision,
+  fetchReviewQueue, submitReviewDecision, fetchRecordForReview,
+  ReviewQueueItem, ReviewDecision, RecordForReview,
 } from '../../services/careerApi';
 import './CareerReviewPage.css';
 
@@ -32,6 +32,8 @@ const CareerReviewPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [preview, setPreview] = useState<RecordForReview | null>(null);
+  const [previewFor, setPreviewFor] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setErr(null);
@@ -107,11 +109,22 @@ const CareerReviewPage: React.FC = () => {
               </div>
             </div>
             <div className="cr-actions">
-              {it.slug && (
-                <a className="cr-btn ghost" href={`/p/${it.slug}`} target="_blank" rel="noopener noreferrer">
-                  Open record
-                </a>
-              )}
+              {/* NOT a link to /p/:slug. Everything awaiting review is unpublished, so the
+                  public page 404s on all of it — and it would throw a reviewer out of admin
+                  into the public marketing shell. The record renders here instead. */}
+              <button
+                type="button"
+                className="cr-btn ghost"
+                aria-expanded={previewFor === it.record_id}
+                onClick={async () => {
+                  if (previewFor === it.record_id) { setPreviewFor(null); setPreview(null); return; }
+                  setPreviewFor(it.record_id); setPreview(null); setErr(null);
+                  try { setPreview(await fetchRecordForReview(it.record_id)); }
+                  catch { setErr('Could not load that record.'); setPreviewFor(null); }
+                }}
+              >
+                {previewFor === it.record_id ? 'Hide record' : 'View record'}
+              </button>
               <button
                 type="button"
                 className="cr-btn"
@@ -122,6 +135,28 @@ const CareerReviewPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {previewFor === it.record_id && (
+            <div className="cr-preview">
+              {!preview ? <p className="cr-muted">Loading the record…</p> : (
+                <>
+                  <div className="cr-preview-head">
+                    <span className="cr-mono">/p/{preview.slug}</span>
+                    <span className="cr-muted">version {preview.version} · {preview.status} · {preview.visibility}</span>
+                  </div>
+                  {preview.content ? (
+                    <pre className="cr-json">{JSON.stringify(preview.content, null, 2)}</pre>
+                  ) : (
+                    <p className="cr-muted">This record has no compiled content yet.</p>
+                  )}
+                  <p className="cr-note">
+                    This is the stored snapshot, exactly as it would publish. Approving publishes
+                    <strong> this</strong>, not a fresh render.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           {openId === it.record_id && (
             <div className="cr-decide">
