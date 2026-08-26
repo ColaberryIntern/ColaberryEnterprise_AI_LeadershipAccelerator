@@ -67,7 +67,7 @@ const publishedTree = (id = ACTIVE_UUID): BackendProjectTree => ({
 });
 
 const inventory = (ids: string[], activeId: string | null = ACTIVE_UUID): ServerInventory =>
-  ({ known: true, ids, activeId });
+  ({ known: true, ids, hydratableIds: ids, activeId });
 
 // The seeded training example. Deliberately local; the server never holds it.
 const demo = () => project('sample-salon', [localTask('s1', 'STORY-001')], { sample: true });

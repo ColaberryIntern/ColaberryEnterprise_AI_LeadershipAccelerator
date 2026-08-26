@@ -16,11 +16,44 @@ export interface AgentDetailTicket {
   id: string;
   ticket_number: number | null;
   title: string;
+  /** Task visibility (2026-08-26) — the real narrative already written at
+   * ticket-creation time (e.g. "Signal: inactivity. Goal: ..."), verbatim.
+   * Answers "what was this looking for, why did it fire" without any new
+   * parsing — whatever the creating code actually wrote. */
+  description: string | null;
   status: string;
   priority: string;
   type: string;
   created_at: string | null;
   updated_at: string | null;
+}
+
+/** Task visibility (2026-08-26) — Ali, live, on Reese's real page: "which
+ * tickets each [task] creates, so I can see which task is creating the
+ * most tickets." Real tickets grouped by `type`, sub-grouped by real
+ * `metadata.signal_type` only where it's actually present. */
+export interface AgentDetailTicketTypeBreakdown {
+  type: string;
+  count: number;
+  by_signal: Array<{ signal_type: string; count: number }>;
+}
+
+/** Task visibility (2026-08-26) — Ali, live: "I need to see what those
+ * [tasks] are... what triggers them... I should be able to see that."
+ * Sibling `AiAgent` rows sharing this agent's real `module` — its own
+ * separately-registered recurring jobs (e.g. Reese's autonomous-outreach
+ * sweep), never visible on this page before. */
+export interface AgentDetailRelatedTask {
+  id: string;
+  agent_name: string;
+  description: string | null;
+  trigger_type: string | null;
+  schedule: string | null;
+  enabled: boolean;
+  status: string;
+  last_run_at: string | null;
+  run_count: number;
+  error_count: number;
 }
 
 /** One tool's own reads/produces, so the UI can show a per-tool drill-down
@@ -105,6 +138,8 @@ export interface AgentDetail {
    * "how many open tickets does this agent have" display. */
   open_ticket_count: number;
   tickets: AgentDetailTicket[];
+  ticket_breakdown: AgentDetailTicketTypeBreakdown[];
+  related_tasks: AgentDetailRelatedTask[];
   capabilities: AgentDetailCapabilities;
   reports_to: AgentDetailReportsTo | null;
   trust_contract: AgentDetailTrustContract;
