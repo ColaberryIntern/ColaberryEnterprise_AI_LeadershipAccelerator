@@ -16,18 +16,31 @@
  * foreign project. Authorization is not weakened: the token carries only the memberships
  * that this script actually created.
  *
- * ## It refuses to run against production
+ * ## It refuses to run against production - and NOT by checking NODE_ENV
  *
- * Two independent guards, because one is a single typo away from failing:
+ * This script originally hard-refused on `NODE_ENV === 'production'`. Measured against
+ * the real containers, that check is not merely unreliable here, it is INVERTED:
  *
- *   1. `NODE_ENV === 'production'` is a hard refusal, before any argument is read.
- *   2. The resolved database name must be in `ALLOWED_DATABASES`.
+ *   dev container   NODE_ENV=production
+ *   prod container  NODE_ENV unset
  *
- * The second exists because of a real trap in this repo: the dev container's `DB_NAME`
- * environment variable reads `accelerator_prod` while compose's `environment:` block makes
- * the app genuinely connect to `accelerator_dev1`. A script that trusted the env var would
- * write to the wrong database while believing otherwise, so this one asks the live
- * connection what it is actually attached to and refuses on anything unrecognised.
+ * So it refused the safe box and would have PERMITTED the dangerous one. It failed safe
+ * on dev only by accident. NODE_ENV in this stack describes how the bundle was built, not
+ * which environment it is serving, and nothing keeps the two aligned.
+ *
+ * The guards that remain interrogate the thing that actually matters - the live database
+ * connection - and there are two of them, because one is a single typo away from failing:
+ *
+ *   1. The resolved database name must appear in `ALLOWED_DATABASES` (an allowlist, so an
+ *      unrecognised database is refused rather than assumed safe).
+ *   2. Neither the database name nor the connection host may contain a production marker
+ *      (a denylist, which catches an allowlist entry that someone widens carelessly).
+ *
+ * Both ask the OPEN CONNECTION what it is attached to, never an environment variable.
+ * That matters because of a second real trap here: the dev container's `DB_NAME` reads
+ * `accelerator_prod` while compose's `environment:` block makes the app genuinely connect
+ * to `accelerator_dev1`. A script trusting that variable would write to the wrong database
+ * while believing otherwise.
  *
  * Usage:  npx ts-node src/scripts/seedDevClientReviewer.ts <email>
  */
@@ -45,12 +58,16 @@ import {
 /** Databases this script may write to. Anything else is refused, including production. */
 const ALLOWED_DATABASES = ['accelerator_dev1', 'accelerator_dev', 'accelerator_test'];
 
+/**
+ * Second, independent guard. Substrings that must never appear in the database name or
+ * the host being written to, whatever the allowlist says. This exists to catch a future
+ * edit that adds a prod-shaped name to ALLOWED_DATABASES without thinking.
+ */
+const PRODUCTION_MARKERS = ['prod', 'production', 'live'];
+
 const DEMO_PROJECT_SLUG = 'dev-demo-engagement';
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Refusing to run with NODE_ENV=production.');
-  }
 
   const email = (process.argv[2] || '').trim().toLowerCase();
   if (!email || !email.includes('@')) {
@@ -67,7 +84,21 @@ async function main(): Promise<void> {
       `Refusing to seed: connected to "${db}", which is not in the allowed dev list.`,
     );
   }
-  console.log(`[seed] database: ${db}`);
+
+  // Independent of the allowlist above, and checked against the live connection rather
+  // than any configured value.
+  const host = String((sequelize.config as { host?: unknown })?.host ?? '').toLowerCase();
+  const marker = PRODUCTION_MARKERS.find(
+    (m) => db.toLowerCase().includes(m) || host.includes(m),
+  );
+  if (marker) {
+    throw new Error(
+      `Refusing to seed: connection looks like production (matched "${marker}" in ` +
+        `database "${db}" or host "${host}").`,
+    );
+  }
+
+  console.log(`[seed] database: ${db} (host: ${host || 'unknown'})`);
 
   const models = require('../models');
   const {

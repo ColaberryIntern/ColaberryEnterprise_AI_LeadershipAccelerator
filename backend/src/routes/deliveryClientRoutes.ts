@@ -33,9 +33,20 @@ import {
  *
  * `assertNoForbiddenFields` re-scans the finished payload for internal vocabulary
  * (`risk_*`, `builder_*`, `execution_*`, cost fields) immediately before it is sent. The
- * allowlist should already make this impossible, which is the point: it fails **loud in
- * development** and **logs and continues in production**, per CLAUDE.md's contract rule.
- * If it ever fires, the allowlist has been bypassed by a code path nobody remembered.
+ * allowlist should already make this impossible, which is the point: if it ever fires, the
+ * allowlist was bypassed by a code path nobody remembered.
+ *
+ * **It fails closed in every environment, which is a deliberate deviation** from
+ * CLAUDE.md's general contract rule of 'fail loud in development, log and continue in
+ * production'. Two reasons:
+ *
+ *   1. This is a confidentiality tripwire, not a shape check. When it fires we are about
+ *      to send one client another client's internal data. An error page is recoverable;
+ *      a disclosure is not.
+ *   2. The environment cannot be told apart reliably anyway. Measured on the real
+ *      containers, the DEV backend runs with `NODE_ENV=production` and the PRODUCTION
+ *      backend has it unset - so branching on it here would pick the wrong behaviour in
+ *      both environments, and pick 'log and continue' precisely where the data is real.
  *
  * ## Absence of a write surface is deliberate
  *
@@ -47,11 +58,10 @@ import {
 const router = Router();
 
 /**
- * Fail loud in development, log and continue in production.
+ * Refuse to send a payload that failed the visibility check, in every environment.
  *
- * Returning a 500 in production for a tripwire that has never fired would turn a
- * defence-in-depth check into an outage. Returning 200 in development would let the same
- * bug ship. Both halves are intentional.
+ * See the header: this is a confidentiality tripwire, and NODE_ENV is inverted between
+ * the real dev and production containers, so there is no honest way to branch on it.
  */
 function assertNoForbiddenFields(payload: unknown, label: string, res: Response): boolean {
   const hits = findForbiddenFields(payload);
@@ -70,11 +80,8 @@ function assertNoForbiddenFields(payload: unknown, label: string, res: Response)
     }),
   );
 
-  if (process.env.NODE_ENV !== 'production') {
-    res.status(500).json({ error: 'Response failed the client visibility check.' });
-    return false;
-  }
-  return true;
+  res.status(500).json({ error: 'Response failed the client visibility check.' });
+  return false;
 }
 
 /**
