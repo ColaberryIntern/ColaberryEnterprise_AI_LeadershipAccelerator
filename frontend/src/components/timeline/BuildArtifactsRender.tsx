@@ -21,8 +21,16 @@ const SAMPLE_PROJECTS: ProjectOpt[] = [
   { id: 'sample-support', name: 'the Customer Support Assistant (sample)', sample: true },
   { id: 'sample-forecast', name: 'the Sales Forecasting Tool (sample)', sample: true },
 ];
-const ACCEPT = '.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.rtf,.txt,.md,.csv';
+// Documents PLUS the recordings the rebuilt labs ask for. Weeks 5 and 7 end with
+// a short screen capture proving the thing ran — an Inspector session answering a
+// real call, three subagents handling one task — and before this they could not be
+// submitted at all. Kept in step with `buildArtifactUpload` on the server, which
+// is the actual gate; this list only decides what the file picker offers.
+const ACCEPT = '.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.rtf,.txt,.md,.csv,.png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.mp3,.m4a,.wav,.zip';
 const ACCEPT_EXT = ACCEPT.split(',');
+// 100MB, matching GitHub's file limit — the labs also tell students to commit the
+// recording to their repo, so accepting something GitHub would reject is a trap.
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 function parseArtifacts(html: string): Artifact[] {
   let root: HTMLElement | null = null;
@@ -129,7 +137,13 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
     const f = e.target.files && e.target.files[0];
     if (!f) return;
     const ext = '.' + (f.name.split('.').pop() || '').toLowerCase();
-    if (!ACCEPT_EXT.includes(ext)) { setUploadErr(`That's a ${ext || 'file with no extension'}. Upload the document file you built — accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV.`); e.target.value = ''; return; }
+    if (!ACCEPT_EXT.includes(ext)) { setUploadErr(`That's a ${ext || 'file with no extension'}. Upload what you built — accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP.`); e.target.value = ''; return; }
+    // Checked here as well as on the server so a 90-second recording fails in a
+    // second with advice, rather than after uploading 100MB to be rejected.
+    if (f.size > MAX_UPLOAD_BYTES) {
+      setUploadErr(`That file is ${(f.size / 1024 / 1024).toFixed(0)}MB and the limit is 100MB. If it's a recording, trim it to about 30-60 seconds or ask Claude Code to compress it — the same limit applies when you commit it to your repo.`);
+      e.target.value = ''; return;
+    }
     setUploadErr(''); setUploading(true);
     try {
       if (cardId) {
@@ -259,7 +273,7 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
         ) : copyGateMet ? (
           <div className="ba-submit">
             <div className="ba-submit-h">Submit your build</div>
-            <p className="ba-submit-p">Upload the file Claude Code built (it told you the exact name and where it saved it). If you have a GitHub repository connected, it also lands there under <code>artifacts/</code>. Accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV.</p>
+            <p className="ba-submit-p">Upload what you built — a file Claude Code made, or the screen recording if this week asked for one. If you have a GitHub repository connected, text files (<code>.md</code>, <code>.txt</code>, <code>.csv</code>) also land there under <code>artifacts/</code>; recordings are kept here, and the lab shows you how to commit those to your own repo. Accepted: PDF, Word, PowerPoint, Excel, Markdown, RTF, Text, CSV, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP — up to 100MB.</p>
             <input ref={fileRef} type="file" accept={ACCEPT} style={{ display: 'none' }} onChange={onFile} />
             <button type="button" className="ba-submit-btn" disabled={uploading} onClick={() => fileRef.current && fileRef.current.click()}>{uploading ? 'Uploading…' : '⬆  Upload your file & submit'}</button>
             {uploadErr && <div className="ba-err">{uploadErr}</div>}
