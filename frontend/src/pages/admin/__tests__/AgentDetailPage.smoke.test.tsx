@@ -88,9 +88,15 @@ const DETAIL: AgentDetail = {
   // the two are intentionally separate fields/queries in the real service.
   open_ticket_count: 1,
   tickets: [
-    { id: 't-1', ticket_number: 1, title: 'Reaching out to Jordan Rivera', status: 'in_progress', priority: 'high', type: 'reese_autonomous_outreach', created_at: null, updated_at: '2026-08-12T15:00:00Z' },
-    { id: 't-2', ticket_number: 2, title: 'DM conversation with Alex Chen', status: 'done', priority: 'medium', type: 'student_support', created_at: null, updated_at: '2026-01-15T15:00:00Z' },
+    { id: 't-1', ticket_number: 1, title: 'Reaching out to Jordan Rivera', description: 'Reese is proactively reaching out to Jordan Rivera. Signal: inactivity. Goal: Confirm the student is unblocked and re-engaged with the curriculum within 7 days.', status: 'in_progress', priority: 'high', type: 'reese_autonomous_outreach', created_at: null, updated_at: '2026-08-12T15:00:00Z' },
+    { id: 't-2', ticket_number: 2, title: 'DM conversation with Alex Chen', description: null, status: 'done', priority: 'medium', type: 'student_support', created_at: null, updated_at: '2026-01-15T15:00:00Z' },
   ],
+  // Task visibility (2026-08-26) — base fixture: matches Reese's real base
+  // case (no `module` set on this fixture's agent), same honest-empty
+  // pattern the backend uses. Individual tests below override to cover the
+  // populated cases.
+  ticket_breakdown: [],
+  related_tasks: [],
   capabilities: {
     reads: ['ProofDesk learner-progress signals (XP, competencies, timeline state) for the student in the conversation'],
     produces: ['A reply message in the student DM thread'],
@@ -473,6 +479,132 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
     await renderAgentPage();
 
     expect(container.textContent).toContain('No tools recorded.');
+  });
+});
+
+// Task visibility (2026-08-26) — Ali, live, looking at Reese's real page:
+// "I need to see what those [tasks] are... what triggers them, what they
+// are looking for, why they triggered."
+describe('AgentDetailPage — "Scheduled tasks" section', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('renders each real sibling task with its schedule, trigger, last run, and run/error counts', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      related_tasks: [
+        {
+          id: 'sweep-id', agent_name: 'ReeseAutonomousOutreachSweep',
+          description: 'Daily scan of the approved pilot cohort for two real risk signals.',
+          trigger_type: 'cron', schedule: '0 15 * * *', enabled: true, status: 'idle',
+          last_run_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), run_count: 12, error_count: 0,
+        },
+      ],
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Scheduled tasks');
+    expect(container.textContent).toContain('ReeseAutonomousOutreachSweep');
+    expect(container.textContent).toContain('Daily scan of the approved pilot cohort');
+    expect(container.textContent).toContain('0 15 * * *');
+    expect(container.textContent).toContain('5h ago');
+    expect(container.textContent).toContain('Enabled');
+  });
+
+  it('honesty boundary: shows a disabled badge for a paused task, never disguising it as running', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      related_tasks: [
+        {
+          id: 'sweep-id', agent_name: 'ReeseAutonomousOutreachSweep', description: null,
+          trigger_type: 'cron', schedule: '0 15 * * *', enabled: false, status: 'paused',
+          last_run_at: null, run_count: 0, error_count: 0,
+        },
+      ],
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Disabled');
+    expect(container.textContent).toContain('Never');
+  });
+
+  it('boundary: no related tasks (the common case — most agents have no module) shows an honest empty state', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL); // base fixture: related_tasks: []
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('No other scheduled tasks are registered');
+  });
+});
+
+// Task visibility (2026-08-26) — "which tickets each [task] creates, so I
+// can see which task is creating the most tickets" + "why they triggered."
+describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_breakdown summary', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getAgentDetail.mockResolvedValue(DETAIL);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('renders the real ticket.description in the Why column, verbatim', async () => {
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Signal: inactivity. Goal: Confirm the student is unblocked');
+  });
+
+  it("boundary: a ticket with no description shows an em dash, never a blank cell or a fabricated reason", async () => {
+    await renderAgentPage();
+
+    // t-2 (the fixture's second ticket) has description: null.
+    const rows = Array.from(container.querySelectorAll('tbody tr'));
+    const alexRow = rows.find((r) => r.textContent?.includes('Alex Chen'));
+    expect(alexRow?.querySelectorAll('td')[1].textContent).toBe('—');
+  });
+
+  it('renders the ticket_breakdown summary grouped by type and real signal_type, above the table', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      ticket_breakdown: [
+        {
+          type: 'reese_autonomous_outreach', count: 3,
+          by_signal: [{ signal_type: 'inactivity', count: 2 }, { signal_type: 'behavior_anomaly', count: 1 }],
+        },
+        { type: 'student_support', count: 5, by_signal: [] },
+      ],
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Reese Outreach: 3');
+    expect(container.textContent).toContain('inactivity: 2');
+    expect(container.textContent).toContain('behavior_anomaly: 1');
+    expect(container.textContent).toContain('Student Support: 5');
+  });
+
+  it('boundary: no ticket_breakdown summary rendered when it is empty (no tickets yet)', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, ticket_breakdown: [] });
+
+    await renderAgentPage();
+
+    expect(container.textContent).not.toContain('Reese Outreach: ');
   });
 });
 

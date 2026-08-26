@@ -4,7 +4,7 @@
  * different assigned_to_id), the service returns exactly the 1 ticket that
  * belongs to Reese, proving the filter is correct.
  */
-jest.mock('../../../models/AiAgent', () => ({ findByPk: jest.fn() }));
+jest.mock('../../../models/AiAgent', () => ({ findByPk: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../../models/AdminUser', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/Enrollment', () => ({ findOne: jest.fn(), findByPk: jest.fn() }));
 jest.mock('../../../models/CommunityMember', () => ({ findOne: jest.fn() }));
@@ -35,6 +35,7 @@ import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../../w
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
+const mockAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
 const mockAdminFindOne = AdminUser.findOne as unknown as jest.Mock;
 const mockEnrollmentFindOne = Enrollment.findOne as unknown as jest.Mock;
 const mockEnrollmentFindByPk = Enrollment.findByPk as unknown as jest.Mock;
@@ -63,6 +64,7 @@ beforeEach(() => {
   mockTicketFindAll.mockResolvedValue([]);
   mockCountOpenTickets.mockResolvedValue(0);
   mockLastActivity.mockResolvedValue(null);
+  mockAgentFindAll.mockResolvedValue([]);
 });
 
 describe('getAgentDetail', () => {
@@ -336,6 +338,105 @@ describe('getAgentDetail', () => {
     // independent), but produced_ticket_types is honestly empty — no admin
     // identity means no match list to query tickets by at all.
     expect(result!.capabilities.produced_ticket_types).toEqual([]);
+  });
+
+  // Task visibility (2026-08-26) — Ali, live, looking at Reese's real page:
+  // "I need to see what those [tasks] are... which tickets each one creates
+  // ...what triggers them, what they are looking for, why they triggered."
+  describe('ticket_breakdown', () => {
+    it('groups real tickets by type, sub-grouped by real metadata.signal_type, both sorted by count descending', async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', type: 'reese_autonomous_outreach', metadata: { signal_type: 'inactivity' } },
+        { id: 't2', type: 'reese_autonomous_outreach', metadata: { signal_type: 'inactivity' } },
+        { id: 't3', type: 'reese_autonomous_outreach', metadata: { signal_type: 'behavior_anomaly' } },
+        { id: 't4', type: 'student_support', metadata: null },
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.ticket_breakdown).toEqual([
+        {
+          type: 'reese_autonomous_outreach',
+          count: 3,
+          by_signal: [
+            { signal_type: 'inactivity', count: 2 },
+            { signal_type: 'behavior_anomaly', count: 1 },
+          ],
+        },
+        { type: 'student_support', count: 1, by_signal: [] },
+      ]);
+    });
+
+    it("honesty boundary: a type whose tickets carry no metadata.signal_type at all gets by_signal: [], never a fabricated 'unknown' bucket", async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', type: 'student_support', metadata: null },
+        { id: 't2', type: 'student_support' }, // metadata entirely absent, not just null
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.ticket_breakdown).toEqual([{ type: 'student_support', count: 2, by_signal: [] }]);
+    });
+
+    it('is empty when there is no linked AdminUser identity — no match list means no ticket query at all', async () => {
+      mockAdminFindOne.mockResolvedValue(null);
+      const result = await getAgentDetail('agent-1');
+      expect(result!.ticket_breakdown).toEqual([]);
+    });
+  });
+
+  // Task visibility (2026-08-26) — "I should be able to see [what tasks
+  // trigger]." Sibling AiAgent rows sharing this agent's real `module` (e.g.
+  // Reese's own ReeseAutonomousOutreachSweep/ReeseOutreachFollowUps cron
+  // rows, registered separately in agentRegistrySeed.ts).
+  describe('related_tasks', () => {
+    it('happy path: returns sibling AiAgent rows sharing this agent\'s real module, excluding itself, ordered by agent_name', async () => {
+      mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, module: 'reese' });
+      const sweepAgent = {
+        id: 'sweep-id', agent_name: 'ReeseAutonomousOutreachSweep', description: 'Daily scan for risk signals.',
+        trigger_type: 'cron', schedule: '0 15 * * *', enabled: true, status: 'idle',
+        last_run_at: new Date('2026-08-25T15:00:00Z'), run_count: 12, error_count: 0,
+      };
+      mockAgentFindAll.mockResolvedValue([sweepAgent]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(mockAgentFindAll).toHaveBeenCalledWith({
+        where: { module: 'reese', id: { [Op.ne]: 'agent-1' } },
+        order: [['agent_name', 'ASC']],
+      });
+      expect(result!.related_tasks).toEqual([
+        {
+          id: 'sweep-id', agent_name: 'ReeseAutonomousOutreachSweep', description: 'Daily scan for risk signals.',
+          trigger_type: 'cron', schedule: '0 15 * * *', enabled: true, status: 'idle',
+          last_run_at: new Date('2026-08-25T15:00:00Z'), run_count: 12, error_count: 0,
+        },
+      ]);
+    });
+
+    it("honesty boundary: [], and AiAgent.findAll is never called, when this agent has no module set (most agents)", async () => {
+      // reeseAgent fixture has no `module` field at all.
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.related_tasks).toEqual([]);
+      expect(mockAgentFindAll).not.toHaveBeenCalled();
+    });
+  });
+
+  it("ticket.description passes through verbatim — the real 'why' narrative already written at ticket-creation time, never truncated or omitted", async () => {
+    mockTicketFindAll.mockResolvedValue([
+      {
+        id: 't1', ticket_number: 1, title: 'Reese autonomous outreach — inactivity (Jane Doe)',
+        description: 'Reese is proactively reaching out to Jane Doe. Signal: inactivity. Goal: Confirm the student is unblocked and re-engaged with the curriculum within 7 days.',
+        status: 'in_progress', priority: 'medium', type: 'reese_autonomous_outreach', created_at: new Date(), updated_at: new Date(),
+      },
+    ]);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.tickets[0].description).toBe(
+      'Reese is proactively reaching out to Jane Doe. Signal: inactivity. Goal: Confirm the student is unblocked and re-engaged with the curriculum within 7 days.',
+    );
   });
 
   // Org-chart hierarchy build (2026-08-19) — the "Reports to" section on
