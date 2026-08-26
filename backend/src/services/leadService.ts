@@ -212,7 +212,14 @@ export async function createLead(data: LeadInput) {
   return { lead, isDuplicate: false };
 }
 
-interface ListLeadsParams {
+/**
+ * Filters shared by the Leads table and the CSV export.
+ *
+ * Split out from ListLeadsParams so the two paths cannot drift again: before
+ * 2026-08-25 the export ignored every filter and dumped the whole table, because
+ * it had no params argument at all and the controller read none.
+ */
+export interface LeadFilterParams {
   status?: string;
   search?: string;
   source?: string;
@@ -226,10 +233,19 @@ interface ListLeadsParams {
    * (sales opens on enterprise sources only). See leadViewPreferenceService.
    */
   website?: string;
+  /**
+   * Declared rather than read through `as any`, which is how it used to be
+   * accessed here. An undeclared field silently disappears the moment another
+   * caller spreads a typed object into this one.
+   */
+  temperature?: string;
   scoreMin?: number;
   scoreMax?: number;
   dateFrom?: string;
   dateTo?: string;
+}
+
+interface ListLeadsParams extends LeadFilterParams {
   page?: number;
   limit?: number;
   sort?: string;
@@ -300,13 +316,15 @@ export async function getLeadSourceGroups(): Promise<LeadSourceGroupSummary[]> {
   return groups;
 }
 
-export async function listLeads(params: ListLeadsParams) {
-  const page = params.page || 1;
-  const limit = params.limit || 25;
-  const offset = (page - 1) * limit;
-  const sort = params.sort || 'created_at';
-  const order = params.order || 'DESC';
-
+/**
+ * Translates the Leads-page filter set into a Sequelize `where`.
+ *
+ * Exported so `listLeads` and `generateLeadCsv` share one definition. They used
+ * to disagree completely: the table filtered and the export did not, so "Export
+ * CSV" on a filtered view handed back all ~24k rows (reported by Kes,
+ * 2026-08-25). Any new filter added here reaches both surfaces at once.
+ */
+export function buildLeadWhere(params: LeadFilterParams): any {
   const where: any = {};
 
   if (params.status) {
@@ -374,8 +392,8 @@ export async function listLeads(params: ListLeadsParams) {
     }
   }
 
-  if ((params as any).temperature) {
-    where.lead_temperature = (params as any).temperature;
+  if (params.temperature) {
+    where.lead_temperature = params.temperature;
   }
 
   if (params.search) {
@@ -385,6 +403,18 @@ export async function listLeads(params: ListLeadsParams) {
       { company: { [Op.iLike]: `%${params.search}%` } },
     ];
   }
+
+  return where;
+}
+
+export async function listLeads(params: ListLeadsParams) {
+  const page = params.page || 1;
+  const limit = params.limit || 25;
+  const offset = (page - 1) * limit;
+  const sort = params.sort || 'created_at';
+  const order = params.order || 'DESC';
+
+  const where = buildLeadWhere(params);
 
   // 'priority' is the sales-facing default: website signups above pulled-list
   // names, then newest first inside each tier. Every other sort is unchanged.
@@ -477,11 +507,54 @@ export async function getLeadStats() {
   return { total, byStatus, conversionRate, highIntent, thisMonth, bookedCalls };
 }
 
-export async function generateLeadCsv() {
-  const leads = await Lead.findAll({
+/**
+ * Ceiling on a single CSV export.
+ *
+ * The whole result set is materialised in memory and then serialised in one
+ * pass, so an unfiltered export of the full table (~24k rows plus an admin join
+ * per row) is a real memory event on a shared box. Anything above this is
+ * reported rather than silently trimmed - see the `truncated` flag.
+ */
+export const LEAD_EXPORT_MAX_ROWS = 25000;
+
+/**
+ * Column order of the export, declared rather than inferred from the first row.
+ *
+ * json2csv derives headers from the data and throws outright on an empty array
+ * ('Data should not be empty or the "fields" option should be included'). Once
+ * the export started honouring filters, "no lead matches" became an ordinary
+ * outcome, so an inferred header would turn an empty result into a 500. With
+ * the fields pinned, that case returns a header-only CSV.
+ */
+export const LEAD_CSV_FIELDS = [
+  'id', 'name', 'email', 'company', 'role', 'title', 'phone', 'company_size',
+  'lead_score', 'status', 'interest_area', 'interest_level', 'evaluating_90_days',
+  'source', 'form_type', 'utm_source', 'utm_campaign', 'page_url',
+  'consent_contact', 'assigned_admin', 'notes', 'created_at', 'updated_at',
+];
+
+/**
+ * CSV of the leads matching `params`, using the same filters as the table.
+ *
+ * Passing no params exports everything, which is what the Export CSV button did
+ * unconditionally until 2026-08-25.
+ */
+export async function generateLeadCsv(
+  params: LeadFilterParams = {}
+): Promise<{ csv: string; rowCount: number; truncated: boolean }> {
+  const where = buildLeadWhere(params);
+
+  // One row over the cap, so "there was more" is distinguishable from
+  // "it landed exactly on the limit" without a second COUNT query.
+  const rows = await Lead.findAll({
+    where,
     include: [{ model: AdminUser, as: 'assignedAdmin', attributes: ['id', 'email'] }],
     order: [['created_at', 'DESC']],
+    limit: LEAD_EXPORT_MAX_ROWS + 1,
   });
+
+  const truncated = rows.length > LEAD_EXPORT_MAX_ROWS;
+  const leads = truncated ? rows.slice(0, LEAD_EXPORT_MAX_ROWS) : rows;
 
   const data = leads.map((l) => ({
     id: l.id,
@@ -509,8 +582,8 @@ export async function generateLeadCsv() {
     updated_at: l.updated_at?.toISOString() || '',
   }));
 
-  const parser = new Parser();
-  return parser.parse(data);
+  const parser = new Parser({ fields: LEAD_CSV_FIELDS });
+  return { csv: parser.parse(data), rowCount: leads.length, truncated };
 }
 
 export async function createLeadAdmin(data: {
