@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, August 25, 2026 at 7:22 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">74 changes</span></div>
+    <div class="meta">Generated Wednesday, August 26, 2026 at 4:09 AM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">79 changes</span></div>
   </header>
   <main>
     
@@ -1167,6 +1167,81 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`git diff origin/main -- PROGRESS.md` is **empty**; the session ID appears **0** times in `PROGRESS.md`. The changelog generator reports 70 entries sourced from this file.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**The check that would have caught this took one grep of the tool I was about to invoke, and I ran it only after acting.** The signal was available twice over: the script says so in its own error text, and a standing memory note records that PROGRESS.md is sealed and that CLAUDE.md is stale on this point. I trusted the instruction file over the executable behaviour without reconciling them. Worth generalising: when a documented rule and a running script disagree about which file is authoritative, **the script is the fact and the doc is the claim** — check the script before writing to the file. CLAUDE.md&#39;s PROGRESS.md section is genuinely stale and is a governance-owned file, so correcting it is the DRI&#39;s call, not mine; flagged to Ali rather than edited.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">75</span>
+          <h2>**Login was impossible for everyone: sign-in read `m.role`, the column is `delivery_role`**</h2>
+          <span class="badge">2026-08-26</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`findExistingClientMemberships` mapped `role: m.role`. `DeliveryProjectMember` has no such attribute - it declares `delivery_role`. The read returned `undefined` for every membership, `isClientSideRole(undefined)` rejected them all, `decideClientSignIn` therefore saw zero memberships, and sign-in refused. **A valid Google account with a genuine membership received the identical generic refusal a stranger receives.** The uniform refusal message is the right design and is also exactly what hid this: from outside, &quot;correctly denied&quot; and &quot;completely broken&quot; are indistinguishable. Shipped in PR #1821 with all 8 CI checks green.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Found by running the seed against `accelerator_dev1` rather than a fixture. Fixed in the auth route and the seed. New `deliveryProjectMemberContract.test.ts` (5 tests, no database) asserts against the **model definition**: `delivery_role` exists, **`role` does NOT exist**, the column is NOT NULL, every field sign-in reads is present, and the unique index still names `delivery_role` so re-granting stays idempotent.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The negative assertion is the load-bearing one - without &quot;there is no attribute called `role`&quot;, adding an alias later would let the suite pass while the two names drifted apart in production. **Why nothing caught it:** `tsc` could not, because the row comes from `require(&#39;../models&#39;)` and is `any` at the call site, so `m.role` is a legal expression; the 20 unit tests could not, because they construct membership objects by hand and so asserted the shape I assumed rather than the model&#39;s; and the seed made the same mistake but **did** fail - only because `delivery_role` is NOT NULL. Sequelize silently drops unknown keys passed to `defaults`, so a wrong name surfaces as a constraint violation rather than a typo. **On a nullable column it would have written a null role and looked like success.**</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">76</span>
+          <h2>**The client allowlist named seven fields that do not exist on any model**</h2>
+          <span class="badge">2026-08-26</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Auditing the rest of the Gate 10 projection after the above found the same error across most of it: `project` named `summary`, `started_at`, `target_date`; `decision` named `title`, `requires_client_approval`; `acceptance` named `scope`, `accepted_by_name`. None exist. **The decision case was the damaging one:** `DeliveryDecision` records a `question`, our `recommendation`, and the `final_decision`, and **none of those three were allowlisted** - so the client-facing projection of a decision carried a status and a rationale and *no statement of what was actually decided*, the one thing a decision record exists to communicate. Each correction was a judgement rather than a rename: `project` gained `business_problem` and `product_idea` (written for the client) but deliberately **not** `workflow_summary` or `existing_system_summary`, which are our analysis of how they work today; `decision` gained the three real fields while still excluding `options` (a JSON blob that can carry internal notes) and every `*_identity_id`, since who decided is internal; `acceptance` took `scope_kind`, and `accepted_by_identity_id` was **not** substituted for the missing `accepted_by_name` because a client is owed the fact of acceptance, not our internal identifier for a person.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">New `clientAllowlistContract.test.ts` (7 tests, no database) asserts every allowlisted field against the real model definition, that no allowlisted field collides with the forbidden-category scanner, that `impact_internal` stays **out** of `change_request` while `impact_summary` stays in, and that every allowlist kind is accounted for so a ninth kind cannot silently skip the check. **537 tests across 20 suites** in `src/services/delivery` pass.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The failure is silent and it points the wrong way.** `toClientShape` skips fields whose value is `undefined` - correct behaviour, since it keeps an absent field absent rather than emitting a null a reader might mistake for data - but it means a misspelled or imagined name simply vanishes: no error, 200 OK, a smaller object. An allowlist bug that **omits** a field is quiet and produces a thin client view; one that **adds** a field is loud and leaks. `findForbiddenFields` only catches the second, so the first had no guard at all until now. The UI carried the same fiction and was corrected with it: it rendered `d.title` and `project.summary`, and coloured status badges on `proposed`/`needs_you`, which no model emits - so every decision would have rendered grey and the one actually waiting on the client would not have stood out. Waiting-on-client is now derived from the real vocabulary (`open | recommended | decided | approved | superseded`).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">77</span>
+          <h2>**`NODE_ENV` is inverted between the dev and production containers**</h2>
+          <span class="badge">2026-08-26</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The dev seed refused to run, and the reason mattered more than the refusal. Measured on the real containers: **the dev backend runs with `NODE_ENV=production` and the production backend has it unset.** A guard written `if (NODE_ENV === &#39;production&#39;) refuse` therefore **blocks the safe box and permits the dangerous one**; mine failed safe on dev purely by accident. `NODE_ENV` here describes how the bundle was built, not which environment is being served, and nothing keeps the two aligned. Two places fixed. The seed now interrogates the **open database connection** instead: the resolved database name must be in an allowlist (so an unrecognised database is refused rather than assumed safe), and independently neither the database name nor the connection host may contain a production marker (catching a later careless widening of the allowlist). `deliveryClientRoutes`&#39; visibility tripwire had the same inverted assumption - it branched to &quot;log and continue&quot; when `NODE_ENV` was production, which on these containers means it would have stayed loud on prod and gone **quiet on dev**, exactly backwards.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Seed run confirmed the guards report the truth: `database: accelerator_dev1 (host: accelerator-db)`. The tripwire now fails closed in every environment.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Failing closed everywhere is a **deliberate deviation** from CLAUDE.md&#39;s &quot;fail loud in development, log and continue in production&quot; rule, for two reasons recorded in the file: this is a confidentiality tripwire rather than a shape check, so firing it means we are about to send one client another client&#39;s internal data - an error page is recoverable, a disclosure is not - and the environment cannot be told apart reliably anyway. **Flagged and deliberately NOT fixed: 8 other backend call sites branch on `NODE_ENV === &#39;production&#39;`.** Each needs its own judgement about what it was really asking; some are probably harmless build-time checks and others may be guarding real behaviour backwards. Raised with Ali as a separate pass rather than swept into this diff or &quot;fixed&quot; eight times without reasoning about each.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">78</span>
+          <h2>**The client read surface and the portal sign-in actually lands on**</h2>
+          <span class="badge">2026-08-26</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Investigating &quot;can&#39;t login&quot; found three gaps, not one. Nothing passed `onSignedIn`, so a **successful** sign-in wrote a token to localStorage and visibly did nothing - it read as a failure while succeeding. `ClientReviewRoom` lives at `/admin/refactored/client`, inside the admin tree a client token cannot enter (correctly - Gate 10&#39;s property is that a client session is not a builder session). And `requireDeliveryClient` had **zero production callers**; only tests imported it, so the guard protected nothing. New `deliveryClientRoutes.ts` provides the read surface, kept scoped by two deliberately independent mechanisms: **scope comes from the token, never the request** (there is no query parameter, filter, or body field on the router that can widen what a session reaches), and **every payload is rebuilt from an allowlist** rather than by deleting keys, so a column added next month is invisible by default. Registered **before** the admin tree, since routes mounted after `adminRoutes` inherit its guard and answer 401 to a perfectly valid client token. New `ClientPortal.tsx` is where sign-in now goes.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Verified live on dev against the running instance, not inferred: no token -&gt; **401**; a bearer carrying `role: super_admin` -&gt; **401** (it has no `aud`, so `jwt.verify` throws before any claim is read); a project outside the session -&gt; **404, not 403**; and the real project, decisions and change requests render from `accelerator_dev1`. Screenshot captured with a genuine `delivery_client_token` via a new `captureClientPortal.js` - deliberately not the admin JWT the other capture script uses, since an admin token cannot reach this surface and a screenshot taken with one would prove nothing. **Zero console errors.**</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The portal deliberately does **not** render the mockup&#39;s design, preview, releases, results and documents sections. Those tables exist but nothing writes them yet, so rendering them would show a client an empty frame styled as a report. The page says so in plain words instead - a client surface that overstates what it knows is worse than a small one. Session expiry is handled as a fact rather than an error: on 401 the token is cleared and the reviewer returns to the door, because an expired 8-hour session is normal. **The seed script is an operator tool, not a product backdoor:** it ships no route, flag or alternate credential, nothing in the running app calls it, and it mints through the same `jwt.sign` call with the same audience the Google route uses, so the session is indistinguishable from a Google-earned one and authorization is not weakened.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">79</span>
+          <h2>**A test that could not fail for the reason that mattered**</h2>
+          <span class="badge">2026-08-26</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Correcting the allowlist turned CI red, correctly. `clientReviewRoom.test.ts` asserted that a projected project keeps `summary` - one of the seven phantom fields. **The fixture invented `summary` and the allowlist named `summary`, so the two agreed with each other and neither agreed with the database.** Both sides of the assertion came from the same wrong assumption, which is precisely why the phantom fields survived review. Fixture realigned to real `DeliveryProject` columns; its genuinely valuable assertions are untouched (forbidden fields dropped, unknown fields dropped by default, a new object built rather than the source mutated, absent fields omitted rather than emitted as `undefined`).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">537 tests across 20 suites in `src/services/delivery`, all passing. CI re-run on PR #1836.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">This is the generalisable lesson of the whole day, and it is not &quot;write more tests&quot;. It is that **a test written from the same assumption as the code cannot check that assumption.** `clientAllowlistContract.test.ts` and `deliveryProjectMemberContract.test.ts` are the checks these tests could never be, because they read the model definitions rather than a fixture. Related: the same shape of error appeared in my own tooling twice today - a `tail`-piped compose command reported the exit code of `tail` rather than the build, and a deploy monitor whose exit condition was `until ! ssh ... ps -p &lt;pid&gt;` treated **SSH being unreachable** as identical to the process finishing, and reported a concurrent production deploy as complete when it was still mid-build under load average 142.</span></div>
           
         </div>
       </article>

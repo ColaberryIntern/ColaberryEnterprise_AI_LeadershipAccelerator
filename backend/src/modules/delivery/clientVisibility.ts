@@ -176,15 +176,36 @@ export type ClientObjectKind =
  * `builder_authority` (an assessment of a person), no story internals.
  */
 export const CLIENT_FIELD_ALLOWLIST: Record<ClientObjectKind, readonly string[]> = {
-  project: ['id', 'name', 'summary', 'status', 'started_at', 'target_date', 'engagement_id'],
+  // `summary`, `started_at` and `target_date` were named here and DO NOT EXIST on
+  // DeliveryProject. Because toClientShape skips undefined values, they vanished in
+  // silence rather than failing, and the client saw a thinner project than intended.
+  // These are the real columns; clientAllowlistContract.test.ts now pins them.
+  project: [
+    'id',
+    'name',
+    'status',
+    'engagement_id',
+    // The client's own problem statement and the product idea, both written for them.
+    // `workflow_summary` and `existing_system_summary` are deliberately excluded: they
+    // are our analysis of how they work today, not something they asked to be shown.
+    'business_problem',
+    'product_idea',
+  ],
+  // `title` and `requires_client_approval` were named here and DO NOT EXIST. The result
+  // was worse than a missing label: the projection carried a status and a rationale but
+  // NO STATEMENT OF WHAT WAS DECIDED - the one thing a decision record exists to say.
   decision: [
     'id',
-    'title',
     'decision_type',
     'status',
+    // The three that actually carry the decision.
+    'question',
+    'recommendation',
+    'final_decision',
     'rationale',
     'decided_at',
-    'requires_client_approval',
+    // Deliberately absent: `options` (a JSON blob that can carry internal notes),
+    // `affected_nodes`, and every *_identity_id - who decided is internal.
   ],
   design: ['id', 'title', 'summary', 'preview_ref', 'status', 'updated_at'],
   release: ['id', 'name', 'status', 'released_at', 'summary', 'evidence_summary'],
@@ -192,13 +213,15 @@ export const CLIENT_FIELD_ALLOWLIST: Record<ClientObjectKind, readonly string[]>
   // proof, not our CI output.
   evidence_summary: ['dimension', 'outcome', 'checked_at'],
   change_request: ['id', 'title', 'description', 'status', 'requested_at', 'impact_summary'],
+  // `scope` and `accepted_by_name` were named here and DO NOT EXIST; the real columns
+  // are `scope_kind` and `accepted_by_identity_id`. The identity id is NOT projected -
+  // a client is owed the fact of acceptance, not our internal identifier for the person.
   acceptance: [
     'id',
-    'scope',
+    'scope_kind',
     'promised_acceptance',
     'preview_ref',
     'evidence_summary',
-    'accepted_by_name',
     'accepted_at',
     'comments',
     'exceptions',

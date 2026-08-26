@@ -69,6 +69,11 @@ const ClientSignIn: React.FC<ClientSignInProps> = ({ clientId, onSignedIn }) => 
         /* private browsing — the caller still gets the token below */
       }
       onSignedIn?.(body.token, body.projects ?? []);
+
+      // Default destination when no handler is supplied, which is the real route's case.
+      // Without this, a successful sign-in stored a token and visibly did nothing - the
+      // page just sat there, which reads as a failure even though it succeeded.
+      if (!onSignedIn) window.location.assign('/client/projects');
     } catch {
       setError('Sign-in was not successful. Please try again.');
     } finally {
