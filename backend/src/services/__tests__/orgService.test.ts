@@ -123,7 +123,12 @@ describe('orgService', () => {
         { enrollment_id: 'enr-1', email: 'jordan@acme.com', team: 'Finance', enrollment: { full_name: 'Jordan Park' } },
       ]);
       (sequelize.query as jest.Mock).mockImplementation(async (sql: string) => {
-        if (sql.includes('student_level')) return [{ enrollment_id: 'enr-1', level_slug: 'developer', rank: 3, architect_readiness: 44 }];
+        // 0..1, because that is the only thing `computeReadiness` can produce:
+        // it returns `Math.min(1, Math.max(0, weighted / totalWeight))`, and all 431
+        // production rows sit between 0 and 0.583 with none above 1. The previous
+        // fixture used 44, a value the writer cannot emit, and so asserted
+        // pass-through of an impossible number instead of the percent conversion.
+        if (sql.includes('student_level')) return [{ enrollment_id: 'enr-1', level_slug: 'developer', rank: 3, architect_readiness: 0.44 }];
         if (sql.includes("stream='builder'")) return [{ enrollment_id: 'enr-1', xp: 160 }];
         if (sql.includes("event_type='daily_streak'")) return [{ enrollment_id: 'enr-1', streak: 6 }];
         if (sql.includes('student_points_events')) return [{ enrollment_id: 'enr-1', total: 530 }];
@@ -143,6 +148,23 @@ describe('orgService', () => {
         streak: 6,
         total_points: 530,
       }]);
+    });
+
+    // The 2026-08-25 incident, pinned to its real number. A student measured at
+    // 0.5828096086919616 read "1% readiness" off /portal/company, because this
+    // rounded the fraction instead of scaling it: Math.round(0.58) === 1.
+    it('scales the 0..1 readiness fraction to a percentage rather than rounding it', async () => {
+      (OrgMember.findAll as jest.Mock).mockResolvedValue([
+        { enrollment_id: 'enr-9', email: 'f@acme.com', team: 'Customer Support', enrollment: { full_name: 'Real Student' } },
+      ]);
+      (sequelize.query as jest.Mock).mockImplementation(async (sql: string) => {
+        if (sql.includes('student_level')) return [{ enrollment_id: 'enr-9', level_slug: 'junior_builder', rank: 1, architect_readiness: 0.5828096086919616 }];
+        return [];
+      });
+
+      const roster = await getRoster('org-1');
+
+      expect(roster[0].readiness).toBe(58);   // not 1
     });
 
     it('defaults total_points to 0 for members with no enrollment yet', async () => {
