@@ -275,3 +275,167 @@ describe('the guards that already held must keep holding', () => {
     expect(out.skipped).toBe(1);
   });
 });
+
+/**
+ * Defect 3 — found by reading the 2026-08-19 window's own log, not by a test.
+ *
+ * That window ran escalate-only by setting WATCHER_MAX_REPLIES_TOTAL=0, which
+ * makes `checkCaps` block EVERY candidate. The cap-blocked branch called
+ * `ports.escalate()` directly instead of going through `escalateWith()`, so it
+ * skipped both invariants this file exists to defend: it never consulted
+ * `escalatedThreads`, and it wrote its log line AFTER the send rather than
+ * before. The measured result was 143 escalation events across 43 distinct
+ * threads — 33 of them to one person — which is defect 1 again, through a door
+ * that was left open.
+ *
+ * The suite missed it because the fixture above says `perWindow: 15` where
+ * CapLimits declares `total`. `sent.length >= undefined` is false, so no test
+ * in this file had ever reached the cap branch at all.
+ */
+describe('defect 3 — a cap-blocked escalation is still one per thread', () => {
+  /** Exactly the shape the live window ran: every message hits the total cap. */
+  const CAPPED = (dir: string) => ({
+    stateDir: dir,
+    runId: 'run-1',
+    dryRun: false,
+    caps: { perThread: 1, perRecipient: 2, total: 0 },
+  });
+
+  /** Classifiable, so it reaches the cap check rather than escalating earlier. */
+  const REPO_ISSUE = 'I cannot connect my github repo';
+
+  it('does not re-escalate a capped thread on the next tick', async () => {
+    const dir = stateDir();
+    openWindow(dir);
+    writeLedger(dir, [STUDENT]);
+    const msgs = [inbound(STUDENT, 'thread-cap-A', REPO_ISSUE)];
+
+    const first = recordingPorts(msgs);
+    const out1 = await runCycle(first.ports, CAPPED(dir));
+    expect(first.escalations).toEqual(['thread-cap-A']);
+    expect(out1.sent).toBe(0);
+
+    // The same message is still sitting in the mailbox on the next tick.
+    const second = recordingPorts(msgs);
+    await runCycle(second.ports, CAPPED(dir));
+    expect(second.escalations).toEqual([]);
+  });
+
+  it('records the capped attempt BEFORE the send, so a crash under-escalates', async () => {
+    const dir = stateDir();
+    openWindow(dir);
+    writeLedger(dir, [STUDENT]);
+    const msgs = [inbound(STUDENT, 'thread-cap-B', REPO_ISSUE)];
+
+    const ports: WatcherPorts = {
+      ...recordingPorts(msgs).ports,
+      escalate: async () => { throw new Error('provider died mid-send'); },
+    };
+
+    await expect(runCycle(ports, CAPPED(dir))).rejects.toThrow('provider died mid-send');
+    expect(replayWatcherLog(dir).escalatedThreads.has('thread-cap-B')).toBe(true);
+  });
+
+  it('still reaches a human once for each distinct capped thread', async () => {
+    const dir = stateDir();
+    openWindow(dir);
+    writeLedger(dir, [STUDENT, OTHER_STUDENT]);
+    const msgs = [
+      inbound(STUDENT, 'thread-cap-C', REPO_ISSUE),
+      inbound(OTHER_STUDENT, 'thread-cap-D', REPO_ISSUE),
+    ];
+
+    const run = recordingPorts(msgs);
+    await runCycle(run.ports, CAPPED(dir));
+    expect(run.escalations.sort()).toEqual(['thread-cap-C', 'thread-cap-D']);
+  });
+});
+
+/**
+ * Filing an answered thread out of the inbox.
+ *
+ * The capability question was settled against the live OAuth token rather than
+ * against `gmailService.ts`, whose SCOPES constant still says readonly+send
+ * while the granted refresh token carries gmail.modify. Reading the source
+ * would have produced a confident "it cannot move mail", which is wrong.
+ */
+describe('answered threads are filed, escalated ones are not', () => {
+  function filingPorts(messages: InboundMessage[], opts: { fail?: boolean } = {}) {
+    const base = recordingPorts(messages);
+    const filed: string[] = [];
+    const ports: WatcherPorts = {
+      ...base.ports,
+      data: {
+        loadStudentFacts: async () => ({
+          email: STUDENT, name: 'Quincy', activeEnrollmentCount: 1, enrollmentId: 'e1',
+          portalTokenExpiresAt: null, projectId: 'p1', githubRepo: 'acme/repo',
+          webhookRegistered: true, webhookLastDeliveryAt: null,
+          story000Present: true, acceptanceCriteriaCount: 4, unverifiable: [],
+        }),
+        requestFreshLoginLink: async () => { throw new Error('must never be called'); },
+      } as any,
+      fileThread: async ({ threadKey }) => {
+        if (opts.fail) throw new Error('gmail said no');
+        filed.push(threadKey);
+      },
+    };
+    return { ports, filed, base };
+  }
+
+  it('files a thread only after the reply is actually sent', async () => {
+    const dir = stateDir();
+    openWindow(dir);
+    writeLedger(dir, [STUDENT]);
+    const msgs = [inbound(STUDENT, 'thread-file-A', 'I cannot connect my github repo')];
+
+    const run = filingPorts(msgs);
+    const out = await runCycle(run.ports, OPTS(dir));
+
+    expect(out.sent).toBe(1);
+    expect(run.filed).toEqual(['thread-file-A']);
+
+    const events = replayWatcherLog(dir);
+    expect(events.answeredThreads.has('thread-file-A')).toBe(true);
+  });
+
+  it('leaves an ESCALATED thread in the inbox, because a handoff is not a resolution', async () => {
+    const dir = stateDir();
+    openWindow(dir);
+    writeLedger(dir, [STUDENT]);
+    // Unclassifiable, so it escalates rather than being answered.
+    const msgs = [inbound(STUDENT, 'thread-file-B', 'hello, a general musing')];
+
+    const run = filingPorts(msgs);
+    const out = await runCycle(run.ports, OPTS(dir));
+
+    expect(out.escalated).toBe(1);
+    expect(out.sent).toBe(0);
+    expect(run.filed).toEqual([]);
+  });
+
+  it('a filing failure does not fail the cycle or unsend the reply', async () => {
+    const dir = stateDir();
+    openWindow(dir);
+    writeLedger(dir, [STUDENT]);
+    const msgs = [inbound(STUDENT, 'thread-file-C', 'I cannot connect my github repo')];
+
+    const run = filingPorts(msgs, { fail: true });
+    const out = await runCycle(run.ports, OPTS(dir));
+
+    expect(out.sent).toBe(1);
+    expect(run.filed).toEqual([]);
+  });
+
+  it('a dry run files nothing', async () => {
+    const dir = stateDir();
+    openWindow(dir);
+    writeLedger(dir, [STUDENT]);
+    const msgs = [inbound(STUDENT, 'thread-file-D', 'I cannot connect my github repo')];
+
+    const run = filingPorts(msgs);
+    const out = await runCycle(run.ports, { ...OPTS(dir), dryRun: true });
+
+    expect(out.sent).toBe(0);
+    expect(run.filed).toEqual([]);
+  });
+});

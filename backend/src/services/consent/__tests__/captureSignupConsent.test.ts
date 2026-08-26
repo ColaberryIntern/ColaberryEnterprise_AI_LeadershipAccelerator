@@ -1,7 +1,11 @@
 const recordConsentMock = jest.fn();
-jest.mock('../../consentService', () => ({
-  recordConsent: (...a: unknown[]) => recordConsentMock(...a),
-}));
+// Keep the real module and override ONLY recordConsent. Mocking it down to a
+// single export made this suite fail the moment captureSignupConsent started
+// using normalizeEmail/normalizePhone - the mock was narrower than the module.
+jest.mock('../../consentService', () => {
+  const actual = jest.requireActual('../../consentService');
+  return { ...actual, recordConsent: (...a: unknown[]) => recordConsentMock(...a) };
+});
 
 import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../captureSignupConsent';
 

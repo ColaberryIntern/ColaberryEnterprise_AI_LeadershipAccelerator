@@ -111,16 +111,36 @@ export async function requestCapstoneReview(enrollmentId: string) {
   if (!record) throw fail(404, 'You do not have a capstone record yet', 'NotFoundError');
   if (record.status === 'published') throw fail(409, 'Your record is already published', 'AlreadyPublished');
 
-  const [approval, created] = await CapstoneReviewApproval.findOrCreate({
-    where: { record_id: record.id, version: record.version, decision: { [Op.is]: null } as any },
-    defaults: {
-      record_id: record.id,
-      enrollment_id: record.enrollment_id,
-      version: record.version,
-    } as any,
+  /**
+   * findOne + create, NOT findOrCreate.
+   *
+   * `findOrCreate` merges its `where` clause into the values it inserts, so a where
+   * containing an operator — `decision: { [Op.is]: null }`, which is exactly how "still
+   * pending" is expressed here — makes Sequelize try to write that operator OBJECT into a
+   * string column. It fails with "string violation: decision cannot be an array or an
+   * object" and 500s. Found by Ali clicking the button in production; the unit tests
+   * mocked `findOrCreate` and so asserted this function's logic while never exercising
+   * Sequelize's actual behaviour.
+   *
+   * Idempotency does not depend on this code path being careful: the partial unique index
+   * `capstone_review_pending_unique ... WHERE decision IS NULL` still allows at most one
+   * pending review per record, so a race loses at the database.
+   */
+  const existing = await CapstoneReviewApproval.findOne({
+    where: { record_id: record.id, decision: { [Op.is]: null } as any },
+    order: [['requested_at', 'DESC']],
   });
+  if (existing) {
+    return { review_id: existing.id, version: existing.version, state: 'in_review' as const, deduplicated: true };
+  }
 
-  return { review_id: approval.id, version: record.version, state: 'in_review' as const, deduplicated: !created };
+  const approval = await CapstoneReviewApproval.create({
+    record_id: record.id,
+    enrollment_id: record.enrollment_id,
+    version: record.version,
+  } as any);
+
+  return { review_id: approval.id, version: record.version, state: 'in_review' as const, deduplicated: false };
 }
 
 export interface CapstoneDecisionInput {
@@ -229,4 +249,42 @@ export async function listCapstoneReviewQueue(reviewer: ReviewerIdentity, limit 
       full_name: r?.full_name ?? null,
     };
   });
+}
+
+/**
+ * The record a reviewer is being asked to decide on.
+ *
+ * Deliberately NOT the public reader. `publicViewDecision` requires both status and
+ * visibility to pass, and EVERY record in a review queue is by definition not yet
+ * published — so the public path 404s on all of them. The review page originally linked
+ * a reviewer to `/p/:slug` and it could never have worked once (found by Ali, 2026-08-25:
+ * every "Open record" click landed on "Not found", in the public marketing shell).
+ *
+ * Scope-checked exactly like a decision: a mentor may read only the records of learners
+ * they are over. Reading someone's unpublished portfolio is as sensitive as deciding on
+ * it, so it gets the same gate rather than a weaker one.
+ */
+export async function getRecordForReview(recordId: string, reviewer: ReviewerIdentity) {
+  const record = await findRecordById(recordId);
+  if (!record) throw fail(404, 'Record not found', 'NotFoundError');
+
+  if (!await canReview(reviewer, record.enrollment_id)) {
+    throw fail(403, 'That learner is outside your mentor scope', 'OutsideScope');
+  }
+
+  const [row] = await sequelize.query(
+    `SELECT content_json FROM capstone_records WHERE id = :id LIMIT 1`,
+    { replacements: { id: recordId }, type: (sequelize as any).QueryTypes?.SELECT ?? 'SELECT' },
+  ) as unknown as Array<{ content_json: any }>;
+
+  return {
+    record_id: record.id,
+    slug: record.slug,
+    version: record.version,
+    status: record.status,
+    visibility: record.visibility,
+    // The stored snapshot, exactly as it would publish. A reviewer must approve the thing
+    // that will actually go live, not a fresh render that may already have moved on.
+    content: row?.content_json ?? null,
+  };
 }

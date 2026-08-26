@@ -79,13 +79,14 @@ function toSlide(artifact: PublicCaseStudyArtifact): StorySlide | null {
 }
 
 /**
- * The slides, or an empty track.
+ * Every approved picture in this record, in the server's order, with no floor.
  *
- * Returns `[]` rather than a one-slide track below the floor, so the caller's
- * emptiness check is the ordinary `length === 0` every other band on this page
- * uses. A caller cannot accidentally render a carousel that cannot move.
+ * Split out from `carouselSlides` because two callers now need the same
+ * selection and only one of them wants the carousel's minimum: the figure
+ * placement model asks "which pictures exist" and answers it for a record with a
+ * single image, which is precisely the record a carousel must refuse.
  */
-export function carouselSlides(
+export function imageSlides(
   artifacts: readonly PublicCaseStudyArtifact[],
 ): readonly StorySlide[] {
   const slides: StorySlide[] = [];
@@ -93,6 +94,30 @@ export function carouselSlides(
     const slide = toSlide(artifact);
     if (slide) slides.push(slide);
   }
+  return slides;
+}
+
+/**
+ * The slides, or an empty track.
+ *
+ * Returns `[]` rather than a one-slide track below the floor, so the caller's
+ * emptiness check is the ordinary `length === 0` every other band on this page
+ * uses. A caller cannot accidentally render a carousel that cannot move.
+ *
+ * `placedHrefs` is what a picture already shown between two sections leaves
+ * behind. The band used to render every image twice within one screen - once in
+ * the track, once again in the list beneath it - which reads as a rendering
+ * fault rather than as a gallery. Subtracting them here rather than at the call
+ * site keeps the floor and the subtraction in the same function, so no caller
+ * can apply one without the other and resurrect the one-slide carousel.
+ * DEFAULTS TO EMPTY: a caller that places nothing gets exactly the old answer.
+ */
+export function carouselSlides(
+  artifacts: readonly PublicCaseStudyArtifact[],
+  placedHrefs: readonly string[] = [],
+): readonly StorySlide[] {
+  const placed = new Set<string>(placedHrefs);
+  const slides = imageSlides(artifacts).filter((slide) => !placed.has(slide.href));
   return slides.length >= CAROUSEL_MINIMUM_SLIDES ? slides : [];
 }
 
