@@ -34,7 +34,9 @@ const OUT_DIR = path.join(
 
 const STOPS = [
   { file: '01-client-signin', url: '/client', label: 'Client sign-in (public door)', signedOut: true },
-  { file: '02-client-projects', url: '/client/projects', label: 'Client portal - signed in' },
+  { file: '02-client-overview', url: '/client/projects', label: 'Client portal - Overview' },
+  { file: '03-client-decisions', url: '/client/projects', label: 'Client portal - Decisions', click: 'Decisions' },
+  { file: '04-client-releases', url: '/client/projects', label: 'Client portal - Releases (empty state)', click: 'Releases' },
 ];
 
 async function main() {
@@ -74,6 +76,11 @@ async function main() {
     // The portal fetches after mount; networkidle covers it, but give React a beat to
     // commit the rendered rows so the screenshot is not of a loading state.
     await page.waitForTimeout(1200);
+    if (stop.click) {
+      // Section rail buttons. Clicking proves the rail works rather than assuming it.
+      await page.getByRole('button', { name: stop.click, exact: true }).first().click();
+      await page.waitForTimeout(400);
+    }
 
     const file = path.join(OUT_DIR, `${stop.file}.png`);
     await safeScreenshot(page, file, { fullPage: true, label: stop.label });
