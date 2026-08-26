@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260826-t8k5 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, August 26, 2026 at 12:39 PM</div>
+    <div><span class="sid">CC-20260826-t8k5</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Made the destination GHL sub-account a per-source decision, wired the open-house and training-site paths to actually sync, and made an unprovisioned account withhold the push rather than fall back to the wrong CRM.**</h2>
+          <span class="badge">2026-08-26</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two independent causes, both addressed. **(1) The sync was never invoked.** `enrollmentService.createExplorerEnrollment` wrote the open-house lead with a raw `Lead.findOrCreate` and never called `syncNewLeadToGhl`; `externalLeadIngestService.ingestExternalLead` did the same for training.colaberry.com. Both now push, fire-and-forget, matching every other call site in the codebase. **(2) One global key, wrong account.** `ghlFetch` read a single `ghl_api_key`, and GHL v1 keys are scoped to one sub-account, so the codebase could only ever write to **Agent Cory AI**. New `backend/src/services/leads/ghlAccountRouting.ts` resolves a sub-account per lead source: it maps a **group key** (via `groupForSource`, so all three spellings of training.colaberry.com fold onto one route) to an account name, and reads that account&#39;s credential from `ghl_api_key_&lt;account&gt;`. `ghlFetch` and the six helpers `syncLeadToGhl` drives gained an **optional trailing `apiKey`**, so all nine pre-existing call sites (Apollo, campaigns, Synthflow, calendar, CSV import, Maya, automation, scheduler, admin-add) are untouched and stay on the global key.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**14 new tests green** in `ghlAccountRouting.test.ts`, plus `externalLeadIngestService`, `enrollmentService`, `v1LeadController.consent` and `leadSourceGroups` still passing (69 passed across the affected set). The tests deliberately target the withholding rule rather than the happy path, including an assertion that the default key **does not appear anywhere** in a withheld result, so a future &quot;simplification&quot; that reintroduces the fallback fails loudly. Also covered: corrupt routes map falls back to default rather than withholding every lead in the system, whitespace-only key counts as unprovisioned, and a null source does not throw.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The safety property is the whole design.** A source routed to an account whose key is not on file resolves to `status: &#39;unconfigured&#39;` and the caller refuses to sync - deliberately *not* a fallback to the default account. Falling back is what makes this dangerous: the default is Agent Cory AI, and those contacts feed Cora Voice outbound dialing. Withholding leaves the leads exactly where they already are, visible in `/admin/leads` and absent from GHL, which is the status quo rather than a new failure. `ghl_account_routes` ships **seeded** with `open_house` and `training_colaberry` pointing at `school_of_data_analytics`, whose key setting ships **empty on purpose**. So merging and deploying this changes nothing observable until someone sets `ghl_api_key_school_of_data_analytics`; that one setting is the switch that turns the whole thing on. Every withheld push writes a `GHL Sync Withheld` activity row naming the account and reason, so &quot;nothing happened&quot; is legible rather than silent. **A defect my own change introduced and then fixed:** adding a top-level `import { syncNewLeadToGhl } from &#39;./ghlService&#39;` to both ingest services broke `externalLeadIngestService.test.ts` at load, because it pulls `settingsService -&gt; SystemSetting -&gt; config/database` and constructs Sequelize at module load with no `DATABASE_URL`. Switched both to the lazy-import convention `ghlService` already uses for `aiEventService`, which exists for exactly this reason. **Deliberately deferred:** `ghl_sync_status` / `ghl_synced_at` columns on `Lead`. Sync state is still inferred from `ghl_contact_id` being non-null, so a *failed* push is only visible in activity rows and logs. That needs a migration and a prod run, and keeping this PR migration-free makes it safe to deploy on its own. **Not done and not mine to decide:** the 490 already-captured open-house leads are untouched. Ali chose new-leads-only; a backfill remains a separate, explicitly-approved bulk write with a dry-run count first. **Pre-existing, proven not caused by this change:** `explorerEnrollmentWelcome.test.ts` fails 4 tests at `Enrollment.findAll`. Verified by running that suite against the pristine `origin/main` copy of `enrollmentService.ts`, where it fails identically. Consistent with yesterday&#39;s finding that this machine&#39;s local jest has ~43 unrelated failures while CI is clean; CI is the gate.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260826-t8k5.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
