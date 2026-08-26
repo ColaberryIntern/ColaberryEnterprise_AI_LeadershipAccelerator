@@ -79,7 +79,19 @@ interface ClientChangeRequest {
   impact_summary?: string;
 }
 
+interface ClientEngagement {
+  id: string;
+  name?: string;
+  status?: string;
+  start_at?: string;
+  target_end_at?: string;
+}
+
 interface ProjectDetail {
+  // Null when the project has no engagement row. The server deliberately sends null
+  // rather than a placeholder, so the fallback wording lives here rather than becoming a
+  // fiction every API consumer inherits.
+  engagement: ClientEngagement | null;
   project: ClientProject;
   decisions: ClientDecision[];
   changeRequests: ClientChangeRequest[];
@@ -328,7 +340,7 @@ const ClientPortal: React.FC = () => {
   }
 
   const active: ClientSection = SECTIONS.find((s) => s.key === activeKey) ?? SECTIONS[0];
-  const { project, decisions, changeRequests } = detail;
+  const { engagement, project, decisions, changeRequests } = detail;
 
   return (
     <div className="min-vh-100 bg-light py-3 px-2 px-lg-3">
@@ -336,7 +348,7 @@ const ClientPortal: React.FC = () => {
         audienceLabel="Client review"
         audienceTone="client"
         projectName={project.name ?? 'Untitled project'}
-        engagementName="Your engagement"
+        engagementName={engagement?.name ?? 'Your engagement'}
         personName={displayName}
         personRole="Reviewer"
         sections={SECTIONS}

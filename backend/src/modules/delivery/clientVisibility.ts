@@ -158,6 +158,7 @@ export function findForbiddenFields(value: unknown, maxDepth = 8): ForbiddenFiel
 
 /** Object kinds the client surface serves. */
 export type ClientObjectKind =
+  | 'engagement'
   | 'project'
   | 'decision'
   | 'design'
@@ -176,6 +177,15 @@ export type ClientObjectKind =
  * `builder_authority` (an assessment of a person), no story internals.
  */
 export const CLIENT_FIELD_ALLOWLIST: Record<ClientObjectKind, readonly string[]> = {
+  // The engagement a project belongs to. A client is shown its NAME because a project
+  // without the engagement around it reads as an orphan - but almost nothing else.
+  //
+  // Deliberately absent, and the first one is the sharp one: `source_lead_id` links the
+  // engagement back to the marketing lead it came from, which is our funnel record and
+  // none of the client's business. Also absent: tenant_id, brand_id, organization_id,
+  // every *_identity_id, `metadata` (an open JSON bag - anything could end up there),
+  // `archived_at` and `engagement_type`, which is our commercial classification.
+  engagement: ['id', 'name', 'status', 'start_at', 'target_end_at'],
   // `summary`, `started_at` and `target_date` were named here and DO NOT EXIST on
   // DeliveryProject. Because toClientShape skips undefined values, they vanished in
   // silence rather than failing, and the client saw a thinner project than intended.
