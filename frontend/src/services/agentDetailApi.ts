@@ -113,6 +113,41 @@ export interface AgentDetailTrustContract {
   last_activity_at: string | null;
 }
 
+/** Trust Contract Phase 1 (2026-08-26) — a real, observed change to this
+ * agent's `persona_version`. `[]` for an agent whose version has never
+ * changed since this table started tracking — the common case on day one,
+ * never fabricated history reaching further back than real data exists. */
+export interface AgentDetailPersonaVersionHistoryRow {
+  id: string;
+  persona_version: string;
+  previous_version: string | null;
+  source: string;
+  created_at: string;
+}
+
+/** Trust Contract Phase 1 (2026-08-26) — real, queryable `ai_events` cost for
+ * this agent over the last 30 days, the same number the Trust Command Center
+ * itself would show. `null` when this agent has zero cost-tracked events in
+ * the window — not an error, just genuinely nothing to report yet. */
+export interface AgentDetailCostSummary {
+  cost_usd: number;
+  runs: number;
+}
+
+/** Trust Contract Phase 1 (2026-08-26) — real `authorizeAgentAction()`
+ * verdicts for this agent over the last 30 days. Makes the "declared
+ * autonomy_level vs. what's actually enforced" gap visible: `enforced_count`
+ * is the subset of decisions made under real `abac_enforcement=enforce`
+ * mode, not shadow. */
+export interface AgentDetailAuthorizationSummary {
+  window_days: number;
+  total: number;
+  allow: number;
+  approval: number;
+  block: number;
+  enforced_count: number;
+}
+
 export interface AgentDetail {
   agent: {
     id: string;
@@ -140,6 +175,9 @@ export interface AgentDetail {
   tickets: AgentDetailTicket[];
   ticket_breakdown: AgentDetailTicketTypeBreakdown[];
   related_tasks: AgentDetailRelatedTask[];
+  persona_version_history: AgentDetailPersonaVersionHistoryRow[];
+  cost_summary: AgentDetailCostSummary | null;
+  authorization_summary: AgentDetailAuthorizationSummary;
   capabilities: AgentDetailCapabilities;
   reports_to: AgentDetailReportsTo | null;
   trust_contract: AgentDetailTrustContract;

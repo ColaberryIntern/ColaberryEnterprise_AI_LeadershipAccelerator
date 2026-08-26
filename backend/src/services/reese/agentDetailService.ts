@@ -11,6 +11,9 @@ import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases'
 import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../workforce/liveAgentsService';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
+import { getPersonaVersionHistory, type PersonaVersionHistoryRow } from '../agentPersonaVersionHistoryService';
+import { agentCostRows } from '../trustMetricsService';
+import { getAgentAuthorizationSummary, type AgentAuthorizationSummary } from '../agentAuthorizationService';
 
 // Agent Detail — the transparency page Ali asked for: real identity, real
 // system prompt, real tools, live status, real linked ticket activity. Written
@@ -104,6 +107,27 @@ export interface AgentDetailResult {
     run_count: number;
     error_count: number;
   }>;
+  /** Trust Contract Phase 1 (2026-08-26) — real changes to this agent's
+   * `persona_version`, most-recent first. `[]` for an agent whose version has
+   * never changed since this table started tracking (2026-08-26) — the
+   * common case for the whole existing fleet on day one — never fabricated
+   * history reaching further back than real data exists. */
+  persona_version_history: PersonaVersionHistoryRow[];
+  /** Trust Contract Phase 1 (2026-08-26) — real, queryable `ai_events` cost
+   * for this agent over the last 30 days (reuses trustMetricsService.ts's
+   * own per-agent cost query — the same number the Trust Command Center
+   * itself would show, never a second, drifting calculation). `null` when
+   * this agent has zero cost-tracked events in the window — an agent that
+   * genuinely hasn't made a tracked LLM call, not an error. */
+  cost_summary: { cost_usd: number; runs: number } | null;
+  /** Trust Contract Phase 1 (2026-08-26) — real `authorizeAgentAction()`
+   * verdicts for this agent over the last 30 days: how many were allowed
+   * outright, how many required approval, how many would have been blocked
+   * — and how many of those were under real `enforce` mode vs. shadow. This
+   * is the "declared autonomy_level vs. what's actually enforced" gap made
+   * visible, using the real ABAC chokepoint's own trail, never a fabricated
+   * trust score. */
+  authorization_summary: AgentAuthorizationSummary;
   /** What this agent reads / produces — Agent Detail transparency, part 2
    * (2026-08-18). Derived from the agent's real, live `tools_granted` (declared
    * capability, via deriveAgentCapabilities()) UNIONED with the real, live
@@ -319,6 +343,18 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     ? await AiAgent.findAll({ where: { module: agent.module, id: { [Op.ne]: agent.id } }, order: [['agent_name', 'ASC']] })
     : [];
 
+  // Trust Contract Phase 1 (2026-08-26) — real version history, real cost,
+  // real authorization verdicts. All three key on `agent.id` directly (not
+  // `adminUser.id` like the tickets queries above), since ai_events and the
+  // new history table are keyed on the real AiAgent row regardless of
+  // whether it has a linked staff identity.
+  const [personaVersionHistory, costRows, authorizationSummary] = await Promise.all([
+    getPersonaVersionHistory(agent.id),
+    agentCostRows(30, agent.id),
+    getAgentAuthorizationSummary(agent.id, 30),
+  ]);
+  const costSummary = costRows[0] ? { cost_usd: costRows[0].costUsd, runs: costRows[0].runs } : null;
+
   return {
     agent: {
       id: agent.id,
@@ -367,6 +403,9 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       run_count: t.run_count ?? 0,
       error_count: t.error_count ?? 0,
     })),
+    persona_version_history: personaVersionHistory,
+    cost_summary: costSummary,
+    authorization_summary: authorizationSummary,
     capabilities: {
       reads: capabilities.reads,
       produces: capabilities.produces,
