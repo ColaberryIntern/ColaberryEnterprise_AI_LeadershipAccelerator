@@ -195,6 +195,11 @@ export function StoryRepositories({
                 <span className="cbv2-cs-sr-only"> repository (opens in a new tab)</span>
               </a>
               <span className="cbv2-cs-tag">{REPO_ROLE_LABELS[repository.role]}</span>
+              {/* A repository only reaches this list by being public AND
+                  consented, so saying so is reading the wire back, not a claim
+                  this file is making. It is the indicator a reader scanning for
+                  "can I actually open the source" is looking for. */}
+              <span className="cbv2-cs-tag cbv2-story__repo-visibility">Public</span>
               {repository.lastCommitDate ? (
                 <span className="cbv2-story__repo-date">
                   <span className="cbv2-cs-sr-only">Last commit: </span>
@@ -223,9 +228,12 @@ export function StoryRepositories({
 export function StorySectionBody({
   sectionKey,
   record,
+  placedHrefs = [],
 }: {
   sectionKey: CaseStudySectionKey;
   record: PublicCaseStudyDetail;
+  /** Pictures the page already showed between sections. Default: none. */
+  placedHrefs?: readonly string[];
 }): React.ReactElement | null {
   switch (sectionKey) {
     case 'situation':
@@ -265,10 +273,11 @@ export function StorySectionBody({
       // The carousel is a second VIEW of the same approved artifacts, not a
       // second set: it shows the ones that are images, and every artifact still
       // appears in the list beneath it. Below two images `carouselSlides`
-      // returns nothing and only the list renders.
+      // returns nothing and only the list renders. Pictures the page already
+      // placed between sections are subtracted first, so nothing appears twice.
       return (
         <div data-story-zone="artifacts">
-          <StoryMediaCarousel slides={carouselSlides(record.artifacts)} />
+          <StoryMediaCarousel slides={carouselSlides(record.artifacts, placedHrefs)} />
           <CaseStudyArtifacts artifacts={record.artifacts} requestHref={record.cta.href} />
         </div>
       );
