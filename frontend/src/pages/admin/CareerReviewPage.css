@@ -37,3 +37,14 @@
   font: inherit; font-size: 14px; background: var(--surface); color: var(--body); margin-bottom: 12px; resize: vertical; }
 .cr-notes:focus-visible { outline: 2px solid var(--berry); outline-offset: 1px; }
 .cr-note { font-size: 13px; color: var(--muted); font-style: italic; margin: 12px 0 0; }
+
+/* Inline record preview. The reviewer must see what they are approving, and the public
+   page cannot show it: everything in the queue is unpublished, so /p/:slug 404s. */
+.cr-preview { border-top: 1px solid var(--border-sub); margin-top: 16px; padding-top: 16px; }
+.cr-preview-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+.cr-json {
+  background: var(--sunken); border: 1px solid var(--border-sub); border-radius: 10px;
+  padding: 14px 16px; margin: 0; max-height: 420px; overflow: auto;
+  font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; line-height: 1.55; color: var(--body);
+  white-space: pre-wrap; word-break: break-word;
+}

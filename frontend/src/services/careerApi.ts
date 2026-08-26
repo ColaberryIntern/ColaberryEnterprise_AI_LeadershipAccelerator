@@ -212,3 +212,27 @@ export async function submitReviewDecision(
   const { data } = await api.post(`/api/admin/career/review/${encodeURIComponent(recordId)}`, { decision, notes });
   return data;
 }
+
+export interface RecordForReview {
+  record_id: string;
+  slug: string;
+  version: number;
+  status: string;
+  visibility: string;
+  /** The stored snapshot, exactly as it would publish. */
+  content: any | null;
+}
+
+/**
+ * What the reviewer is deciding on, served from the admin side.
+ *
+ * NOT `/p/:slug`. Everything in a review queue is unpublished by definition, so the
+ * public reader 404s on all of it — the review page originally linked there and the link
+ * could never have worked once.
+ */
+export async function fetchRecordForReview(recordId: string): Promise<RecordForReview> {
+  const { data } = await api.get<{ ok: boolean } & RecordForReview>(
+    `/api/admin/career/review/${encodeURIComponent(recordId)}/record`,
+  );
+  return data;
+}
