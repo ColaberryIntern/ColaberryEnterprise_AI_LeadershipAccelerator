@@ -61,6 +61,9 @@ process.stdout.write(jwt.sign(
 }
 
 const STOPS = [
+  // The public client sign-in door. Unauthenticated on purpose - it is the one stop here
+  // that an external reviewer can reach, and the only one that must render with no token.
+  { file: '00-client-signin', url: '/client', label: 'Client Sign-In (public)' },
   { file: '01-client-overview', url: '/admin/refactored/client', label: 'Client Review Room — Overview' },
   { file: '02-client-decisions', url: '/admin/refactored/client', label: 'Client — Decisions', click: 'Decisions' },
   { file: '03-client-changes', url: '/admin/refactored/client', label: 'Client — Changes', click: 'Changes' },
