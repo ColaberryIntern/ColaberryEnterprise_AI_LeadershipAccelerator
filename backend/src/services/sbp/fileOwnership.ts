@@ -70,8 +70,39 @@ const OWNERSHIP: Record<string, FileOwnership> = {
  * exceptions are named above; a genuinely new co-owned file must be added here,
  * which is what `fileOwnership.test.ts` checks.
  */
+/**
+ * Whole subtrees a student writes into, matched by prefix rather than exact path.
+ *
+ * `.claude/agents/` is the Week 7 lab's deliverable: the student builds three
+ * subagents by hand, proves each one gets invoked, and commits a recording of
+ * them working. The filenames come from their own project, so they cannot be
+ * enumerated here the way the three `.colaberry/` files can.
+ *
+ * ── THIS IS A GUARD AGAINST A FUTURE WRITE, NOT A CURRENT BUG ───────────────
+ *
+ * Nothing in the pipeline writes `.claude/agents/` today. The hazard is the
+ * default: `ownershipOf` returns `platform` for anything unlisted, and
+ * `platform` means safe to drop on top sight unseen. So the day the project
+ * build learns to generate agents — and the plan already models them, with
+ * triggers, skills and gates — those writes would land on the default class and
+ * wholesale-replace whatever the student built.
+ *
+ * That is not hypothetical. It is what this module was created to stop after it
+ * happened to `plan.json`: "the bot overwrote a student's file, he restored it
+ * by hand, and the bot overwrote him again." Classifying the path before anyone
+ * writes to it costs one line; classifying it afterwards costs a student their
+ * week.
+ */
+const STUDENT_OWNED_PREFIXES: readonly string[] = ['.claude/agents/'];
+
 export function ownershipOf(path: string): FileOwnership {
-  return OWNERSHIP[path] ?? 'platform';
+  const exact = OWNERSHIP[path];
+  if (exact) return exact;
+  // Normalise a leading ./ so a caller that builds paths by concatenation gets
+  // the same answer as one that does not.
+  const normalised = path.replace(/^\.\//, '');
+  if (STUDENT_OWNED_PREFIXES.some((prefix) => normalised.startsWith(prefix))) return 'student';
+  return 'platform';
 }
 
 /**
