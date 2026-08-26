@@ -7,23 +7,37 @@ import { sequelize } from '../config/database';
 // never alters or drops any existing column/table/constraint.
 //
 // `autonomy_level` — the 4-level ladder `docs/ai-governance/abac-design.md`
-// already proposed (2026-06-22, "no code yet", still awaiting Ali's sign-off
-// on 7 open decisions): 'observe' | 'suggest' | 'act_audited' | 'communicate'.
+// proposed (2026-06-22): 'observe' | 'suggest' | 'act_audited' | 'communicate'.
 // Reused here verbatim rather than inventing a second, competing governance
-// vocabulary — but this column is PURELY DECLARATIVE at this stage: nothing
-// in this repo reads it to block or permit an action yet (that would be real
-// enforcement, `authorizeAgentAction()`, explicitly out of scope — see
-// abac-design.md's own Phase 1 "shadow mode, nothing blocked" for why this is
-// consistent with that doc's own rollout plan, not a preemptive decision on
-// the sign-off it's still waiting on). Required at reactivation time
+// vocabulary. CORRECTION (2026-08-25): this column's original header comment
+// claimed `authorizeAgentAction()` was "explicitly out of scope" and the design
+// doc had "no code yet" — both were wrong. A real chokepoint has existed and
+// run in shadow mode since PR #69 (2026-06-23, session CC-20260622-r468),
+// deriving its own autonomy level from the pre-existing `agentPermissionService`
+// tier map, with no knowledge of this column. See
+// agentAuthorizationService.ts's `resolveLevel()` (2026-08-25) for how the two
+// are now reconciled: this column governs ONLY when `autonomy_level_set_at`
+// is non-null (an operator deliberately chose it via the reactivation flow) —
+// otherwise the existing tier-derived level keeps governing, unchanged, for
+// every agent this column has never applied to. Required at reactivation time
 // (agentReactivationService.ts) so bringing an agent back online is a
 // deliberate, visible act — never a silent flip back to unlimited trust.
-// DB default 'observe' (fail-closed) matches the doc's own stated default for
-// "any new/unclassified agent." No DB-level check constraint on the value
+// DB default 'observe' (fail-closed) matches the design doc's stated default
+// for "any new/unclassified agent." No DB-level check constraint on the value
 // set — validated in application code (reactivationSchema.ts's Zod enum) so
 // a future 5th level needs no migration to add.
+//
+// `autonomy_level_set_at` (2026-08-25) — null until `reactivateAgent()` sets
+// it in the same update as `autonomy_level`. The honest marker distinguishing
+// "an operator chose this" from "the migration's untouched default sitting on
+// every agent that has never been through the reactivation flow" — without
+// it, `autonomy_level`'s DB default ('observe') would be indistinguishable
+// from a deliberate choice, and wiring the gate to prefer it would silently
+// demote the entire existing fleet (Reese, cory-engine, every long-running
+// agent) to observe-only in the shadow signal the moment this shipped.
 export const AI_AGENT_AUTONOMY_LEVEL_STATEMENTS: string[] = [
   `ALTER TABLE ai_agents ADD COLUMN IF NOT EXISTS autonomy_level VARCHAR(20) DEFAULT 'observe'`,
+  `ALTER TABLE ai_agents ADD COLUMN IF NOT EXISTS autonomy_level_set_at TIMESTAMP`,
 ];
 
 export async function ensureAiAgentAutonomyLevelSchema(): Promise<void> {

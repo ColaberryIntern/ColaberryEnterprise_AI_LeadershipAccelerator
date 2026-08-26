@@ -61,6 +61,9 @@ process.stdout.write(jwt.sign(
 }
 
 const STOPS = [
+  // The public client sign-in door. Unauthenticated on purpose - it is the one stop here
+  // that an external reviewer can reach, and the only one that must render with no token.
+  { file: '00-client-signin', url: '/client', label: 'Client Sign-In (public)' },
   { file: '01-client-overview', url: '/admin/refactored/client', label: 'Client Review Room — Overview' },
   { file: '02-client-decisions', url: '/admin/refactored/client', label: 'Client — Decisions', click: 'Decisions' },
   { file: '03-client-changes', url: '/admin/refactored/client', label: 'Client — Changes', click: 'Changes' },
@@ -113,7 +116,9 @@ const STOPS = [
   console.log(`\n[console] ${consoleErrors.length} error(s)`);
   consoleErrors.slice(0, 10).forEach((e) => console.log(`  ${e}`));
 
-  writeCaptureSummary(OUT_DIR, { base_url: BASE_URL, console_errors: consoleErrors, entries });
+  // The helper takes the ENTRY ARRAY. Passing an object nests the ledger one level
+  // deep and the per-PNG width record stops being where the protocol says it is.
+  writeCaptureSummary(OUT_DIR, entries);
   await browser.close();
   process.exit(consoleErrors.length > 0 ? 2 : 0);
 })().catch((err) => {

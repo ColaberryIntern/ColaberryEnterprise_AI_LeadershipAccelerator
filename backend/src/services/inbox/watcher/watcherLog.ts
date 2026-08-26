@@ -56,6 +56,9 @@ export type WatcherEventType =
   | 'reply_failed'
   | 'reply_suppressed'
   | 'window_expired'
+  /** An answered thread was moved out of the inbox. Never written for an escalation. */
+  | 'thread_filed'
+  | 'thread_filed_failed'
   | 'halted';
 
 export interface EvidenceItem {
@@ -168,8 +171,35 @@ export class WatcherLogUnreadableError extends Error {
  * exists but cannot be parsed THROWS: the caller must treat that as every cap
  * exceeded, because an unreadable count is not a count of zero. Silently
  * treating a corrupt log as empty would re-arm all fifteen replies.
+ *
+ * ── `escalationsSinceIso`: WHY ONE SET IS SCOPED AND THE OTHERS ARE NOT ─────
+ *
+ * Pass the current window's `started_at` and `escalatedThreads` counts only
+ * escalations from THIS window. Everything else — the reply ceilings,
+ * `answeredThreads`, `ownReplyIds` — stays cumulative across the whole log.
+ *
+ * The asymmetry is deliberate, because the two guards protect different people.
+ * An escalation goes to Ali, who is watching the window and wants to hear when
+ * a student writes AGAIN; suppressing that forever means a genuinely new
+ * message is silently dropped, which is the exact silence this watcher exists
+ * to end. A reply goes to a STUDENT, where a second copy is a defect, so that
+ * guard must never reset.
+ *
+ * This does not reopen the flood. That was 143 escalations across 43 threads
+ * driven by re-escalating the same message every 20 minutes; per-window scope
+ * still bounds it to one escalation per thread per window.
+ *
+ * Omit the argument and escalations replay cumulatively, as before.
  */
-export function replayWatcherLog(stateDir: string): ReplayedState {
+export function replayWatcherLog(stateDir: string, escalationsSinceIso?: string): ReplayedState {
+  // An unparseable bound must not silently widen the guard to "everything
+  // counts from the beginning of time" nor narrow it to "nothing counts".
+  // Treat it as absent, which is the previous, more suppressive behaviour.
+  const escalationFloor = (() => {
+    if (!escalationsSinceIso) return null;
+    const t = Date.parse(escalationsSinceIso);
+    return Number.isFinite(t) ? t : null;
+  })();
   const file = watcherLogPath(stateDir);
   const empty: ReplayedState = {
     sentReplies: [],
@@ -231,7 +261,14 @@ export function replayWatcherLog(stateDir: string): ReplayedState {
     // and `escalated` is replayed too so a log written before this event type
     // existed still suppresses a repeat.
     if (ev.type === 'escalation_attempt' || ev.type === 'escalated' || ev.type === 'escalation_failed') {
-      if (ev.thread_key) state.escalatedThreads.add(ev.thread_key);
+      // Scoped to the current window when a floor is supplied — see the header.
+      // An event with no parseable `ts` counts regardless: an escalation we
+      // cannot date is one we cannot prove belongs to an earlier window, and
+      // the suppressive reading is the safe one.
+      const evTs = Date.parse(ev.ts);
+      const withinWindow =
+        escalationFloor === null || !Number.isFinite(evTs) || evTs >= escalationFloor;
+      if (ev.thread_key && withinWindow) state.escalatedThreads.add(ev.thread_key);
     }
   }
 

@@ -125,3 +125,50 @@ describe('authorizeAgentAction — disabled agent + off + fail-open', () => {
     expect(r.reason).toBe('authz_error');
   });
 });
+
+// AI Workforce Reset (2026-08-25) — the reactivation flow's real, human-chosen
+// autonomy_level is now wired into this gate, but ONLY when
+// autonomy_level_set_at proves it was deliberately set (not the untouched
+// migration default sitting on every agent that has never been reactivated).
+describe('authorizeAgentAction — deliberate autonomy_level from the reactivation flow', () => {
+  it('a deliberately-set autonomy_level OVERRIDES the tier-derived level, even when they disagree', async () => {
+    findOne.mockResolvedValue({ enabled: true, status: 'idle', autonomy_level: 'communicate', autonomy_level_set_at: new Date() });
+    // tier: 'read_only' would normally derive 'observe' (may not send email) — the
+    // deliberately-reactivated 'communicate' level must win instead.
+    const r = await authorizeAgentAction({ ...base, action: 'send_email', tier: 'read_only' });
+
+    expect(r.level).toBe('communicate');
+    expect(r.wouldDeny).toBe(false);
+    expect(r.reason).toBe('ok');
+  });
+
+  it('a deliberate DEMOTION also works — reactivating at "observe" blocks a write even for a high-tier agent', async () => {
+    findOne.mockResolvedValue({ enabled: true, status: 'idle', autonomy_level: 'observe', autonomy_level_set_at: new Date() });
+    const r = await authorizeAgentAction({ ...base, action: 'update_campaign_config', tier: 'communication' });
+
+    expect(r.level).toBe('observe');
+    expect(r.wouldDeny).toBe(true);
+    expect(r.reason).toBe('level_forbids:write');
+  });
+
+  it('boundary: autonomy_level set but autonomy_level_set_at is null (the untouched migration default) — tier-derived level keeps governing, unchanged', async () => {
+    findOne.mockResolvedValue({ enabled: true, status: 'idle', autonomy_level: 'observe', autonomy_level_set_at: null });
+    const r = await authorizeAgentAction({ ...base, action: 'send_email', tier: 'communication' });
+
+    // Proves the fix doesn't silently demote the untouched fleet: a real,
+    // long-running 'communication'-tier agent (Reese, cory-engine, ...) that
+    // has never been through the reactivation flow keeps working exactly as
+    // it did before this change, DESPITE autonomy_level literally being
+    // 'observe' in the DB (the Phase C migration's default value).
+    expect(r.level).toBe('communicate');
+    expect(r.wouldDeny).toBe(false);
+  });
+
+  it('boundary: no registry row at all (unregistered .js cron) still falls back cleanly to the tier-derived level', async () => {
+    findOne.mockResolvedValue(null);
+    const r = await authorizeAgentAction({ ...base, action: 'send_email', tier: 'communication' });
+
+    expect(r.level).toBe('communicate');
+    expect(r.wouldDeny).toBe(false);
+  });
+});

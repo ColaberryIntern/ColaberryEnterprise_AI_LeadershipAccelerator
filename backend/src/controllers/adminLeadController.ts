@@ -13,6 +13,7 @@ import {
   updateLead,
   getLeadStats,
   generateLeadCsv,
+  LEAD_EXPORT_MAX_ROWS,
   getPipelineStats,
   createLeadAdmin,
   batchUpdateLeads,
@@ -363,17 +364,49 @@ export async function handleAdminGetPipelineStats(
   }
 }
 
+/**
+ * CSV of the current view. Parses the query exactly as handleAdminListLeads
+ * does - same schema, same website resolution - so the file matches the table
+ * the operator was looking at when they clicked Export.
+ */
 export async function handleAdminExportLeads(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const csv = await generateLeadCsv();
+    const filters = leadFilterSchema.parse(req.query);
+    const websites = await resolveWebsiteFilter(
+      req.admin?.sub,
+      req.admin?.role,
+      filters.website
+    );
+    const { csv, rowCount, truncated } = await generateLeadCsv({
+      ...filters,
+      website: websites && websites.length ? websites.join(',') : undefined,
+    });
+
+    // Truncation has to be visible to whoever opens the file. Response headers
+    // are not, on a browser download, so it goes in the filename too.
+    const filename = truncated
+      ? `leads-export-partial-first-${rowCount}.csv`
+      : 'leads-export.csv';
+    if (truncated) {
+      console.warn(
+        `[AdminLead] Export hit the ${LEAD_EXPORT_MAX_ROWS}-row cap; returned the newest ${rowCount}.`
+      );
+    }
+
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="leads-export.csv"');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Export-Row-Count', String(rowCount));
+    res.setHeader('X-Export-Truncated', String(truncated));
     res.send(csv);
   } catch (error) {
+    if (error instanceof ZodError) {
+      res.status(400).json({ error: 'Invalid query parameters' });
+      return;
+    }
     next(error);
   }
 }
