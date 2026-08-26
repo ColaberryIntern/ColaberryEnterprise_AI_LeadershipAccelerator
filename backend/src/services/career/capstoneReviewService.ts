@@ -250,3 +250,41 @@ export async function listCapstoneReviewQueue(reviewer: ReviewerIdentity, limit 
     };
   });
 }
+
+/**
+ * The record a reviewer is being asked to decide on.
+ *
+ * Deliberately NOT the public reader. `publicViewDecision` requires both status and
+ * visibility to pass, and EVERY record in a review queue is by definition not yet
+ * published — so the public path 404s on all of them. The review page originally linked
+ * a reviewer to `/p/:slug` and it could never have worked once (found by Ali, 2026-08-25:
+ * every "Open record" click landed on "Not found", in the public marketing shell).
+ *
+ * Scope-checked exactly like a decision: a mentor may read only the records of learners
+ * they are over. Reading someone's unpublished portfolio is as sensitive as deciding on
+ * it, so it gets the same gate rather than a weaker one.
+ */
+export async function getRecordForReview(recordId: string, reviewer: ReviewerIdentity) {
+  const record = await findRecordById(recordId);
+  if (!record) throw fail(404, 'Record not found', 'NotFoundError');
+
+  if (!await canReview(reviewer, record.enrollment_id)) {
+    throw fail(403, 'That learner is outside your mentor scope', 'OutsideScope');
+  }
+
+  const [row] = await sequelize.query(
+    `SELECT content_json FROM capstone_records WHERE id = :id LIMIT 1`,
+    { replacements: { id: recordId }, type: (sequelize as any).QueryTypes?.SELECT ?? 'SELECT' },
+  ) as unknown as Array<{ content_json: any }>;
+
+  return {
+    record_id: record.id,
+    slug: record.slug,
+    version: record.version,
+    status: record.status,
+    visibility: record.visibility,
+    // The stored snapshot, exactly as it would publish. A reviewer must approve the thing
+    // that will actually go live, not a fresh render that may already have moved on.
+    content: row?.content_json ?? null,
+  };
+}
