@@ -74,6 +74,27 @@ describe('toProjectSummaryDto', () => {
     expect(toProjectSummaryDto({ id: 'p2', name: 'B' }, 'p1').is_active).toBe(false);
     expect(toProjectSummaryDto({ id: 'p1', name: 'A' }, null).is_active).toBe(false);
   });
+
+  /**
+   * The client hydrates a card for every project in this listing that it does
+   * not already hold, so the listing is now the thing standing between the
+   * platform's own ~144k-row record and a build card reading "Your build" on
+   * Ali's Projects page. The row must still be LISTED — pruning treats an
+   * absent project as deleted and destroys its local card — so "do not offer
+   * it" has to travel as a flag rather than as an omission.
+   */
+  it('marks the platform record as protected so no client mints a card for it', () => {
+    const platform = 'fcce50ef-fe01-471d-a3ff-cd6948d092c2';
+    expect(toProjectSummaryDto({ id: platform, name: null }, null).is_protected).toBe(true);
+    expect(toProjectSummaryDto({ id: 'p1', name: 'A' }, null).is_protected).toBe(false);
+  });
+
+  it('still lists the protected row rather than hiding it', () => {
+    // Omitting it would read as "deleted" to pruneDeadProjects.
+    const dto = toProjectSummaryDto({ id: 'FCCE50EF-FE01-471D-A3FF-CD6948D092C2', name: null }, null);
+    expect(dto.id).toBeTruthy();
+    expect(dto.is_protected).toBe(true);   // case-insensitive, per isProtectedProject
+  });
 });
 
 describe('the schedule reaches the portal', () => {
