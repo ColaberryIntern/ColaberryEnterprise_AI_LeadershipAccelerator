@@ -7,6 +7,8 @@ import { connectDatabase, sequelize } from './config/database';
 import { errorHandler } from './middlewares/errorHandler';
 import { traceMiddleware } from './middlewares/traceMiddleware';
 import healthRoutes from './routes/healthRoutes';
+import deliveryClientAuthRoutes from './routes/deliveryClientAuthRoutes';
+import deliveryClientRoutes from './routes/deliveryClientRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
@@ -123,6 +125,14 @@ app.use(express.json({ limit: '5mb' }));
 app.use(intelligenceMiddleware());
 
 app.use(healthRoutes);
+// Client reviewer sign-in (Google SSO). Mounted UNAUTHENTICATED on purpose - it is the
+// door. It grants nothing: it verifies a Google identity, looks up delivery memberships
+// that already exist, and refuses when there are none.
+app.use(deliveryClientAuthRoutes);
+// The client read surface. Registered immediately after the auth route and BEFORE the
+// admin tree: routes mounted after adminRoutes inherit its guard and answer 401 to a
+// perfectly valid client token.
+app.use(deliveryClientRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
