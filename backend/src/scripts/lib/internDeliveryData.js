@@ -23,6 +23,8 @@
 //
 // No secrets here. Token is resolved by the caller via lib/basecampToken.
 
+const { classifyList, isExcludedPerson } = require('./internDeliveryScope');
+
 const ACCOUNT_ID = process.env.BASECAMP_ACCOUNT_ID || '3945211';
 const API = `https://3.basecampapi.com/${ACCOUNT_ID}`;
 
@@ -34,37 +36,9 @@ const PROJECT_SCOPE = [
   { bucketId: 47346103, todosetId: 9908475794, label: 'Gov Contracts', stream: 'Gov Contracts' },
 ];
 
-// People who are never "interns" for the purposes of this report. Ali and Ram
-// are the audience; CB System and the "+ai" twin accounts are bots.
-const EXCLUDED_BC_IDS = new Set([
-  17454835, // Ali Muwwakkil (the audience)
-  17346350, // Ram Katamaraja (the audience)
-  37708014, // CB System (bot)
-  37184021, // Jackie Chalk (staff, work account)
-  37179680, // Jackie Chalk (staff, personal account)
-  52530300, // Ram AI
-  52530301, // Samrawit Mekonen AI
-  52530305, // Akiwam AI
-  52530307, // Omolola Makinde AI
-]);
-// The "<Name> AI" twin accounts are all "<handle>+ai@". CB System is "+999@".
-const EXCLUDED_EMAIL_PATTERNS = [/\+ai@/i, /\+999@/i];
-// Known staff without a reliable ID on file. Kept deliberately short: the Gov
-// Contracts crew are @colaberry.com but ARE in scope, so we cannot filter by
-// email domain the way lib/internActivityTracker.js does.
-const EXCLUDED_NAMES_LOWER = new Set(['milad', 'milad rezvani', 'milad r']);
-
-function isExcludedPerson(person) {
-  if (!person) return true;
-  if (EXCLUDED_BC_IDS.has(person.id)) return true;
-  const email = String(person.email_address || '');
-  if (EXCLUDED_EMAIL_PATTERNS.some((re) => re.test(email))) return true;
-  const name = String(person.name || '').trim().toLowerCase();
-  if (EXCLUDED_NAMES_LOWER.has(name)) return true;
-  // Twin bot accounts sometimes arrive with a null email; catch the naming form.
-  if (/\sAI$/.test(String(person.name || '')) && !email) return true;
-  return false;
-}
+// Who counts as an intern, who is staff, and who is dropped outright all live
+// in lib/internDeliveryScope.js, so the harvest and the list classifier can
+// never disagree about it.
 
 // ---------------------------------------------------------------------------
 // HTTP with bounded retry. Every outbound call has an explicit timeout and a
@@ -386,6 +360,7 @@ async function harvestDelivery({ token, refreshToken = null, lookbackDays = 14, 
 
   const projects = [];
   const allComments = [];
+  const withheld = [];
   const peopleById = new Map();
 
   // Register a person once, from whichever surface first mentions them.
@@ -420,6 +395,34 @@ async function harvestDelivery({ token, refreshToken = null, lookbackDays = 14, 
     for (const list of listArray) {
       const { todos, groups } = await collectListTodos(scope.bucketId, list, auth);
       if (todos.length === 0) continue;
+
+      // Decide scope BEFORE fetching comments. Comments are by far the most
+      // expensive part of the harvest (one call per commented todo), and an
+      // onboarding checklist with 31 todos is exactly the shape that costs the
+      // most and contributes the least.
+      const listName = stripHtml(list.name || list.title || '');
+      const delivery = todos.filter((t) => t.groupKind !== 'approval_gate');
+      const verdict = classifyList({
+        projectId: list.id,
+        name: listName,
+        assigneeIds: [...new Set(delivery.flatMap((t) => t.assignees.map((x) => x.id)))],
+        deliveryTaskCount: delivery.length,
+        releaseCount: groups.filter((g) => g.kind === 'release').length,
+      });
+      if (!verdict.inScope) {
+        withheld.push({
+          projectId: list.id,
+          name: listName,
+          stream: scope.stream,
+          category: verdict.category,
+          reason: verdict.reason,
+          taskCount: delivery.length,
+          url: list.app_url || appUrl(scope.bucketId, 'todolists', list.id),
+        });
+        onProgress(`  - ${listName} :: withheld (${verdict.category}: ${verdict.reason})`);
+        continue;
+      }
+
       const comments = await collectComments(scope.bucketId, todos, auth, historyCutoff);
       allComments.push(...comments);
 
@@ -458,6 +461,10 @@ async function harvestDelivery({ token, refreshToken = null, lookbackDays = 14, 
     scope: PROJECT_SCOPE,
     people: [...peopleById.values()].map((p) => ({ ...p, streams: [...p.streams] })),
     projects,
+    // Kept rather than dropped silently. A reader who wonders why the onboarding
+    // checklist is missing gets the answer on the page instead of assuming the
+    // harvest broke.
+    withheld,
     commentCount: allComments.length,
   };
 }
