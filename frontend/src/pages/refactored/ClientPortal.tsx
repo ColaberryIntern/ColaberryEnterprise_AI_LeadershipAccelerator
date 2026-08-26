@@ -34,23 +34,27 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 const TOKEN_KEY = 'delivery_client_token';
 
+// These mirror CLIENT_FIELD_ALLOWLIST exactly. The allowlist previously named fields that
+// did not exist on the models (`summary`, `title`, `started_at`...), and because
+// toClientShape skips undefined values they vanished silently rather than erroring.
+// clientAllowlistContract.test.ts now pins the server side; these types mirror it.
 interface ClientProject {
   id: string;
   name?: string;
-  summary?: string;
   status?: string;
-  started_at?: string;
-  target_date?: string;
+  business_problem?: string;
+  product_idea?: string;
 }
 
 interface ClientDecision {
   id: string;
-  title?: string;
   decision_type?: string;
   status?: string;
+  question?: string;
+  recommendation?: string;
+  final_decision?: string | null;
   rationale?: string;
   decided_at?: string;
-  requires_client_approval?: boolean;
 }
 
 interface ClientChangeRequest {
@@ -79,14 +83,24 @@ function clearToken(): void {
   }
 }
 
+/**
+ * Colour by the REAL status vocabularies, not invented ones.
+ *
+ * DecisionStatus is open | recommended | decided | approved | superseded. An earlier
+ * version of this badge coloured on 'proposed' and 'needs_you', neither of which any
+ * model emits - so every decision would have rendered grey and the one waiting on the
+ * client would not have stood out at all.
+ */
+const AWAITING_CLIENT = new Set(['recommended', 'open', 'pending']);
+const SETTLED = new Set(['approved', 'decided', 'accepted', 'released']);
+
 function StatusBadge({ status }: { status?: string }): React.ReactElement | null {
   if (!status) return null;
-  const cls =
-    status === 'approved' || status === 'accepted' || status === 'released'
-      ? 'bg-success'
-      : status === 'needs_you' || status === 'pending' || status === 'proposed'
-        ? 'bg-warning text-dark'
-        : 'bg-secondary';
+  const cls = SETTLED.has(status)
+    ? 'bg-success'
+    : AWAITING_CLIENT.has(status)
+      ? 'bg-warning text-dark'
+      : 'bg-secondary';
   return <span className={`badge ${cls}`}>{status.replace(/_/g, ' ')}</span>;
 }
 
@@ -279,8 +293,11 @@ const ClientPortal: React.FC = () => {
                 <div className="d-flex align-items-start gap-3 flex-wrap">
                   <div className="flex-grow-1">
                     <h2 className="h5 mb-1">{detail.project.name ?? 'Untitled project'}</h2>
-                    {detail.project.summary && (
-                      <p className="text-muted small mb-0">{detail.project.summary}</p>
+                    {detail.project.business_problem && (
+                      <p className="text-muted small mb-1">{detail.project.business_problem}</p>
+                    )}
+                    {detail.project.product_idea && (
+                      <p className="small mb-0">{detail.project.product_idea}</p>
                     )}
                   </div>
                   <StatusBadge status={detail.project.status} />
@@ -305,7 +322,8 @@ const ClientPortal: React.FC = () => {
                     <table className="table table-hover mb-0">
                       <thead className="table-light">
                         <tr>
-                          <th>Decision</th>
+                          <th>Question</th>
+                          <th>Outcome</th>
                           <th>Why</th>
                           <th>Status</th>
                         </tr>
@@ -314,9 +332,19 @@ const ClientPortal: React.FC = () => {
                         {detail.decisions.map((d) => (
                           <tr key={d.id}>
                             <td>
-                              <div className="fw-medium">{d.title ?? 'Untitled'}</div>
-                              {d.requires_client_approval && (
-                                <div className="small text-warning-emphasis">Needs your approval</div>
+                              <div className="fw-medium">{d.question ?? 'Untitled decision'}</div>
+                              {/* There is no requires_client_approval column. Awaiting the
+                                  client is expressed by the status vocabulary: a decision
+                                  sits at 'recommended' until they approve it. */}
+                              {d.status === 'recommended' && (
+                                <div className="small text-warning-emphasis">Waiting on you</div>
+                              )}
+                            </td>
+                            <td className="small">
+                              {d.final_decision ?? (
+                                <span className="text-muted">
+                                  {d.recommendation ? `Recommended: ${d.recommendation}` : '—'}
+                                </span>
                               )}
                             </td>
                             <td className="small text-muted">{d.rationale ?? '—'}</td>

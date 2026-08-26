@@ -199,26 +199,32 @@ async function main(): Promise<void> {
   console.log(`[seed] membership ${membership.id} (${created ? 'created' : 'existing'})`);
 
   // --- a couple of decisions so the surface has something real to show --------------------
+  // DeliveryDecision has no `title` and no `requires_client_approval`. It records a
+  // `question`, our `recommendation`, and the `final_decision`. Statuses are
+  // open | recommended | decided | approved | superseded - so 'awaiting the client' is
+  // expressed as status 'recommended', not as a boolean flag.
   const decisionSeed = [
     {
-      title: 'Arrivals refresh every 30 seconds',
+      question: 'How often should the arrivals board refresh?',
+      recommendation: 'Every 30 seconds.',
+      final_decision: 'Every 30 seconds.',
       rationale: "Balances freshness against the transit feed rate limit and data cost.",
       status: 'approved',
-      requires_client_approval: false,
     },
     {
-      title: 'Screen-reader announcements on arrival change',
+      question: 'Should arrival changes be announced to screen readers?',
+      recommendation: 'Yes - announce politely on change, not on every poll.',
+      final_decision: null,
       rationale: 'Required for the accessibility commitment in the contract.',
-      status: 'proposed',
-      requires_client_approval: true,
+      status: 'recommended',
     },
   ];
   for (const d of decisionSeed) {
     const [, madeNew] = await DeliveryDecision.findOrCreate({
-      where: { delivery_project_id: project.id, title: d.title },
+      where: { delivery_project_id: project.id, question: d.question },
       defaults: { delivery_project_id: project.id, decision_type: 'design', ...d },
     });
-    if (madeNew) console.log(`[seed] decision: ${d.title}`);
+    if (madeNew) console.log(`[seed] decision: ${d.question}`);
   }
 
   // --- mint the session, through the real path ----------------------------------------
