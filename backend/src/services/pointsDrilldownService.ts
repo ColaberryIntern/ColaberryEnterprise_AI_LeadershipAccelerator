@@ -62,7 +62,12 @@ export async function getPointsDrilldown(enrollmentId: string): Promise<Drilldow
   try {
     const st = await getPromotionStatus(enrollmentId);
     readiness = {
-      pct: Math.round(st.readiness),
+      // `st.readiness` is a 0..1 fraction (`computeReadiness`, stored verbatim in
+      // `student_level.architect_readiness`). This is rendered as "{pct}% readiness"
+      // and as a bar width, so it must be scaled to 0..100 here. Without the *100 a
+      // real 0.58 rounded to 1 and the student read "1% readiness" off a page that
+      // had measured them at 58%.
+      pct: Math.round(st.readiness * 100),
       level: st.level,
       rank: st.rank,
       next_level: st.next_level,
