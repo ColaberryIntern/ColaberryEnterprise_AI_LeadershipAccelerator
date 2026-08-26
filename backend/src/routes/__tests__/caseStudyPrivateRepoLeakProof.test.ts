@@ -339,8 +339,15 @@ describe('T023 area 2 — a private repository survives only as a count', () => 
     // The projection is a FIELD allowlist, not a CONTENT scrubber: prose an
     // admin typed is published verbatim, so a private repository URL pasted
     // into `identity.standfirst` reaches the public payload. Documented in the
-    // proof as F-01; the compensating control is the publish gate below plus
-    // human snapshot approval.
+    // proof as F-01.
+    //
+    // THIS REMAINS TRUE AND IS DELIBERATE. The fix for V-29 was NOT to start
+    // scrubbing content at projection time — that would silently rewrite what a
+    // human approved, which is the one thing the snapshot model exists to
+    // prevent. The fix is that such a snapshot can no longer be PUBLISHED; see
+    // the gate assertions below. So this assertion stays exactly as it was, and
+    // its meaning has changed from "the boundary leaks" to "the boundary is a
+    // field allowlist, and the gate is what stops a leaking record reaching it".
     expect(JSON.stringify(summary)).toContain(S.url);
     expect(summary.standfirst).toContain(S.url);
   });
@@ -385,5 +392,97 @@ describe('T023 area 2 — a private repository survives only as a count', () => 
         decision.blockers.some((x) => x.field.startsWith('identity.standfirst'))}`,
       '=== end compensating control measurement ===', '',
     ].join('\n'));
+  });
+
+  /**
+   * V-29, closed. This is the assertion the measurement above used to print as
+   * `false`.
+   *
+   * `ruleRepoIdentityInProse` refuses a snapshot whose narrative fields name a
+   * repository that this same record withholds. The prose still projects
+   * verbatim — see the measurement test — but it can no longer get published.
+   */
+  it('the publish gate refuses a private repo identity typed into PROSE (V-29)', () => {
+    const decision = evaluateCaseStudyPublishGate({
+      surfaceKey: 'enterprise',
+      caseStudy: {
+        id: 'cs-1', status: 'approved',
+        organizationIdentityMode: 'anonymized', organizationNamingConsent: false,
+        builderIdentityMode: 'anonymous', builderNamingConsent: false,
+      },
+      snapshot: {
+        id: 'snap-1', version: 1, status: 'approved',
+        approvedBy: 'reviewer', approvedAt: '2026-02-01T00:00:00Z',
+        content: HOSTILE_CONTENT,
+      },
+    });
+
+    const fields = decision.blockers
+      .filter((x) => x.code === 'private_repo_exposed')
+      .map((x) => x.field);
+
+    // The exact field the old measurement reported as unflagged.
+    expect(fields).toContain('identity.standfirst');
+    // …and the other prose routes the same identity was planted into.
+    expect(fields).toContain('identity.summary');
+    expect(fields).toContain('situation.narrative[0]');
+    expect(fields).toContain('architecture.narrative[0]');
+
+    // NON-VACUITY: the rule is reaching many distinct prose paths, not firing
+    // once on a single field and satisfying the assertions above by luck.
+    expect(new Set(fields).size).toBeGreaterThan(6);
+
+    // The refusal must not itself print what it is refusing to publish.
+    for (const x of decision.blockers.filter((b2) => b2.code === 'private_repo_exposed')) {
+      expect(JSON.stringify(x)).not.toContain(S.owner);
+      expect(JSON.stringify(x)).not.toContain(S.name);
+      expect(JSON.stringify(x)).not.toContain(S.url);
+    }
+  });
+
+  /**
+   * The positive half. Without this the rule could be "never mention a
+   * repository", which would be a gate nobody could satisfy.
+   */
+  it('a genuinely public, consented repository may be named in prose', () => {
+    const clean = {
+      ...HOSTILE_CONTENT,
+      identity: {
+        ...HOSTILE_CONTENT.identity,
+        title: 'A clean record',
+        standfirst: 'Built in the open at https://github.com/colaberry/public-demo',
+        summary: 'The colaberry/public-demo repository carries the whole build.',
+        organizationDisplayName: null,
+        programLabel: 'Accelerator',
+        engagementWindow: { start: '2026-01-01', durationLabel: '12 weeks', verification: verified },
+      },
+      heroMetrics: [],
+      situation: { narrative: ['Nothing withheld is named here.'], verification: verified },
+      buildTimeline: [],
+      architecture: { narrative: ['Standard stack.'], stack: [], capabilities: [], integrations: [] },
+      measurement: { narrative: [], metrics: [] },
+      roadmap: [],
+      contributors: [],
+      artifacts: [],
+      // Only repository 4 — public AND consented.
+      repositories: [REPOS[3]],
+      taxonomy: { builtByType: 'colaberry_team' },
+    } as unknown as CaseStudySnapshotContent;
+
+    const decision = evaluateCaseStudyPublishGate({
+      surfaceKey: 'enterprise',
+      caseStudy: {
+        id: 'cs-2', status: 'approved',
+        organizationIdentityMode: 'anonymized', organizationNamingConsent: false,
+        builderIdentityMode: 'anonymous', builderNamingConsent: false,
+      },
+      snapshot: {
+        id: 'snap-2', version: 1, status: 'approved',
+        approvedBy: 'reviewer', approvedAt: '2026-02-01T00:00:00Z',
+        content: clean,
+      },
+    });
+
+    expect(decision.codes).not.toContain('private_repo_exposed');
   });
 });

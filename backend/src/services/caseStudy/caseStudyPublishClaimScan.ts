@@ -39,6 +39,7 @@
  * PURE. No clock, no randomness, no I/O, no database, no logging.
  */
 import { classifyAiForbiddenPath, provenanceAncestors } from './caseStudyProvenance';
+import { opaqueRepoRef } from './caseStudyRepoReader';
 import { arr, has, text, visible } from './caseStudyPublishRules';
 import type { Blockers, CaseStudyPublishSnapshot, MetricAt } from './caseStudyPublishRules';
 import type { CaseStudySnapshotContent } from '../../types/caseStudy';
@@ -349,5 +350,139 @@ export function ruleUnverifiedClaims(
     b.add('unverified_claim', 'identity.productionStatus.verification.method',
       'production status is "shipped" on a self-reported verification; a deployment claim is not established by the party claiming it',
       'verify the deployment against the repository, the platform or the client');
+  }
+}
+
+/* ──────────────────────────── 11 — withheld repository identity in prose ── */
+
+/**
+ * The finding this closes is V-29, and it was open and measured rather than
+ * unknown.
+ *
+ * `caseStudyPrivateRepoLeakProof.test.ts` plants a sentinel private repository
+ * identity into twelve non-repository fields and asserts the result as it
+ * actually is: `expect(summary.standfirst).toContain(S.url)`. The STRUCTURED
+ * path is closed — `projectRepositories` is a field allowlist and there is no
+ * key on the public repository type that could carry a withheld owner, name or
+ * URL. The PROSE path was not, because the projection publishes authored text
+ * verbatim, by design: it is an allowlist of FIELDS, not a scrubber of CONTENT.
+ * A private repository URL pasted into `identity.standfirst` reached the public
+ * payload, and the same test printed the fact that no blocker mentioned it.
+ *
+ * WHY THE FIX IS HERE AND NOT IN THE PROJECTION. Scrubbing at projection time
+ * would silently rewrite what a human approved, which is the one thing the
+ * snapshot model exists to prevent — an approved snapshot is meant to be what
+ * ships. Refusing to PUBLISH it instead keeps the record honest, names the
+ * field, and puts the decision back with the person who typed it. It also
+ * inherits the gate's fail-closed posture for free.
+ *
+ * WHY IT IS DETERMINISTIC. This is a LOOKUP, not a judgement, and that is the
+ * same standard rules 9 and 10 hold themselves to. The needles are not a guess
+ * at what a repository might be called: they are the owner, name and URL of a
+ * repository recorded ON THIS RECORD whose own row says it is withheld. Nothing
+ * here interprets language or asks a model anything.
+ *
+ * WHICH REPOSITORIES COUNT AS WITHHELD. Exactly the ones `projectRepositories`
+ * refuses to render: any repository that is not BOTH `visibility: 'public'` AND
+ * `allowPublicRepoLink: true`. `unknown` visibility is withheld, matching the
+ * fail-closed rule `repoLogIdentity()` applies one file over. A genuinely
+ * public, consented repository may be named in prose freely — that is the
+ * positive half, and without it this rule would just be a ban on mentioning
+ * repositories.
+ *
+ * WHAT IT DOES NOT CATCH, STATED PLAINLY, in the house style:
+ *
+ *   · A repository identity that appears in prose but has NO row on this
+ *     record. There is nothing to compare against, and inventing a general
+ *     "does this look like a private repo URL" test would flag every legitimate
+ *     third-party link — `github.com/facebook/react` is not a leak.
+ *   · A withheld repository whose name is a single word with no separator or
+ *     digit (`platform`, `ledger`, `reconciliation`) is not matched on its BARE
+ *     name. Matching those would fire on ordinary sentences — see
+ *     `nameIsDistinctive`, where exactly that regression was caught by a fixture
+ *     — and a gate that cried wolf would be switched off within a month, the
+ *     reasoning `PRODUCTION_WORDS` already records. Such a repository is still
+ *     caught by its URL and by its `owner/name` slug, which are unambiguous and
+ *     are what actually let a reader find it.
+ *   · A paraphrase. "our client's internal monorepo" names nothing and no
+ *     deterministic rule reaches it. Human snapshot approval stands in that gap,
+ *     as it does for rules 9 and 10.
+ *
+ * THE BLOCKER NEVER NAMES THE REPOSITORY. It carries `opaqueRepoRef` — the same
+ * stable non-reversing handle `ruleRepositories` uses — because a refusal
+ * message is logged, and a gate that printed the private identifier in the
+ * course of refusing to publish it would be the leak it just blocked.
+ */
+
+/** Lower-cased, scheme- and `www.`-stripped, `.git` and trailing slashes gone. */
+function foldRepoIdentifier(value: string): string {
+  return value.trim().toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '');
+}
+
+/**
+ * A bare repository name is matched only when its SHAPE says "identifier"
+ * rather than "word": it carries a separator or a digit. `acme-ledger`,
+ * `client_portal` and `proj2026` qualify; `ledger` does not.
+ *
+ * THE FIRST VERSION OF THIS ALSO ACCEPTED ANY NAME OF 12+ CHARACTERS, AND THAT
+ * WAS WRONG. `caseStudyPublicationService.test.ts` caught it immediately: its
+ * fixture repository is called `reconciliation` (14 characters, and an entirely
+ * ordinary English word), while the same record's summary legitimately reads
+ * "A batch reconciliation pipeline was rebuilt…". The gate refused a publish
+ * over a word describing the work. Length is not evidence of distinctiveness —
+ * a long common word is still a common word — and a rule that fires on ordinary
+ * prose is the "cried wolf" failure `PRODUCTION_WORDS` is written to avoid.
+ *
+ * A single-word private repository is therefore matched by its URL and by its
+ * `owner/name` slug, but not by its bare name. That residue is deliberate and is
+ * stated in this rule's header: the bare word on its own does not let a reader
+ * FIND the repository, which is what the boundary is protecting.
+ */
+function nameIsDistinctive(name: string): boolean {
+  return name.length >= 4 && /[-_0-9]/.test(name);
+}
+
+/** Whole-token containment: `myrepo` must not match inside `myrepository`. */
+function containsToken(haystackLower: string, needle: string): boolean {
+  if (!needle) return false;
+  const alnum = /[a-z0-9]/;
+  let from = haystackLower.indexOf(needle);
+  while (from !== -1) {
+    const before = from === 0 ? '' : haystackLower[from - 1];
+    const afterAt = from + needle.length;
+    const after = afterAt >= haystackLower.length ? '' : haystackLower[afterAt];
+    if (!alnum.test(before) && !alnum.test(after)) return true;
+    from = haystackLower.indexOf(needle, from + 1);
+  }
+  return false;
+}
+
+export function ruleRepoIdentityInProse(content: CaseStudySnapshotContent, b: Blockers): void {
+  const withheld = arr(content.repositories)
+    .filter((r) => has(r?.repoOwner) && has(r?.repoName))
+    .filter((r) => !(r?.visibility === 'public' && r?.allowPublicRepoLink === true))
+    .map((r) => {
+      const owner = text(r.repoOwner);
+      const name = text(r.repoName);
+      const needles = [foldRepoIdentifier(`${owner}/${name}`)];
+      if (has(r.repoUrl)) needles.push(foldRepoIdentifier(text(r.repoUrl)));
+      return { ref: opaqueRepoRef(owner, name), name: name.toLowerCase(), needles };
+    });
+  if (withheld.length === 0) return;
+
+  for (const field of collectNarrative(content)) {
+    const hay = field.value.toLowerCase();
+    for (const repo of withheld) {
+      const hit = repo.needles.some((n) => n.length > 0 && hay.includes(n))
+        || (nameIsDistinctive(repo.name) && containsToken(hay, repo.name));
+      if (!hit) continue;
+      b.add('private_repo_exposed', field.path,
+        `${field.label} names a repository that is withheld from the public page (repo_ref ${repo.ref}); authored prose is published verbatim, so the identifier would reach the public payload`,
+        'take the repository out of the prose — a withheld repository survives on the page as an opaque count, never as a name or a link; or, if it really is public, record link consent so it is entitled to be named');
+    }
   }
 }
