@@ -4,6 +4,7 @@ import { requireCareerReviewer } from '../../middlewares/requireCareerReviewer';
 import {
   handleGetReviewQueue,
   handleReviewDecision,
+  handleGetRecordForReview,
 } from '../../controllers/careerPublicationController';
 import { grantScope, revokeScope, listScopes } from '../../services/career/careerMentorScopeService';
 
@@ -25,6 +26,7 @@ const router = Router();
  */
 
 router.get('/api/admin/career/review-queue', requireCareerReviewer, handleGetReviewQueue);
+router.get('/api/admin/career/review/:recordId/record', requireCareerReviewer, handleGetRecordForReview);
 router.post('/api/admin/career/review/:recordId', requireCareerReviewer, handleReviewDecision);
 
 // ── Mentor privilege, admin-only ───────────────────────────────────────────

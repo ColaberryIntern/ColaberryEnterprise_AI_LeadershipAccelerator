@@ -40,6 +40,14 @@ jest.mock('../../../../../services/workforceOrgChartApi', () => ({
 const { getOrgChart, updateOrgMemberTeam, assignHierarchyTask } = require('../../../../../services/workforceOrgChartApi') as {
   getOrgChart: jest.Mock; updateOrgMemberTeam: jest.Mock; assignHierarchyTask: jest.Mock;
 };
+// Task-assignment scope disclosure (2026-08-25) — OrgChartHumanDrawer now
+// fetches the selected agent's REAL capabilities (getAgentDetail(), the same
+// call the Agent Detail page uses) whenever the assign-task picker's
+// selection changes. Mocked here so those fetches are deterministic instead
+// of hitting the real (unmocked-in-tests) axios client.
+jest.mock('../../../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn() }));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getAgentDetail } = require('../../../../../services/agentDetailApi') as { getAgentDetail: jest.Mock };
 // OrgChartMermaid (and the MermaidDiagram it wraps) loads mermaid from a CDN
 // at runtime via a dynamic `import()` of a literal URL string — real
 // production behavior (MermaidDiagram.tsx's own graceful CDN-failure
@@ -95,6 +103,11 @@ async function render() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Deterministic default for every test — the "assign task" describe block
+  // below overrides this per-case where the real content matters.
+  getAgentDetail.mockResolvedValue({
+    capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [], by_tool: [] },
+  });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -762,6 +775,132 @@ describe('OrgChartHumanDrawer — assign task', () => {
       'f179c222-284e-4180-a335-cca9e4918b2e',
       expect.objectContaining({ agentId: 'corybrain-id', title: 'Investigate lead spike', idempotencyKey: firstKey }),
     );
+  });
+});
+
+// Task-assignment scope disclosure (2026-08-25) — Ali, live, after asking
+// "what happens if Taiwo asks the agent to do something it doesn't have a
+// tool for?": no agent auto-executes an assigned task today, for anyone.
+// Rather than fabricate an in-scope/out-of-scope verdict (would need real
+// NLU against free text), this shows the REAL selected agent's
+// reads/produces so a human can judge fit themselves, plus an honest note
+// that nothing runs automatically yet.
+describe('OrgChartHumanDrawer — task-assignment scope disclosure', () => {
+  async function openAliDrawerAndAssignForm() {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const aliCard = Array.from(container.querySelectorAll('.wf-emp')).find((el) => el.textContent?.includes('Ali Muwwakkil')) as HTMLElement;
+    await act(async () => {
+      aliCard.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const openButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Assign task') as HTMLElement;
+    await act(async () => {
+      openButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  it('shows the selected agent\'s REAL reads/produces, fetched via the same getAgentDetail() the Agent Detail page uses', async () => {
+    getAgentDetail.mockResolvedValue({
+      capabilities: {
+        reads: ['Live campaign performance metrics'],
+        produces: ['A weekly strategic initiative ticket'],
+        undocumented_tools: [], produced_ticket_types: [], by_tool: [],
+      },
+    });
+
+    await openAliDrawerAndAssignForm();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    // The initially-selected agent is CoryBrain (assignableAgents[0]).
+    expect(getAgentDetail).toHaveBeenCalledWith('corybrain-id');
+    expect(container.textContent).toContain('Live campaign performance metrics');
+    expect(container.textContent).toContain('A weekly strategic initiative ticket');
+  });
+
+  it('re-fetches and shows the NEW agent\'s real capabilities when the picker selection changes', async () => {
+    getAgentDetail.mockImplementation((agentId: string) =>
+      Promise.resolve({
+        capabilities: {
+          reads: [], produces: [`Output specific to ${agentId}`],
+          undocumented_tools: [], produced_ticket_types: [], by_tool: [],
+        },
+      }),
+    );
+
+    await openAliDrawerAndAssignForm();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(container.textContent).toContain('Output specific to corybrain-id');
+
+    const select = container.querySelector('select[aria-label="Assign task to agent"]') as HTMLSelectElement;
+    await act(async () => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.set!;
+      nativeSetter.call(select, 'staff-1-id');
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(getAgentDetail).toHaveBeenCalledWith('staff-1-id');
+    expect(container.textContent).toContain('Output specific to staff-1-id');
+    expect(container.textContent).not.toContain('Output specific to corybrain-id');
+  });
+
+  it('honesty boundary: an agent with no documented reads/produces shows an honest empty state, never fabricated capabilities', async () => {
+    getAgentDetail.mockResolvedValue({
+      capabilities: { reads: [], produces: [], undocumented_tools: [], produced_ticket_types: [], by_tool: [] },
+    });
+
+    await openAliDrawerAndAssignForm();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    expect(container.textContent).toContain('No documented reads or produces for this agent yet.');
+  });
+
+  it('failure path: a failed capability fetch shows an honest error, never a silent blank or a fabricated capability', async () => {
+    getAgentDetail.mockRejectedValue(new Error('network error'));
+
+    await openAliDrawerAndAssignForm();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    expect(container.textContent).toContain('Could not load this agent\'s real capabilities.');
+  });
+
+  it('links to the full AI Organization roster for a human to find a better-fit agent outside their own hierarchy', async () => {
+    await openAliDrawerAndAssignForm();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    const rosterLink = Array.from(container.querySelectorAll('a')).find((a) => a.textContent === 'Browse the full AI Organization roster');
+    expect(rosterLink).toBeDefined();
+    expect(rosterLink!.getAttribute('href')).toBe('/admin/workforce');
+  });
+
+  it('the honest "no auto-execution yet" note is visible in the form BEFORE submitting, not only after', async () => {
+    await openAliDrawerAndAssignForm();
+
+    expect(container.textContent).toContain('no agent automatically picks these up and works them yet');
+  });
+
+  it('the success message after a real submission also discloses that nothing auto-executes', async () => {
+    assignHierarchyTask.mockResolvedValue({ id: 'ticket-1', title: 'Some task' });
+    await openAliDrawerAndAssignForm();
+
+    const titleInput = container.querySelector('input[aria-label="Task title"]') as HTMLInputElement;
+    await act(async () => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+      nativeSetter.call(titleInput, 'Some task');
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const form = container.querySelector('form') as HTMLFormElement;
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.textContent).toContain('no agent auto-picks it up yet');
   });
 });
 

@@ -21,6 +21,7 @@ import {
   listCapstoneReviewQueue,
   getReviewState,
   setVisibility,
+  getRecordForReview,
 } from '../services/career/capstoneReviewService';
 import { reviewerKind, type ReviewerIdentity } from '../services/career/careerMentorScopeService';
 
@@ -96,6 +97,18 @@ export async function handleGetReviewQueue(req: Request, res: Response, next: Ne
     const who = reviewer(req);
     const items = await listCapstoneReviewQueue(who);
     res.json({ ok: true, items, reviewer_kind: reviewerKind(who) });
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * GET /api/admin/career/review/:recordId/record — what the reviewer is deciding on.
+ *
+ * Serves the stored snapshot whatever its status, which the public reader cannot do:
+ * everything awaiting review is unpublished, so /p/:slug 404s on all of it.
+ */
+export async function handleGetRecordForReview(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ ok: true, ...await getRecordForReview(String(req.params.recordId), reviewer(req)) });
   } catch (e) { fail(res, e, next); }
 }
 

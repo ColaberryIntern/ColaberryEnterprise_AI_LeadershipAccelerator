@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-08-26T02:45:17.175Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "01-client-signin.png",
+      "label": "Client sign-in (public door)",
+      "url": "/client"
+    },
+    {
+      "file": "02-client-projects.png",
+      "label": "Client portal - signed in",
+      "url": "/client/projects"
+    }
+  ]
+}

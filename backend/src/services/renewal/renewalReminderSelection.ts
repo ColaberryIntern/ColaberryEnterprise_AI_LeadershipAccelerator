@@ -13,6 +13,11 @@
  * themselves.
  */
 
+// The module is otherwise pure; this import is the codebase's existing pure
+// suppression predicate, kept shared so the pause flag cannot mean one thing
+// for session mail and another for money mail.
+import { isNotificationSuppressed } from '../notifications/enrollmentNotificationSuppression';
+
 export type ReminderKind = 'advance_7d' | 'final_1d' | 'after_lapse_1d' | 'after_lapse_7d';
 
 /**
@@ -101,6 +106,17 @@ export interface RenewalSubscriptionRow {
   canceled_at?: Date | string | null;
   email?: string | null;
   full_name?: string | null;
+  /** Enrollment lifecycle, joined in by loadActiveSubscriptions. A stale
+   *  subscription row is normal; the person having withdrawn, been deferred to
+   *  a later cohort, or been explicitly paused is what makes mailing them
+   *  about money wrong. */
+  enrollment_status?: string | null;
+  /** The postponed-cohort-move gate (Enrollment.access_starts_at). A date in
+   *  the future means this person's programme has not started yet. */
+  access_starts_at?: Date | string | null;
+  /** The per-student notification kill switch. See
+   *  services/notifications/enrollmentNotificationSuppression.ts. */
+  notifications_paused_at?: Date | string | null;
 }
 
 export type SkipReason =
@@ -111,7 +127,10 @@ export type SkipReason =
   | 'superseded'
   | 'already_lapsed'
   | 'unusable_email'
-  | 'not_yet_due';
+  | 'not_yet_due'
+  | 'enrollment_not_active'
+  | 'notifications_paused'
+  | 'access_not_started';
 
 export interface DueReminder {
   subscription_id: string;
@@ -266,6 +285,37 @@ export function selectRenewalReminders(
     }
     if (!(row.amount_cents > 0)) {
       skip(row, 'zero_amount', `amount_cents=${row.amount_cents}`);
+      continue;
+    }
+
+    // ---- enrollment lifecycle gates -------------------------------------
+    // A subscription row is not a person. `subscriptions.status` only says
+    // whether a term was ever paid for; it is never retired when somebody
+    // leaves or is moved, so on its own it will happily bill a student who
+    // withdrew or was deferred. These three read the enrollment instead.
+    //
+    // They sit ABOVE the date-window maths deliberately: a live send calls
+    // startCheckout(), which POSTs to PaySimple and inserts a pending
+    // subscription row. Excluding here means a paused student never has a
+    // checkout minted in their name, not merely that the mail is withheld.
+    if (row.enrollment_status && row.enrollment_status !== 'active') {
+      skip(row, 'enrollment_not_active', `enrollment_status=${row.enrollment_status}`);
+      continue;
+    }
+
+    // The one deliberate "stop mailing this student" switch in the codebase.
+    // It already governs session reminders; money mail is the surface where
+    // getting it wrong costs the most, so it governs this too.
+    if (isNotificationSuppressed(row)) {
+      skip(row, 'notifications_paused', 'notifications_paused_at is set');
+      continue;
+    }
+
+    // Postponed to a later cohort. Their programme has not started, so there
+    // is no term to renew yet; charging now is billing ahead of delivery.
+    const accessStartMs = toMs(row.access_starts_at);
+    if (accessStartMs !== null && centralDayNumber(accessStartMs) > centralDayNumber(nowMs)) {
+      skip(row, 'access_not_started', `access_starts_at=${String(row.access_starts_at)}`);
       continue;
     }
 

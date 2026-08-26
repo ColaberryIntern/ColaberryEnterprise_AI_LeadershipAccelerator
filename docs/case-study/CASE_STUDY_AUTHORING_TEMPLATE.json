@@ -1,0 +1,149 @@
+{
+  "_README": [
+    "AUTHORING TEMPLATE for one Case Study record.",
+    "Fill this in offline and hand it back; it maps 1:1 onto snapshot content paths.",
+    "Anything you omit simply hides that band on the page - a thin record still looks deliberate.",
+    "",
+    "TWO THINGS THE SYSTEM WILL REFUSE, so do not spend time on them:",
+    "  1. A metric with verification.class 'verified' and method 'self'. A self-report is",
+    "     not third-party verification and the publish gate rejects it outright as a mislabel.",
+    "  2. A verified metric with no evidenceId, or a headline metric with no baseline,",
+    "     sample or methodology. A number with no account of how it was produced does not render.",
+    "",
+    "The gate reads STRUCTURED fields. It does not read prose - so anything you write in a",
+    "narrative array is on your honour. That gap is a known open finding (V-29)."
+  ],
+
+  "identity": {
+    "title": "Short, concrete, and about the outcome rather than the technology.",
+    "standfirst": "One sentence. The problem and what was built to solve it.",
+    "organizationDisplayName": "Client name, or null",
+    "organizationIdentityMode": "named | anonymized | hidden",
+    "organizationNamingConsent": true,
+    "builderIdentityMode": "named | role_only | anonymous",
+    "builderNamingConsent": false,
+    "productionStatus": {
+      "status": "shipped | in_progress | paused | not_pursued | unknown",
+      "_status_note": "CORRECTED. This renders through the same label map as roadmap statuses, so it takes those values. Earlier drafts of this template said 'in_production | pilot | prototype' - none of those have a label and would render blank.",
+      "verification": { "class": "verified", "method": "repo", "evidenceId": "<case_study_evidence id>" }
+    }
+  },
+
+  "taxonomy": {
+    "industry": "Workforce development",
+    "primaryCapability": "AI architecture training",
+    "capabilities": ["Adaptive learning", "Skill verification"],
+    "stack": ["React", "Express", "PostgreSQL"],
+    "deliverables": ["Learner portal", "Adaptive path engine"],
+    "builtByType": "colaberry_team | learner | intern | client_team | ai_flotation_team | joint_team",
+    "_builtByType_note": "CORRECTED. Earlier drafts offered 'client' and 'partner'; neither is a member of the union and both would be rejected. Note that ai_flotation_team is a real, separate value - which is what lets an AI Flotation surface tell a truthful story about a build it did not do, because attribution travels with the record rather than with the page."
+  },
+
+  "situation": {
+    "_note": "The problem, told so the READER recognises it as theirs. On Enterprise that is a buyer; on Training it is a prospective learner.",
+    "narrative": [
+      "Paragraph 1 - the problem, stated as a business condition rather than a technology trend.",
+      "Paragraph 2 - why the obvious solutions fail.",
+      "Paragraph 3 - the harder version of the problem, the one worth solving."
+    ],
+    "constraints": ["A hard requirement the solution had to satisfy."],
+    "goals": ["What success would look like, in the client's terms."],
+    "verification": { "class": "verified", "method": "repo", "evidenceId": "<id>" }
+  },
+
+  "architecture": {
+    "_note": "What was BUILT. The software, not the methodology.",
+    "narrative": [
+      "Paragraph 1 - the central mechanism, in one idea.",
+      "Paragraph 2 - the data or state that makes it work.",
+      "Paragraph 3 - a decision that was deliberate, and why."
+    ],
+    "stack": ["Auto-filled from the repository; override only to correct it."],
+    "capabilities": ["Adaptive sequencing", "Evidence capture"],
+    "integrations": ["GitHub", "Postgres"],
+    "dataStores": ["PostgreSQL"],
+    "diagramSource": "flowchart TD\n  A[\"Input\"] --> B[\"Process\"]\n  B --> C[\"Outcome\"]",
+    "_diagramSource_rules": [
+      "Mermaid source. Rendered client-side, themed to brand.",
+      "Angle brackets are REFUSED outright (the renderer writes to innerHTML).",
+      "Capped at 8000 characters. Keep node labels in double quotes."
+    ]
+  },
+
+  "measurement": {
+    "_note": "What CHANGED. Narrative is for qualitative outcomes; metrics are for figures.",
+    "narrative": [
+      "A qualitative outcome that is true and checkable, stated plainly.",
+      "Another. These carry the story where a number would be invented."
+    ],
+    "metrics": [
+      {
+        "key": "stable_snake_case_key",
+        "label": "What this figure measures",
+        "valueDisplay": "41% fewer stockouts",
+        "isHeadline": true,
+        "publishable": true,
+        "verification": { "class": "verified", "method": "client", "evidenceId": "<id>" },
+        "measurement": {
+          "baseline": "What it was before, and over what period.",
+          "sample": "How much, how many, over what window.",
+          "methodology": "How it was measured. Required for any headline figure.",
+          "limitations": [
+            "What this figure does NOT prove. Stating one makes the rest credible."
+          ]
+        }
+      }
+    ]
+  },
+
+  "heroMetrics": [
+    "_note: MUST be the same object(s) as the isHeadline entries in measurement.metrics.",
+    "_note: A figure in the hero that is absent from measurement disappears from the page entirely."
+  ],
+
+  "roadmap": [
+    {
+      "label": "What shipped",
+      "status": "shipped | in_progress | paused | not_pursued | unknown",
+      "detail": "One or two sentences.",
+      "verification": { "class": "verified", "method": "repo", "evidenceId": "<id>" },
+      "_note": "status carries done-ness; verification carries whether the STATEMENT is checkable. An item whose verification is 'pending' is DROPPED from the public page - the same rule that drops an unverified metric. Items admitting what is NOT solved are the most credible ones on the page."
+    }
+  ],
+
+  "artifacts": [
+    {
+      "status": "approved",
+      "artifactType": "screenshot",
+      "visibility": "public",
+      "publicUrl": "https://…/shot.png",
+      "title": "The learner command centre",
+      "description": "What the reader is looking at."
+    },
+    {
+      "status": "approved",
+      "artifactType": "photo",
+      "visibility": "public",
+      "publicUrl": "https://…/photo.jpg",
+      "title": "Short, plain",
+      "description": "Atmosphere photography. Not a picture of this programme or its people.",
+      "_note": "artifactType 'photo' is ATMOSPHERE and can never be evidence. It is ranked below screenshot and architecture for the hero, it renders labelled as atmosphere, and a photo whose title or description claims delivered work is DROPPED entirely. Two publicly-viewable images is the standard; the readiness rubric scores a record down below that."
+    }
+  ],
+
+  "_artifactTypes": [
+    "screenshot", "architecture", "photo", "demo", "deck",
+    "roadmap", "report", "evaluation", "code", "document", "other"
+  ],
+  "_verificationClasses": ["verified", "anonymized", "illustrative", "pending"],
+  "_verificationMethods": ["repo", "client", "platform", "self", "internal"],
+
+  "_perSurface": {
+    "_note": "Set per PUBLICATION, not on the record. This is how one record reads differently on two sites.",
+    "surfaceKey": "enterprise | training | ai-flotation | refactored",
+    "surfaceTitleOverride": "A title written for THIS audience, or null to use the record's.",
+    "surfaceSummaryOverride": "A standfirst written for THIS audience, or null.",
+    "featured": false,
+    "featuredRank": null
+  }
+}
