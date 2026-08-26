@@ -63,6 +63,20 @@ describe('recordPersonaVersionChangeIfNeeded', () => {
       expect.objectContaining({ persona_version: '2026-08-06', previous_version: null }),
     );
   });
+
+  // Found live in CI (2026-08-26): several pre-existing agentRegistrySeed
+  // test files exercise the real seedAgentRegistry() loop without mocking
+  // this service, so a real DB validation error surfaced here and aborted
+  // their entire test — proving the real production risk this test pins:
+  // one bad history write must never break the loop that registers ~200
+  // real agents.
+  it('swallow-safe: a DB error writing the history row is caught and logged, never thrown — the caller (seedAgentRegistry) must keep running', async () => {
+    mockCreate.mockRejectedValue(new Error('db validation failed'));
+
+    await expect(
+      recordPersonaVersionChangeIfNeeded('agent-1', '2026-08-06', { agent_name: 'Reese', persona_version: '2026-09-01' }),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe('getPersonaVersionHistory', () => {

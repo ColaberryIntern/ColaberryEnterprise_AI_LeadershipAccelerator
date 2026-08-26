@@ -33,6 +33,14 @@ export interface PersonaVersionHistoryRow {
  * already has the pre-update `agent` row in memory) is the single source of
  * truth for "what it was before" — this function never re-queries it, so
  * there's no window where a concurrent update could make the comparison stale.
+ *
+ * Swallow-safe by design: this is a side audit trail bolted onto
+ * `seedAgentRegistry()`, the boot-time loop that registers/refreshes ~200
+ * real production agents. A failure writing ONE history row (a lock, a
+ * transient DB hiccup, a schema not yet migrated on a fresh environment)
+ * must never abort that entire loop and leave every agent AFTER this one
+ * unregistered — same "one bad row must not abort seeding for everything
+ * else" posture this file's own `enforceRetiredAgents()` already follows.
  */
 export async function recordPersonaVersionChangeIfNeeded(
   agentId: string,
@@ -42,15 +50,19 @@ export async function recordPersonaVersionChangeIfNeeded(
   if (entry.persona_version === undefined) return; // this registry entry doesn't declare one at all
   if (entry.persona_version === previousVersion) return; // no real change — the common case on every boot
 
-  await AgentPersonaVersionHistory.create({
-    agent_id: agentId,
-    agent_name: entry.agent_name,
-    persona_version: entry.persona_version,
-    previous_version: previousVersion,
-    system_prompt: entry.system_prompt ?? null,
-    tools_granted: entry.tools_granted ?? null,
-    source: 'registry_seed',
-  });
+  try {
+    await AgentPersonaVersionHistory.create({
+      agent_id: agentId,
+      agent_name: entry.agent_name,
+      persona_version: entry.persona_version,
+      previous_version: previousVersion,
+      system_prompt: entry.system_prompt ?? null,
+      tools_granted: entry.tools_granted ?? null,
+      source: 'registry_seed',
+    });
+  } catch (err: any) {
+    console.warn(`[AI Ops] Failed to record persona_version change for ${entry.agent_name}: ${err?.message}`);
+  }
 }
 
 /** Real version history for one agent, most-recent first. `[]` for an agent

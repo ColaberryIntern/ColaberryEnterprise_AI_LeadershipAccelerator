@@ -9,7 +9,7 @@
  * agentRegistrySeedReeseOutreach.test.ts — not re-testing the whole 130+-entry
  * registry.
  */
-jest.mock('../../models/AiAgent', () => ({ findOrCreate: jest.fn() }));
+jest.mock('../../models/AiAgent', () => ({ findOrCreate: jest.fn(), update: jest.fn().mockResolvedValue([0]) }));
 jest.mock('../reese/reeseIdentitySeed', () => ({ seedReeseIdentity: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../reese/reeseSystemPrompt', () => ({ REESE_PERSONA_BLOCK: 'MOCKED_PERSONA_BLOCK' }));
 jest.mock('../agentPersonaVersionHistoryService', () => ({ recordPersonaVersionChangeIfNeeded: jest.fn() }));
