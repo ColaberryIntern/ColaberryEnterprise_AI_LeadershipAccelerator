@@ -456,6 +456,13 @@ import CaseStudyArtifact from './CaseStudyArtifact';
 import CaseStudyPublication from './CaseStudyPublication';
 import CaseStudySyncRun from './CaseStudySyncRun';
 import CaseStudyCollection from './CaseStudyCollection';
+// Story Studio assets. Schema lives in db/ensureCaseStudyStoryAssets.ts, a peer
+// of ensureCaseStudySchema.ts rather than an extension of it — see that file's
+// header for why the ten-table core was left byte-untouched.
+import CaseStudyStoryline from './CaseStudyStoryline';
+import CaseStudyAiDraft from './CaseStudyAiDraft';
+import CaseStudyQuote from './CaseStudyQuote';
+import CaseStudyChart from './CaseStudyChart';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1530,6 +1537,10 @@ export {
   CaseStudyPublication,
   CaseStudySyncRun,
   CaseStudyCollection,
+  CaseStudyStoryline,
+  CaseStudyAiDraft,
+  CaseStudyQuote,
+  CaseStudyChart,
   // Refactored AI Delivery OS (Gate 1)
   DeliveryEngagement,
   DeliveryProject,
