@@ -1,0 +1,92 @@
+import { CLIENT_FIELD_ALLOWLIST, type ClientObjectKind } from '../../../modules/delivery/clientVisibility';
+import DeliveryProject from '../../../models/DeliveryProject';
+import DeliveryDecision from '../../../models/DeliveryDecision';
+import DeliveryChangeRequest from '../../../models/DeliveryChangeRequest';
+import DeliveryClientAcceptance from '../../../models/DeliveryClientAcceptance';
+
+/**
+ * Every name in the client allowlist must exist on the model it projects.
+ *
+ * ## The failure this prevents is silent, and it points the wrong way
+ *
+ * `toClientShape` builds the response from the allowlist and **skips fields whose value is
+ * `undefined`**. That skip is correct — it keeps an absent field absent rather than
+ * emitting a null a reader might mistake for data — but it also means a **misspelled or
+ * imagined field name simply vanishes**. No error, no warning, no failing test. The
+ * endpoint returns 200 with a smaller object than intended.
+ *
+ * That is exactly what happened. The `decision` allowlist named `title` and
+ * `requires_client_approval`; `DeliveryDecision` has neither. It has `question`,
+ * `recommendation` and `final_decision`. So the client-facing projection of a decision
+ * contained a status and a rationale but **no statement of what was actually decided** —
+ * the one thing a decision record exists to communicate. The `project` allowlist likewise
+ * named `summary`, `started_at` and `target_date`, none of which exist.
+ *
+ * The direction of the failure is worth naming: an allowlist bug that *omits* a field is
+ * quiet and produces a thin, confusing client view. One that *adds* a field is loud and
+ * leaks. Only the second is caught by `findForbiddenFields`, so the first needs this test.
+ *
+ * ## Why assert against models rather than a fixture
+ *
+ * The allowlist was written from an imagined schema. Any test written the same way would
+ * have agreed with it. These assertions read the model definitions, so they fail when the
+ * schema and the projection disagree, whichever one moved.
+ *
+ * Kinds with no backing model yet (`design`, `release`, `evidence_summary`, `document`)
+ * are deliberately not asserted here — see the final test, which keeps that list honest.
+ */
+
+const MODEL_BY_KIND = {
+  project: DeliveryProject,
+  decision: DeliveryDecision,
+  change_request: DeliveryChangeRequest,
+  acceptance: DeliveryClientAcceptance,
+} as const;
+
+/** Kinds projected from something other than a single model, or not yet backed by one. */
+const KINDS_WITHOUT_A_MODEL: readonly ClientObjectKind[] = [
+  'design',
+  'release',
+  'evidence_summary',
+  'document',
+];
+
+describe('client allowlist matches the real models', () => {
+  for (const [kind, Model] of Object.entries(MODEL_BY_KIND)) {
+    it(`every allowlisted \`${kind}\` field exists on its model`, () => {
+      const attributes = Object.keys(Model.getAttributes());
+      const missing = CLIENT_FIELD_ALLOWLIST[kind as ClientObjectKind].filter(
+        (field) => !attributes.includes(field),
+      );
+      // Named in the failure message so the fix is obvious without opening two files.
+      expect({ kind, missing }).toEqual({ kind, missing: [] });
+    });
+  }
+
+  it('never allowlists a field the forbidden-category scanner would reject', () => {
+    // The two mechanisms must not contradict each other. If a field is both allowlisted
+    // and forbidden, one of them is wrong and the tripwire would fire on every request.
+    const forbiddenPrefixes = ['risk_', 'builder_', 'execution_', 'internal_', 'cost_'];
+    for (const [kind, fields] of Object.entries(CLIENT_FIELD_ALLOWLIST)) {
+      for (const field of fields) {
+        const clash = forbiddenPrefixes.find((p) => field.startsWith(p));
+        expect({ kind, field, clash }).toEqual({ kind, field, clash: undefined });
+      }
+    }
+  });
+
+  it('keeps the impact_internal field OUT of the change_request projection', () => {
+    // A specific, high-value negative: DeliveryChangeRequest carries both `impact_summary`
+    // (what the client is told) and `impact_internal` (what we say to each other). Getting
+    // these the wrong way round is a plausible edit and an expensive one.
+    expect(CLIENT_FIELD_ALLOWLIST.change_request).toContain('impact_summary');
+    expect(CLIENT_FIELD_ALLOWLIST.change_request).not.toContain('impact_internal');
+  });
+
+  it('accounts for every allowlist kind, so a new one cannot skip this check', () => {
+    // Without this, adding a ninth kind would silently go unverified: the loop above only
+    // covers what MODEL_BY_KIND names.
+    const covered = [...Object.keys(MODEL_BY_KIND), ...KINDS_WITHOUT_A_MODEL].sort();
+    expect(Object.keys(CLIENT_FIELD_ALLOWLIST).sort()).toEqual(covered);
+  });
+});
