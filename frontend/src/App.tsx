@@ -8,6 +8,7 @@ import RouteLoading from './components/ui/RouteLoading';
 import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
 import ClientSignIn from './pages/refactored/ClientSignIn';
+import ClientPortal from './pages/refactored/ClientPortal';
 import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
 import HomeV2 from './pages/publicV2/HomeV2';
 import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
@@ -162,6 +163,11 @@ function App() {
               full-height centred layout.
           */}
           <Route path="/client" element={<ClientSignIn />} />
+          {/*
+              Where sign-in actually goes. Same standalone treatment and the same reason:
+              a client reviewer is not a lead, so no marketing chrome and no tracker.
+          */}
+          <Route path="/client/projects" element={<ClientPortal />} />
           <Route element={<PublicLayout />}>
             {publicRoutes}
           </Route>

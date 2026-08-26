@@ -13,12 +13,15 @@ import type {
 /**
  * storyDetailV2Model - the decisions `/stories/:slug` makes that are not markup.
  *
- * WHY IT IS A SEPARATE MODULE. Four of this page's acceptance criteria are rules
- * rather than rendering - which sections exist for a record, which figure is
- * complete enough to headline, what a withheld repository may say, and when
- * structured data may be emitted. A rule inside a component can only be tested
- * by rendering the component, which is how "hidden unless supported" quietly
- * becomes "hidden unless this fixture is empty". These are pure functions.
+ * WHY IT IS A SEPARATE MODULE. Three of this page's acceptance criteria are
+ * rules rather than rendering - which sections exist for a record, which figure
+ * is complete enough to headline, and what a withheld repository may say. A rule
+ * inside a component can only be tested by rendering the component, which is how
+ * "hidden unless supported" quietly becomes "hidden unless this fixture is
+ * empty". These are pure functions.
+ *
+ * The fourth rule - when structured data may be emitted - moved to
+ * `storySeoModel.ts` when this file reached its 300-line ceiling.
  *
  * WHY IT IS NOT IN `components/caseStudy/`. That directory is a closed set:
  * `caseStudyStyleContract.test.ts` asserts its exact ten filenames, so anything
@@ -77,8 +80,11 @@ export const SECTION_HEADINGS: Readonly<Record<CaseStudySectionKey, string>> = O
 /**
  * Whether "What was built" has anything to show, across BOTH its renderers:
  * `CaseStudyArchitecture` returns null when its fields are empty, `StoryDiagram`
- * renders on `diagramSource` alone. Drop that clause and the band hides on
- * exactly the records it exists for, every other test still green. */
+ * renders on `diagramSource` alone. Drop either clause and the band hides on
+ * exactly the records it exists for, every other test still green. `dataStores`
+ * counts here for the same reason it counts in the snapshot builder and in the
+ * projector: all three must agree, or the field survives one layer and vanishes
+ * at the next. */
 export function architectureHasContent(architecture: PublicCaseStudyArchitecture | null): boolean {
   if (!architecture) return false;
   const diagram = architecture.diagram;
@@ -86,6 +92,7 @@ export function architectureHasContent(architecture: PublicCaseStudyArchitecture
     || architecture.stack.length > 0
     || architecture.capabilities.length > 0
     || architecture.integrations.length > 0
+    || architecture.dataStores.length > 0
     || (diagram?.nodes.length ?? 0) > 0
     || (diagram?.edges.length ?? 0) > 0
     || (architecture.diagramSource ?? '').trim().length > 0;
@@ -251,48 +258,4 @@ export function anonymousContributorNote(count: number): string | null {
   return n === 1
     ? 'One further contributor is not named here.'
     : `${n} further contributors are not named here.`;
-}
-
-/* ------------------------------------------------------------------ seo --- */
-
-/**
- * The OpenGraph card and the structured-data block, or `null`.
- *
- * BOTH ARE GATED ON APPROVED MEDIA, on the same gate. Spec section 28 allows
- * OpenGraph "when approved media exists" and section 25 forbids presenting
- * anything else as a product image, so a card with no approved image has
- * nothing truthful to show. The schema.org Article block is gated with it
- * because `image` is required for an Article rich result: without one it can
- * never produce the result it exists for. `ogImageUrl` is the server's
- * decision, from the media priority list in section 25; nothing here selects.
- */
-export interface StorySeoExtras {
-  readonly ogImage: string;
-  readonly ogType: string;
-  readonly jsonLd: Record<string, unknown>;
-}
-
-export function storySeoExtras(
-  detail: PublicCaseStudyDetail,
-  surface: PublicSurfaceView,
-): StorySeoExtras | null {
-  const image = detail.seo.ogImageUrl;
-  if (!image) return null;
-  return {
-    ogImage: image,
-    ogType: detail.seo.ogType,
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@type': 'Article',
-      headline: detail.title,
-      description: detail.seo.description,
-      url: detail.seo.canonicalUrl,
-      image: [image],
-      datePublished: detail.publishedAt,
-      dateModified: detail.updatedAt,
-      // The organisation, never a person: contributor consent is per-record and
-      // structured data is the one place a name would outlive its withdrawal.
-      publisher: { '@type': 'Organization', name: surface.brandLabel },
-    },
-  };
 }

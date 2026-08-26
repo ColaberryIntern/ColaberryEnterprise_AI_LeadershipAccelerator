@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260826-t3v8 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, August 26, 2026 at 5:51 AM</div>
+    <div><span class="sid">CC-20260826-t3v8</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Reconciled the two concurrent Checkpoint A design docs, wrote the two missing ones, and shipped the Enterprise band grammar: the masthead gave up its second half (desktop 1142px -&gt; 546px, mobile 2201px -&gt; 773px), three authored-but-never-projected fields became readable, and a version-skew crash that white-screened the whole route against the live API was found by looking at the page.**</h2>
+          <span class="badge">2026-08-26</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**NOT DEPLOYED — local only.**</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Frontend `tsc --noEmit` exit 0** and **backend `tsc --noEmit` exit 0**, both on the workspace-local TypeScript 5.9.3 — never root&#39;s 4.9.5, which reports a false clean. **Backend jest 885 tests / 29 suites green**, including 9 new in `caseStudyPublicSectionsFormatV1.test.ts`. **Full frontend jest suite, unscoped: 1895 passed / 1905 total.** The 10 failures are **proven pre-existing, not asserted**: reverted every tracked change, held back every new file, ran the six suspect suites at pristine HEAD, and got the byte-identical failure set; restored all 31 files and verified with `sha256sum -c` (31 OK, 0 mismatch). **16 mutations applied, each watched go red naming the expected test, each reverted byte-exact and checksum-verified** — including two the visual step produced. **Browser acceptance:** proved `caseStudyPublic.e2e.js` can fail first (dead port -&gt; 34 failures, exit 1); captured the production before-baseline; against the local build **verdict PASS, 0 failures, 0 skipped, exit 0**, with the same four pre-existing contrast notes as production (brand palette and a shared evidence badge, neither owned by this surface). **Measured, not estimated:** desktop masthead 1142 -&gt; 546px, mobile 2201 -&gt; 773px, total desktop document 8584 -&gt; 7311px. Live-DOM checks: artifact titles now `H3,H3,H3`; tone rhythm `situation:default figure:sunken build:default figure:sunken architecture:default figure:sunken measurement:default roadmap:default artifacts:sunken repositories:default`. Screenshots at 1440x1000 and 390x844 in `.loop-architect/runs/20260822-casestudy-os/checkpoint-b/` (gitignored) and looked at.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**NOT DEPLOYED, and the projection change means deploy order matters** — backend before frontend, or the new bands are simply empty. The normaliser guarantees &quot;empty&quot; rather than &quot;fatal&quot;, which is the whole point of item 7. **An honest limit on what was proved:** the pilot record&#39;s snapshot may carry no `constraints`, `goals` or `dataStores` at all — a DB fact this session could not read without production access — so the three new bands were verified against a **synthetic intercepted payload**, labelled `SYNTHETIC` in the capture script, while the projector itself is proved by unit tests. If the pilot carries none, projecting them changes nothing visible on that record and the value is for the next one. **A tradeoff stated rather than hidden:** moving content out of the masthead does not bring the first sentence of the story closer — `firstSectionTop` went 1211 -&gt; 1374 desktop and 2270 -&gt; 2366 mobile. What improved is the masthead itself (halved, and no longer a dark band with a large white card marooned inside it, which is the structural cause of three shipped invisible-text incidents on this surface) and the total page (-1273px desktop). **Deferred deliberately, each for a stated reason:** quotes (the only proposed band that can manufacture a false claim; the gate that blocks them exists because this repo shipped invented client quotations), charts (need a metric-key reference model and verified metrics first), external references (no field, no table, no gate coverage), band order and per-surface headings (lens work, Checkpoint C — and additionally blocked on the pilot&#39;s hero/measurement duplication: `heroMetrics[0]` and `measurement.metrics[0]` are the same metric object, so the proposed Enterprise order prints the same card twice inside one screen), and the three dead publication columns (`section_order`, `hidden_sections`, `cta_profile_key`), which are per-publication ordering and therefore lens behaviour. **A ceiling to watch:** `storyDetailV2Sections.tsx` is at 294/300 and `StoryDetailV2.tsx` at 366/400; the next addition to either must split first. **A correction to `STORY_ASSET_MODEL.md` made by reading source:** its §5 and §2.6 place the single artifact `create` at `caseStudySyncSources.ts:253`; appendix A-3 is the correct citation, `caseStudyEvidenceSource.ts:369`. **Carried into the plan as the Checkpoint D prerequisite:** no code path promotes an artifact to `approved` — one `create` hardcoding `status:&#39;candidate&#39;`, no `update`, no route — so the entire hero, carousel and figure surface cannot populate through the application, and the pilot&#39;s three approved artifacts were promoted by direct SQL. **Two process findings, neither mine to fix:** `PROGRESS.md` carries `0x08` bytes at line 16171 from an earlier session, the exact shell-heredoc corruption CLAUDE.md warns about (left alone — CLAUDE.md forbids editing another session&#39;s entries); and `scripts/generateSessionChangelog.js` reports `PROGRESS.md` is a **sealed pre-2026-08-23 archive** that &quot;nothing reads&quot;, while CLAUDE.md still names it the hard gate. Both files were written this session so neither convention is starved, but the two should be reconciled.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260826-t3v8.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

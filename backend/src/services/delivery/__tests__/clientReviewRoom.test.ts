@@ -88,10 +88,15 @@ describe('client visibility vocabulary', () => {
 // ---------------------------------------------------------------------------
 
 describe('toClientShape', () => {
+  // The fields here are the REAL DeliveryProject columns. This fixture previously used
+  // `summary`, which does not exist on the model - the allowlist named it too, so the
+  // fixture and the allowlist agreed with each other and neither agreed with the
+  // database. clientAllowlistContract.test.ts now pins the allowlist to the model, which
+  // is the check this test could never be.
   const builderProject = {
     id: 'p1',
     name: 'Client Portal',
-    summary: 'A portal',
+    business_problem: 'Riders cannot see arrival times.',
     status: 'active',
     // Everything below must NOT survive.
     risk_level: 'R4',
@@ -105,7 +110,7 @@ describe('toClientShape', () => {
 
   it('keeps only allowlisted fields', () => {
     const out = toClientShape('project', builderProject);
-    expect(Object.keys(out).sort()).toEqual(['id', 'name', 'status', 'summary']);
+    expect(Object.keys(out).sort()).toEqual(['business_problem', 'id', 'name', 'status']);
   });
 
   it('drops every forbidden field', () => {
