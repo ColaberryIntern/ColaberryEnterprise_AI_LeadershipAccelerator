@@ -1,5 +1,6 @@
 import React from 'react';
 import { RecordForReview } from '../../services/careerApi';
+import RecordProse from '../../components/capstone/RecordProse';
 
 /**
  * ReviewRecordPreview — the Capstone Record as the reviewer sees it, inside admin.
@@ -57,7 +58,7 @@ const ReviewRecordPreview: React.FC<{ record: RecordForReview }> = ({ record }) 
       {(has(system.project_name) || has(system.descriptor)) && (
         <Band title="The system they built">
           {has(system.project_name) && <div className="rp-project">{system.project_name}</div>}
-          {has(system.descriptor) && <p className="rp-body">{system.descriptor}</p>}
+          {has(system.descriptor) && <RecordProse>{String(system.descriptor)}</RecordProse>}
           {/* hours_reclaimed is a real measured claim or it is absent. Never rendered as 0. */}
           {typeof system.hours_reclaimed === 'number' && system.hours_reclaimed > 0 && (
             <p className="rp-metric">{system.hours_reclaimed} hours reclaimed</p>
@@ -122,7 +123,7 @@ const ReviewRecordPreview: React.FC<{ record: RecordForReview }> = ({ record }) 
                   {p.shared === false && <span className="rp-unshared">not shared</span>}
                 </div>
                 {has(p.headline) && <div className="rp-post-h">{p.headline}</div>}
-                {has(p.body) && <p className="rp-body">{p.body}</p>}
+                {has(p.body) && <RecordProse>{String(p.body)}</RecordProse>}
               </li>
             ))}
           </ul>
