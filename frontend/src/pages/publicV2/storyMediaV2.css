@@ -1,0 +1,218 @@
+/* ============================================================================
+   storyMediaV2.css -- the pictures on the Enterprise detail surface.
+
+   WHY IT IS A SEPARATE FILE. `storyDetailV2.css` reached 549 lines, past
+   CLAUDE.md's 500-line hard ceiling, and CLAUDE.md requires the next change to
+   an oversize file to split it before adding to it. This is that split, and the
+   seam is the one the page already draws elsewhere: `StoryMediaCarousel`,
+   `StoryDiagram` and `StoryFigure` are three page-local components that answer
+   "what does a picture look like here", while everything left behind answers
+   "what does the argument look like". `storyDetailV2Sections.tsx` and
+   `storyDetailV2Model.ts` are split on the same line.
+
+   IT IS NOT UNCHECKED. A split that moves rules out of a contract-tested file
+   into an untested one is a regression wearing a refactor's clothes, so this
+   file is on `storyDetailV2Contract.test.ts`'s list and inherits every rule the
+   page's own stylesheet obeys: V2 tokens only, no raw colour, `cbv2-` namespace
+   only, no `@import`, no control characters.
+
+   THE TOKEN THAT DOES NOT EXIST. The V2 spacing scale runs 0,1,2,3,4,5,6,8,10,
+   12,16,20,24,32. There is no --space-7, and a rule asking for one resolves to
+   NOTHING -- not a fallback, an absence. This file adds no reference to it.
+
+   KNOWN COUPLING. Same as the page's: these rules sit inside `.cbv2-section` /
+   `.cbv2-wrap` from homeV2.css and publicV2.css and resolve only because
+   App.tsx imports every V2 page statically.
+
+   IMPORTED BY `StoryDetailV2.tsx`, as a second side-effect import beside the
+   page stylesheet -- not by `@import` from it, which the contract test forbids
+   and which would cost a second serial round trip in the browser.
+   ========================================================================== */
+
+/* -------------------------------------------------------------- carousel --- */
+/* Native scroll-snap. No library, no JavaScript layout, no transform track --
+   the browser scrolls, and the arrows only nudge it. Which is why it still
+   works with JavaScript off, and why a focused slide scrolls itself into view
+   without anything here being told about focus. */
+
+.cbv2-story-carousel {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  min-width: 0;
+}
+
+.cbv2-story-carousel__track {
+  display: flex;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0 0 var(--space-3) 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: var(--space-1);
+  scroll-behavior: smooth;
+  /* A flex child's default `min-width: auto` refuses to shrink below its
+     content, which is what turns a horizontal scroller into a page that scrolls
+     sideways. This is the whole 320px story. */
+  min-width: 0;
+}
+
+/* A programmatic scroll carries its own behaviour and ignores this rule, so the
+   arrow handler asks matchMedia again. Both halves are needed. */
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-story-carousel__track { scroll-behavior: auto; }
+}
+
+.cbv2-story-carousel__slide {
+  flex: 0 0 auto;
+  /* `min()` and not a fixed width: at 320px one slide is the viewport, and on a
+     wide screen three sit side by side. No media query needed and no breakpoint
+     to get wrong. */
+  width: min(100%, 20rem);
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+/* THE 320px OVERFLOW LIVED HERE, and it was not the track.
+   `.cbv2-cs-sr-only` is `position: absolute`, and an absolutely positioned box
+   is only clipped by an ancestor's overflow if that ancestor sits between it and
+   its CONTAINING BLOCK. Nothing inside this track was positioned, so the
+   containing block was the initial one, the sr-only span in each offscreen slide
+   escaped the track's `overflow-x: auto` entirely, and it extended the ROOT
+   scroll area to its own right edge. Measured on the live page: documentElement
+   scrollWidth 709 against a 390px viewport and 613 against 320px, and deleting
+   just those three spans in the live DOM dropped both to the viewport width
+   exactly. One `position: relative` puts the containing block back inside the
+   scroller, and the span is clipped with everything else. */
+.cbv2-story-carousel__link {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-3);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  color: var(--text-body);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.cbv2-story-carousel__link:hover { border-color: var(--border-default); }
+
+.cbv2-story-carousel__link:focus-visible {
+  outline: var(--border-2) solid var(--border-focus);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+.cbv2-story-carousel__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.cbv2-story-carousel__caption { display: grid; gap: var(--space-1); }
+
+.cbv2-story-carousel__kind {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+}
+
+.cbv2-story-carousel__title {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-strong);
+}
+
+.cbv2-story-carousel__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* -------------------------------------------------------------- diagram --- */
+
+/* Sits BELOW the verified component and connection lists, never instead of
+   them. When the record carries no hand-drawn source this block is not rendered
+   at all -- there is no empty frame and no placeholder heading. */
+.cbv2-story__diagram {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  min-width: 0;
+}
+.cbv2-story__diagram h3 { margin: 0; }
+
+/* -------------------------------------------------------- inline figures --- */
+/* A picture met while the reading is still going on, between two sections and
+   belonging to neither. It carries no section padding of its own: the sections
+   on either side already pay for the space, and a third helping turns a reading
+   break into a gap. */
+
+.cbv2-story-figures { min-width: 0; }
+
+.cbv2-story-figure {
+  display: grid;
+  gap: var(--space-3);
+  /* Narrower than the prose column on purpose. A full-bleed 1232px picture stops
+     being a figure inside an argument and becomes a banner between two of them. */
+  max-width: var(--container-sm);
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.cbv2-story-figure__link {
+  position: relative;
+  display: block;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  text-decoration: none;
+}
+.cbv2-story-figure__link:focus-visible {
+  outline: var(--border-2) solid var(--border-focus);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+/* `contain` and a height cap, not a crop. This is a template: the next record
+   may carry a 3000x400 banner or a 400x3000 phone capture, and `cover` would
+   silently cut the evidence out of an evidence image. The sunken ground is what
+   the letterboxing lands on, so an odd ratio reads as deliberate framing.
+   30rem, because the column is `--container-sm` (640px) and 640 x 3/4 is 480px
+   exactly: the ordinary 4:3 photograph fills the frame with no bars at all, and
+   only something taller than 4:3 letterboxes. At 26rem every 4:3 image had grey
+   bars down both sides for no reason. */
+.cbv2-story-figure__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 30rem;
+  object-fit: contain;
+  background: var(--surface-sunken);
+}
+
+.cbv2-story-figure__caption {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cbv2-story-figure__kind {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+}
+.cbv2-story-figure__title {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-strong);
+}

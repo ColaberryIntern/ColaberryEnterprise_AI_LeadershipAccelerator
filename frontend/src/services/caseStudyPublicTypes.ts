@@ -149,6 +149,25 @@ export interface PublicCaseStudyNarrative {
   readonly body: readonly string[];
 }
 
+/**
+ * The situation, plus the two structured lists that qualify it.
+ *
+ * These two fields were authored, populated by the sync pipeline and read by the
+ * publish gate's claim scan — so a sentence in either could BLOCK a record from
+ * publishing — and were never projected onto the public payload. A constraint
+ * that can veto publication but can never be read is the worst of both worlds,
+ * which is why projecting them came before anything else in this pass.
+ *
+ * Mirrors `backend/src/types/caseStudyPublic.ts`. Both are arrays and never
+ * null: an absent list is `[]`, so a renderer asks `length` and never has to
+ * distinguish "none recorded" from "field missing" — a distinction the snapshot
+ * does not carry.
+ */
+export interface PublicCaseStudySituation extends PublicCaseStudyNarrative {
+  readonly constraints: readonly string[];
+  readonly goals: readonly string[];
+}
+
 export interface PublicCaseStudyTimelineEntry {
   readonly date: string;
   readonly endDate: string | null;
@@ -175,6 +194,14 @@ export interface PublicCaseStudyArchitecture {
   readonly stack: readonly string[];
   readonly capabilities: readonly string[];
   readonly integrations: readonly string[];
+  /**
+   * What the system stores its data in. Assembled from repository evidence and
+   * counted by the snapshot's own emptiness check, but until this pass it had no
+   * public shape to arrive in — so a record could be considered to HAVE an
+   * architecture section on the strength of data stores alone and then render
+   * without them. Empty is the common case for a front-end-only repository.
+   */
+  readonly dataStores: readonly string[];
   readonly diagram: {
     readonly nodes: readonly PublicCaseStudyArchitectureNode[];
     readonly edges: readonly PublicCaseStudyArchitectureEdge[];
@@ -319,7 +346,7 @@ export interface PublicCaseStudyDetail {
   readonly engagementDuration: string | null;
   readonly productionStatus: CaseStudyRoadmapStatus | null;
   readonly heroMetrics: readonly PublicCaseStudyMetric[];
-  readonly situation: PublicCaseStudyNarrative | null;
+  readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
   readonly architecture: PublicCaseStudyArchitecture | null;
   readonly measurement: PublicCaseStudyMeasurement | null;

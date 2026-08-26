@@ -63,7 +63,34 @@ const MEDIA_SOURCES = [
   path.join(PAGE_DIR, 'StorySectionList.tsx'),
   path.join(PAGE_DIR, 'storyFigurePlacement.ts'),
   path.join(PAGE_DIR, 'storyIndicatorModel.ts'),
+  /* The Story Format V1 pass added three more, and they are listed here for the
+     same reason all of the above were - an unlisted page-local file could carry
+     a hex literal, an inline style object, a class outside the namespace or a
+     control character, and nothing in this repository would say so.
+       - `StoryContextStrip.tsx` is the hero's second half, moved onto light
+         ground: the counts, the facts grid and the headline figures.
+       - `StorySituation.tsx` renders `situation.constraints` and `.goals`, two
+         fields that were authored, populated and publish-gated but never
+         projected.
+       - `storySeoModel.ts` is the structured-data half of what used to be
+         `storyDetailV2Model.ts`, split out when that file hit the 300-line
+         ceiling asserted below. */
+  path.join(PAGE_DIR, 'StoryContextStrip.tsx'),
+  path.join(PAGE_DIR, 'StorySituation.tsx'),
+  path.join(PAGE_DIR, 'storySeoModel.ts'),
 ];
+
+/**
+ * The picture rules, split out of `storyDetailV2.css` when it passed CLAUDE.md's
+ * 500-line hard ceiling.
+ *
+ * IT IS CHECKED EXACTLY AS HARD AS THE FILE IT CAME OUT OF. A split that moves
+ * rules from a contract-tested stylesheet into an untested one is a regression
+ * wearing a refactor's clothes: every token, colour, namespace and
+ * control-character assertion below runs over both files.
+ */
+const MEDIA_CSS = path.join(PAGE_DIR, 'storyMediaV2.css');
+const STYLESHEETS = [path.join(PAGE_DIR, 'storyDetailV2.css'), MEDIA_CSS];
 const APP = path.join(SRC, 'App.tsx');
 const LEGACY_TOKENS = path.join(SRC, 'styles', 'tokens.css');
 const V2_TOKEN_DIR = path.join(SRC, 'colaberry', 'tokens');
@@ -275,11 +302,16 @@ describe('one styling mechanism, the one the V2 pages use', () => {
     }
   });
 
-  it('names every selector in the stylesheet inside the namespace', () => {
-    const css = read(CSS).replace(/\/\*[\s\S]*?\*\//g, ' ');
-    const classes = (css.match(/\.[A-Za-z][A-Za-z0-9_-]*/g) ?? []).map((c) => c.slice(1));
-    expect(classes.length).toBeGreaterThan(10);
-    for (const name of classes) expect(name).toMatch(/^cbv2-/);
+  it('names every selector in either stylesheet inside the namespace', () => {
+    for (const file of STYLESHEETS) {
+      const css = readCss(file);
+      const classes = (css.match(/\.[A-Za-z][A-Za-z0-9_-]*/g) ?? []).map((c) => c.slice(1));
+      // Non-vacuity per file, so a stylesheet that was emptied or misnamed
+      // cannot pass this by having nothing in it to check.
+      expect({ file: path.basename(file), count: classes.length > 10 })
+        .toEqual({ file: path.basename(file), count: true });
+      for (const name of classes) expect(name).toMatch(/^cbv2-/);
+    }
   });
 });
 
@@ -311,6 +343,15 @@ function referencedIn(css: string): Set<string> {
 
 const readCss = (file: string): string => read(file).replace(/\/\*[\s\S]*?\*\//g, ' ');
 
+/**
+ * Both stylesheets, concatenated, comments already stripped.
+ *
+ * The token, colour and grid-track assertions below are about the page's STYLE
+ * SYSTEM rather than about one file, so they read the whole system. The
+ * per-file assertions that remain - `@import`, the size ceiling - stay per-file
+ * because they are about a file.
+ */
+const allCss = STYLESHEETS.map(readCss).join('\n');
 const pageCss = readCss(CSS);
 const legacyDeclared = declaredIn(readCss(LEGACY_TOKENS));
 const v2Declared = new Set<string>();
@@ -318,9 +359,9 @@ for (const file of fs.readdirSync(V2_TOKEN_DIR).filter((f) => f.endsWith('.css')
   for (const name of declaredIn(readCss(path.join(V2_TOKEN_DIR, file)))) v2Declared.add(name);
 }
 const legacyOnly = [...legacyDeclared].filter((name) => !v2Declared.has(name)).sort();
-const referenced = [...referencedIn(pageCss)].sort();
+const referenced = [...referencedIn(allCss)].sort();
 
-describe('storyDetailV2.css names only tokens that exist', () => {
+describe('the story stylesheets name only tokens that exist', () => {
   it('derives a non-trivial legacy-only list, so the ban below is not vacuous', () => {
     expect(legacyOnly.length).toBeGreaterThan(20);
     expect(legacyOnly).toContain('--color-primary');
@@ -366,29 +407,88 @@ describe('storyDetailV2.css names only tokens that exist', () => {
    * runs in CI on every push, that one needs a browser and a live record.
    */
   it('inverts text on the masthead by naming WHAT it inverts, not just the background', () => {
-    const selectors = pageCss.split('{').map((chunk) => chunk.split('}').pop()?.trim() ?? '');
+    const selectors = allCss.split('{').map((chunk) => chunk.split('}').pop()?.trim() ?? '');
+
+    /* THE BAN, UNCHANGED AND STILL THE POINT OF THIS TEST. A descendant selector
+       whose only scope is `.cbv2-pagehero` names a BACKGROUND, not a component,
+       and matches every light card inside the dark band as well as the dark
+       band's own text. */
     const unscoped = selectors.filter((selector) =>
       /\.cbv2-pagehero\s+\.cbv2-story__(term|value)\s*$/.test(selector)
       || /\.cbv2-pagehero\s+\.cbv2-story__(term|value)\s*,/.test(selector));
     expect(unscoped).toEqual([]);
-    // Non-vacuity: the scoped form IS present, so this is not passing because
-    // the masthead stopped inverting anything at all.
-    expect(pageCss).toMatch(/\.cbv2-pagehero\s+\.cbv2-story__facts\s+\.cbv2-story__term/);
-    // ...and the light card says its own colours rather than inheriting them.
-    expect(pageCss).toMatch(/\.cbv2-story__metric\s+\.cbv2-story__value/);
+
+    /* THE NON-VACUITY HALF CHANGED, AND HERE IS WHY, BECAUSE A WEAKENED GUARD
+       THAT NOBODY EXPLAINED IS HOW THE NEXT ONE OF THESE SHIPS.
+       This used to assert the presence of `.cbv2-pagehero .cbv2-story__facts
+       .cbv2-story__term` - the correctly-scoped version of the rule that had
+       failed. That rule is now GONE, because the facts strip is no longer on the
+       masthead at all: it moved to `.cbv2-story__context`, on light ground,
+       where it needs no inversion and there is no inverted region for a light
+       card to be trapped inside. Requiring a rule that should no longer exist
+       would have meant keeping a dead selector alive to satisfy a test.
+       What replaces it is stronger rather than weaker: EVERY masthead-scoped
+       colour rule in either stylesheet must name a component class, not just the
+       masthead. That generalises the original guard from two class names to all
+       of them. */
+    const mastheadColourRules = selectors.filter((selector) =>
+      /\.cbv2-pagehero\b/.test(selector));
+    expect(mastheadColourRules.length).toBeGreaterThan(0);
+    for (const selector of mastheadColourRules) {
+      // Everything after `.cbv2-pagehero` must contain at least one further
+      // class. `.cbv2-pagehero { ... }` itself is fine - it paints the ground.
+      const tail = selector.slice(selector.lastIndexOf('.cbv2-pagehero') + '.cbv2-pagehero'.length);
+      const namesAComponent = tail.trim().length === 0 || /\.cbv2-[a-z0-9_-]+/i.test(tail);
+      expect({ selector, namesAComponent }).toEqual({ selector, namesAComponent: true });
+    }
+
+    // ...and the light card still says its own colours rather than inheriting
+    // them. Belt and braces on the defect this page has shipped twice.
+    expect(allCss).toMatch(/\.cbv2-story__metric\s+\.cbv2-story__value/);
   });
 
-  it('hardcodes no colour outside the token system', () => {
-    expect(pageCss.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);
-    expect(pageCss.match(/\b(?:rgba?|hsla?)\s*\(/gi) ?? []).toEqual([]);
+  it('hardcodes no colour outside the token system, in either stylesheet', () => {
+    for (const file of STYLESHEETS) {
+      const css = readCss(file);
+      expect({ file: path.basename(file), hex: css.match(/#[0-9a-f]{3,8}\b/gi) ?? [] })
+        .toEqual({ file: path.basename(file), hex: [] });
+      expect({ file: path.basename(file), fn: css.match(/\b(?:rgba?|hsla?)\s*\(/gi) ?? [] })
+        .toEqual({ file: path.basename(file), fn: [] });
+    }
   });
 
-  it('pulls in no second stylesheet', () => {
-    expect(read(CSS)).not.toMatch(/@import/);
+  it('pulls in no second stylesheet by @import, in either file', () => {
+    /* COMMENTS STRIPPED FIRST, and this test is the reason that matters.
+       The predecessor of this assertion read RAW bytes, which was fine for as
+       long as no stylesheet header happened to mention the word. `storyMediaV2.
+       css` explains in its own header why it is a side-effect import in the page
+       rather than an `@import` from the page stylesheet - and saying so made the
+       check go red on a file that contains no `@import` rule at all. The rule is
+       about an ACTIVE at-rule, and an at-rule inside a comment is not one, which
+       is the same principle this file already applies to source: "Comments
+       stripped, so a name mentioned in prose is never read as a call." */
+    for (const file of STYLESHEETS) {
+      expect({ file: path.basename(file), imports: /@import/.test(readCss(file)) })
+        .toEqual({ file: path.basename(file), imports: false });
+      // Non-vacuity: stripping did not empty the file and leave nothing to check.
+      expect({ file: path.basename(file), substantial: readCss(file).trim().length > 500 })
+        .toEqual({ file: path.basename(file), substantial: true });
+    }
+    // The second sheet reaches the bundle the other way: a side-effect import in
+    // the page. An `@import` would cost a serial round trip before either sheet
+    // could paint.
+    expect(stripComments(read(PAGE))).toContain("import './storyMediaV2.css';");
+  });
+
+  it('keeps both stylesheets under the 500-line ceiling that forced the split', () => {
+    const oversize = STYLESHEETS
+      .map((file) => ({ file: path.basename(file), lines: read(file).split('\n').length }))
+      .filter((entry) => entry.lines > 500);
+    expect(oversize).toEqual([]);
   });
 
   it('gives every grid track a zero floor, so a long word cannot widen a column', () => {
-    const tracks = pageCss
+    const tracks = allCss
       .split(/[;{}]/)
       .map((line) => line.trim())
       .filter((line) => /^grid-template-columns\s*:/.test(line));
@@ -400,7 +500,29 @@ describe('storyDetailV2.css names only tokens that exist', () => {
   });
 
   it('lets long words break rather than push the page sideways', () => {
-    expect(pageCss).toContain('overflow-wrap: anywhere');
+    for (const file of STYLESHEETS) {
+      expect({ file: path.basename(file), breaks: readCss(file).includes('overflow-wrap: anywhere') })
+        .toEqual({ file: path.basename(file), breaks: true });
+    }
+  });
+
+  /**
+   * THE TONE GRAMMAR RESTS ON THIS PAGE'S OWN CLASS, NOT THE SHARED MODIFIER.
+   * `.cbv2-section--sunken` is declared twice in this codebase with different
+   * values - `homeV2.css` paints it `--surface-sunken`, `cinematicV2.css` paints
+   * it `--cbv2-warm-sunken` - so which one a band gets depends on the order
+   * App.tsx happens to import two other pages in. `STORY_FORMAT_V1.md` calls the
+   * alternation a LOCKED grammar, and a locked grammar cannot rest on that.
+   */
+  it('declares its own sunken tone rather than inheriting a twice-declared one', () => {
+    expect(pageCss).toMatch(/\.cbv2-story\s+\.cbv2-story__section--sunken\s*\{/);
+    const claimsTheSharedOne = /^\s*\.cbv2-section--sunken\s*\{/m.test(pageCss);
+    expect(claimsTheSharedOne).toBe(false);
+    // Non-vacuity: the ambiguity this avoids is real and still present upstream.
+    const home = readCss(path.join(PAGE_DIR, 'homeV2.css'));
+    const cinematic = readCss(path.join(SRC, 'components', 'publicV2', 'cinematicV2.css'));
+    expect(/\.cbv2-section--sunken\s*\{/.test(home)).toBe(true);
+    expect(/\.cbv2-section--sunken\s*\{/.test(cinematic)).toBe(true);
   });
 });
 
@@ -409,7 +531,10 @@ describe('storyDetailV2.css names only tokens that exist', () => {
 /* ----------------------------------------------------------- media band --- */
 
 describe('the page-local media files play by the same rules as the page', () => {
-  it('finds all four, so nothing below passes by reading an empty string', () => {
+  it('finds every one of them, so nothing below passes by reading an empty string', () => {
+    // Non-vacuity, and it is the assertion the whole describe block rests on: a
+    // mistyped path makes every check below pass against `''`.
+    expect(MEDIA_SOURCES.length).toBeGreaterThan(10);
     for (const file of MEDIA_SOURCES) {
       expect({ file: path.basename(file), exists: fs.existsSync(file) })
         .toEqual({ file: path.basename(file), exists: true });
@@ -452,7 +577,10 @@ describe('the page-local media files play by the same rules as the page', () => 
       expect({ library, imported: new RegExp(`from\\s+['"][^'"]*${library}`).test(carousel) })
         .toEqual({ library, imported: false });
     }
-    expect(read(CSS)).toContain('scroll-snap-type');
+    // The track lives in `storyMediaV2.css` since the split; this reads the
+    // system rather than one file, so moving a rule between them cannot make
+    // the assertion silently stop applying.
+    expect(allCss).toContain('scroll-snap-type');
   });
 
   it('adds no mermaid dependency — the renderer fetches it at runtime', () => {
@@ -490,9 +618,48 @@ describe('the carousel cannot become a control that does nothing', () => {
     // Both halves are needed: a programmatic `scrollBy` carries its own
     // behaviour and ignores the stylesheet, and a native drag ignores the
     // runtime check. Either one alone leaves half the interaction unhandled.
-    expect(read(CSS)).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(allCss).toContain('@media (prefers-reduced-motion: reduce)');
     expect(stripComments(read(path.join(PAGE_DIR, 'StoryMediaCarousel.tsx'))))
       .toContain('prefers-reduced-motion: reduce');
+  });
+});
+
+/* ------------------------------------------------------------- version skew --- */
+
+describe('the detail fetch normalises before a component can read it', () => {
+  /**
+   * WHY A SOURCE ASSERTION AND NOT A BEHAVIOURAL ONE. Every render test in this
+   * suite mocks `fetchCaseStudyDetail`, so nothing exercises the real function
+   * body, and the defect being guarded lives in one line INSIDE it: whether the
+   * fetched payload is handed to `normalizeDetailResponse` before it is returned.
+   * Deleting that call reintroduces a white screen against any server older than
+   * this bundle, and every mocked test would stay green.
+   *
+   * The defect is not hypothetical. Pointed at the live production API, this page
+   * rendered nothing at all: `StorySituation` and `TagGroup` both threw reading
+   * `.length` of `undefined`, because the deployed projection does not yet send
+   * `situation.constraints`, `situation.goals` or `architecture.dataStores`.
+   */
+  const api = read(path.join(SRC, 'services', 'caseStudyApi.ts'));
+  const source = stripComments(api);
+
+  it('reads the client from here, so the checks below are not vacuous', () => {
+    expect(api.length).toBeGreaterThan(1000);
+    expect(source).toContain('export async function fetchCaseStudyDetail');
+  });
+
+  it('routes the detail response through the normaliser rather than returning it raw', () => {
+    const body = source.slice(source.indexOf('export async function fetchCaseStudyDetail'));
+    const upToReturn = body.slice(0, body.indexOf('\n}'));
+    expect(upToReturn).toContain('return normalizeDetailResponse(body);');
+    expect(upToReturn).not.toMatch(/return\s+body\s*;/);
+  });
+
+  it('normalises the three fields that a server older than this bundle omits', () => {
+    for (const field of ['constraints', 'goals', 'dataStores']) {
+      expect({ field, normalised: source.includes(field) })
+        .toEqual({ field, normalised: true });
+    }
   });
 });
 
@@ -508,7 +675,7 @@ describe('the files carry no stray control characters', () => {
       + `${String.fromCharCode(11)}${String.fromCharCode(12)}`
       + `${String.fromCharCode(14)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]`,
     );
-    for (const file of [PAGE, MODEL, SECTIONS, CSS, ...MEDIA_SOURCES]) {
+    for (const file of [PAGE, MODEL, SECTIONS, ...STYLESHEETS, ...MEDIA_SOURCES]) {
       expect({ file: path.basename(file), clean: !forbidden.test(read(file)) })
         .toEqual({ file: path.basename(file), clean: true });
     }

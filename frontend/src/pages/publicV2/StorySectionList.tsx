@@ -38,6 +38,31 @@ import type {
  * layout for one record.
  */
 
+/**
+ * Which bands sit on sunken ground.
+ *
+ * `STORY_FORMAT_V1.md` section 5: every VISUAL band sits on sunken ground and
+ * every PROSE band on default ground, so a reader learns in two screens that a
+ * change of ground means a change of medium. Before this pass every band on the
+ * page was default and the body read as one uninterrupted white sheet.
+ *
+ * ONLY `artifacts` QUALIFIES AMONG THE SECTIONS, and the reason is worth writing
+ * down because the list looks suspiciously short. `artifacts` is the only
+ * section whose body leads with pictures - `StoryMediaCarousel` above the list.
+ * `architecture` carries a drawing, but it carries it BELOW two paragraphs and
+ * three tag lists, so toning the whole band would put prose on visual ground to
+ * reach a diagram most records do not have. `repositories` is a list of links,
+ * which is text. The other visual bands on this page are the figure bands, and
+ * they are not sections - they carry their own tone in `StoryFigure`.
+ *
+ * It is a Set rather than a total Record on purpose: a new section key should
+ * default to prose ground, which is the safe answer, rather than failing to
+ * compile until somebody picks a tone for it.
+ */
+const SUNKEN_SECTIONS: ReadonlySet<CaseStudySectionKey> = new Set<CaseStudySectionKey>([
+  'artifacts',
+]);
+
 export interface StorySectionListProps {
   record: PublicCaseStudyDetail;
   /** Already resolved by `visibleSections`, hero and cta still included. */
@@ -58,8 +83,11 @@ export function StorySectionList({
         .map((key) => (
           <React.Fragment key={key}>
             <section
-              className="cbv2-rv cbv2-section cbv2-story__section"
+              className={`cbv2-rv cbv2-section cbv2-story__section${
+                SUNKEN_SECTIONS.has(key) ? ' cbv2-story__section--sunken' : ''
+              }`}
               data-section={key}
+              data-tone={SUNKEN_SECTIONS.has(key) ? 'sunken' : 'default'}
               aria-labelledby={`cbv2-story-${key}`}
             >
               <div className="cbv2-wrap cbv2-story__body">
