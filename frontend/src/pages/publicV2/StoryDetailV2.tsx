@@ -18,7 +18,6 @@ import {
 import {
   NOT_FOUND_BODY,
   NOT_FOUND_HEADING,
-  SECTION_HEADINGS,
   heroFacts,
   heroMetricsFor,
   storySeoExtras,
@@ -26,7 +25,11 @@ import {
 } from './storyDetailV2Model';
 import type { DetailState } from './storyDetailV2Model';
 import StoryHeroActions from './StoryHeroActions';
-import { StoryHeroMetrics, StorySectionBody } from './storyDetailV2Sections';
+import { StoryHeroMetrics } from './storyDetailV2Sections';
+import StorySectionList from './StorySectionList';
+import { StoryIndicatorRail } from './StoryIndicators';
+import { storyIndicators } from './storyIndicatorModel';
+import { placeStoryFigures } from './storyFigurePlacement';
 import './storyDetailV2.css';
 
 /**
@@ -261,6 +264,13 @@ function StoryDetailV2(): React.ReactElement {
   const extras = storySeoExtras(record, surface);
   const metrics = heroMetricsFor(record);
   const facts = heroFacts(record);
+  const indicators = storyIndicators(record, sections);
+  /* Pictures are placed BETWEEN sections, from the sections that actually
+     survived `visibleSections`, so a figure can never follow a heading this
+     record does not print. `placedHrefs` then goes down to the artifacts band,
+     which subtracts them from its carousel - the same picture appearing inline
+     and again in a track ten centimetres below reads as a rendering fault. */
+  const figures = placeStoryFigures(record.artifacts, sections);
 
   return (
     <>
@@ -294,6 +304,13 @@ function StoryDetailV2(): React.ReactElement {
               verificationClass={record.verificationClass}
               verificationMethod={record.verificationMethod}
             />
+
+            {/* Counts, never scores. Directly under the badge because the two
+                answer the neighbouring questions - "is this checked" and "how
+                much of it is here" - and a reader who is scanning stops after
+                one of them. Empty for a record with nothing countable, and then
+                nothing renders. */}
+            <StoryIndicatorRail indicators={indicators} />
 
             {facts.length > 0 ? (
               <dl className="cbv2-story__facts">
@@ -334,25 +351,7 @@ function StoryDetailV2(): React.ReactElement {
           </div>
         </section>
 
-        {sections
-          .filter((key) => key !== 'hero' && key !== 'cta')
-          .map((key) => (
-            <section
-              className="cbv2-rv cbv2-section cbv2-story__section"
-              key={key}
-              data-section={key}
-              aria-labelledby={`cbv2-story-${key}`}
-            >
-              <div className="cbv2-wrap cbv2-story__body">
-                <h2 id={`cbv2-story-${key}`}>
-                  {key === 'situation' && record.situation?.heading
-                    ? record.situation.heading
-                    : SECTION_HEADINGS[key]}
-                </h2>
-                <StorySectionBody sectionKey={key} record={record} />
-              </div>
-            </section>
-          ))}
+        <StorySectionList record={record} sections={sections} figures={figures} />
 
         {sections.includes('cta') ? (
           <section className="cbv2-rv cbv2-section cbv2-section--inverse" data-section="cta">

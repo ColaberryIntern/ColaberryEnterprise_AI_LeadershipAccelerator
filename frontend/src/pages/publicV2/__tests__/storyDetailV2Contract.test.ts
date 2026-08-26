@@ -48,6 +48,21 @@ const MEDIA_SOURCES = [
   path.join(PAGE_DIR, 'StoryMediaCarousel.tsx'),
   path.join(PAGE_DIR, 'StoryDiagram.tsx'),
   path.join(PAGE_DIR, 'StoryHeroActions.tsx'),
+  /* The UI pass added five more page-local files - the between-sections figure
+     band, the indicator rail, the section list and their two pure models - and
+     they are listed here for exactly the reason the four above were: without it,
+     a new file could carry a hex literal, an inline style object, a class
+     outside the namespace or a control character, and nothing in this repository
+     would say so. `storyIndicatorModel.ts` is named for its role rather than
+     matching its component, because `storyIndicators.ts` beside
+     `StoryIndicators.tsx` differs only in casing and Windows and macOS resolve
+     the two to one file - which failed the build here before it could fail
+     anywhere else. */
+  path.join(PAGE_DIR, 'StoryFigure.tsx'),
+  path.join(PAGE_DIR, 'StoryIndicators.tsx'),
+  path.join(PAGE_DIR, 'StorySectionList.tsx'),
+  path.join(PAGE_DIR, 'storyFigurePlacement.ts'),
+  path.join(PAGE_DIR, 'storyIndicatorModel.ts'),
 ];
 const APP = path.join(SRC, 'App.tsx');
 const LEGACY_TOKENS = path.join(SRC, 'styles', 'tokens.css');
@@ -334,6 +349,33 @@ describe('storyDetailV2.css names only tokens that exist', () => {
 
   it('references no legacy-only token', () => {
     expect(referenced.filter((name) => legacyOnly.includes(name))).toEqual([]);
+  });
+
+  /**
+   * THE DEFECT THIS GUARDS SHIPPED, and was found by looking at the page rather
+   * than by any test here. `.cbv2-pagehero .cbv2-story__term` was written for
+   * the hero's facts strip, which sits directly on the dark ground - but it
+   * matches EVERY descendant of the masthead, and the hero's figure card is
+   * painted `--surface-card`. Sample, Methodology and Limitations rendered white
+   * on white at 1.00:1, measured live, five elements, invisible.
+   *
+   * jsdom applies no stylesheet, so no unit test in this repository can compute
+   * that cascade. This reads bytes, which is the only thing available here; the
+   * assertion that actually catches the general case is the rendered-contrast
+   * sweep in `tests/systemV2/caseStudyPublic.e2e.js`. Both are needed - this one
+   * runs in CI on every push, that one needs a browser and a live record.
+   */
+  it('inverts text on the masthead by naming WHAT it inverts, not just the background', () => {
+    const selectors = pageCss.split('{').map((chunk) => chunk.split('}').pop()?.trim() ?? '');
+    const unscoped = selectors.filter((selector) =>
+      /\.cbv2-pagehero\s+\.cbv2-story__(term|value)\s*$/.test(selector)
+      || /\.cbv2-pagehero\s+\.cbv2-story__(term|value)\s*,/.test(selector));
+    expect(unscoped).toEqual([]);
+    // Non-vacuity: the scoped form IS present, so this is not passing because
+    // the masthead stopped inverting anything at all.
+    expect(pageCss).toMatch(/\.cbv2-pagehero\s+\.cbv2-story__facts\s+\.cbv2-story__term/);
+    // ...and the light card says its own colours rather than inheriting them.
+    expect(pageCss).toMatch(/\.cbv2-story__metric\s+\.cbv2-story__value/);
   });
 
   it('hardcodes no colour outside the token system', () => {
