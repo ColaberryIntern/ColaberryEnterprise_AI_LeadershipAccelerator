@@ -1,8 +1,10 @@
 /**
  * captureClientPortal — screenshot the signed-in client surface on DEV.
  *
- * DEV ONLY. The base URL is the dev instance on :9999 and there is no production target
- * in this file, deliberately: the seeded engagement it depends on exists only there.
+ * Defaults to the dev instance on :9999, because the seeded engagement this depends on
+ * exists only there. `CAPTURE_BASE` overrides it so the SIGNED-OUT surface can be checked
+ * on production - which is the only thing worth capturing there, since production has no
+ * memberships and no OAuth client, so no client session can exist yet.
  *
  * Unlike `captureRefactoredDeliveryOs.js`, this one injects a **client** session
  * (`delivery_client_token`), not an admin JWT. That is the whole point — the admin token
@@ -24,8 +26,11 @@ const {
   writeCaptureSummary,
 } = require('./captureHelpers');
 
-const BASE_URL = 'http://95.216.199.47:9999';
-const OUT_DIR = path.join(__dirname, '..', 'docs', 'screenshots', 'refactored-client-portal-dev');
+const BASE_URL = process.env.CAPTURE_BASE || 'http://95.216.199.47:9999';
+const OUT_DIR = path.join(
+  __dirname, '..', 'docs', 'screenshots',
+  process.env.CAPTURE_OUT_NAME || 'refactored-client-portal-dev',
+);
 
 const STOPS = [
   { file: '01-client-signin', url: '/client', label: 'Client sign-in (public door)', signedOut: true },
@@ -34,13 +39,17 @@ const STOPS = [
 
 async function main() {
   const token = process.argv[2] || process.env.CLIENT_TOKEN || '';
-  if (!token) throw new Error('Usage: node scripts/captureClientPortal.js <client token>');
+  // No token is a legitimate run, not an error: on production there is no client session
+  // to have. Capture the signed-out stops and say so, rather than refusing or - worse -
+  // silently producing screenshots that look signed-in but are not.
+  const stops = token ? STOPS : STOPS.filter((s) => s.signedOut);
+  if (!token) console.log('[init] no token - capturing signed-out stops only');
 
   const browser = await chromium.launch();
   const consoleErrors = [];
   const entries = [];
 
-  for (const stop of STOPS) {
+  for (const stop of stops) {
     // A fresh context per stop so the signed-out door is genuinely signed out rather than
     // relying on clearing state that a previous stop set.
     const context = await createSafeContext(browser);
