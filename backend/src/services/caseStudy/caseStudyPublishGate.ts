@@ -114,7 +114,9 @@ import {
   ruleStatus,
   ruleSurface,
 } from './caseStudyPublishRules';
-import { ruleQuotes, ruleUnverifiedClaims } from './caseStudyPublishClaimScan';
+import {
+  ruleQuotes, ruleRepoIdentityInProse, ruleUnverifiedClaims,
+} from './caseStudyPublishClaimScan';
 import type {
   CaseStudyPublishBlocker,
   CaseStudyPublishBlockerCode,
@@ -177,6 +179,10 @@ export function evaluateCaseStudyPublishGate(
     ruleProofMetadata(metrics, content, b);
     ruleQuotes(input.snapshot, b);
     ruleUnverifiedClaims(content, metrics, b);
+    // 11 — the prose half of the private-repository boundary. `ruleRepositories`
+    // above closes the STRUCTURED path; this closes the one V-29 measured open,
+    // where an identifier typed into a narrative field is published verbatim.
+    ruleRepoIdentityInProse(content, b);
   } else if (input.snapshot) {
     b.add('snapshot_not_approved', 'case_study_snapshots.content',
       `snapshot version ${input.snapshot.version} carries no content object`,
