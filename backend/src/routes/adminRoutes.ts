@@ -6,6 +6,7 @@ import authRoutes from './admin/authRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import leadRoutes from './admin/leadRoutes';
 import organizationRoutes from './admin/organizationRoutes';
+import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
@@ -103,6 +104,14 @@ router.use(authRoutes);
 router.use(cohortRoutes);
 router.use(leadRoutes);
 router.use(organizationRoutes);
+// Case Study OS admin surface. Every path is fully qualified
+// (/api/admin/case-studies/...) and carries requireAdmin per route, so its
+// position among the sibling sub-routers is not load-bearing — but it MUST stay
+// below router.use(mgmtSectionGate) above, or scoped management roles bypass the
+// section check entirely. Its PATH_SECTION entry maps it to 'program', the same
+// section /api/admin/projects uses: a Case Study is the publishable projection
+// of a Project, so the roles that manage Projects manage these.
+router.use(caseStudyAdminRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
 router.use(settingsRoutes);

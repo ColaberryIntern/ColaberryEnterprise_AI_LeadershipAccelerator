@@ -96,32 +96,38 @@ router.get('/api/admin/tickets', async (req: Request, res: Response) => {
   }
 });
 
+// Ticket KPI filter-scoping fix (2026-08-25) — shared by /board and /stats so
+// the two routes can never resolve the same query params into two different
+// TicketFilters shapes. Throws a ZodError on a malformed `creator`; callers
+// catch and 400, same as /board already did before this was extracted.
+async function resolveTicketFilters(query: Request['query']) {
+  const { status, priority, type, source, assigned_to_id, created_after } = query;
+  const creator = boardQuerySchema.parse(query).creator;
+  const creatorMatchIds = creator ? await resolveCreatorMatchIds(creator) : undefined;
+  return {
+    status: status as TicketStatus | undefined,
+    priority: priority as TicketPriority | undefined,
+    type: type as TicketType | undefined,
+    source: source as string | undefined,
+    assigned_to_id: assigned_to_id as string | undefined,
+    createdAfter: parseCreatedAfter(created_after),
+    creatorMatchIds,
+  };
+}
+
 // ── Kanban board format ──────────────────────────────────────────────────
 router.get('/api/admin/tickets/board', async (req: Request, res: Response) => {
   try {
-    const { status, priority, type, source, assigned_to_id, created_after } = req.query;
-
-    // Org Chart v4 (2026-08-20) — validated separately from the destructure
-    // above (which stays untouched for the pre-existing params, out of
-    // scope for this run to retrofit) so a malformed `creator` value 400s
-    // before ever reaching resolveCreatorMatchIds()/getTicketsForBoard().
-    let creator: string | undefined;
+    // Org Chart v4 (2026-08-20) — a malformed `creator` value 400s before
+    // ever reaching resolveCreatorMatchIds()/getTicketsForBoard().
+    let filters;
     try {
-      creator = boardQuerySchema.parse(req.query).creator;
+      filters = await resolveTicketFilters(req.query);
     } catch (zodErr: any) {
       return res.status(400).json({ error: 'Invalid input', issues: zodErr.issues });
     }
-    const creatorMatchIds = creator ? await resolveCreatorMatchIds(creator) : undefined;
 
-    const board = await getTicketsForBoard({
-      status: status as TicketStatus | undefined,
-      priority: priority as TicketPriority | undefined,
-      type: type as TicketType | undefined,
-      source: source as string | undefined,
-      assigned_to_id: assigned_to_id as string | undefined,
-      createdAfter: parseCreatedAfter(created_after),
-      creatorMatchIds,
-    });
+    const board = await getTicketsForBoard(filters);
     res.json({ board });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -148,9 +154,22 @@ router.get('/api/admin/tickets/creators', async (_req: Request, res: Response) =
 });
 
 // ── Stats ────────────────────────────────────────────────────────────────
-router.get('/api/admin/tickets/stats', async (_req: Request, res: Response) => {
+// Ticket KPI filter-scoping fix (2026-08-25) — Ali, live: "When we filter
+// down on a list the KPIs should reflect what the data is showing." Accepts
+// the exact same query params as /board (resolved via the same
+// resolveTicketFilters() helper) so the KPI cards always describe the same
+// slice the Kanban columns below them are showing — no params at all keeps
+// today's whole-system-totals behavior unchanged for any existing caller.
+router.get('/api/admin/tickets/stats', async (req: Request, res: Response) => {
   try {
-    const stats = await getTicketStats();
+    let filters;
+    try {
+      filters = await resolveTicketFilters(req.query);
+    } catch (zodErr: any) {
+      return res.status(400).json({ error: 'Invalid input', issues: zodErr.issues });
+    }
+
+    const stats = await getTicketStats(filters);
     res.json(stats);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

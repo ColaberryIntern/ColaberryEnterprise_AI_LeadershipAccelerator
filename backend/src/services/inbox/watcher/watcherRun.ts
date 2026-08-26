@@ -34,13 +34,13 @@ import { shouldLogExpiry, noteExpiryObserved } from './watcherRetirement';
  *   cycle later, and "one cycle later" is however many replies were in flight.
  *
  *   A DRY RUN TOUCHES NOTHING. Not "sends no student reply" — touches nothing.
- *   The dry-run check used to sit AFTER diagnose(), and the login_link
- *   diagnosis applies its repair: it rotates the student's portal token and
- *   mails them a real magic link, then re-reads the row to verify. So a
- *   rehearsal mutated live accounts and sent real mail. The check now sits
- *   immediately after classification, before anything can read a student's row
- *   with intent to change it, and `inertPorts` below is the backstop that makes
- *   a future regression fail loudly instead of quietly mailing somebody.
+ *   The dry-run check used to sit AFTER diagnose(), and back when the login_link
+ *   diagnosis applied a repair it rotated the student's portal token and mailed
+ *   them a real magic link before verifying. So a rehearsal mutated live
+ *   accounts and sent real mail. Diagnosis no longer writes anything at all, but
+ *   the check stays immediately after classification and `inertPorts` still
+ *   refuses every outward port, because the ordering is what made that bug
+ *   possible and the ordering is what keeps the next one from being.
  */
 
 export interface InboundMessage {
@@ -75,6 +75,15 @@ export interface WatcherPorts {
     inReplyTo: string | null;
   }): Promise<{ providerMessageId: string; messageIdHeader: string | null }>;
   escalate(input: EscalationInput): Promise<void>;
+  /**
+   * Take a thread out of Ali's inbox once it has been ANSWERED.
+   *
+   * Optional: a run with no filing capability simply leaves the mail where it
+   * is, which is the honest degradation. Only ever called after a reply whose
+   * send returned a provider id -- see the call site for why escalated threads
+   * are deliberately left in place.
+   */
+  fileThread?(input: { threadId: string | null; threadKey: string }): Promise<void>;
   data: WatcherDataAccess;
 }
 
@@ -133,6 +142,7 @@ export function inertPorts(ports: WatcherPorts): WatcherPorts {
     fetchThreadMessages: ports.fetchThreadMessages.bind(ports),
     sendReply: refuse('send a reply to a student'),
     escalate: refuse('send an escalation email'),
+    fileThread: refuse("move a thread out of Ali's inbox"),
     data: {
       loadStudentFacts: ports.data.loadStudentFacts.bind(ports.data),
       requestFreshLoginLink: refuse("rotate a student's login token and mail them a magic link"),
@@ -208,7 +218,9 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
     // reached ceiling, never an empty one.
     let replay;
     try {
-      replay = replayWatcherLog(opts.stateDir);
+      // Escalations are scoped to THIS window; reply ceilings stay cumulative.
+      // See replayWatcherLog's header for why the two guards differ.
+      replay = replayWatcherLog(opts.stateDir, window.state?.started_at);
     } catch (err) {
       if (!(err instanceof WatcherLogUnreadableError)) throw err;
       // escalatedThreads EMPTY here is safe only because escalateOnly is set
@@ -399,17 +411,25 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
 
       const cap = checkCaps(replay.sentReplies, { threadKey, recipient: msg.fromAddress }, opts.caps);
       if (cap.blocked) {
-        out.escalated++;
-        await ports.escalate({
-          reason: `cap_${cap.cap}`,
-          detail: `Reply ceiling ${cap.cap} reached (${cap.observed}/${cap.limit}). Escalating instead of replying.`,
-          fromAddress: msg.fromAddress, subject: msg.subject, threadKey,
-          messageIdHeader: msg.messageIdHeader,
-        });
-        log.append({
-          ts: new Date().toISOString(), type: 'escalated', ...common,
-          reason: `cap_${cap.cap}`, cap: cap.cap, observed: cap.observed, limit: cap.limit,
-        });
+        // THROUGH escalateWith, NOT straight to the port.
+        //
+        // This branch used to call ports.escalate() directly and log AFTER it,
+        // which quietly opted the busiest path in the file out of both
+        // invariants the escalation guard exists to enforce: it never consulted
+        // escalatedThreads, and it recorded nothing before the send.
+        //
+        // It mattered because a cap is not a rare event. Setting
+        // WATCHER_MAX_REPLIES_TOTAL=0 is how the 2026-08-19 window was put into
+        // escalate-only, and that makes EVERY candidate cap-blocked — so every
+        // message took this path on every tick. The log for that window records
+        // 143 escalation events across 43 threads, 33 of them to one person.
+        // That is the flood the per-thread record was written to stop,
+        // reappearing through the one branch that skipped it.
+        await escalateWith(
+          `cap_${cap.cap}`,
+          `Reply ceiling ${cap.cap} reached (${cap.observed}/${cap.limit}). Escalating instead ` +
+          'of replying.',
+        );
         continue;
       }
 
@@ -481,6 +501,40 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
           reply_message_id: sent.messageIdHeader ?? undefined,
           reply_provider_message_id: sent.providerMessageId,
         });
+
+        // ── FILE IT, BUT ONLY NOW ────────────────────────────────────────
+        //
+        // After `reply_sent`, which means the provider accepted the message and
+        // handed back an id. Filing before that point, or on the strength of
+        // sendReply not throwing, is how a thread ends up marked handled with
+        // nothing actually sent -- strictly worse than leaving it in the inbox,
+        // because the evidence that it needs attention is gone.
+        //
+        // ESCALATED THREADS ARE DELIBERATELY LEFT ALONE. An escalation is not a
+        // resolution, it is a handoff, and the thing it hands the work to is Ali
+        // looking at his inbox. Archiving those would hide exactly the mail that
+        // still needs a person.
+        //
+        // Best-effort by design: a filing failure must not fail the cycle or
+        // retry the reply. The reply is already out and `reply_attempt` already
+        // counts against the ceilings, so the worst case is a correctly-answered
+        // thread still sitting in the inbox, which is only untidy.
+        if (ports.fileThread) {
+          try {
+            await ports.fileThread({ threadId: msg.threadId, threadKey });
+            log.append({
+              ts: new Date().toISOString(), type: 'thread_filed', ...common,
+              detail: 'Answered and moved out of the inbox.',
+            });
+          } catch (err: any) {
+            log.append({
+              ts: new Date().toISOString(), type: 'thread_filed_failed', ...common,
+              error_class: err?.name || 'FileThreadError',
+              error: String(err?.message ?? err),
+              detail: 'The reply was sent. The thread could not be moved and is still in the inbox.',
+            });
+          }
+        }
       } catch (err: any) {
         log.append({
           ts: new Date().toISOString(), type: 'reply_failed', ...common,

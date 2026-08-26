@@ -260,7 +260,7 @@ const ClassCheckinPage: React.FC = () => {
                           Questions will not reach this phone until you sign in again. Nothing you have already
                           answered is lost.
                         </p>
-                        <button type="button" className="cbck-link-btn" onClick={() => navigate('/portal/login')}>
+                        <button type="button" className="cbck-link-btn" onClick={() => navigate(loginHref)}>
                           Sign in again
                         </button>
                       </>

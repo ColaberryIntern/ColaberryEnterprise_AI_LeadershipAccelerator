@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { PARTICIPANT_TOKEN_KEY, VIEW_AS_TOKEN_KEY, getParticipantToken } from './participantToken';
+import { loginHrefPreserving } from './portalLoginHref';
 
 const portalApi = axios.create({
   baseURL: process.env.REACT_APP_API_URL || '',
@@ -30,7 +31,8 @@ portalApi.interceptors.response.use(
         localStorage.removeItem(PARTICIPANT_TOKEN_KEY);
       }
       if (window.location.pathname.startsWith('/portal')) {
-        window.location.href = '/portal/login';
+        // Carry the destination through sign-in — see loginHrefPreserving().
+        window.location.href = loginHrefPreserving(window.location.pathname);
       }
     }
     return Promise.reject(error);

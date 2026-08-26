@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
+import { WAR_ROOM_PAGE_EVENT_TYPES, toSqlInList } from '../../constants/caseStudyEventTypes';
 import {
   handleAdminListCohorts,
   handleAdminGetCohort,
@@ -108,7 +109,7 @@ router.get('/api/admin/war-room/feed', requireAdmin, async (_req, res) => {
         FROM page_events pe
         JOIN visitors v ON v.id = pe.visitor_id
         LEFT JOIN leads l ON v.lead_id = l.id
-        WHERE pe.event_type IN ('pageview', 'cta_click', 'form_start', 'form_submit', 'demo_start', 'demo_complete', 'demo_skip', 'scroll', 'booking_modal_opened')
+        WHERE pe.event_type IN (${toSqlInList(WAR_ROOM_PAGE_EVENT_TYPES)})
           AND pe.event_type != 'heartbeat'
         ORDER BY pe.created_at DESC LIMIT 20
       )
