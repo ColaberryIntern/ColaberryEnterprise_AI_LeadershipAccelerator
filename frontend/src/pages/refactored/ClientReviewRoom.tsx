@@ -82,6 +82,28 @@ const ClientReviewRoom: React.FC = () => {
 
   return (
     <ClientPage>
+      {/*
+          This screen is a DESIGN PREVIEW with invented data, and it says so on the page.
+
+          The live client surface is ClientPortal at /client/projects: same DeliveryShell,
+          same eight sections, but driven by the guarded client API. This one exists so the
+          approved layout stays reviewable by staff, who cannot hold a client session and
+          therefore cannot open the real thing.
+
+          The banner is not decoration. An unlabelled staff page showing invented client
+          content is the same failure the client surface itself refuses - presenting
+          something as known when it is not - and it is the more dangerous of the two,
+          because staff quote what they see here back to a real client.
+      */}
+      <div className="alert alert-warning d-flex align-items-start gap-2 small" role="note">
+        <span aria-hidden="true">&#9888;</span>
+        <span>
+          <strong>Design preview — sample data.</strong> Northgate Transit and everything
+          below are invented for layout review. No client sees this screen and none of it is
+          read from the delivery tables. The live client surface is{' '}
+          <a href="/client/projects">/client/projects</a>.
+        </span>
+      </div>
     <DeliveryShell
       audienceLabel="Client view"
       audienceTone="client"
