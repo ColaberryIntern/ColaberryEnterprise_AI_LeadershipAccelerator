@@ -6,6 +6,8 @@ import {
   identifyOutbound,
   normalizeMessageId,
   sendLedgerPath,
+  rosterExtraPath,
+  isCampaignRecipient,
   OUTBOUND_COPY_HEADER,
 } from '../outboundIdentity';
 
@@ -178,5 +180,83 @@ describe('a reply the watcher itself sent is recognised as ours', () => {
       own,
     );
     expect(match).toEqual({ isOurs: true, via: 'watcher_own_reply', seamDisagreement: false });
+  });
+});
+
+/**
+ * The supplementary roster.
+ *
+ * The ledger answers "which addresses did we mail". The guard needs "which
+ * people are we talking to". They come apart when a student holds a second
+ * address, and the failure is quiet: `not_campaign_recipient` is the one skip
+ * reason that does not escalate, so the student is dropped rather than handed
+ * to a human.
+ */
+describe('roster-extra widens the roster without touching self-copy identification', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'roster-extra-'));
+    fs.writeFileSync(
+      sendLedgerPath(dir),
+      JSON.stringify({
+        type: 'sent', recipient: 'bitania3@gmail.com', subject: 's',
+        business_event_id: 'e1', message_id: '<sent-1@colaberry.com>',
+      }) + '\n',
+    );
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('treats a second address as a campaign recipient', () => {
+    // Britiana Akhile, whose primary address is on the ledger.
+    fs.writeFileSync(rosterExtraPath(dir), JSON.stringify(['bitania3@yahoo.co.uk']));
+    const ledger = loadOutboundLedger(dir);
+
+    expect(ledger.available).toBe(true);
+    expect(isCampaignRecipient(ledger, 'bitania3@yahoo.co.uk')).toBe(true);
+    expect(isCampaignRecipient(ledger, 'bitania3@gmail.com')).toBe(true);
+  });
+
+  it('is absent by default, and then the ledger alone is the roster', () => {
+    const ledger = loadOutboundLedger(dir);
+    expect(ledger.available).toBe(true);
+    expect(isCampaignRecipient(ledger, 'bitania3@yahoo.co.uk')).toBe(false);
+    expect(isCampaignRecipient(ledger, 'bitania3@gmail.com')).toBe(true);
+  });
+
+  it('does NOT let an extra address count as one of our own sends', () => {
+    fs.writeFileSync(rosterExtraPath(dir), JSON.stringify(['bitania3@yahoo.co.uk']));
+    const ledger = loadOutboundLedger(dir);
+
+    // The roster grew; the set that identifies our own outbound did not.
+    expect(ledger.messageIds.size).toBe(1);
+    expect(ledger.sentCount).toBe(1);
+  });
+
+  it('accepts the { addresses: [...] } form and lower-cases entries', () => {
+    fs.writeFileSync(rosterExtraPath(dir), JSON.stringify({ addresses: ['  Jude.Mofunanya+2@Gmail.com '] }));
+    const ledger = loadOutboundLedger(dir);
+    expect(isCampaignRecipient(ledger, 'jude.mofunanya+2@gmail.com')).toBe(true);
+  });
+
+  /**
+   * The important direction. A broken file must not read as "no extras",
+   * because that silently reinstates the exact behaviour it was added to stop
+   * while looking perfectly healthy.
+   */
+  it('treats a malformed file as a broken roster, not an empty one', () => {
+    fs.writeFileSync(rosterExtraPath(dir), '{ this is not json');
+    const ledger = loadOutboundLedger(dir);
+
+    expect(ledger.available).toBe(false);
+    expect(ledger.unavailableReason).toBe('corrupt');
+    // Unavailable means "we cannot tell", which escalates to a human rather
+    // than silently matching nobody.
+    expect(isCampaignRecipient(ledger, 'bitania3@gmail.com')).toBeNull();
+  });
+
+  it('rejects an entry that is not an address', () => {
+    fs.writeFileSync(rosterExtraPath(dir), JSON.stringify(['bitania3@yahoo.co.uk', 42]));
+    expect(loadOutboundLedger(dir).available).toBe(false);
   });
 });

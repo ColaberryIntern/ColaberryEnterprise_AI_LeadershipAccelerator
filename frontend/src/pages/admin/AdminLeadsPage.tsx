@@ -130,20 +130,37 @@ function AdminLeadsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showApolloImport, setShowApolloImport] = useState(false);
 
+  /**
+   * The active filters, shared by the table query and the CSV export.
+   *
+   * Export used to call a bare `/export` with no params while the table sent
+   * all of these, so the downloaded file ignored the filters on screen and
+   * returned every lead (reported by Kes, 2026-08-25). Both callers read this
+   * one builder now; pagination and sort are added by the table only.
+   */
+  const buildFilterParams = useCallback(() => {
+    const params: Record<string, string> = {};
+    if (statusFilter) params.status = statusFilter;
+    if (sourceFilter) params.source = sourceFilter;
+    if (websiteFilter.length) params.website = websiteFilter.join(',');
+    if (tempFilter) params.temperature = tempFilter;
+    if (scoreMin) params.scoreMin = scoreMin;
+    if (scoreMax) params.scoreMax = scoreMax;
+    if (dateFrom) params.dateFrom = dateFrom;
+    if (dateTo) params.dateTo = dateTo;
+    if (search) params.search = search;
+    return params;
+  }, [statusFilter, sourceFilter, websiteFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
+
   const fetchLeads = useCallback(async () => {
     try {
-      const params: Record<string, string> = { page: String(page), limit: '25' };
-      if (statusFilter) params.status = statusFilter;
-      if (sourceFilter) params.source = sourceFilter;
-      if (websiteFilter.length) params.website = websiteFilter.join(',');
-      // Website signups outrank pulled-list names; see leadSourceGroups.ts.
-      params.sort = 'priority';
-      if (tempFilter) params.temperature = tempFilter;
-      if (scoreMin) params.scoreMin = scoreMin;
-      if (scoreMax) params.scoreMax = scoreMax;
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-      if (search) params.search = search;
+      const params: Record<string, string> = {
+        ...buildFilterParams(),
+        page: String(page),
+        limit: '25',
+        // Website signups outrank pulled-list names; see leadSourceGroups.ts.
+        sort: 'priority',
+      };
       const res = await api.get('/api/admin/leads', { params });
       setLeads(res.data.leads);
       setTotal(res.data.total);
@@ -170,7 +187,7 @@ function AdminLeadsPage() {
       setLeads([]);
       setTotal(0);
     }
-  }, [page, statusFilter, sourceFilter, websiteFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
+  }, [page, buildFilterParams]);
 
   const fetchSourceGroups = useCallback(async () => {
     try {
@@ -252,15 +269,22 @@ function AdminLeadsPage() {
 
   const handleExport = async () => {
     try {
-      const res = await api.get('/api/admin/leads/export', { responseType: 'blob' });
+      const res = await api.get('/api/admin/leads/export', {
+        params: buildFilterParams(),
+        responseType: 'blob',
+      });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'leads-export.csv';
+      // The server names the file, so a capped export arrives as
+      // leads-export-partial-first-N.csv instead of looking complete.
+      const disposition: string = res.headers?.['content-disposition'] ?? '';
+      a.download = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'leads-export.csv';
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to export leads:', err);
+      setLoadError('Could not export leads. The filters on screen were not applied to a file.');
     }
   };
 
@@ -272,6 +296,10 @@ function AdminLeadsPage() {
     setScoreMax('');
     setDateFrom('');
     setDateTo('');
+    // Temperature and website were left set by this handler, so "Clear" left
+    // the table filtered while the controls read as cleared.
+    setTempFilter('');
+    setWebsiteFilter([]);
     setPage(1);
   };
 

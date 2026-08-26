@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { OrgChartHuman, OrgChartLeadershipAgent, OrgChartStaffAgent } from '../../../../services/workforceOrgChartApi';
 import { NAMED_DEPARTMENTS, updateOrgMemberTeam, assignHierarchyTask } from '../../../../services/workforceOrgChartApi';
+import { getAgentDetail, type AgentDetailCapabilities } from '../../../../services/agentDetailApi';
 
 /**
  * OrgChartHumanDrawer — the human drill-down (org-chart hierarchy build,
@@ -14,6 +15,20 @@ import { NAMED_DEPARTMENTS, updateOrgMemberTeam, assignHierarchyTask } from '../
  * team-switch dropdown Ali asked for ("Give me the ability to switch the
  * people between teams") — a dropdown, not drag-and-drop, a deliberate
  * cost/value call logged in this run's execution-contract.md.
+ *
+ * Task-assignment scope disclosure (2026-08-25) — Ali, live, after asking
+ * "what happens if Taiwo asks the agent to do something it doesn't have a
+ * tool for?": assigning a task only ever creates a Ticket row — no agent in
+ * this repo currently picks one up and acts on it automatically (see
+ * PROGRESS.md, "the deactivated-agent task-assignment fix," Notes section,
+ * for the full real trace of why). Rather than build a fabricated fit-check
+ * (matching free text against a tool list needs real NLU/LLM reasoning —
+ * a separate, bigger architecture decision, not a UI tweak), this shows the
+ * REAL data a human needs to judge fit themselves: the selected agent's
+ * actual reads/produces (the same data already on the Agent Detail page,
+ * reused via getAgentDetail() — no new backend endpoint), an honest note
+ * that nothing auto-executes yet, and a pointer to the full roster if
+ * nothing in this hierarchy is the right fit.
  */
 
 interface OrgChartHumanDrawerProps {
@@ -95,6 +110,31 @@ function OrgChartHumanDrawer({ human, leadership, staff, onClose, onTeamChanged 
   const [assignError, setAssignError] = useState('');
   const [assignSuccess, setAssignSuccess] = useState('');
 
+  // Task-assignment scope disclosure (2026-08-25) — the selected agent's
+  // REAL capabilities, fetched fresh whenever the picker's selection
+  // changes, reusing the exact same getAgentDetail() call the Agent Detail
+  // page itself uses (so this can never show different reads/produces than
+  // the transparency page a human could go check directly). null while
+  // loading or before a selection exists; 'error' is deliberately not a
+  // silent failure — see the render below.
+  const [selectedCapabilities, setSelectedCapabilities] = useState<AgentDetailCapabilities | null>(null);
+  const [capabilitiesError, setCapabilitiesError] = useState(false);
+
+  useEffect(() => {
+    if (!assignFormOpen || !assignAgentId) {
+      setSelectedCapabilities(null);
+      setCapabilitiesError(false);
+      return;
+    }
+    let cancelled = false;
+    setSelectedCapabilities(null);
+    setCapabilitiesError(false);
+    getAgentDetail(assignAgentId)
+      .then((detail) => { if (!cancelled) setSelectedCapabilities(detail.capabilities); })
+      .catch(() => { if (!cancelled) setCapabilitiesError(true); });
+    return () => { cancelled = true; };
+  }, [assignFormOpen, assignAgentId]);
+
   function openAssignForm() {
     // Generated ONCE per form-open, not per render and not per submit —
     // reused across a retry of the SAME submission so a duplicate click or
@@ -119,7 +159,7 @@ function OrgChartHumanDrawer({ human, leadership, staff, onClose, onTeamChanged 
         agentId: assignAgentId, title: assignTitle.trim(),
         description: assignDescription.trim() || undefined, idempotencyKey: assignIdempotencyKey,
       });
-      setAssignSuccess('Task assigned.');
+      setAssignSuccess('Task assigned. It\'s a real ticket on the board now, but no agent auto-picks it up yet — check the Tickets board to work it manually.');
       setAssignFormOpen(false);
     } catch {
       setAssignError('Could not assign task.');
@@ -230,6 +270,41 @@ function OrgChartHumanDrawer({ human, leadership, staff, onClose, onTeamChanged 
                     <option key={a.id} value={a.id}>{a.label}</option>
                   ))}
                 </select>
+
+                {/* Task-assignment scope disclosure (2026-08-25) — the
+                    selected agent's REAL reads/produces, so whoever's
+                    assigning can judge fit themselves before submitting.
+                    Never a fabricated "in scope"/"out of scope" verdict —
+                    that would need real NLU against the free-text task, a
+                    separate decision Ali deliberately did not ask for here. */}
+                <div className="wf-muted" style={{ fontSize: 12, marginBottom: 8, padding: 8, background: '#F7F7F9', borderRadius: 6 }}>
+                  {capabilitiesError ? (
+                    'Could not load this agent\'s real capabilities.'
+                  ) : !selectedCapabilities ? (
+                    'Loading what this agent can actually do…'
+                  ) : (
+                    <>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>What this agent can actually do:</div>
+                      {selectedCapabilities.reads.length === 0 && selectedCapabilities.produces.length === 0 ? (
+                        <div>No documented reads or produces for this agent yet.</div>
+                      ) : (
+                        <>
+                          {selectedCapabilities.reads.length > 0 && (
+                            <div>Reads: {selectedCapabilities.reads.join('; ')}</div>
+                          )}
+                          {selectedCapabilities.produces.length > 0 && (
+                            <div>Produces: {selectedCapabilities.produces.join('; ')}</div>
+                          )}
+                        </>
+                      )}
+                      <div style={{ marginTop: 4 }}>
+                        Not the right fit? <Link to="/admin/workforce">Browse the full AI Organization roster</Link> for
+                        an existing agent with the right tools — or this may need a new agent built for it.
+                      </div>
+                    </>
+                  )}
+                </div>
+
                 <input
                   aria-label="Task title"
                   className="wf-select"
@@ -246,6 +321,17 @@ function OrgChartHumanDrawer({ human, leadership, staff, onClose, onTeamChanged 
                   onChange={(e) => setAssignDescription(e.target.value)}
                   style={{ marginBottom: 8, minHeight: 60 }}
                 />
+
+                {/* Task-assignment scope disclosure (2026-08-25) — Ali, live:
+                    "we might just need to tell them it is out of scope."
+                    Honest, persistent — never a silent implication that
+                    submitting means the work is underway. */}
+                <div className="wf-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                  ⚠️ Submitting creates a real, tracked ticket, but no agent automatically picks these up and works
+                  them yet — someone will need to check the Tickets board and act on it manually until real
+                  auto-execution is built.
+                </div>
+
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button type="submit" className="wf-btn pri" disabled={assignBusy || !assignTitle.trim()}>
                     {assignBusy ? 'Assigning…' : 'Submit'}

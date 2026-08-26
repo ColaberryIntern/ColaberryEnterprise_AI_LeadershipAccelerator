@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, August 25, 2026 at 12:23 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">70 changes</span></div>
+    <div class="meta">Generated Tuesday, August 25, 2026 at 7:22 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">74 changes</span></div>
   </header>
   <main>
     
@@ -1107,6 +1107,66 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">screenshots before and after, on dev then production. **0 console errors** on both surfaces.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">the Client Review Room rendered **inside the admin shell** — a surface badged &quot;Client view&quot; beside a sidebar reading Revenue, Campaigns, Lead Ingestion, Intelligence. `tsc` passed, 7/7 CI passed, every component was correct in isolation; the fault existed only in the composition. Not a leak while the route is staff-only and no client can authenticate — but it makes the eventual mistake easy. **While fixing it I deleted `/admin/va-erp`**, another workstream&#39;s route: my original registration wrote LF lines into a CRLF file, so splitting on `\r\n` treated three logical lines as one element. Restored, normalized, byte-level verified. `git diff --stat` said &quot;3 deletions&quot; and looked unremarkable.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">71</span>
+          <h2>**Client auth via Google SSO: a client reviewer can finally log in**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The item listed above as *&quot;no `PlatformIdentity` can log in — governance decision&quot;* is closed. Ali chose Google SSO over magic-link. Master plan §12 forbids a separate Refactored credential store, so identity stays `PlatformIdentity` and Google only proves **who the person is**. **Authentication is not authorization:** `decideClientSignIn` requires a delivery membership that **already exists** and refuses to create one, so a valid Google account with no membership gets no session. Access comes from someone adding a reviewer to a project; signing in is only how they use access they already have. The membership lookup is read-only and lives in its own function so that property is visible in one place rather than emerging from what the handler happens not to call. **The session separation is structural in both directions** — both token types are signed with the same secret, so convention would not have held: a client token carries **no `role` claim** (`requireAdmin` gates on `ADMIN_ROLES.has(payload.role)`, and `undefined` is not in that set), and it carries `aud=&#39;delivery-client&#39;` which the guard verifies **with** (an admin token has no audience, so `jwt.verify` rejects it before any claim is read). `assertNotAdminShaped` runs again before signing, so a future edit adding a role for convenience fails at **mint time** rather than in an access review. **A foreign project returns 404, not 403** — a 403 confirms the project exists, turning the endpoint into a way to enumerate other clients&#39; engagements; E2E scenario F asserts exactly this. **Every refusal is uniform**, including internal errors, or sign-in becomes an oracle for who reviews which project; the specific reason is logged, never returned. An email resolving to two identities **refuses rather than guessing**, since picking one would silently decide which projects the person can see. New: `modules/delivery/clientAuth.ts`, `middlewares/deliveryClientAuth.ts`, `routes/deliveryClientAuthRoutes.ts`, `frontend/src/pages/refactored/ClientSignIn.tsx`. PR #1821.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` under pinned TypeScript 5.9.3 — zero real errors. **106 tests across 4 suites**, including a new 20-test `clientAuth.test.ts` covering a token that smuggles `role:&#39;super_admin&#39;` alongside the client audience, and the two-identity refusal. **All 8 CI checks green on PR #1821** — Backend typecheck, Backend unit tests, Frontend typecheck, Frontend build, Secret scan + route-auth lint, Static security scan, Scan new commits (Sweep full history skipped as conditional). Deployed to dev and the page was **rendered and looked at**, not merely compiled; the endpoint returns the uniform 401 against a garbage token.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Two real defects the tooling caught, both in security-relevant paths.** `req.params[paramName]` is `string | string[]` in Express — a repeated param would have compared an array against a list of strings *in the guard deciding whether you can see another client&#39;s project*; refused with 400 rather than coerced, since casting the type away would have left the hole. And `document.querySelector` returns `Element`, which has no `src`/`async`/`defer`/`onload`; fixing with a typed lookup rather than a cast also surfaced that the code created a script element even when one already existed and then discarded it. **NOT VERIFIED END TO END: no Google sign-in has ever completed.** `GOOGLE_CLIENT_ID` and `REACT_APP_GOOGLE_CLIENT_ID` are unset on dev, so the page correctly renders &quot;Sign-in is not configured for this environment.&quot; Completing one also needs a `PlatformIdentity` plus a `DeliveryProjectMember` row for the tester — by design, not a gap.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">72</span>
+          <h2>**Fix: an eslint-disable comment that CRA promotes to a failed build**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The dev frontend build failed with `Definition for rule &#39;react-hooks/exhaustive-deps&#39; was not found`. The rule is not registered in this project, so a comment **naming** it is itself a lint error, and `CI=true` makes it fatal. Removed it — the rule cannot fire, so there was nothing to suppress — and replaced it with a comment stating why the deps are intentionally partial.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Docker CRA build exit 0 after the fix; containers confirmed recreated by **age**, not by command exit. CI&#39;s `Frontend build` check — the same gate — passes on PR #1821.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**`tsc` structurally could not catch this.** It is a lint error, not a type error; both typechecks were clean before and after. **The deploy&#39;s own exit code did not catch it either:** the compose command was piped through `tail`, so `$?` was tail&#39;s status. It reported success while both containers sat 8 hours old. `useCountUp.ts:163` already carried a note about this exact trap written for `.ts` files; this failure was in a `.tsx`, so the rules are unregistered for both, and that note is now cross-referenced rather than rediscovered a third time.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">73</span>
+          <h2>**Fix: the client sign-in door was wearing the marketing shell and tracking the visitor**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deploying to dev and **looking** showed the page wrapped in `PublicLayout` (V1): the retired navbar offering &quot;Start free&quot; and &quot;Book a walkthrough&quot;, the marketing footer, and the Maya sales chat widget — shown to an external reviewer arriving at the front door of an engagement their company already pays for. **The substantive defect is not cosmetic: `PublicLayout.tsx:12` calls `initTracker()` unconditionally**, so a client&#39;s executive reviewer was fingerprinted before signing in, being recognised, or consenting to anything. `/client` now sits outside **both** marketing layouts and supplies its own centred layout; V2 was not the answer either, since it is still the marketing site.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Docker CRA build (runs `tsc` **and** the lint pass that caught the previous failure), then re-captured and re-examined the rendered page on dev — the nav, footer, and widget are gone.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`App.tsx` already recorded this reasoning for `p/:slug`, where a capstone record was moved out of the same block so a hiring manager would not be tracked for opening someone&#39;s credential; the consent argument applies harder here. Ali had already made this call for the Client Review Room (&quot;give the client room its own shell&quot;) — this applies his existing decision to the door as well as the room. **Found only by deploying and looking:** no test asserts which layout wraps a route, and both the typecheck and the CRA build passed with the wrong shell in place. A local frontend typecheck is **not** claimed: this worktree&#39;s `node_modules` carries only the root-hoisted TypeScript 4.9.5 while both `package.json` files pin `^5.7.3`, so a local run would have been a false signal.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">74</span>
+          <h2>**Correction: I invented a PROGRESS.md gate violation that did not exist**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Reverted. Reading CLAUDE.md&#39;s &quot;PROGRESS.md hard gate&quot; literally, I concluded this session had violated it — the 16 gates were logged here in `docs/sessions/`, and a grep for the session ID in `PROGRESS.md` returned 0. I appended seven catch-up entries to `PROGRESS.md` and wrote a commit message asserting that `generateSessionChangelog.js` reads from it. **All of that was wrong.** `scripts/generateSessionChangelog.js:224` states plainly that *&quot;PROGRESS.md is a sealed pre-2026-08-23 archive; nothing reads it here&quot;*, and it sources `docs/sessions/&lt;id&gt;.md`. The previous session logged to the correct file. `PROGRESS.md` is now byte-identical to `origin/main` again, and the real entries are the three above, in this file.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`git diff origin/main -- PROGRESS.md` is **empty**; the session ID appears **0** times in `PROGRESS.md`. The changelog generator reports 70 entries sourced from this file.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The check that would have caught this took one grep of the tool I was about to invoke, and I ran it only after acting.** The signal was available twice over: the script says so in its own error text, and a standing memory note records that PROGRESS.md is sealed and that CLAUDE.md is stale on this point. I trusted the instruction file over the executable behaviour without reconciling them. Worth generalising: when a documented rule and a running script disagree about which file is authoritative, **the script is the fact and the doc is the claim** — check the script before writing to the file. CLAUDE.md&#39;s PROGRESS.md section is genuinely stale and is a governance-owned file, so correcting it is the DRI&#39;s call, not mine; flagged to Ali rather than edited.</span></div>
           
         </div>
       </article>

@@ -78,7 +78,6 @@ const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
     <Route path="/admin/login" element={<AdminLoginPage />} />
-    <Route path="/admin/career-review" element={<CareerReviewPage />} />
     <Route element={<ProtectedRoute />}>
       {/* Staff → own student portal ("AI Training"): mints a full-access portal
           token, redirects to /portal/today. Sits outside AdminLayout, like the
@@ -96,6 +95,12 @@ const adminRoutes = (
       <Route path="/admin/refactored/client" element={<RefactoredClientReviewRoom />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        {/* Portfolio review. INSIDE ProtectedRoute and AdminLayout: it first shipped
+            beside /admin/login, outside the auth guard entirely, so the page was
+            publicly loadable (the API still 401d, so no data leaked, but the surface
+            was reachable). Found by Ali opening it and seeing no admin chrome — the
+            missing sidebar was the visible symptom of the missing guard. */}
+        <Route path="/admin/career-review" element={<CareerReviewPage />} />
         {/* Account self-service: reachable by every admin identity regardless
             of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
         <Route path="/admin/change-password" element={<AdminChangePasswordPage />} />

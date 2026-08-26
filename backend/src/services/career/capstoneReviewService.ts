@@ -111,16 +111,36 @@ export async function requestCapstoneReview(enrollmentId: string) {
   if (!record) throw fail(404, 'You do not have a capstone record yet', 'NotFoundError');
   if (record.status === 'published') throw fail(409, 'Your record is already published', 'AlreadyPublished');
 
-  const [approval, created] = await CapstoneReviewApproval.findOrCreate({
-    where: { record_id: record.id, version: record.version, decision: { [Op.is]: null } as any },
-    defaults: {
-      record_id: record.id,
-      enrollment_id: record.enrollment_id,
-      version: record.version,
-    } as any,
+  /**
+   * findOne + create, NOT findOrCreate.
+   *
+   * `findOrCreate` merges its `where` clause into the values it inserts, so a where
+   * containing an operator — `decision: { [Op.is]: null }`, which is exactly how "still
+   * pending" is expressed here — makes Sequelize try to write that operator OBJECT into a
+   * string column. It fails with "string violation: decision cannot be an array or an
+   * object" and 500s. Found by Ali clicking the button in production; the unit tests
+   * mocked `findOrCreate` and so asserted this function's logic while never exercising
+   * Sequelize's actual behaviour.
+   *
+   * Idempotency does not depend on this code path being careful: the partial unique index
+   * `capstone_review_pending_unique ... WHERE decision IS NULL` still allows at most one
+   * pending review per record, so a race loses at the database.
+   */
+  const existing = await CapstoneReviewApproval.findOne({
+    where: { record_id: record.id, decision: { [Op.is]: null } as any },
+    order: [['requested_at', 'DESC']],
   });
+  if (existing) {
+    return { review_id: existing.id, version: existing.version, state: 'in_review' as const, deduplicated: true };
+  }
 
-  return { review_id: approval.id, version: record.version, state: 'in_review' as const, deduplicated: !created };
+  const approval = await CapstoneReviewApproval.create({
+    record_id: record.id,
+    enrollment_id: record.enrollment_id,
+    version: record.version,
+  } as any);
+
+  return { review_id: approval.id, version: record.version, state: 'in_review' as const, deduplicated: false };
 }
 
 export interface CapstoneDecisionInput {
