@@ -3,9 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { getAgentDetail, AgentDetail } from '../../services/agentDetailApi';
 import { resetAgents, reactivateAgent, AUTONOMY_LEVELS, AutonomyLevel, AUTONOMY_LEVEL_DESCRIPTIONS } from '../../services/workforceOrgChartApi';
 import { PageHeader, StatCard, SectionCard, StatusBadge } from '../../components/admin/shell';
-import { fmtCentralDateTime } from '../../utils/centralTime';
 import { timeAgo } from '../../components/admin/shell/trust';
-import { getTicketTypeLabel, getTicketTypeTone, getTicketStatusLabel, getTicketStatusTone } from '../../utils/ticketTypeMeta';
+import AgentToolsCapabilitiesCard from '../../components/admin/AgentToolsCapabilitiesCard';
+import AgentTicketActivityTable from '../../components/admin/AgentTicketActivityTable';
+import AgentScheduledTasksCard from '../../components/admin/AgentScheduledTasksCard';
+import { getTicketTypeLabel, getTicketTypeTone } from '../../utils/ticketTypeMeta';
 
 // Agent Detail — Ali's requested transparency page: who this agent is, its real
 // system prompt, its real tools/capabilities, its live status, and its linked
@@ -114,7 +116,7 @@ export default function AgentDetailPage() {
     return <div className="alert alert-danger">{error || 'Agent not found'}</div>;
   }
 
-  const { agent, identity, live_status, tickets, capabilities, trust_contract } = detail;
+  const { agent, identity, live_status, tickets, ticket_breakdown, related_tasks, capabilities, trust_contract } = detail;
   // Agent Alias & Identity Fix — same fix as the Live Agents card list: prefer the
   // real AdminUser.display_name over the raw technical agent_name. Falls back to
   // agent_name for a non-blueprint agent (identity is null — no linked AdminUser).
@@ -364,71 +366,7 @@ export default function AgentDetailPage() {
         )}
       </SectionCard>
 
-      <SectionCard
-        title="Tools & capabilities"
-        icon="tools-line"
-        subtitle="What this agent is actually permitted to do today — not an aspirational list. Click a tool to see what it reads and produces."
-      >
-        {capabilities.by_tool.length > 0 ? (
-          <div className="d-flex flex-column gap-2">
-            {capabilities.by_tool.map((t) => (
-              <details key={t.tool} className="border rounded p-2">
-                <summary style={{ cursor: 'pointer' }}>
-                  <span className="badge bg-secondary-subtle text-secondary-emphasis me-2">
-                    <i className="ri-checkbox-circle-line" aria-hidden="true" />
-                  </span>
-                  <code>{t.tool}</code>
-                  {!t.documented && (
-                    <span className="badge bg-warning-subtle text-warning-emphasis ms-2">
-                      <i className="ri-information-line" aria-hidden="true" /> undocumented
-                    </span>
-                  )}
-                </summary>
-                <div className="mt-2 ps-4">
-                  {t.documented ? (
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <h6 className="text-uppercase text-muted small mb-1">Reads</h6>
-                        {t.reads.length > 0 ? (
-                          <ul className="list-unstyled mb-0 small">
-                            {t.reads.map((r) => (
-                              <li key={r} className="mb-1">
-                                <i className="ri-eye-line text-info me-1" aria-hidden="true" />{r}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-muted small mb-0">Doesn't read an external data source.</p>
-                        )}
-                      </div>
-                      <div className="col-md-6">
-                        <h6 className="text-uppercase text-muted small mb-1">Produces</h6>
-                        {t.produces.length > 0 ? (
-                          <ul className="list-unstyled mb-0 small">
-                            {t.produces.map((p) => (
-                              <li key={p} className="mb-1">
-                                <i className="ri-add-circle-line text-success me-1" aria-hidden="true" />{p}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-muted small mb-0">Doesn't produce anything on its own.</p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-muted small mb-0">
-                      <i className="ri-information-line" aria-hidden="true" /> No documented reads/produces yet for this tool — disclosed honestly rather than guessed.
-                    </p>
-                  )}
-                </div>
-              </details>
-            ))}
-          </div>
-        ) : (
-          <p className="text-muted mb-0">No tools recorded.</p>
-        )}
-      </SectionCard>
+      <AgentToolsCapabilitiesCard byTool={capabilities.by_tool} />
 
       <SectionCard
         title="What this agent reads / produces"
@@ -493,44 +431,9 @@ export default function AgentDetailPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="Ticket activity" icon="ticket-2-line" subtitle="Every ProofDesk ticket assigned to this agent — real, linked, followable to closure." padded={false}>
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead className="table-light">
-              <tr>
-                <th>Ticket</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Type</th>
-                <th>Updated</th>
-                <th>Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-muted text-center py-3">No ticket activity yet.</td>
-                </tr>
-              ) : (
-                tickets.map((t) => (
-                  <tr key={t.id}>
-                    <td>
-                      <Link to={`/admin/tickets?open=${t.id}`}>
-                        {t.ticket_number ? `#${t.ticket_number}` : ''} {t.title}
-                      </Link>
-                    </td>
-                    <td><StatusBadge label={getTicketStatusLabel(t.status)} tone={getTicketStatusTone(t.status)} /></td>
-                    <td>{t.priority}</td>
-                    <td><StatusBadge label={getTicketTypeLabel(t.type)} tone={getTicketTypeTone(t.type)} /></td>
-                    <td>{t.updated_at ? fmtCentralDateTime(t.updated_at) : '—'}</td>
-                    <td>{timeAgo(t.updated_at)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
+      <AgentScheduledTasksCard tasks={related_tasks} />
+
+      <AgentTicketActivityTable tickets={tickets} ticketBreakdown={ticket_breakdown} />
     </>
   );
 }
