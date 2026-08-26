@@ -97,6 +97,12 @@ const DETAIL: AgentDetail = {
   // populated cases.
   ticket_breakdown: [],
   related_tasks: [],
+  // Trust Contract Phase 1 (2026-08-26) — base fixture: honest-empty, same
+  // pattern as ticket_breakdown/related_tasks above. Individual tests below
+  // override to cover the populated cases.
+  persona_version_history: [],
+  cost_summary: null,
+  authorization_summary: { window_days: 30, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 },
   capabilities: {
     reads: ['ProofDesk learner-progress signals (XP, competencies, timeline state) for the student in the conversation'],
     produces: ['A reply message in the student DM thread'],
@@ -605,6 +611,99 @@ describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_bre
     await renderAgentPage();
 
     expect(container.textContent).not.toContain('Reese Outreach: ');
+  });
+});
+
+// Trust Contract Phase 1 (2026-08-26) — real cost, real authorization
+// verdicts, real version history. Closes the "declared autonomy_level vs.
+// what's actually enforced" gap using evidence that already exists.
+describe('AgentDetailPage — "Trust evidence" section', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('renders the real cost figure and run count when this agent has tracked ai_events activity', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, cost_summary: { cost_usd: 4.82, runs: 37 } });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Trust evidence');
+    expect(container.textContent).toContain('$4.82');
+    expect(container.textContent).toContain('37');
+  });
+
+  it('boundary: an em dash, not $0.00, when this agent has zero cost-tracked events', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, cost_summary: null });
+
+    await renderAgentPage();
+
+    const statCards = Array.from(container.querySelectorAll('.admin-stat-card')).map((el) => el.textContent || '');
+    expect(statCards.some((text) => text.includes('Cost (30d)') && text.includes('—'))).toBe(true);
+    expect(container.textContent).not.toContain('$0.00');
+  });
+
+  it('renders the real allow/approval/block verdict counts', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      authorization_summary: { window_days: 30, total: 18, allow: 14, approval: 3, block: 1, enforced_count: 0 },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('Allowed: 14');
+    expect(container.textContent).toContain('Would require approval: 3');
+    expect(container.textContent).toContain('Would block: 1');
+  });
+
+  it('honesty callout: discloses that every decision was shadow-mode when enforced_count is 0 but real decisions exist', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      authorization_summary: { window_days: 30, total: 5, allow: 5, approval: 0, block: 0, enforced_count: 0 },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('shadow mode');
+  });
+
+  it('boundary: no shadow-mode callout when there are zero authorization checks at all — nothing to disclose', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL); // base fixture: authorization_summary.total === 0
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('No authorization checks recorded');
+    expect(container.textContent).not.toContain('shadow mode');
+  });
+
+  it('renders real persona version history entries, most-recent first as passed from the API', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      persona_version_history: [
+        { id: 'h1', persona_version: '2026-09-01', previous_version: '2026-08-06', source: 'registry_seed', created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString() },
+      ],
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('2026-08-06');
+    expect(container.textContent).toContain('2026-09-01');
+    expect(container.textContent).toContain('1h ago');
+  });
+
+  it('boundary: honest empty state when persona_version_history is empty, never fabricated history', async () => {
+    getAgentDetail.mockResolvedValue({ ...DETAIL, persona_version_history: [] });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('No version change recorded yet');
   });
 });
 

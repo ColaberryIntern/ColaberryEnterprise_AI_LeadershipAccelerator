@@ -21,6 +21,10 @@ jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChain
 // Trust Contract fix (2026-08-24) — getAgentDetail() now also calls the REAL
 // getLastTicketActivityForAgent() (same module), mocked alongside its sibling.
 jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn() }));
+// Trust Contract Phase 1 (2026-08-26) — the 3 new real-evidence fields.
+jest.mock('../../agentPersonaVersionHistoryService', () => ({ getPersonaVersionHistory: jest.fn() }));
+jest.mock('../../trustMetricsService', () => ({ agentCostRows: jest.fn() }));
+jest.mock('../../agentAuthorizationService', () => ({ getAgentAuthorizationSummary: jest.fn() }));
 
 import { Op } from 'sequelize';
 import AiAgent from '../../../models/AiAgent';
@@ -32,6 +36,9 @@ import { Ticket } from '../../../models';
 import { derivePresence } from '../../communityService';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
 import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../../workforce/liveAgentsService';
+import { getPersonaVersionHistory } from '../../agentPersonaVersionHistoryService';
+import { agentCostRows } from '../../trustMetricsService';
+import { getAgentAuthorizationSummary } from '../../agentAuthorizationService';
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
@@ -46,6 +53,9 @@ const mockDerivePresence = derivePresence as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
 const mockLastActivity = getLastTicketActivityForAgent as unknown as jest.Mock;
+const mockPersonaHistory = getPersonaVersionHistory as unknown as jest.Mock;
+const mockCostRows = agentCostRows as unknown as jest.Mock;
+const mockAuthSummary = getAgentAuthorizationSummary as unknown as jest.Mock;
 
 const reeseAgent = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success',
@@ -65,6 +75,9 @@ beforeEach(() => {
   mockCountOpenTickets.mockResolvedValue(0);
   mockLastActivity.mockResolvedValue(null);
   mockAgentFindAll.mockResolvedValue([]);
+  mockPersonaHistory.mockResolvedValue([]);
+  mockCostRows.mockResolvedValue([]);
+  mockAuthSummary.mockResolvedValue({ window_days: 30, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 });
 });
 
 describe('getAgentDetail', () => {
@@ -437,6 +450,65 @@ describe('getAgentDetail', () => {
     expect(result!.tickets[0].description).toBe(
       'Reese is proactively reaching out to Jane Doe. Signal: inactivity. Goal: Confirm the student is unblocked and re-engaged with the curriculum within 7 days.',
     );
+  });
+
+  // Trust Contract Phase 1 (2026-08-26) — real version history, real cost,
+  // real authorization verdicts, all keyed on the real AiAgent id.
+  describe('persona_version_history / cost_summary / authorization_summary', () => {
+    it('happy path: passes through real history rows verbatim, keyed on the real agent id', async () => {
+      const rows = [{ id: 'h1', persona_version: '2026-09-01', previous_version: '2026-08-06', source: 'registry_seed', created_at: new Date() }];
+      mockPersonaHistory.mockResolvedValue(rows);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.persona_version_history).toEqual(rows);
+      expect(mockPersonaHistory).toHaveBeenCalledWith('agent-1');
+    });
+
+    it('honesty boundary: [] when this agent\'s persona_version has never changed, never fabricated history', async () => {
+      mockPersonaHistory.mockResolvedValue([]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.persona_version_history).toEqual([]);
+    });
+
+    it('cost_summary: reflects the real per-agent row from the shared trustMetricsService query', async () => {
+      mockCostRows.mockResolvedValue([{ agentId: 'agent-1', costUsd: 4.82, runs: 37 }]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.cost_summary).toEqual({ cost_usd: 4.82, runs: 37 });
+      expect(mockCostRows).toHaveBeenCalledWith(30, 'agent-1');
+    });
+
+    it('cost_summary: null when this agent has zero cost-tracked events in the window, never a fabricated $0 row', async () => {
+      mockCostRows.mockResolvedValue([]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.cost_summary).toBeNull();
+    });
+
+    it('authorization_summary: passes through the real per-agent verdict breakdown verbatim', async () => {
+      const summary = { window_days: 30, total: 18, allow: 14, approval: 3, block: 1, enforced_count: 2 };
+      mockAuthSummary.mockResolvedValue(summary);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.authorization_summary).toEqual(summary);
+      expect(mockAuthSummary).toHaveBeenCalledWith('agent-1', 30);
+    });
+
+    it('these 3 fields key on the real AiAgent id directly, independent of whether a linked AdminUser identity exists', async () => {
+      mockAdminFindOne.mockResolvedValue(null); // no linked staff identity — tickets/capabilities go empty, but these 3 must not
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(mockPersonaHistory).toHaveBeenCalledWith('agent-1');
+      expect(mockCostRows).toHaveBeenCalledWith(30, 'agent-1');
+      expect(mockAuthSummary).toHaveBeenCalledWith('agent-1', 30);
+    });
   });
 
   // Org-chart hierarchy build (2026-08-19) — the "Reports to" section on
