@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260825-q7m4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, August 25, 2026 at 7:49 PM</div>
+    <div><span class="sid">CC-20260825-q7m4</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Found the real root cause, ruled out the assumed one with evidence, unblocked Quincy with a backed-up one-row write, and opened PR #1833 with the permanent fix.**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Quincy Ninying, 2026-08-24: *&quot;I am unable to see my Ambit project. I only see my current project and the training example.&quot;* Both projects are real rows on **his own** enrollment `acda8718`: `CoreOps` (`48f67531`, active, 28 tasks, 22 complete) and `Ambit` (`860288eb`, 13 tasks, published plan, created 2026-08-19). **The assumed cause was wrong and was disproved rather than worked around.** The known data defect on `860288eb` (`organization_name` still reading &quot;Oklahoma Turnpike Authority&quot;) is carried by **both** of his projects, and the one carrying it renders perfectly, so the column cannot be what hides the other. `active_project_id` is not a filter either: `GET /api/portal/projects` was called against production as him and returned **200 with `Ambit` in the body** while the page drew one build. The server was sending it and the client was discarding it. **The defect is client-side.** `projectSync.reconcileFromBackend` hydrates from `/api/portal/projects/active`, which returns exactly ONE tree; the inventory from `/api/portal/projects` was consulted only to name the active id and to prune cards for deleted projects, and was never a source of new cards. A project live on the server but not active therefore had **no path onto the page at all**, and reloading could not help because the reload re-ran the same one-tree pull. `hydrateProjectById` already did the right thing and was wired only to archive-restore. The existing code comments name the hole exactly (&quot;a project that is live on the server but not active has no path onto the page at all&quot;). New `hydrateMissingProjects()` runs at the end of every pull and gives a card to each live server project the device lacks. **The guard that makes that safe:** &quot;hydrate everything the server owns&quot; points straight at `fcce50ef`, the platform&#39;s own ~144k-row record, which sits on Ali&#39;s real enrollment and has `name IS NULL`, so it would have rendered as a build called &quot;Your build&quot;. The summary DTO now carries `is_protected` (derived from the existing `PROTECTED_PROJECT_IDS`, not a new list) and hydration skips those rows **while pruning still sees them**; `ServerInventory` gained a separate `hydratableIds` precisely so the two cannot be recollapsed, because narrowing `ids` would make pruning treat a live project as deleted and destroy its local card. Files: `frontend/src/pages/portal/projects/projectSync.ts`, `projectHydrate.ts`, `backend/src/services/projects/projectTreeDto.ts`, plus four test files. PR **#1833**, branch `fix/hydrate-non-active-projects`, SHA `00f641f8`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**All 8 CI checks green on PR #1833** - Backend typecheck, Backend unit tests, Frontend typecheck, Frontend build, secret scan, static security scan. Locally: **138 tests / 10 suites** green across `projectSync|projectHydrate` including a new 10-case suite, and the backend `projectTreeDto` suite **19/19**. **Verified in a real browser against production, with a control, not from the API alone.** Control (before any change): a clean Chromium profile carrying a read-only view-as token for his enrollment loaded `https://enterprise.colaberry.ai/portal/projects` and rendered `CoreOps` plus the Hair Salon training example with `bodyHasAmbit: false`, reproducing his screenshot exactly, while the captured network log showed `/api/portal/projects` returning **200 with Ambit in the body**. That pair is the whole diagnosis in one run: served by the server, dropped by the client. After the remediation the same profile rendered **&quot;Active builds: 2&quot;** with `Ambit` (0/13) and `CoreOps` (22/28) both present and his 22 completions intact. Screenshots inspected, not assumed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The PR is deliberately NOT merged and NOT deployed.** Quincy was unblocked separately by a targeted single-row write setting `enrollments.active_project_id` to Ambit, which makes it hydrate onto his device under the code that is live today. Backed up first to `backup_quincy_active_project_20260825` (full row copy, verified to hold the original `48f67531` pointer), done inside a transaction with before/after selects. **Checked against the seed-revert trap before writing:** nothing in `backend/src/seeds/` touches `active_project_id` and no seed references these projects, so the change survives the next deploy. That write is a workaround for one student and not the fix. **Three other real accounts have a hidden second build for the same reason and are NOT helped by it:** Regina Asafor (`e2c4d802`, &quot;AI Support Inbox Triage Agent&quot;, **21 tasks**), Ikenna (`c16a410c`, 10 tasks), and staff account Taiwo Oludimimu (`c30f8234`, 10 tasks). Only merging #1833 fixes them. Ali&#39;s own enrollment also has a non-active project, but that is the platform record and it is correct for it to stay invisible, which is exactly what the `is_protected` guard preserves. **Ali&#39;s 2026-08-24 email had told Quincy to &quot;open the project switcher, move to Ambit, and start working&quot;** - advice that could not work, because the switcher never listed it; the reply sent today says so plainly rather than leaving him to think he had missed a control. His hand-ticked legacy completions were deliberately left untouched (no task regeneration, no pruning). **Left open for him to answer:** `Ambit` still shows &quot;Oklahoma Turnpike Authority&quot; as its organization, inherited from CoreOps when the two were split. That is cosmetic and is not the bug, and it was not guessed at - the email asks him for the right name rather than inventing one. **Toolchain note worth keeping:** a local `tsc` run reported ~100 syntax errors in third-party `.d.ts` files, which was the documented stale-compiler trap, not a real failure - the repo root hoists TypeScript **4.9.5** while both workspaces require **5.7.3** in their nested `node_modules`. Running the nested compiler gave exit 0 on both, matching CI.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260825-q7m4.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
