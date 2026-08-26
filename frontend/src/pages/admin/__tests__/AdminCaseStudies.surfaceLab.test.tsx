@@ -48,6 +48,19 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
+/**
+ * Mount and open the SURFACES tab, where the lens lab lives.
+ *
+ * The detail page became a seven-tab Story Studio on 2026-08-26 and the lab
+ * moved behind the SURFACES tab. The click is here rather than in each test
+ * because every test in this file is about the lab and none of them is about
+ * navigation — a per-test click would add fifteen identical lines and would let
+ * one be forgotten silently.
+ *
+ * WHAT DOES NOT CHANGE: the page still auto-previews `enterprise` on MOUNT, not
+ * on tab selection, so the write-call assertions below still cover the whole
+ * journey from arrival to the lab.
+ */
 async function mountDetail(): Promise<void> {
   H.mount(
     <Routes>
@@ -55,6 +68,8 @@ async function mountDetail(): Promise<void> {
     </Routes>,
     `/admin/case-studies/${ID}`,
   );
+  await H.settle();
+  H.click('cs-studio-tab-surfaces');
   await H.settle();
 }
 
@@ -118,12 +133,21 @@ describe('switching a lens creates nothing, publishes nothing, mutates nothing',
     // THE LOAD-BEARING TEST. Preview follows the tab; publish follows a
     // constant. If someone ever "tidies" those into one piece of state, this is
     // what goes red.
+    //
+    // STRONGER SINCE THE STUDIO TABS LANDED. The lens is now selected on
+    // SURFACES and the publish button lives on PUBLISH, so the journey crosses
+    // a tab boundary — and `lensSurface` survives that crossing, because it is
+    // page state rather than tab state. This test therefore now proves the
+    // separation holds across exactly the navigation an operator would really
+    // perform: explore a lens, walk over to publish, press the button.
     await mountDetail();
     H.click('cs-lens-tab-training');
     await H.settle();
     H.click('cs-lens-tab-ai-flotation');
     await H.settle();
 
+    H.click('cs-studio-tab-publish');
+    await H.settle();
     H.click(CASE_STUDY_CONTROLS.publish);
     await H.settle();
 
@@ -133,6 +157,8 @@ describe('switching a lens creates nothing, publishes nothing, mutates nothing',
   it('keeps unpublish bound to enterprise too', async () => {
     await mountDetail();
     H.click('cs-lens-tab-refactored');
+    await H.settle();
+    H.click('cs-studio-tab-publish');
     await H.settle();
     H.click(CASE_STUDY_CONTROLS.unpublish);
     await H.settle();

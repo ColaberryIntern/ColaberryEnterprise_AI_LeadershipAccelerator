@@ -8,6 +8,7 @@ import cohortRoutes from './admin/cohortRoutes';
 import leadRoutes from './admin/leadRoutes';
 import organizationRoutes from './admin/organizationRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
+import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
@@ -128,6 +129,15 @@ router.use(organizationRoutes);
 // Case Study admin call, passes through untouched.
 router.use('/api/admin/case-studies/:id/preview', requireAdmin, caseStudySurfaceLabGate);
 router.use(caseStudyAdminRoutes);
+// Story Studio authoring routes. A SIBLING of the review-desk router rather than
+// growth inside it: that file is what a reviewer can do, this one is what an
+// author can do, and keeping the two route tables separately readable is worth
+// more than one import. Mounted identically — no path prefix, `requireAdmin` on
+// each route individually — and every path sits under `/api/admin/case-studies`,
+// so `mgmtSectionGate`'s existing `program` row already covers them. A new
+// prefix would be deny-by-default for every scoped management role while legacy
+// admin passed, which is a surface that half-works and looks fine.
+router.use(caseStudyStudioRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
 router.use(settingsRoutes);

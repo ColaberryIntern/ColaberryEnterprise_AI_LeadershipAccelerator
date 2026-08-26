@@ -135,6 +135,13 @@ export function resolveRequestSurface(_req: Request): CaseStudySurfaceKey {
  * routes cycle and execute router construction inside a service's import graph.
  * The helper is unchanged; only its address is.
  */
+// PRE-EXISTING TYPE ERROR, fixed 2026-08-26. `export type { X } from '...'` is a
+// re-export ONLY: it publishes the name to importers and does NOT bind it in
+// this module's scope, so the three `readonly surface: PublicSurfaceView`
+// declarations below were TS2304 "Cannot find name". The import binds it; the
+// re-export keeps every existing importer working.
+import type { PublicSurfaceView } from '../services/caseStudy/caseStudySurfaceView';
+
 export type { PublicSurfaceView } from '../services/caseStudy/caseStudySurfaceView';
 
 /* ------------------------------------------------------------- responses --- */

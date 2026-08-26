@@ -72,6 +72,9 @@ import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartment
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
+import {
+  ensureCaseStudyStoryAssets, assertCaseStudyStoryAssets,
+} from './db/ensureCaseStudyStoryAssets';
 import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
 import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotificationSchema';
@@ -2417,6 +2420,14 @@ async function start(): Promise<void> {
   // post-check must not take the whole API down, it must be loud in the logs.
   await ensureCaseStudySchema();
   await assertCaseStudySchema();
+  // Story Studio assets: 4 tables (storylines, AI drafts, quotes, charts). A
+  // peer module rather than four more statements in ensureCaseStudySchema,
+  // which is already 508 lines against the 500 ceiling AND is read as source
+  // text by two guard suites that pin its table count and column total. Same
+  // ensure-then-assert shape and the same non-fatal posture: a failed post-check
+  // must be loud in the logs, never take the API down.
+  await ensureCaseStudyStoryAssets();
+  await assertCaseStudyStoryAssets();
   // Ticket Board Performance fix (2026-08-18): idx_tickets_created_at +
   // idx_tickets_status_created_at, CONCURRENTLY (tickets is write-heavy). Powers the
   // new "last 7 days" default board view. See ensureTicketIndexesSchema.ts header.

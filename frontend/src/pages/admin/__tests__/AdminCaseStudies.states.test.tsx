@@ -45,13 +45,25 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-async function mountDetail(): Promise<void> {
+/**
+ * Mount the detail page, optionally opening one of the seven Story Studio tabs.
+ *
+ * The tab is named per test rather than derived, because these tests are not
+ * about capabilities: they are about what four DIFFERENT SITUATIONS say on
+ * screen, and the situation determines which panel has to be visible. Passing
+ * no tab leaves the landing tab open, which is what the load-failure test wants
+ * — it asserts the error path renders instead of any tab at all.
+ */
+async function mountDetail(tab?: string): Promise<void> {
   H.mount(
     <Routes>
       <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
     </Routes>,
     `/admin/case-studies/${ID}`,
   );
+  await H.settle();
+  if (!tab) return;
+  H.click(`cs-studio-tab-${tab}`);
   await H.settle();
 }
 
@@ -126,7 +138,7 @@ describe('AdminCaseStudyDetailPage — the publish gate speaks in full', () => {
 
   it('renders EVERY blocker the gate named, not the first', async () => {
     refusePublish();
-    await mountDetail();
+    await mountDetail('publish');
     H.click(CASE_STUDY_CONTROLS.publish);
     await H.settle();
 
@@ -139,7 +151,7 @@ describe('AdminCaseStudyDetailPage — the publish gate speaks in full', () => {
 
   it('gives each blocker its field and its remedy, so the reason is actionable', async () => {
     refusePublish();
-    await mountDetail();
+    await mountDetail('publish');
     H.click(CASE_STUDY_CONTROLS.publish);
     await H.settle();
 
@@ -153,14 +165,16 @@ describe('AdminCaseStudyDetailPage — the publish gate speaks in full', () => {
 
   it('leaves the publish button enabled after a refusal, so the fix can be retried', async () => {
     refusePublish();
-    await mountDetail();
+    await mountDetail('publish');
     H.click(CASE_STUDY_CONTROLS.publish);
     await H.settle();
     expect((H.el(CASE_STUDY_CONTROLS.publish) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  // The PREVIEW tab, not PUBLISH: this test is about the gate verdict a preview
+  // produces, and `cs-preview` lives on the preview tab.
   it('shows the gate would refuse, with its reasons, from a preview that wrote nothing', async () => {
-    await mountDetail();
+    await mountDetail('preview');
     H.click(CASE_STUDY_CONTROLS.preview);
     await H.settle();
     expect(H.text()).toContain('gate: would refuse');
@@ -192,7 +206,7 @@ describe('AdminCaseStudyDetailPage — a record that will not load', () => {
 
 describe('AdminCaseStudyDetailPage — a private repository is never named in a LABEL', () => {
   it('shows the opaque row handle instead of the owner and name', async () => {
-    await mountDetail();
+    await mountDetail('sources');
     // Assert the OWNER and NAME independently, not just the slashed form. The
     // earlier version of this test checked only `northwind/internal-rules`, so
     // it would have passed while every panel printed the two halves separately.
@@ -212,7 +226,7 @@ describe('AdminCaseStudyDetailPage — a private repository is never named in a 
     // earlier doc comment did exactly that). If someone later redacts this
     // column, this test fails and forces them to decide consciously rather than
     // quietly breaking the review comparison.
-    await mountDetail();
+    await mountDetail('preview');
     H.click('cs-preview');
     await H.settle();
 
@@ -223,7 +237,7 @@ describe('AdminCaseStudyDetailPage — a private repository is never named in a 
   });
 
   it('the PUBLIC projection column never names it, even with the raw column open', async () => {
-    await mountDetail();
+    await mountDetail('preview');
     H.click('cs-preview');
     await H.settle();
 

@@ -83,6 +83,56 @@ export function collectNarrative(content: CaseStudySnapshotContent): readonly Te
     push(`artifacts[${i}].title`, 'an artifact title', a?.title);
     push(`artifacts[${i}].description`, 'an artifact description', a?.description);
   });
+
+  /* ── added 2026-08-26 with the Story Studio: the structured free-text gap ──
+   *
+   * Everything above is prose a reader takes as narrative. Everything below is
+   * STRUCTURED free text — fields whose shape is a label or an explanation
+   * rather than a paragraph, and which finding A-8 recorded as never being
+   * claim-scanned at all. A `%` written into `measurement.methodology` reached
+   * the public page unchecked, and so did one in a metric label.
+   *
+   * WHY THEY ARE ADDED NOW AND NOT BEFORE. An AI drafting feature raises the
+   * volume of text nobody wrote by hand, which makes an unscanned field a
+   * bigger surface than it was. But note carefully what this closes and what it
+   * does not: the SECONDARY control is this list, and it is bounded — the
+   * vocabulary is still the same five token classes, so it widens a net whose
+   * mesh is fixed. The PRIMARY control against AI-written text is quarantine in
+   * `caseStudyAiDraftStore.ts`, which is structural and holds for sentences no
+   * scanner could recognise. This list earns its place at the moment quarantine
+   * ends — after a human has promoted a value — which is exactly when these
+   * fields become reachable.
+   *
+   * METRIC `valueDisplay` REMAINS DELIBERATELY ABSENT, for the reason stated at
+   * the top of this function: it is the verified figure itself, and scanning it
+   * would report every verified metric as an unbacked claim about itself.
+   * `label`, `baseline`, `sample`, `measured`, `methodology` and `limitations`
+   * are NOT the figure — they are prose about it — so they are scanned.
+   */
+  const metricText = (prefix: string, m: any): void => {
+    push(`${prefix}.label`, 'a metric label', m?.label);
+    push(`${prefix}.measurement.baseline`, 'a metric baseline', m?.measurement?.baseline);
+    push(`${prefix}.measurement.sample`, 'a metric sample description', m?.measurement?.sample);
+    push(`${prefix}.measurement.measured`, 'a metric measurement note', m?.measurement?.measured);
+    push(`${prefix}.measurement.methodology`, 'a metric methodology', m?.measurement?.methodology);
+    arr(m?.measurement?.limitations).forEach((l: unknown, j: number) => push(
+      `${prefix}.measurement.limitations[${j}]`, 'a stated metric limitation', l,
+    ));
+  };
+  arr(content.heroMetrics).forEach((m, i) => metricText(`heroMetrics[${i}]`, m));
+  arr(content.measurement?.metrics).forEach((m, i) => metricText(`measurement.metrics[${i}]`, m));
+
+  push('identity.programLabel', 'the programme label', (content.identity as any)?.programLabel);
+  arr(content.contributors).forEach((c, i) => push(
+    `contributors[${i}].role`, 'a contributor role', (c as any)?.role,
+  ));
+  arr(content.architecture?.integrations).forEach((s, i) => push(
+    `architecture.integrations[${i}]`, 'a stated integration', s,
+  ));
+  arr((content.architecture as any)?.dataStores).forEach((s: unknown, i: number) => push(
+    `architecture.dataStores[${i}]`, 'a stated data store', s,
+  ));
+
   return out;
 }
 

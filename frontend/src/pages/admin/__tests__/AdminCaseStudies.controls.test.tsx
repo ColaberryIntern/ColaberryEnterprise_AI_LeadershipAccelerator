@@ -7,6 +7,9 @@ import {
   CASE_STUDY_CONTROLS, SPEC_18_CAPABILITIES,
 } from '../../../components/admin/caseStudy/caseStudyDesk';
 import type { CaseStudyCapability } from '../../../components/admin/caseStudy/caseStudyDesk';
+import {
+  CAPABILITY_TAB, CASE_STUDY_STUDIO_TABS, tabTestIdForCapability,
+} from '../../../components/admin/caseStudy/caseStudyStudioTabs';
 import * as H from '../__fixtures__/domHarness';
 import * as F from '../__fixtures__/caseStudyAdminFixtures';
 import { installCaseStudyApiMocks } from '../__fixtures__/caseStudyApiMocks';
@@ -62,13 +65,37 @@ async function mountList(): Promise<void> {
   await H.settle();
 }
 
-async function mountDetail(): Promise<void> {
+/**
+ * Mount the detail page and OPEN THE TAB THAT OWNS THE CAPABILITY under test.
+ *
+ * The page became a seven-tab Story Studio on 2026-08-26, so a capability is no
+ * longer necessarily on screen at mount. The tab to click is read from
+ * `CAPABILITY_TAB` — the same map the product renders from — rather than
+ * hardcoded here. That matters: a hardcoded mapping in the suite would drift
+ * from the product silently, and this guard would decay into a description of a
+ * layout that no longer exists while staying green.
+ *
+ * A capability whose owning tab is `null` lives on the LIST page and never
+ * reaches this function.
+ */
+async function mountDetail(capability?: CaseStudyCapability): Promise<void> {
   H.mount(
     <Routes>
       <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
     </Routes>,
     `/admin/case-studies/${ID}`,
   );
+  await H.settle();
+
+  if (!capability) return;
+  const tabTestId = tabTestIdForCapability(capability);
+  if (!tabTestId) {
+    throw new Error(
+      `Capability "${capability}" is mapped to no detail-page tab, but a detail mount asked for `
+      + 'it. Either CAPABILITY_TAB is wrong or this test should mount the list page.',
+    );
+  }
+  H.click(tabTestId);
   await H.settle();
 }
 
@@ -144,7 +171,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'attach repos',
     run: async () => {
-      await mountDetail();
+      await mountDetail('attach repos');
       H.setValue('cs-repo-reference', 'colaberry/claims-evals');
       H.click(control('attach repos'));
       await H.settle();
@@ -156,7 +183,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'remove repos',
     run: async () => {
-      await mountDetail();
+      await mountDetail('remove repos');
       H.click(control('remove repos'));
       await H.settle();
       expect(api.removeCaseStudyRepository).toHaveBeenCalledWith(ID, F.PUBLIC_REPO_ID);
@@ -165,7 +192,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'assign repo roles',
     run: async () => {
-      await mountDetail();
+      await mountDetail('assign repo roles');
       H.setValue(control('assign repo roles'), 'backend');
       await H.settle();
       expect(api.setCaseStudyRepositoryRole).toHaveBeenCalledWith(ID, F.PUBLIC_REPO_ID, 'backend');
@@ -174,7 +201,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'sync',
     run: async () => {
-      await mountDetail();
+      await mountDetail('sync');
       H.click(control('sync'));
       await H.settle();
       expect(api.syncCaseStudy).toHaveBeenCalledWith(ID, { trigger: 'manual' });
@@ -185,7 +212,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'inspect provenance',
     run: async () => {
-      await mountDetail();
+      await mountDetail('inspect provenance');
       expect(H.text()).toContain('identity.standfirst');
       expect(H.text()).toContain('human_override');
       api.previewCaseStudy.mockClear();
@@ -199,7 +226,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'review/edit narrative',
     run: async () => {
-      await mountDetail();
+      await mountDetail('review/edit narrative');
       expect(H.text()).toContain('Generated standfirst from the repository README.');
       await applyOverride('review/edit narrative', 'Claims triage copilot for first notice of loss');
       expect(api.applyCaseStudyOverride).toHaveBeenCalledWith(ID, {
@@ -210,7 +237,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'metrics',
     run: async () => {
-      await mountDetail();
+      await mountDetail('metrics');
       expect(H.text()).toContain('Median claim cycle time');
       expect(H.text()).toContain('this figure cannot reach a visitor');
       await applyOverride('metrics', '4.0 days');
@@ -222,7 +249,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'evidence',
     run: async () => {
-      await mountDetail();
+      await mountDetail('evidence');
       expect(H.text()).toContain('no evidence record is linked to this figure');
       await applyOverride('evidence', 'Median of the claims system export.');
       expect(api.applyCaseStudyOverride).toHaveBeenCalledWith(ID, {
@@ -234,7 +261,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'artifacts',
     run: async () => {
-      await mountDetail();
+      await mountDetail('artifacts');
       expect(H.text()).toContain('Routing diagram');
       expect(H.text()).toContain('1 of 2 would reach a visitor');
       await applyOverride('artifacts', 'Agent routing diagram');
@@ -246,7 +273,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'contributors',
     run: async () => {
-      await mountDetail();
+      await mountDetail('contributors');
       expect(H.text()).toContain('Dana Reyes');
       expect(H.text()).toContain('1 anonymous');
       await applyOverride('contributors', 'Lead engineer, claims');
@@ -258,7 +285,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'consent',
     run: async () => {
-      await mountDetail();
+      await mountDetail('consent');
       expect(H.text()).toContain('named without a recorded consent');
       H.toggle('cs-org-consent');
       H.click(control('consent'));
@@ -276,7 +303,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'readiness gaps',
     run: async () => {
-      await mountDetail();
+      await mountDetail('readiness gaps');
       expect(H.text()).toContain('the headline metric has no linked evidence record');
       expect(H.text()).toContain('attach the claims system export to the headline metric');
       expect(H.text()).toContain('Advisory only');
@@ -289,7 +316,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'preview',
     run: async () => {
-      await mountDetail();
+      await mountDetail('preview');
       api.previewCaseStudy.mockClear();
       H.click(control('preview'));
       await H.settle();
@@ -304,7 +331,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'approve',
     run: async () => {
-      await mountDetail();
+      await mountDetail('approve');
       H.click(control('approve'));
       await H.settle();
       expect(api.approveCaseStudySnapshot).toHaveBeenCalledWith(ID, F.SNAPSHOT_DRAFT_ID);
@@ -313,7 +340,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'publish',
     run: async () => {
-      await mountDetail();
+      await mountDetail('publish');
       // Readiness is 54/100 and "developing". That must not disable anything:
       // the gate decides, on the server, on every call.
       expect((H.el(control('publish')) as HTMLButtonElement).disabled).toBe(false);
@@ -325,7 +352,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'unpublish',
     run: async () => {
-      await mountDetail();
+      await mountDetail('unpublish');
       H.click(control('unpublish'));
       await H.settle();
       expect(api.unpublishCaseStudy).toHaveBeenCalledWith(ID, { surfaceKey: 'enterprise' });
@@ -334,7 +361,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'archive',
     run: async () => {
-      await mountDetail();
+      await mountDetail('archive');
       H.click(control('archive'));
       await H.settle();
       expect(api.archiveCaseStudy).toHaveBeenCalledWith(ID);
@@ -343,7 +370,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'sync history',
     run: async () => {
-      await mountDetail();
+      await mountDetail('sync history');
       H.click(control('sync history'));
       await H.settle();
       expect(api.listCaseStudySyncRuns).toHaveBeenCalledWith(ID, { limit: 20, offset: 0 });
@@ -353,7 +380,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
   {
     name: 'published-vs-draft diff',
     run: async () => {
-      await mountDetail();
+      await mountDetail('published-vs-draft diff');
       api.previewCaseStudy.mockClear();
       H.click(control('published-vs-draft diff'));
       await H.settle();
@@ -384,5 +411,50 @@ describe('spec §18 coverage guard', () => {
   it('gives every capability a distinct data-testid', () => {
     const ids = SPEC_18_CAPABILITIES.map((name) => CASE_STUDY_CONTROLS[name]);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+/**
+ * THE GUARD ON THE TAB MAP.
+ *
+ * `mountDetail` navigates by reading `CAPABILITY_TAB`, so a capability missing
+ * from that map, or pointing at a tab that does not exist, would make the
+ * capability's own test fail with a confusing "no control rendered" rather than
+ * naming the real cause. These three assertions name it directly.
+ */
+describe('Story Studio tab map', () => {
+  it('assigns every spec §18 capability to a real tab or explicitly to none', () => {
+    const tabKeys = new Set(CASE_STUDY_STUDIO_TABS.map((t) => t.key));
+    const bad: string[] = [];
+    for (const capability of SPEC_18_CAPABILITIES) {
+      const tab = CAPABILITY_TAB[capability];
+      if (tab !== null && !tabKeys.has(tab)) bad.push(`${capability} -> ${tab}`);
+    }
+    expect(bad).toEqual([]);
+    // Non-vacuity: the map must actually be populated, or the loop above passes
+    // by iterating nothing and this guard proves only that it ran.
+    expect(SPEC_18_CAPABILITIES.length).toBeGreaterThan(20);
+  });
+
+  it('covers six of the seven tabs, and SURFACES is the one exception by design', () => {
+    const used = new Set(
+      SPEC_18_CAPABILITIES.map((c) => CAPABILITY_TAB[c]).filter((t): t is NonNullable<typeof t> => t !== null),
+    );
+    const uncovered = CASE_STUDY_STUDIO_TABS
+      .map((t) => t.key).filter((key) => !used.has(key));
+
+    // SURFACES owns no spec §18 capability, and that is correct rather than a
+    // gap: the four-lens lab shipped on 2026-08-26, long after §18 was written,
+    // so §18 has no vocabulary for it. Asserting the exact exception rather
+    // than "at most one" means a SECOND tab drifting out of coverage fails
+    // here, by name, instead of being absorbed by a loose bound.
+    expect(uncovered).toEqual(['surfaces']);
+  });
+
+  it('leaves exactly the four list-page capabilities unmapped', () => {
+    const unmapped = SPEC_18_CAPABILITIES.filter((c) => CAPABILITY_TAB[c] === null);
+    expect(unmapped.sort()).toEqual([
+      'candidate states', 'create from Project', 'create from a repo collection', 'dashboard',
+    ]);
   });
 });
