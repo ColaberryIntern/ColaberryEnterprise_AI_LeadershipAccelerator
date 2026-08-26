@@ -26,7 +26,26 @@
 
 /* ------------------------------------------------------------------ hero --- */
 
-.cbv2-story__hero { display: grid; justify-items: start; gap: var(--space-5); min-width: 0; }
+/* MEASURED, NOT ESTIMATED. On the live record the masthead was 1166px tall at
+   1440px and 2309px at 390px - two and a half phone screens of hero before the
+   first sentence of the story. The shared `.cbv2-pagehero` pays --space-16 top
+   and bottom for pages whose hero is a headline and a button; this one stacks a
+   crumb, an eyebrow, a title, a standfirst, a badge, an indicator rail, a facts
+   grid, a figure card, two buttons and a share row, so the same padding reads as
+   a hole. Scoped under .cbv2-story so no other page inherits the decision. */
+.cbv2-story .cbv2-pagehero { padding-block: var(--space-10); }
+
+/* The band between the masthead and the first heading was --space-24 (96px) on
+   both sides of the boundary. One step down is still a clear section break and
+   gives back roughly 100px per boundary across eight of them. */
+.cbv2-story .cbv2-story__section { padding-block: var(--space-16); }
+
+.cbv2-story__hero { display: grid; justify-items: start; gap: var(--space-4); min-width: 0; }
+
+/* `.cbv2-pagehero h1` ships `margin: var(--space-4) 0` for pages that are not a
+   grid. This hero IS a grid, so that margin is added to the row gap and the
+   title floats. */
+.cbv2-story .cbv2-story__hero h1 { margin: 0; }
 
 /* The way back to the index, above the title rather than buried at the end. */
 .cbv2-story__crumb {
@@ -46,9 +65,17 @@
 
 /* The context strip. `minmax(0, ...)` so a long programme name cannot widen a
    column and push the page sideways at 320px. */
+/* Two columns from 320px up rather than one. Six single-column rows cost ~54px
+   of masthead each on a phone. 7rem is measured, not guessed: at 320px the wrap
+   leaves 272px of content, and two 112px tracks plus the 16px gap is 240 - two
+   columns fit, where 8rem needed 276 and silently stayed at one.
+   THE GAP STAYS --space-4 ON BOTH AXES. Widening the column gap to --space-5
+   pushed the desktop row from six facts to five-plus-a-wrap: at 1440 the six
+   12rem tracks plus five 16px gaps come to exactly 1232px, which is exactly the
+   wrap. Four pixels of extra gap is a second row. */
 .cbv2-story__facts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
   gap: var(--space-4);
   margin: 0;
   width: 100%;
@@ -68,8 +95,28 @@
 }
 .cbv2-story__value { margin: 0; overflow-wrap: anywhere; }
 
-.cbv2-pagehero .cbv2-story__term { color: var(--text-on-inverse); opacity: 0.75; }
-.cbv2-pagehero .cbv2-story__value { color: var(--text-on-inverse); }
+/* SCOPED TO THE FACTS STRIP, and the scope is the whole point.
+   These two rules used to read `.cbv2-pagehero .cbv2-story__term/__value`, which
+   matches EVERY descendant of the masthead - including the same two classes
+   inside the hero's figure card, which is painted `--surface-card`. The result
+   shipped: Sample, Methodology and Limitations rendered white on white at
+   1.00:1, measured on the live page, five elements, completely invisible. The
+   evidence context is the thing spec 23 says makes a figure readable, so the
+   card a reader met was a large blank box - which is what "too much white gap,
+   empty space" turned out to describe. Descendant selectors on an inverted
+   surface must name what they invert; `.cbv2-pagehero X` names a background,
+   not a component. */
+.cbv2-pagehero .cbv2-story__facts .cbv2-story__term {
+  color: var(--text-on-inverse);
+  opacity: 0.75;
+}
+.cbv2-pagehero .cbv2-story__facts .cbv2-story__value { color: var(--text-on-inverse); }
+
+/* And said again from the light side, so the card is legible even if some other
+   stylesheet reaches for the same pair. Belt and braces on the one defect this
+   page has now shipped twice in two different places. */
+.cbv2-story__metric .cbv2-story__term { color: var(--text-muted); opacity: 1; }
+.cbv2-story__metric .cbv2-story__value { color: var(--text-body); }
 
 /* --------------------------------------------------------- hero figures --- */
 
@@ -286,7 +333,19 @@
   scroll-snap-align: start;
 }
 
+/* THE 320px OVERFLOW LIVED HERE, and it was not the track.
+   `.cbv2-cs-sr-only` is `position: absolute`, and an absolutely positioned box
+   is only clipped by an ancestor's overflow if that ancestor sits between it and
+   its CONTAINING BLOCK. Nothing inside this track was positioned, so the
+   containing block was the initial one, the sr-only span in each offscreen slide
+   escaped the track's `overflow-x: auto` entirely, and it extended the ROOT
+   scroll area to its own right edge. Measured on the live page: documentElement
+   scrollWidth 709 against a 390px viewport and 613 against 320px, and deleting
+   just those three spans in the live DOM dropped both to the viewport width
+   exactly. One `position: relative` puts the containing block back inside the
+   scroller, and the span is clipped with everything else. */
 .cbv2-story-carousel__link {
+  position: relative;
   display: grid;
   gap: var(--space-2);
   height: 100%;
@@ -348,3 +407,143 @@
   min-width: 0;
 }
 .cbv2-story__diagram h3 { margin: 0; }
+
+/* -------------------------------------------------------- inline figures --- */
+/* A picture met while the reading is still going on, between two sections and
+   belonging to neither. It carries no section padding of its own: the sections
+   on either side already pay for the space, and a third helping turns a reading
+   break into a gap. */
+
+.cbv2-story-figures { min-width: 0; }
+
+.cbv2-story-figure {
+  display: grid;
+  gap: var(--space-3);
+  /* Narrower than the prose column on purpose. A full-bleed 1232px picture stops
+     being a figure inside an argument and becomes a banner between two of them. */
+  max-width: var(--container-sm);
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.cbv2-story-figure__link {
+  position: relative;
+  display: block;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  text-decoration: none;
+}
+.cbv2-story-figure__link:focus-visible {
+  outline: var(--border-2) solid var(--border-focus);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+/* `contain` and a height cap, not a crop. This is a template: the next record
+   may carry a 3000x400 banner or a 400x3000 phone capture, and `cover` would
+   silently cut the evidence out of an evidence image. The sunken ground is what
+   the letterboxing lands on, so an odd ratio reads as deliberate framing.
+   30rem, because the column is `--container-sm` (640px) and 640 x 3/4 is 480px
+   exactly: the ordinary 4:3 photograph fills the frame with no bars at all, and
+   only something taller than 4:3 letterboxes. At 26rem every 4:3 image had grey
+   bars down both sides for no reason. */
+.cbv2-story-figure__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 30rem;
+  object-fit: contain;
+  background: var(--surface-sunken);
+}
+
+.cbv2-story-figure__caption {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cbv2-story-figure__kind {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+}
+.cbv2-story-figure__title {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-strong);
+}
+
+/* ------------------------------------------------------------ indicators --- */
+/* Counts, on the dark masthead. No colour coding: colour here would have to mean
+   good or bad, and a count of technologies is neither. */
+
+.cbv2-story__indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.cbv2-story__indicator {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  overflow-wrap: anywhere;
+}
+
+/* The number is the `dd` and the noun the `dt`, so a screen reader hears the
+   term before its value; `order` puts the number first on screen without
+   reversing the markup. */
+.cbv2-story__indicator-count {
+  order: -1;
+  margin: 0;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-on-inverse);
+}
+.cbv2-story__indicator-label {
+  font-size: var(--fs-body-sm);
+  color: var(--text-on-inverse);
+  opacity: 0.78;
+}
+
+/* The count chip beside a section heading. Baseline-aligned to the h2 rather
+   than centred, so it sits on the type rather than floating beside it. */
+.cbv2-story__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.cbv2-story__heading h2 { margin: 0; }
+
+.cbv2-story__count {
+  /* Positioned for the same reason the carousel slide is: it holds an
+     absolutely positioned `.cbv2-cs-sr-only`, and without a containing block
+     inside this chip that span escapes to the initial one and joins the page's
+     scroll area. That is the exact mechanism behind the 320px overflow this
+     pass fixed; it is cheaper to not repeat it than to measure it again. */
+  position: relative;
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-sunken);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* Repository visibility. Same tag shape as the role beside it, because they are
+   the same kind of fact and a second shape would imply a second importance. */
+.cbv2-story__repo-visibility { white-space: nowrap; }

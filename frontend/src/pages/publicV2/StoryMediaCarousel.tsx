@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ARTIFACT_TYPE_LABELS } from '../../config/caseStudySurfaces';
 import type { StorySlide } from './storyMediaModel';
 
@@ -36,6 +36,15 @@ import type { StorySlide } from './storyMediaModel';
  * ground. This band sits on `cbv2-section`, which is light, so a ghost arrow
  * here would be near-white on near-white - the same 1.06:1 failure the /stories
  * masthead shipped and had to be fixed.
+ *
+ * THE ARROWS GO AWAY WHEN THE TRACK CANNOT MOVE, which is not a hypothetical.
+ * Measured on the live page at 1440px: three slides at 320px sit inside a
+ * 1232px track, so `scrollWidth === clientWidth`, and a press moved
+ * `scrollLeft` from 0 to 0. Two visible controls that do nothing is the same
+ * defect as the one-slide carousel `CAROUSEL_MINIMUM_SLIDES` already refuses -
+ * that floor only ever caught the too-few-slides half of it, and the
+ * they-all-fit half shipped. See `measure()` for why "we do not know" is
+ * treated as "keep them".
  */
 
 export interface StoryMediaCarouselProps {
@@ -70,6 +79,40 @@ export function StoryMediaCarousel({
   label = 'Approved images from this project',
 }: StoryMediaCarouselProps): React.ReactElement | null {
   const trackRef = useRef<HTMLUListElement>(null);
+  /* Starts TRUE. See `measure` for why the unknown case keeps the controls. */
+  const [canScroll, setCanScroll] = useState(true);
+
+  /**
+   * Does the track have anywhere to go?
+   *
+   * ABSENT LAYOUT, SAY NOTHING. A track that has not been laid out reports
+   * `scrollWidth === clientWidth === 0`, which is indistinguishable from "the
+   * slides all fit" by arithmetic and is not the same thing at all. jsdom is
+   * permanently in that state, and so is a real browser for the frames before
+   * layout settles. Treating it as "cannot scroll" would delete the controls in
+   * every unit test that presses them and would flash them out of existence on a
+   * slow first paint, so the unknown case leaves `canScroll` alone: a control
+   * that is present and works is a smaller error than a control that vanished.
+   *
+   * The `+ 1` absorbs sub-pixel track widths, which otherwise report a one-pixel
+   * scroll range and bring back the arrows this exists to remove.
+   */
+  const measure = useCallback((): void => {
+    const track = trackRef.current;
+    if (!track) return;
+    if (track.scrollWidth === 0 && track.clientWidth === 0) return;
+    setCanScroll(track.scrollWidth > track.clientWidth + 1);
+  }, []);
+
+  /* Re-asked on resize, because whether the slides fit is a question about the
+     viewport and the answer changes when a phone is turned sideways. Keyed on
+     the slide count too: a different record is a different track. */
+  useEffect(() => {
+    measure();
+    if (typeof window === 'undefined') return undefined;
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [measure, slides.length]);
 
   /**
    * One press, one viewport-ish step.
@@ -141,27 +184,32 @@ export function StoryMediaCarousel({
       </ul>
 
       {/* After the track in DOM order, so tabbing reaches the pictures first and
-          a reader who never presses an arrow still meets every slide. */}
-      <div className="cbv2-story-carousel__controls">
-        <button
-          type="button"
-          className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm"
-          onClick={() => step(-1)}
-          data-testid="carousel-prev"
-        >
-          <span aria-hidden="true">&larr;</span>
-          <span className="cbv2-cs-sr-only">Scroll to previous images</span>
-        </button>
-        <button
-          type="button"
-          className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm"
-          onClick={() => step(1)}
-          data-testid="carousel-next"
-        >
-          <span aria-hidden="true">&rarr;</span>
-          <span className="cbv2-cs-sr-only">Scroll to more images</span>
-        </button>
-      </div>
+          a reader who never presses an arrow still meets every slide. Absent
+          entirely when the track has nowhere to go - not disabled, because a
+          disabled button is still a promise that pressing it would have done
+          something, and here there was never anything to do. */}
+      {canScroll ? (
+        <div className="cbv2-story-carousel__controls">
+          <button
+            type="button"
+            className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm"
+            onClick={() => step(-1)}
+            data-testid="carousel-prev"
+          >
+            <span aria-hidden="true">&larr;</span>
+            <span className="cbv2-cs-sr-only">Scroll to previous images</span>
+          </button>
+          <button
+            type="button"
+            className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm"
+            onClick={() => step(1)}
+            data-testid="carousel-next"
+          >
+            <span aria-hidden="true">&rarr;</span>
+            <span className="cbv2-cs-sr-only">Scroll to more images</span>
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

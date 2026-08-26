@@ -34,13 +34,25 @@
   border: 0;
 }
 
+/* THE QUIET META LABELS ARE `--text-muted`, NOT `--text-subtle`, and that is a
+   legibility fix rather than a taste one. Every label in this file that used
+   `--text-subtle` is 12px or 14px painted on `--surface-card`, which the browser
+   computes at 3.36:1 - below the 4.5:1 WCAG 2.1 AA floor for text this size, and
+   measured on the live page across eight classes at once: the eyebrows above
+   Capabilities, Stack and Integrations, the measurement terms, the artifact
+   type labels, the timeline dates, the filter tallies and the notes.
+   `--text-muted` is the next step up the same neutral ramp and measures 5.33:1.
+   Nothing else about these labels changes; they are still the quietest text on
+   the surface, they are simply readable now. Found by the rendered-contrast
+   sweep in `tests/systemV2/caseStudyPublic.e2e.js`, which exists because
+   token-level checks cannot see what a browser actually paints. */
 .cbv2-cs-eyebrow {
   margin: 0 0 var(--space-1);
   font-family: var(--font-mono);
   font-size: var(--fs-overline);
   letter-spacing: var(--ls-overline);
   text-transform: uppercase;
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 .cbv2-cs-tags {
@@ -69,7 +81,7 @@
 .cbv2-cs-note {
   margin: 0;
   font-size: var(--fs-caption);
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 /* Focus is never removed, only restyled. Both an outline and a ring, so the
@@ -272,7 +284,7 @@
 .cbv2-cs-filters__count {
   font-family: var(--font-mono);
   font-size: var(--fs-overline);
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 .cbv2-cs-filters__options {
@@ -311,7 +323,7 @@
 .cbv2-cs-filters__tally {
   font-family: var(--font-mono);
   font-size: var(--fs-overline);
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 /* -------------------------------------------------------------- timeline --- */
@@ -336,7 +348,7 @@
   font-family: var(--font-mono);
   font-size: var(--fs-overline);
   letter-spacing: var(--ls-wide);
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 .cbv2-cs-timeline__label {
@@ -402,7 +414,7 @@
   font-size: var(--fs-overline);
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 .cbv2-cs-arch__edges {
@@ -451,7 +463,7 @@
   font-size: var(--fs-overline);
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 .cbv2-cs-measure__value {
@@ -541,7 +553,7 @@
   font-size: var(--fs-overline);
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
-  color: var(--text-subtle);
+  color: var(--text-muted);
 }
 
 .cbv2-cs-artifact__title {

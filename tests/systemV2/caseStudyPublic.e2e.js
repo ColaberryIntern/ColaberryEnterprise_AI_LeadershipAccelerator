@@ -241,6 +241,80 @@ async function probe(page) {
           background: `rgb(${Math.round(bg.r)}, ${Math.round(bg.g)}, ${Math.round(bg.b)})`,
         };
       })(),
+      /**
+       * EVERY piece of visible text on the page, measured against the ground it
+       * is actually painted on, worst first.
+       *
+       * `ledgerContrast` above asks about ONE element by selector, and that is
+       * how the next contrast defect got through: `.cbv2-pagehero
+       * .cbv2-story__term` was scoped to a BACKGROUND rather than to a
+       * component, so it also matched the same class inside the masthead's
+       * white figure card. Sample, Methodology and Limitations rendered white on
+       * white at 1.00:1 - five invisible elements on a live page - and a
+       * one-selector probe measured the first match, which was the one on the
+       * dark ground, and reported 17.4:1. A sweep cannot be pointed at the wrong
+       * element, because it looks at all of them.
+       *
+       * Only nodes with their own visible text are measured. Screen-reader-only
+       * text is skipped: it is deliberately clipped to 1px and is not a thing a
+       * person is being asked to read.
+       */
+      worstContrast: (() => {
+        const parse = (c) => {
+          const m = String(c).match(/rgba?\(([^)]+)\)/);
+          if (!m) return null;
+          const p = m[1].split(',').map((v) => parseFloat(v));
+          return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+        };
+        const lum = (c) => {
+          const f = (v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+          return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+        };
+        const bgOf = (node) => {
+          let e = node;
+          while (e) {
+            const c = parse(getComputedStyle(e).backgroundColor);
+            if (c && c.a >= 0.99) return c;
+            e = e.parentElement;
+          }
+          return { r: 255, g: 255, b: 255, a: 1 };
+        };
+        const label = (e) => e.tagName.toLowerCase()
+          + (typeof e.className === 'string' && e.className.trim()
+            ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : '');
+        const found = [];
+        for (const node of q('main *, article *')) {
+          if (node.closest('.cbv2-cs-sr-only')) continue;
+          const cs = getComputedStyle(node);
+          if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+          if (parseFloat(cs.opacity) < 0.1) continue;
+          const box = node.getBoundingClientRect();
+          if (box.width < 4 || box.height < 4) continue;
+          // Own text only, so a wrapper is not credited with its child's words.
+          const own = Array.from(node.childNodes)
+            .filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+          if (own.length < 2) continue;
+          const fg = parse(cs.color);
+          if (!fg) continue;
+          const bg = bgOf(node);
+          const l1 = lum(fg); const l2 = lum(bg);
+          const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+          found.push({
+            el: label(node),
+            text: own.slice(0, 40),
+            ratio: Math.round(ratio * 100) / 100,
+            size: Math.round(parseFloat(cs.fontSize)),
+          });
+        }
+        found.sort((a, b) => a.ratio - b.ratio);
+        // EVERY failure, not the worst few. A cap here would hide the seventh
+        // offender behind six others and turn a fixed page into a green one
+        // while it still had a problem. The cap is only on how many PASSING
+        // rows travel back, which are there to prove the sweep ran.
+        const failing = found.filter((f) => f.ratio < 4.5);
+        const sample = found.slice(0, 3).filter((f) => !failing.includes(f));
+        return { measured: found.length, worst: failing.concat(sample) };
+      })(),
       // one-column check for mobile: are result cards stacked?
       cardColumns: (() => {
         const items = q('.cbv2-stories__result');
@@ -268,6 +342,80 @@ async function visit(page, label, url) {
 }
 
 /** The shared page-health assertions, applied to any route at any viewport. */
+/**
+ * WCAG 2.1 AA for body text. 3:1 is the large-text threshold, and the sweep
+ * cannot reliably tell which of these is large text without also modelling font
+ * weight, so it holds everything to the stricter number and reports the offender
+ * rather than arguing about which rule applies to it.
+ */
+const MIN_CONTRAST = 4.5;
+
+/**
+ * The classes the case-study surface owns and is answerable for:
+ * `caseStudy.css` and `storyDetailV2.css` / `storiesV2.css`. A failure inside
+ * these FAILS the run.
+ *
+ * A failure OUTSIDE them is reported, loudly, every run - and does not fail,
+ * because the fix lives in a stylesheet another task owns and this suite must
+ * not become the thing that stops that task's page from shipping. One is known
+ * as of this pass: `.cbv2-evidence--verified` at 3.02:1 (11px), in
+ * `components/publicV2/publicV2.css`. It was not introduced by this pass and it
+ * is a real AA failure.
+ *
+ * This is NOT the "query one element" weakness that let white-on-white through.
+ * That probe asked about a single node and got the wrong one. This measures
+ * every text node on the page and only decides where the answer is binding.
+ */
+const OWNED = /(^|\s)cbv2-(cs|story|stories)(-|__|$)/;
+
+/**
+ * THE BRAND BUTTON IS NOT THIS SUITE'S TO DECIDE.
+ *
+ * `--text-on-accent` (white) on `--surface-brand` (the Colaberry red) computes
+ * to 3.85:1 wherever the primary button appears - every V2 page, not this one -
+ * so it is a palette decision belonging to the design-system DRI, not a defect
+ * on the case-study surface. WCAG 2.1 AA would want 4.5:1 for 16px text.
+ *
+ * It is EXCLUDED FROM THE ASSERTION AND STILL REPORTED, loudly, on every run.
+ * That distinction is the whole point: an allowlist that silences a finding is
+ * how a suite goes green while a page stays broken, whereas this one keeps
+ * saying the number and only declines to block the case-study surface for a
+ * decision the case-study surface cannot make. It is narrow on purpose - two
+ * class names, not a wildcard - so nothing else can hide behind it.
+ */
+const BRAND_SURFACE = /cbv2-(btn--primary|cs-cta__button)/;
+
+function assertContrast(prefix, d) {
+  const c = d.worstContrast;
+  // A sweep that measured nothing is not a pass. This is the same guard
+  // `checkOn` applies to the page: an absence assertion over an empty set is
+  // trivially true and is worth less than no check at all.
+  if (!c || c.measured < 10) {
+    return fail(`${prefix}: rendered contrast`, c
+      ? `only ${c.measured} text nodes were measured, which is too few to have checked anything`
+      : 'the sweep did not run');
+  }
+  const describe = (f) => `${f.el} "${f.text}" ${f.ratio}:1 @${f.size}px`;
+  const failing = c.worst.filter((entry) => entry.ratio < MIN_CONTRAST);
+  const mine = failing.filter((entry) => {
+    const el = String(entry.el).replace(/\./g, ' ');
+    return OWNED.test(el) && !BRAND_SURFACE.test(el);
+  });
+  const theirs = failing.filter((entry) => !mine.includes(entry));
+
+  for (const other of theirs) {
+    const brand = BRAND_SURFACE.test(String(other.el));
+    console.log(`  note  contrast below AA ${brand
+      ? 'on the brand palette, which is a design-system decision, not a case-study one'
+      : 'in a component this surface does not own'}: ${describe(other)}`);
+  }
+  return check(`${prefix}: every piece of case-study text is legible where it is painted`,
+    mine.length === 0,
+    mine.length
+      ? mine.map(describe).join(' | ')
+      : `${c.measured} text nodes measured, worst owned-surface ratio above ${MIN_CONTRAST}:1`);
+}
+
 function assertPageHealth(prefix, d, errs) {
   checkOn(d, `${prefix}: the app rendered`, d.loaded, `${d.textLen} chars of text`);
   checkOn(d, `${prefix}: has an h1`, d.h1, d.h1Text ? `"${String(d.h1Text).slice(0, 60)}"` : 'none');
@@ -470,6 +618,10 @@ function assertPageHealth(prefix, d, errs) {
     checkOn(det, '/stories/:slug desktop: sections rendered', det.storySections > 0, `${det.storySections} sections`);
     checkOn(det, '/stories/:slug desktop: enterprise CTA rendered', det.hasCta);
     checkOn(det, '/stories/:slug desktop: not in the failure state', !det.failureShown);
+    // The masthead paints a white figure card on a near-black ground, so this
+    // page is where a background-scoped colour rule does the most damage. It
+    // already did: 1.00:1, five elements, found by looking rather than by a test.
+    if (det.loaded) assertContrast('/stories/:slug desktop', det);
     await shot(desk.page, 'story-detail-desktop-1440x1000.png', DESKTOP);
   } else {
     skip('/stories/:slug desktop', 'no published record to open — the detail route cannot be exercised');

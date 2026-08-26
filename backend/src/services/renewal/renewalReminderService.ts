@@ -205,12 +205,20 @@ async function release(r: DueReminder, err: unknown): Promise<void> {
  * Every active subscription with the person attached. Deliberately unfiltered
  * beyond `status = 'active'`: the exclusions live in the pure selector so they
  * are testable, and so a dry run can report what it refused and why.
+ *
+ * The enrollment columns are carried for that reason. `subscriptions.status`
+ * describes a paid term, not a person, and nothing retires it when a student
+ * withdraws or is moved to a later cohort, so the selector needs the
+ * enrollment's own lifecycle to decide whether this human should be mailed.
  */
 export async function loadActiveSubscriptions(): Promise<RenewalSubscriptionRow[]> {
   return (await sequelize.query(
     `SELECT s.id, s.enrollment_id, s.plan, s.status, s.amount_cents,
             s.current_period_end, s.canceled_at,
-            e.email, e.full_name
+            e.email, e.full_name,
+            e.status AS enrollment_status,
+            e.access_starts_at,
+            e.notifications_paused_at
        FROM subscriptions s
        JOIN enrollments e ON e.id = s.enrollment_id
       WHERE s.status = 'active'`,
