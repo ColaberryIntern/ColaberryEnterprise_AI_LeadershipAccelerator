@@ -234,8 +234,21 @@ export interface AgentAuthorizationSummary {
  * `agent.authorization` ai_events row, grouped for one agent. Sibling read to
  * `countAbacChecks()` above (same table, same event_type), scoped to one agent
  * instead of the whole fleet. Zeros for an agent with no authorization events
- * yet — honest absence, not a fabricated "all clear." */
-export async function getAgentAuthorizationSummary(agentId: string, days = 30): Promise<AgentAuthorizationSummary> {
+ * yet — honest absence, not a fabricated "all clear."
+ *
+ * Matches on EITHER the real `AiAgent.id` OR the bare `agentName` string
+ * (2026-08-26 production-verification fix): `agentActionAuthorizationBridge.ts`
+ * — the one real caller behind Reese's own autonomous-outreach HITL check —
+ * passes `agentId: input.agentName` (the literal name, not a UUID) into
+ * `authorizeAgentAction()`, so `ai_events.agent_id` genuinely holds `'Reese'`
+ * for those rows, confirmed against real production data (13 real rows found
+ * under the name, 0 under her UUID). A UUID-only match would have silently
+ * shown 0 authorization checks for the one agent whose HITL evaluation this
+ * page most needs to prove. The write-side inconsistency itself is a
+ * separate, pre-existing issue this fix does not touch — flagged, not fixed
+ * here, since correcting it changes how every other historical row for this
+ * agent is interpreted, a bigger call than a read-side query fix. */
+export async function getAgentAuthorizationSummary(agentId: string, agentName: string, days = 30): Promise<AgentAuthorizationSummary> {
   try {
     const rows = (await sequelize.query(
       `SELECT
@@ -244,10 +257,10 @@ export async function getAgentAuthorizationSummary(agentId: string, days = 30): 
          COUNT(*)::int AS n
        FROM ai_events
        WHERE event_type = 'agent.authorization'
-         AND agent_id = :agentId
+         AND agent_id IN (:agentId, :agentName)
          AND created_at >= NOW() - (:days || ' days')::interval
        GROUP BY 1, 2`,
-      { type: QueryTypes.SELECT, replacements: { agentId, days } },
+      { type: QueryTypes.SELECT, replacements: { agentId, agentName, days } },
     )) as Array<{ verdict: string | null; enforced: boolean | null; n: number }>;
 
     const summary: AgentAuthorizationSummary = { window_days: days, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 };

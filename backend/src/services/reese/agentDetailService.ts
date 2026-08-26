@@ -351,7 +351,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   const [personaVersionHistory, costRows, authorizationSummary] = await Promise.all([
     getPersonaVersionHistory(agent.id),
     agentCostRows(30, agent.id),
-    getAgentAuthorizationSummary(agent.id, 30),
+    getAgentAuthorizationSummary(agent.id, agent.agent_name, 30),
   ]);
   const costSummary = costRows[0] ? { cost_usd: costRows[0].costUsd, runs: costRows[0].runs } : null;
 
