@@ -138,13 +138,28 @@ export function isSectionSupported(
  * The sections this record shows, in the order the surface asked for: the
  * surface's own order (or the spec default), minus anything the surface hides,
  * minus anything the record cannot support. A key named twice is emitted once.
+ *
+ * THE ATTRIBUTION FLOOR IS SUBTRACTED FROM THE HIDDEN SET BEFORE THE WALK, so a
+ * surface profile cannot hide a band that is on its own floor. Order it last,
+ * rename it, put it under a different masthead — but a lens may not choose to be
+ * silent about who built the work, where the source is, or what is being
+ * offered. That is the whole difference between "AI Flotation should not imply
+ * it built this" and "AI Flotation cannot hide who did".
+ *
+ * The floor constrains the LENS, never the DATA: `isSectionSupported` still runs
+ * afterwards and is still authoritative, so a record with no contributors stays
+ * quiet. A required band is a band the surface may not suppress, not a band the
+ * page must invent.
  */
 export function visibleSections(
   detail: PublicCaseStudyDetail,
   surface: PublicSurfaceView,
 ): readonly CaseStudySectionKey[] {
   const order = surface.sectionOrder.length > 0 ? surface.sectionOrder : DEFAULT_SECTION_ORDER;
-  const hidden = new Set<CaseStudySectionKey>(surface.hiddenSections);
+  const floor = new Set<CaseStudySectionKey>(surface.requiredSections ?? []);
+  const hidden = new Set<CaseStudySectionKey>(
+    surface.hiddenSections.filter((key) => !floor.has(key)),
+  );
   const seen = new Set<CaseStudySectionKey>();
   const out: CaseStudySectionKey[] = [];
   for (const key of order) {

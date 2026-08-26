@@ -30,7 +30,10 @@ import { z } from 'zod';
 // The SAME projection the public API renders with — never a second renderer.
 // See `caseStudyAdminPreview.ts` for why that matters and why it lives there.
 import { projectPreviewDetail } from './caseStudyAdminPreview';
-import type { PublicCaseStudyDetail } from '../../types/caseStudyPublic';
+import type { CaseStudySurfacePreview } from './caseStudyAdminPreview';
+// The SAME surface view the public detail response carries — never a second one.
+import { surfaceView } from './caseStudySurfaceView';
+import { getCaseStudySurfaceProfile } from './caseStudySurfaceProfiles';
 import CaseStudySnapshot from '../../models/CaseStudySnapshot';
 import CaseStudySyncRun from '../../models/CaseStudySyncRun';
 import { ensureTraceId } from '../../utils/requestContext';
@@ -38,7 +41,6 @@ import { hashCanonical } from '../../utils/canonicalHash';
 import { applyOverrides } from './caseStudySnapshotOverrides';
 import { persistCaseStudySnapshot } from './caseStudySnapshotStore';
 import { evaluateCaseStudyPublication } from './caseStudyPublicationService';
-import type { CaseStudyPublishDecision } from './caseStudyPublicationService';
 import { scoreCaseStudyReadiness } from './caseStudyReadinessService';
 import type { CaseStudyReadinessReport } from './caseStudyReadinessService';
 import {
@@ -94,28 +96,13 @@ export interface CaseStudySyncRunPage {
   readonly offset: number;
 }
 
-export interface CaseStudySurfacePreview {
-  readonly surfaceKey: CaseStudySurfaceKey;
-  /** Which version the preview is OF. `null` when nothing has been built yet. */
-  readonly snapshot: CaseStudySnapshotSummary | null;
-  readonly source: 'approved_snapshot' | 'latest_draft' | 'none';
-  /** The real gate, not a second opinion. `blockers` are verbatim, for the UI. */
-  readonly decision: CaseStudyPublishDecision;
-  /** ADVISORY. Reported beside the decision, never consulted by it. */
-  readonly readiness: CaseStudyReadinessReport | null;
-  /**
-   * What a visitor would actually see, rendered through the SAME projection the
-   * public API uses (spec §34). Null when there is no snapshot to project.
-   *
-   * This is deliberately not a second renderer. If the preview built its own
-   * view, an admin could approve something subtly different from what ships —
-   * and the review step, which is the entire justification for a human in this
-   * loop, would be reviewing the wrong artifact. The projection is also where
-   * private repositories are dropped and pending metrics become unrepresentable,
-   * so a preview that skipped it would show the admin more than the public gets.
-   */
-  readonly projection: PublicCaseStudyDetail | null;
-}
+/**
+ * `CaseStudySurfacePreview` MOVED to `caseStudyAdminPreview.ts` — the module
+ * that already owns the preview concept — when adding its `surface` field took
+ * this file past CLAUDE.md's 500-line hard ceiling. Re-exported so every
+ * existing importer keeps its import path.
+ */
+export type { CaseStudySurfacePreview };
 
 export const MAX_SYNC_RUN_LIMIT = 100;
 export const DEFAULT_SYNC_RUN_LIMIT = 20;
@@ -487,6 +474,7 @@ export async function previewSurfaceProjection(input: unknown): Promise<CaseStud
 
   return {
     surfaceKey: data.surfaceKey,
+    surface: surfaceView(getCaseStudySurfaceProfile(data.surfaceKey)),
     snapshot: shown ? toSnapshotSummary(shown) : null,
     source,
     decision,

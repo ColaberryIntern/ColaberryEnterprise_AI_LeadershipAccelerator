@@ -653,6 +653,30 @@ describe('previewSurfaceProjection (§34)', () => {
       .rejects.toMatchObject({ error_class: 'ValidationError' });
     expect(evaluateCaseStudyPublication).not.toHaveBeenCalled();
   });
+
+  it('returns the surface view OF THE REQUESTED SURFACE, not of a default', async () => {
+    // Without this, a preview could return the Enterprise profile under a
+    // Training `surfaceKey` and the client would render the Enterprise order
+    // labelled Training — four tabs that agree with each other and disagree
+    // with the server. The band order is what the client composes a lens from,
+    // so it is what is asserted.
+    caseStudy.findByPk.mockResolvedValue(caseStudyRow());
+    snapshots.findOne.mockResolvedValue(null);
+    evaluateCaseStudyPublication.mockResolvedValue({
+      allowed: false, blockers: [], codes: ['surface_not_publishable'], summary: '',
+    });
+
+    const training = await previewSurfaceProjection({ caseStudyId: ID, surfaceKey: 'training' });
+    const enterprise = await previewSurfaceProjection({ caseStudyId: ID, surfaceKey: 'enterprise' });
+
+    expect(training.surface.key).toBe('training');
+    expect(enterprise.surface.key).toBe('enterprise');
+    expect(training.surface.sectionOrder).not.toEqual(enterprise.surface.sectionOrder);
+    // And the attribution floor travels with it, or the client has nothing to
+    // enforce.
+    expect([...training.surface.requiredSections].sort())
+      .toEqual(['contributors', 'cta', 'repositories']);
+  });
 });
 
 /* ─────────────────────────────────────────────────────────────── privacy ──── */

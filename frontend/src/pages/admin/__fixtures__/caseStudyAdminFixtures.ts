@@ -1,8 +1,11 @@
 import type {
   CaseStudyDetail, CaseStudyPublishBlocker, CaseStudyReadinessReport, CaseStudyRepositoryRecord,
-  CaseStudySnapshotSummary, CaseStudySummary, CaseStudySurfacePreview, CaseStudySyncResult,
-  CaseStudySyncRunSummary,
+  CaseStudySnapshotSummary, CaseStudySummary, CaseStudySurfaceKey, CaseStudySurfacePreview,
+  CaseStudySyncResult, CaseStudySyncRunSummary,
 } from '../../../services/caseStudyAdminTypes';
+import type {
+  CaseStudySectionKey, PublicCaseStudyDetail, PublicSurfaceView,
+} from '../../../services/caseStudyPublicTypes';
 
 /**
  * Fixtures for the Case Study admin suites — one realistic record, shaped like
@@ -258,10 +261,173 @@ export function detailFixture(over: Partial<CaseStudyDetail> = {}): CaseStudyDet
   };
 }
 
-export function previewFixture(over: Partial<CaseStudySurfacePreview> = {}): CaseStudySurfacePreview {
-  const blockers = blockersFixture();
+/**
+ * The four surface orders, mirroring
+ * `backend/src/services/caseStudy/caseStudySurfaceProfiles.ts`.
+ *
+ * MIRRORED, NOT IMPORTED, for the reason the whole of `caseStudyAdminTypes.ts`
+ * mirrors: the frontend has no path to `backend/src`. What matters for the
+ * suites is that they are genuinely DIFFERENT from each other — a fixture that
+ * gave four lenses one order would let the lens model regress to four identical
+ * pages with every test still green, which is precisely the state this work
+ * exists to leave behind.
+ */
+export const SURFACE_ORDERS: Readonly<
+  Record<CaseStudySurfaceKey, readonly CaseStudySectionKey[]>
+> = Object.freeze({
+  enterprise: ['hero', 'situation', 'build', 'architecture', 'measurement',
+    'roadmap', 'contributors', 'artifacts', 'repositories', 'cta'],
+  training: ['hero', 'situation', 'contributors', 'build', 'artifacts',
+    'architecture', 'measurement', 'roadmap', 'repositories', 'cta'],
+  'ai-flotation': ['hero', 'architecture', 'build', 'repositories', 'measurement',
+    'situation', 'roadmap', 'artifacts', 'contributors', 'cta'],
+  refactored: ['hero', 'build', 'architecture', 'repositories', 'artifacts',
+    'roadmap', 'measurement', 'situation', 'contributors', 'cta'],
+});
+
+/** The attribution floor, identical on all four surfaces. */
+export const REQUIRED_SECTIONS: readonly CaseStudySectionKey[] =
+  Object.freeze(['contributors', 'repositories', 'cta'] as CaseStudySectionKey[]);
+
+const SURFACE_BRANDS: Readonly<Record<CaseStudySurfaceKey, string>> = Object.freeze({
+  enterprise: 'Colaberry Enterprise',
+  training: 'Colaberry Training',
+  'ai-flotation': 'AI Flotation',
+  refactored: 'Refactored',
+});
+
+export function surfaceViewFixture(
+  key: CaseStudySurfaceKey = 'enterprise',
+  over: Partial<PublicSurfaceView> = {},
+): PublicSurfaceView {
+  return {
+    key,
+    brandLabel: SURFACE_BRANDS[key],
+    hero: { eyebrow: `${key} · shipped work`, title: 'What we shipped.', description: 'Assembled from repository evidence.' },
+    cta: {
+      eyebrow: 'Same shape, different workflow',
+      heading: 'Bring us a workflow worth improving.',
+      buttonLabel: 'Map an opportunity',
+      href: '/lab',
+    },
+    sectionOrder: SURFACE_ORDERS[key],
+    hiddenSections: [],
+    requiredSections: REQUIRED_SECTIONS,
+    emphasis: ['outcome', 'measurement'],
+    defaultSort: 'featured',
+    ...over,
+  };
+}
+
+/**
+ * What a visitor would see — the full public detail, not a loose subset.
+ *
+ * EVERY BAND IS POPULATED ON PURPOSE. `isSectionSupported` hides a band whose
+ * data is empty, so a sparse fixture would make all four lenses render the same
+ * three bands and the "the lenses genuinely differ" assertions would pass
+ * vacuously while proving nothing.
+ */
+export function projectionFixture(
+  over: Partial<PublicCaseStudyDetail> = {},
+): PublicCaseStudyDetail {
   return {
     surfaceKey: 'enterprise',
+    slug: 'claims-triage-copilot',
+    title: 'Claims triage copilot',
+    standfirst: 'Generated standfirst from the repository README.',
+    // Consent is not recorded, so the projection does not name the client.
+    organizationLabel: 'A national insurance carrier',
+    industry: 'Insurance',
+    primaryCapability: 'agentic-workflow',
+    capabilities: ['agentic-workflow'],
+    stack: ['TypeScript'],
+    programLabel: 'Delivery cohort',
+    // The record says staff built this. No lens may imply otherwise.
+    builtBy: 'colaberry_team',
+    verificationClass: 'verified',
+    verificationMethod: 'repo',
+    publishedAt: '2026-08-15T00:00:00.000Z',
+    updatedAt: '2026-08-20T00:00:00.000Z',
+    heroImageUrl: null,
+    engagementDuration: 'Twelve weeks',
+    productionStatus: 'shipped',
+    // Only the verified, publishable figure survives.
+    heroMetrics: [{
+      label: 'Reopened claims', valueDisplay: '3%', unit: null,
+      verificationClass: 'verified', verificationMethod: 'client',
+      baseline: 'approximately 9%', sample: 'four claim queues',
+      methodology: 'Counted from the carrier export before and after.',
+      limitations: ['One quarter of data.'],
+    }],
+    situation: {
+      heading: 'The situation',
+      body: ['Adjusters were triaging by hand.'],
+      constraints: ['No PHI could leave the carrier network.'],
+      goals: ['Cut reopened claims.'],
+    },
+    timeline: [{
+      date: '2026-03-04', endDate: null, label: 'First working slice merged',
+      detail: 'The triage queue rendered live claims.', sourceKind: 'repository',
+    }],
+    architecture: {
+      narrative: ['A queue in front, a classifier behind it.'],
+      stack: ['TypeScript', 'Postgres'],
+      capabilities: ['agentic-workflow'],
+      integrations: ['Carrier claims export'],
+      dataStores: ['Postgres'],
+      diagram: {
+        nodes: [{ key: 'api', label: 'Triage API', kind: 'service' }],
+        edges: [],
+      },
+      diagramSource: null,
+    },
+    measurement: {
+      narrative: ['Measured against the quarter before the rollout.'],
+      metrics: [{
+        label: 'Reopened claims', valueDisplay: '3%', unit: null,
+        verificationClass: 'verified', verificationMethod: 'client',
+        baseline: 'approximately 9%', sample: 'four claim queues',
+        methodology: 'Counted from the carrier export before and after.',
+        limitations: ['One quarter of data.'],
+      }],
+    },
+    roadmap: [{ label: 'Second carrier', status: 'in_progress', detail: null }],
+    contributors: [{
+      displayMode: 'named', displayName: 'A. Rivera', role: 'Lead engineer',
+      kind: 'colaberry_team',
+    }],
+    artifacts: [{
+      access: 'open', artifactType: 'architecture', presentation: 'evidence',
+      title: 'Routing diagram', description: null,
+      url: 'https://example.org/routing.png', previewUrl: null,
+    }],
+    repositories: [{
+      label: 'claims-router', role: 'primary',
+      url: 'https://github.com/colaberry/claims-router', lastCommitDate: '2026-08-01',
+    }],
+    privateRepositoryCount: 1,
+    anonymousContributorCount: 1,
+    cta: {
+      eyebrow: 'Same shape, different workflow',
+      heading: 'Bring us a workflow worth improving.',
+      buttonLabel: 'Map an opportunity',
+      href: '/lab',
+    },
+    seo: {
+      title: 'Claims triage copilot', description: 'A triage copilot.',
+      canonicalUrl: 'https://enterprise.colaberry.ai/stories/claims-triage-copilot',
+      ogImageUrl: null, ogType: 'article',
+    },
+    ...over,
+  };
+}
+
+export function previewFixture(over: Partial<CaseStudySurfacePreview> = {}): CaseStudySurfacePreview {
+  const blockers = blockersFixture();
+  const surfaceKey = (over.surfaceKey ?? 'enterprise') as CaseStudySurfaceKey;
+  return {
+    surfaceKey,
+    surface: surfaceViewFixture(surfaceKey),
     snapshot: snapshotFixture(SNAPSHOT_DRAFT_ID, 3, 'draft'),
     source: 'latest_draft',
     decision: {
@@ -271,25 +437,7 @@ export function previewFixture(over: Partial<CaseStudySurfacePreview> = {}): Cas
       summary: `Cannot publish:\n- ${blockers[0].message}\n- ${blockers[1].message}`,
     },
     readiness: readinessFixture(),
-    projection: {
-      slug: 'claims-triage-copilot',
-      title: 'Claims triage copilot',
-      standfirst: 'Generated standfirst from the repository README.',
-      // Consent is not recorded, so the projection does not name the client.
-      organizationLabel: 'A national insurance carrier',
-      industry: 'Insurance',
-      primaryCapability: 'agentic-workflow',
-      capabilities: ['agentic-workflow'],
-      stack: ['TypeScript'],
-      verificationClass: 'verified',
-      // Only the verified, publishable figure survives.
-      heroMetrics: [{ label: 'Reopened claims', valueDisplay: '3%' }],
-      contributors: [{ role: 'Lead engineer', displayMode: 'named' }],
-      artifacts: [{ title: 'Routing diagram', access: 'open' }],
-      repositories: [{ label: 'claims-router', url: 'https://github.com/colaberry/claims-router' }],
-      privateRepositoryCount: 1,
-      anonymousContributorCount: 1,
-    },
+    projection: projectionFixture({ surfaceKey }),
     ...over,
   };
 }

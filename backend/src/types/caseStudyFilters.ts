@@ -129,6 +129,25 @@ export interface CaseStudySurfaceProfile {
   readonly defaultSort: CaseStudySortKey;
   readonly sectionOrder: readonly CaseStudySectionKey[];
   readonly hiddenSections: readonly CaseStudySectionKey[];
+  /**
+   * THE ATTRIBUTION FLOOR (SURFACE_LENS_MODEL §5.4). Bands a lens may never
+   * hide, whatever it puts in `hiddenSections`.
+   *
+   * This exists because the other two fields on this object are enough, on
+   * their own, to make a false claim out of true data. Reorder an
+   * architecture-led record under an AI Flotation masthead, hide
+   * `contributors`, and the page implies AI Flotation built something
+   * `builtBy: 'colaberry_team'` says it did not — without a single word of copy
+   * changing. Section order is an editorial lever; attribution is not, and this
+   * is the field that makes the difference structural instead of a note in a
+   * document.
+   *
+   * The floor constrains the LENS, never the DATA. A band on the floor still
+   * hides when the record genuinely has nothing to say — `isSectionSupported`
+   * stays authoritative. A lens may not choose to be silent about attribution;
+   * a record with no contributors is still allowed to be quiet.
+   */
+  readonly requiredSections: readonly CaseStudySectionKey[];
   readonly cta: CaseStudyCtaProfile;
   /**
    * What this surface leads with — Enterprise emphasises outcome and

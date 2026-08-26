@@ -8,6 +8,7 @@ import {
   CaseStudyRepositoriesPanel, CaseStudySyncPanel, formatDate, readProvenance, readSnapshot,
 } from '../../components/admin/caseStudy';
 import type { ProvenanceVersionOption } from '../../components/admin/caseStudy';
+import CaseStudySurfaceLab from './CaseStudySurfaceLab';
 import {
   applyCaseStudyOverride, approveCaseStudySnapshot, archiveCaseStudy, attachCaseStudyRepository,
   describeApiError, getCaseStudy, listCaseStudySyncRuns, previewCaseStudy, publishBlockersFrom,
@@ -16,7 +17,8 @@ import {
 } from '../../services/caseStudyAdminApi';
 import type {
   CaseStudyDetail, CaseStudyPublishBlocker, CaseStudyRepoRole, CaseStudySnapshotSummary,
-  CaseStudySurfacePreview, CaseStudySyncResult, CaseStudySyncRunSummary, CaseStudyUpdatePatch,
+  CaseStudySurfaceKey, CaseStudySurfacePreview, CaseStudySyncResult, CaseStudySyncRunSummary,
+  CaseStudyUpdatePatch,
 } from '../../services/caseStudyAdminApi';
 
 /**
@@ -36,7 +38,21 @@ import type {
  * button again.
  */
 
-const SURFACE = 'enterprise' as const;
+/**
+ * THE PUBLISH SURFACE. Deliberately a constant, and deliberately NOT the surface
+ * the lens lab is looking at.
+ *
+ * Until 2026-08-26 one `SURFACE` constant served preview, publish, unpublish and
+ * the publication lookup, so there was nothing to get wrong. The lens lab makes
+ * the preview surface a moving value, and the obvious next step — pointing
+ * publish at the same state — is the one genuinely dangerous version of this
+ * feature: an operator idly exploring the Training lens would be one click from
+ * publishing to it, on a surface whose framing copy has never been reviewed and
+ * whose publish gate refuses it for a reason they would then be tempted to work
+ * around. Preview follows the tab. Publish follows this constant. They are two
+ * decisions and they stay two names.
+ */
+const PUBLISH_SURFACE: CaseStudySurfaceKey = 'enterprise';
 const SYNC_RUN_PAGE = { limit: 20, offset: 0 };
 
 function AdminCaseStudyDetailPage(): React.ReactElement {
@@ -56,6 +72,24 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
   const [preview, setPreview] = useState<CaseStudySurfacePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  /**
+   * Which lens the lab is showing. State, not a constant — but note what it is
+   * NOT wired to: `onPublish` and `onUnpublish` below both read
+   * `PUBLISH_SURFACE`, never this. See the constant's comment.
+   */
+  const [lensSurface, setLensSurface] = useState<CaseStudySurfaceKey>(PUBLISH_SURFACE);
+  /**
+   * Whether the RAW SNAPSHOT panel has been opened.
+   *
+   * It exists because the lens lab now loads a preview on arrival, and
+   * `CaseStudyPreviewPanel`'s left-hand column is a verbatim dump of the
+   * snapshot — which names private repositories, by a disclosed §34 exception
+   * pinned in `AdminCaseStudies.states.test.tsx`. That exception is defensible
+   * for a reviewer who deliberately opened it and indefensible as something that
+   * appears on screen for anyone who merely navigated to the page. So the lab
+   * auto-loads and the raw dump stays behind its own click, exactly as before.
+   */
+  const [rawPanelOpen, setRawPanelOpen] = useState(false);
 
   const [lastSync, setLastSync] = useState<CaseStudySyncResult | null>(null);
   const [runs, setRuns] = useState<readonly CaseStudySyncRunSummary[] | null>(null);
@@ -142,7 +176,7 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
     setActionNote(null);
     setBlockers([]);
     try {
-      const result = await publishCaseStudy(id, { surfaceKey: SURFACE });
+      const result = await publishCaseStudy(id, { surfaceKey: PUBLISH_SURFACE });
       setActionNote(result.outcome === 'published'
         ? `Published snapshot v${result.snapshotVersion} to the enterprise surface.`
         : 'Nothing changed: that snapshot was already live on this surface.');
@@ -159,22 +193,58 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
     }
   };
 
-  const onPreview = async () => {
+  /**
+   * Render one lens. A READ, and the only thing switching a lens does.
+   *
+   * On failure the previous payload is CLEARED rather than left on screen. A
+   * non-allowlisted admin selecting the Training tab gets a 403 here, and
+   * keeping the Enterprise projection visible under a heading that now says
+   * Training would show an operator one surface's content labelled as another's
+   * — which is the exact confusion this whole lab exists to remove.
+   */
+  const runPreview = useCallback(async (surfaceKey: CaseStudySurfaceKey): Promise<void> => {
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-      const result = await previewCaseStudy(id, { surfaceKey: SURFACE });
+      const result = await previewCaseStudy(id, { surfaceKey });
       setPreview(result);
       // The preview carries the REAL gate decision, so its reasons are shown in
       // the same place a refused publish puts them.
       setBlockers(result.decision.blockers);
       setBlockerSource(result.decision.blockers.length > 0 ? 'preview' : null);
     } catch (err) {
+      setPreview(null);
+      setBlockers([]);
+      setBlockerSource(null);
       setPreviewError(describeApiError(err, 'this preview'));
     } finally {
       setPreviewLoading(false);
     }
-  };
+  }, [id]);
+
+  /**
+   * Select a lens. It sets which lens is being LOOKED at and re-reads. It does
+   * not touch `PUBLISH_SURFACE`, and there is no code path from this callback to
+   * `publishCaseStudy`.
+   */
+  const onSelectLens = useCallback((surfaceKey: CaseStudySurfaceKey): void => {
+    setLensSurface(surfaceKey);
+    void runPreview(surfaceKey);
+  }, [runPreview]);
+
+  /**
+   * Render the LIVE lens on arrival, so the desk opens showing what is actually
+   * published rather than an empty panel and an instruction.
+   *
+   * It fires for `PUBLISH_SURFACE` and only for `PUBLISH_SURFACE` — never for a
+   * restricted one. That is deliberate: an admin who is not on the surface lab
+   * allowlist must never meet a 403 they did not ask for, and enterprise is the
+   * one surface every admin may always preview. Switching to a restricted lens
+   * stays an explicit act.
+   */
+  useEffect(() => {
+    void runPreview(PUBLISH_SURFACE);
+  }, [runPreview]);
 
   const onLoadRuns = async () => {
     setRunsLoading(true);
@@ -190,7 +260,8 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
     }
   };
 
-  const enterprisePublication = detail?.publications.find((p) => p.surfaceKey === SURFACE) ?? null;
+  const enterprisePublication = detail?.publications
+    .find((p) => p.surfaceKey === PUBLISH_SURFACE) ?? null;
   const publishedSnapshotId = enterprisePublication?.publishedSnapshotId ?? null;
 
   const onDiff = async () => {
@@ -310,7 +381,7 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
         }}
         onPublish={() => { void onPublish(); }}
         onUnpublish={() => {
-          void act('this unpublish', () => unpublishCaseStudy(id, { surfaceKey: SURFACE }),
+          void act('this unpublish', () => unpublishCaseStudy(id, { surfaceKey: PUBLISH_SURFACE }),
             'Unpublished. Snapshots, evidence and publication history are kept.');
         }}
         onArchive={() => {
@@ -376,9 +447,21 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
         error={provenanceError}
       />
 
+      <CaseStudySurfaceLab
+        recordTitle={record.title}
+        activeSurface={lensSurface}
+        onSelectSurface={onSelectLens}
+        detail={detail}
+        preview={preview}
+        loading={previewLoading}
+        error={previewError}
+      />
+
       <CaseStudyPreviewPanel
-        preview={preview} loading={previewLoading} error={previewError}
-        onPreview={() => { void onPreview(); }}
+        preview={rawPanelOpen ? preview : null}
+        loading={previewLoading} error={previewError}
+        surfaceKey={lensSurface}
+        onPreview={() => { setRawPanelOpen(true); void runPreview(lensSurface); }}
       />
 
       <CaseStudySyncPanel

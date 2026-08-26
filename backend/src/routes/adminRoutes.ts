@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { auditMiddleware } from '../middlewares/auditMiddleware';
-import { requireSection } from '../middlewares/authMiddleware';
+import { requireAdmin, requireSection } from '../middlewares/authMiddleware';
 import { mgmtSectionGate } from '../middlewares/mgmtSectionGate';
+import { caseStudySurfaceLabGate } from '../middlewares/caseStudySurfaceLabGate';
 import authRoutes from './admin/authRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import leadRoutes from './admin/leadRoutes';
@@ -111,6 +112,21 @@ router.use(organizationRoutes);
 // section check entirely. Its PATH_SECTION entry maps it to 'program', the same
 // section /api/admin/projects uses: a Case Study is the publishable projection
 // of a Project, so the roles that manage Projects manage these.
+// Case Study four-lens surface lab — the ONLY code path in the system that
+// renders a non-enterprise surface. Mounted PATH-SCOPED, above the sub-router it
+// guards, and deliberately not as `router.use(gate)` inside
+// caseStudyAdminRoutes: sub-routers here mount with no path prefix, so an
+// unscoped guard inside one applies to every later router's paths as well. That
+// has already caused a production outage in this repo.
+//
+// `requireAdmin` is repeated here rather than relied upon from the sub-router
+// because middleware on this mount runs BEFORE the route's own guards, and the
+// lab gate needs `req.admin.sub` to exist. It is scoped to this one path, so it
+// cannot leak onto a sibling.
+//
+// It refuses a REQUEST, not a route: an `enterprise` preview, and every other
+// Case Study admin call, passes through untouched.
+router.use('/api/admin/case-studies/:id/preview', requireAdmin, caseStudySurfaceLabGate);
 router.use(caseStudyAdminRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);

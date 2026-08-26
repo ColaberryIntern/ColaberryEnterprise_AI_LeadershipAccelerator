@@ -15,6 +15,20 @@ jest.mock('../../../services/caseStudyAdminApi');
 const api = adminApi as jest.Mocked<typeof adminApi>;
 
 /**
+ * WALL-CLOCK ALLOWANCE, ADDED 2026-08-26 (CC-20260826-h4k9), AND WHY.
+ *
+ * The detail page now renders the live lens on arrival, so every mount in this
+ * file does one more fetch-and-settle cycle than it did before. In isolation
+ * that is nothing; inside a 140-suite parallel run on a loaded machine it pushes
+ * the slowest tests here past jest's 5s default, and they fail as timeouts with
+ * no assertion involved. Naming it rather than leaving a flake for the next
+ * reader to rediscover.
+ *
+ * NOTHING BELOW ASSERTS LESS BECAUSE OF THIS LINE. It buys time, not leniency.
+ */
+jest.setTimeout(30000);
+
+/**
  * SPEC §18 COVERAGE, MACHINE-CHECKED.
  *
  * `REQUIRED_CONTROLS` names every capability spec §18 requires of
