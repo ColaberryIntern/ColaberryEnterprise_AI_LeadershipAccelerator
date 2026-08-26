@@ -71,7 +71,7 @@ function tree(over: Partial<BackendProjectTree> = {}): BackendProjectTree {
 }
 
 const inventory = (ids: string[], activeId: string | null = null): ServerInventory =>
-  ({ known: true, ids, activeId });
+  ({ known: true, ids, hydratableIds: ids, activeId });
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('a server-side rename reaches a device that already holds the project', () => {

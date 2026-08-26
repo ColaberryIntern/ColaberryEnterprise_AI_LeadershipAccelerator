@@ -375,6 +375,27 @@ export interface PublicSurfaceView {
   readonly cta: PublicCaseStudyCta;
   readonly sectionOrder: readonly CaseStudySectionKey[];
   readonly hiddenSections: readonly CaseStudySectionKey[];
+  /**
+   * THE ATTRIBUTION FLOOR. Bands a lens may not hide, whatever `hiddenSections`
+   * says — `visibleSections()` subtracts this set from the hidden set before it
+   * walks the order.
+   *
+   * It arrives on the wire rather than living as a client constant because the
+   * floor is part of the surface contract. A client-side copy would be a second
+   * source of truth that can drift from the server's without either side
+   * failing, which is how a guarantee quietly stops being one.
+   *
+   * `sectionOrder` and `hiddenSections` between them are enough to make a false
+   * claim out of true data: reorder an architecture-led record under a delivery
+   * masthead, hide "who built it", and the page implies an authorship the record
+   * explicitly denies — with no copy change anywhere. This is the field that
+   * makes that unexpressible rather than merely discouraged.
+   *
+   * Optional on the type because a response from a server that predates the
+   * field must not crash the page; absent reads as an empty floor, which is the
+   * behaviour that shipped before it existed.
+   */
+  readonly requiredSections?: readonly CaseStudySectionKey[];
   readonly emphasis: readonly string[];
   readonly defaultSort: CaseStudySortKey;
 }

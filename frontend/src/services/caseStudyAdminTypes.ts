@@ -20,6 +20,10 @@
  * live, and it is the only shape in this file that says `allowed`.
  */
 
+import type {
+  PublicCaseStudyDetail, PublicSurfaceView,
+} from './caseStudyPublicTypes';
+
 /* ─────────────────────────────────────────────────────────── vocabulary ──── */
 
 export type CaseStudyStatus = 'draft' | 'review' | 'approved' | 'published' | 'archived';
@@ -297,38 +301,37 @@ export interface UnpublishCaseStudyResult {
 
 /**
  * What a visitor would actually see, already sanitised by
- * `caseStudyPublicProjection`. The admin desk renders the fields below beside
- * the raw snapshot so the difference between the two is visible; the complete
- * payload is also shown verbatim, which is why the index signature is here
- * rather than a partial restatement of the whole public contract (that contract
- * belongs to the public module, not to this admin client).
+ * `caseStudyPublicProjection`.
+ *
+ * IT IS THE PUBLIC CONTRACT, NOT A LOOSE COPY OF IT. Until 2026-08-26 this file
+ * declared a `PublicCaseStudyProjection` — fifteen named fields plus a
+ * `[key: string]: unknown` escape hatch — because the admin desk only read
+ * counts off it and dumped the rest as JSON. The surface lens lab reads the
+ * record's SHAPE (is there a situation, is there a timeline, does the
+ * architecture carry anything) to decide which bands a lens would render, and it
+ * does that through the same `isSectionSupported` the public page uses. A type
+ * with an index signature cannot feed that function, and casting into it would
+ * be asserting a shape rather than having one.
+ *
+ * So the admin client now references the public module's `PublicCaseStudyDetail`
+ * rather than restating it. That is not the "mirror the backend" rule being
+ * broken — `caseStudyPublicTypes.ts` is the frontend module that owns this
+ * contract, and pointing at it is the opposite of a second statement of it.
  */
-export interface PublicCaseStudyProjection {
-  readonly slug: string;
-  readonly title: string;
-  readonly standfirst: string | null;
-  readonly organizationLabel: string | null;
-  readonly industry: string | null;
-  readonly primaryCapability: string | null;
-  readonly capabilities: readonly string[];
-  readonly stack: readonly string[];
-  readonly verificationClass: 'verified' | 'anonymized' | 'illustrative';
-  readonly heroMetrics: readonly { readonly label: string; readonly valueDisplay: string }[];
-  readonly contributors: readonly { readonly role: string; readonly displayMode: string }[];
-  readonly artifacts: readonly { readonly title: string; readonly access: string }[];
-  readonly repositories: readonly { readonly label: string; readonly url: string }[];
-  readonly privateRepositoryCount: number;
-  readonly anonymousContributorCount: number;
-  readonly [key: string]: unknown;
-}
-
 export interface CaseStudySurfacePreview {
   readonly surfaceKey: CaseStudySurfaceKey;
+  /**
+   * The surface profile, built by the same helper the public detail response
+   * uses. This is what makes a four-lens preview possible: band order, the
+   * hidden set and the attribution floor are all properties of the surface, and
+   * a bare `surfaceKey` string carries none of them.
+   */
+  readonly surface: PublicSurfaceView;
   readonly snapshot: CaseStudySnapshotSummary | null;
   readonly source: 'approved_snapshot' | 'latest_draft' | 'none';
   /** The REAL gate decision, not a second opinion. Blockers are verbatim. */
   readonly decision: CaseStudyPublishDecision;
   /** ADVISORY, reported beside the decision and never consulted by it. */
   readonly readiness: CaseStudyReadinessReport | null;
-  readonly projection: PublicCaseStudyProjection | null;
+  readonly projection: PublicCaseStudyDetail | null;
 }

@@ -219,3 +219,48 @@ export async function countAbacChecks(days = 7): Promise<number> {
     return 0;
   }
 }
+
+export interface AgentAuthorizationSummary {
+  window_days: number;
+  total: number;
+  allow: number;
+  approval: number;
+  block: number;
+  enforced_count: number; // subset of the above where mode was genuinely 'enforce', not shadow
+}
+
+/** Per-agent breakdown of real `authorizeAgentAction()` verdicts (Trust Contract
+ * Phase 1, 2026-08-26) — the real, already-written `metadata.verdict` on each
+ * `agent.authorization` ai_events row, grouped for one agent. Sibling read to
+ * `countAbacChecks()` above (same table, same event_type), scoped to one agent
+ * instead of the whole fleet. Zeros for an agent with no authorization events
+ * yet — honest absence, not a fabricated "all clear." */
+export async function getAgentAuthorizationSummary(agentId: string, days = 30): Promise<AgentAuthorizationSummary> {
+  try {
+    const rows = (await sequelize.query(
+      `SELECT
+         metadata->>'verdict' AS verdict,
+         (metadata->>'enforced')::boolean AS enforced,
+         COUNT(*)::int AS n
+       FROM ai_events
+       WHERE event_type = 'agent.authorization'
+         AND agent_id = :agentId
+         AND created_at >= NOW() - (:days || ' days')::interval
+       GROUP BY 1, 2`,
+      { type: QueryTypes.SELECT, replacements: { agentId, days } },
+    )) as Array<{ verdict: string | null; enforced: boolean | null; n: number }>;
+
+    const summary: AgentAuthorizationSummary = { window_days: days, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 };
+    for (const row of rows) {
+      const count = Number(row.n) || 0;
+      summary.total += count;
+      if (row.verdict === 'allow') summary.allow += count;
+      else if (row.verdict === 'approval') summary.approval += count;
+      else if (row.verdict === 'block') summary.block += count;
+      if (row.enforced) summary.enforced_count += count;
+    }
+    return summary;
+  } catch {
+    return { window_days: days, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 };
+  }
+}

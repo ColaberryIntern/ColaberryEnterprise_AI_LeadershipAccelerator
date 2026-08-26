@@ -1,4 +1,5 @@
 import { CLIENT_FIELD_ALLOWLIST, type ClientObjectKind } from '../../../modules/delivery/clientVisibility';
+import DeliveryEngagement from '../../../models/DeliveryEngagement';
 import DeliveryProject from '../../../models/DeliveryProject';
 import DeliveryDecision from '../../../models/DeliveryDecision';
 import DeliveryChangeRequest from '../../../models/DeliveryChangeRequest';
@@ -37,6 +38,7 @@ import DeliveryClientAcceptance from '../../../models/DeliveryClientAcceptance';
  */
 
 const MODEL_BY_KIND = {
+  engagement: DeliveryEngagement,
   project: DeliveryProject,
   decision: DeliveryDecision,
   change_request: DeliveryChangeRequest,
@@ -83,6 +85,15 @@ describe('client allowlist matches the real models', () => {
     expect(CLIENT_FIELD_ALLOWLIST.change_request).not.toContain('impact_internal');
   });
 
+  it('keeps source_lead_id OUT of the engagement projection', () => {
+    // The sharpest negative on this model. `source_lead_id` links an engagement back to
+    // the marketing lead it came from - our funnel record, not the client's. Showing it
+    // would tell a client we tracked them as a lead, and which one.
+    expect(CLIENT_FIELD_ALLOWLIST.engagement).toContain('name');
+    expect(CLIENT_FIELD_ALLOWLIST.engagement).not.toContain('source_lead_id');
+    expect(CLIENT_FIELD_ALLOWLIST.engagement).not.toContain('metadata');
+    expect(CLIENT_FIELD_ALLOWLIST.engagement).not.toContain('engagement_type');
+  });
   it('accounts for every allowlist kind, so a new one cannot skip this check', () => {
     // Without this, adding a ninth kind would silently go unverified: the loop above only
     // covers what MODEL_BY_KIND names.
