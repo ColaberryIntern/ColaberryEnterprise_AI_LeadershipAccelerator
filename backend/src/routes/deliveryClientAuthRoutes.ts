@@ -89,7 +89,16 @@ async function findExistingClientMemberships(email: string): Promise<ExistingCli
     .map((m: any) => ({
       platformIdentityId: identity.id,
       deliveryProjectId: m.delivery_project_id,
-      role: m.role,
+      // The column is `delivery_role`, NOT `role`. This read said `m.role` when it
+      // shipped, which is always undefined, so isClientSideRole() below rejected every
+      // membership and NOBODY could sign in - a valid Google account with a real
+      // membership still got the generic refusal, indistinguishable from having none.
+      //
+      // Nothing caught it: the model row is `any` here, so tsc had nothing to check, and
+      // the unit tests build membership objects by hand and therefore tested the assumed
+      // shape rather than the model's. `deliveryProjectMemberContract.test.ts` now pins
+      // the real attribute name so this cannot regress silently.
+      role: m.delivery_role,
     }))
     .filter((m: ExistingClientMembership) => isClientSideRole(m.role));
 }

@@ -190,7 +190,10 @@ async function main(): Promise<void> {
     defaults: {
       delivery_project_id: project.id,
       platform_identity_id: identity.id,
-      role: 'client_reviewer',
+      // `delivery_role`, not `role` - Sequelize silently ignores unknown keys in
+      // `defaults`, so the wrong name here produced a NOT NULL violation rather than an
+      // obvious typo. The same mistake in the auth route was invisible instead.
+      delivery_role: 'client_reviewer',
     },
   });
   console.log(`[seed] membership ${membership.id} (${created ? 'created' : 'existing'})`);
