@@ -34,6 +34,7 @@ import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
 import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
+import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
@@ -180,6 +181,9 @@ app.use(trackingRoutes);
 // smoke test kept passing. publicCaseStudyRoutes.test.ts builds both orders against
 // an adminRoutes-shaped stand-in and asserts 200 above / 401 below, so the failure
 // mode is pinned by a test rather than by this comment.
+// MUST stay above adminRoutes: a public route mounted after it inherits the admin
+// auth guard and 401s for the strangers it exists to serve.
+app.use(publicCareerPortfolioRoutes);
 app.use(publicCaseStudyRoutes);
 
 app.use(adminRoutes);
