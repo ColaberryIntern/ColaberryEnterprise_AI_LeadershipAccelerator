@@ -796,7 +796,12 @@ export const WEEK5_PACK: WeekPack = {
   CP1 --> CP2["2️⃣ Resource<br/>+ prompt"]
   CP2 --> CP3["3️⃣ A real host<br/>calls it"]
   CP3 --> BH["💥 Break,<br/>then harden"]`,
-        script: 'Name Monday honestly in one sentence before anything else — we ran out of time at the scaffold, so tonight starts at the beginning and nobody is behind. Ten seconds, and it removes the quiet embarrassment that otherwise stops three people asking for help all night. Then show a finished server in the inspector with all three tabs populated and say the line that sets the night: "the difference between tonight and a tutorial is that this one connects to something you actually care about."',
+        script: [
+          'SAY: Monday we ran out of time at the scaffold. So tonight we start at the beginning, together, and nobody in this room is behind.',
+          'DO: Put a finished server in the inspector on screen, with all three tabs populated.',
+          'SAY: The difference between tonight and a tutorial is that this one connects to something you actually care about.',
+          'NOTE: The honesty line costs ten seconds and removes the quiet embarrassment that otherwise stops three people asking for help all night. Do not skip it.',
+        ].join('\n'),
       },
       {
         segment: 'build-map', eyebrow: '🧰 Readiness', title: 'One prompt gets everybody to the same place — whether or not Monday finished',
@@ -829,7 +834,14 @@ export const WEEK5_PACK: WeekPack = {
   TC --> GO["✅ Same green state,<br/>whole room"]
   FD --> GO
   CAP["✍️ Your capability,<br/>one sentence"] --> GO`,
-        script: 'Run it on screen yourself first and let them watch Claude Code do the OS detection and the folder triage live — that is the lesson as much as the versions are. Then stop talking and let the room work. Read the FAIL count off the pulse rail out loud and send mentors at it. Push hardest on point four: ask someone who says they are green to read their sentence, and if it is vague, fix it in front of the room. Thirty seconds there saves their whole build.',
+        script: [
+          'DO: Run the prompt on your own screen first. Let them watch Claude Code detect the OS and triage the folder live.',
+          'SAY: You do not need to know any of these commands. Paste this, and it checks your machine, installs whatever is missing, and rebuilds Monday’s folder if you do not have one.',
+          'DO: Stop talking and let the room work. Read the FAIL count off the pulse rail out loud and send mentors at it.',
+          'SAY: Point four is the one people skip. Your capability, written down as one sentence — not just in your head.',
+          'DO: Ask someone who says they are green to read their sentence out loud. If it is vague, fix it in front of the room.',
+          'NOTE: That thirty-second intervention saves their whole build. Watching Claude Code do the OS detection is as much the lesson as the version numbers are.',
+        ].join('\n'),
       },
       {
         segment: 'build-map', eyebrow: '📐 Decide before you type', title: 'Point the three primitives at YOUR project — this is the five minutes Monday ran out of',
@@ -860,7 +872,13 @@ export const WEEK5_PACK: WeekPack = {
   Q{"🤔 Who decides<br/>to invoke it?"} -->|"the model"| T["🔧 Tool"]
   Q -->|"the app"| R["📚 Resource"]
   Q -->|"the person"| P["💬 Prompt"]`,
-        script: 'Put the decision diamond on screen and make the room answer it out loud for one student’s capability before anyone touches Claude Code. This is the slide Monday never reached, so treat it as teaching rather than revision — say the question, get a wrong answer from the room, and correct it warmly. Five minutes of classification here prevents the most expensive rework of the night, which is discovering at CP2 that your tool should have been a resource.',
+        script: [
+          'DO: Put the decision diamond on screen. Take one student’s capability and work it in front of the room before anybody touches Claude Code.',
+          'SAY: There is one question, and you ask it of every row. Who decides to invoke this — the model, the application, or the person?',
+          'SAY: Model decides, it is a tool. App decides, it is a resource. Person decides, it is a prompt.',
+          'NOTE: Monday never reached this slide, so teach it rather than revise it. Ask the question, take a wrong answer from the room, correct it warmly.',
+          'NOTE: Five minutes here prevents the most expensive rework of the night — finding out at CP2 that your tool should have been a resource.',
+        ].join('\n'),
       },
 
       /* ============================ guided build ========================== */
@@ -893,7 +911,14 @@ export const WEEK5_PACK: WeekPack = {
   BOOT --> I["🔬 Inspector<br/>opens"]
   I --> CN["🔗 connected"]
   I --> L["📋 Panels empty —<br/>correct, for now"]`,
-        script: 'Do it live and let the room watch a server start and produce absolutely nothing. Say out loud that silence is success — several people will think it hung, and naming it in advance saves five hands going up. Then open the inspector and walk every panel deliberately. This slide removes more fear than any other in the week: from here on they can always see exactly what their server is publishing. State the rule for the rest of the night explicitly — inspector-green between every checkpoint, no exceptions.',
+        script: [
+          'DO: Run it live. Let the room watch a server start and produce absolutely nothing.',
+          'SAY: Silence is success here. It has not hung — it is sitting there waiting on you.',
+          'DO: Open the inspector and walk every panel deliberately. Point at the empty Tools panel.',
+          'SAY: Empty is correct right now. Your server genuinely publishes nothing yet. From here on, you can always see exactly what it is offering.',
+          'SAY: Here is the rule for the rest of tonight: inspector-green between every checkpoint. No exceptions.',
+          'NOTE: This slide removes more fear than any other in the week. Naming the silence in advance saves five hands going up.',
+        ].join('\n'),
       },
       {
         segment: 'guided-build', eyebrow: '1️⃣ CP1 · The tool', title: 'One tool that reaches something real — with the boundary built in from the first line',
@@ -924,7 +949,13 @@ export const WEEK5_PACK: WeekPack = {
   DS["📝 Docstring<br/>= when to use it"] --> TL
   IC["📐 Input constraints<br/>= the boundary"] --> TL
   TL --> DATA[("🗄️ Your real data")]`,
-        script: 'Stop on the docstring and compare a vague one to a precise one on screen — same lesson as Week 2 Skills, landing faster because they have met it twice. Then point at the constraints and say plainly: "this is the line we delete on purpose in forty minutes, so look at it now."',
+        script: [
+          'DO: Stop on the docstring. Put a vague one and a precise one side by side on screen.',
+          'SAY: The docstring is not documentation. It is the model’s entire guide to when this tool applies.',
+          'DO: Point at the input constraints in the file.',
+          'SAY: This is the line we delete on purpose in forty minutes. Look at it now, so you recognise what is missing when it is gone.',
+          'NOTE: Same lesson as Week 2 Skills, and it lands faster because they have now met it twice.',
+        ].join('\n'),
       },
       {
         segment: 'guided-build', eyebrow: '🔬 CP1 gate', title: 'Prove it in the inspector before you build anything on top of it',
@@ -954,7 +985,12 @@ export const WEEK5_PACK: WeekPack = {
   L --> SC["📐 Schema shows<br/>your constraints"]
   SC --> OK["✅ Good call →<br/>structured rows"]
   SC --> NO["🛑 Empty call →<br/>refused at the boundary"]`,
-        script: 'Hold the gate honestly — read the pulse-rail count out loud and wait. The temptation is to keep moving for the people who are ahead; resist it, because a student who is behind at CP1 is lost for the rest of the night. Make the deliberate empty call yourself on screen so the refusal is normalised as a success.',
+        script: [
+          'DO: Read the pulse-rail count out loud, then wait. Hold the gate honestly.',
+          'DO: Make the deliberate empty call yourself on screen so the room sees the refusal.',
+          'SAY: That red error is a pass, not a bug. The boundary refused it before your code ever ran.',
+          'NOTE: The temptation is to keep moving for the people who are ahead. Resist it — a student behind at CP1 is lost for the rest of the night.',
+        ].join('\n'),
       },
       {
         segment: 'guided-build', eyebrow: '2️⃣ CP2a · The resource', title: 'Read-only context, at a URI, with a MIME type — the corrected pattern, in your own server',
@@ -985,7 +1021,12 @@ export const WEEK5_PACK: WeekPack = {
   R --> MT["🏷️ MIME type<br/>= the contract"]
   D --> RT["🧩 Template URI<br/>one handler, many items"]
   RT --> MT`,
-        script: 'Say the callback explicitly: "this is Monday’s refund-policy fix, except it is your data and you are the one deciding." Then open the Resources tab live and read one resource, pointing at the MIME type in the response. That is the moment the abstract contract becomes a visible field.',
+        script: [
+          'SAY: This is Monday’s refund-policy fix, except it is your data and you are the one deciding.',
+          'DO: Open the Resources tab live, read one resource, and point at the MIME type in the response.',
+          'SAY: That field right there is the contract. It is what tells the client whether to parse JSON, render markdown, or show an image.',
+          'NOTE: Pointing at the MIME type is the moment an abstract contract becomes a visible field. Do it on screen, not in words.',
+        ].join('\n'),
       },
       {
         segment: 'guided-build', eyebrow: '3️⃣ CP2b · The prompt', title: 'Ship a workflow, not just a capability — and this is where Week 4 comes back',
@@ -1013,7 +1054,11 @@ export const WEEK5_PACK: WeekPack = {
   L["📚 Week 4<br/>prompt library"] --> PR["💬 Server prompt<br/>named + arguments"]
   PR --> SL["⌨️ Slash command<br/>in the client"]
   SL --> WF["🔁 Same workflow,<br/>every time, by anyone"]`,
-        script: 'Frame prompts as shipping a workflow rather than a capability — that framing is what makes executives in the room sit up. Then land the Week 4 connection out loud: the library stops being a document people are supposed to consult and becomes something the tool offers them by name.',
+        script: [
+          'SAY: A prompt is not a capability. It is a workflow you can hand to somebody who will never read your code.',
+          'SAY: And here is what that does to Week 4. Your prompt library stops being a document people are supposed to consult, and becomes something the tool offers them by name.',
+          'NOTE: The workflow framing is what makes the executives in the room sit up. Land the Week 4 connection out loud — it pays off last week in one sentence.',
+        ].join('\n'),
       },
       {
         segment: 'guided-build', eyebrow: '🔬 CP2 gate', title: 'All three primitives lit, in three tabs — this is the screenshot you submit',
@@ -1044,7 +1089,12 @@ export const WEEK5_PACK: WeekPack = {
   T --> G["✅ CP2 gate"]
   R --> G
   P --> G`,
-        script: 'Do the full walk live and then tell them to screenshot it, because that screenshot IS the assignment proof. This is the peak-competence moment of the week — the whole server, all three primitives, provable without one line of client code. Let the room feel it before you move on.',
+        script: [
+          'DO: Do the full three-tab walk live — Tools, Resources, Prompts, in that order.',
+          'SAY: Screenshot this. That screenshot is your assignment proof for the week.',
+          'SAY: Look at what you have. A whole server, all three primitives, and you proved it without writing one line of client code.',
+          'NOTE: This is the peak-competence moment of the week. Pause and let the room feel it before you move on.',
+        ].join('\n'),
       },
       {
         segment: 'guided-build', eyebrow: '3️⃣ CP3 · A real host calls it', title: 'Register it with Claude Code — and watch your prompt become a slash command',
@@ -1074,7 +1124,13 @@ export const WEEK5_PACK: WeekPack = {
   REG --> H["💻 Claude Code<br/>host"]
   H --> TC["🔧 Tool callable<br/>in conversation"]
   H --> SL["⌨️ Prompt is now<br/>a slash command"]`,
-        script: 'Demo this live if you do nothing else tonight. Ask Claude a plain-English question that requires the tool and let the room watch it reach into a server a student wrote ninety minutes ago. Seeing their own prompt appear as a slash command is the mic-drop of the week — pause and let them screenshot it. Protect this slide: if you are behind, cut the stretch slide that follows, never this one.',
+        script: [
+          'DO: Demo this live if you do nothing else tonight. Ask Claude a plain-English question that can only be answered by calling the tool.',
+          'SAY: Watch what just happened. Claude reached into a server you wrote ninety minutes ago, and I did not write a line of code to make that work.',
+          'DO: Show /mcp, then show their prompt appearing as a slash command. Pause and let them screenshot it.',
+          'SAY: Zero changes to your server. That is the M plus N argument from Monday, arriving on your own laptop.',
+          'NOTE: Protect this slide. If you are behind, cut the stretch slide that follows — never this one.',
+        ].join('\n'),
       },
       {
         segment: 'guided-build', eyebrow: '🎁 Stretch · Only if the room is ahead', title: 'Optional: write the other half of the conversation yourself',
@@ -1105,7 +1161,13 @@ export const WEEK5_PACK: WeekPack = {
   SE --> LS["📋 list tools /<br/>resources / prompts"]
   LS --> CA["▶️ call + read"]
   CA --> OUT["📦 Your own data,<br/>printed"]`,
-        script: 'Check the clock before you open this one. If the room is not at CP3 and comfortably inside the break, say out loud that it is a take-home, give them the prompt, and move to the failure segment — that segment is where the retention is, and the last two Build Days lost it by running long right here. If you do have the time, run it live against the inspector on the other screen and land it: "you have now authored both halves of an MCP conversation."',
+        script: [
+          'NOTE: Check the clock BEFORE you open this one. If the room is not at CP3 and comfortably inside the break, this is a take-home and you move on.',
+          'SAY: This one is a bonus, and your assignment does not depend on it. Take the prompt home — it is about ten minutes and it is worth it.',
+          'DO: Only if you have the time: run it live against the inspector on the other screen — same data, two clients, one server.',
+          'SAY: You have now authored both halves of an MCP conversation.',
+          'NOTE: The failure segment after this is where the retention is, and the last two Build Days lost it by running long right here. Cutting this slide is the right call, not a failure.',
+        ].join('\n'),
       },
 
       /* ============================== failure ============================= */
@@ -1137,7 +1199,13 @@ export const WEEK5_PACK: WeekPack = {
   B --> F["🐍 Deep inside<br/>your function"]
   F --> E["💥 Internal error"]
   E --> M["🧠 The model gets<br/>noise, not guidance"]`,
-        script: 'Run all three bad inputs live in the inspector and read the ugly traceback out loud in the voice of the model receiving it. Then ask the room the only question that matters: "whose job was it to stop this?" Answer: the boundary we deleted two minutes ago. Sit in that for a beat.',
+        script: [
+          'DO: Run all three bad inputs live in the inspector — the empty string, the 5,000-character string, the number.',
+          'DO: Read the ugly traceback out loud, in the voice of the model receiving it.',
+          'SAY: That is what your model just got back. Not guidance. Not an instruction. An internal crash it can do nothing with.',
+          'SAY: So whose job was it to stop this?',
+          'NOTE: Wait for the room. The answer is the boundary you deleted two minutes ago. Sit in that for a beat before you move.',
+        ].join('\n'),
       },
       {
         segment: 'failure', eyebrow: '🛡️ Harden it', title: 'Validate at the door, return structure on a miss, and save exceptions for the truly exceptional',
@@ -1166,7 +1234,12 @@ export const WEEK5_PACK: WeekPack = {
   IN["💣 Bad input"] --> B["🚪 Boundary<br/>refuses it"]
   B --> CLR["🗣️ Clear schema error<br/>the client can read"]
   OK["🙂 Valid but empty"] --> ST["📦 Structured<br/>empty result"]`,
-        script: 'Re-run the exact same three inputs from the previous slide and let the room see the difference themselves. Then ask which of the two fixes they would have thought of unprompted — usually the constraints, rarely the structured miss. Name that gap: it is exactly what the Build-Break-Harden habit exists to close.',
+        script: [
+          'DO: Re-run the exact same three inputs from the previous slide. Let the room see the difference themselves.',
+          'SAY: Same three inputs. The malformed ones are refused legibly now, and the valid-but-empty one comes back as clean data.',
+          'SAY: Which of those two fixes would you have thought of on your own?',
+          'NOTE: Almost everyone says the constraints; almost nobody says the structured miss. Name that gap out loud — it is exactly what Build-Break-Harden exists to close.',
+        ].join('\n'),
       },
       {
         segment: 'failure', eyebrow: '🧯 The one you cannot see', title: 'Hidden state: the server that works for you and shatters for the second person',
@@ -1186,7 +1259,12 @@ export const WEEK5_PACK: WeekPack = {
   S["🗄️ Server with<br/>module-level state"] --> C1["🙂 Client 1<br/>works fine"]
   S --> C2["😱 Client 2<br/>sees client 1's data"]
   ST["✅ Stateless tool"] --> SAFE["🚀 Week 6:<br/>safe to scale"]`,
-        script: 'Close the loop on the whole week in three sentences: primitives chosen by control model, boundaries validated at the door, tools kept stateless. Recap the assignment and its proof. Then the Week 6 trailer, said as a promise rather than a topic list: "this same server goes on call — sampling, notifications, file roots, a real transport, and a real business system behind it."',
+        script: [
+          'SAY: Three things carried the whole week. Primitives chosen by who controls them. Boundaries validated at the door. Tools kept stateless.',
+          'SAY: Your assignment is the server repo with a tool, a resource and a prompt, and the proof is that inspector screenshot.',
+          'SAY: Monday, this same server goes on call — sampling, notifications, file roots, a real transport, and a real business system behind it.',
+          'NOTE: Say the Week 6 line as a promise, not a topic list. That is the open loop that brings them back.',
+        ].join('\n'),
       },
     ],
 
