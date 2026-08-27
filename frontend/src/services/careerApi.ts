@@ -236,3 +236,44 @@ export async function fetchRecordForReview(recordId: string): Promise<RecordForR
   );
   return data;
 }
+
+// ── The person-level page at /u/:slug ──────────────────────────────────────
+
+export type PortfolioPageVisibility = 'private' | 'unlisted' | 'public';
+
+export interface PortfolioPageState {
+  slug: string;
+  status: 'draft' | 'published';
+  visibility: PortfolioPageVisibility;
+  review_requested_at: string | null;
+  approved_at: string | null;
+  public_path: string;
+}
+
+/**
+ * The learner's page. Created on first read, which is safe: a new page is
+ * draft + unlisted, and `publicViewDecision` treats that as invisible. It only
+ * reserves their address.
+ */
+export async function fetchPortfolioPage(): Promise<PortfolioPageState> {
+  const res = await portalApi.get('/api/portal/career/portfolio-page');
+  return res.data.page;
+}
+
+/**
+ * The learner's own choice of audience. Safe to expose directly because status and
+ * visibility are independent axes and both must pass: setting `public` on a page a
+ * reviewer has not approved changes nothing a stranger can see.
+ */
+export async function setPortfolioPageVisibility(
+  visibility: PortfolioPageVisibility,
+): Promise<PortfolioPageState> {
+  const res = await portalApi.put('/api/portal/career/portfolio-page/visibility', { visibility });
+  return res.data.page;
+}
+
+/** Asking twice while a request is open returns the existing one, not a second. */
+export async function requestPortfolioPageReview(): Promise<PortfolioPageState> {
+  const res = await portalApi.post('/api/portal/career/portfolio-page/request-review', {});
+  return res.data.page;
+}
