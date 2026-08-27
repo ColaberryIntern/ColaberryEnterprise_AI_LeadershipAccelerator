@@ -18,6 +18,7 @@ export { default as CaseStudySyncPanel } from './CaseStudySyncPanel';
 // Story Studio — the seven-tab authoring surface.
 export { default as CaseStudyStudioTabStrip } from './CaseStudyStudioTabStrip';
 export { default as CaseStudyGateBand } from './CaseStudyGateBand';
+export { default as CaseStudyActionBand } from './CaseStudyActionBand';
 export { default as CaseStudyElementStatus, GeneratedTextFrame } from './CaseStudyElementStatus';
 export { default as CaseStudyStorylinePanel } from './CaseStudyStorylinePanel';
 export { default as CaseStudyAnalyzePanel } from './CaseStudyAnalyzePanel';

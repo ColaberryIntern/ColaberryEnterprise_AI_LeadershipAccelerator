@@ -30,6 +30,19 @@ const Empty = ({ what }: { what: string }): React.ReactElement => (
   </p>
 );
 
+/**
+ * Why the three override fields below go inert when there is no snapshot.
+ *
+ * This panel already warns, in an alert, that a candidate with no snapshot has
+ * "nothing to review" — and then rendered three fully enabled Apply-override
+ * buttons underneath it. Pressing one on production 2026-08-26 POSTed an
+ * override against a record with no snapshot and came back 404, which the
+ * client turned into "this override not found.". The panel had already said the
+ * right thing; it simply did not act on it.
+ */
+const NO_SNAPSHOT_REASON = 'This candidate has no snapshot, so there is no field to override. '
+  + 'Run a sync on the SOURCES tab to build one.';
+
 export default function CaseStudyNarrativePanel({
   view, busy, hasSnapshot, onApplyOverride,
 }: Props): React.ReactElement {
@@ -123,6 +136,7 @@ export default function CaseStudyNarrativePanel({
             testId={CASE_STUDY_CONTROLS['review/edit narrative']}
             busy={busy}
             onApply={onApplyOverride}
+            disabledReason={hasSnapshot ? undefined : NO_SNAPSHOT_REASON}
             help="One sentence under the title on the public page."
           />
           <CaseStudyOverrideField
@@ -132,6 +146,7 @@ export default function CaseStudyNarrativePanel({
             testId="cs-narrative-override-heading"
             busy={busy}
             onApply={onApplyOverride}
+            disabledReason={hasSnapshot ? undefined : NO_SNAPSHOT_REASON}
           />
           <CaseStudyOverrideField
             label="Summary"
@@ -140,6 +155,7 @@ export default function CaseStudyNarrativePanel({
             testId="cs-narrative-override-summary"
             busy={busy}
             onApply={onApplyOverride}
+            disabledReason={hasSnapshot ? undefined : NO_SNAPSHOT_REASON}
             rows={3}
           />
         </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader, StatusBadge } from '../../components/admin/shell';
 import {
-  CaseStudyAnalyzePanel, CaseStudyArtifactsPanel, CaseStudyConsentPanel,
+  CaseStudyActionBand, CaseStudyAnalyzePanel, CaseStudyArtifactsPanel, CaseStudyConsentPanel,
   CaseStudyContributorsPanel, CaseStudyDraftPanel, CaseStudyEvidencePanel, CaseStudyGateBand,
   CaseStudyMetricsPanel, CaseStudyNarrativePanel, CaseStudyPreviewPanel, CaseStudyProvenancePanel,
   CaseStudyPublishPanel, CaseStudyQuotesPanel, CaseStudyReadinessPanel, CaseStudyRepositoriesPanel,
@@ -100,9 +100,27 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
     owner: repo.repoOwner, repo: repo.repoName,
   }));
 
-  const metricKeys = desk.metrics
-    .map((metric) => metric.key)
-    .filter((key): key is string => typeof key === 'string' && key.length > 0);
+  /**
+   * DE-DUPLICATED, and it is not cosmetic.
+   *
+   * `desk.metrics` is `heroMetrics` concatenated with `measurement.metrics`, and
+   * a headline metric legitimately appears in both — the pilot record's
+   * `verified_competencies` does. Un-deduplicated, the chart builder rendered
+   * two checkboxes carrying the same `id` AND the same `data-testid`, so both
+   * `<label htmlFor>` associations pointed at the first input and a click on the
+   * second label toggled the wrong box. Observed on production 2026-08-26.
+   *
+   * This does NOT fix the deeper mismatch, which is recorded rather than
+   * papered over: these keys are read from the SNAPSHOT, while `resolveChart`
+   * resolves against the `case_study_metrics` table. On a record whose metrics
+   * were authored straight into snapshot content, every offered key resolves to
+   * nothing. Closing that needs a metric-listing endpoint the API does not have.
+   */
+  const metricKeys = Array.from(new Set(
+    desk.metrics
+      .map((metric) => metric.key)
+      .filter((key): key is string => typeof key === 'string' && key.length > 0),
+  ));
 
   return (
     <div className="container-fluid py-4">
@@ -126,6 +144,18 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
         source={desk.blockerSource}
         unknown={desk.gateUnknown}
       />
+
+      {/*
+        ALSO ABOVE THE TABS, AND FOR THE SAME REASON. Every write on this page
+        goes through one `act()` in `useCaseStudyDesk` and reports through one
+        note and one error. Those two lines used to render inside
+        `CaseStudyPublishPanel`, which reaches the screen on PUBLISH only — so a
+        consent save on TRUTH, a repository attach on SOURCES and every override
+        anywhere reported their outcome to a panel the operator could not see.
+        Observed on production 2026-08-26: a consent save produced no visible
+        response of any kind. See `CaseStudyActionBand`'s header.
+      */}
+      <CaseStudyActionBand note={desk.actionNote} error={desk.actionError} />
 
       <CaseStudyStudioTabStrip active={tab} onSelect={setTab} />
 
@@ -276,8 +306,6 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
               publications={detail.publications}
               blockers={desk.blockers}
               blockerSource={desk.blockerSource}
-              actionError={desk.actionError}
-              actionNote={desk.actionNote}
               busy={busy}
               onApprove={desk.onApprove}
               onPublish={() => { void desk.onPublish(); }}

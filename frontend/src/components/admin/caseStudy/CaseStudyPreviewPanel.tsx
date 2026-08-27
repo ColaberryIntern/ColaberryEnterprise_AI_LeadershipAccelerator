@@ -157,6 +157,15 @@ export default function CaseStudyPreviewPanel({
                 style={{
                   background: 'var(--surface-sunken)', color: 'var(--text-body)',
                   maxHeight: '18rem', overflow: 'auto',
+                  // MEASURED, not guessed. Without these two declarations the
+                  // JSON's longest line pushed this <pre> to 3686px inside a
+                  // .col-lg-6 whose min-width is auto, and the whole admin page's
+                  // scrollWidth became 7745px against a 1440px viewport - a 6305px
+                  // horizontal overflow on every other panel too. 'overflow: auto'
+                  // alone does not stop it: the box has to be prevented from
+                  // WIDENING before it can be asked to scroll. Injecting exactly
+                  // these two into the live page took scrollWidth back to 1440.
+                  whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
                 }}
                 data-testid="cs-preview-raw-json"
               >
@@ -197,6 +206,15 @@ export default function CaseStudyPreviewPanel({
                     style={{
                       background: 'var(--surface-sunken)', color: 'var(--text-body)',
                       maxHeight: '18rem', overflow: 'auto',
+                  // MEASURED, not guessed. Without these two declarations the
+                  // JSON's longest line pushed this <pre> to 3686px inside a
+                  // .col-lg-6 whose min-width is auto, and the whole admin page's
+                  // scrollWidth became 7745px against a 1440px viewport - a 6305px
+                  // horizontal overflow on every other panel too. 'overflow: auto'
+                  // alone does not stop it: the box has to be prevented from
+                  // WIDENING before it can be asked to scroll. Injecting exactly
+                  // these two into the live page took scrollWidth back to 1440.
+                  whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
                     }}
                     data-testid="cs-preview-projection-json"
                   >

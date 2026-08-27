@@ -31,8 +31,6 @@ interface Props {
   /** Verbatim from the gate: a refused publish, or the preview's decision. */
   blockers: readonly CaseStudyPublishBlocker[];
   blockerSource: 'publish' | 'preview' | null;
-  actionError: string | null;
-  actionNote: string | null;
   busy: boolean;
   onApprove: () => void;
   onPublish: () => void;
@@ -42,7 +40,7 @@ interface Props {
 
 export default function CaseStudyPublishPanel({
   record, latestSnapshot, approvedSnapshot, publications, blockers, blockerSource,
-  actionError, actionNote, busy, onApprove, onPublish, onUnpublish, onArchive,
+  busy, onApprove, onPublish, onUnpublish, onArchive,
 }: Props): React.ReactElement {
   const enterprise = publications.find((p) => p.surfaceKey === 'enterprise') ?? null;
   const isLive = enterprise?.status === 'published';
@@ -80,13 +78,15 @@ export default function CaseStudyPublishPanel({
         </div>
       </div>
 
-      {actionError && (
-        <div className="alert alert-danger" data-testid="cs-action-error">{actionError}</div>
-      )}
-      {actionNote && (
-        <div className="alert alert-success" data-testid="cs-action-note">{actionNote}</div>
-      )}
-
+      {/*
+        THE OUTCOME OF THE LAST WRITE IS NOT RENDERED HERE ANY MORE, and that is
+        the fix rather than an omission. `actionNote` and `actionError` used to
+        live in this panel; once the page became seven tabs, this panel reached
+        the screen on PUBLISH only, so a consent save on TRUTH or a repository
+        attach on SOURCES reported into a component the operator could not see.
+        Both lines now render in `CaseStudyActionBand`, above the tab strip, on
+        every tab — the same placement, for the same reason, as the gate band.
+      */}
       {blockers.length > 0 && (
         <div className="alert alert-danger" data-testid="cs-publish-blockers">
           <p className="fw-semibold mb-2">
