@@ -53,6 +53,21 @@ export interface SignupConsentInput {
   ipAddress?: string | null;
   userAgent?: string | null;
   /**
+   * The request that produced this consent.
+   *
+   * Without it NO consent row can be traced back to what created it, which for a
+   * record whose entire purpose is auditability is a defect in itself. It is also
+   * what makes an anomaly investigable: an orphaned grant on 2026-08-25 - consent
+   * written, no matching lead - had nowhere to start precisely because this field
+   * did not exist.
+   *
+   * Optional because not every call site has one. A site WITHOUT a real request id
+   * must pass nothing rather than minting a fresh UUID here: an id that correlates
+   * with no log line looks like a trace and traces nothing, which is worse than an
+   * honest null.
+   */
+  correlationId?: string | null;
+  /**
    * Optional lapse. Use it when the affirmative act authorises something bounded
    * ("call me about this") rather than an open-ended standing permission.
    * `getCurrentConsent` honours it: `expires_at IS NULL OR expires_at > now()`.
@@ -132,6 +147,7 @@ export async function captureSignupConsent(input: SignupConsentInput): Promise<b
       ip_address: input.ipAddress ?? null,
       user_agent: input.userAgent ?? null,
       captured_via: 'signup_checkbox',
+      correlation_id: input.correlationId ?? null,
     },
     expiresAt: input.expiresAt ?? null,
   });
