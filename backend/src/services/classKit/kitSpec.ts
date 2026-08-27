@@ -13,7 +13,7 @@ import {
   WEEK_CLASS_CONTENT, ORIENTATION_PLAN,
 } from '../../data/classSessionPlan';
 import { weekBlueprint } from '../../data/weekBlueprints';
-import { TeachSlide, EvidenceClaim } from '../../data/classTeachContent';
+import { TeachSlide, EvidenceClaim, TermDefinition } from '../../data/classTeachContent';
 import {
   SegmentTemplate, SegmentMode, runOfShowFor, scaleSegments,
   formatClock, durationMinutes, formatLongDate, weekdayOf,
@@ -52,6 +52,9 @@ export interface KitSlide {
   diagramCaption?: string;
   /** Sourced factual claims (rendered as a small source footer). */
   evidence?: EvidenceClaim[];
+  /** New vocabulary the slide introduces — rendered as the "Definitions" row
+   * beneath "Key points" in the full-screen diagram view. */
+  definitions?: TermDefinition[];
   /** Guidance shown in the instructor's presenter rail, never to the room. */
   presenterTip?: string;
   /** Reminder of what this segment is worth as public content. */
@@ -206,6 +209,7 @@ export function teachToSlides(teach: TeachSlide[], segId: string, seg: KitSegmen
         prompt: t.code ? { ...t.code, label: t.code.label, prompt: t.code.code } : undefined,
         diagram: t.diagram,
         evidence: t.evidence,
+        definitions: t.definitions,
         presenterTip: t.script || seg.purpose,
       }),
     );
