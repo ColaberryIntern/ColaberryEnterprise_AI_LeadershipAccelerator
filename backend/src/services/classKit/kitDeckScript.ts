@@ -143,18 +143,23 @@ export function deckScript(): string {
       theater: sm.question.theater ? { state: theaterState[sm.id] || 'voting' } : undefined,
     } : null;
     var tipEl = slides[i];
-    // The phone gets the FULL text — the short presenter cue plus the slide's
-    // own paragraph — so it is genuinely the "long version" of what's on
-    // screen. The projected slide itself is unchanged by this; only what
-    // reaches the instructor's own phone is affected.
+    // The phone gets the slide's two halves SEPARATELY, because they serve two
+    // different moments. The PREFACE — what this step's prompt does, then the
+    // presenter cue — lands the instant you arrive on the slide: it is
+    // direction, read silently, before anything is said out loud. The
+    // READ-ALOUD half is the slide's own paragraph, and it surfaces only once
+    // the diagram is full-screened, which is precisely when the projected
+    // screen has stopped showing that paragraph to the room.
     var cue = tipEl ? (tipEl.getAttribute('data-tip') || '') : '';
     var bodyText = tipEl ? (tipEl.getAttribute('data-body') || '') : '';
-    var presenterTip = cue && bodyText ? (cue + '\\n\\n' + bodyText) : (cue || bodyText);
+    var brief = sm.prompt_brief || '';
+    var preface = brief && cue ? (brief + '\\n\\n' + cue) : (brief || cue);
     var nextTitle = (i + 1 < slides.length) ? (slides[i + 1].getAttribute('data-slidetitle') || '') : 'End of class';
     var body = {
       slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
       phase: sm.phase, question: q, broadcast_prompts: sm.broadcast_prompts,
-      prompt: sm.prompt || undefined, presenter_tip: presenterTip, next_title: nextTitle,
+      prompt: sm.prompt || undefined,
+      presenter_tip: bodyText || cue, presenter_preface: preface, next_title: nextTitle,
       diagram_fullscreen: diagramFull,
     };
     fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {

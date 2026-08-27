@@ -112,29 +112,50 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
   .seg{font-size:13px;color:#9aa2b1;margin-bottom:18px}
   .tip{font-size:clamp(20px,5.5vw,30px);line-height:1.42;font-weight:600;flex:1;white-space:pre-wrap}
   .tip.empty{color:#6b7385;font-weight:400;font-style:italic}
-  .waiting{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
-    color:#4b5263;font-size:16px;line-height:1.6;padding:0 10px}
+  /* The preface is direction you read silently; the tip is the text you say
+     out loud. Deliberately different weights and sizes, because in a dark room
+     mid-class the two must never be mistaken for each other at a glance. */
+  .pre{font-size:clamp(16px,4.2vw,21px);line-height:1.5;font-weight:500;flex:1;
+    white-space:pre-wrap;color:#cbd5e1}
+  .pre.empty{color:#6b7385;font-weight:400;font-style:italic}
+  .hint{margin-top:14px;font-size:12px;color:#4b5263;font-style:italic}
   .next{margin-top:22px;padding-top:16px;border-top:1px solid #2b2f3a;font-size:14px;color:#9aa2b1}
   .next b{color:#e2e8f0;font-weight:700}
   .stale{position:fixed;top:10px;right:14px;font-size:10px;color:#6b7385;letter-spacing:.5px}
   .err{color:#f59e0b;font-size:13px;margin-top:10px}
+  /* Live poll results. Read-only by construction — bars and counts, no tap
+     targets — so this view watches the room without ever voting in it. */
+  .poll{margin-top:18px;padding-top:14px;border-top:1px solid #2b2f3a}
+  .poll-hd{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;
+    color:#38bdf8;margin-bottom:10px}
+  .prow{margin-bottom:9px}
+  .ptop{display:flex;justify-content:space-between;gap:10px;font-size:14px;line-height:1.3}
+  .pname{color:#e2e8f0}
+  .pnum{color:#38bdf8;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .pbar{height:7px;border-radius:4px;background:#232833;margin-top:4px;overflow:hidden}
+  .pfill{height:100%;background:#38bdf8;border-radius:4px;transition:width .4s ease}
 </style></head>
 <body>
   <div class="stale" id="upd"></div>
-  <div class="lbl">Now teaching</div>
+  <div class="lbl" id="lbl">Set up — read this</div>
   <div class="seg" id="seg">Waiting for the deck to open…</div>
-  <div class="waiting" id="waiting">Full-screen the diagram on the deck — your script appears here the moment you do.</div>
+  <div class="pre empty" id="pre">Open the deck — this fills in the moment you land on a slide.</div>
   <div class="tip empty" id="tip" style="display:none"></div>
+  <div class="hint" id="hint"></div>
+  <div class="poll" id="poll" style="display:none"><div class="poll-hd">Live results · you are watching, not voting</div><div id="prows"></div></div>
   <div class="next" id="next"></div>
   <div class="err" id="err"></div>
 <script>
 (function(){
   var endpoint = ${JSON.stringify(endpoint)};
   var segEl = document.getElementById('seg'), tipEl = document.getElementById('tip'),
-      waitEl = document.getElementById('waiting'),
+      preEl = document.getElementById('pre'), lblEl = document.getElementById('lbl'),
+      hintEl = document.getElementById('hint'),
+      pollEl = document.getElementById('poll'), prowsEl = document.getElementById('prows'),
       nextEl = document.getElementById('next'), updEl = document.getElementById('upd'),
       errEl = document.getElementById('err');
-  var lastTip = null;
+  var lastTip = null, lastPre = null, lastPoll = null;
+  function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
   function tick(){
     fetch(endpoint).then(function(r){
       if (!r.ok) throw new Error('http ' + r.status);
@@ -142,9 +163,19 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
     }).then(function(d){
       errEl.textContent = '';
       segEl.textContent = (d.segment_label || '') + (d.title ? ' — ' + d.title : '');
+
+      // Two modes, switched by whether the diagram is full-screened on the
+      // projected deck. Landed on the slide: the PREFACE — what this step is,
+      // whether there is a prompt, what it will do. Diagram full-screened:
+      // the room is looking at the picture and nothing else, so this becomes
+      // the paragraph to actually read out.
       var showTip = !!d.diagram_fullscreen;
       tipEl.style.display = showTip ? '' : 'none';
-      waitEl.style.display = showTip ? 'none' : '';
+      preEl.style.display = showTip ? 'none' : '';
+      lblEl.textContent = showTip ? 'Read this out' : 'Set up — read this';
+      hintEl.textContent = showTip
+        ? 'Click the diagram again to come back to the set-up notes.'
+        : 'Click the diagram on the deck when you are ready to read.';
       if (showTip) {
         var tip = d.presenter_tip || '';
         if (tip !== lastTip) {
@@ -152,8 +183,36 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
           tipEl.textContent = tip || 'No script for this slide — keep talking from the diagram.';
           tipEl.classList.toggle('empty', !tip);
         }
+      } else {
+        var pre = d.presenter_preface || '';
+        if (pre !== lastPre) {
+          lastPre = pre;
+          preEl.textContent = pre || 'No set-up notes for this slide.';
+          preEl.classList.toggle('empty', !pre);
+        }
       }
-      nextEl.innerHTML = d.next_title ? '<b>Next:</b> ' + d.next_title.replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }) : '';
+
+      // Live results while a question is on screen. Rendered from counts only
+      // — no names, no option buttons — so watching the room form an answer
+      // can never turn into voting in it.
+      var poll = d.poll || null;
+      pollEl.style.display = poll ? '' : 'none';
+      var sig = poll ? JSON.stringify(poll) : null;
+      if (sig !== lastPoll) {
+        lastPoll = sig;
+        if (poll) {
+          var total = poll.total || 0;
+          prowsEl.innerHTML = (poll.options || []).map(function(o, idx){
+            var n = (poll.tally || [])[idx] || 0;
+            var pct = total ? Math.round((n / total) * 100) : 0;
+            return '<div class="prow"><div class="ptop"><span class="pname">' + esc(o) + '</span>'
+              + '<span class="pnum">' + n + ' · ' + pct + '%</span></div>'
+              + '<div class="pbar"><div class="pfill" style="width:' + pct + '%"></div></div></div>';
+          }).join('') + '<div class="ptop" style="margin-top:10px"><span class="pname">Answered</span><span class="pnum">' + total + '</span></div>';
+        }
+      }
+
+      nextEl.innerHTML = d.next_title ? '<b>Next:</b> ' + esc(d.next_title) : '';
       if (d.updated_at) {
         var secs = Math.max(0, Math.round((Date.now() - new Date(d.updated_at).getTime()) / 1000));
         updEl.textContent = secs < 8 ? 'live' : secs + 's ago';

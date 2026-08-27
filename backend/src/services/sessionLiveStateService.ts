@@ -89,6 +89,12 @@ export interface BroadcastState {
    * student-facing read below), which whitelists its own fields. Read back
    * out only via the kit-token/admin-gated presenter-notes endpoint. */
   presenter_tip?: string;
+  /** The PREFACE: what this step is and how to run it, shown the moment the
+   * instructor lands on the slide — before the diagram is full-screened. On a
+   * slide carrying a prompt it leads with what that prompt does, so the
+   * instructor knows what they are about to run before they start reading it.
+   * Same instructor-only handling as presenter_tip above. */
+  presenter_preface?: string;
   next_title?: string;
   /** True only while the instructor has the current slide's diagram
    * full-screened on the projected deck — that is the moment the projected
@@ -254,8 +260,14 @@ export interface PresenterNotes {
   title: string;
   segment_label: string;
   presenter_tip: string;
+  presenter_preface: string;
   next_title: string;
   diagram_fullscreen: boolean;
+  /** The live tally for the question currently on screen, so the instructor
+   * watches the room answer in real time on their own phone. Deliberately
+   * carries no per-student identity and no vote control — this view reads the
+   * room, it never participates in it. */
+  poll: { options: string[]; tally: number[]; total: number } | null;
   updated_at: string | null;
 }
 
@@ -268,12 +280,27 @@ export interface PresenterNotes {
  */
 export async function getPresenterNotes(sessionId: string): Promise<PresenterNotes> {
   const bc = await getBroadcast(sessionId);
+
+  // The live tally, when a question is the thing on screen. Same shape and
+  // same source as getLiveState's poll block, minus correctResponders — the
+  // instructor's phone shows how the room is answering, never who answered
+  // what, and it exposes no way to cast a vote.
+  let poll: PresenterNotes['poll'] = null;
+  if (bc && bc.phase === 'question' && bc.question) {
+    const opts = Array.isArray(bc.question.options) ? bc.question.options : [];
+    const tally = await getPollTally(sessionId, bc.question.key);
+    const filled = opts.map((_, i) => tally[i] || 0);
+    poll = { options: opts, tally: filled, total: filled.reduce((a, b) => a + b, 0) };
+  }
+
   return {
     title: bc?.title || '',
     segment_label: bc?.segment_label || '',
     presenter_tip: bc?.presenter_tip || '',
+    presenter_preface: bc?.presenter_preface || '',
     next_title: bc?.next_title || '',
     diagram_fullscreen: !!bc?.diagram_fullscreen,
+    poll,
     updated_at: bc?.updated_at || null,
   };
 }
