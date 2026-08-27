@@ -19,6 +19,7 @@
  * readiness number from being something a model invented.
  */
 import type { CareerCapability, CareerIdentity, CareerArtifact, CareerProject, CareerGithub } from './careerEvidenceAdapters';
+import { isVerifiedLevel } from './careerEvidenceAdapters';
 
 export interface ReadinessRequirement {
   key: string;
@@ -75,9 +76,7 @@ export function computeReadiness(
 ): ReadinessResult {
   const { identity, capabilities, artifacts, projects, github } = input;
 
-  const verified = capabilities.filter(
-    (c) => c.evidence_level === 'colaberry_verified' || c.evidence_level === 'delivery_verified',
-  );
+  const verified = capabilities.filter((c) => isVerifiedLevel(c.evidence_level));
 
   const requirements: ReadinessRequirement[] = [
     {
