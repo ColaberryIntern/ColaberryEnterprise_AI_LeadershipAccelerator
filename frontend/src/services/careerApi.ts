@@ -293,7 +293,12 @@ export interface PortfolioQueueItem {
  * approvals over different things, and the reviewer surface shows both.
  */
 export async function fetchPortfolioReviewQueue(): Promise<PortfolioQueueItem[]> {
-  const res = await portalApi.get('/api/admin/career/portfolio-review-queue');
+  // `api`, NOT `portalApi`. Admin pages authenticate with `admin_token`; portalApi sends
+  // the participant token, so this 401'd on the review screen and the queue looked empty.
+  // Every /api/admin/* call in this file uses `api` -- see fetchReviewQueue above.
+  const res = await api.get<{ ok: boolean; items: PortfolioQueueItem[] }>(
+    '/api/admin/career/portfolio-review-queue',
+  );
   return res.data.items;
 }
 
@@ -301,6 +306,10 @@ export async function submitPortfolioDecision(
   enrollmentId: string,
   decision: 'approved' | 'changes_requested',
 ): Promise<{ status: string; visibility: string; public_path: string }> {
-  const res = await portalApi.post(`/api/admin/career/portfolio-review/${enrollmentId}`, { decision });
+  // `api` for the same reason as the queue above: this is an admin route.
+  const res = await api.post(
+    `/api/admin/career/portfolio-review/${encodeURIComponent(enrollmentId)}`,
+    { decision },
+  );
   return res.data.page;
 }

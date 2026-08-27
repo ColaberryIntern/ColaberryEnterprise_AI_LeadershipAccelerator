@@ -38,12 +38,25 @@ const CareerReviewPage: React.FC = () => {
   // decide endpoints without this list left a learner waiting on a review no reviewer
   // could see -- Ali hit exactly that within minutes of the deploy.
   const [pages, setPages] = useState<PortfolioQueueItem[] | null>(null);
+  const [pagesError, setPagesError] = useState<string | null>(null);
   const [preview, setPreview] = useState<RecordForReview | null>(null);
   const [previewFor, setPreviewFor] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setErr(null);
-    fetchPortfolioReviewQueue().then(setPages).catch(() => setPages([]));
+    // A failure here must be VISIBLE. `.catch(() => setPages([]))` turned a 401 into a
+    // clean "Nothing to review", which is how a wrong-token bug survived a deploy and a
+    // round of live verification: the screen looked correct and was lying.
+    fetchPortfolioReviewQueue()
+      .then((rows) => { setPages(rows); setPagesError(null); })
+      .catch((e: any) => {
+        setPages([]);
+        setPagesError(
+          e?.response?.status === 401 || e?.response?.status === 403
+            ? 'Could not load portfolio pages: not authorised. Try signing in again.'
+            : 'Could not load portfolio pages. They may be waiting but hidden.',
+        );
+      });
     fetchReviewQueue()
       .then((r) => { setItems(r.items); setKind(r.reviewer_kind); })
       .catch((e: any) => {
@@ -91,6 +104,8 @@ const CareerReviewPage: React.FC = () => {
 
       {msg && <div className="cr-banner ok" role="status">{msg}</div>}
       {err && <div className="cr-banner err" role="alert">{err}</div>}
+
+      {pagesError && <div className="cr-banner err" role="alert">{pagesError}</div>}
 
       {/* Portfolio pages: the person-level page at /portfolio/:slug. */}
       {pages !== null && pages.length > 0 && (
@@ -142,7 +157,7 @@ const CareerReviewPage: React.FC = () => {
         </section>
       )}
 
-      {items !== null && items.length === 0 && (pages === null || pages.length === 0) && !err && (
+      {items !== null && items.length === 0 && (pages === null || pages.length === 0) && !err && !pagesError && (
         <div className="cr-empty">
           <p>Nothing to review.</p>
           <p className="cr-muted">
