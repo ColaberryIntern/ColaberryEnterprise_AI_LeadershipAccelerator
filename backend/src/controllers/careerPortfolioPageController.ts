@@ -17,6 +17,7 @@ import {
   requestPortfolioReview,
   decidePortfolioReview,
   isVisibility,
+  listPortfolioReviewQueue,
   type PortfolioDecision,
 } from '../services/career/careerPortfolioPageWriteService';
 import { canReview, type ReviewerIdentity } from '../services/career/careerMentorScopeService';
@@ -82,6 +83,19 @@ export async function handleRequestPortfolioPageReview(req: Request, res: Respon
 }
 
 // ── Reviewer ───────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/career/portfolio-review-queue — pages awaiting a decision.
+ *
+ * Added after shipping the request and decide endpoints WITHOUT this one, which left a
+ * learner's request sitting in a table no surface read. Scoped per reviewer by the same
+ * function the record queue uses.
+ */
+export async function handleGetPortfolioReviewQueue(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ ok: true, items: await listPortfolioReviewQueue(reviewer(req)) });
+  } catch (e) { fail(res, e, next); }
+}
 
 const DECISIONS = new Set<PortfolioDecision>(['approved', 'changes_requested']);
 
