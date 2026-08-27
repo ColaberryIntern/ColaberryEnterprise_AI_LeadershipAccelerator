@@ -137,7 +137,10 @@ const app = buildApp();
 const token = (payload: Record<string, unknown>): string =>
   jwt.sign(payload, JWT_SECRET, { expiresIn: '10m' });
 
-const LEGACY_ADMIN = token({ sub: 'a1', email: 'ali@colaberry.com', role: 'admin' });
+// A real address does not belong in a fixture: the Test Plan's Checkpoint D
+// rule is that no test may carry a hardcoded personal identifier, and the value
+// is never asserted on — only signed into a bearer token.
+const LEGACY_ADMIN = token({ sub: 'a1', email: 'admin@example.test', role: 'admin' });
 const MGMT_CURRICULUM = token({ sub: 'e1', email: 'c@colaberry.com', role: 'admin', mgmt_role: 'curriculum' });
 const MGMT_SUPPORT = token({ sub: 'e2', email: 's@colaberry.com', role: 'admin', mgmt_role: 'support' });
 const MGMT_REVENUE = token({ sub: 'e3', email: 'r@colaberry.com', role: 'admin', mgmt_role: 'revenue' });

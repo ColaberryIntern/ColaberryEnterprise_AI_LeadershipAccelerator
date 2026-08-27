@@ -17,6 +17,7 @@ import {
   applyVerificationLatch, isLatched, latchNote,
   VerificationLatch, VerificationRecord,
 } from '../sbp/verification/verificationLatch';
+import { isProtectedProject } from './protectedProjects';
 
 export type { VerificationLatch };
 
@@ -204,6 +205,18 @@ export interface ProjectSummaryDto {
   is_active: boolean;
   /** Null when the caller did not resolve connection state for this list. */
   repo_sync: ProjectRepoSync | null;
+  /**
+   * True when this row is platform infrastructure rather than student work.
+   *
+   * Exists so the CLIENT can tell the two apart. The listing itself must keep
+   * returning the row — it is what the browser prunes dead local cards against,
+   * and a project missing from that answer reads as "deleted, remove it" — but
+   * a client that hydrates every project the server owns would otherwise mint a
+   * build card for `fcce50ef-…`, the platform's own ~144k-row record, on Ali's
+   * enrollment. Listing it and offering it are different promises; see
+   * ./protectedProjects for why that distinction is enforced by id.
+   */
+  is_protected: boolean;
 }
 
 /**
@@ -490,5 +503,6 @@ export function toProjectSummaryDto(
     health_score: p.health_score ?? null,
     is_active: activeProjectId != null && String(p.id) === String(activeProjectId),
     repo_sync: connection === undefined ? null : repoSyncFrom(connection),
+    is_protected: isProtectedProject(p.id),
   };
 }

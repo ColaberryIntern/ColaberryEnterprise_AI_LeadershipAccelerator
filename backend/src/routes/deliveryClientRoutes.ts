@@ -139,7 +139,12 @@ router.get(
     const projectId = req.params.projectId as string;
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { DeliveryProject, DeliveryDecision, DeliveryChangeRequest } = require('../models');
+      const {
+        DeliveryProject,
+        DeliveryDecision,
+        DeliveryChangeRequest,
+        DeliveryEngagement,
+      } = require('../models');
 
       const project = await DeliveryProject.findOne({ where: { id: projectId } });
       if (!project) {
@@ -159,7 +164,20 @@ router.get(
         DeliveryChangeRequest.findAll({ where: { delivery_project_id: projectId } }),
       ]);
 
+      // The engagement the project belongs to. Fetched by the project's OWN
+      // engagement_id, never from the request - the guard above already confirmed this
+      // project belongs to the session, so the engagement it points at is in scope by
+      // construction. Looking it up any other way would introduce a second, weaker path
+      // to the same data.
+      const engagement = project.engagement_id
+        ? await DeliveryEngagement.findOne({ where: { id: project.engagement_id } })
+        : null;
+
       const payload = {
+        // Null rather than a placeholder when it is missing: the client surface can say
+        // 'your engagement' itself, and inventing a name here would put a fiction in the
+        // API where every consumer would inherit it.
+        engagement: engagement ? toClientShape('engagement', plain(engagement)) : null,
         project: toClientShape('project', plain(project)),
         // A client is owed the decisions they were asked to weigh in on. Internal design
         // decisions stay internal; `requires_client_approval` is the line.

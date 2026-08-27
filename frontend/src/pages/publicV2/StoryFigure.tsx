@@ -28,6 +28,13 @@ import type { StorySlide } from './storyMediaModel';
  * IT DISAPPEARS RATHER THAN EMPTIES. No figures, no band - no frame, no
  * placeholder, no "images coming soon". A record with no approved pictures
  * renders this component zero times and reads as though it never wanted any.
+ *
+ * IT ALWAYS CARRIES SUNKEN TONE, and unconditionally rather than by a prop.
+ * `STORY_FORMAT_V1.md` section 5's grammar is that every VISUAL band sits on
+ * sunken ground and every PROSE band on default ground, so a reader learns in two
+ * screens that a change of ground means a change of medium. A figure band is
+ * visual by definition - there is no variant of it that is prose - so a prop
+ * offering the alternative would only offer a way to break the grammar.
  */
 
 export interface StoryFigureBandProps {
@@ -39,7 +46,11 @@ export function StoryFigureBand({ figures }: StoryFigureBandProps): React.ReactE
   if (figures.length === 0) return null;
 
   return (
-    <div className="cbv2-rv cbv2-story-figures" data-testid="story-figures">
+    <div
+      className="cbv2-rv cbv2-story-figures cbv2-story__section--sunken"
+      data-testid="story-figures"
+      data-tone="sunken"
+    >
       <div className="cbv2-wrap">
         {figures.map((figure, index) => (
           <figure

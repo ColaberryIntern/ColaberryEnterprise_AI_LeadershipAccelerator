@@ -382,8 +382,10 @@ export async function getObservabilityStatus(): Promise<ObservabilityStatus> {
 
 /** Shared cost-aggregation over ai_events, grouped by agent_id — used by both getAgentRoster
  *  (all workforce agents) and getAgentDetail (one agent). `days` is a fixed internal literal,
- *  never user input, interpolated the same way dailyCounts() already does above. */
-async function agentCostRows(days: number, agentId?: string): Promise<{ agentId: string; costUsd: number; runs: number }[]> {
+ *  never user input, interpolated the same way dailyCounts() already does above.
+ *  Exported (Trust Contract Phase 1, 2026-08-26) so reese/agentDetailService.ts's generic
+ *  per-agent page can reuse this exact query instead of a second, drifting copy. */
+export async function agentCostRows(days: number, agentId?: string): Promise<{ agentId: string; costUsd: number; runs: number }[]> {
   const where = agentId
     ? `agent_id = :agentId AND created_at >= NOW() - INTERVAL '${days} days'`
     : `agent_id IS NOT NULL AND created_at >= NOW() - INTERVAL '${days} days'`;

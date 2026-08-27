@@ -53,16 +53,16 @@ import {
   sanitizeFiltersForAudience,
 } from '../services/caseStudy/caseStudyFilterService';
 import { projectPublicDetail, projectPublicSummary } from '../services/caseStudy/caseStudyPublicProjection';
+import { surfaceView } from '../services/caseStudy/caseStudySurfaceView';
 import {
   PUBLIC_SLUG,
   PublicCaseStudyListQuery,
   toPublicFilterInput,
 } from '../schemas/publicCaseStudySchema';
-import type { CaseStudySectionKey, CaseStudySurfaceKey } from '../types/caseStudy';
+import type { CaseStudySurfaceKey } from '../types/caseStudy';
 import type {
   CaseStudyFilterInput,
   CaseStudySortKey,
-  CaseStudySurfaceProfile,
 } from '../types/caseStudyFilters';
 import type { CaseStudyLedger } from '../services/caseStudy/caseStudyFilterService';
 import type { PublishedCaseStudyRecord } from '../services/caseStudy/caseStudyPublicStore';
@@ -125,42 +125,24 @@ export function resolveRequestSurface(_req: Request): CaseStudySurfaceKey {
   return 'enterprise';
 }
 
-export interface PublicSurfaceView {
-  readonly key: CaseStudySurfaceKey;
-  readonly brandLabel: string;
-  readonly hero: { readonly eyebrow: string; readonly title: string; readonly description: string };
-  readonly cta: {
-    readonly eyebrow: string; readonly heading: string;
-    readonly buttonLabel: string; readonly href: string;
-  };
-  readonly sectionOrder: readonly CaseStudySectionKey[];
-  readonly hiddenSections: readonly CaseStudySectionKey[];
-  readonly emphasis: readonly string[];
-  readonly defaultSort: CaseStudySortKey;
-}
+/**
+ * `PublicSurfaceView` and `surfaceView()` MOVED to
+ * `services/caseStudy/caseStudySurfaceView.ts` and are re-exported here so
+ * every existing importer keeps its import path.
+ *
+ * They left because the admin surface-lens lab needs the identical object, and
+ * importing this route module from a service would close a routes → services →
+ * routes cycle and execute router construction inside a service's import graph.
+ * The helper is unchanged; only its address is.
+ */
+// PRE-EXISTING TYPE ERROR, fixed 2026-08-26. `export type { X } from '...'` is a
+// re-export ONLY: it publishes the name to importers and does NOT bind it in
+// this module's scope, so the three `readonly surface: PublicSurfaceView`
+// declarations below were TS2304 "Cannot find name". The import binds it; the
+// re-export keeps every existing importer working.
+import type { PublicSurfaceView } from '../services/caseStudy/caseStudySurfaceView';
 
-/** Built field by field. `publishable` and `defaultFilters` stay internal. */
-function surfaceView(profile: CaseStudySurfaceProfile): PublicSurfaceView {
-  return {
-    key: profile.surfaceKey,
-    brandLabel: profile.brandLabel,
-    hero: {
-      eyebrow: profile.hero.eyebrow,
-      title: profile.hero.title,
-      description: profile.hero.description,
-    },
-    cta: {
-      eyebrow: profile.cta.eyebrow,
-      heading: profile.cta.heading,
-      buttonLabel: profile.cta.buttonLabel,
-      href: profile.cta.href,
-    },
-    sectionOrder: profile.sectionOrder,
-    hiddenSections: profile.hiddenSections,
-    emphasis: profile.emphasis,
-    defaultSort: profile.defaultSort,
-  };
-}
+export type { PublicSurfaceView } from '../services/caseStudy/caseStudySurfaceView';
 
 /* ------------------------------------------------------------- responses --- */
 

@@ -406,6 +406,60 @@ describe('archiveCaseStudy (§35)', () => {
     expect(row.update).not.toHaveBeenCalled();
   });
 
+  /**
+   * The slug is the published URL, and `caseStudyPublicStore.toCandidate` reads
+   * it off THIS mutable row rather than off the frozen snapshot — so renaming a
+   * live record moves its public address and its `seo.canonicalUrl` with no
+   * publish gate, no `published_at` bump and no audit trail. Snapshot
+   * immutability does not cover it: the snapshot is byte-identical throughout.
+   */
+  it('refuses a slug CHANGE while the record is published', async () => {
+    const row = caseStudyRow();
+    caseStudy.findByPk.mockResolvedValue(row);
+    publications.findAll.mockResolvedValue([{ surface_key: 'enterprise', status: 'published' }]);
+
+    const err = await updateCaseStudy({
+      caseStudyId: ID, actor: 'a@b.c', patch: { slug: 'acme-claims-renamed' },
+    }).catch((e) => e);
+
+    expect(err.error_class).toBe('CaseStudyPublished');
+    expect(err.http_status).toBe(409);
+    expect(err.message).toContain('enterprise');
+    // The refusal names the operation, not "archiving".
+    expect(err.message).toContain('changing its slug');
+    // Nothing was written — the refusal is before the update, not after.
+    expect(row.update).not.toHaveBeenCalled();
+    expect(row.slug).toBe('acme-claims');
+  });
+
+  it('allows a slug change when nothing is live', async () => {
+    // Non-vacuity: the guard is scoped to PUBLISHED records, not a blanket ban
+    // on renaming. Without this the rule could be "slugs are immutable".
+    const row = caseStudyRow();
+    caseStudy.findByPk.mockResolvedValue(row);
+    publications.findAll.mockResolvedValue([]);
+
+    await expect(updateCaseStudy({
+      caseStudyId: ID, actor: 'a@b.c', patch: { slug: 'acme-claims-renamed' },
+    })).resolves.toBeDefined();
+    expect(row.update).toHaveBeenCalled();
+    expect(row.slug).toBe('acme-claims-renamed');
+  });
+
+  it('allows a PATCH that RE-SENDS the current slug on a published record', async () => {
+    // An admin form that submits its whole model sends `slug` on every save.
+    // Blocking that would make every published record uneditable, so only a
+    // real change is refused.
+    const row = caseStudyRow();
+    caseStudy.findByPk.mockResolvedValue(row);
+    publications.findAll.mockResolvedValue([{ surface_key: 'enterprise', status: 'published' }]);
+
+    await expect(updateCaseStudy({
+      caseStudyId: ID, actor: 'a@b.c', patch: { slug: 'acme-claims', title: 'Edited live' },
+    })).resolves.toBeDefined();
+    expect(row.update).toHaveBeenCalled();
+  });
+
   it('PATCH to a NON-archived status is unaffected by a live publication', async () => {
     // Non-vacuity: the guard is scoped to the archive transition, not a blanket
     // "published records are read-only" rule.
@@ -652,6 +706,30 @@ describe('previewSurfaceProjection (§34)', () => {
     await expect(previewSurfaceProjection({ caseStudyId: ID, surfaceKey: 'intranet' }))
       .rejects.toMatchObject({ error_class: 'ValidationError' });
     expect(evaluateCaseStudyPublication).not.toHaveBeenCalled();
+  });
+
+  it('returns the surface view OF THE REQUESTED SURFACE, not of a default', async () => {
+    // Without this, a preview could return the Enterprise profile under a
+    // Training `surfaceKey` and the client would render the Enterprise order
+    // labelled Training — four tabs that agree with each other and disagree
+    // with the server. The band order is what the client composes a lens from,
+    // so it is what is asserted.
+    caseStudy.findByPk.mockResolvedValue(caseStudyRow());
+    snapshots.findOne.mockResolvedValue(null);
+    evaluateCaseStudyPublication.mockResolvedValue({
+      allowed: false, blockers: [], codes: ['surface_not_publishable'], summary: '',
+    });
+
+    const training = await previewSurfaceProjection({ caseStudyId: ID, surfaceKey: 'training' });
+    const enterprise = await previewSurfaceProjection({ caseStudyId: ID, surfaceKey: 'enterprise' });
+
+    expect(training.surface.key).toBe('training');
+    expect(enterprise.surface.key).toBe('enterprise');
+    expect(training.surface.sectionOrder).not.toEqual(enterprise.surface.sectionOrder);
+    // And the attribution floor travels with it, or the client has nothing to
+    // enforce.
+    expect([...training.surface.requiredSections].sort())
+      .toEqual(['contributors', 'cta', 'repositories']);
   });
 });
 

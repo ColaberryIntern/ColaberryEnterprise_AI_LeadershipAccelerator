@@ -508,11 +508,30 @@ export interface ServerInventory {
   known: boolean;
   /** Every project id the server says this enrollment owns. */
   ids: string[];
+  /**
+   * The subset of `ids` a student should get a build card for.
+   *
+   * SEPARATE FROM `ids` ON PURPOSE, because the two answer different questions
+   * and one list cannot honestly serve both:
+   *
+   *   - `ids` is "what still exists", and pruning reads it. A project missing
+   *     from it is treated as deleted and its local card is destroyed, so it
+   *     must stay complete — narrowing it would delete real cards.
+   *   - `hydratableIds` is "what may become a card", and hydration reads it.
+   *     It drops rows the server marked `is_protected`: the platform's own
+   *     record sits on a real enrollment (Ali's) and would otherwise be
+   *     reconstructed as a build named "Your build".
+   *
+   * Collapsing these back into one field re-creates one bug or the other.
+   */
+  hydratableIds: string[];
   /** The project the server considers active, if any. */
   activeId: string | null;
 }
 
-export const UNKNOWN_INVENTORY: ServerInventory = { known: false, ids: [], activeId: null };
+export const UNKNOWN_INVENTORY: ServerInventory = {
+  known: false, ids: [], hydratableIds: [], activeId: null,
+};
 
 /**
  * Backend ids are UUIDs; the browser mints its own as `p<epoch>` and the seeded

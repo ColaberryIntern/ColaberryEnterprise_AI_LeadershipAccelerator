@@ -21,7 +21,7 @@ import {
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import path from 'path';
 import fs from 'fs';
-import { strategyPrepUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR, agentAttachmentUpload } from '../config/upload';
+import { strategyPrepUpload, buildArtifactUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR, agentAttachmentUpload } from '../config/upload';
 import { attachmentsSchema } from '../services/agents/tools/attachmentSchema';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
@@ -129,12 +129,16 @@ router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, 
 router.post('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, fieldGuideUpload.single('file'), handleUploadFieldGuide);
 router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, handleGetFieldGuide);
 
-// Build Artifact(s) Lab — upload the file the student built in Claude Code. Reuses
-// the strategy-prep multer config (PDF/Word/PPT/Excel/RTF/Text/Markdown/CSV) on the
-// persistent uploads volume; a bad type returns a clear 400. The handler stores it
+// Build Artifact(s) Lab — upload what the student built in Claude Code. Uses its
+// OWN multer config rather than the strategy-prep one it used to share: the
+// rebuilt labs ask for a short screen recording proving the thing ran, and the
+// strategy-prep list is documents only, so a demo could not be submitted at all.
+// `buildArtifactUpload` adds video, audio and zip and caps at 100MB, matching
+// GitHub's file limit because the labs also tell students to commit the recording
+// to their own repo. A bad type still returns a clear 400. The handler stores it
 // as a PortfolioArtifact (portfolio + instructor review); the card is then marked
 // complete via the normal /complete endpoint (points on the first build).
-router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, strategyPrepUpload.single('file'), handleBuildArtifactUpload);
+router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, buildArtifactUpload.single('file'), handleBuildArtifactUpload);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 // Weekly feedback Survey — read the questions + saved answers, and store answers.

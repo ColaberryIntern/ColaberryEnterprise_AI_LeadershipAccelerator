@@ -54,7 +54,7 @@ import type {
   PublicCaseStudyContributor,
   PublicCaseStudyMeasurement,
   PublicCaseStudyMetric,
-  PublicCaseStudyNarrative,
+  PublicCaseStudySituation,
   PublicCaseStudyRepository,
   PublicCaseStudyRoadmapItem,
   PublicCaseStudyTimelineEntry,
@@ -238,6 +238,12 @@ export function projectArchitecture(
   const stack = normalizeFacetList(a.stack);
   const capabilities = normalizeFacetList(a.capabilities);
   const integrations = normalizeFacetList(a.integrations);
+  // Same normalisation as the three lists above, so "PostgreSQL" and "postgres"
+  // cannot both appear and a reader is not asked to work out whether they are
+  // two systems. The field is assembled from repository evidence and counted by
+  // the snapshot's own emptiness check, but until now had no public shape to
+  // arrive in.
+  const dataStores = normalizeFacetList(a.dataStores);
   // `id` becomes `key`: on every other shape here `id` means a database
   // identifier, and a public payload carrying a field called `id` invites the
   // wrong thing to be put in it. This one is a graph label ("api", "worker").
@@ -249,19 +255,48 @@ export function projectArchitecture(
     .map((e) => ({ from: text(e.from), to: text(e.to), label: text(e.label) || null }));
   const diagram = nodes.length > 0 ? { nodes, edges } : null;
   const diagramSource = projectDiagramSource(a.diagramSource);
+  // `dataStores` joins the emptiness test, which makes this agree with the
+  // snapshot builder: `caseStudySnapshotSections.ts:168` already counts data
+  // stores when deciding whether an architecture section exists at all. Before
+  // this, a repository that evidenced a database and nothing else produced a
+  // snapshot section here and a `null` projection there — the section existed
+  // and could never be read. The frontend's own two guards
+  // (`architectureHasContent`, `CaseStudyArchitecture`'s `empty`) are updated in
+  // the same change, because a projection that survives and then hides on the
+  // client is the same defect one layer up.
   if (!narrative.length && !stack.length && !capabilities.length && !integrations.length
-    && !diagram && !diagramSource) {
+    && !dataStores.length && !diagram && !diagramSource) {
     return null;
   }
-  return { narrative, stack, capabilities, integrations, diagram, diagramSource };
+  return { narrative, stack, capabilities, integrations, dataStores, diagram, diagramSource };
 }
 
-export function projectSituation(content: CaseStudySnapshotContent): PublicCaseStudyNarrative | null {
+/**
+ * The situation band.
+ *
+ * THE NARRATIVE IS STILL WHAT DECIDES WHETHER THE BAND EXISTS. `constraints` and
+ * `goals` are projected alongside it but deliberately do NOT rescue a record with
+ * no narrative: a band headed "The situation" whose entire content is a bullet
+ * list of goals is not a situation, and the pre-existing rule — hide rather than
+ * render thin — is the one this page is built on. Widening the guard to
+ * `!body.length && !constraints.length && !goals.length` would have been the
+ * easy change and the wrong one.
+ *
+ * THE VERIFICATION GATE ALSO STAYS AHEAD OF EVERYTHING. `pairOf(s.verification)`
+ * fails closed, so an unreadable verification pair drops the whole band
+ * including the two new lists. They are not a side door around it.
+ */
+export function projectSituation(content: CaseStudySnapshotContent): PublicCaseStudySituation | null {
   const s = content?.situation;
   if (!s || !pairOf(s.verification)) return null;
   const body = lines(s.narrative);
   if (!body.length) return null;
-  return { heading: 'The situation', body };
+  return {
+    heading: 'The situation',
+    body,
+    constraints: lines(s.constraints),
+    goals: lines(s.goals),
+  };
 }
 
 export function projectMeasurement(content: CaseStudySnapshotContent): PublicCaseStudyMeasurement | null {

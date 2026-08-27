@@ -486,7 +486,11 @@ export async function getRoster(orgId: string): Promise<RosterMember[]> {
       team: m.team,
       level: lvl?.level_slug || 'builder',
       rank: Number(lvl?.rank ?? 0),
-      readiness: Math.round(Number(lvl?.architect_readiness ?? 0)),
+      // 0..1 in the column, 0..100 on the screen. Same bug and same fix as
+      // `pointsDrilldownService`; this is the roster fallback the drilldown uses
+      // when the points drill-down degrades, so fixing only one still leaves a
+      // path that renders 58% as 1%.
+      readiness: Math.round(Number(lvl?.architect_readiness ?? 0) * 100),
       builder_xp_week: m.enrollment_id ? (xpMap.get(m.enrollment_id) ?? 0) : 0,
       streak: m.enrollment_id ? (streakMap.get(m.enrollment_id) ?? 0) : 0,
       total_points: m.enrollment_id ? (pointsMap.get(m.enrollment_id) ?? 0) : 0,

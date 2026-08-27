@@ -167,6 +167,25 @@ export const env = {
   // Deliberately NOT a boolean — the first audience for this is one account
   // being tested while a class is running on the same deployment.
   sbpAgentScoping: (process.env.SBP_AGENT_SCOPING ?? 'off').trim(),
+  // Who may preview a Case Study on a surface OTHER than `enterprise` — the
+  // admin four-lens surface lab. 'off' (default), 'all', or a comma-separated
+  // list of admin user ids (the `sub` claim on the admin JWT).
+  //
+  // DEFAULT CLOSED, and the default is the important half. Three of the four
+  // surfaces are `publishable: false` and have never been reviewed by the
+  // product owner; the copy on two of them carries truthfulness constraints
+  // ("AI Flotation must not imply it built this platform", "Refactored must not
+  // imply it governed work predating it") that only a human can judge. An
+  // unreviewed lens rendered by an operator who does not know that is how an
+  // unreviewed claim gets screenshotted into a deck.
+  //
+  // IDS, NOT EMAILS, and not a hardcoded identifier of any kind. This repo's
+  // `requireCoryAuthorized` hardcodes one person's email address in two files;
+  // an identifier baked into a conditional is a permission that cannot be
+  // granted, revoked or audited without a deploy. An env var can be all three.
+  // Same 'off'/'all'/CSV shape as SBP_AGENT_SCOPING above, deliberately: one
+  // parse convention for "narrow rollout to named accounts" in this codebase.
+  caseStudySurfaceLabUserIds: (process.env.CASE_STUDY_SURFACE_LAB_USER_IDS ?? 'off').trim(),
   // Today aggregation — blend Project + Community cards into the Today feed
   // (Phase 2). Default OFF; the feed stays Class-only until enabled.
   todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',

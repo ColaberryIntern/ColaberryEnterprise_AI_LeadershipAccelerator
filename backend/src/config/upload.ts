@@ -56,6 +56,68 @@ export const strategyPrepUpload = multer({
 
 export { UPLOAD_DIR };
 
+// ── Build Artifact(s) Lab — documents PLUS the recordings the labs now ask for ─
+//
+// The build labs used to ask for a document about the work. Weeks 5 and 7 now ask
+// for the work itself plus a short screen recording proving it ran — an Inspector
+// session answering a real call, three subagents handling one task. The blueprint
+// asked for a demo in 10 of the 12 weeks all along; nobody could submit one,
+// because this endpoint reused `strategyPrepUpload`, whose list is documents only.
+// Across all 65 build artifacts ever submitted there is not one media file.
+//
+// A SEPARATE CONFIG RATHER THAN A WIDER SHARED ONE. `strategyPrepUpload` also
+// serves strategy-prep and the admin accelerator routes. Adding video there would
+// quietly let 100MB uploads into two surfaces that never asked for them, which is
+// how an allowlist stops meaning anything.
+//
+// THE CAP IS 100MB BECAUSE GITHUB'S IS. Step 7 of each rebuilt lab tells the
+// student to commit the recording to their own repo, so a file this endpoint
+// accepts but GitHub rejects would be a trap of our own making. Anything larger
+// gets the same advice the lab gives: shorten it or compress it.
+const BUILD_ARTIFACT_MIMES: Record<string, string> = {
+  ...ALLOWED_MIMES,
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm',
+  'audio/mpeg': '.mp3',
+  'audio/mp4': '.m4a',
+  'audio/wav': '.wav',
+  'application/zip': '.zip',
+};
+
+// Browsers are unreliable about media mime types — a .mov often arrives as
+// application/octet-stream, and .md as an empty string. The extension is the
+// fallback so a correct file is never rejected for a header we cannot control.
+const BUILD_ARTIFACT_EXT_FALLBACK = new Set(
+  [...Object.values(BUILD_ARTIFACT_MIMES)],
+);
+
+const MAX_BUILD_ARTIFACT_SIZE = 100 * 1024 * 1024; // 100MB — GitHub's own file limit
+
+const buildArtifactStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, UPLOAD_DIR); },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || BUILD_ARTIFACT_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+
+function buildArtifactFilter(
+  _req: Express.Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback,
+): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (BUILD_ARTIFACT_MIMES[file.mimetype] || BUILD_ARTIFACT_EXT_FALLBACK.has(ext)) cb(null, true);
+  else cb(new Error('Accepted: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP'));
+}
+
+export const buildArtifactUpload = multer({
+  storage: buildArtifactStorage,
+  fileFilter: buildArtifactFilter,
+  limits: { fileSize: MAX_BUILD_ARTIFACT_SIZE },
+});
+
 // ── Certificate uploads (Anthropic Skills Course) — images + PDF only ─────────
 const CERT_DIR = process.env.CERT_UPLOAD_DIR || path.resolve('/app/uploads/certificates');
 try { fs.mkdirSync(CERT_DIR, { recursive: true }); } catch { /* created lazily on first write otherwise */ }

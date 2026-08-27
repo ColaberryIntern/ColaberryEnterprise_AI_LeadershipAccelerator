@@ -2,9 +2,8 @@ import React from 'react';
 import { SectionCard, StatusBadge } from '../shell';
 import { CASE_STUDY_CONTROLS } from './caseStudyDesk';
 import { readSnapshot } from './caseStudySnapshotView';
-import type {
-  CaseStudySurfacePreview, PublicCaseStudyProjection,
-} from '../../../services/caseStudyAdminTypes';
+import type { CaseStudySurfacePreview } from '../../../services/caseStudyAdminTypes';
+import type { PublicCaseStudyDetail } from '../../../services/caseStudyPublicTypes';
 import type { SnapshotView } from './caseStudySnapshotView';
 
 /**
@@ -30,11 +29,18 @@ interface Props {
   preview: CaseStudySurfacePreview | null;
   loading: boolean;
   error: string | null;
+  /**
+   * Which lens this panel is rendering. It exists so the button names the
+   * surface it will actually fetch: the surface lab above can move the preview
+   * onto Training, and a button that still said "enterprise" would be describing
+   * a request nobody is making.
+   */
+  surfaceKey: string;
   onPreview: () => void;
 }
 
 /** Every count the projection changed, said out loud. */
-function projectionDelta(raw: SnapshotView, projection: PublicCaseStudyProjection): string[] {
+function projectionDelta(raw: SnapshotView, projection: PublicCaseStudyDetail): string[] {
   const notes: string[] = [];
   const rawMetrics = raw.heroMetrics.length + raw.measurementMetrics.length;
   const shownMetrics = projection.heroMetrics.length;
@@ -80,7 +86,7 @@ function projectionDelta(raw: SnapshotView, projection: PublicCaseStudyProjectio
 }
 
 export default function CaseStudyPreviewPanel({
-  preview, loading, error, onPreview,
+  preview, loading, error, surfaceKey, onPreview,
 }: Props): React.ReactElement {
   const raw = readSnapshot(preview?.snapshot?.content ?? null);
   const projection = preview?.projection ?? null;
@@ -93,7 +99,7 @@ export default function CaseStudyPreviewPanel({
           type="button" className="btn btn-sm btn-outline-danger"
           data-testid={CASE_STUDY_CONTROLS.preview} onClick={onPreview} disabled={loading}
         >
-          {loading ? 'Rendering...' : 'Preview enterprise surface'}
+          {loading ? 'Rendering...' : `Preview ${surfaceKey} surface`}
         </button>
       }
     >

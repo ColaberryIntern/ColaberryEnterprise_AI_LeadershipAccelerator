@@ -26,13 +26,18 @@
 
 /* ------------------------------------------------------------------ hero --- */
 
-/* MEASURED, NOT ESTIMATED. On the live record the masthead was 1166px tall at
-   1440px and 2309px at 390px - two and a half phone screens of hero before the
+/* MEASURED, NOT ESTIMATED. On the live record the masthead was 1142px tall at
+   1440px and 2201px at 390px - two and a half phone screens of hero before the
    first sentence of the story. The shared `.cbv2-pagehero` pays --space-16 top
-   and bottom for pages whose hero is a headline and a button; this one stacks a
+   and bottom for pages whose hero is a headline and a button; this one stacked a
    crumb, an eyebrow, a title, a standfirst, a badge, an indicator rail, a facts
-   grid, a figure card, two buttons and a share row, so the same padding reads as
-   a hole. Scoped under .cbv2-story so no other page inherits the decision. */
+   grid, a figure card, two buttons and a share row, so the same padding read as
+   a hole. Scoped under .cbv2-story so no other page inherits the decision.
+
+   THE SECOND HALF OF THAT STACK NOW LIVES ONE BAND DOWN, in
+   `.cbv2-story__context`. What is left here is the masthead proper: crumb,
+   eyebrow, title, standfirst, badge, actions, share. The format's rule for this
+   band is subtract, never add. */
 .cbv2-story .cbv2-pagehero { padding-block: var(--space-10); }
 
 /* The band between the masthead and the first heading was --space-24 (96px) on
@@ -95,28 +100,91 @@
 }
 .cbv2-story__value { margin: 0; overflow-wrap: anywhere; }
 
-/* SCOPED TO THE FACTS STRIP, and the scope is the whole point.
-   These two rules used to read `.cbv2-pagehero .cbv2-story__term/__value`, which
-   matches EVERY descendant of the masthead - including the same two classes
-   inside the hero's figure card, which is painted `--surface-card`. The result
-   shipped: Sample, Methodology and Limitations rendered white on white at
-   1.00:1, measured on the live page, five elements, completely invisible. The
-   evidence context is the thing spec 23 says makes a figure readable, so the
-   card a reader met was a large blank box - which is what "too much white gap,
-   empty space" turned out to describe. Descendant selectors on an inverted
-   surface must name what they invert; `.cbv2-pagehero X` names a background,
-   not a component. */
-.cbv2-pagehero .cbv2-story__facts .cbv2-story__term {
-  color: var(--text-on-inverse);
-  opacity: 0.75;
-}
-.cbv2-pagehero .cbv2-story__facts .cbv2-story__value { color: var(--text-on-inverse); }
+/* THE INVERSION RULES THAT USED TO LIVE HERE ARE GONE, AND THEIR ABSENCE IS THE
+   FIX RATHER THAN A REGRESSION.
+   The facts strip used to sit on the dark masthead, so it needed two overrides
+   to invert its term and value. The first version of those overrides read
+   `.cbv2-pagehero .cbv2-story__term/__value`, which matches EVERY descendant of
+   the masthead - including the same two classes inside the hero's figure card,
+   which is painted `--surface-card`. That shipped: Sample, Methodology and
+   Limitations rendered white on white at 1.00:1, measured on the live page, five
+   elements, completely invisible. Scoping them to `.cbv2-story__facts` fixed the
+   symptom and left the shape - an inverted region with a light card inside it -
+   in place.
+   Moving the whole strip onto light ground removes the shape. There is no
+   inverted region for a light card to be trapped inside, and term and value use
+   the ordinary colours declared above. The general rule survives and is still
+   enforced by `storyDetailV2Contract.test.ts`: a descendant selector on an
+   inverted surface must name WHAT it inverts, because `.cbv2-pagehero X` names a
+   background, not a component.
 
-/* And said again from the light side, so the card is legible even if some other
+   Said from the light side anyway, so the card is legible even if some other
    stylesheet reaches for the same pair. Belt and braces on the one defect this
-   page has now shipped twice in two different places. */
+   page has shipped twice in two different places. */
 .cbv2-story__metric .cbv2-story__term { color: var(--text-muted); opacity: 1; }
 .cbv2-story__metric .cbv2-story__value { color: var(--text-body); }
+
+/* ------------------------------------------------------------ context band --- */
+
+/* The hero's second half, on its own ground. `--space-12` rather than the
+   sections' `--space-16`: this band answers the masthead directly above it and a
+   full section's breathing room would read as a break between the two. */
+.cbv2-story .cbv2-story__context { padding-block: var(--space-12); }
+
+.cbv2-story__context-body {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+/* TWO COLUMNS FROM 64rem, AND THIS IS THE PART THAT ACTUALLY SAVES HEIGHT.
+   Moving a block from the masthead to the band below it does not, by itself,
+   bring the first sentence of the story any closer - the same content is still
+   between the reader and it. What shortens the page is putting the scannable
+   half (counts, facts) beside the readable half (the figure card with its
+   sample, methodology and limitations) instead of above it.
+   5fr/7fr rather than 1fr/1fr because the two halves are not the same weight:
+   the facts are short label-value pairs and the figure card carries a paragraph
+   of methodology. Both tracks get a zero floor so a long programme name or an
+   unbroken URL cannot widen a column and push the page sideways. Below 64rem it
+   is one column and the order is source order, which is already the order a
+   reader wants: counts, facts, figures. */
+@media (min-width: 64rem) {
+  .cbv2-story__context-body {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: start;
+    column-gap: var(--space-10);
+  }
+  /* The rail spans both tracks: it is a single horizontal line of chips and
+     confining it to the narrow column would wrap it into three rows. */
+  .cbv2-story__context-body .cbv2-story__indicators { grid-column: 1 / -1; }
+}
+
+/* ------------------------------------------------------------------ tone --- */
+
+/* THE ALTERNATION IS THE GRAMMAR, AND IT IS ONE CLASS.
+   `STORY_FORMAT_V1.md` section 5: every VISUAL band sits on sunken ground and
+   every PROSE band sits on default ground, so a reader learns in two screens
+   that a change of ground means a change of medium. Before this pass every band
+   on the page was default and the whole body read as one uninterrupted white
+   sheet.
+
+   IT IS THIS PAGE'S OWN CLASS, NOT THE SHARED `.cbv2-section--sunken`, and that
+   is deliberate. The shared modifier is DECLARED TWICE with different values -
+   `homeV2.css:22` paints it `--surface-sunken` and `cinematicV2.css:409` paints
+   it `--cbv2-warm-sunken` - so which one a band actually gets depends on the
+   order App.tsx happens to import two other pages in. A grammar that is supposed
+   to be locked cannot rest on that. Scoped under `.cbv2-story` so no other page
+   inherits the decision either. */
+.cbv2-story .cbv2-story__section--sunken { background: var(--surface-sunken); }
+
+/* A picture band pays its own block padding, which it does not otherwise carry.
+   Without it the sunken ground is exactly the height of the image and reads as a
+   mat around the picture rather than as a band the picture sits in. Keyed on the
+   same tone class as every other band, so there is one name for this idea. */
+.cbv2-story .cbv2-story-figures.cbv2-story__section--sunken {
+  padding-block: var(--space-12);
+}
 
 /* --------------------------------------------------------- hero figures --- */
 
@@ -163,6 +231,48 @@
 .cbv2-story__body { display: grid; gap: var(--space-6); min-width: 0; }
 .cbv2-story__body h2 { margin: 0; overflow-wrap: anywhere; }
 .cbv2-story__block { display: grid; gap: var(--space-4); min-width: 0; }
+
+/* --------------------------------------------------------- the situation --- */
+
+.cbv2-story__situation { display: grid; gap: var(--space-8); min-width: 0; }
+
+/* `constraints` and `goals` - what the work was for and what it had to work
+   within. Two columns from 48rem because they are a matched pair and reading
+   them side by side is the whole point: the aim on the left, the boundary on the
+   right. One column below that, in source order, so the aim still comes first. */
+.cbv2-story__qualifiers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+@media (min-width: 48rem) {
+  .cbv2-story__qualifiers { grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+}
+
+.cbv2-story__qualifier {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--surface-sunken);
+  /* The accent edge marks these as the record's own stated terms rather than
+     the page's summary of them - the same device the disclosure note uses, for
+     the same reason. */
+  border-left: var(--border-3) solid var(--chart-1);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.cbv2-story__qualifier h3 { margin: 0; }
+
+.cbv2-story__qualifier-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  line-height: var(--lh-relaxed);
+}
 
 /* ----------------------------------------------------------- contributors --- */
 
@@ -287,197 +397,17 @@
   gap: var(--space-3);
 }
 
-/* ------------------------------------------------------------- carousel --- */
-/* Native scroll-snap. No library, no JavaScript layout, no transform track --
-   the browser scrolls, and the arrows only nudge it. Which is why it still
-   works with JavaScript off, and why a focused slide scrolls itself into view
-   without anything here being told about focus. */
-
-.cbv2-story-carousel {
-  display: grid;
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
-  min-width: 0;
-}
-
-.cbv2-story-carousel__track {
-  display: flex;
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0 0 var(--space-3) 0;
-  list-style: none;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
-  scroll-padding-left: var(--space-1);
-  scroll-behavior: smooth;
-  /* A flex child's default `min-width: auto` refuses to shrink below its
-     content, which is what turns a horizontal scroller into a page that scrolls
-     sideways. This is the whole 320px story. */
-  min-width: 0;
-}
-
-/* A programmatic scroll carries its own behaviour and ignores this rule, so the
-   arrow handler asks matchMedia again. Both halves are needed. */
-@media (prefers-reduced-motion: reduce) {
-  .cbv2-story-carousel__track { scroll-behavior: auto; }
-}
-
-.cbv2-story-carousel__slide {
-  flex: 0 0 auto;
-  /* `min()` and not a fixed width: at 320px one slide is the viewport, and on a
-     wide screen three sit side by side. No media query needed and no breakpoint
-     to get wrong. */
-  width: min(100%, 20rem);
-  min-width: 0;
-  scroll-snap-align: start;
-}
-
-/* THE 320px OVERFLOW LIVED HERE, and it was not the track.
-   `.cbv2-cs-sr-only` is `position: absolute`, and an absolutely positioned box
-   is only clipped by an ancestor's overflow if that ancestor sits between it and
-   its CONTAINING BLOCK. Nothing inside this track was positioned, so the
-   containing block was the initial one, the sr-only span in each offscreen slide
-   escaped the track's `overflow-x: auto` entirely, and it extended the ROOT
-   scroll area to its own right edge. Measured on the live page: documentElement
-   scrollWidth 709 against a 390px viewport and 613 against 320px, and deleting
-   just those three spans in the live DOM dropped both to the viewport width
-   exactly. One `position: relative` puts the containing block back inside the
-   scroller, and the span is clipped with everything else. */
-.cbv2-story-carousel__link {
-  position: relative;
-  display: grid;
-  gap: var(--space-2);
-  height: 100%;
-  padding: var(--space-3);
-  background: var(--surface-card);
-  border: var(--border-1) solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  color: var(--text-body);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-.cbv2-story-carousel__link:hover { border-color: var(--border-default); }
-
-.cbv2-story-carousel__link:focus-visible {
-  outline: var(--border-2) solid var(--border-focus);
-  outline-offset: 2px;
-  box-shadow: var(--focus-ring);
-}
-
-.cbv2-story-carousel__image {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunken);
-}
-
-.cbv2-story-carousel__caption { display: grid; gap: var(--space-1); }
-
-.cbv2-story-carousel__kind {
-  font-size: var(--fs-caption);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--ls-wide);
-}
-
-.cbv2-story-carousel__title {
-  font-size: var(--fs-body-sm);
-  font-weight: var(--fw-medium);
-  color: var(--text-strong);
-}
-
-.cbv2-story-carousel__controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-/* -------------------------------------------------------------- diagram --- */
-
-/* Sits BELOW the verified component and connection lists, never instead of
-   them. When the record carries no hand-drawn source this block is not rendered
-   at all -- there is no empty frame and no placeholder heading. */
-.cbv2-story__diagram {
-  display: grid;
-  gap: var(--space-3);
-  margin-top: var(--space-6);
-  min-width: 0;
-}
-.cbv2-story__diagram h3 { margin: 0; }
-
-/* -------------------------------------------------------- inline figures --- */
-/* A picture met while the reading is still going on, between two sections and
-   belonging to neither. It carries no section padding of its own: the sections
-   on either side already pay for the space, and a third helping turns a reading
-   break into a gap. */
-
-.cbv2-story-figures { min-width: 0; }
-
-.cbv2-story-figure {
-  display: grid;
-  gap: var(--space-3);
-  /* Narrower than the prose column on purpose. A full-bleed 1232px picture stops
-     being a figure inside an argument and becomes a banner between two of them. */
-  max-width: var(--container-sm);
-  margin: 0 auto;
-  min-width: 0;
-}
-
-.cbv2-story-figure__link {
-  position: relative;
-  display: block;
-  min-width: 0;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  text-decoration: none;
-}
-.cbv2-story-figure__link:focus-visible {
-  outline: var(--border-2) solid var(--border-focus);
-  outline-offset: 2px;
-  box-shadow: var(--focus-ring);
-}
-
-/* `contain` and a height cap, not a crop. This is a template: the next record
-   may carry a 3000x400 banner or a 400x3000 phone capture, and `cover` would
-   silently cut the evidence out of an evidence image. The sunken ground is what
-   the letterboxing lands on, so an odd ratio reads as deliberate framing.
-   30rem, because the column is `--container-sm` (640px) and 640 x 3/4 is 480px
-   exactly: the ordinary 4:3 photograph fills the frame with no bars at all, and
-   only something taller than 4:3 letterboxes. At 26rem every 4:3 image had grey
-   bars down both sides for no reason. */
-.cbv2-story-figure__image {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: 30rem;
-  object-fit: contain;
-  background: var(--surface-sunken);
-}
-
-.cbv2-story-figure__caption {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.cbv2-story-figure__kind {
-  font-size: var(--fs-caption);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--ls-wide);
-}
-.cbv2-story-figure__title {
-  font-size: var(--fs-body-sm);
-  font-weight: var(--fw-medium);
-  color: var(--text-strong);
-}
-
 /* ------------------------------------------------------------ indicators --- */
-/* Counts, on the dark masthead. No colour coding: colour here would have to mean
-   good or bad, and a count of technologies is neither. */
+/* Counts. No colour coding: colour here would have to mean good or bad, and a
+   count of technologies is neither.
+   THE RAIL MOVED FROM DARK GROUND TO LIGHT, and these two rules are the reason
+   that move is not the fourth invisible-text incident on this surface. They read
+   `--text-on-inverse` while the rail sat on the masthead; left alone under
+   `.cbv2-story__context` they would have painted near-white text on
+   `--surface-sunken`. Nothing in jsdom can see that - no unit test in this
+   repository applies a stylesheet - so the check that catches this class of
+   mistake is the rendered-contrast sweep in `tests/systemV2/caseStudyPublic.e2e.js`,
+   and it is the reason that sweep is a completion condition rather than a nicety. */
 
 .cbv2-story__indicators {
   display: flex;
@@ -507,12 +437,11 @@
   margin: 0;
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
-  color: var(--text-on-inverse);
+  color: var(--text-strong);
 }
 .cbv2-story__indicator-label {
   font-size: var(--fs-body-sm);
-  color: var(--text-on-inverse);
-  opacity: 0.78;
+  color: var(--text-muted);
 }
 
 /* The count chip beside a section heading. Baseline-aligned to the h2 rather

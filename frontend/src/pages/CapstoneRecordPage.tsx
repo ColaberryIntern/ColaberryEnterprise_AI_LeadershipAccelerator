@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import RecordProse from '../components/capstone/RecordProse';
 import { useParams } from 'react-router-dom';
 import portalApi from '../utils/portalApi';
 
@@ -175,11 +176,17 @@ function CapstoneRecordPage() {
             <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>{system.project_name}</h3>
           )}
           {system.descriptor && (
-            <p style={{ fontSize: 15.5, lineHeight: 1.65, color: BODY, margin: 0 }}>
-              {system.descriptor}
-            </p>
+            /* Markdown, not a paragraph. The descriptor is compiled from the project's
+               executive deliverable and is a full document -- headings, GFM tables, bold.
+               Rendered flat it reached hiring managers as a wall of literal ## and |. */
+            <div style={{ fontSize: 15.5, color: BODY }}>
+              <RecordProse>{system.descriptor}</RecordProse>
+            </div>
           )}
-          {typeof system.hours_reclaimed === 'number' && (
+          {/* `> 0`, not just `is a number`. A compiled 0 rendered as
+              "0 hours a month reclaimed", which reads as a measured result of nothing --
+              the record's own rule is that an absent band renders as absent. */}
+          {typeof system.hours_reclaimed === 'number' && system.hours_reclaimed > 0 && (
             <p style={{ fontSize: 14, color: MUTED, marginTop: 12, marginBottom: 0 }}>
               {system.hours_reclaimed} hours a month reclaimed
             </p>

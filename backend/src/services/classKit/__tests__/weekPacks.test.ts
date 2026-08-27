@@ -115,6 +115,21 @@ describe('week pack registry', () => {
     it('shows at least one read-along code block — the class reads what Claude Code wrote', () => {
       const withCode = d.teach.filter((s: TeachSlide) => s.code);
       expect(withCode.length).toBeGreaterThan(0);
+
+      // Week 5 Monday deliberately carries NO `review` block. The MCP rebuild
+      // teaches the round trip from scratch, so every block is a prompt the room
+      // TYPES rather than a transcript it reads. Ali ruled on this 2026-08-26, by
+      // which point the deck had already been serving in production for two days:
+      // the assertion below was describing a rule he had decided against.
+      //
+      // Scoped to this one day on purpose. The rule still holds for every other
+      // session, because it exists to stop a week shipping as pure narration with
+      // nothing on screen that Claude Code actually produced. The withCode.length
+      // floor above still applies here, so Week 5 Monday cannot quietly lose its
+      // code blocks altogether.
+      const PROMPT_ONLY_DAYS = [{ week: 5, day: 'monday' }];
+      if (PROMPT_ONLY_DAYS.some((x) => x.week === week && x.day === day)) return;
+
       expect(withCode.some((s) => s.code!.kind === 'review')).toBe(true);
     });
 
