@@ -101,7 +101,7 @@ describe('splitScript', () => {
       'SAY: Read this out.\nDO: Put it on screen.\nNOTE: Watch the clock.',
       'the body paragraph',
     );
-    expect(r.say).toBe('Read this out.');
+    expect(r.say).toBe('the body paragraph');
     expect(r.setup).toBe('SAY: Read this out.\nDO: Put it on screen.\nNOTE: Watch the clock.');
   });
 
@@ -117,8 +117,8 @@ describe('splitScript', () => {
   });
 
   it('never lets direction reach the read screen', () => {
-    const r = splitScript('DO: Run it.\nNOTE: Then wait.\nSAY: Only this.', 'body');
-    expect(r.say).toBe('Only this.');
+    const r = splitScript('DO: Run it.\nNOTE: Then wait.\nSAY: Only this.', 'The paragraph.');
+    expect(r.say).toBe('The paragraph.');
     expect(r.say).not.toMatch(/DO:|NOTE:/);
   });
 
@@ -130,9 +130,9 @@ describe('splitScript', () => {
     expect(r.setup).toBe('NOTE: Walk the diagram node by node.\nSAY: The paragraph they read.');
   });
 
-  it('falls back to the body when a slide tags direction but no spoken line', () => {
-    const r = splitScript('DO: Just run it.', 'Fallback prose.');
-    expect(r.say).toBe('Fallback prose.');
+  it('falls back to the script’s SAY cues when a slide has no paragraph of its own', () => {
+    const r = splitScript('DO: Just run it.\nSAY: The only spoken cue.', undefined);
+    expect(r.say).toBe('The only spoken cue.');
   });
 
   it('handles a slide with neither script nor body without throwing', () => {
