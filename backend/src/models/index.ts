@@ -422,9 +422,8 @@ import TenantAccessAudit from './TenantAccessAudit';
 // sequelize.models, so an unregistered model is an invisible one.
 import DeliveryEngagement from './DeliveryEngagement';
 import DeliveryProject from './DeliveryProject';
-import CareerPublication from './CareerPublication';
-import CareerPublicationSnapshot from './CareerPublicationSnapshot';
-import CareerPublicationApproval from './CareerPublicationApproval';
+import CapstoneReviewApproval from './CapstoneReviewApproval';
+import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
 import DeliveryContract from './DeliveryContract';
@@ -457,6 +456,13 @@ import CaseStudyArtifact from './CaseStudyArtifact';
 import CaseStudyPublication from './CaseStudyPublication';
 import CaseStudySyncRun from './CaseStudySyncRun';
 import CaseStudyCollection from './CaseStudyCollection';
+// Story Studio assets. Schema lives in db/ensureCaseStudyStoryAssets.ts, a peer
+// of ensureCaseStudySchema.ts rather than an extension of it — see that file's
+// header for why the ten-table core was left byte-untouched.
+import CaseStudyStoryline from './CaseStudyStoryline';
+import CaseStudyAiDraft from './CaseStudyAiDraft';
+import CaseStudyQuote from './CaseStudyQuote';
+import CaseStudyChart from './CaseStudyChart';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1531,15 +1537,18 @@ export {
   CaseStudyPublication,
   CaseStudySyncRun,
   CaseStudyCollection,
+  CaseStudyStoryline,
+  CaseStudyAiDraft,
+  CaseStudyQuote,
+  CaseStudyChart,
   // Refactored AI Delivery OS (Gate 1)
   DeliveryEngagement,
   DeliveryProject,
   DeliveryProjectSourceLink,
 
   // Living Career Portfolio (Gate 10 — versioned publication)
-  CareerPublication,
-  CareerPublicationSnapshot,
-  CareerPublicationApproval,
+  CapstoneReviewApproval,
+  CareerMentorScope,
   DeliveryProjectMember,
   DeliveryContract,
   DeliveryDecision,

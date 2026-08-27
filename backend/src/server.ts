@@ -7,6 +7,8 @@ import { connectDatabase, sequelize } from './config/database';
 import { errorHandler } from './middlewares/errorHandler';
 import { traceMiddleware } from './middlewares/traceMiddleware';
 import healthRoutes from './routes/healthRoutes';
+import deliveryClientAuthRoutes from './routes/deliveryClientAuthRoutes';
+import deliveryClientRoutes from './routes/deliveryClientRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
@@ -32,7 +34,7 @@ import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
 import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
-import publicTalentRoutes from './routes/publicTalentRoutes';
+import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
@@ -67,10 +69,14 @@ import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
+import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
+import {
+  ensureCaseStudyStoryAssets, assertCaseStudyStoryAssets,
+} from './db/ensureCaseStudyStoryAssets';
 import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
 import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotificationSchema';
@@ -124,6 +130,14 @@ app.use(express.json({ limit: '5mb' }));
 app.use(intelligenceMiddleware());
 
 app.use(healthRoutes);
+// Client reviewer sign-in (Google SSO). Mounted UNAUTHENTICATED on purpose - it is the
+// door. It grants nothing: it verifies a Google identity, looks up delivery memberships
+// that already exist, and refuses when there are none.
+app.use(deliveryClientAuthRoutes);
+// The client read surface. Registered immediately after the auth route and BEFORE the
+// admin tree: routes mounted after adminRoutes inherit its guard and answer 401 to a
+// perfectly valid client token.
+app.use(deliveryClientRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
@@ -144,10 +158,6 @@ app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
-// Gate 11 public talent read. Mounted HERE, beside the other public routes and
-// BEFORE adminRoutes, for the reason documented just below: a public route
-// registered downstream of adminRoutes inherits its requireAdmin guard and 401s.
-app.use(publicTalentRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
@@ -171,6 +181,9 @@ app.use(trackingRoutes);
 // smoke test kept passing. publicCaseStudyRoutes.test.ts builds both orders against
 // an adminRoutes-shaped stand-in and asserts 200 above / 401 below, so the failure
 // mode is pinned by a test rather than by this comment.
+// MUST stay above adminRoutes: a public route mounted after it inherits the admin
+// auth guard and 401s for the strangers it exists to serve.
+app.use(publicCareerPortfolioRoutes);
 app.use(publicCaseStudyRoutes);
 
 app.use(adminRoutes);
@@ -2412,6 +2425,14 @@ async function start(): Promise<void> {
   // post-check must not take the whole API down, it must be loud in the logs.
   await ensureCaseStudySchema();
   await assertCaseStudySchema();
+  // Story Studio assets: 4 tables (storylines, AI drafts, quotes, charts). A
+  // peer module rather than four more statements in ensureCaseStudySchema,
+  // which is already 508 lines against the 500 ceiling AND is read as source
+  // text by two guard suites that pin its table count and column total. Same
+  // ensure-then-assert shape and the same non-fatal posture: a failed post-check
+  // must be loud in the logs, never take the API down.
+  await ensureCaseStudyStoryAssets();
+  await assertCaseStudyStoryAssets();
   // Ticket Board Performance fix (2026-08-18): idx_tickets_created_at +
   // idx_tickets_status_created_at, CONCURRENTLY (tickets is write-heavy). Powers the
   // new "last 7 days" default board view. See ensureTicketIndexesSchema.ts header.
@@ -2623,6 +2644,11 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase C — autonomy_level (docs/ai-governance/abac-design.md's
   // 4-level ladder), required at agent reactivation time. Additive, idempotent, no flag.
   await ensureAiAgentAutonomyLevelSchema();
+  // Trust Contract Phase 1 — real history behind AiAgent.persona_version,
+  // written by seedAgentRegistry() (below) whenever a registry entry's
+  // version genuinely changes. Additive, idempotent, no flag. Must run
+  // before seedAgentRegistry() so the table exists on a fresh boot.
+  await ensureAgentPersonaVersionHistorySchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();

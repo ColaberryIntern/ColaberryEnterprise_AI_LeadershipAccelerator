@@ -96,6 +96,24 @@ export interface CampaignMessageInput {
   html: string;
   businessEventId: string;
   idempotencyKey: string;
+  /**
+   * RFC822 Message-ID of the message being answered, e.g. `<abc@mail.gmail.com>`.
+   *
+   * Without this a Mandrill send starts a BRAND NEW conversation, even when its
+   * subject is `Re: ...`. That is not cosmetic: the student's original thread
+   * keeps exactly one message, so every inbox sweep reads it as unanswered.
+   * On 2026-08-25 that made four already-answered student emails look like a
+   * four-day backlog, and nearly produced an apology for a delay that had not
+   * happened.
+   *
+   * Omit for a first-contact campaign, which genuinely has nothing to thread
+   * into. Supply it for anything that is a REPLY.
+   */
+  inReplyTo?: string;
+  /** Prior Message-IDs in the thread, oldest first. Defaults to `[inReplyTo]`. */
+  references?: string[];
+  /** Mandrill tag, for separating watcher replies from campaign sends. */
+  tag?: string;
 }
 
 export interface CampaignMessage {
@@ -121,7 +139,15 @@ export function buildCampaignMessage(input: CampaignMessageInput): CampaignMessa
     headers: {
       [OUTBOUND_COPY_HEADER]: input.businessEventId,
       [IDEMPOTENCY_HEADER]: input.idempotencyKey,
-      'X-MC-Tags': 'student-unblock',
+      'X-MC-Tags': input.tag ?? 'student-unblock',
+      // Threading. Present only when this send is answering something, so a
+      // first-contact campaign is byte-identical to before this existed.
+      ...(input.inReplyTo
+        ? {
+            'In-Reply-To': input.inReplyTo,
+            References: (input.references?.length ? input.references : [input.inReplyTo]).join(' '),
+          }
+        : {}),
       // Pinned rather than left to Mandrill's SMTP default, so the header the
       // student receives is the header the verification gate reviewed.
       'X-MC-PreserveRecipients': 'true',

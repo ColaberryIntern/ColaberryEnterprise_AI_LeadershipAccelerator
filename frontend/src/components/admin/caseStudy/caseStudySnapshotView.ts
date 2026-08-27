@@ -231,6 +231,69 @@ export interface ProvenanceRow {
   readonly detail: string;
 }
 
+/**
+ * Describe a `CaseStudyProvenanceOrigin` in words a reviewer can act on.
+ *
+ * IDS THAT ARE INTERNAL STAY INTERNAL. `metricId`, `evidenceId`,
+ * `evidenceRecordId`, `portfolioArtifactId` and `projectId` are row identifiers
+ * with no meaning outside the database; the same rule `metricAt` follows for
+ * `verification.evidenceId` applies here — that a record exists is what the
+ * reviewer needs, and all they are shown. A commit sha is the opposite case:
+ * it is the thing that makes an extraction checkable, so it is shown.
+ */
+function describeOrigin(origin: Record<string, unknown>): string {
+  const kind = str(origin.kind);
+  const repo = [str(origin.repoOwner), str(origin.repoName)].filter(Boolean).join('/');
+  const sha = str(origin.commitSha);
+  switch (kind) {
+    case 'human':
+      return [str(origin.actor), str(origin.note)].filter(Boolean).join(' · ');
+    case 'repo_extraction':
+      return [repo && sha ? `${repo}@${sha.slice(0, 7)}` : repo, str(origin.filePath)]
+        .filter(Boolean).join(' · ');
+    case 'manifest':
+      return [repo, str(origin.manifestPath)].filter(Boolean).join(' · ');
+    case 'ai_draft':
+      return [str(origin.model), str(origin.promptKey)].filter(Boolean).join(' · ');
+    case 'project_field':
+      return str(origin.fieldName) ? `project field ${str(origin.fieldName)}` : 'a project field';
+    case 'case_study_metric':
+      return 'a metric row on this record';
+    case 'case_study_evidence':
+    case 'evidence_record':
+      return 'an evidence record';
+    case 'portfolio_artifact':
+      return 'a portfolio artifact';
+    default:
+      return kind;
+  }
+}
+
+/**
+ * THE SHAPE THIS READS WAS WRONG IN PRODUCTION UNTIL 2026-08-26, and the way it
+ * went unnoticed is the more useful half of the story.
+ *
+ * The server writes `CaseStudyProvenanceEntry` — `{ tier, origin, recordedAt }`
+ * (`backend/src/types/caseStudyProvenance.ts`). This function read `row.source`,
+ * `row.sourceType`, `row.sourceRef`, `row.note` and `row.generatedBy`, none of
+ * which appear anywhere in that type. Every entry therefore fell through to the
+ * `'unknown'` default with an empty detail, and the TRUTH tab's Provenance
+ * panel — whose entire job is answering "where did each value come from?" —
+ * rendered fourteen rows on the live pilot record reading `unknown` and `—`,
+ * while the payload behind them carried the tier, the actor, the repository and
+ * the commit sha for every one.
+ *
+ * NOTHING CAUGHT IT because `caseStudyAdminFixtures.ts` encoded the OLD shape:
+ * `{ source: 'human_override', note: '...' }`. A fixture is a claim about what
+ * the server sends, and when it stops being true the suite goes on proving the
+ * reader can parse a format nothing produces. The fixture now carries the real
+ * production shape, with one legacy-shaped entry kept deliberately so the
+ * back-compat branch below is exercised rather than merely asserted.
+ *
+ * BOTH SHAPES ARE READ. Snapshots written before the entry type landed are
+ * still in the table and still openable, so the old keys are a fallback rather
+ * than a deletion.
+ */
 export function readProvenance(
   provenance: Record<string, unknown> | null | undefined,
 ): ProvenanceRow[] {
@@ -239,6 +302,16 @@ export function readProvenance(
     const entry = provenance[field];
     if (typeof entry === 'string') return { field, source: entry, detail: '' };
     const row = asRecord(entry);
+
+    // The current contract: tier + origin + recordedAt.
+    const tier = str(row.tier);
+    if (tier) {
+      const detail = [describeOrigin(asRecord(row.origin)), str(row.recordedAt).slice(0, 10)]
+        .filter((v) => v.length > 0).join(' · ');
+      return { field, source: tier, detail };
+    }
+
+    // Pre-entry-type snapshots, still readable.
     const source = str(row.source) || str(row.sourceType) || 'unknown';
     const detail = [str(row.sourceRef), str(row.note), str(row.generatedBy)]
       .filter((v) => v.length > 0).join(' · ');

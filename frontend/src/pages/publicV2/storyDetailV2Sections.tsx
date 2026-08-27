@@ -7,6 +7,9 @@ import CaseStudyRoadmap from '../../components/caseStudy/CaseStudyRoadmap';
 import CaseStudyTimeline from '../../components/caseStudy/CaseStudyTimeline';
 import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVerificationBadge';
 import { BUILT_BY_LABELS, REPO_ROLE_LABELS } from '../../config/caseStudySurfaces';
+import StoryDiagram from './StoryDiagram';
+import StoryMediaCarousel from './StoryMediaCarousel';
+import StorySituation from './StorySituation';
 import {
   anonymousContributorNote,
   contributorLabel,
@@ -14,6 +17,7 @@ import {
   formatPublishedDate,
   withheldRepositoryNote,
 } from './storyDetailV2Model';
+import { carouselSlides, diagramSourceOf } from './storyMediaModel';
 import type {
   CaseStudySectionKey,
   PublicCaseStudyContributor,
@@ -192,6 +196,11 @@ export function StoryRepositories({
                 <span className="cbv2-cs-sr-only"> repository (opens in a new tab)</span>
               </a>
               <span className="cbv2-cs-tag">{REPO_ROLE_LABELS[repository.role]}</span>
+              {/* A repository only reaches this list by being public AND
+                  consented, so saying so is reading the wire back, not a claim
+                  this file is making. It is the indicator a reader scanning for
+                  "can I actually open the source" is looking for. */}
+              <span className="cbv2-cs-tag cbv2-story__repo-visibility">Public</span>
               {repository.lastCommitDate ? (
                 <span className="cbv2-story__repo-date">
                   <span className="cbv2-cs-sr-only">Last commit: </span>
@@ -220,24 +229,30 @@ export function StoryRepositories({
 export function StorySectionBody({
   sectionKey,
   record,
+  placedHrefs = [],
 }: {
   sectionKey: CaseStudySectionKey;
   record: PublicCaseStudyDetail;
+  /** Pictures the page already showed between sections. Default: none. */
+  placedHrefs?: readonly string[];
 }): React.ReactElement | null {
   switch (sectionKey) {
     case 'situation':
-      return (
-        <div className="cbv2-cs-arch__prose">
-          {(record.situation?.body ?? []).map((paragraph, index) => (
-            <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
-          ))}
-        </div>
-      );
+      // The narrative plus `constraints` and `goals` - two fields that have
+      // always been authored and gated and were never projected. Page-local for
+      // the same reason everything here is.
+      return <StorySituation situation={record.situation} />;
     case 'build':
       return <CaseStudyTimeline entries={record.timeline} />;
     case 'architecture':
+      // The verified lists FIRST, the drawing second. A reader meets what the
+      // repository evidenced before they meet what somebody sketched, and the
+      // drawing is absent entirely on the records that have none.
       return record.architecture ? (
-        <CaseStudyArchitecture architecture={record.architecture} headingLevel={3} />
+        <>
+          <CaseStudyArchitecture architecture={record.architecture} headingLevel={3} />
+          <StoryDiagram source={diagramSourceOf(record.architecture)} />
+        </>
       ) : null;
     case 'measurement':
       return record.measurement ? (
@@ -253,9 +268,21 @@ export function StorySectionBody({
         />
       );
     case 'artifacts':
+      // The carousel is a second VIEW of the same approved artifacts, not a
+      // second set: it shows the ones that are images, and every artifact still
+      // appears in the list beneath it. Below two images `carouselSlides`
+      // returns nothing and only the list renders. Pictures the page already
+      // placed between sections are subtracted first, so nothing appears twice.
       return (
         <div data-story-zone="artifacts">
-          <CaseStudyArtifacts artifacts={record.artifacts} />
+          <StoryMediaCarousel slides={carouselSlides(record.artifacts, placedHrefs)} />
+          {/* `headingLevel={3}` closes the h2 -> h4 skip this band used to
+              carry. The component's default is still 4 for every other caller. */}
+          <CaseStudyArtifacts
+            artifacts={record.artifacts}
+            requestHref={record.cta.href}
+            headingLevel={3}
+          />
         </div>
       );
     case 'repositories':

@@ -1,0 +1,142 @@
+{
+  "generated_at": "2026-08-25T18:44:41.085Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "base_url": "https://enterprise.colaberry.ai",
+  "console_errors": [],
+  "note": "deviceScaleFactor 2 (retina-review): these PNGs are embedded in REFACTORED_DELIVERY_OS_REVIEW.html for human inspection only and are never Read by Claude.",
+  "entries": [
+    {
+      "file": "01-client-overview.png",
+      "label": "Client · Overview",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/client",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "02-client-decisions.png",
+      "label": "Client · Decisions",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/client",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "03-client-design.png",
+      "label": "Client · Design",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/client",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "04-client-preview.png",
+      "label": "Client · Preview",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/client",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "05-client-changes.png",
+      "label": "Client · Changes",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/client",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "06-client-releases.png",
+      "label": "Client · Releases",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/client",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "07-client-results.png",
+      "label": "Client · Results",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/client",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "08-client-documents.png",
+      "label": "Client · Documents",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/client",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "09-builder-command.png",
+      "label": "Builder · Command",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/builder",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "10-builder-plan.png",
+      "label": "Builder · Plan",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/builder",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "11-builder-design.png",
+      "label": "Builder · Design",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/builder",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "12-builder-build.png",
+      "label": "Builder · Build",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/builder",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "13-builder-agents.png",
+      "label": "Builder · Agents",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/builder",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "14-builder-proof.png",
+      "label": "Builder · Proof",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/builder",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "15-builder-release.png",
+      "label": "Builder · Release",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/builder",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    },
+    {
+      "file": "16-builder-operate.png",
+      "label": "Builder · Operate",
+      "url": "https://enterprise.colaberry.ai/admin/refactored/builder",
+      "originalWidth": 2880,
+      "finalWidth": 2880,
+      "downscaled": false
+    }
+  ]
+}

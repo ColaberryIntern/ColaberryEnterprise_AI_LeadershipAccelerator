@@ -80,12 +80,13 @@ function facts(over: Partial<any> = {}) {
   };
 }
 
-function makePorts(
-  messages: any[],
-  opts: { linkLands?: boolean; postRepairExpiry?: string } = {},
-) {
-  let requested = false;
-  const freshExpiry = opts.postRepairExpiry ?? '2026-08-18T04:00:05.000Z';
+/**
+ * `linkLands` and `postRepairExpiry` are gone with the repair they configured.
+ * `requestFreshLoginLink` is deliberately still WIRED, and still records into
+ * `mutations`, even though nothing calls it: a spy on a port that should never
+ * fire is how a regression that reintroduces the call gets caught.
+ */
+function makePorts(messages: any[]) {
   return {
     fetchRecentInbound: async () => messages,
     fetchThreadMessages: async (threadId: string | null) =>
@@ -96,11 +97,8 @@ function makePorts(
     },
     escalate: async (input: any) => { escalations.push(input); },
     data: {
-      loadStudentFacts: async () =>
-        facts(requested && opts.linkLands !== false
-          ? { portalTokenExpiresAt: freshExpiry }
-          : {}),
-      requestFreshLoginLink: async (email: string) => { mutations.push(email); requested = true; },
+      loadStudentFacts: async () => facts(),
+      requestFreshLoginLink: async (email: string) => { mutations.push(email); },
     },
   };
 }
@@ -147,18 +145,27 @@ describe('a dry run is genuinely inert', () => {
     expect(mutations).toEqual([]);
   });
 
-  it('mutates nothing even though the live run on the same input does', async () => {
+  it('reaches nothing, while the live run on the same input reaches the wire', async () => {
     await runCycle(makePorts([bccCopy, studentReply()]), {
       stateDir: dir, runId: RUN_ID, dryRun: true, caps: CAPS, now: NOW,
     });
     expect(mutations).toEqual([]);
+    expect(sent).toEqual([]);
 
-    // The same message, live: proves the dry run was reaching a real repair and
-    // that the fix removed it rather than the fixture simply never getting there.
+    // The positive control this test exists to be.
+    //
+    // It used to read `expect(mutations).toEqual(['bfglz@yahoo.com'])` -- the
+    // live run reached a real repair, so the dry run's empty `mutations` was
+    // the check working rather than the fixture stopping short. There is no
+    // repair to reach any more, so the control moves to the wire: the same
+    // input sends on a live run and sent nothing on the rehearsal. Without a
+    // control in one direction or the other, an assertion that nothing happened
+    // is indistinguishable from a fixture that never got there.
     await runCycle(makePorts([bccCopy, studentReply()]), {
       stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS, now: NOW,
     });
-    expect(mutations).toEqual(['bfglz@yahoo.com']);
+    expect(sent).toHaveLength(1);
+    expect(mutations).toEqual([]);   // and no token was rotated on either path
   });
 
   it('puts no escalation on the wire either, and records why in the log', async () => {
@@ -204,7 +211,7 @@ describe('dry run is the default posture and reaches no wire', () => {
 });
 
 describe('a real student reply is answered once and only once', () => {
-  it('sends one reply that states what was checked and what was done', async () => {
+  it('sends one reply that states what was checked, and only what was checked', async () => {
     const out = await runCycle(makePorts([bccCopy, studentReply()]), {
       stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS, now: NOW,
     });
@@ -215,11 +222,18 @@ describe('a real student reply is answered once and only once', () => {
     expect(sent[0].inReplyTo).toBe('<student-1@yahoo.com>');
 
     const record = readLog().find((e) => e.type === 'reply_sent');
-    expect(record.claims).toHaveLength(2);
-    expect(record.evidence.filter((e: any) => e.postChange === true)).toHaveLength(1);
+    // One claim, and it is a reading rather than a repair. This used to assert
+    // two claims, the second of which was 'I confirmed it is live until ...'
+    // about a token the watcher had just minted. Nothing is minted now, so a
+    // second claim reappearing here means something started acting again.
+    expect(record.claims).toHaveLength(1);
+    expect(record.claims[0]).toContain('exactly one active enrollment');
+    // No post-change evidence, because there was no change to confirm.
+    expect(record.evidence.filter((e: any) => e.postChange === true)).toHaveLength(0);
+    expect(record.evidence.length).toBeGreaterThan(0);
     expect(record.reply_message_id).toBe('<watcher-reply-1@colaberry.com>');
     // What it claimed is recorded next to what it actually read.
-    expect(record.claims[1]).toContain('I confirmed it is live until');
+    expect(record.evidence[0].what).toContain('enrollments');
   });
 
   it('refuses a second reply on the same thread and escalates instead', async () => {
@@ -237,12 +251,52 @@ describe('a real student reply is answered once and only once', () => {
   });
 });
 
-describe('a fix that did not land is not claimed', () => {
-  it('escalates instead of telling the student their link is live', async () => {
-    const ports = makePorts([bccCopy, studentReply()], { linkLands: false });
+/**
+ * This block used to be 'a fix that did not land is not claimed', and it proved
+ * the watcher escalated rather than telling a student a link was live when the
+ * re-read disagreed. That scenario cannot arise now -- no link is minted, so
+ * there is no repair whose landing could be misreported.
+ *
+ * The risk it was guarding did not go away though, it just moved: the reply
+ * still has to avoid implying a repair it did not perform. So the assertions
+ * point at the words on the wire instead of at the verification step.
+ */
+describe('the login_link reply claims nothing it did not do', () => {
+  it('points at the login page, mints nothing, and asserts no repair', async () => {
+    const out = await runCycle(makePorts([bccCopy, studentReply()]), {
+      stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS, now: NOW,
+    });
+
+    expect(out.sent).toBe(1);
+    expect(mutations).toEqual([]);
+
+    const body = sent[0].body;
+    expect(body).toContain('https://enterprise.colaberry.ai/portal/login');
+    // The phrasings a student would read as "it is done". The claim gate
+    // refuses these unless a verified fix claim backs them, and this reply
+    // carries only 'checked' claims.
+    expect(body).not.toMatch(/is now (?:working|fixed|active|resolved)/i);
+    expect(body).not.toMatch(/has been (?:fixed|resolved|corrected|restored)/i);
+    expect(body).not.toMatch(/should work now/i);
+    expect(body).not.toMatch(/I have just sent you a fresh sign in link/i);
+
+    const attempt = readLog().find((e: any) => e.type === 'reply_attempt');
+    expect(attempt.claims).toHaveLength(1);
+  });
+
+  /**
+   * The Million Meshesha guard, which survives the repair being withdrawn.
+   * Two active rows means the watcher cannot tell which seat the student is
+   * asking about, so it reports on none of them.
+   */
+  it('escalates rather than answering when the address is not singular', async () => {
+    const ports: any = makePorts([bccCopy, studentReply()]);
+    ports.data.loadStudentFacts = async () => facts({ activeEnrollmentCount: 2 });
+
     const out = await runCycle(ports, {
       stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS, now: NOW,
     });
+
     expect(out.sent).toBe(0);
     expect(sent).toEqual([]);
     expect(escalations).toHaveLength(1);
@@ -378,8 +432,8 @@ describe('escalations reach Ali rather than becoming silence', () => {
  * `runCycle` resolves a clock (`opts.now ?? new Date()`) and threads it
  * everywhere -- except that it used to hand `diagnose()` a fresh `new Date()`,
  * and `diagnose` then read the wall clock AGAIN for the one comparison that
- * decides whether the repair landed. The injected clock was dead at the only
- * point it decides anything.
+ * decided whether the repair had landed. The injected clock was dead at the
+ * only point it decided anything.
  *
  * What that cost: the suite pinned `now` to 2026-08-17 and minted a token
  * expiring 2026-08-18T04:00:05Z. It passed until real time crossed that
@@ -388,24 +442,30 @@ describe('escalations reach Ali rather than becoming silence', () => {
  * 2026-08-18 with nobody having touched the watcher. A test that fails by
  * calendar tells you nothing about the code on the day it breaks.
  *
- * This test is the discriminator the old fixtures could not be. The repaired
- * token expires an hour after the PINNED now and long before real wall-clock
- * now, so it is live on the cycle's clock and expired on the wall clock. It
- * passes only while the injected clock is honoured, and it gets sharper with
- * age rather than rotting.
+ * The `landed` comparison is gone with the repair, so the original
+ * discriminator (a token live on the cycle clock and expired on the wall clock)
+ * has nothing left to discriminate. The clock is still threaded through
+ * `diagnose()` and still decides something visible: every piece of evidence is
+ * stamped with it. Asserting on that keeps a real guard here rather than
+ * deleting the file's memory of why the seam matters.
  */
-describe('the cycle judges a repair on its own clock, not the wall clock', () => {
-  it('sends when the fresh token is live at the cycle time, though long expired in real time', async () => {
-    const out = await runCycle(
-      makePorts([bccCopy, studentReply()], { postRepairExpiry: '2026-08-17T05:00:00.000Z' }),
-      { stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS, now: NOW },
-    );
+describe('the cycle honours its injected clock', () => {
+  it('stamps the reply evidence with the cycle clock, not the wall clock', async () => {
+    const out = await runCycle(makePorts([bccCopy, studentReply()]), {
+      stateDir: dir, runId: RUN_ID, dryRun: false, caps: CAPS, now: NOW,
+    });
 
-    // On the wall clock this token expired long ago and the cycle would escalate
-    // instead, which is exactly the regression.
-    expect(new Date('2026-08-17T05:00:00.000Z').getTime()).toBeLessThan(Date.now());
     expect(out.sent).toBe(1);
-    expect(escalations).toEqual([]);
+    const attempt = readLog().find((e: any) => e.type === 'reply_attempt');
+    expect(attempt.evidence).not.toHaveLength(0);
+    for (const item of attempt.evidence) {
+      expect(item.at).toBe(NOW.toISOString());
+    }
+
+    // The pinned instant is far behind real time, so an implementation that
+    // reached for `new Date()` would stamp something else and fail here. That
+    // gap widens with age rather than rotting.
+    expect(NOW.getTime()).toBeLessThan(Date.now());
     expect(sent[0].to).toBe('Liza Ayele <bfglz@yahoo.com>');
   });
 });

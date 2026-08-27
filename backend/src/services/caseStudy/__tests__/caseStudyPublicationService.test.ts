@@ -323,8 +323,15 @@ function publishableContent(): CaseStudySnapshotContent {
     ],
     contributors: [{ displayMode: 'role_only', role: 'Data engineer', kind: 'colaberry_team' }],
     artifacts: [
-      { id: 'a1', artifactType: 'screenshot', title: 'Run duration dashboard', sourceType: 'repo', visibility: 'public', status: 'approved' },
-      { id: 'a2', artifactType: 'architecture', title: 'Pipeline architecture', sourceType: 'repo', visibility: 'public', status: 'approved' },
+      // `publicUrl` is required by the two-image readiness rule, which counts an
+      // image only when it is approved AND public AND image-typed AND carries a
+      // real http(s) URL. The reference record is meant to score 100, and an
+      // artifact with no URL renders as blank space - so counting one would make
+      // the rule agree with an empty page. Added when that rule landed; this
+      // suite asserts exact scores and was missed at the time, which is what
+      // turned CI red rather than any defect in the rule.
+      { id: 'a1', artifactType: 'screenshot', title: 'Run duration dashboard', sourceType: 'repo', visibility: 'public', status: 'approved', publicUrl: 'https://example.com/shot.png' },
+      { id: 'a2', artifactType: 'architecture', title: 'Pipeline architecture', sourceType: 'repo', visibility: 'public', status: 'approved', publicUrl: 'https://example.com/arch.png' },
     ],
     repositories: [{
       repoOwner: 'colaberry', repoName: 'reconciliation',

@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { Ticket } from '../../models';
 import { createTicket } from '../ticketService';
-import { isAgentInHumanDownstream } from './orgChartHierarchyService';
+import { resolveHumanDownstreamAgents } from './orgChartHierarchyService';
 
 /**
  * orgChartTaskAssignmentService — Org Chart v3 (2026-08-19, session
@@ -41,6 +41,25 @@ export class AgentNotInHierarchyError extends Error {
   }
 }
 
+/** Thrown when the target agent IS genuinely in the hierarchy but is
+ * currently deactivated (AI Workforce Reset, Phase A). Real bug, caught
+ * live 2026-08-25: Taiwo assigned "Audit of Payment System" to
+ * FinanceIntelligenceArchitect (one of the 17 agents deactivated in Phase
+ * A) — the dropdown listed it with no indication it was inactive, and this
+ * service created a real ticket that agent will never process, since it's
+ * switched off. A client-side dropdown filter alone is not a real
+ * authorization boundary (a direct API call would still bypass it), so this
+ * is checked here, server-side, same posture as AgentNotInHierarchyError. */
+export class AgentDeactivatedError extends Error {
+  readonly error_class = 'AgentDeactivatedError' as const;
+  readonly status = 403;
+
+  constructor(agentId: string, agentName: string) {
+    super(`Agent "${agentName}" (${agentId}) is currently deactivated and cannot be assigned a task.`);
+    this.name = 'AgentDeactivatedError';
+  }
+}
+
 export interface AssignTaskToAgentInput {
   orgMemberId: string;
   agentId: string;
@@ -55,15 +74,18 @@ export interface AssignTaskToAgentInput {
 }
 
 /**
- * Assigns a task (a real `Ticket`) to any agent in `orgMemberId`'s
- * downstream hierarchy. Authorization check happens FIRST, before any DB
- * read or write — a client-supplied agentId is NEVER trusted on its own.
- * Idempotent: submitting the SAME idempotencyKey twice returns the SAME
- * ticket both times, never creating a duplicate (Postgres JSONB
- * containment lookup on `metadata.idempotency_key`, scoped to this creator
- * so two different humans could theoretically reuse the same random key
- * without colliding — astronomically unlikely with crypto.randomUUID(),
- * but scoping costs nothing and removes the theoretical case entirely).
+ * Assigns a task (a real `Ticket`) to any ENABLED agent in `orgMemberId`'s
+ * downstream hierarchy. Authorization checks happen FIRST, before any DB
+ * read or write — a client-supplied agentId is NEVER trusted on its own,
+ * and neither is its enabled status (2026-08-25: a deactivated agent that
+ * hadn't gone through the dropdown's client-side filter was still
+ * assignable via this service directly). Idempotent: submitting the SAME
+ * idempotencyKey twice returns the SAME ticket both times, never creating
+ * a duplicate (Postgres JSONB containment lookup on
+ * `metadata.idempotency_key`, scoped to this creator so two different
+ * humans could theoretically reuse the same random key without colliding —
+ * astronomically unlikely with crypto.randomUUID(), but scoping costs
+ * nothing and removes the theoretical case entirely).
  */
 export async function assignTaskToAgent(input: AssignTaskToAgentInput): Promise<Ticket> {
   const { orgMemberId, agentId, title, description, idempotencyKey } = input;
@@ -72,9 +94,18 @@ export async function assignTaskToAgent(input: AssignTaskToAgentInput): Promise<
     throw new Error('title is required.');
   }
 
-  const inHierarchy = await isAgentInHumanDownstream(orgMemberId, agentId);
-  if (!inHierarchy) {
+  // One shared hierarchy walk answers both "is this agent really here" and
+  // "is it actually enabled" — reusing resolveHumanDownstreamAgents() rather
+  // than isAgentInHumanDownstream()'s boolean-only check, so the real agent
+  // record (and its real `enabled`/`agent_name`) is available for the
+  // second check without a second DB round trip.
+  const { leadership, staff } = await resolveHumanDownstreamAgents(orgMemberId);
+  const targetAgent = [...leadership, ...staff].find((a) => a.id === agentId);
+  if (!targetAgent) {
     throw new AgentNotInHierarchyError(orgMemberId, agentId);
+  }
+  if (!targetAgent.enabled) {
+    throw new AgentDeactivatedError(targetAgent.id, targetAgent.agent_name);
   }
 
   const existing = await Ticket.findOne({

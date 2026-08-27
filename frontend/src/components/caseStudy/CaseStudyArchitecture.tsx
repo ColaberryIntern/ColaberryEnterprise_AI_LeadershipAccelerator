@@ -86,6 +86,7 @@ export function CaseStudyArchitecture({
     && architecture.stack.length === 0
     && architecture.capabilities.length === 0
     && architecture.integrations.length === 0
+    && architecture.dataStores.length === 0
     && nodes.length === 0
     && edges.length === 0;
   if (empty) return null;
@@ -103,6 +104,13 @@ export function CaseStudyArchitecture({
       <TagGroup title="Capabilities" items={architecture.capabilities} Heading={Heading} />
       <TagGroup title="Stack" items={architecture.stack} Heading={Heading} />
       <TagGroup title="Integrations" items={architecture.integrations} Heading={Heading} />
+      {/* Data stores were assembled from repository evidence and counted by the
+          snapshot's emptiness check long before they had anywhere to render, so
+          a record could be judged to HAVE an architecture on their strength and
+          then show nothing of them. Same shape as the three lists above because
+          they are the same kind of fact - a derived list of names - and a second
+          shape would imply a second importance. */}
+      <TagGroup title="Data stores" items={architecture.dataStores} Heading={Heading} />
 
       {nodes.length > 0 ? (
         <div>

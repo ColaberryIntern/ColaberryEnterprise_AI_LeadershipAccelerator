@@ -605,8 +605,16 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {onClose && <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>}
                 {/* Media cards collect points here, gated by the server's watch check.
                     When the gate is active but unmet, the button is disabled with the
-                    remaining %; the server enforces the same rule regardless. */}
-                {isVideo && source && completeSafely && (
+                    remaining %; the server enforces the same rule regardless.
+
+                    `pts > 0` keeps this drawer honest with the feed tile, which only
+                    offers "Collect +N pts" when totalPoints(card.points) > 0 and shows
+                    "Open" otherwise. Synthesized feed cards (testimonial, podcast and
+                    community items are built per-request and never stored in
+                    timeline_cards) carry no points object at all, so without this test
+                    the tile said "Open" and the drawer promised "Collect points" for
+                    points that do not exist. Reported by Swati Raman, 2026-08-25. */}
+                {isVideo && source && completeSafely && pts > 0 && (
                   <button
                     type="button"
                     className="tl-btn primary"
@@ -618,7 +626,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                   </button>
                 )}
                 {/* Blog: collect after the 2-minute read gate is met (server enforces). */}
-                {blog && blogId && completeSafely && (
+                {blog && blogId && completeSafely && pts > 0 && (
                   <button
                     type="button"
                     className="tl-btn primary"

@@ -39,6 +39,26 @@ import { getSettings } from '../portalSettingsService';
  */
 export type CareerEvidenceLevel = 'none' | 'resume' | 'colaberry_verified' | 'delivery_verified';
 
+/**
+ * The levels that count as VERIFIED. The single source of truth for that question.
+ *
+ * A POSITIVE ALLOW-LIST, never `level !== 'resume'`. The negative form once counted an
+ * empty capability as verified and reported "10 of 10 verified by Colaberry" from an
+ * empty ledger, because `'none' !== 'resume'` is true. A level added next year is
+ * unverified until somebody names it here on purpose, which is the safe default.
+ *
+ * Used by the readiness gate, the private profile summary, and the public projection.
+ * They must agree: a capability the portal calls unverified must not appear as proof on
+ * a page a hiring manager reads.
+ */
+const VERIFIED_LEVELS = ['colaberry_verified', 'delivery_verified'] as const;
+
+export type CareerVerifiedLevel = (typeof VERIFIED_LEVELS)[number];
+
+export function isVerifiedLevel(level: CareerEvidenceLevel): level is CareerVerifiedLevel {
+  return (VERIFIED_LEVELS as readonly string[]).includes(level);
+}
+
 export interface CareerIdentity {
   full_name: string;
   email: string;

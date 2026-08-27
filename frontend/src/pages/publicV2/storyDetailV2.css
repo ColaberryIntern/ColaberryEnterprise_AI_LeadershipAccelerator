@@ -26,7 +26,31 @@
 
 /* ------------------------------------------------------------------ hero --- */
 
-.cbv2-story__hero { display: grid; justify-items: start; gap: var(--space-5); min-width: 0; }
+/* MEASURED, NOT ESTIMATED. On the live record the masthead was 1142px tall at
+   1440px and 2201px at 390px - two and a half phone screens of hero before the
+   first sentence of the story. The shared `.cbv2-pagehero` pays --space-16 top
+   and bottom for pages whose hero is a headline and a button; this one stacked a
+   crumb, an eyebrow, a title, a standfirst, a badge, an indicator rail, a facts
+   grid, a figure card, two buttons and a share row, so the same padding read as
+   a hole. Scoped under .cbv2-story so no other page inherits the decision.
+
+   THE SECOND HALF OF THAT STACK NOW LIVES ONE BAND DOWN, in
+   `.cbv2-story__context`. What is left here is the masthead proper: crumb,
+   eyebrow, title, standfirst, badge, actions, share. The format's rule for this
+   band is subtract, never add. */
+.cbv2-story .cbv2-pagehero { padding-block: var(--space-10); }
+
+/* The band between the masthead and the first heading was --space-24 (96px) on
+   both sides of the boundary. One step down is still a clear section break and
+   gives back roughly 100px per boundary across eight of them. */
+.cbv2-story .cbv2-story__section { padding-block: var(--space-16); }
+
+.cbv2-story__hero { display: grid; justify-items: start; gap: var(--space-4); min-width: 0; }
+
+/* `.cbv2-pagehero h1` ships `margin: var(--space-4) 0` for pages that are not a
+   grid. This hero IS a grid, so that margin is added to the row gap and the
+   title floats. */
+.cbv2-story .cbv2-story__hero h1 { margin: 0; }
 
 /* The way back to the index, above the title rather than buried at the end. */
 .cbv2-story__crumb {
@@ -46,9 +70,17 @@
 
 /* The context strip. `minmax(0, ...)` so a long programme name cannot widen a
    column and push the page sideways at 320px. */
+/* Two columns from 320px up rather than one. Six single-column rows cost ~54px
+   of masthead each on a phone. 7rem is measured, not guessed: at 320px the wrap
+   leaves 272px of content, and two 112px tracks plus the 16px gap is 240 - two
+   columns fit, where 8rem needed 276 and silently stayed at one.
+   THE GAP STAYS --space-4 ON BOTH AXES. Widening the column gap to --space-5
+   pushed the desktop row from six facts to five-plus-a-wrap: at 1440 the six
+   12rem tracks plus five 16px gaps come to exactly 1232px, which is exactly the
+   wrap. Four pixels of extra gap is a second row. */
 .cbv2-story__facts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
   gap: var(--space-4);
   margin: 0;
   width: 100%;
@@ -68,8 +100,91 @@
 }
 .cbv2-story__value { margin: 0; overflow-wrap: anywhere; }
 
-.cbv2-pagehero .cbv2-story__term { color: var(--text-on-inverse); opacity: 0.75; }
-.cbv2-pagehero .cbv2-story__value { color: var(--text-on-inverse); }
+/* THE INVERSION RULES THAT USED TO LIVE HERE ARE GONE, AND THEIR ABSENCE IS THE
+   FIX RATHER THAN A REGRESSION.
+   The facts strip used to sit on the dark masthead, so it needed two overrides
+   to invert its term and value. The first version of those overrides read
+   `.cbv2-pagehero .cbv2-story__term/__value`, which matches EVERY descendant of
+   the masthead - including the same two classes inside the hero's figure card,
+   which is painted `--surface-card`. That shipped: Sample, Methodology and
+   Limitations rendered white on white at 1.00:1, measured on the live page, five
+   elements, completely invisible. Scoping them to `.cbv2-story__facts` fixed the
+   symptom and left the shape - an inverted region with a light card inside it -
+   in place.
+   Moving the whole strip onto light ground removes the shape. There is no
+   inverted region for a light card to be trapped inside, and term and value use
+   the ordinary colours declared above. The general rule survives and is still
+   enforced by `storyDetailV2Contract.test.ts`: a descendant selector on an
+   inverted surface must name WHAT it inverts, because `.cbv2-pagehero X` names a
+   background, not a component.
+
+   Said from the light side anyway, so the card is legible even if some other
+   stylesheet reaches for the same pair. Belt and braces on the one defect this
+   page has shipped twice in two different places. */
+.cbv2-story__metric .cbv2-story__term { color: var(--text-muted); opacity: 1; }
+.cbv2-story__metric .cbv2-story__value { color: var(--text-body); }
+
+/* ------------------------------------------------------------ context band --- */
+
+/* The hero's second half, on its own ground. `--space-12` rather than the
+   sections' `--space-16`: this band answers the masthead directly above it and a
+   full section's breathing room would read as a break between the two. */
+.cbv2-story .cbv2-story__context { padding-block: var(--space-12); }
+
+.cbv2-story__context-body {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+/* TWO COLUMNS FROM 64rem, AND THIS IS THE PART THAT ACTUALLY SAVES HEIGHT.
+   Moving a block from the masthead to the band below it does not, by itself,
+   bring the first sentence of the story any closer - the same content is still
+   between the reader and it. What shortens the page is putting the scannable
+   half (counts, facts) beside the readable half (the figure card with its
+   sample, methodology and limitations) instead of above it.
+   5fr/7fr rather than 1fr/1fr because the two halves are not the same weight:
+   the facts are short label-value pairs and the figure card carries a paragraph
+   of methodology. Both tracks get a zero floor so a long programme name or an
+   unbroken URL cannot widen a column and push the page sideways. Below 64rem it
+   is one column and the order is source order, which is already the order a
+   reader wants: counts, facts, figures. */
+@media (min-width: 64rem) {
+  .cbv2-story__context-body {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: start;
+    column-gap: var(--space-10);
+  }
+  /* The rail spans both tracks: it is a single horizontal line of chips and
+     confining it to the narrow column would wrap it into three rows. */
+  .cbv2-story__context-body .cbv2-story__indicators { grid-column: 1 / -1; }
+}
+
+/* ------------------------------------------------------------------ tone --- */
+
+/* THE ALTERNATION IS THE GRAMMAR, AND IT IS ONE CLASS.
+   `STORY_FORMAT_V1.md` section 5: every VISUAL band sits on sunken ground and
+   every PROSE band sits on default ground, so a reader learns in two screens
+   that a change of ground means a change of medium. Before this pass every band
+   on the page was default and the whole body read as one uninterrupted white
+   sheet.
+
+   IT IS THIS PAGE'S OWN CLASS, NOT THE SHARED `.cbv2-section--sunken`, and that
+   is deliberate. The shared modifier is DECLARED TWICE with different values -
+   `homeV2.css:22` paints it `--surface-sunken` and `cinematicV2.css:409` paints
+   it `--cbv2-warm-sunken` - so which one a band actually gets depends on the
+   order App.tsx happens to import two other pages in. A grammar that is supposed
+   to be locked cannot rest on that. Scoped under `.cbv2-story` so no other page
+   inherits the decision either. */
+.cbv2-story .cbv2-story__section--sunken { background: var(--surface-sunken); }
+
+/* A picture band pays its own block padding, which it does not otherwise carry.
+   Without it the sunken ground is exactly the height of the image and reads as a
+   mat around the picture rather than as a band the picture sits in. Keyed on the
+   same tone class as every other band, so there is one name for this idea. */
+.cbv2-story .cbv2-story-figures.cbv2-story__section--sunken {
+  padding-block: var(--space-12);
+}
 
 /* --------------------------------------------------------- hero figures --- */
 
@@ -116,6 +231,48 @@
 .cbv2-story__body { display: grid; gap: var(--space-6); min-width: 0; }
 .cbv2-story__body h2 { margin: 0; overflow-wrap: anywhere; }
 .cbv2-story__block { display: grid; gap: var(--space-4); min-width: 0; }
+
+/* --------------------------------------------------------- the situation --- */
+
+.cbv2-story__situation { display: grid; gap: var(--space-8); min-width: 0; }
+
+/* `constraints` and `goals` - what the work was for and what it had to work
+   within. Two columns from 48rem because they are a matched pair and reading
+   them side by side is the whole point: the aim on the left, the boundary on the
+   right. One column below that, in source order, so the aim still comes first. */
+.cbv2-story__qualifiers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+@media (min-width: 48rem) {
+  .cbv2-story__qualifiers { grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+}
+
+.cbv2-story__qualifier {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--surface-sunken);
+  /* The accent edge marks these as the record's own stated terms rather than
+     the page's summary of them - the same device the disclosure note uses, for
+     the same reason. */
+  border-left: var(--border-3) solid var(--chart-1);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.cbv2-story__qualifier h3 { margin: 0; }
+
+.cbv2-story__qualifier-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  line-height: var(--lh-relaxed);
+}
 
 /* ----------------------------------------------------------- contributors --- */
 
@@ -228,3 +385,94 @@
 /* ------------------------------------------------------------------- cta --- */
 
 .cbv2-story__cta { display: grid; justify-items: center; text-align: center; }
+
+/* --------------------------------------------------------- hero actions --- */
+
+/* Wraps rather than scrolls: at 320px the offer and the repository stack, and
+   neither is ever pushed off the side of the masthead. */
+.cbv2-story__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ------------------------------------------------------------ indicators --- */
+/* Counts. No colour coding: colour here would have to mean good or bad, and a
+   count of technologies is neither.
+   THE RAIL MOVED FROM DARK GROUND TO LIGHT, and these two rules are the reason
+   that move is not the fourth invisible-text incident on this surface. They read
+   `--text-on-inverse` while the rail sat on the masthead; left alone under
+   `.cbv2-story__context` they would have painted near-white text on
+   `--surface-sunken`. Nothing in jsdom can see that - no unit test in this
+   repository applies a stylesheet - so the check that catches this class of
+   mistake is the rendered-contrast sweep in `tests/systemV2/caseStudyPublic.e2e.js`,
+   and it is the reason that sweep is a completion condition rather than a nicety. */
+
+.cbv2-story__indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.cbv2-story__indicator {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  overflow-wrap: anywhere;
+}
+
+/* The number is the `dd` and the noun the `dt`, so a screen reader hears the
+   term before its value; `order` puts the number first on screen without
+   reversing the markup. */
+.cbv2-story__indicator-count {
+  order: -1;
+  margin: 0;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+}
+.cbv2-story__indicator-label {
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+}
+
+/* The count chip beside a section heading. Baseline-aligned to the h2 rather
+   than centred, so it sits on the type rather than floating beside it. */
+.cbv2-story__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.cbv2-story__heading h2 { margin: 0; }
+
+.cbv2-story__count {
+  /* Positioned for the same reason the carousel slide is: it holds an
+     absolutely positioned `.cbv2-cs-sr-only`, and without a containing block
+     inside this chip that span escapes to the initial one and joins the page's
+     scroll area. That is the exact mechanism behind the 320px overflow this
+     pass fixed; it is cheaper to not repeat it than to measure it again. */
+  position: relative;
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-sunken);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* Repository visibility. Same tag shape as the role beside it, because they are
+   the same kind of fact and a second shape would imply a second importance. */
+.cbv2-story__repo-visibility { white-space: nowrap; }

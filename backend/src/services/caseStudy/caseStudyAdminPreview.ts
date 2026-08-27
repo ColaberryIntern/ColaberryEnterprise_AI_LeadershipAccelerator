@@ -3,6 +3,10 @@ import { env } from '../../config/env';
 import { projectPublicDetail } from './caseStudyPublicProjection';
 import type { PublicCaseStudyDetail } from '../../types/caseStudyPublic';
 import type { CaseStudySnapshotContent, CaseStudySurfaceKey } from '../../types/caseStudy';
+import type { PublicSurfaceView } from './caseStudySurfaceView';
+import type { CaseStudySnapshotSummary } from './caseStudyAdminStore';
+import type { CaseStudyPublishDecision } from './caseStudyPublicationService';
+import type { CaseStudyReadinessReport } from './caseStudyReadinessService';
 
 /**
  * Rendering an admin preview through the public projection (spec §34).
@@ -19,6 +23,50 @@ import type { CaseStudySnapshotContent, CaseStudySurfaceKey } from '../../types/
  * that skipped it would show the reviewer strictly more than the public gets,
  * which is the opposite of a useful check.
  */
+
+/**
+ * WHAT A PREVIEW IS.
+ *
+ * MOVED HERE FROM `caseStudyAdminReview.ts`, which was at 497 of CLAUDE.md's
+ * 500-line hard ceiling when `surface` was added — the rule is to split before
+ * adding, not after, and this is the module that already owns the preview
+ * concept. `caseStudyAdminReview` re-exports the name so no importer moves.
+ */
+export interface CaseStudySurfacePreview {
+  readonly surfaceKey: CaseStudySurfaceKey;
+  /**
+   * The surface profile as the client receives it, built by the SAME
+   * `surfaceView()` the public detail response uses.
+   *
+   * Without this the admin lens lab could not exist: `visibleSections()` takes a
+   * `PublicSurfaceView` and derives the band order, the hidden set and the
+   * attribution floor from it, and a bare `surfaceKey` string cannot stand in
+   * for that. Rebuilding the view on the client from a key would be a second
+   * implementation of the framing rules, which is the same mistake as a second
+   * projection — the reviewer would be reviewing a different artifact from the
+   * one that ships.
+   */
+  readonly surface: PublicSurfaceView;
+  /** Which version the preview is OF. `null` when nothing has been built yet. */
+  readonly snapshot: CaseStudySnapshotSummary | null;
+  readonly source: 'approved_snapshot' | 'latest_draft' | 'none';
+  /** The real gate, not a second opinion. `blockers` are verbatim, for the UI. */
+  readonly decision: CaseStudyPublishDecision;
+  /** ADVISORY. Reported beside the decision, never consulted by it. */
+  readonly readiness: CaseStudyReadinessReport | null;
+  /**
+   * What a visitor would actually see, rendered through the SAME projection the
+   * public API uses (spec §34). Null when there is no snapshot to project.
+   *
+   * This is deliberately not a second renderer. If the preview built its own
+   * view, an admin could approve something subtly different from what ships —
+   * and the review step, which is the entire justification for a human in this
+   * loop, would be reviewing the wrong artifact. The projection is also where
+   * private repositories are dropped and pending metrics become unrepresentable,
+   * so a preview that skipped it would show the admin more than the public gets.
+   */
+  readonly projection: PublicCaseStudyDetail | null;
+}
 
 /** The snapshot fields a preview projection needs. Structural, so a Sequelize row fits. */
 export interface PreviewSnapshotFacts {

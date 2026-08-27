@@ -10,6 +10,12 @@
  * authz error degrades to allow + logged. Read-level actions always pass (least-privilege floor).
  * Per Ali's §5 sign-off: shadow-first · 4-rung ladder · per-department scope (Phase 4) ·
  * kill-switch keeps reads running · HITL = the 4-rule set in agentAutonomy.
+ *
+ * Autonomy level source (2026-08-25): defaults to deriving the level from the pre-existing
+ * permission-tier map (`levelForTier`, unchanged since this file's original build). An agent
+ * reactivated through the AI Workforce Reset flow (`agentReactivationService.ts`) carries a real,
+ * human-chosen `AiAgent.autonomy_level` instead — `resolveLevel()` prefers it, but ONLY when
+ * `autonomy_level_set_at` proves it was deliberately set, never the untouched migration default.
  */
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
@@ -72,14 +78,55 @@ async function resolveTier(input: AuthorizeAgentInput): Promise<string | null> {
   }
 }
 
-async function isAgentDisabled(agentName: string): Promise<boolean> {
+interface AgentRegistryRow {
+  enabled: boolean;
+  status: string;
+  autonomy_level: AutonomyLevel | null;
+  autonomy_level_set_at: Date | null;
+}
+
+// 2026-08-25 — one shared registry lookup for both the disabled-agent check and
+// the (new) deliberate-autonomy-level check, replacing what was a separate
+// isAgentDisabled() query. Same fail-safe posture as before: unregistered or
+// unreadable → null, never thrown, never blocks on missing data.
+async function fetchAgentRegistryRow(agentName: string): Promise<AgentRegistryRow | null> {
   try {
-    const agent = await AiAgent.findOne({ where: { agent_name: agentName }, attributes: ['enabled', 'status'] });
-    if (!agent) return false; // unregistered (e.g. a .js cron) — don't block on enabled in shadow
-    return agent.enabled === false || agent.status === 'paused';
+    const agent = await AiAgent.findOne({
+      where: { agent_name: agentName },
+      attributes: ['enabled', 'status', 'autonomy_level', 'autonomy_level_set_at'],
+    });
+    if (!agent) return null; // unregistered (e.g. a .js cron) — don't block on it in shadow
+    return {
+      enabled: agent.enabled,
+      status: agent.status,
+      autonomy_level: (agent.autonomy_level as AutonomyLevel | undefined) ?? null,
+      autonomy_level_set_at: (agent as any).autonomy_level_set_at ?? null,
+    };
   } catch {
-    return false; // registry read failed → don't block on it
+    return null; // registry read failed → don't block on it
   }
+}
+
+function isAgentDisabledFromRow(row: AgentRegistryRow | null): boolean {
+  if (!row) return false;
+  return row.enabled === false || row.status === 'paused';
+}
+
+// 2026-08-25 — AI Workforce Reset, Phase C's reactivation flow
+// (agentReactivationService.ts) writes a REAL, human-chosen `autonomy_level` to
+// AiAgent, but until now this gate never read it — it derives its own level
+// purely from the pre-existing permission-tier map (levelForTier below),
+// unaware the column exists. Reconciled here rather than left as two silent,
+// disagreeing sources of truth: the deliberate column wins ONLY when
+// `autonomy_level_set_at` is stamped (an operator actually chose it via
+// reactivation). Every agent that has never been through that flow — which is
+// most of the fleet, including long-running agents like Reese and
+// cory-engine — keeps the exact tier-derived level this gate has used since
+// PR #69, so this change cannot silently demote the existing shadow signal
+// the day it ships.
+function resolveLevel(row: AgentRegistryRow | null, tier: string | null): AutonomyLevel {
+  if (row?.autonomy_level_set_at && row.autonomy_level) return row.autonomy_level;
+  return levelForTier(tier);
 }
 
 /**
@@ -93,7 +140,8 @@ export async function authorizeAgentAction(input: AuthorizeAgentInput): Promise<
     if (mode === 'off') {
       return { allowed: true, enforced: false, reason: 'gate_off', requiresApproval: false, level: 'observe', wouldDeny: false, mode };
     }
-    const level = levelForTier(await resolveTier(input));
+    const registryRow = await fetchAgentRegistryRow(input.agentName);
+    const level = resolveLevel(registryRow, await resolveTier(input));
     const category = actionCategory(input.action);
 
     // ── Ordered policy checks → a hard-block reason, or null. ──
@@ -105,7 +153,7 @@ export async function authorizeAgentAction(input: AuthorizeAgentInput): Promise<
       else if (await isSafeModeActive()) blockReason = 'safe_mode_active';
     }
     // 2. Agent enabled / not paused.
-    if (!blockReason && (await isAgentDisabled(input.agentName))) blockReason = 'agent_disabled';
+    if (!blockReason && isAgentDisabledFromRow(registryRow)) blockReason = 'agent_disabled';
     // 3. Autonomy level permits this action category.
     if (!blockReason && !levelAllowsAction(level, input.action)) blockReason = `level_forbids:${category}`;
     // (4. Per-resource scope is Phase 4 — advisory no-op here.)
@@ -169,5 +217,63 @@ export async function countAbacChecks(days = 7): Promise<number> {
     return Number(rows[0]?.n) || 0;
   } catch {
     return 0;
+  }
+}
+
+export interface AgentAuthorizationSummary {
+  window_days: number;
+  total: number;
+  allow: number;
+  approval: number;
+  block: number;
+  enforced_count: number; // subset of the above where mode was genuinely 'enforce', not shadow
+}
+
+/** Per-agent breakdown of real `authorizeAgentAction()` verdicts (Trust Contract
+ * Phase 1, 2026-08-26) — the real, already-written `metadata.verdict` on each
+ * `agent.authorization` ai_events row, grouped for one agent. Sibling read to
+ * `countAbacChecks()` above (same table, same event_type), scoped to one agent
+ * instead of the whole fleet. Zeros for an agent with no authorization events
+ * yet — honest absence, not a fabricated "all clear."
+ *
+ * Matches on EITHER the real `AiAgent.id` OR the bare `agentName` string
+ * (2026-08-26 production-verification fix): `agentActionAuthorizationBridge.ts`
+ * — the one real caller behind Reese's own autonomous-outreach HITL check —
+ * passes `agentId: input.agentName` (the literal name, not a UUID) into
+ * `authorizeAgentAction()`, so `ai_events.agent_id` genuinely holds `'Reese'`
+ * for those rows, confirmed against real production data (13 real rows found
+ * under the name, 0 under her UUID). A UUID-only match would have silently
+ * shown 0 authorization checks for the one agent whose HITL evaluation this
+ * page most needs to prove. The write-side inconsistency itself is a
+ * separate, pre-existing issue this fix does not touch — flagged, not fixed
+ * here, since correcting it changes how every other historical row for this
+ * agent is interpreted, a bigger call than a read-side query fix. */
+export async function getAgentAuthorizationSummary(agentId: string, agentName: string, days = 30): Promise<AgentAuthorizationSummary> {
+  try {
+    const rows = (await sequelize.query(
+      `SELECT
+         metadata->>'verdict' AS verdict,
+         (metadata->>'enforced')::boolean AS enforced,
+         COUNT(*)::int AS n
+       FROM ai_events
+       WHERE event_type = 'agent.authorization'
+         AND agent_id IN (:agentId, :agentName)
+         AND created_at >= NOW() - (:days || ' days')::interval
+       GROUP BY 1, 2`,
+      { type: QueryTypes.SELECT, replacements: { agentId, agentName, days } },
+    )) as Array<{ verdict: string | null; enforced: boolean | null; n: number }>;
+
+    const summary: AgentAuthorizationSummary = { window_days: days, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 };
+    for (const row of rows) {
+      const count = Number(row.n) || 0;
+      summary.total += count;
+      if (row.verdict === 'allow') summary.allow += count;
+      else if (row.verdict === 'approval') summary.approval += count;
+      else if (row.verdict === 'block') summary.block += count;
+      if (row.enforced) summary.enforced_count += count;
+    }
+    return summary;
+  } catch {
+    return { window_days: days, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 };
   }
 }

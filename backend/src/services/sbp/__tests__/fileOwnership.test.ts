@@ -98,3 +98,39 @@ describe('the classification covers everything the renderer emits', () => {
       .toEqual([PLAN_FILE_PATH, PROGRESS_FILE_PATH, PROFILE_FILE_PATH].sort());
   });
 });
+
+describe('student-owned subtrees', () => {
+  it('treats everything under .claude/agents/ as the student\'s', () => {
+    // Week 7's deliverable. Filenames come from the student's own project, so
+    // they cannot be enumerated the way the .colaberry files are.
+    expect(ownershipOf('.claude/agents/opportunity-scorer.md')).toBe('student');
+    expect(ownershipOf('.claude/agents/README.md')).toBe('student');
+    expect(ownershipOf('.claude/agents/nested/deal-analyst.md')).toBe('student');
+  });
+
+  it('refuses to overwrite an agent sight unseen', () => {
+    // This is the whole point: `platform` means safe to drop on top, and the
+    // default is `platform`. The day the project build learns to generate
+    // agents, this is what stops it replacing the student's.
+    expect(isSafeToOverwrite('.claude/agents/opportunity-scorer.md')).toBe(false);
+  });
+
+  it('gives the same answer whether or not the path carries a leading ./', () => {
+    expect(ownershipOf('./.claude/agents/deal-analyst.md')).toBe('student');
+  });
+
+  it('does not capture neighbouring .claude paths the platform may own', () => {
+    // Only the agents subtree is claimed. Commands, hooks and settings are not
+    // this lab's deliverable and keep the default.
+    expect(ownershipOf('.claude/settings.json')).toBe('platform');
+    expect(ownershipOf('.claude/commands/review.md')).toBe('platform');
+    // A file merely NAMED like the subtree is not inside it.
+    expect(ownershipOf('.claude/agents-backup.md')).toBe('platform');
+  });
+
+  it('leaves the three .colaberry classifications untouched', () => {
+    expect(ownershipOf(PLAN_FILE_PATH)).toBe('platform_unless_edited');
+    expect(ownershipOf(PROGRESS_FILE_PATH)).toBe('co_owned');
+    expect(ownershipOf(PROFILE_FILE_PATH)).toBe('student');
+  });
+});

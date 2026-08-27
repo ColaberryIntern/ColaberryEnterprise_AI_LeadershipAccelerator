@@ -176,8 +176,18 @@ async function fetchInventory(): Promise<ServerInventory> {
     const rows = res.data?.projects;
     if (!Array.isArray(rows)) return UNKNOWN_INVENTORY;
     const ids = rows.map((r: { id?: unknown }) => String(r?.id ?? '')).filter(Boolean);
+    // Protected rows stay in `ids` (pruning must see everything that exists) but
+    // are withheld from hydration, so the platform's own project record never
+    // becomes a build card. An older server that does not send the flag yields
+    // `undefined !== true`, i.e. hydratable — the pre-existing behaviour for
+    // every ordinary project, and the platform record was already invisible
+    // there because nothing but the active tree could hydrate anything.
+    const hydratableIds = rows
+      .filter((r: { is_protected?: unknown }) => r?.is_protected !== true)
+      .map((r: { id?: unknown }) => String(r?.id ?? ''))
+      .filter(Boolean);
     const active = rows.find((r: { is_active?: unknown }) => r?.is_active === true);
-    return { known: true, ids, activeId: active ? String(active.id) : null };
+    return { known: true, ids, hydratableIds, activeId: active ? String(active.id) : null };
   } catch (err) {
     if (!isApiDisabled(err)) reportFailure('inventory', err);
     return UNKNOWN_INVENTORY;
@@ -221,6 +231,64 @@ export async function hydrateProjectById(projectId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Give a card to every server project this device is missing — not just the
+ * active one.
+ *
+ * THE HOLE THIS CLOSES. `reconcileFromBackend` hydrates from `/active`, which
+ * returns exactly one tree, so a project that is live on the server but is not
+ * the active one had no path onto the page at all. It was reported by
+ * `/api/portal/projects` on every single load and then dropped on the floor:
+ * the inventory was consulted only to prune dead cards and to name the active
+ * id. A student whose second build was created anywhere other than this
+ * browser (the wizard on another device, or the pipeline server-side) simply
+ * never saw it, and no amount of reloading helped, because reloading re-ran the
+ * same one-tree pull.
+ *
+ * That is the qninying/Ambit case: two live projects, `Ambit` never active on
+ * the device he was looking at, and a Projects page that showed his current
+ * build and the training example forever.
+ *
+ * Runs AFTER reconcile so it only ever sees what reconcile left behind — the
+ * active project has already been hydrated, overlaid or superseded by then, and
+ * asking for it again here would race that decision.
+ *
+ * Sequential rather than `Promise.all`: this is a background repair on a page
+ * that has already painted, and a student with several missing builds should
+ * not open with a burst of parallel tree fetches. Each hydrate is independently
+ * best-effort — `hydrateProjectById` reports its own failures and returns false
+ * — so one unreachable project cannot cost the others their card.
+ */
+async function hydrateMissingProjects(inventory: ServerInventory): Promise<void> {
+  if (!inventory.known || inventory.hydratableIds.length === 0) return;
+
+  // Both identities count as "already here": a hydrated project carries the
+  // backend id as its own `id`, while a locally-built one that was mirrored up
+  // carries it as `pipelineProjectId`. Matching on only one of them would give
+  // a mirrored build a second, duplicate card on the next load.
+  const held = new Set<string>();
+  for (const p of loadProjects()) {
+    held.add(String(p.id));
+    if (p.pipelineProjectId) held.add(String(p.pipelineProjectId));
+  }
+
+  const missing = inventory.hydratableIds.filter((id) => !held.has(String(id)));
+  if (missing.length === 0) return;
+
+  let added = 0;
+  for (const id of missing) {
+    if (await hydrateProjectById(id)) added += 1;
+  }
+
+  if (added > 0) {
+    console.info(JSON.stringify({
+      level: 'info', service: 'frontend', event: 'project_sync_hydrated_missing_projects',
+      outcome: 'success',
+      context: { requested: missing.length, added, server_project_count: inventory.ids.length },
+    }));
+  }
+}
+
 /** PULL: overlay backend completions onto local, or hydrate a build this device lacks. */
 async function reconcileFromBackend(): Promise<void> {
   try {
@@ -250,6 +318,10 @@ async function reconcileFromBackend(): Promise<void> {
       }));
     }
     if (changed) hydrateProjects(next);
+
+    // Inside the try, but deliberately last: every projects-page load ends by
+    // giving a card to any live server project this device still lacks.
+    await hydrateMissingProjects(inventory);
   } catch (err) {
     reportFailure('pull', err);
   }

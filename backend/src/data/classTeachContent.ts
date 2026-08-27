@@ -39,6 +39,17 @@ export interface EvidenceClaim {
   note?: string;
 }
 
+/** One new term and its plain-English meaning. Rendered as a "Definitions" row
+ *  under "Key points" in the click-to-zoom full-screen diagram view, which is
+ *  the surface the room stares at while the instructor talks — so a term the
+ *  slide introduces gets explained on the same screen the diagram is on,
+ *  instead of only in the instructor's script. Optional everywhere: a slide
+ *  that introduces no new vocabulary simply omits it and renders as before. */
+export interface TermDefinition {
+  term: string;
+  meaning: string;
+}
+
 export interface TeachSlide {
   /** Run-of-show segment id this slide belongs to. */
   segment: string;
@@ -60,6 +71,9 @@ export interface TeachSlide {
   diagram?: string;
   /** Sourced factual claims (rendered as a source footer + readiness report). */
   evidence?: EvidenceClaim[];
+  /** New vocabulary this slide introduces — shown as the Definitions row of the
+   *  zoomed diagram. */
+  definitions?: TermDefinition[];
   /** What the instructor says/does out loud (teaching script; goes to notes). */
   script?: string;
 }

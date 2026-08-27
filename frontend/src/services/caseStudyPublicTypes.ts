@@ -71,9 +71,18 @@ export type CaseStudyRoadmapStatus =
   | 'not_pursued'
   | 'unknown';
 
+/**
+ * `photo` is ATMOSPHERE AND NEVER EVIDENCE. The server decides what that means
+ * (`caseStudyPublicSections.ts`): a photograph ranks below a screenshot and an
+ * architecture image for the hero, it arrives stamped
+ * `presentation: 'atmosphere'`, and one whose caption claims to show delivered
+ * work never reaches the wire at all. Nothing on the client re-derives any of
+ * that — it reads `presentation`.
+ */
 export type CaseStudyArtifactType =
   | 'screenshot'
   | 'architecture'
+  | 'photo'
   | 'demo'
   | 'deck'
   | 'roadmap'
@@ -140,6 +149,25 @@ export interface PublicCaseStudyNarrative {
   readonly body: readonly string[];
 }
 
+/**
+ * The situation, plus the two structured lists that qualify it.
+ *
+ * These two fields were authored, populated by the sync pipeline and read by the
+ * publish gate's claim scan — so a sentence in either could BLOCK a record from
+ * publishing — and were never projected onto the public payload. A constraint
+ * that can veto publication but can never be read is the worst of both worlds,
+ * which is why projecting them came before anything else in this pass.
+ *
+ * Mirrors `backend/src/types/caseStudyPublic.ts`. Both are arrays and never
+ * null: an absent list is `[]`, so a renderer asks `length` and never has to
+ * distinguish "none recorded" from "field missing" — a distinction the snapshot
+ * does not carry.
+ */
+export interface PublicCaseStudySituation extends PublicCaseStudyNarrative {
+  readonly constraints: readonly string[];
+  readonly goals: readonly string[];
+}
+
 export interface PublicCaseStudyTimelineEntry {
   readonly date: string;
   readonly endDate: string | null;
@@ -166,10 +194,29 @@ export interface PublicCaseStudyArchitecture {
   readonly stack: readonly string[];
   readonly capabilities: readonly string[];
   readonly integrations: readonly string[];
+  /**
+   * What the system stores its data in. Assembled from repository evidence and
+   * counted by the snapshot's own emptiness check, but until this pass it had no
+   * public shape to arrive in — so a record could be considered to HAVE an
+   * architecture section on the strength of data stores alone and then render
+   * without them. Empty is the common case for a front-end-only repository.
+   */
+  readonly dataStores: readonly string[];
   readonly diagram: {
     readonly nodes: readonly PublicCaseStudyArchitectureNode[];
     readonly edges: readonly PublicCaseStudyArchitectureEdge[];
   } | null;
+  /**
+   * Mermaid source for a chart a PERSON drew, or null — which is the normal
+   * case, and the band hides entirely when it is null.
+   *
+   * It is an addition to `diagram`, never a replacement for it.
+   * `CaseStudyArchitecture` renders the verified node and edge lists as text on
+   * purpose, and that stays. This is the human-authored view, labelled as such,
+   * so a reader can tell which picture the repository evidenced and which one
+   * somebody chose to draw.
+   */
+  readonly diagramSource: string | null;
 }
 
 export interface PublicCaseStudyMeasurement {
@@ -203,10 +250,19 @@ export type PublicCaseStudyContributor =
     };
 
 /** An approved artifact. `request` carries no url, so no control can link one. */
+/**
+ * What an image on this page is allowed to MEAN. `evidence` is a picture of the
+ * delivered work; `atmosphere` is a photograph, which shows a room and
+ * evidences nothing. The server derives it from `artifactType` and the client
+ * never re-derives it, so there is one definition and it is not on the client.
+ */
+export type PublicArtifactPresentation = 'evidence' | 'atmosphere';
+
 export type PublicCaseStudyArtifact =
   | {
       readonly access: 'open';
       readonly artifactType: CaseStudyArtifactType;
+      readonly presentation: PublicArtifactPresentation;
       readonly title: string;
       readonly description: string | null;
       readonly url: string;
@@ -215,6 +271,7 @@ export type PublicCaseStudyArtifact =
   | {
       readonly access: 'request';
       readonly artifactType: CaseStudyArtifactType;
+      readonly presentation: PublicArtifactPresentation;
       readonly title: string;
       readonly description: string | null;
     };
@@ -289,7 +346,7 @@ export interface PublicCaseStudyDetail {
   readonly engagementDuration: string | null;
   readonly productionStatus: CaseStudyRoadmapStatus | null;
   readonly heroMetrics: readonly PublicCaseStudyMetric[];
-  readonly situation: PublicCaseStudyNarrative | null;
+  readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
   readonly architecture: PublicCaseStudyArchitecture | null;
   readonly measurement: PublicCaseStudyMeasurement | null;
@@ -318,6 +375,27 @@ export interface PublicSurfaceView {
   readonly cta: PublicCaseStudyCta;
   readonly sectionOrder: readonly CaseStudySectionKey[];
   readonly hiddenSections: readonly CaseStudySectionKey[];
+  /**
+   * THE ATTRIBUTION FLOOR. Bands a lens may not hide, whatever `hiddenSections`
+   * says — `visibleSections()` subtracts this set from the hidden set before it
+   * walks the order.
+   *
+   * It arrives on the wire rather than living as a client constant because the
+   * floor is part of the surface contract. A client-side copy would be a second
+   * source of truth that can drift from the server's without either side
+   * failing, which is how a guarantee quietly stops being one.
+   *
+   * `sectionOrder` and `hiddenSections` between them are enough to make a false
+   * claim out of true data: reorder an architecture-led record under a delivery
+   * masthead, hide "who built it", and the page implies an authorship the record
+   * explicitly denies — with no copy change anywhere. This is the field that
+   * makes that unexpressible rather than merely discouraged.
+   *
+   * Optional on the type because a response from a server that predates the
+   * field must not crash the page; absent reads as an empty floor, which is the
+   * behaviour that shipped before it existed.
+   */
+  readonly requiredSections?: readonly CaseStudySectionKey[];
   readonly emphasis: readonly string[];
   readonly defaultSort: CaseStudySortKey;
 }

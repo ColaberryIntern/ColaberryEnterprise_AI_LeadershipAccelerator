@@ -80,6 +80,12 @@ export const architecture = (
   stack: ['Claude', 'Postgres'],
   capabilities: ['Agentic workflow'],
   integrations: ['Warehouse export'],
+  // EMPTY BY DEFAULT, and for the same reason `diagramSource` is null by
+  // default: it is the ordinary case. Data stores are derived from repository
+  // evidence, so a front-end-only repository yields none, and a fixture that
+  // supplied them by default would make "the list hides when empty" the unusual
+  // path rather than the one every other suite exercises.
+  dataStores: [],
   diagram: {
     nodes: [
       { key: 'api', label: 'Planner API', kind: 'service' },
@@ -87,6 +93,11 @@ export const architecture = (
     ],
     edges: [{ from: 'api', to: 'worker', label: 'queues' }],
   },
+  // Null by DEFAULT, because null is the normal case: almost no record carries a
+  // hand-drawn chart. A fixture that supplied one by default would make the
+  // "band hides when there is no source" test the unusual path rather than the
+  // ordinary one, and every other suite would silently start rendering mermaid.
+  diagramSource: null,
   ...overrides,
 });
 
@@ -107,20 +118,64 @@ export const roadmapItem = (
   ...overrides,
 });
 
-export const openArtifact = (): PublicCaseStudyArtifact => ({
+export const openArtifact = (
+  overrides: Partial<Extract<PublicCaseStudyArtifact, { access: 'open' }>> = {},
+): PublicCaseStudyArtifact => ({
   access: 'open',
   artifactType: 'deck',
+  presentation: 'evidence',
   title: 'Executive walkthrough',
   description: 'Twelve slides on the rollout.',
   url: 'https://example.org/walkthrough',
   previewUrl: null,
+  ...overrides,
 });
 
 export const requestArtifact = (): PublicCaseStudyArtifact => ({
   access: 'request',
   artifactType: 'evaluation',
+  presentation: 'evidence',
   title: 'Evaluation results',
   description: null,
+});
+
+/**
+ * A picture OF the delivered work. `previewUrl` is deliberately null on one of
+ * the two image builders below and set on the other, so a suite exercising the
+ * carousel covers both the "publisher supplied a thumbnail" and the "fall back
+ * to the asset itself" paths rather than only whichever one the fixture happened
+ * to pick.
+ */
+export const screenshotArtifact = (
+  overrides: Partial<Extract<PublicCaseStudyArtifact, { access: 'open' }>> = {},
+): PublicCaseStudyArtifact => ({
+  access: 'open',
+  artifactType: 'screenshot',
+  presentation: 'evidence',
+  title: 'The planner console',
+  description: 'The route list as a dispatcher sees it.',
+  url: 'https://example.org/console.png',
+  previewUrl: 'https://example.org/console-thumb.png',
+  ...overrides,
+});
+
+/**
+ * ATMOSPHERE, NEVER EVIDENCE. Its caption says where the picture was taken and
+ * makes no claim about the system - which is the only kind of photograph the
+ * server will publish at all. `presentation` is what the server stamped, not
+ * something a fixture gets to choose freely: a photograph is always atmosphere.
+ */
+export const photoArtifact = (
+  overrides: Partial<Extract<PublicCaseStudyArtifact, { access: 'open' }>> = {},
+): PublicCaseStudyArtifact => ({
+  access: 'open',
+  artifactType: 'photo',
+  presentation: 'atmosphere',
+  title: 'The Dallas studio during a working session',
+  description: null,
+  url: 'https://example.org/studio.jpg',
+  previewUrl: null,
+  ...overrides,
 });
 
 export const cta = (overrides: Partial<PublicCaseStudyCta> = {}): PublicCaseStudyCta => ({

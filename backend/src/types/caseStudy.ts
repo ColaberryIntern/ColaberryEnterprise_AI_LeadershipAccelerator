@@ -150,10 +150,32 @@ export type CaseStudyEvidenceSourceType =
   | 'internal_measurement'
   | 'manual';
 
-/** `case_study_artifacts.artifact_type`. */
+/**
+ * `case_study_artifacts.artifact_type`.
+ *
+ * `photo` IS ATMOSPHERE AND IS NEVER EVIDENCE. It exists so a record can carry a
+ * photograph — a room, a working session, a stock frame — without that
+ * photograph being able to stand in for a screenshot of the delivered system.
+ * `docs/V2_CUTOVER_CARRYOVER.md` states the rule the whole system inherits from
+ * the claims registry: *"a picture presented as evidence of something that did
+ * not happen is a fabricated claim, it just happens to be made of pixels."*
+ *
+ * Three consequences are enforced in code rather than asked for in review, all
+ * of them in the public projection (`caseStudyPublicSections.ts`):
+ *   1. `HERO_IMAGE_PRIORITY` ranks `photo` BELOW `screenshot` and
+ *      `architecture`, so a real product image always wins the hero when one
+ *      exists and a photograph can only be the hero of a record that has no
+ *      product image at all;
+ *   2. `projectArtifacts` stamps every `photo` `presentation: 'atmosphere'`,
+ *      derived from the type and never supplied by an author, so no renderer can
+ *      be told a photograph is evidence;
+ *   3. a `photo` whose title or description makes a delivered-work claim is
+ *      DROPPED from the public payload entirely — `describesDeliveredWork()`.
+ */
 export type CaseStudyArtifactType =
   | 'screenshot'
   | 'architecture'
+  | 'photo'
   | 'demo'
   | 'deck'
   | 'roadmap'
@@ -352,6 +374,21 @@ export interface CaseStudyArchitectureSection {
     readonly nodes: readonly CaseStudyArchitectureNode[];
     readonly edges: readonly CaseStudyArchitectureEdge[];
   };
+  /**
+   * Mermaid source for a HUMAN-AUTHORED chart, and only ever that.
+   *
+   * It does not replace `diagram`, and nothing generates it. `diagram` is the
+   * normalised node/edge list the repository sync can evidence, and
+   * `CaseStudyArchitecture.tsx` renders it as text on purpose — *"a list of
+   * verified nodes and verified edges says exactly what the data says and no
+   * more"*. A chart drawn from that same list would have to invent a layout the
+   * data does not contain. So this field carries a drawing a PERSON made and
+   * takes responsibility for, it renders beside the verified list rather than
+   * instead of it, and the page labels it as the human-authored view.
+   *
+   * Sanitised at the public boundary, not here: see `projectDiagramSource()`.
+   */
+  readonly diagramSource?: string;
 }
 
 export interface CaseStudyMeasurementSection {

@@ -1,0 +1,168 @@
+# Delivery execution runner — the containment ESC-4 chose.
+#
+# WHY THIS FILE EXISTS. Gate 0's EXECUTION_CAPABILITY_MAP found that three of the eight
+# default-deny rules in master plan §Gate 8 were UNENFORCEABLE while execution shared the
+# backend container: `previewStackService` mounts the Docker socket into the process that
+# also serves public HTTP, which is root-equivalent host control behind an internet-facing
+# service. ESC-4 resolved that by moving execution off the VPS entirely, to an ephemeral
+# GitHub Actions runner with a per-job token and GitHub's network policy.
+#
+# `executionPolicy.ts` records `runner_isolation` as the enforcer for five of the eight
+# denied capabilities. THIS FILE IS THAT ENFORCER. Without it, those five rows describe an
+# intention rather than a control.
+#
+# ---------------------------------------------------------------------------------------
+# WHAT THIS WORKFLOW DELIBERATELY CANNOT DO
+# ---------------------------------------------------------------------------------------
+# It is manual-dispatch only. There is no `push`, no `schedule`, no `repository_dispatch`,
+# and no `pull_request` trigger — so nothing in this repository can start an agent run by
+# merging something. Master plan §20 does not authorize production agent workers, and a
+# workflow that fires on push would be one.
+#
+# It has NO production secrets. Not "secrets it does not use" — none are referenced, so a
+# compromised run has nothing to exfiltrate. `production_database`, `live_email`,
+# `cloud_resource_deletion` and `dns` are denied by the absence of any credential to do
+# them with, which is the only form of that denial that survives a hostile prompt.
+#
+# It cannot push to `main`. `permissions.contents: write` allows a branch and a pull
+# request; branch protection rejects a direct push to `main`, and `push_to_protected_main`
+# is enforced there rather than here.
+
+name: Delivery execution runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'delivery_execution_runs.id to claim (UUID)'
+        required: true
+        type: string
+      repo_url:
+        description: 'Repository the story executes against'
+        required: true
+        type: string
+      base_sha:
+        description: 'Exact commit to work from. A branch name would move under the run.'
+        required: true
+        type: string
+      branch:
+        description: 'Branch to create for the work'
+        required: true
+        type: string
+      max_duration_minutes:
+        description: 'Hard ceiling. The run is cancelled, never silently truncated.'
+        required: false
+        default: '30'
+        type: string
+
+# Least privilege, stated rather than defaulted. `contents: write` is required to open a
+# pull request; nothing here needs packages, deployments, or id-token.
+permissions:
+  contents: write
+  pull-requests: write
+
+# One run per delivery run. A second dispatch for the same story does not race the first —
+# `delivery_execution_runs` claims with FOR UPDATE SKIP LOCKED on the database side, and
+# this is the same guarantee at the workflow level.
+concurrency:
+  group: delivery-execution-${{ inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    name: Execute one approved story
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.max_duration_minutes) }}
+
+    env:
+      # The engine's credential is the ONLY secret this workflow references.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      DELIVERY_RUN_ID: ${{ inputs.run_id }}
+      DELIVERY_BASE_SHA: ${{ inputs.base_sha }}
+      DELIVERY_BRANCH: ${{ inputs.branch }}
+
+    steps:
+      - name: Refuse to run without an isolation marker
+        # `executionPolicy.decideExecutionPolicy` refuses any run that is not on an
+        # isolated runner. This asserts the runner really is one rather than trusting the
+        # caller's flag — a self-hosted runner would have the VPS's network and disk, which
+        # is the exact situation ESC-4 exists to prevent.
+        run: |
+          if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
+            echo "::error::This workflow must run on a GitHub-hosted runner."
+            echo "RUNNER_ENVIRONMENT=${RUNNER_ENVIRONMENT:-unset}"
+            exit 1
+          fi
+          echo "runner: github-hosted, ephemeral"
+
+      - name: Check out the target repository at the exact base SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo_url }}
+          ref: ${{ inputs.base_sha }}
+          # A shallow clone is enough to work from and keeps the workspace small.
+          fetch-depth: 1
+          path: workspace
+          persist-credentials: true
+
+      - name: Create the story branch
+        working-directory: workspace
+        run: |
+          git checkout -b "${DELIVERY_BRANCH}"
+          git config user.name  "Colaberry Delivery Runner"
+          git config user.email "delivery-runner@colaberry.com"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the execution engine
+        # Installed here rather than vendored into the backend image: the engine belongs to
+        # the runner, not to the internet-facing service. The backend never has it.
+        run: npm install --no-save @anthropic-ai/claude-agent-sdk@0.3.245
+
+      - name: Fail if a production credential is present
+        # Defence in depth against a future edit adding one. The check is cheap and the
+        # failure it prevents — an agent run holding production credentials — is not.
+        run: |
+          for forbidden in DATABASE_URL MANDRILL_API_KEY BASECAMP_TOKEN OPENAI_API_KEY AWS_ACCESS_KEY_ID; do
+            if [ -n "$(printenv "$forbidden" || true)" ]; then
+              echo "::error::$forbidden is present in the runner environment. Remove it."
+              exit 1
+            fi
+          done
+          echo "no production credentials in the runner environment"
+
+      - name: Execute the story
+        working-directory: workspace
+        env:
+          MAX_DURATION_SECONDS: ${{ fromJSON(inputs.max_duration_minutes) }}
+        run: |
+          echo "::group::execution"
+          # The orchestrator entrypoint assembles the prompt via executionPromptEnvelope
+          # and drives claudeAgentSdkProvider. It is NOT implemented yet — this step fails
+          # loudly rather than pretending a run happened.
+          echo "::error::Execution entrypoint not implemented. See docs/architecture/refactored-delivery-os/E2E_SCENARIOS.md"
+          exit 1
+
+      - name: Open a pull request
+        if: success()
+        working-directory: workspace
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push origin "${DELIVERY_BRANCH}"
+          gh pr create \
+            --repo "${{ inputs.repo_url }}" \
+            --base main \
+            --head "${DELIVERY_BRANCH}" \
+            --title "Delivery run ${DELIVERY_RUN_ID}" \
+            --body "Automated delivery execution. Run id: ${DELIVERY_RUN_ID}. Base: ${DELIVERY_BASE_SHA}."
+
+      - name: Destroy the workspace
+        # Runs even when the job failed or was cancelled. An orphaned workspace holding a
+        # client's source is the failure mode; the runner is ephemeral anyway, so this is
+        # belt and braces rather than the only guarantee.
+        if: always()
+        run: rm -rf workspace

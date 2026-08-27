@@ -80,10 +80,20 @@ import type {
  * `caseStudyPublicationService.ts` re-exporting the gate and the store.
  */
 export {
+  ATMOSPHERE_ARTIFACT_TYPES,
+  DELIVERED_WORK_CLAIMS,
+  HERO_IMAGE_PRIORITY,
+  artifactPresentation,
+  describesDeliveredWork,
+} from './caseStudyArtifactPresentation';
+export {
+  MAX_DIAGRAM_SOURCE_CHARS,
   projectArtifacts,
   projectContributors,
+  projectDiagramSource,
   projectMetric,
   projectRepositories,
+  resolveHeroImage,
   resolveOrganizationLabel,
   resolveRecordVerification,
   safeHttpUrl,

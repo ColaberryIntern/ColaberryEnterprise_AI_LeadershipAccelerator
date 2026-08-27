@@ -3,6 +3,7 @@ import { Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
 const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
+const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const AdminLoginPage = lazy(() => import('../pages/admin/AdminLoginPage'));
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
 const WarRoomPage = lazy(() => import('../pages/admin/WarRoomPage'));
@@ -66,6 +67,13 @@ const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
 const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
 const AdminVaErpDashboardPage = lazy(() => import('../pages/admin/AdminVaErpDashboardPage'));
 const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
+// Refactored AI Delivery OS (Gates 10-11). Both surfaces sit under /admin for now because
+// no authentication path resolves a PlatformIdentity yet, so a client reviewer cannot log
+// in — see docs/architecture/refactored-delivery-os/CLIENT_IDENTITY_ANSWER.md. Serving the
+// client room from a staff-authenticated route makes it reviewable by staff WITHOUT
+// implying an external client can reach it.
+const RefactoredClientReviewRoom = lazy(() => import('../pages/refactored/ClientReviewRoom'));
+const RefactoredBuilderWorkspace = lazy(() => import('../pages/refactored/BuilderWorkspace'));
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
@@ -75,8 +83,24 @@ const adminRoutes = (
           token, redirects to /portal/today. Sits outside AdminLayout, like the
           portal's mirror-image /portal/mgmt-enter sits outside PortalLayout. */}
       <Route path="/admin/ai-training-enter" element={<AdminPortalEnterPage />} />
+      {/* The Client Review Room renders OUTSIDE AdminLayout, deliberately.
+          Wrapping a client-facing surface in the operations sidebar (Revenue, Lead
+          Ingestion, Campaigns, Intelligence) contradicts the one thing Gate 10 exists
+          to guarantee: a client sees a different, narrower world than an operator.
+          It is not a leak while the route is staff-only and no client can authenticate,
+          but it makes the eventual mistake easy — the day someone shares this URL the
+          projection layer would be doing its job while the chrome advertised the lead
+          pipeline. Found by deploying to dev and LOOKING; CI cannot see this.
+          Staff auth is retained via ProtectedRoute. */}
+      <Route path="/admin/refactored/client" element={<RefactoredClientReviewRoom />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        {/* Portfolio review. INSIDE ProtectedRoute and AdminLayout: it first shipped
+            beside /admin/login, outside the auth guard entirely, so the page was
+            publicly loadable (the API still 401d, so no data leaked, but the surface
+            was reachable). Found by Ali opening it and seeing no admin chrome — the
+            missing sidebar was the visible symptom of the missing guard. */}
+        <Route path="/admin/career-review" element={<CareerReviewPage />} />
         {/* Account self-service: reachable by every admin identity regardless
             of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
         <Route path="/admin/change-password" element={<AdminChangePasswordPage />} />
@@ -158,6 +182,7 @@ const adminRoutes = (
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
         <Route path="/admin/va-erp" element={<AdminVaErpDashboardPage />} />
+        <Route path="/admin/refactored/builder" element={<RefactoredBuilderWorkspace />} />
       </Route>
     </Route>
   </>

@@ -264,13 +264,18 @@ describe('artifacts', () => {
   const detail = projectPublicDetail(input());
 
   it('renders approved public and request-only artifacts, and nothing else', () => {
+    // `presentation` is derived from `artifactType` by the projection and is
+    // asserted here literally, so a change to the derivation surfaces as a diff
+    // on the payload rather than only inside the photo suite.
     expect(detail.artifacts).toEqual([
       {
-        access: 'open', artifactType: 'architecture', title: 'System diagram',
+        access: 'open', artifactType: 'architecture', presentation: 'evidence',
+        title: 'System diagram',
         description: null, url: 'https://example.com/diagram.png', previewUrl: null,
       },
       {
-        access: 'request', artifactType: 'deck', title: 'Executive summary',
+        access: 'request', artifactType: 'deck', presentation: 'evidence',
+        title: 'Executive summary',
         description: null,
       },
     ]);

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260825-m2w8 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, August 25, 2026 at 8:49 PM</div>
+    <div><span class="sid">CC-20260825-m2w8</span><span class="count">3 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Made the Export CSV button export the view on screen instead of the whole table, and bounded it.**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Kes reported that Export CSV &quot;exports all data regardless of the applied filters&quot;. **Both halves of the path were broken independently**, which is why the failure looked total rather than partial, and why fixing either side alone would have changed nothing. The page called `/api/admin/leads/export` with **no query parameters at all** (`api.get(url, { responseType: &#39;blob&#39; })`, no `params` key), while the table alongside it sent nine. The controller took `_req`, the request object deliberately unused, and called `generateLeadCsv()`, which **accepted no arguments** and ran a `Lead.findAll` with no `where`. Extracted **`buildLeadWhere(params)`** out of `listLeads` so the table and the export derive their filter from one function; they cannot drift again because there is only one definition left. The export controller now parses the same `leadFilterSchema` and runs the same `resolveWebsiteFilter` as the list handler, so a sales rep&#39;s saved and locked website scope applies to their download too rather than being bypassed. On the page, **`buildFilterParams()`** is now the single source both `fetchLeads` and `handleExport` read. Also declared `temperature` on the params interface, which was being read through `(params as any)` and would have silently vanished the first time a typed object was spread into that call.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**81 tests / 5 suites green**, 12 of them new in `leadExportFilters.test.ts`. The new tests pin the filter translation (status, score range, date range with `dateTo` covering the whole day, website group expansion, unknown-key-matches-nothing, temperature, search), **list and export producing the same `where` for the same input** which is the regression itself, the empty result, the bound, and truncation in both directions. `leadSourceGroups`, `leadViewPreference`, `externalLeadIngestService` and `v1LeadController.consent` all still pass. Root cause was confirmed against production before any code was written: `accelerator_prod.leads` holds 24,244 rows, so every click was a full-table dump. PR: https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/1828</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Two defects found during BREAK that Kes&#39;s report did not mention.** (1) The export was **unbounded** - the whole table plus an `AdminUser` join per row, materialised and serialised in a single pass. Now capped at `LEAD_EXPORT_MAX_ROWS = 25000`, queried at **cap+1** so &quot;there was more&quot; is distinguishable from &quot;it landed exactly on the limit&quot; without a second COUNT, and a capped file is **named** `leads-export-partial-first-N.csv`. Response headers are invisible on a browser download, and a silently trimmed CSV reads as complete, so the truncation had to be in something the human actually sees. (2) **My own fix would have introduced a 500.** `json2csv` throws `Data should not be empty or the &quot;fields&quot; option should be included` on an empty array, and once the filters actually applied, &quot;no lead matches&quot; stopped being impossible and became ordinary. Verified the throw directly against the installed `6.0.0-alpha.2` rather than reasoning about it; columns are now pinned via `LEAD_CSV_FIELDS` so an empty result returns a header-only file. Also fixed `clearFilters()` leaving `tempFilter` and `websiteFilter` set while the controls read as cleared. **Deployed and production-verified 2026-08-26 01:45-01:47 UTC.** Backend and nginx rebuilt separately, nginx with `--no-deps` so it did not bounce the backend. No `git pull` was needed - prod&#39;s tree already carried the merge - which also avoided touching `ead1d15a`, a Session 10 curriculum commit that exists **only on the production box** and is unpushed to any branch. Verified the shipped artifacts rather than the build exit codes: `buildLeadWhere` and `LEAD_EXPORT_MAX_ROWS` present in the running `/app/dist/services/leadService.js`, and the new error-copy string present in the **minified** `static/js/1941.3841c260.chunk.js`, which is the only proof the frontend bundle actually rebuilt. `RestartCount=0`, `OOMKilled=false`, site 200, `/admin/leads` 200. **Then exercised the deployed code directly**: unfiltered export = 24,610 rows, `website=open_house` = **490**, `status=qualified` = 1, a no-match search = 0 rows returning a header-only CSV rather than a 500. The 490 cross-validates exactly against the open-house count from the GHL investigation in the next entry. **Still not visually verified** - nobody has clicked the actual button in a browser; this is server-side proof of the same code path. **Forward-looking:** unfiltered is 24,610 against a 25,000 cap, roughly 390 rows of headroom, so the cap will be crossed within weeks. It degrades visibly (the file arrives named `leads-export-partial-first-25000.csv`) rather than silently, but the real fix when that lands is to stream the CSV instead of materialising it. **Deviation from `docs/MERGE_WORKFLOW.md`, logged deliberately:** that doc routes feature PRs into `staging`, but staging and main are split-brain (main is **1,551 commits ahead**, staging 73 ahead), so a PR into staging would carry 1,551 unrelated commits and be unreviewable. This targets `main`. That divergence is worth its own fix and is not addressed here. **All 7 CI checks pass** on the PR: Backend typecheck, Backend unit tests, Frontend build, Frontend typecheck, Secret scan + route-auth lint, Static security scan, Scan new commits. **A local-only artifact worth recording so the next person does not chase it:** locally `tsc --noEmit` reported 2 errors, both `Cannot find module &#39;@anthropic-ai/sdk&#39;` in `interviewService.ts` and `runtime/anthropicClient.ts`, because this worktree&#39;s `node_modules` is a junction into a tree where that package is absent. CI&#39;s Backend typecheck passes, so those were environmental and not real. Same shape locally on jest: a repo-wide run showed 43 failures in unrelated domains (e.g. `participantMagicLink.test.ts`, whose only imports are `Enrollment` and `participantService`, neither of which reaches this code) while CI&#39;s Backend unit tests pass clean. **The local toolchain here is not trustworthy as a gate; CI is.**</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Diagnosed why 490 leads are invisible to Cora Voice and admissions, and stopped short of the fix on purpose.**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**Nothing in code, deliberately.** Kes reported that leads from the open house and the training site never appear in the &quot;Colaberry School of Data Analytics&quot; GHL account, so neither Cora Voice nor the admissions team can reach them. Root caused to **two independent blockers**, and the second is the reason no code shipped. **(1) The sync is never invoked.** `enrollmentService.createExplorerEnrollment` writes the open-house lead with a raw `Lead.findOrCreate` and never calls `syncNewLeadToGhl`; `externalLeadIngestService.ingestExternalLead` does the same for the training site; and `leadService.createLead`, the shared helper the generic form ingest funnels through, has no GHL call either. So **inbound web forms are unsynced as an entire class**, not just these two sources. Every existing GHL call site is admin-add, calendar booking, Apollo, CSV import, Maya, the Synthflow webhook, campaigns, automation or the scheduler. **(2) The single stored key points at the wrong sub-account.** `ghlService` uses one global `ghl_api_key` and never reads a location id. Calling `GET /v1/locations/` with the live key returns exactly one location: `JFWwp8q7l6T12NWTIOKG`, **&quot;Agent Cory AI&quot;** - not School of Data Analytics. The `ghl_location_id` that `settingsService` writes is dead config, read by nothing. Escalation written to `tmp/escalation.json` (not committed; `/tmp` is scratch).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Production evidence rather than inference. `accelerator_prod.leads` grouped by source: **`open_house` = 490 rows, 0 with a `ghl_contact_id`**, newest one today. `training.colaberry.com` across its three spellings = 3 rows, 0 synced. The control group proves GHL itself is healthy and the failure is specific to these paths: `apollo` **1,981 / 2,102** synced, `ccpp_alumni` 679/689, `ai-pilot-cold` 99/99, `strategy_call` 4/4. `system_settings` reads `ghl_enabled = true`, `ghl_api_key` set, `test_mode_enabled = false`, which rules out the disabled-flag and test-mode-redirect hypotheses outright.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Not fixed on purpose, and that is the substance of this entry.** Wiring the sync is a two-line change. But with blocker (2) unresolved it would create roughly 490 contacts in the wrong CRM sub-account, and those contacts feed Cora Voice outbound dialing. That is an irreversible, outward-facing write to a live CRM and a live dialer against a population nobody has reviewed, which CLAUDE.md puts on the escalate side of the line rather than the proceed side. Three decisions are needed before code: which sub-account is genuinely the intended destination; whether to build **per-source account routing** (recommended) rather than repointing the single key, since repointing would silently move Apollo, campaigns, Synthflow and calendar bookings into the new account alongside the open-house leads; and whether the 490 already-captured leads get backfilled or the fix is new-leads-only, with a dry-run count first either way. Worth adding `ghl_sync_status` / `ghl_synced_at` to `Lead` when this is built, because today the only sync signal is `ghl_contact_id` being non-null and a failure is otherwise invisible. **Incidental security finding:** GHL&#39;s `GET /v1/locations/` returns each location&#39;s **full `apiKey` in the response body**, so any script that logs that response leaks a live credential.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Checked the review request Kes sent at noon and established there is nothing to review.**</h2>
+          <span class="badge">2026-08-25</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Nothing. Kes&#39;s second email describes a completed, verified fix on `fix/cora-staff-pronoun-kb` adding a `pronouns` column to `ResponsiblePerson` and a staff-pronoun block to Cora&#39;s inbox system prompt, states it is &quot;pushed to origin&quot;, and asks for review and merge. It is not pushed. Recorded here because the email reads as a handoff and would otherwise look actioned.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Checked four ways rather than once, since this is a claim about someone else&#39;s work. All **1,187 remote heads** contain no branch matching `pronoun` or `cora-staff`; **every PR in any state** returns no match; a **GitHub code search** for `add_responsible_person_pronouns`, the migration filename his email names, returns 0 results; and **both forks** (`Akiwam`, `aleemcolaberry`, last pushed 2026-08-05 and 2026-07-01) have no such branch.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Two errors in his runbook worth catching before anyone follows it. His migration command and his verify step both target **`-d accelerator`**, but the production database is **`accelerator_prod`** - that psql line fails as written. And his PR instruction routes to `staging`, which is currently unreviewable for the reason logged above. Replied to him on all three items in one email; answered his two open questions as: yes to giving `docs/synthflow-inbound-prompt.md` the same pronoun treatment, since an inconsistent third prompt is how this regresses, and no to hand-mirroring pronoun text into the live Synthflow dashboard config for now, because config that cannot be verified from the repo should not be kept in sync from memory.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260825-m2w8.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

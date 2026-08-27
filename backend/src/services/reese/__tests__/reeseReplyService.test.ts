@@ -8,7 +8,7 @@
  */
 jest.mock('../../../models/RoomMembership', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/RoomMessage', () => ({ findAll: jest.fn() }));
-jest.mock('../reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn(), getReeseAdminUserId: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn(), getReeseAdminUserId: jest.fn(), getReeseAgentId: jest.fn() }));
 jest.mock('../reeseSystemPrompt', () => ({ buildReeseSystemPrompt: jest.fn() }));
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
@@ -19,7 +19,7 @@ jest.mock('../reeseTicketLinkService', () => ({
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
-import { getReeseEnrollmentId, getReeseAdminUserId } from '../reeseIdentitySeed';
+import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId } from '../reeseIdentitySeed';
 import { buildReeseSystemPrompt } from '../reeseSystemPrompt';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { sendDmMessage } from '../../communityRooms/dmService';
@@ -30,6 +30,7 @@ const mockMembershipFindOne = RoomMembership.findOne as unknown as jest.Mock;
 const mockMessageFindAll = RoomMessage.findAll as unknown as jest.Mock;
 const mockGetReeseEnrollmentId = getReeseEnrollmentId as unknown as jest.Mock;
 const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
+const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
 const mockBuildReeseSystemPrompt = buildReeseSystemPrompt as unknown as jest.Mock;
 const mockGetInstrumentedOpenAI = getInstrumentedOpenAI as unknown as jest.Mock;
 const mockSendDmMessage = sendDmMessage as unknown as jest.Mock;
@@ -37,6 +38,7 @@ const mockEnsureTicket = ensureReeseTicketForRoom as unknown as jest.Mock;
 const mockLogExchange = logReeseExchangeActivity as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
+const REESE_AGENT_ID = 'reese-agent-1';
 
 const REESE_ID = 'reese-enrollment-1';
 const STUDENT_ID = 'student-enrollment-1';
@@ -55,6 +57,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGetReeseEnrollmentId.mockResolvedValue(REESE_ID);
   mockGetReeseAdminUserId.mockResolvedValue(REESE_ADMIN_ID);
+  mockGetReeseAgentId.mockResolvedValue(REESE_AGENT_ID);
   mockBuildReeseSystemPrompt.mockResolvedValue('SYSTEM PROMPT');
   mockMessageFindAll.mockResolvedValue([
     { id: 'student-msg-1', enrollment_id: STUDENT_ID, content: 'Hi Reese, I am stuck on my project.' },
@@ -83,6 +86,13 @@ describe('maybeTriggerReeseReply', () => {
       { enrollmentId: REESE_ID, cohortId: null, isAdmin: false },
       ROOM_ID,
       'Here is your next move.',
+    );
+    // Cost-tracking fix (2026-08-27) — the real agent_id must be resolved and
+    // passed at client construction, not left null (see the module-scope
+    // singleton caveat above: this is the ONLY test where a fresh
+    // construction can be observed, since it's the first to trigger one).
+    expect(mockGetInstrumentedOpenAI).toHaveBeenCalledWith(
+      expect.objectContaining({ workflow_id: 'reese', agent_id: REESE_AGENT_ID }),
     );
   });
 

@@ -1,257 +1,76 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader, StatusBadge } from '../../components/admin/shell';
 import {
-  CaseStudyArtifactsPanel, CaseStudyConsentPanel, CaseStudyContributorsPanel,
-  CaseStudyEvidencePanel, CaseStudyMetricsPanel, CaseStudyNarrativePanel, CaseStudyPreviewPanel,
-  CaseStudyProvenancePanel, CaseStudyPublishPanel, CaseStudyReadinessPanel,
-  CaseStudyRepositoriesPanel, CaseStudySyncPanel, formatDate, readProvenance, readSnapshot,
+  CaseStudyActionBand, CaseStudyAnalyzePanel, CaseStudyArtifactsPanel, CaseStudyConsentPanel,
+  CaseStudyContributorsPanel, CaseStudyDraftPanel, CaseStudyEvidencePanel, CaseStudyGateBand,
+  CaseStudyMetricsPanel, CaseStudyNarrativePanel, CaseStudyPreviewPanel, CaseStudyProvenancePanel,
+  CaseStudyPublishPanel, CaseStudyQuotesPanel, CaseStudyReadinessPanel, CaseStudyRepositoriesPanel,
+  CaseStudyStorylinePanel, CaseStudyStudioTabStrip, CaseStudySyncPanel, CaseStudyVisualsPanel,
+  DEFAULT_STUDIO_TAB, formatDate, readProvenance,
 } from '../../components/admin/caseStudy';
-import type { ProvenanceVersionOption } from '../../components/admin/caseStudy';
-import {
-  applyCaseStudyOverride, approveCaseStudySnapshot, archiveCaseStudy, attachCaseStudyRepository,
-  describeApiError, getCaseStudy, listCaseStudySyncRuns, previewCaseStudy, publishBlockersFrom,
-  publishCaseStudy, removeCaseStudyRepository, setCaseStudyRepositoryRole, syncCaseStudy,
-  unpublishCaseStudy, updateCaseStudy,
-} from '../../services/caseStudyAdminApi';
-import type {
-  CaseStudyDetail, CaseStudyPublishBlocker, CaseStudyRepoRole, CaseStudySnapshotSummary,
-  CaseStudySurfacePreview, CaseStudySyncResult, CaseStudySyncRunSummary, CaseStudyUpdatePatch,
-} from '../../services/caseStudyAdminApi';
+import type { CaseStudyStudioTabKey } from '../../components/admin/caseStudy';
+import CaseStudySurfaceLab from './CaseStudySurfaceLab';
+import { PUBLISH_SURFACE, useCaseStudyDesk } from './useCaseStudyDesk';
+import { useCaseStudyStudio } from './useCaseStudyStudio';
 
 /**
- * AdminCaseStudyDetailPage — the review desk for one candidate (spec §17, §18).
+ * AdminCaseStudyDetailPage — the Story Studio, seven tabs over one record.
  *
- * The whole record is on one page rather than behind tabs, because the decision
- * this screen exists for is a single judgement made across all of it: a metric
- * is publishable only if its evidence is, a name may be shown only if consent
- * was recorded, and the publish gate refuses on any of them. Splitting that into
- * tabs would let a reviewer approve a record having seen a third of it.
+ * TRUTH · SOURCES · STORY · VISUALS · SURFACES · PREVIEW · PUBLISH
+ *
+ * WHAT CHANGED HERE, AND THE DECISION IT REVERSES.
+ *
+ * This page used to open with: "The whole record is on one page rather than
+ * behind tabs, because the decision this screen exists for is a single
+ * judgement made across all of it... Splitting that into tabs would let a
+ * reviewer approve a record having seen a third of it."
+ *
+ * That risk is real and the sentence was right. It is reversed because the
+ * surface acquired a SECOND job — authoring — and a flat scroll of eighteen
+ * panels is a bad authoring surface in a different way: the five steps
+ * (storyline, sources, analyze, draft, edit) have an order, and one long page
+ * presents them as though they do not.
+ *
+ * THE OLD INVARIANT IS PRESERVED BY A DIFFERENT MECHANISM, not abandoned.
+ * `CaseStudyGateBand` renders the publish gate's named refusals ABOVE the tab
+ * strip, on every tab. A reviewer on VISUALS sees exactly the refusals a
+ * reviewer on PUBLISH sees. Approving without having read every panel is still
+ * possible; approving without having seen what the gate refuses is not, and
+ * that is the half the original comment was protecting.
  *
  * NOTHING HERE DECIDES ANYTHING. Every action posts to a service that owns the
  * rule and re-checks it; readiness is displayed and never gates; the publish
  * button is enabled regardless of score, and the gate's named refusals are
- * rendered in full. All four write paths (sync, approve, publish, unpublish) are
- * idempotent server-side, so the retry strategy for any of them is pressing the
- * button again.
+ * rendered in full. All write paths are idempotent server-side, so the retry
+ * strategy for any of them is pressing the button again.
+ *
+ * THE PAGE HOLDS NO DATA STATE. `useCaseStudyDesk` owns the review desk's state
+ * and writes; `useCaseStudyStudio` owns authoring's. The split is not only for
+ * the 500-line ceiling: the studio hook does not import a single lifecycle
+ * function, so no authoring action can publish, and that is checkable by
+ * reading its import list.
  */
-
-const SURFACE = 'enterprise' as const;
-const SYNC_RUN_PAGE = { limit: 20, offset: 0 };
 
 function AdminCaseStudyDetailPage(): React.ReactElement {
   const { id = '' } = useParams<{ id: string }>();
+  const [tab, setTab] = useState<CaseStudyStudioTabKey>(DEFAULT_STUDIO_TAB);
 
-  const [detail, setDetail] = useState<CaseStudyDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const desk = useCaseStudyDesk(id);
+  const studio = useCaseStudyStudio(id, desk.load);
 
-  const [busy, setBusy] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionNote, setActionNote] = useState<string | null>(null);
-  const [blockers, setBlockers] = useState<readonly CaseStudyPublishBlocker[]>([]);
-  const [blockerSource, setBlockerSource] = useState<'publish' | 'preview' | null>(null);
-
-  const [preview, setPreview] = useState<CaseStudySurfacePreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-
-  const [lastSync, setLastSync] = useState<CaseStudySyncResult | null>(null);
-  const [runs, setRuns] = useState<readonly CaseStudySyncRunSummary[] | null>(null);
-  const [runsLoading, setRunsLoading] = useState(false);
-  const [runsError, setRunsError] = useState<string | null>(null);
-
-  const [provenanceId, setProvenanceId] = useState('');
-  const [provenanceSnapshot, setProvenanceSnapshot] = useState<CaseStudySnapshotSummary | null>(null);
-  const [provenanceLoading, setProvenanceLoading] = useState(false);
-  const [provenanceError, setProvenanceError] = useState<string | null>(null);
-
-  const [publishedSnapshot, setPublishedSnapshot] = useState<CaseStudySnapshotSummary | null>(null);
-  const [diffLoading, setDiffLoading] = useState(false);
-  const [diffError, setDiffError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setDetail(await getCaseStudy(id));
-      setLoadError(null);
-    } catch (err) {
-      setLoadError(describeApiError(err, 'this Case Study'));
-      setDetail(null);
-    }
-  }, [id]);
-
+  /** Fetch only what the open tab needs. See the hook's header. */
   useEffect(() => {
-    setLoading(true);
-    load().finally(() => setLoading(false));
-  }, [load]);
+    if (tab === 'truth') studio.ensureLoaded('storyline');
+    if (tab === 'story') { studio.ensureLoaded('drafts'); studio.ensureLoaded('quotes'); }
+    if (tab === 'visuals') studio.ensureLoaded('visuals');
+  }, [tab, studio]);
 
-  /** One write, one reload, one place errors are surfaced rather than swallowed. */
-  const act = useCallback(async (
-    subject: string, run: () => Promise<unknown>, note: string,
-  ): Promise<void> => {
-    setBusy(true);
-    setActionError(null);
-    setActionNote(null);
-    try {
-      await run();
-      setActionNote(note);
-      await load();
-    } catch (err) {
-      setActionError(describeApiError(err, subject));
-    } finally {
-      setBusy(false);
-    }
-  }, [load]);
-
-  /**
-   * One human override of one snapshot field (spec §34). Every editorial panel
-   * shares this path deliberately: an override is the same operation whichever
-   * field it touches, and it always produces a NEW snapshot version that has to
-   * be approved before it counts, so no panel gets to write directly.
-   */
-  const override = useCallback((path: string, value: string, note?: string): void => {
-    void act(
-      'this override',
-      () => applyCaseStudyOverride(id, { path, value, ...(note ? { note } : {}) }),
-      `Override applied to ${path} as a new snapshot version. Approve it before it counts.`,
-    );
-  }, [act, id]);
-
-  const onSync = async () => {
-    setSyncing(true);
-    setActionError(null);
-    try {
-      const result = await syncCaseStudy(id, { trigger: 'manual' });
-      setLastSync(result);
-      await load();
-    } catch (err) {
-      setActionError(describeApiError(err, 'this sync'));
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  /**
-   * Publish. A refusal is not an error to be summarised: it is a list of named
-   * conditions, and every one of them is put on screen.
-   */
-  const onPublish = async () => {
-    setBusy(true);
-    setActionError(null);
-    setActionNote(null);
-    setBlockers([]);
-    try {
-      const result = await publishCaseStudy(id, { surfaceKey: SURFACE });
-      setActionNote(result.outcome === 'published'
-        ? `Published snapshot v${result.snapshotVersion} to the enterprise surface.`
-        : 'Nothing changed: that snapshot was already live on this surface.');
-      await load();
-    } catch (err) {
-      const named = publishBlockersFrom(err);
-      setBlockers(named);
-      setBlockerSource('publish');
-      setActionError(named.length > 0
-        ? `The publish gate refused this record for ${named.length} named reason${named.length === 1 ? '' : 's'}. Every one is listed below.`
-        : describeApiError(err, 'this publication'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onPreview = async () => {
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      const result = await previewCaseStudy(id, { surfaceKey: SURFACE });
-      setPreview(result);
-      // The preview carries the REAL gate decision, so its reasons are shown in
-      // the same place a refused publish puts them.
-      setBlockers(result.decision.blockers);
-      setBlockerSource(result.decision.blockers.length > 0 ? 'preview' : null);
-    } catch (err) {
-      setPreviewError(describeApiError(err, 'this preview'));
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const onLoadRuns = async () => {
-    setRunsLoading(true);
-    setRunsError(null);
-    try {
-      const page = await listCaseStudySyncRuns(id, SYNC_RUN_PAGE);
-      setRuns(page.items);
-    } catch (err) {
-      setRuns(null);
-      setRunsError(describeApiError(err, 'the sync history'));
-    } finally {
-      setRunsLoading(false);
-    }
-  };
-
-  const enterprisePublication = detail?.publications.find((p) => p.surfaceKey === SURFACE) ?? null;
-  const publishedSnapshotId = enterprisePublication?.publishedSnapshotId ?? null;
-
-  const onDiff = async () => {
-    if (!publishedSnapshotId) return;
-    setDiffLoading(true);
-    setDiffError(null);
-    try {
-      const result = await previewCaseStudy(id, { snapshotId: publishedSnapshotId });
-      setPublishedSnapshot(result.snapshot);
-    } catch (err) {
-      setDiffError(describeApiError(err, 'the published version'));
-    } finally {
-      setDiffLoading(false);
-    }
-  };
-
-  const onSelectProvenanceVersion = async (snapshotId: string) => {
-    setProvenanceId(snapshotId);
-    setProvenanceError(null);
-    if (!snapshotId) {
-      setProvenanceSnapshot(null);
-      return;
-    }
-    setProvenanceLoading(true);
-    try {
-      const result = await previewCaseStudy(id, { snapshotId });
-      setProvenanceSnapshot(result.snapshot);
-    } catch (err) {
-      setProvenanceSnapshot(null);
-      setProvenanceError(describeApiError(err, 'that snapshot version'));
-    } finally {
-      setProvenanceLoading(false);
-    }
-  };
-
-  const view = useMemo(() => readSnapshot(detail?.latestSnapshot?.content ?? null), [detail]);
-  const metrics = useMemo(() => [...view.heroMetrics, ...view.measurementMetrics], [view]);
-  const provenanceVersions = useMemo((): ProvenanceVersionOption[] => {
-    const options: ProvenanceVersionOption[] = [{
-      snapshotId: null,
-      label: detail?.latestSnapshot
-        ? `Latest draft v${detail.latestSnapshot.version}`
-        : 'Latest draft (none)',
-    }];
-    if (detail?.approvedSnapshot) {
-      options.push({
-        snapshotId: detail.approvedSnapshot.id,
-        label: `Approved v${detail.approvedSnapshot.version}`,
-      });
-    }
-    if (publishedSnapshotId && publishedSnapshotId !== detail?.approvedSnapshot?.id) {
-      options.push({ snapshotId: publishedSnapshotId, label: 'Published version' });
-    }
-    return options;
-  }, [detail, publishedSnapshotId]);
-
-  if (loading) {
+  if (desk.loading) {
     return <div className="container-fluid py-4"><p className="text-muted">Loading this Case Study...</p></div>;
   }
 
-  if (loadError || !detail) {
+  if (desk.loadError || !desk.detail) {
     return (
       <div className="container-fluid py-4">
         <PageHeader
@@ -263,7 +82,7 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
           ]}
         />
         <div className="alert alert-danger" data-testid="cs-detail-load-error">
-          {loadError || 'This Case Study could not be found.'}
+          {desk.loadError || 'This Case Study could not be found.'}
         </div>
         <Link className="btn btn-outline-secondary" to="/admin/case-studies">
           Back to all Case Studies
@@ -272,7 +91,36 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
     );
   }
 
+  const detail = desk.detail;
   const record = detail.caseStudy;
+  const busy = desk.busy || studio.busy;
+
+  /** Repository references the draft generator can be pointed at. */
+  const repoRefs = detail.repositories.map((repo) => ({
+    owner: repo.repoOwner, repo: repo.repoName,
+  }));
+
+  /**
+   * DE-DUPLICATED, and it is not cosmetic.
+   *
+   * `desk.metrics` is `heroMetrics` concatenated with `measurement.metrics`, and
+   * a headline metric legitimately appears in both — the pilot record's
+   * `verified_competencies` does. Un-deduplicated, the chart builder rendered
+   * two checkboxes carrying the same `id` AND the same `data-testid`, so both
+   * `<label htmlFor>` associations pointed at the first input and a click on the
+   * second label toggled the wrong box. Observed on production 2026-08-26.
+   *
+   * This does NOT fix the deeper mismatch, which is recorded rather than
+   * papered over: these keys are read from the SNAPSHOT, while `resolveChart`
+   * resolves against the `case_study_metrics` table. On a record whose metrics
+   * were authored straight into snapshot content, every offered key resolves to
+   * nothing. Closing that needs a metric-listing endpoint the API does not have.
+   */
+  const metricKeys = Array.from(new Set(
+    desk.metrics
+      .map((metric) => metric.key)
+      .filter((key): key is string => typeof key === 'string' && key.length > 0),
+  ));
 
   return (
     <div className="container-fluid py-4">
@@ -287,109 +135,190 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
         actions={<StatusBadge label={record.status} />}
       />
 
-      <CaseStudyReadinessPanel
-        readiness={detail.readiness} busy={busy}
-        onRecheck={() => { void load(); }}
+      {/*
+        ABOVE THE TABS, DELIBERATELY. This is what makes tabs safe on this
+        surface — see the file header. It must never move inside a tab.
+      */}
+      <CaseStudyGateBand
+        blockers={desk.blockers}
+        source={desk.blockerSource}
+        unknown={desk.gateUnknown}
       />
 
-      <CaseStudyPublishPanel
-        record={record}
-        latestSnapshot={detail.latestSnapshot}
-        approvedSnapshot={detail.approvedSnapshot}
-        publications={detail.publications}
-        blockers={blockers}
-        blockerSource={blockerSource}
-        actionError={actionError}
-        actionNote={actionNote}
-        busy={busy}
-        onApprove={() => {
-          if (!detail.latestSnapshot) return;
-          void act('this approval',
-            () => approveCaseStudySnapshot(id, detail.latestSnapshot!.id),
-            'Snapshot approved. It now supersedes any earlier approved version.');
-        }}
-        onPublish={() => { void onPublish(); }}
-        onUnpublish={() => {
-          void act('this unpublish', () => unpublishCaseStudy(id, { surfaceKey: SURFACE }),
-            'Unpublished. Snapshots, evidence and publication history are kept.');
-        }}
-        onArchive={() => {
-          if (!window.confirm(`Archive "${record.title}"? Nothing is deleted.`)) return;
-          void act('this archive', () => archiveCaseStudy(id),
-            'Archived. The record is out of the worklist and nothing was deleted.');
-        }}
-      />
+      {/*
+        ALSO ABOVE THE TABS, AND FOR THE SAME REASON. Every write on this page
+        goes through one `act()` in `useCaseStudyDesk` and reports through one
+        note and one error. Those two lines used to render inside
+        `CaseStudyPublishPanel`, which reaches the screen on PUBLISH only — so a
+        consent save on TRUTH, a repository attach on SOURCES and every override
+        anywhere reported their outcome to a panel the operator could not see.
+        Observed on production 2026-08-26: a consent save produced no visible
+        response of any kind. See `CaseStudyActionBand`'s header.
+      */}
+      <CaseStudyActionBand note={desk.actionNote} error={desk.actionError} />
 
-      <CaseStudyNarrativePanel
-        view={view} busy={busy} hasSnapshot={detail.latestSnapshot !== null}
-        onApplyOverride={override}
-      />
+      <CaseStudyStudioTabStrip active={tab} onSelect={setTab} />
 
-      <CaseStudyMetricsPanel metrics={metrics} busy={busy} onApplyOverride={override} />
+      <div id="cs-studio-panel" role="tabpanel" aria-labelledby={`cs-studio-tab-${tab}`}>
+        {tab === 'truth' ? (
+          <>
+            <CaseStudyStorylinePanel
+              storyline={studio.storyline}
+              loading={studio.storylineLoading}
+              error={studio.storylineError}
+              busy={busy}
+              onSave={studio.onSaveStoryline}
+            />
+            <CaseStudyConsentPanel record={record} busy={busy} onSave={desk.onSaveConsent} />
+            <CaseStudyContributorsPanel
+              contributors={desk.view.contributors} busy={busy} onApplyOverride={desk.override}
+            />
+            <CaseStudyProvenancePanel
+              rows={readProvenance(
+                (desk.provenanceId ? desk.provenanceSnapshot : detail.latestSnapshot)?.provenance ?? null,
+              )}
+              versions={desk.provenanceVersions}
+              selectedSnapshotId={desk.provenanceId}
+              onSelectVersion={(snapshotId) => { void desk.onSelectProvenanceVersion(snapshotId); }}
+              loading={desk.provenanceLoading}
+              error={desk.provenanceError}
+            />
+          </>
+        ) : null}
 
-      <CaseStudyEvidencePanel metrics={metrics} busy={busy} onApplyOverride={override} />
+        {tab === 'sources' ? (
+          <>
+            <CaseStudyRepositoriesPanel
+              repositories={detail.repositories} busy={busy} syncing={desk.syncing}
+              onAttach={desk.onAttachRepo}
+              onSetRole={desk.onSetRepoRole}
+              onRemove={desk.onRemoveRepo}
+              onSync={() => { void desk.onSync(); }}
+            />
+            <CaseStudyAnalyzePanel
+              proofs={studio.proofs}
+              analyzing={studio.analyzing}
+              error={studio.analyzeError}
+              onAnalyze={studio.onAnalyze}
+            />
+            <CaseStudyEvidencePanel
+              metrics={desk.metrics} busy={busy} onApplyOverride={desk.override}
+            />
+            <CaseStudySyncPanel
+              lastSync={desk.lastSync} runs={desk.runs}
+              runsLoading={desk.runsLoading} runsError={desk.runsError}
+              onLoadRuns={() => { void desk.onLoadRuns(); }}
+              draftSnapshot={detail.latestSnapshot}
+              publishedSnapshot={desk.publishedSnapshot}
+              canDiff={desk.publishedSnapshotId !== null}
+              diffLoading={desk.diffLoading} diffError={desk.diffError}
+              onDiff={() => { void desk.onDiff(); }}
+            />
+          </>
+        ) : null}
 
-      <CaseStudyArtifactsPanel
-        artifacts={view.artifacts} busy={busy} onApplyOverride={override}
-      />
+        {tab === 'story' ? (
+          <>
+            <CaseStudyDraftPanel
+              drafts={studio.drafts}
+              refused={studio.draftRefusals}
+              generatedBy={studio.draftGeneratedBy}
+              generating={studio.generating}
+              busy={busy}
+              error={studio.draftError}
+              canGenerate={repoRefs.length > 0}
+              onGenerate={() => studio.onGenerateDraft(repoRefs)}
+              onPromote={studio.onPromoteDraft}
+              onReject={studio.onRejectDraft}
+            />
+            <CaseStudyNarrativePanel
+              view={desk.view} busy={busy} hasSnapshot={detail.latestSnapshot !== null}
+              onApplyOverride={desk.override}
+            />
+            <CaseStudyMetricsPanel
+              metrics={desk.metrics} busy={busy} onApplyOverride={desk.override}
+            />
+            <CaseStudyQuotesPanel
+              quotes={studio.quotes}
+              loading={studio.quotesLoading}
+              busy={busy}
+              error={studio.quotesError}
+              suggestedSlots={[]}
+              onCreate={studio.onCreateQuote}
+              onSetApproval={studio.onSetQuoteApproval}
+            />
+          </>
+        ) : null}
 
-      <CaseStudyContributorsPanel
-        contributors={view.contributors} busy={busy} onApplyOverride={override}
-      />
+        {tab === 'visuals' ? (
+          <>
+            <CaseStudyVisualsPanel
+              artifacts={studio.artifacts}
+              charts={studio.charts}
+              availableMetricKeys={metricKeys}
+              loading={studio.visualsLoading}
+              busy={busy}
+              error={studio.visualsError}
+              onSetArtifactStatus={studio.onSetArtifactStatus}
+              onSaveChart={studio.onSaveChart}
+              onSetChartApproval={studio.onSetChartApproval}
+            />
+            <CaseStudyArtifactsPanel
+              artifacts={desk.view.artifacts} busy={busy} onApplyOverride={desk.override}
+            />
+          </>
+        ) : null}
 
-      <CaseStudyConsentPanel
-        record={record} busy={busy}
-        onSave={(patch: CaseStudyUpdatePatch) => {
-          void act('this consent change', () => updateCaseStudy(id, patch),
-            'Consent saved on the record. Rebuild the snapshot with a sync and approve it again, '
-            + 'or the gate will refuse the publish for a consent mismatch.');
-        }}
-      />
+        {tab === 'surfaces' ? (
+          <CaseStudySurfaceLab
+            recordTitle={record.title}
+            activeSurface={desk.lensSurface}
+            onSelectSurface={desk.onSelectLens}
+            detail={detail}
+            preview={desk.preview}
+            loading={desk.previewLoading}
+            error={desk.previewError}
+          />
+        ) : null}
 
-      <CaseStudyRepositoriesPanel
-        repositories={detail.repositories} busy={busy} syncing={syncing}
-        onAttach={(body) => {
-          void act('this repository', () => attachCaseStudyRepository(id, body),
-            'Repository attached. Sync to read it.');
-        }}
-        onSetRole={(repositoryId: string, role: CaseStudyRepoRole) => {
-          void act('this repository role',
-            () => setCaseStudyRepositoryRole(id, repositoryId, role),
-            'Role updated. Promoting to primary demotes the previous primary.');
-        }}
-        onRemove={(repositoryId: string, label: string) => {
-          if (!window.confirm(`Detach ${label} from this Case Study?`)) return;
-          void act('this repository', () => removeCaseStudyRepository(id, repositoryId),
-            'Repository detached. Snapshots that already cite it are unchanged.');
-        }}
-        onSync={() => { void onSync(); }}
-      />
+        {tab === 'preview' ? (
+          <CaseStudyPreviewPanel
+            preview={desk.rawPanelOpen ? desk.preview : null}
+            loading={desk.previewLoading} error={desk.previewError}
+            surfaceKey={desk.lensSurface}
+            onPreview={() => {
+              desk.setRawPanelOpen(true);
+              void desk.runPreview(desk.lensSurface);
+            }}
+          />
+        ) : null}
 
-      <CaseStudyProvenancePanel
-        rows={readProvenance(
-          (provenanceId ? provenanceSnapshot : detail.latestSnapshot)?.provenance ?? null,
-        )}
-        versions={provenanceVersions}
-        selectedSnapshotId={provenanceId}
-        onSelectVersion={(snapshotId) => { void onSelectProvenanceVersion(snapshotId); }}
-        loading={provenanceLoading}
-        error={provenanceError}
-      />
-
-      <CaseStudyPreviewPanel
-        preview={preview} loading={previewLoading} error={previewError}
-        onPreview={() => { void onPreview(); }}
-      />
-
-      <CaseStudySyncPanel
-        lastSync={lastSync} runs={runs} runsLoading={runsLoading} runsError={runsError}
-        onLoadRuns={() => { void onLoadRuns(); }}
-        draftSnapshot={detail.latestSnapshot}
-        publishedSnapshot={publishedSnapshot}
-        canDiff={publishedSnapshotId !== null}
-        diffLoading={diffLoading} diffError={diffError}
-        onDiff={() => { void onDiff(); }}
-      />
+        {tab === 'publish' ? (
+          <>
+            <CaseStudyReadinessPanel
+              readiness={detail.readiness} busy={busy}
+              onRecheck={() => { void desk.load(); }}
+            />
+            <CaseStudyPublishPanel
+              record={record}
+              latestSnapshot={detail.latestSnapshot}
+              approvedSnapshot={detail.approvedSnapshot}
+              publications={detail.publications}
+              blockers={desk.blockers}
+              blockerSource={desk.blockerSource}
+              busy={busy}
+              onApprove={desk.onApprove}
+              onPublish={() => { void desk.onPublish(); }}
+              onUnpublish={desk.onUnpublish}
+              onArchive={() => desk.onArchive(record.title)}
+            />
+            <p className="small text-muted" data-testid="cs-publish-surface-note">
+              Publishing targets the <code>{PUBLISH_SURFACE}</code> surface. Exploring a lens on the
+              SURFACES tab never changes that.
+            </p>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -86,6 +86,38 @@ export interface PublicCaseStudyNarrative {
 }
 
 /**
+ * The situation, plus the two structured lists that qualify it.
+ *
+ * WHY THESE TWO FIELDS EXIST AND WHY THEY WERE INVISIBLE. `constraints` and
+ * `goals` have been on `CaseStudySituationSection` since the snapshot type was
+ * written (`types/caseStudy.ts:338-339`), are populated by the sync pipeline
+ * (`caseStudyProjectSource.ts` `situationFrom`), and are walked by the publish
+ * gate's claim scan (`caseStudyPublishClaimScan.ts:70-71`) — so a sentence in
+ * either of them could BLOCK a record from publishing. They were never
+ * projected. `projectSituation` returned `{ heading, body }` and
+ * `PublicCaseStudyNarrative` had no room for them, so a constraint could veto
+ * publication and no reader could ever see it. That is the worst of both worlds
+ * and it is why projecting them came before anything else in this pass.
+ *
+ * A SEPARATE INTERFACE RATHER THAN WIDENING `PublicCaseStudyNarrative`. The
+ * narrative shape is prose and nothing else, and it is the right shape for any
+ * future band that is only prose. A constraint list is not prose; it is a
+ * structured field that happens to contain sentences. Keeping them apart means
+ * the next narrative band does not silently inherit two arrays it has no source
+ * for.
+ *
+ * BOTH ARE ARRAYS, NEVER NULL. An absent list is `[]`, so a renderer asks
+ * `length` and never has to distinguish "no constraints recorded" from "the
+ * field is missing" — a distinction the snapshot does not actually carry.
+ */
+export interface PublicCaseStudySituation extends PublicCaseStudyNarrative {
+  /** Hard requirements the build had to satisfy. Empty when none are recorded. */
+  readonly constraints: readonly string[];
+  /** What the work was trying to achieve. Empty when none are recorded. */
+  readonly goals: readonly string[];
+}
+
+/**
  * A dated step. `sourceKind` says what KIND of thing evidenced it; the reference
  * itself (`sourceRef`, a commit sha, a stage id) stays internal, because for a
  * private repo the reference is the leak.
@@ -103,6 +135,20 @@ export interface PublicCaseStudyArchitecture {
   readonly stack: readonly string[];
   readonly capabilities: readonly string[];
   readonly integrations: readonly string[];
+  /**
+   * What the system stores its data in.
+   *
+   * Assembled from repository evidence at `caseStudySnapshotSections.ts:164`
+   * (`repos.flatMap((r) => r.facts.derived.databases)`) and counted by the
+   * emptiness check at `:168`, so a record could be considered to HAVE an
+   * architecture section on the strength of data stores alone — and then render
+   * without them, because `PublicCaseStudyArchitecture` had no field for them.
+   * Silently invisible, same class of defect as `situation.constraints`.
+   *
+   * Empty when the analyser found none, which is the common case for a
+   * front-end-only repository.
+   */
+  readonly dataStores: readonly string[];
   /**
    * Nodes are keyed by `key`, not `id`, deliberately: `id` is on the
    * forbidden-key list because on every other shape in this system it means a
@@ -122,6 +168,15 @@ export interface PublicCaseStudyArchitecture {
       readonly label: string | null;
     }[];
   } | null;
+  /**
+   * Mermaid source for the human-authored chart, or null.
+   *
+   * SEPARATE FROM `diagram` BECAUSE THEY ARE DIFFERENT CLAIMS. `diagram` is what
+   * the repository evidenced, rendered as text. This is what a person drew. The
+   * renderer shows both, labels this one as the human-authored view, and hides
+   * this band entirely when the field is null — which is the normal case.
+   */
+  readonly diagramSource: string | null;
 }
 
 export interface PublicCaseStudyMeasurement {
@@ -155,6 +210,19 @@ export type PublicCaseStudyContributor =
     };
 
 /**
+ * WHAT AN IMAGE ON THIS PAGE IS ALLOWED TO MEAN.
+ *
+ * `evidence` is a picture of the delivered work — a screenshot, an architecture
+ * image. `atmosphere` is a photograph, which shows a room or a working session
+ * and evidences nothing about the system. The distinction is the whole reason
+ * `photo` exists as an artifact type, and it is DERIVED FROM THE TYPE by
+ * `artifactPresentation()`, never supplied by whoever uploaded the file — an
+ * author-set flag would make "is this evidence?" an editorial field, which is
+ * exactly the decision that must not be editable.
+ */
+export type PublicArtifactPresentation = 'evidence' | 'atmosphere';
+
+/**
  * An approved artifact. No `status` field exists, so a `candidate` or `rejected`
  * artifact has no shape to occupy; and `private` is not an `access` variant, so a
  * private artifact is dropped rather than rendered as a dead control. Spec §23:
@@ -164,6 +232,7 @@ export type PublicCaseStudyArtifact =
   | {
       readonly access: 'open';
       readonly artifactType: CaseStudyArtifactType;
+      readonly presentation: PublicArtifactPresentation;
       readonly title: string;
       readonly description: string | null;
       readonly url: string;
@@ -172,6 +241,7 @@ export type PublicCaseStudyArtifact =
   | {
       readonly access: 'request';
       readonly artifactType: CaseStudyArtifactType;
+      readonly presentation: PublicArtifactPresentation;
       readonly title: string;
       readonly description: string | null;
     };
@@ -256,7 +326,7 @@ export interface PublicCaseStudyDetail {
   readonly engagementDuration: string | null;
   readonly productionStatus: CaseStudyRoadmapStatus | null;
   readonly heroMetrics: readonly PublicCaseStudyMetric[];
-  readonly situation: PublicCaseStudyNarrative | null;
+  readonly situation: PublicCaseStudySituation | null;
   readonly timeline: readonly PublicCaseStudyTimelineEntry[];
   readonly architecture: PublicCaseStudyArchitecture | null;
   readonly measurement: PublicCaseStudyMeasurement | null;
