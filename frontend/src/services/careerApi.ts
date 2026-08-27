@@ -277,3 +277,30 @@ export async function requestPortfolioPageReview(): Promise<PortfolioPageState> 
   const res = await portalApi.post('/api/portal/career/portfolio-page/request-review', {});
   return res.data.page;
 }
+
+export interface PortfolioQueueItem {
+  enrollment_id: string;
+  slug: string;
+  full_name: string | null;
+  requested_at: string;
+  public_path: string;
+}
+
+/**
+ * Portfolio pages awaiting a decision, scoped to the learners this reviewer is over.
+ *
+ * Separate from `fetchReviewQueue`, which lists RECORD reviews. They are different
+ * approvals over different things, and the reviewer surface shows both.
+ */
+export async function fetchPortfolioReviewQueue(): Promise<PortfolioQueueItem[]> {
+  const res = await portalApi.get('/api/admin/career/portfolio-review-queue');
+  return res.data.items;
+}
+
+export async function submitPortfolioDecision(
+  enrollmentId: string,
+  decision: 'approved' | 'changes_requested',
+): Promise<{ status: string; visibility: string; public_path: string }> {
+  const res = await portalApi.post(`/api/admin/career/portfolio-review/${enrollmentId}`, { decision });
+  return res.data.page;
+}
