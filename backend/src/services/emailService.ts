@@ -2635,3 +2635,88 @@ export async function sendSponsorMagicLink(data: SponsorMagicLinkData): Promise<
 
   console.log(`[Email] Sponsor magic link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
+
+interface DeliveryClientMagicLinkData {
+  to: string;
+  displayName?: string | null;
+  brandName?: string | null;
+  token: string;
+}
+
+/**
+ * The sign-in link for a client reviewer.
+ *
+ * Deliberately says almost nothing. It names no project, no engagement and no company,
+ * because a mailbox is not a controlled surface: it is forwarded, quoted into threads,
+ * synced to phones and read on screens in meetings. Everything specific waits until the
+ * link is redeemed and the session is scoped.
+ *
+ * It also does not say who invited them or which brand's engagement it is unless the
+ * brand is already known - the same reason the sign-in refusal is uniform.
+ */
+function buildDeliveryClientMagicLinkHtml(
+  data: DeliveryClientMagicLinkData,
+  magicLink: string,
+): string {
+  const who = data.displayName ? escapeHtml(data.displayName) : 'there';
+  const brand = data.brandName ? escapeHtml(data.brandName) : 'Colaberry';
+  return `
+<div style="font-family:Segoe UI,system-ui,-apple-system,sans-serif;color:#2d3748;line-height:1.6;max-width:520px">
+  <p>Hi ${who},</p>
+  <p>Here is your sign-in link for your ${brand} project review.</p>
+  <p style="margin:28px 0">
+    <a href="${magicLink}"
+       style="background:#FB2832;color:#fff;padding:12px 22px;border-radius:6px;
+              text-decoration:none;font-weight:600;display:inline-block">
+      Open your review
+    </a>
+  </p>
+  <p style="font-size:13px;color:#718096">
+    This link works once and expires in one hour. If it has expired, request a new one
+    from the sign-in page.
+  </p>
+  <p style="font-size:13px;color:#718096">
+    If you were not expecting this, you can ignore it - the link only works for the
+    address it was sent to, and nothing happens until it is opened.
+  </p>
+</div>`;
+}
+
+/**
+ * Send a client reviewer their sign-in link.
+ *
+ * The token reaches this function raw because it has to travel in the URL. It is never
+ * logged: `redactForLogs` covers the address, and the link itself is deliberately absent
+ * from the log line, since a magic link in a log file is a credential in a log file.
+ */
+export async function sendDeliveryClientMagicLink(
+  data: DeliveryClientMagicLinkData,
+): Promise<void> {
+  if (!transporter) {
+    console.warn(
+      '[Email] SMTP not configured. Skipping client sign-in link to:',
+      redactForLogs(data.to),
+    );
+    return;
+  }
+
+  const baseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const magicLink = `${baseUrl}/client?token=${encodeURIComponent(data.token)}`;
+
+  const r = await resolveEmailRecipient(data.to, 'Your project review sign-in link');
+  const html = buildDeliveryClientMagicLinkHtml(data, magicLink);
+  const info = await guardedSendMail({
+    from: `"Colaberry" <${env.emailFrom}>`,
+    replyTo: `"Colaberry" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('delivery-client-magic-link'),
+  });
+
+  // Address redacted, link omitted entirely.
+  console.log(
+    `[Email] Client sign-in link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`,
+  );
+}

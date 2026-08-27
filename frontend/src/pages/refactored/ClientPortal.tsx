@@ -47,15 +47,6 @@ import { Panel } from './DeliveryPrimitives';
 
 const TOKEN_KEY = 'delivery_client_token';
 
-/**
- * Whether signing in can actually succeed here.
- *
- * Read from the same env var `ClientSignIn` uses to decide whether to render Google's
- * button, so the two surfaces cannot disagree about whether the door opens. Where it is
- * unset - dev and production today - the expired-session screen must not offer a sign-in
- * link, because following it lands on a page that cannot sign anybody in.
- */
-const signInAvailable = Boolean(process.env.REACT_APP_GOOGLE_CLIENT_ID);
 
 // These mirror CLIENT_FIELD_ALLOWLIST. The allowlist previously named fields that did not
 // exist on the models (`summary`, `title`, `started_at`...), and because toClientShape
@@ -322,27 +313,18 @@ const ClientPortal: React.FC = () => {
         <div className="card border-0 shadow-sm" style={{ maxWidth: 420, width: '100%' }}>
           <div className="card-body p-4 text-center">
             <h1 className="h6 mb-3">Your review session has ended</h1>
-            {signInAvailable ? (
-              <>
-                <p className="text-muted small mb-3">
-                  Client sessions last 8 hours. Sign in again to pick up where you left off.
-                </p>
-                <a className="btn btn-primary btn-sm" href="/client">
-                  Sign in
-                </a>
-              </>
-            ) : (
-              // No sign-in link when signing in cannot complete. Offering one sent an
-              // expired reviewer to a door that cannot open - a dead end with no way out
-              // and no explanation - and the sentence above it promised they could pick up
-              // where they left off, which that door cannot deliver. Naming the limit and
-              // pointing at a human costs the reviewer one message instead of a loop.
-              <p className="text-muted small mb-0">
-              Client sessions last 8 hours. Signing in is not available on this environment
-              yet, so please contact your Colaberry contact and they will restore your
-              access.
-              </p>
-            )}
+            {/*
+                Unconditional again. This was gated on a Google client id, because
+                following it landed on a door that could not open. Magic link needs no
+                provider configured, so the door always opens now and the gate is dead
+                code - removed rather than left as a condition that is always true.
+            */}
+            <p className="text-muted small mb-3">
+              Client sessions last 8 hours. Sign in again to pick up where you left off.
+            </p>
+            <a className="btn btn-primary btn-sm" href="/client">
+              Sign in
+            </a>
           </div>
         </div>
       </div>

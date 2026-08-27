@@ -426,6 +426,7 @@ import CapstoneReviewApproval from './CapstoneReviewApproval';
 import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
+import DeliveryClientSigninToken from './DeliveryClientSigninToken';
 import DeliveryContract from './DeliveryContract';
 import DeliveryDecision from './DeliveryDecision';
 import DeliveryEvent from './DeliveryEvent';
@@ -1550,6 +1551,7 @@ export {
   CapstoneReviewApproval,
   CareerMentorScope,
   DeliveryProjectMember,
+  DeliveryClientSigninToken,
   DeliveryContract,
   DeliveryDecision,
   DeliveryEvent,
