@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import portalApi from '../utils/portalApi';
 
 /**
- * PublicPortfolioProfilePage — /u/:slug, the person rather than one project.
+ * PublicPortfolioProfilePage — /portfolio/:slug, the person rather than one project.
  *
  * THE DIVISION OF LABOUR WITH /p/:slug. A Capstone Record answers "here is the one
  * system I built", in depth. This page answers "here is who I am across thirteen weeks",
@@ -77,7 +77,7 @@ const PublicPortfolioProfilePage: React.FC = () => {
 
   useEffect(() => {
     let live = true;
-    portalApi.get(`/api/public/u/${slug}`)
+    portalApi.get(`/api/public/portfolios/${slug}`)
       .then((res: any) => {
         if (!live) return;
         setPortfolio(res.data.portfolio);

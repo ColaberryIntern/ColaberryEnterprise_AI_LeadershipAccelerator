@@ -1,7 +1,7 @@
 /**
  * careerPortfolioPublicProjection - THE SECURITY BOUNDARY of the public portfolio.
  *
- * Everything `/api/public/u/:slug` ever returns is built here, field by named field,
+ * Everything `/api/public/portfolios/:slug` ever returns is built here, field by named field,
  * from object literals whose shapes are declared below. There is no spread of an
  * internal object anywhere in this file: no `...profile`, no `Object.assign`, no
  * `JSON.parse(JSON.stringify(row))`. An internal field reaches the public payload only
