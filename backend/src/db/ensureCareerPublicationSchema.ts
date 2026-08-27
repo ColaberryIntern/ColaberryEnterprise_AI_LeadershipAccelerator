@@ -162,6 +162,7 @@ const PORTFOLIO_PAGES: string[] = [
      status VARCHAR(24) NOT NULL DEFAULT 'draft',
      visibility VARCHAR(24) NOT NULL DEFAULT 'unlisted',
      approved_identity JSONB,
+     review_requested_at TIMESTAMPTZ,
      approved_at TIMESTAMPTZ,
      approved_by VARCHAR(255),
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -169,6 +170,8 @@ const PORTFOLIO_PAGES: string[] = [
    )`,
   // One page per learner. Without this, a retried create makes a second page and the
   // slug a learner shared silently stops being the one that resolves.
+  // Idempotent for a table that may already exist from an earlier deploy of this file.
+  `ALTER TABLE career_portfolio_pages ADD COLUMN IF NOT EXISTS review_requested_at TIMESTAMPTZ`,
   `CREATE UNIQUE INDEX IF NOT EXISTS career_portfolio_pages_enrollment_unique
      ON career_portfolio_pages (enrollment_id)`,
   // A slug is an address. Two people cannot hold the same one, ever.

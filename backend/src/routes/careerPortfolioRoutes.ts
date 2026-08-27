@@ -3,6 +3,11 @@ import { requireParticipant } from '../middlewares/participantAuth';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { handleGetCareerProfile } from '../controllers/careerPortfolioController';
 import { handleGetPublicationStatus, handleRequestReview, handleSetVisibility } from '../controllers/careerPublicationController';
+import {
+  handleGetPortfolioPage,
+  handleSetPortfolioPageVisibility,
+  handleRequestPortfolioPageReview,
+} from '../controllers/careerPortfolioPageController';
 
 /**
  * Living Career Portfolio — the private Career Studio at /portal/portfolio.
@@ -52,6 +57,31 @@ router.put(
   requireParticipant,
   requireContentEntitlement('portfolio'),
   handleSetVisibility,
+);
+
+// ── The person-level page at /u/:slug ──────────────────────────────────────
+// Same two gates as everything else here: authenticated, and entitled. None of
+// these can publish: `status` only ever becomes 'published' via a reviewer, so a
+// learner setting visibility on a draft page changes nothing a stranger sees.
+router.get(
+  '/api/portal/career/portfolio-page',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleGetPortfolioPage,
+);
+
+router.put(
+  '/api/portal/career/portfolio-page/visibility',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleSetPortfolioPageVisibility,
+);
+
+router.post(
+  '/api/portal/career/portfolio-page/request-review',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleRequestPortfolioPageReview,
 );
 
 export default router;
