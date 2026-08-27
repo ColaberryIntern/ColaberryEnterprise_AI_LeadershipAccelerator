@@ -233,7 +233,83 @@ async function shot(page, dir, name, shots) {
   }
 }
 
+/* ------------------------------------------------------------ measurement --- */
+
+/**
+ * Horizontal overflow of the whole document, measured rather than argued.
+ *
+ * The PREVIEW defect was a `<pre>` that WIDENED its column instead of scrolling
+ * inside it, so the page itself grew: `scrollWidth` 7745 against a 1440
+ * viewport. Reading both numbers is the point — `scrollWidth` alone says
+ * nothing without the viewport it is being compared to.
+ */
+const overflow = (page) => page.evaluate(() => ({
+  scrollWidth: document.documentElement.scrollWidth,
+  clientWidth: document.documentElement.clientWidth,
+})).catch(() => ({ scrollWidth: -1, clientWidth: -1 }));
+
+/**
+ * Read the Provenance table as {field, source, detail} triples straight off the
+ * rendered DOM.
+ *
+ * WHY OFF THE DOM AND NOT OFF THE API. The defect being re-checked was entirely
+ * in the READER: the server's payload always carried the tier, the actor and the
+ * commit sha, and the panel still printed `unknown` fourteen times. Asserting
+ * against the API payload would have passed while the operator looked at a wall
+ * of `unknown`, so the only measurement that means anything is the one taken
+ * from the cells a human actually reads.
+ */
+const provenanceRows = (page) => page.evaluate(() => {
+  const out = [];
+  document.querySelectorAll('[data-testid^="cs-provenance-"]').forEach((el) => {
+    if (el.tagName !== 'TR') return;
+    const cells = el.querySelectorAll('td');
+    if (cells.length < 2) return;
+    out.push({
+      field: (cells[0].textContent || '').trim(),
+      source: (cells[1].textContent || '').trim(),
+      detail: ((cells[2] && cells[2].textContent) || '').trim(),
+    });
+  });
+  return out;
+}).catch(() => []);
+
+/**
+ * Force one API call to fail, in the browser, without touching production.
+ *
+ * "Action feedback works" cannot be proved by a write that succeeds — success
+ * and failure rendered through different branches, and it was the FAILURE
+ * branch that was invisible. The honest way to see a failure is to cause one,
+ * and the only safe way to cause one on a live record is to stop the request at
+ * the browser and answer it with a 500 myself. Nothing reaches the server, so
+ * the pilot's consent cannot be changed by this check even in principle.
+ */
+async function withForcedFailure(page, urlPattern, fn, method) {
+  const handler = async (route) => {
+    // A URL pattern cannot express a method, and the record endpoint serves GET
+    // as well. Letting a GET through matters: intercepting the reload that
+    // follows the write would leave the panel showing stale data and the check
+    // would be measuring the wrong thing.
+    if (method && route.request().method() !== method) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Forced by the walkthrough to see the failure path render.' }),
+    });
+  };
+  await page.route(urlPattern, handler);
+  try {
+    return await fn();
+  } finally {
+    await page.unroute(urlPattern, handler).catch(() => {});
+  }
+}
+
 module.exports = {
   readToken, Recorder, attachDiagnostics, drainDiagnostics, newAdminPage,
   appLoaded, go, reachable, sel, count, countPrefix, text, textsPrefix, click, fill, shot,
+  overflow, provenanceRows, withForcedFailure,
 };

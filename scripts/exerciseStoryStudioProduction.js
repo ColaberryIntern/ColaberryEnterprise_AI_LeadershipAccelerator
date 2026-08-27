@@ -130,6 +130,9 @@ const TABS = [
   } else {
     const opts = {
       stamp: STAMP,
+      // The record id is needed to scope the forced-failure route on TRUTH to
+      // exactly this record's PATCH and nothing else.
+      recordId: RECORD,
       throwawayRepo: 'https://github.com/expressjs/express',
       analyzeOwner: 'expressjs',
       analyzeRepo: 'express',
@@ -254,9 +257,49 @@ async function runThrowaway(page, rec, shots, token, auth) {
 
   /* an override — the act deliberately withheld from the pilot */
   await T.openTab(page, rec, 'story', 'THROWAWAY/STORY');
+
+  /* FIX 4, the half that can only be seen on a record with no snapshot. The
+     narrative panel used to warn "there is nothing to review" and then render
+     three fully enabled Apply-override buttons underneath it; pressing one
+     404s. The control must now be inert AND say why, so both are checked —
+     an inert button with no stated reason is a dead end, not a fix. */
+  const noSnapshotYet = (await P.count(page, 'cs-narrative-no-snapshot')) > 0;
+  if (noSnapshotYet) {
+    // The three Apply-override buttons all carry a `cs-narrative-override*`
+    // testid, and so do their inputs, notes and reason lines. Constraining the
+    // selector to `button` is what separates the control from its own labels.
+    const buttons = page.locator('button[data-testid^="cs-narrative-override"]');
+    const n = await buttons.count();
+    let enabled = 0;
+    for (let i = 0; i < n; i += 1) {
+      if (!(await buttons.nth(i).isDisabled().catch(() => true))) enabled += 1;
+    }
+    const reasons = await page.locator('[data-testid$="-blocked"]').count().catch(() => 0);
+    const reasonText = await P.text(page, 'cs-narrative-override-blocked');
+    rec.check('THROWAWAY/STORY: with no snapshot, no override button is pressable',
+      n === 0 || enabled === 0, `${enabled} of ${n} override buttons are still enabled`);
+    rec.check('THROWAWAY/STORY: the inert override states why it is inert',
+      n === 0 || reasons > 0,
+      reasonText ? reasonText.slice(0, 180)
+        : `${reasons} reason line(s) rendered beside ${n} inert control(s)`);
+  } else {
+    rec.note('observation', 'the throwaway record already carries a snapshot, so the '
+      + '"no snapshot, inert override" branch could not be exercised on it');
+  }
+
+  /* Applying an override is only meaningful once there is a snapshot to
+     override. Until 2026-08-27 this block pressed Apply unconditionally,
+     because the button was wrongly enabled on a record with no snapshot and the
+     404 that produced was the defect being recorded. Now that the control is
+     correctly inert, pressing it times out — so the walkthrough would report a
+     FAILURE caused by the FIX. The condition the two checks above establish is
+     therefore the condition this one runs under. */
   const overrideInput = page.locator('[data-testid="cs-narrative-override-input"]').first();
-  if (await overrideInput.count()) {
-    const noSnapshot = (await P.count(page, 'cs-narrative-no-snapshot')) > 0;
+  if (noSnapshotYet) {
+    rec.skip('apply an override on the throwaway',
+      'the record has no snapshot, so the override is correctly inert — which is the fixed '
+      + 'behaviour checked immediately above, not a failure to exercise the control');
+  } else if (await overrideInput.count()) {
     const before = await P.reachable(`${BASE}/api/admin/case-studies/${row.id}`, auth);
     const beforeBody = before.ok ? await before.res.json().catch(() => null) : null;
     const beforeVersion = beforeBody && beforeBody.latestSnapshot ? beforeBody.latestSnapshot.version : null;
@@ -274,25 +317,33 @@ async function runThrowaway(page, rec, shots, token, auth) {
     rec.check('applying an override actually mints a new snapshot version',
       applied.ok && afterVersion !== null && afterVersion !== beforeVersion,
       `snapshot version ${beforeVersion} -> ${afterVersion}${applied.ok ? '' : ' (' + applied.why + ')'}`);
-    rec.check('the override control is withheld when the panel says there is no snapshot to override',
-      !noSnapshot,
-      noSnapshot
-        ? 'the panel renders "no snapshot yet, there is nothing to review" AND three enabled '
-          + 'Apply-override buttons; pressing one 404s with the message "this override not found."'
-        : '');
   } else {
-    rec.skip('apply an override', (await P.count(page, 'cs-narrative-no-snapshot')) > 0
-      ? 'the narrative panel states there is no snapshot to override yet'
-      : 'no narrative override input rendered');
+    rec.skip('apply an override on the throwaway', 'no narrative override input rendered');
   }
 
   /* the gate, then the lifecycle */
   await T.openTab(page, rec, 'publish', 'THROWAWAY/PUBLISH');
-  const approved = await P.click(page, 'cs-approve', 4000);
-  const approveErr = await P.text(page, 'cs-action-error');
-  const approveNote = await P.text(page, 'cs-action-note');
-  rec.check('approve reports its outcome on the publish tab', approved.ok && Boolean(approveNote || approveErr),
-    approveErr ? `refused: ${approveErr.slice(0, 180)}` : (approveNote || approved.why || '').slice(0, 180));
+
+  /* Approve is only pressable when there is a snapshot to approve. A record
+     created from a repository collection and never synced has none, so the
+     control is inert — and an inert control is the right answer, not a failure
+     to report an outcome. Reading `disabled` first is what separates "the
+     button refused to do something it should not do" from "the button is
+     broken"; pressing it blindly reports a 15-second click timeout for correct
+     behaviour, which is what the 2026-08-27 run did before this was fixed. */
+  const approveBtn = page.locator('[data-testid="cs-approve"]').first();
+  const approveDisabled = (await approveBtn.count())
+    ? await approveBtn.isDisabled().catch(() => null) : null;
+  if (approveDisabled) {
+    rec.check('approve is inert while there is no snapshot to approve', true,
+      'the control is disabled rather than offering an action that cannot succeed');
+  } else {
+    const approved = await P.click(page, 'cs-approve', 4000);
+    const approveErr = await P.text(page, 'cs-action-error');
+    const approveNote = await P.text(page, 'cs-action-note');
+    rec.check('approve reports its outcome on the publish tab', approved.ok && Boolean(approveNote || approveErr),
+      approveErr ? `refused: ${approveErr.slice(0, 180)}` : (approveNote || approved.why || '').slice(0, 180));
+  }
 
   // The preview response names the gate verdict `decision`, NOT `gate`. An
   // earlier revision of this script read `gate.blockers`, found `undefined`,
