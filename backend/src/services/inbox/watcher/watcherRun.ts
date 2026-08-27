@@ -145,6 +145,12 @@ export function inertPorts(ports: WatcherPorts): WatcherPorts {
     fileThread: refuse("move a thread out of Ali's inbox"),
     data: {
       loadStudentFacts: ports.data.loadStudentFacts.bind(ports.data),
+      // A read, not a mutation, so a dry run may do it: the whole point of the
+      // rehearsal is to show which messages WOULD have reached a human.
+      // Tolerates absence for the same partial-deploy reason as the call site.
+      isKnownPerson: typeof ports.data.isKnownPerson === 'function'
+        ? ports.data.isKnownPerson.bind(ports.data)
+        : (async () => null),
       requestFreshLoginLink: refuse("rotate a student's login token and mail them a magic link"),
     },
   };
@@ -288,28 +294,30 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
         continue;
       }
 
-      // NOT ON THE CAMPAIGN ROSTER — ignore it entirely, do not escalate it.
+      // NOT ON THE CAMPAIGN ROSTER — may not be auto-replied to. May still be
+      // worth a human's attention. Those are two different questions and this
+      // used to answer only the first.
       //
-      // This is the difference between a watcher and a mail forwarder. On its
-      // first live run it considered every message in the mailbox, so what it
-      // escalated was Basecamp standup notifications: 24 of them before it was
-      // halted. Only the 25 people the send harness actually mailed are
-      // candidates, and the roster is read off the ledger so it cannot drift
-      // from who really received it.
+      // The roster exists because on its first live run the watcher considered
+      // every message in the mailbox and escalated Basecamp standup
+      // notifications: 24 of them before it was halted. That is a real hazard
+      // and the roster still closes it — Basecamp sends from `notifications@`,
+      // which the automated-sender guard above does NOT match (it matches
+      // mailer-daemon, postmaster, bounce and no-reply local parts only), and
+      // those messages carry no Precedence or Auto-Submitted header. Verified,
+      // not assumed: removing this gate reopens the flood.
+      //
+      // What it must stop doing is dropping PEOPLE. `not_campaign_recipient`
+      // fired 3,667 times in the 2026-08-25 window and is the one skip reason
+      // that never escalates, so Sai Tejesh (staff) and Kepha Ohanga (a student
+      // simply not on that campaign) were seen, judged strangers, and discarded
+      // in silence while both were waiting on an answer.
+      //
       // `null` means there is no roster to check against, which is NOT the same
       // as "not on it" — see isCampaignRecipient. With no roster the message
       // still reaches a human; the per-thread record is what stops that
       // repeating on every tick.
-      if (isCampaignRecipient(ledger, msg.fromAddress) === false) {
-        out.skipped++;
-        log.append({
-          ts: new Date().toISOString(), type: 'skipped', ...common,
-          reason: 'not_campaign_recipient',
-          detail: `${msg.fromAddress} is not one of the ${ledger.recipients.size} addresses the ` +
-            'campaign was sent to. Ignored, not escalated.',
-        });
-        continue;
-      }
+      const offRoster = isCampaignRecipient(ledger, msg.fromAddress) === false;
 
       const classification = classifyInbound({
         fromAddress: msg.fromAddress, subject: msg.subject, bodyText: msg.bodyText,
@@ -374,6 +382,72 @@ export async function runCycle(rawPorts: WatcherPorts, opts: CycleOptions): Prom
         }
         log.append({ ts: new Date().toISOString(), type: 'escalated', ...common, reason, detail });
       };
+
+      // OFF THE ROSTER: never auto-reply, but do not vanish a person either.
+      //
+      // Asked of the database rather than of the campaign: is this an enrolled
+      // student or a staff member? That set is bounded and already known, so it
+      // cannot be flooded, which is what makes it safe as an escalation gate
+      // where the roster was not. A Basecamp notification is in neither table
+      // and is still dropped exactly as before.
+      //
+      // `null` means the lookup itself failed. That escalates, because "we
+      // could not check" must never resolve to "stranger" — that is precisely
+      // how the original bug swallowed real mail, and a broken database read
+      // is a worse reason to ignore someone than a deliberate one.
+      if (offRoster) {
+        // A MISSING PORT FALLS BACK TO TODAY'S BEHAVIOUR, LOUDLY.
+        //
+        // TypeScript requires this method, so no compiled caller can omit it.
+        // The deployed watcher is not a compiled caller: it runs from a pinned
+        // dist at /mnt/.../send-runtime, maintained by copying individual .js
+        // files out of the backend image. I did exactly that on 2026-08-26.
+        // Copy watcherRun.js without runInboxWatcher30h.js and this is
+        // `undefined` at runtime.
+        //
+        // Three options, and the choice is not obvious:
+        //   - throw:    kills the whole cycle, so the watcher goes silent;
+        //   - escalate: Basecamp is off-roster too, so a partial deploy floods
+        //               Ali with standup notifications. The existing flood-guard
+        //               test caught me choosing this;
+        //   - skip:     exactly what the deployed code does today.
+        //
+        // Skip wins. A partial deploy should behave like the version it is
+        // partially deployed over, not like a third thing nobody has run. It is
+        // recorded as `person_lookup_unavailable` rather than the ordinary
+        // reason, so the log distinguishes "checked, a stranger" from "could not
+        // check at all" and this cannot hide as normal operation.
+        const canCheck = typeof ports.data.isKnownPerson === 'function';
+        if (!canCheck) {
+          log.append({
+            ts: new Date().toISOString(), type: 'preflight_failed', ...common,
+            reason: 'person_lookup_unavailable',
+            detail: 'ports.data.isKnownPerson is not wired. Off-roster mail is being skipped as ' +
+              'it was before this gate existed. Likely a partial copy into the pinned runtime.',
+          });
+        }
+        const known = canCheck ? await ports.data.isKnownPerson(msg.fromAddress) : false;
+        if (known === false) {
+          out.skipped++;
+          log.append({
+            ts: new Date().toISOString(), type: 'skipped', ...common,
+            reason: 'not_campaign_recipient',
+            detail: `${msg.fromAddress} is not one of the ${ledger.recipients.size} addresses the ` +
+              'campaign was sent to, and is not a known student or staff member. Ignored.',
+          });
+          continue;
+        }
+        await escalateWith(
+          known === null ? 'off_roster_lookup_failed' : 'off_roster_known_person',
+          known === null
+            ? `${msg.fromAddress} is not on the campaign roster and the student/staff lookup ` +
+              'failed, so we cannot tell whether this is a person. Escalating rather than ' +
+              'guessing, because an unreadable check is not a negative answer.'
+            : `${msg.fromAddress} is not on the campaign roster but IS a known student or staff ` +
+              'member. The watcher will not auto-reply to them, so this needs a human.',
+        );
+        continue;
+      }
 
       if (classification.action === 'escalate') {
         await escalateWith(classification.reason, classification.detail);

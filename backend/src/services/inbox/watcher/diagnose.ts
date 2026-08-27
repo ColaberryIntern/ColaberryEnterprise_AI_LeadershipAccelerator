@@ -74,6 +74,29 @@ export interface WatcherDataAccess {
   loadStudentFacts(email: string): Promise<StudentFacts | null>;
   /** Mints and emails a fresh sign-in link. Verified by re-reading, never by its return. */
   requestFreshLoginLink(email: string): Promise<void>;
+  /**
+   * Is this address a person we have a relationship with — an enrolled student
+   * or a staff member — regardless of whether they were on the campaign roster?
+   *
+   * THE QUESTION THE ROSTER CANNOT ANSWER.
+   *
+   * The roster is "who did the send harness mail", which is the right gate for
+   * "may we auto-reply". It is the WRONG gate for "should a human hear about
+   * this", and conflating the two cost us real mail: in the 2026-08-25 window
+   * `not_campaign_recipient` fired 3,667 times, and it is the one skip reason
+   * that does not escalate. Sai Tejesh (staff) and Kepha Ohanga (a student who
+   * simply was not on that one campaign) were both seen, classified as
+   * strangers, and dropped in silence while they waited on an answer.
+   *
+   * Widening the roster would not have fixed it and narrowing it is what caused
+   * it. The set of people we actually know is bounded, already in the database,
+   * and cannot be flooded — which is exactly what an escalation gate needs.
+   *
+   * `null` means WE COULD NOT CHECK (the lookup failed). That is deliberately
+   * distinct from `false`, because "the database was unreachable" must not read
+   * as "this is a stranger" and silently resurrect the bug this closes.
+   */
+  isKnownPerson(email: string): Promise<boolean | null>;
 }
 
 export type DiagnosisResult =
