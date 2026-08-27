@@ -87,7 +87,16 @@ interface ClientEngagement {
   target_end_at?: string;
 }
 
+interface ClientBrand {
+  id: string;
+  name?: string;
+}
+
 interface ProjectDetail {
+  // Null when the project has no brand_id. The surface then shows no brand at all rather
+  // than defaulting to Colaberry: an AI Flotation engagement wearing Colaberry's name is
+  // worse than one wearing no name.
+  brand: ClientBrand | null;
   // Null when the project has no engagement row. The server deliberately sends null
   // rather than a placeholder, so the fallback wording lives here rather than becoming a
   // fiction every API consumer inherits.
@@ -340,11 +349,12 @@ const ClientPortal: React.FC = () => {
   }
 
   const active: ClientSection = SECTIONS.find((s) => s.key === activeKey) ?? SECTIONS[0];
-  const { engagement, project, decisions, changeRequests } = detail;
+  const { brand, engagement, project, decisions, changeRequests } = detail;
 
   return (
     <div className="min-vh-100 bg-light py-3 px-2 px-lg-3">
       <DeliveryShell
+        brandName={brand?.name ?? null}
         audienceLabel="Client review"
         audienceTone="client"
         projectName={project.name ?? 'Untitled project'}

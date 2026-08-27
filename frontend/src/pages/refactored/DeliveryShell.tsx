@@ -27,6 +27,20 @@ export interface DeliveryShellProps {
   audienceTone: 'client' | 'builder';
   projectName: string;
   engagementName: string;
+  /**
+   * The brand delivering this engagement, resolved from the project's brand_id.
+   *
+   * Optional and rendered as TEXT, never as a mark. This shell previously drew an
+   * invented red 'C' square that is not Colaberry's logo - Colaberry's is a bicycle
+   * glyph with a Quicksand wordmark - so the page announced an owner that does not exist.
+   *
+   * A mark is deliberately not drawn here even now, because the owner varies: an
+   * engagement may be delivered under AI Flotation, Refactored.ai or CPN. Per-brand logo
+   * and colour belong to a theme layer that `brands.default_theme_key` anticipates and
+   * nothing yet implements. Until it exists, the honest rendering is the brand's name and
+   * no imagery at all.
+   */
+  brandName?: string | null;
   personName: string;
   personRole: string;
   sections: readonly DeliverySection[];
@@ -50,6 +64,7 @@ const DeliveryShell: React.FC<DeliveryShellProps> = ({
   audienceTone,
   projectName,
   engagementName,
+  brandName,
   personName,
   personRole,
   sections,
@@ -65,19 +80,12 @@ const DeliveryShell: React.FC<DeliveryShellProps> = ({
       <div className="card border-0 shadow-sm overflow-hidden">
         {/* Top bar */}
         <div className="d-flex align-items-center gap-2 px-3 py-2 border-bottom bg-white flex-wrap">
-          <div
-            className="rounded d-grid text-white fw-bold"
-            style={{
-              width: 26,
-              height: 26,
-              placeItems: 'center',
-              fontSize: '.8rem',
-              background: 'var(--color-primary)',
-            }}
-            aria-hidden="true"
-          >
-            C
-          </div>
+          {/* The brand's NAME, not a mark. See brandName above for why no logo is drawn. */}
+          {brandName && (
+            <span className="fw-semibold text-uppercase small text-muted" style={{ letterSpacing: '.06em' }}>
+              {brandName}
+            </span>
+          )}
           <div className="fw-semibold">
             {engagementName} <span className="text-muted fw-normal">/ {projectName}</span>
           </div>

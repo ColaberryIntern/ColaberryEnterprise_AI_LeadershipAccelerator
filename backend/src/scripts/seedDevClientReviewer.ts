@@ -140,6 +140,15 @@ async function main(): Promise<void> {
   }
   console.log(`[seed] tenant: ${tenant.name} (${tenant.id})`);
 
+  // The brand this engagement is delivered under. Resolved by slug from the real brands
+  // table, matching the tenant - never invented. Without it the client surface correctly
+  // shows no brand at all, which is honest but makes the resolution impossible to see.
+  const [brand] = await sequelize.query<{ id: string; name: string }>(
+    "SELECT id, name FROM brands WHERE slug = 'refactored' LIMIT 1",
+    { type: QueryTypes.SELECT },
+  );
+  if (brand) console.log(`[seed] brand: ${brand.name} (${brand.id})`);
+
   // --- organization + engagement + project --------------------------------------------
   // ESC-1 in practice: a client organization with no owning enrollment. This row is the
   // reason that column was relaxed to nullable.
@@ -175,6 +184,7 @@ async function main(): Promise<void> {
       engagement_id: engagement.id,
       tenant_id: engagement.tenant_id,
       organization_id: org.id,
+      brand_id: brand ? brand.id : null,
       name: 'Real-time arrivals board',
       slug: DEMO_PROJECT_SLUG,
       status: 'build',
@@ -182,6 +192,11 @@ async function main(): Promise<void> {
       business_problem: 'Riders cannot see accurate arrival times, so they call the depot.',
     });
     console.log(`[seed] created DeliveryProject ${project.id}`);
+  } else if (brand && !project.brand_id) {
+    // Created by an earlier run, before the brand was resolved. Repair rather than
+    // duplicate - a second demo project would give the token two ids to choose from.
+    await project.update({ brand_id: brand.id });
+    console.log(`[seed] backfilled brand on DeliveryProject ${project.id}`);
   }
 
   // --- membership: the thing that actually grants access ------------------------------
