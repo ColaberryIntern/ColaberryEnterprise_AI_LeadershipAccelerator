@@ -225,6 +225,13 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
         default_theme_key: 'refactored',
         domains: [
           { hostname: 'refactored.ai', purpose: 'web', is_primary: true },
+          // `www` is a SEPARATE A record on the live site, not a redirect to the apex —
+          // both hostnames serve the page independently today. Without this row, traffic
+          // arriving on www resolves to no brand and silently records a null context,
+          // while apex traffic attributes correctly. That is the worst kind of gap: it
+          // does not fail, it just quietly under-counts one half of the audience.
+          // Non-primary, matching how colaberry-enterprise carries www.colaberry.ai.
+          { hostname: 'www.refactored.ai', purpose: 'web', is_primary: false },
           // The logged-in product lives at enterprise.colaberry.ai today, behind the
           // login. Same hostname as Colaberry Consulting's public site, different
           // brand — which is exactly why brand_domains is keyed on (hostname, purpose)
