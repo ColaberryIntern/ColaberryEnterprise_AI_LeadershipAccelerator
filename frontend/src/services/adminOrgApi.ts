@@ -209,8 +209,26 @@ export async function getViewAsUrl(enrollmentId: string): Promise<string | null>
  */
 export function describeApiError(err: unknown, subject: string): string {
   const status = (err as { response?: { status?: number } })?.response?.status;
-  if (status === 401 || status === 403) {
-    return `Your session is not authorized to read ${subject}. Sign in again.`;
+
+  // 401 and 403 are DIFFERENT FACTS and must not share a sentence.
+  //
+  // 401 means the caller is not authenticated: the session is missing or
+  // expired, and signing in again is exactly the fix.
+  //
+  // 403 means the caller IS authenticated and still may not do this. Signing in
+  // again cannot possibly help, and telling an operator to do it sends them
+  // around a loop that always ends where it started. This was observed on
+  // production on 2026-08-27: the Story Studio's surface lab and its PREVIEW tab
+  // both answer 403 for any surface outside the default, because the backend
+  // allowlist `CASE_STUDY_SURFACE_LAB_USER_IDS` is unset — a configuration
+  // decision, not a session problem. Both told the admin to sign in again, and
+  // no number of sign-ins would ever have changed the answer.
+  if (status === 401) {
+    return `Your session is no longer valid. Sign in again to reach ${subject}.`;
+  }
+  if (status === 403) {
+    return `Your account is not permitted to access ${subject}. Signing in again will not `
+      + 'change this — it is a permission or configuration setting, not an expired session.';
   }
   if (status === 404) return `${subject} not found.`;
   return `Could not load ${subject}${status ? ` (HTTP ${status})` : ''}. This is a load failure, not an empty result.`;
