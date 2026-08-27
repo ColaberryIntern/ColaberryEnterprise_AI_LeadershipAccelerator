@@ -340,7 +340,13 @@ pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transpa
 .kdiagram--full .kdiagram-cap{max-width:80ch}
 
 /* teach-slide "lead with the conclusion" insight card */
-.kteach-lead{margin-top:2.2vh;display:flex;gap:12px;align-items:flex-start;max-width:68ch;
+/* The lead paragraph is parked a full screen below the fold ON PURPOSE. It is
+   the text the instructor reads out loud, so the room must not be able to read
+   it before it is spoken. Moving it under the diagram was not enough — on a
+   short slide it still landed inside the viewport. The instructor can scroll
+   to it, and it stays in the deck so the recording and the printed kit keep
+   the full narration. Print resets this (see @media print below). */
+.kteach-lead{margin-top:96vh;display:flex;gap:12px;align-items:flex-start;max-width:68ch;
   background:var(--bg-soft);border:1.5px solid var(--line);border-left:5px solid var(--berry);border-radius:14px;padding:1.6vh 1.6vw}
 .kteach-ico{flex:none;font-size:clamp(18px,2vh,24px);line-height:1.3}
 .kteach-lead p{font-size:clamp(15px,.6vw + .85vh,22px);line-height:1.5;color:var(--ink-2);font-weight:600}
@@ -491,6 +497,9 @@ body.mode-story .ktoggles:hover{opacity:1}
   #kpace,#krail,#kprogress,#kcounter,#khint,.ktoggles,#kqr-overlay,#knotes,#ktoast{display:none !important}
   .kstage{position:static;inset:auto}
   .kslide{display:flex !important;position:relative;page-break-after:always;height:100vh;inset:auto}
+  /* On paper there is no fold to hide the narration behind, and a 96vh margin
+     would blow every teach slide onto a second blank page. */
+  .kteach-lead{margin-top:2.2vh}
   @page{size:letter landscape;margin:0}
 }
 `;
