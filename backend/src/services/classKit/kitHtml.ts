@@ -350,13 +350,19 @@ export function splitScript(script: string | undefined, body: string | undefined
   const tagged = raw.filter((l) => /^(SAY|DO|NOTE):/i.test(l));
   if (!tagged.length) {
     // Untagged: the script is all direction, the body is what gets spoken.
-    return { say: body || '', setup: script ? 'NOTE: ' + script : '' };
+    return { say: body || '', setup: (script ? 'NOTE: ' + script : '') + (body ? '\nSAY: ' + body : '') };
   }
   const say = tagged
     .filter((l) => /^SAY:/i.test(l))
     .map((l) => l.replace(/^SAY:\s*/i, ''))
     .join('\n\n');
-  const setup = tagged.filter((l) => /^(DO|NOTE):/i.test(l)).join('\n');
+  // `setup` is the WHOLE script in authored order, tags intact — spoken lines
+  // included. The instructor needs their opening words the instant the slide
+  // lands, or the pause this exists to remove just moves to the top of the
+  // slide: "trying to read it when the new slide comes on and trying not to
+  // take a long pause is hard to do" (Ali, 2026-08-27). Colour is what keeps
+  // the roles separable here; the zoom view below is where SAY stands alone.
+  const setup = tagged.join('\n');
   // A slide that tags direction but never tags a spoken line still has to give
   // the instructor something to read, so the body stands in.
   return { say: say || body || '', setup };
