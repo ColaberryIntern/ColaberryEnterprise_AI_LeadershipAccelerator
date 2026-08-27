@@ -177,7 +177,20 @@ export const tabTestIdForCapability = (capability: CaseStudyCapability): string 
 /** Studio-only controls, kept in the same registry style as `CASE_STUDY_CONTROLS`. */
 export const CASE_STUDY_STUDIO_CONTROLS = {
   'storyline': 'cs-storyline',
-  'analyze repository': 'cs-analyze-repo',
+  /**
+   * `cs-analyze-run`, NOT `cs-analyze-repo`, and the rename closed a real
+   * collision found on production 2026-08-26.
+   *
+   * `CaseStudyAnalyzePanel` gives its Repository text input
+   * `data-testid="cs-analyze-repo"`. This entry gave the Analyze BUTTON the
+   * same id, so two elements on the SOURCES tab answered to it. The disjointness
+   * guard could not see it — that check compares this registry against
+   * `CASE_STUDY_CONTROLS`, and the collision was with a literal in a component.
+   * Every lookup resolves `.first()`, which is the input, so the §18 guard for
+   * "analyze repository" was asserting against a text box and would have stayed
+   * green with the button deleted.
+   */
+  'analyze repository': 'cs-analyze-run',
   'generate story draft': 'cs-generate-draft',
   'promote draft': 'cs-promote-draft',
   'reject draft': 'cs-reject-draft',

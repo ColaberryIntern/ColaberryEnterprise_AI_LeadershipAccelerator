@@ -1,0 +1,709 @@
+<title>Story Studio Walkthrough</title>
+<style>
+  /* Palette from frontend/src/colaberry/tokens/colors.css — the V2 tokens are the
+     source of truth. (The /baseline-ui skill names frontend/src/styles/tokens.css;
+     that file is not the authority and its values are not used here.) */
+  :root{
+    --cherry:#FB2832;--cherry-deep:#C20E1E;--cherry-bg:#FFF0F1;
+    --leaf:#77BB4A;--leaf-deep:#468A2E;--leaf-bg:#F1F8EC;
+    --berry:#367895;--berry-deep:#265A72;--berry-bg:#EEF5F8;
+    --amber:#E8920C;--amber-bg:#FCF1DD;
+    --bg:#fff;--alt:#F8F8F7;--sunken:#F1F1F0;
+    --text:#2B2B2B;--strong:#1A1A1A;--muted:#6B6B6B;--border:#E4E4E3;
+    --font:'Segoe UI',system-ui,-apple-system,sans-serif;
+    --mono:'Consolas','Monaco',monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--text);background:var(--alt);
+    line-height:1.6;font-size:14px;overflow-wrap:break-word}
+  h1,h2,h3,h4{margin:0;line-height:1.25;font-weight:700;color:var(--strong)}
+  p{margin:0 0 .9em}
+  code{font-family:var(--mono);font-size:.8125rem;background:var(--sunken);
+    padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+  a{color:var(--berry-deep)}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 18px}
+
+  header{background:#fff;border-bottom:1px solid var(--border);padding:26px 0}
+  .stamp{display:inline-block;font-size:.6875rem;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;padding:3px 10px;border-radius:9999px;margin-right:6px}
+  .stamp.live{background:var(--berry-bg);color:var(--berry-deep);border:1px solid #C6DDE7}
+  .stamp.hold{background:var(--amber-bg);color:#8A5606;border:1px solid #F0D5A3}
+  header h1{font-size:1.55rem;margin-top:12px}
+  header p.lede{color:var(--muted);max-width:80ch;margin:10px 0 0;font-size:.95rem}
+
+  .facts{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:20px}
+  @media(max-width:900px){.facts{grid-template-columns:repeat(2,1fr)}}
+  .fact{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+  .fact b{display:block;font-size:1.35rem;color:var(--cherry-deep)}
+  .fact b.good{color:var(--leaf-deep)}
+  .fact span{font-size:.6875rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+
+  .banner{margin:18px 0 0;padding:13px 16px;border-radius:0 8px 8px 0;font-size:.9rem;
+    background:var(--cherry-bg);border-left:3px solid var(--cherry)}
+  .banner.warn{background:var(--amber-bg);border-left-color:var(--amber)}
+  .banner.ok{background:var(--leaf-bg);border-left-color:var(--leaf)}
+  .banner.info{background:var(--berry-bg);border-left-color:var(--berry)}
+
+  section.stop{background:#fff;border:1px solid var(--border);border-radius:10px;margin:22px 0;overflow:hidden}
+  .stop > h2{font-size:1rem;padding:14px 18px;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .num{background:var(--cherry);color:#fff;width:26px;height:26px;border-radius:50%;
+    display:grid;place-items:center;font-size:.75rem;flex:none}
+  .verdict{font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+    padding:2px 9px;border-radius:9999px;margin-left:auto}
+  .v-works{background:var(--leaf-bg);color:var(--leaf-deep)}
+  .v-defect{background:var(--cherry-bg);color:var(--cherry-deep)}
+  .v-partial{background:var(--amber-bg);color:#8A5606}
+  .q{font-size:.8125rem;color:var(--muted);font-style:italic;font-weight:400;
+    flex-basis:100%;margin:0}
+  .step{padding:16px 18px;border-top:1px solid var(--border)}
+  .step:first-of-type{border-top:0}
+  .step h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:9px}
+
+  .shot{background:#1A1A1A;border-radius:8px;padding:10px}
+  .shot img{width:100%;display:block;border-radius:4px;background:#fff}
+  .cap{margin-top:9px;font-size:.75rem;color:#D8D8D8;font-family:var(--mono);overflow-wrap:anywhere}
+
+  ul.tight{margin:0;padding-left:19px;font-size:.9rem}
+  ul.tight li{margin-bottom:6px}
+  ul.tight li b{color:var(--strong)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:820px){.cols{grid-template-columns:1fr}}
+  .col h4{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+  .col.can h4{color:var(--leaf-deep)}
+  .col.cannot h4{color:var(--cherry-deep)}
+
+  .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;min-width:640px;font-size:.85rem}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{font-size:.6875rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    background:var(--alt);font-weight:700}
+  td.n{white-space:nowrap}
+  .pill{font-size:.6875rem;font-weight:700;padding:2px 8px;border-radius:9999px;white-space:nowrap}
+  .p-fixed{background:var(--leaf-bg);color:var(--leaf-deep)}
+  .p-open{background:var(--amber-bg);color:#8A5606}
+
+  footer{color:var(--muted);font-size:.8125rem;padding:24px 0 60px}
+</style>
+
+<header>
+  <div class="wrap">
+    <span class="stamp live">Exercised on production</span>
+    <span class="stamp hold">Fixes not deployed</span>
+    <h1>Story Studio &mdash; a production walkthrough of all seven tabs</h1>
+    <p class="lede">
+      Every tab of the Story Studio was opened against the live
+      <code>enterprise.colaberry.ai</code> admin surface with a real admin session, and every
+      control on it was <em>used</em> rather than photographed. This page reports what happened.
+      Where a control did not work, it says so. Where something could not be tested honestly, it
+      says that instead of guessing.
+    </p>
+    <p class="lede">
+      Record: <code>268c5050-7f83-4b5d-ac39-cd44dbe433e2</code> &mdash; &ldquo;Teaching people with
+      no technical background to architect AI systems&rdquo;, status <code>approved</code>, live on
+      the Enterprise surface since 2026-08-25.
+    </p>
+
+    <div class="facts">
+      <div class="fact"><b>7</b><span>tabs exercised</span></div>
+      <div class="fact"><b>100</b><span>checks recorded</span></div>
+      <div class="fact"><b>6</b><span>defects found</span></div>
+      <div class="fact"><b class="good">5</b><span>defects fixed</span></div>
+      <div class="fact"><b class="good">0</b><span>console errors</span></div>
+    </div>
+
+    <div class="banner warn">
+      <b>Nothing on this page has been deployed.</b> The six defects below were observed on the
+      production build that was live at 21:42 UTC on 2026-08-26. Five are fixed in the working
+      tree on <code>workstream/case-study-os</code> and are proved by tests; none has shipped.
+      Until a deploy happens, the live surface still behaves exactly as the screenshots show.
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="banner info" style="margin-top:22px">
+    <b>How the screenshots were made.</b> A headless Chromium session with an admin token in
+    <code>localStorage.admin_token</code>, driving the real surface at 1440&times;1000 and capturing
+    full-page PNGs through <code>scripts/captureHelpers.js</code> (1800px safe-width ceiling) into
+    <code>docs/screenshots/2026-08-26-story-studio/</code>. Every image below is that capture, not a
+    mockup. The harness was pointed at a dead port first and produced four red preflight checks and
+    exit 1, so a green result from it means something.
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────── TRUTH ── -->
+  <section class="stop">
+    <h2><span class="num">1</span> TRUTH <span class="verdict v-defect">1 defect, fixed</span>
+      <p class="q">&ldquo;What is established about this record, who consented to what, and where
+        did each value come from?&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>What it is for</h3>
+      <p>The canonical record and its consent axis. Four panels: the <b>Storyline</b> (editorial
+      direction that aims the draft generator), <b>Consent and privacy</b>, <b>Contributors</b>,
+      and <b>Provenance</b>.</p>
+    </div>
+
+    <div class="step">
+      <h3>What actually happened</h3>
+      <div class="cols">
+        <div class="col can">
+          <h4>Worked</h4>
+          <ul class="tight">
+            <li><b>Storyline save.</b> Typed, saved, and read back from the server: the panel showed
+              &ldquo;Last written by &lt;the signed-in admin&gt;&rdquo; and <code>GET /storyline</code>
+              returned the same text. The disclaimer that this is editorial direction stored outside
+              the snapshot is on screen, which is the right thing to say.</li>
+            <li><b>Consent fields</b> rendered the record&rsquo;s real values
+              (<code>named</code> / <code>Colaberry</code> / <code>public</code> /
+              <code>role_only</code>) and the save was accepted. Re-saving the same values left the
+              record unchanged, confirmed through the API.</li>
+            <li><b>Contributors</b> is empty and <em>says so</em>: &ldquo;No contributors in this
+              snapshot. The public page shows no credits section rather than an empty one.&rdquo;
+              A working empty state.</li>
+            <li><b>Provenance version switcher</b> offered two versions and re-read without error.</li>
+          </ul>
+        </div>
+        <div class="col cannot">
+          <h4>Broken</h4>
+          <ul class="tight">
+            <li><b>Saving consent produced no visible response at all.</b> Not a success banner, not
+              an error. The success line and the failure line both render inside
+              <code>CaseStudyPublishPanel</code>, which only reaches the screen on the PUBLISH tab.
+              An operator whose consent save fails on this tab sees nothing happen.</li>
+            <li><b>Every provenance row read <code>unknown</code> / &mdash;.</b> Fourteen rows, all
+              blank, on the panel whose entire job is answering where each value came from. The
+              payload behind them carried the tier, the actor, the note, the repository and the
+              commit sha for every single row. The reader was looking for
+              <code>source</code>/<code>sourceRef</code>, keys the server does not send.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>The tab, as captured</h3>
+      <div class="shot">
+        <img src="screenshots/2026-08-26-story-studio/01-truth.png"
+             alt="The TRUTH tab on production: storyline, consent and privacy, contributors, and a provenance table whose every row reads unknown.">
+        <p class="cap">01-truth.png &mdash; note the Provenance table: fourteen rows, Source
+          &ldquo;unknown&rdquo;, Detail &ldquo;&mdash;&rdquo;. That is the defect, photographed.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────────────── SOURCES ── -->
+  <section class="stop">
+    <h2><span class="num">2</span> SOURCES <span class="verdict v-defect">1 defect, fixed</span>
+      <p class="q">&ldquo;What evidence exists, and what does each source actually prove?&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>What it is for</h3>
+      <p>Everything the record is built from: attached repositories and their roles, the read-only
+      repository analyzer, the evidence table, sync, sync history, and the published-vs-draft diff.</p>
+    </div>
+
+    <div class="step">
+      <h3>What actually happened</h3>
+      <div class="cols">
+        <div class="col can">
+          <h4>Worked</h4>
+          <ul class="tight">
+            <li><b>Attach and detach round-tripped.</b> A second repository was attached (1&nbsp;&rarr;&nbsp;2),
+              appeared in the table, was detached, and the record came back to exactly the one
+              repository it started with &mdash; verified through the API, not from the UI.</li>
+            <li><b>The analyzer reached GitHub</b> and came back <code>connected</code>, listing both
+              what the repository proves and what it cannot prove. Seven proof elements rendered.</li>
+            <li><b>Sync ran against the live repository</b> and reported it in place:
+              &ldquo;1 of 1 repositories read, 156 facts, 0 candidate metrics. Snapshot created
+              (v29).&rdquo;</li>
+            <li><b>Sync history</b> listed four real runs; the <b>published-vs-draft diff</b> rendered
+              a table with ten diff elements.</li>
+            <li><b>Evidence</b> rendered eight elements from the snapshot rather than a blank frame.</li>
+          </ul>
+        </div>
+        <div class="col cannot">
+          <h4>Broken</h4>
+          <ul class="tight">
+            <li><b>Two elements shared one test id.</b> The Repository text input and the Analyze
+              button both carried <code>data-testid="cs-analyze-repo"</code>. Every lookup resolves
+              the first match, which is the input &mdash; so the capability guard for &ldquo;analyze
+              repository&rdquo; was asserting against a text box and would have stayed green with the
+              button deleted. The walkthrough had to find the button by its accessible name instead,
+              which is how it was noticed.</li>
+            <li><b>Sync, attach, detach and role changes report their errors to the PUBLISH tab</b>
+              &mdash; the same defect as consent, listed once above but felt here too. A failed sync
+              on this tab surfaces nowhere on this tab.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>Confusing rather than broken</h3>
+      <p>&ldquo;Attach repository&rdquo; is styled <code>btn-danger</code> &mdash; solid red &mdash;
+      for an additive, reversible action, and &ldquo;Sync repositories&rdquo; is
+      <code>btn-outline-danger</code>. Red on this surface currently means &ldquo;a button&rdquo;
+      rather than &ldquo;careful&rdquo;, which spends the one signal that should be reserved for
+      Detach and Archive. Not fixed here: it is a design decision across the whole admin surface,
+      not a defect in this tab.</p>
+    </div>
+
+    <div class="step">
+      <h3>The tab, as captured</h3>
+      <div class="shot">
+        <img src="screenshots/2026-08-26-story-studio/02-sources.png"
+             alt="The SOURCES tab on production: repositories table, analyzer with a returned proof, evidence rows, sync history and the diff.">
+        <p class="cap">02-sources.png &mdash; captured after the sync, the analyzer run and the
+          diff, so the panels show real returned data.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────────────── STORY ── -->
+  <section class="stop">
+    <h2><span class="num">3</span> STORY <span class="verdict v-works">works as built</span>
+      <p class="q">&ldquo;What are we saying, in whose words, and has a human stood behind each
+        sentence?&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>What it is for</h3>
+      <p>The prose and the figures it is allowed to state: draft generation and promotion, the
+      narrative override fields, the metric table, and quotes.</p>
+    </div>
+
+    <div class="step">
+      <h3>What actually happened</h3>
+      <div class="cols">
+        <div class="col can">
+          <h4>Worked</h4>
+          <ul class="tight">
+            <li><b>Draft generation ran and produced four drafts</b> (fourteen draft elements on
+              screen) against the attached repository.</li>
+            <li><b>The generator names itself: &ldquo;Last run by: deterministic&rdquo;.</b> It does
+              not imply an LLM wrote it, because none did.</li>
+            <li><b>Every generated draft was rejected</b> and the record was left with zero pending
+              drafts, confirmed through the API.</li>
+            <li><b>Metrics</b> rendered nine elements from the snapshot; <b>quotes</b> rendered its
+              form plus a named empty state and its consent condition.</li>
+          </ul>
+        </div>
+        <div class="col cannot">
+          <h4>Not exercised on this record, deliberately</h4>
+          <ul class="tight">
+            <li><b>Promoting a draft</b> and <b>applying a narrative override</b> both mint a new
+              snapshot version, which would move a published record into &ldquo;draft ahead&rdquo;.
+              Both were exercised on a throwaway record instead &mdash; see stop 8.</li>
+            <li><b>Suggested quote slots</b> renders nothing: the page passes an empty list. The
+              panel is wired for slot suggestions that nothing computes yet.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>The tab, as captured</h3>
+      <div class="shot">
+        <img src="screenshots/2026-08-26-story-studio/03-story.png"
+             alt="The STORY tab on production: generated drafts, the narrative panel with override fields, the metric table and the quotes form.">
+        <p class="cap">03-story.png &mdash; captured with four generated drafts on screen, before
+          they were rejected.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────────────── VISUALS ── -->
+  <section class="stop">
+    <h2><span class="num">4</span> VISUALS <span class="verdict v-partial">2 defects &mdash; 1 fixed, 1 left open</span>
+      <p class="q">&ldquo;What can be shown, and does every number in a picture come from a
+        verified metric?&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>What it is for</h3>
+      <p>Artifact promotion &mdash; the control that moves a picture off <code>candidate</code> so a
+      hero, carousel or figure can populate &mdash; and charts that <em>reference</em> verified
+      metrics without ever carrying a number of their own.</p>
+    </div>
+
+    <div class="step">
+      <h3>What actually happened</h3>
+      <div class="cols">
+        <div class="col can">
+          <h4>Worked</h4>
+          <ul class="tight">
+            <li><b>The artifacts panel is honestly empty.</b> This record has zero rows in
+              <code>case_study_artifacts</code>, and the panel says &ldquo;No artifacts on this
+              record yet.&rdquo; rather than rendering a blank table.</li>
+            <li><b>The chart disclaimer is on screen</b> and is true: there is no field anywhere in
+              the form into which a number could be typed.</li>
+            <li><b>Saving a chart worked</b> and the chart persisted.</li>
+            <li><b>The chart told the truth about itself afterwards:</b> &ldquo;Renders: nothing
+              &mdash; no metric it names is publishable and verified&rdquo;, with the reason named
+              per key. The honest-omission behaviour the panel promises is real.</li>
+          </ul>
+        </div>
+        <div class="col cannot">
+          <h4>Broken</h4>
+          <ul class="tight">
+            <li><b>The chart builder offers keys the chart resolver cannot resolve.</b> The
+              checkboxes are read from the <em>snapshot</em>; <code>resolveChart</code> resolves
+              against the <code>case_study_metrics</code> table, which has zero rows for this record.
+              So the form invites you to build a chart, accepts it, and then renders nothing.
+              <b>Left open</b> &mdash; closing it needs a metric-listing endpoint the admin API does
+              not have.</li>
+            <li><b>The same key was offered twice.</b> <code>verified_competencies</code> appears in
+              both <code>heroMetrics</code> and <code>measurement.metrics</code>, so two checkboxes
+              rendered carrying one <code>id</code> and one test id &mdash; both labels pointed at
+              the first input, and clicking the second label toggled the wrong box. <b>Fixed.</b></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>Could not be exercised at all</h3>
+      <p><b>Hero selection, the promote control and the derived evidence/atmosphere column.</b>
+      All three are per-artifact, and this record has no artifacts, so there was no row to press.
+      They are unproven end to end &mdash; not observed working, and not observed broken.</p>
+      <p><b>The architecture diagram is not on this tab.</b> It is rendered by the public story page
+      (<code>StoryDiagram.tsx</code>, mermaid loaded from a CDN at runtime), and nothing in the
+      admin VISUALS tab previews it. It was checked separately against the public page &mdash; see
+      stop 7.</p>
+    </div>
+
+    <div class="step">
+      <h3>The tab, as captured</h3>
+      <div class="shot">
+        <img src="screenshots/2026-08-26-story-studio/04-visuals.png"
+             alt="The VISUALS tab on production: an empty artifacts panel with its named empty state, and the chart builder with metric checkboxes.">
+        <p class="cap">04-visuals.png</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────────────────────────────────────────────────────── SURFACES ── -->
+  <section class="stop">
+    <h2><span class="num">5</span> SURFACES <span class="verdict v-works">works &mdash; and reveals a gate disagreement</span>
+      <p class="q">&ldquo;How does this one record read to four different audiences?&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>What actually happened, and a correction</h3>
+      <div class="banner ok" style="margin:0 0 14px">
+        <b>The four-lens switcher rendered, and it was expected not to.</b>
+        <code>CASE_STUDY_SURFACE_LAB_USER_IDS</code> is unset on the production backend &mdash;
+        confirmed directly against the running container, where it reads <code>(unset)</code>, which
+        the config layer resolves to <code>off</code>. The strip rendered anyway, with four lens
+        tabs and nine bands, because the gate refuses <em>a request</em>, not the component. Measured
+        against production with this session&rsquo;s admin token:
+        <code>GET /preview</code> &rarr; <b>200</b>,
+        <code>?surfaceKey=enterprise</code> &rarr; <b>200</b>,
+        <code>?surfaceKey=training</code> &rarr; <b>403</b>,
+        <code>?surfaceKey=ai_flotation</code> &rarr; <b>403</b>.
+        So the lab loads the Enterprise lens that every admin may preview, and the other three tabs
+        are present but lead to a refusal. That is a switcher that looks available and is not, which
+        is worth knowing before anyone reports it as broken.
+      </div>
+      <ul class="tight">
+        <li><b>The canonical truth line rendered</b> &mdash; the line whose job is proving the lens
+          changed no facts: title, &ldquo;Built by: Colaberry team&rdquo;, organization,
+          &ldquo;Verification: verified&rdquo;, method.</li>
+        <li><b>The live surface is marked in text</b> (<code>&uarr; LIVE</code>), not by colour alone.</li>
+        <li><b>The draft state is a state, never an invented count:</b> &ldquo;draft is ahead &mdash;
+          draft v29 is not the published version&rdquo;, followed by the panel explaining that
+          snapshots are content-hashed wholes so no honest change count exists.</li>
+        <li><b>The note that exploring a lens never publishes</b> is present.</li>
+      </ul>
+    </div>
+
+    <div class="step">
+      <h3>Worth an operator&rsquo;s attention</h3>
+      <p>This tab reported <code>gate: would publish</code> while the PUBLISH tab reported five
+      readiness gaps, two of them <code>publication.surface_declared</code> and
+      <code>publication.surface_publishable</code>. Both are correct and they are answering different
+      questions &mdash; readiness is advisory and scores the record, the gate decides publication
+      &mdash; but a reader moving between the two tabs sees &ldquo;would publish&rdquo; and
+      &ldquo;five gaps&rdquo; within one click of each other with nothing on screen reconciling them.
+      Not a defect. Recorded because it is the most likely thing to be misread on this surface.</p>
+    </div>
+
+    <div class="step">
+      <h3>The tab, as captured</h3>
+      <div class="shot">
+        <img src="screenshots/2026-08-26-story-studio/05-surfaces.png"
+             alt="The SURFACES tab on production: four lens tabs, the canonical truth line, publication state, draft state and the band order.">
+        <p class="cap">05-surfaces.png &mdash; the Enterprise lens, auto-loaded, with the LIVE
+          marker and the band order beneath it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────────────── PREVIEW ── -->
+  <section class="stop">
+    <h2><span class="num">6</span> PREVIEW <span class="verdict v-defect">1 defect, fixed</span>
+      <p class="q">&ldquo;What would a reader actually receive?&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>What actually happened</h3>
+      <div class="cols">
+        <div class="col can">
+          <h4>Worked</h4>
+          <ul class="tight">
+            <li><b>The idle state is a sentence, not a blank frame:</b> &ldquo;Not previewed yet. The
+              preview writes nothing&hellip;&rdquo;</li>
+            <li><b>Pressing Preview rendered both halves</b> &mdash; the raw snapshot beside the
+              public projection &mdash; with 11,481 characters of projection JSON a reviewer can read.</li>
+            <li><b>The withholding narrative is specific:</b> &ldquo;1 of 2 metrics are not shown
+              publicly. A metric that is not publishable, or whose verification is still pending, has
+              no public shape at all.&rdquo;</li>
+          </ul>
+        </div>
+        <div class="col cannot">
+          <h4>Broken</h4>
+          <ul class="tight">
+            <li><b>Rendering the preview blew the page 6,305px wide.</b> Measured on the live page:
+              <code>documentElement.scrollWidth</code> went from 1440 on every other tab to
+              <b>7745</b> against a 1440px viewport the moment the projection rendered. The JSON
+              <code>&lt;pre&gt;</code> grew to 3,686px inside a column whose <code>min-width</code>
+              is <code>auto</code>, dragging the whole admin shell sideways with it.
+              <code>overflow: auto</code> was already set and did not prevent it &mdash; a box has to
+              be stopped from <em>widening</em> before it can be asked to scroll. <b>Fixed</b>, and
+              the fix was verified by injecting exactly those two declarations into the live page and
+              re-measuring: 7745 &rarr; 1440.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>The tab, as captured</h3>
+      <div class="shot">
+        <img src="screenshots/2026-08-26-story-studio/06-preview.png"
+             alt="The PREVIEW tab on production, captured full-page at 7745px wide and downscaled: the raw snapshot and public projection panels are pushed far off to the left by the overflowing JSON.">
+        <p class="cap">06-preview.png &mdash; this is the overflow itself. The capture is 7745px of
+          real page width downscaled to 1800px, which is why the content sits in a narrow strip on
+          the left with thousands of empty pixels beside it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────────────────────── PUBLISH ── -->
+  <section class="stop">
+    <h2><span class="num">7</span> PUBLISH <span class="verdict v-works">works &mdash; read-only paths only</span>
+      <p class="q">&ldquo;What does the gate refuse, and what happens when it stops refusing?&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>What actually happened</h3>
+      <ul class="tight">
+        <li><b>Readiness declares itself advisory</b> and named five gaps rather than a bare score:
+          a missing standfirst or summary, a build timeline under three entries, no target surface
+          declared, the declared surface not publishable in Phase&nbsp;1, and no approved snapshot
+          for the current draft. Each carries a &ldquo;To close:&rdquo; remedy.</li>
+        <li><b>The publication state rendered</b> &mdash; <code>published (8/25/2026, 5:13:23 PM)</code>.</li>
+        <li><b>The gate reported zero blockers</b> and the band above the tabs said so in the words
+          &ldquo;Publish gate: no refusals&hellip; A clear gate is permission to publish, never an
+          instruction to.&rdquo;</li>
+        <li><b>All four lifecycle controls are present</b>: approve, publish, unpublish, archive.</li>
+      </ul>
+    </div>
+
+    <div class="step">
+      <h3>Not exercised on the live record, on purpose</h3>
+      <p>Approve, publish, unpublish and archive were <b>not</b> pressed on the pilot. It is live on
+      the Enterprise surface and unpublishing or archiving it would have taken a real page down. The
+      refusal path was exercised on a throwaway record instead &mdash; see below.</p>
+    </div>
+
+    <div class="step">
+      <h3>The tab, as captured</h3>
+      <div class="shot">
+        <img src="screenshots/2026-08-26-story-studio/07-publish.png"
+             alt="The PUBLISH tab on production: the readiness panel with five named gaps and remedies, and the approve/publish/unpublish/archive controls.">
+        <p class="cap">07-publish.png</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────────────────── THE THROWAWAY ── -->
+  <section class="stop">
+    <h2><span class="num">8</span> A throwaway record &mdash; the acts the live one must not receive
+      <span class="verdict v-defect">1 defect, fixed</span></h2>
+
+    <div class="step">
+      <h3>What actually happened</h3>
+      <ul class="tight">
+        <li><b>Create-from-repositories worked</b> and said what it had and had not done:
+          &ldquo;&hellip;as a draft with 1 repository. Nothing is public until it is approved and
+          published.&rdquo;</li>
+        <li><b>A refused publish named every reason.</b> The gate returned two refusals
+          (<code>case_study_not_approved</code>, <code>snapshot_not_approved</code>) and the panel
+          rendered both in full with field and remedy. This is the behaviour the whole gate design
+          exists for, and it is real.</li>
+        <li><b>Archive worked</b> and the record reported <code>archived</code> from the server, so
+          the desk was left with no debris.</li>
+        <li><b>Defect:</b> a fresh record has no snapshot, and the Narrative panel <em>says so</em>
+          &mdash; &ldquo;This candidate has no snapshot yet, so there is nothing to review&rdquo;
+          &mdash; and then renders three fully enabled &ldquo;Apply override&rdquo; buttons under
+          that warning. Pressing one POSTs an override against nothing, gets a 404, and the operator
+          is shown <code>this override not found.</code>, on a different tab. The panel had already
+          worked out the right answer and then did not act on it. <b>Fixed.</b></li>
+      </ul>
+      <p style="font-size:.9rem"><b>Approve was correctly disabled</b> on that record, because there
+      was no snapshot to approve. That is right, and it is only discoverable from a
+      <code>title</code> tooltip.</p>
+    </div>
+  </section>
+
+  <!-- ──────────────────────────────────────────────────── DEFECT LEDGER ── -->
+  <section class="stop">
+    <h2><span class="num">&sum;</span> Every defect found</h2>
+    <div class="step">
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>#</th><th>Where</th><th>What is wrong</th><th class="n">State</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="n">1</td><td class="n">TRUTH</td>
+              <td>Provenance rendered fourteen rows all reading <code>unknown</code> / &mdash;.
+                The reader looked for <code>source</code>/<code>sourceRef</code>; the server sends
+                <code>tier</code>/<code>origin</code>/<code>recordedAt</code>. The test fixture
+                encoded the same obsolete shape, which is why the suite never noticed.</td>
+              <td class="n"><span class="pill p-fixed">Fixed</span></td>
+            </tr>
+            <tr>
+              <td class="n">2</td><td class="n">Every tab</td>
+              <td>The outcome of every write &mdash; consent, sync, attach, detach, role change,
+                every override &mdash; rendered only inside the PUBLISH panel. A failed consent save
+                on TRUTH produced no visible response of any kind.</td>
+              <td class="n"><span class="pill p-fixed">Fixed</span></td>
+            </tr>
+            <tr>
+              <td class="n">3</td><td class="n">PREVIEW</td>
+              <td>The projection JSON pushed the page to 7745px against a 1440px viewport &mdash; a
+                6,305px horizontal overflow affecting the whole admin shell.</td>
+              <td class="n"><span class="pill p-fixed">Fixed</span></td>
+            </tr>
+            <tr>
+              <td class="n">4</td><td class="n">STORY</td>
+              <td>The Narrative panel offered three enabled Apply-override buttons on a record it
+                had just said has no snapshot. Pressing one 404s.</td>
+              <td class="n"><span class="pill p-fixed">Fixed</span></td>
+            </tr>
+            <tr>
+              <td class="n">5</td><td class="n">SOURCES</td>
+              <td>The Repository input and the Analyze button both carried
+                <code>data-testid="cs-analyze-repo"</code>, so the capability guard was asserting
+                against a text box.</td>
+              <td class="n"><span class="pill p-fixed">Fixed</span></td>
+            </tr>
+            <tr>
+              <td class="n">6</td><td class="n">VISUALS</td>
+              <td>Duplicate metric key offered twice (two inputs, one id) &mdash; <b>fixed</b>. The
+                deeper half is not: the builder&rsquo;s keys come from the snapshot while the
+                resolver reads <code>case_study_metrics</code>, so on this record every offered key
+                resolves to nothing. Closing that needs a metric-listing endpoint the admin API does
+                not have, so it is <b>left open</b> deliberately.</td>
+              <td class="n"><span class="pill p-open">Half open</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:14px;font-size:.9rem"><b>Console errors: none.</b> Across all seven tabs,
+      the record load and the public page, the browser logged zero page errors, zero console errors,
+      zero warnings, zero failed requests and zero 4xx or 5xx responses. The only error of the entire
+      run was the single <code>404 POST &hellip;/overrides</code> produced by defect&nbsp;4 on the
+      throwaway record.</p>
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────────── WHAT IS NOT POSSIBLE ── -->
+  <section class="stop">
+    <h2><span class="num">!</span> What is <em>not</em> yet possible</h2>
+    <div class="step">
+      <p>This is the section to read before deciding what Story Studio can be used for. Everything
+      below was observed, not inferred from a roadmap.</p>
+      <ul class="tight">
+        <li><b>No LLM is wired to anything.</b> The draft generator is deterministic and says so on
+          screen: &ldquo;Last run by: <code>deterministic</code>&rdquo;. It is behind a seam, so a
+          model can be dropped in later, but today nothing generates prose that a model wrote.
+          Drafts are assembled from repository facts.</li>
+        <li><b>The four-lens switcher is gated off for non-default surfaces.</b>
+          <code>CASE_STUDY_SURFACE_LAB_USER_IDS</code> is unset on the production backend, which
+          means <code>off</code>. The lab renders and the Enterprise lens loads (HTTP 200), but
+          Training and AI Flotation return <b>403</b> for every admin &mdash; and three of the four
+          surfaces are <code>publishable: false</code> anyway. Nothing in this walkthrough changed
+          that environment variable, and nothing should: it is a production config decision, not a
+          bug to work around.</li>
+        <li><b>External references were never built.</b> There is no surface anywhere in the seven
+          tabs for a customer reference, a testimonial from outside the platform, or a third-party
+          citation. Quotes exist, but they are internal and consent-gated.</li>
+        <li><b>Charts are unproven end to end.</b> A chart can be created and it correctly reports
+          what it would render &mdash; which, on this record, is nothing. No chart has ever been seen
+          resolving a real metric and appearing on a public page, because
+          <code>case_study_metrics</code> is empty for the only record that exists. The chart
+          subsystem is currently a form with an honest error message behind it.</li>
+        <li><b>Hero selection and artifact promotion are untested.</b> Both are per-artifact controls
+          and the pilot record has zero artifacts. Neither has been seen working or failing.</li>
+        <li><b>The architecture diagram has no admin preview.</b> It renders on the public page from
+          a CDN-loaded mermaid; to see whether a change to it worked, you visit
+          <code>/stories/:slug</code>. The Story Studio never shows it.</li>
+        <li><b>Metrics cannot be created here.</b> Nine metric elements render on STORY, all read
+          from the snapshot, all overridable &mdash; but there is no control anywhere in Story Studio
+          that adds a row to the metric table, which is what charts and the publish gate read.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── THE PUBLIC SURFACE ── -->
+  <section class="stop">
+    <h2><span class="num">&rarr;</span> What this record publishes to <span class="verdict v-works">works</span></h2>
+    <div class="step">
+      <p>The published page at <code>/stories/ai-systems-architect-training-system</code> rendered
+      with the record&rsquo;s headline and, unlike the admin VISUALS tab, <b>a real mermaid
+      architecture diagram</b> &mdash; one <code>&lt;svg&gt;</code>, rendered, no placeholder and no
+      failure state.</p>
+      <div class="shot">
+        <img src="screenshots/2026-08-26-story-studio/08-public-story.png"
+             alt="The public story page on production, showing the headline, the story sections and a rendered mermaid architecture diagram.">
+        <p class="cap">08-public-story.png &mdash; the diagram the VISUALS tab governs but never shows.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────────── WHAT IT TOUCHED ── -->
+  <section class="stop">
+    <h2><span class="num">&#9888;</span> What this walkthrough wrote to production</h2>
+    <div class="step">
+      <p>Stated in full, because a walkthrough that writes to a live record and does not say so is
+      not a walkthrough.</p>
+      <ul class="tight">
+        <li>A <b>storyline</b> on the pilot record. Editorial direction, stored outside the snapshot,
+          unpublishable by construction.</li>
+        <li>A <b>re-save of the consent fields</b> with the values already on them. Verified
+          unchanged afterwards.</li>
+        <li>One repository <b>attached and then detached</b>. The record ended with exactly the one
+          repository it started with.</li>
+        <li>One <b>manual sync</b>, which created <b>draft snapshot v29</b>. The approved snapshot is
+          still v28 and the publication still points at v28, so the public page did not move. The
+          record now reads &ldquo;draft ahead&rdquo;, which is the normal state after any sync.</li>
+        <li><b>Four AI drafts generated and all four rejected.</b> No pending drafts remain.</li>
+        <li>One <b>chart</b>, unapproved, which resolves nothing. It is the evidence for defect 6 and
+          was left in place rather than quietly deleted.</li>
+        <li>One <b>throwaway record</b>, created and archived.</li>
+      </ul>
+      <p><b>Never touched:</b> the pilot was not approved, published, unpublished, archived or
+      overridden. Its publication has been continuously live throughout.</p>
+    </div>
+  </section>
+
+  <footer>
+    Story Studio production walkthrough &mdash; 2026-08-26, branch
+    <code>workstream/case-study-os</code>.<br>
+    Harness: <code>scripts/exerciseStoryStudioProduction.js</code> ·
+    Raw results: <code>docs/screenshots/2026-08-26-story-studio/_findings.json</code> ·
+    Screenshots: <code>docs/screenshots/2026-08-26-story-studio/</code><br>
+    100 checks recorded: 93 passed, 3 failed, 4 skipped and named. Fixes proved by
+    <code>frontend/src/pages/admin/__tests__/AdminCaseStudies.tabs.test.tsx</code> (28 tests),
+    each watched failing under mutation before being trusted. <b>Not deployed.</b>
+  </footer>
+</div>

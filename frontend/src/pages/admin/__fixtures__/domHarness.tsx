@@ -75,6 +75,17 @@ export async function settle(): Promise<void> {
 
 export const text = (): string => container?.textContent ?? '';
 
+/**
+ * EVERY element carrying an id, not the first.
+ *
+ * `query` resolves `.first()`, which makes a DUPLICATE `data-testid` invisible to
+ * a suite: two elements answering to one id look exactly like one element that
+ * works. `cs-analyze-repo` was claimed by both the Repository input and the
+ * Analyze button for that reason, and no test could see it.
+ */
+export const queryAll = (testId: string): HTMLElement[] =>
+  Array.from(container?.querySelectorAll(`[data-testid="${testId}"]`) ?? []) as HTMLElement[];
+
 export const query = (testId: string): HTMLElement | null =>
   (container?.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null) ?? null;
 

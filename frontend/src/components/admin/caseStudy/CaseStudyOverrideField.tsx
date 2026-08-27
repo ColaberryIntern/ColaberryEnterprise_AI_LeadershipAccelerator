@@ -22,15 +22,29 @@ interface Props {
   onApply: (path: string, value: string, note?: string) => void;
   help?: string;
   rows?: number;
+  /**
+   * Refuse the edit before it is attempted, and say why on screen.
+   *
+   * There is one caller that needs this and it is the reason it exists:
+   * `CaseStudyNarrativePanel` renders three of these fields unconditionally,
+   * including on a candidate with no snapshot at all. Pressing Apply there
+   * POSTs an override against nothing and comes back 404, which the client
+   * renders as "this override not found." — a sentence describing a lookup the
+   * operator never asked for. Observed on production 2026-08-26.
+   */
+  disabledReason?: string;
 }
 
 export default function CaseStudyOverrideField({
-  label, path, generated, testId, busy, onApply, help, rows,
+  label, path, generated, testId, busy, onApply, help, rows, disabledReason,
 }: Props): React.ReactElement {
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
 
+  const blocked = Boolean(disabledReason);
+
   const apply = () => {
+    if (blocked) return;
     const next = value.trim();
     if (!next) return;
     onApply(path, next, note.trim() ? note.trim() : undefined);
@@ -49,26 +63,32 @@ export default function CaseStudyOverrideField({
         <textarea
           id={`${testId}-input`} data-testid={`${testId}-input`} className="form-control mt-1"
           rows={rows} value={value} onChange={(e) => setValue(e.target.value)}
-          placeholder="Human override"
+          placeholder="Human override" disabled={blocked}
         />
       ) : (
         <input
           id={`${testId}-input`} data-testid={`${testId}-input`} className="form-control mt-1"
           value={value} onChange={(e) => setValue(e.target.value)} placeholder="Human override"
+          disabled={blocked}
         />
       )}
       <input
         data-testid={`${testId}-note`} className="form-control form-control-sm mt-1"
         value={note} onChange={(e) => setNote(e.target.value)}
         placeholder="Why (optional, stored with the override)"
-        aria-label={`Note for ${label}`}
+        aria-label={`Note for ${label}`} disabled={blocked}
       />
       <button
         type="button" className="btn btn-sm btn-outline-danger mt-2" data-testid={testId}
-        onClick={apply} disabled={busy}
+        onClick={apply} disabled={busy || blocked}
       >
         Apply override
       </button>
+      {blocked ? (
+        <div className="small text-muted mt-1" data-testid={`${testId}-blocked`}>
+          {disabledReason}
+        </div>
+      ) : null}
     </div>
   );
 }

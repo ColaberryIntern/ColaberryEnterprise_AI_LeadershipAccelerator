@@ -157,10 +157,48 @@ export function snapshotFixture(
       },
       ...over,
     },
+    /**
+     * THE SHAPE THE SERVER ACTUALLY SENDS, corrected 2026-08-26.
+     *
+     * This map used to read `{ source: 'repository_analysis', sourceRef: 'a1b2c3d' }`
+     * — a format `backend/src/types/caseStudyProvenance.ts` does not define and
+     * the API does not emit. `readProvenance` was written against that fixture,
+     * so on production every row rendered `unknown` / `—` while the payload
+     * carried the tier, the actor, the repo and the commit sha. The suite stayed
+     * green throughout, because a fixture is a CLAIM about the wire and this one
+     * had stopped being true.
+     *
+     * The first three entries are `CaseStudyProvenanceEntry`, verbatim in shape.
+     * The fourth is deliberately left in the pre-entry-type format: those rows
+     * are still in `case_study_snapshots` and must stay readable, so the
+     * back-compat branch is exercised by a real fixture rather than trusted.
+     */
     provenance: {
-      'identity.title': { source: 'repository_analysis', sourceRef: 'a1b2c3d' },
-      'identity.standfirst': { source: 'human_override', note: 'rewritten for the enterprise page' },
-      'heroMetrics.0.valueDisplay': { source: 'manifest' },
+      'identity.title': {
+        tier: 'repo_extraction',
+        origin: {
+          kind: 'repo_extraction', repoOwner: 'colaberry', repoName: 'claims-router',
+          commitSha: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', filePath: 'README.md',
+        },
+        recordedAt: '2026-08-20T08:00:00.000Z',
+      },
+      'identity.standfirst': {
+        tier: 'human_override',
+        origin: {
+          kind: 'human', actor: 'reviewer@colaberry.test',
+          note: 'rewritten for the enterprise page',
+        },
+        recordedAt: '2026-08-20T09:00:00.000Z',
+      },
+      'heroMetrics.0.valueDisplay': {
+        tier: 'repo_manifest',
+        origin: {
+          kind: 'manifest', repoOwner: 'colaberry', repoName: 'claims-router',
+          manifestPath: '.colaberry/case-study.yml',
+        },
+        recordedAt: '2026-08-20T08:30:00.000Z',
+      },
+      'situation.heading': { source: 'repository_analysis', sourceRef: 'a1b2c3d' },
     },
     sourceCommitMap: { 'colaberry/claims-router': 'a1b2c3d' },
   };
