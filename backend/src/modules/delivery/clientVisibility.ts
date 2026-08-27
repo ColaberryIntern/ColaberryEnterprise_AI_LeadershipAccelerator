@@ -158,6 +158,7 @@ export function findForbiddenFields(value: unknown, maxDepth = 8): ForbiddenFiel
 
 /** Object kinds the client surface serves. */
 export type ClientObjectKind =
+  | 'brand'
   | 'engagement'
   | 'project'
   | 'decision'
@@ -177,6 +178,19 @@ export type ClientObjectKind =
  * `builder_authority` (an assessment of a person), no story internals.
  */
 export const CLIENT_FIELD_ALLOWLIST: Record<ClientObjectKind, readonly string[]> = {
+  // The brand this engagement is delivered under. NAME ONLY, and that is the whole point:
+  // a client room is not Colaberry's room, it is the room of whichever brand owns the
+  // engagement - AI Flotation, Refactored.ai, CPN. Rendering a hardcoded identity here
+  // would have to be undone the first time a non-Colaberry brand delivers a project.
+  //
+  // Colours and logo are deliberately NOT here. `brands.default_theme_key` exists and is
+  // seeded for all five brands, but nothing implements it - there is no theme registry,
+  // no per-theme CSS and no consumer. Projecting a theme key the client surface cannot
+  // honour would be shipping a promise instead of a feature. Ali's call, deferred.
+  //
+  // Absent: slug and status (internal), metadata (an open bag), tenant_id, and
+  // default_theme_key until something can act on it.
+  brand: ['id', 'name'],
   // The engagement a project belongs to. A client is shown its NAME because a project
   // without the engagement around it reads as an orphan - but almost nothing else.
   //

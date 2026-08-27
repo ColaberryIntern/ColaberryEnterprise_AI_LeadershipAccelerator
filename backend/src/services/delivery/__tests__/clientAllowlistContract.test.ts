@@ -1,4 +1,5 @@
 import { CLIENT_FIELD_ALLOWLIST, type ClientObjectKind } from '../../../modules/delivery/clientVisibility';
+import Brand from '../../../models/Brand';
 import DeliveryEngagement from '../../../models/DeliveryEngagement';
 import DeliveryProject from '../../../models/DeliveryProject';
 import DeliveryDecision from '../../../models/DeliveryDecision';
@@ -38,6 +39,7 @@ import DeliveryClientAcceptance from '../../../models/DeliveryClientAcceptance';
  */
 
 const MODEL_BY_KIND = {
+  brand: Brand,
   engagement: DeliveryEngagement,
   project: DeliveryProject,
   decision: DeliveryDecision,
@@ -93,6 +95,15 @@ describe('client allowlist matches the real models', () => {
     expect(CLIENT_FIELD_ALLOWLIST.engagement).not.toContain('source_lead_id');
     expect(CLIENT_FIELD_ALLOWLIST.engagement).not.toContain('metadata');
     expect(CLIENT_FIELD_ALLOWLIST.engagement).not.toContain('engagement_type');
+  });
+  it('projects a brand NAME and nothing that implies a theme it cannot honour', () => {
+    // `default_theme_key` is seeded for all five brands and implemented nowhere - no
+    // registry, no CSS, no consumer. Projecting it would let a client surface promise
+    // per-brand styling that does not exist. Name only until a theme layer is built.
+    expect(CLIENT_FIELD_ALLOWLIST.brand).toContain('name');
+    expect(CLIENT_FIELD_ALLOWLIST.brand).not.toContain('default_theme_key');
+    expect(CLIENT_FIELD_ALLOWLIST.brand).not.toContain('metadata');
+    expect(CLIENT_FIELD_ALLOWLIST.brand).not.toContain('status');
   });
   it('accounts for every allowlist kind, so a new one cannot skip this check', () => {
     // Without this, adding a ninth kind would silently go unverified: the loop above only

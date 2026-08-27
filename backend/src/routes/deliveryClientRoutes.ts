@@ -144,6 +144,7 @@ router.get(
         DeliveryDecision,
         DeliveryChangeRequest,
         DeliveryEngagement,
+        Brand,
       } = require('../models');
 
       const project = await DeliveryProject.findOne({ where: { id: projectId } });
@@ -173,7 +174,16 @@ router.get(
         ? await DeliveryEngagement.findOne({ where: { id: project.engagement_id } })
         : null;
 
+      // The brand the engagement is delivered under, resolved from the project's own
+      // brand_id. Null when unset, and the surface says nothing rather than defaulting to
+      // Colaberry - an AI Flotation engagement wearing Colaberry's name is worse than one
+      // wearing no name at all.
+      const brand = project.brand_id
+        ? await Brand.findOne({ where: { id: project.brand_id } })
+        : null;
+
       const payload = {
+        brand: brand ? toClientShape('brand', plain(brand)) : null,
         // Null rather than a placeholder when it is missing: the client surface can say
         // 'your engagement' itself, and inventing a name here would put a fiction in the
         // API where every consumer would inherit it.
