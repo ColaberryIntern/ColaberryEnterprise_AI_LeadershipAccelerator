@@ -38,6 +38,7 @@ import {
   type CareerArtifact,
   type CareerProject,
   type CareerGithub,
+  isVerifiedLevel,
 } from './careerEvidenceAdapters';
 import { computeReadiness, DEFAULT_POLICY, type ReadinessResult, type PortfolioReadinessPolicy } from './careerReadiness';
 
@@ -107,9 +108,7 @@ export function composeNarrative(
   artifacts: CareerArtifact[],
   projects: CareerProject[],
 ): CareerNarrative {
-  const verified = capabilities.filter(
-    (c) => c.evidence_level === 'colaberry_verified' || c.evidence_level === 'delivery_verified',
-  );
+  const verified = capabilities.filter((c) => isVerifiedLevel(c.evidence_level));
 
   const facts: string[] = [];
   if (verified.length) facts.push(`${verified.length} Colaberry-verified capabilit${verified.length === 1 ? 'y' : 'ies'}`);
