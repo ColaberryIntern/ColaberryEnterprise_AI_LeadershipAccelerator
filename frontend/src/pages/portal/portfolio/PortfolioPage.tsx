@@ -8,6 +8,7 @@ import StudioOverview from './StudioOverview';
 import CapabilityList from './CapabilityList';
 import BuildsSection from './BuildsSection';
 import PublishingPanel from './PublishingPanel';
+import PortfolioAddressPanel from './PortfolioAddressPanel';
 import './PortfolioPage.css';
 
 /**
@@ -170,7 +171,15 @@ const PortfolioPage: React.FC = () => {
             github={profile.github}
           />
         )}
-        {tab === 'publishing' && <PublishingPanel />}
+        {/* Two separate things under one tab: the person-level page at /u/:slug, and
+            the individual record at /p/:slug. Separate approvals, separate audiences;
+            revoking one must not revoke the other. */}
+        {tab === 'publishing' && (
+          <>
+            <PortfolioAddressPanel />
+            <PublishingPanel />
+          </>
+        )}
       </div>
     </PortalShell>
   );
