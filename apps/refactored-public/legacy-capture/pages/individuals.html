@@ -1,0 +1,839 @@
+<!-- Copyright (C) Colaberry, Inc - All Rights Reserved -->
+<!-- Unauthorized copying of this file, via any medium is strictly prohibited -->
+<!-- Proprietary and confidential -->
+<!-- Author: Colaberry Inc Developer - Dinesh <dinesh@colaberry.com>,  2019 -->
+
+
+<!-- Copyright (C) Colaberry, Inc - All Rights Reserved -->
+<!-- Unauthorized copying of this file, via any medium is strictly prohibited -->
+<!-- Proprietary and confidential -->
+<!-- Author: Colaberry Inc Developer - Dinesh <dinesh@colaberry.com>,  2019 -->
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  
+<title>Individuals</title>
+
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Muli:200,300,400,600,700,800,900" rel="stylesheet">
+  <link rel="shortcut icon" type="image/png" href="https://d2quzus90i2gii.cloudfront.net/images/favicon.png"/>
+  <!--<link rel="stylesheet" href="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/css/bootstrap/bootstrap.min.css">
+  <link rel="stylesheet" href="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/fontawesome/css/all.css">-->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" integrity="sha512-+4zCK9k+qNFUR5X+cKL9EIR+ZOhtIloNl9GIKS57V1MyNsYpYcUrUeQc9vNfzsWfV28IaLL3i96P9sdNyeRssA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="https://d2quzus90i2gii.cloudfront.net/CACHE/css/output.1a6f94af4d27.css" type="text/css">
+  
+<link rel="stylesheet" href="https://d2quzus90i2gii.cloudfront.net/CACHE/css/output.3c1261d3aa02.css" type="text/css">
+
+</head>
+<style type="text/css">
+
+.dropdown-menu {
+    background-color: var(--dark-gray);
+    border-top: 1px solid white;
+    border-right: 1px solid white;
+    border-left: 1px solid white;
+    border-bottom: 1px solid white;
+}
+
+.dropdown-item:hover {
+    background-color: var(--gray);
+}
+
+.dropdown-toggle.active {
+    background-color: blue;
+}
+
+</style>
+
+<body>
+
+<nav class="menu_block sticky">
+  <div class="container">
+    <div class="menu">
+      <div class="header_block">
+        <div class="header_row">
+          <div class="menu_and_name_holder">
+            <div class="left_image d-flex align-items-center">
+              <a href="/"><img class="img-fluid header_logo" src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/refactored_logo_new.svg" alt="logo"></a>
+            </div>
+            <div class="menu_icon pointer" id="menu_icon">
+              <i class="menu_icon_child menu_bar_1"></i>
+              <i class="menu_icon_child menu_bar_2"></i>
+              <i class="menu_icon_child menu_bar_3"></i>
+            </div>
+          </div>
+          <div class="menu_list">
+            <div class="menu_item">
+              <div class="container">
+                <ul class="right_menu mb-0">
+                  <li class="mobile_menu_logo  align-items-center mb-2 mt-0">
+                  </li>
+                  <li class="d-flex align-items-center"><a class="d-flex align-items-center active_individual font-weight-bold" href="/individuals">Individuals
+                    </a>
+                  </li>
+                  <li class="d-flex align-items-center"><a class="d-flex align-items-center font-weight-bold" href="/enterprise">Enterprise
+                    </a>
+                  </li>
+                  
+                  <li class="d-flex align-items-center">
+                    <a class="d-flex align-items-center font-weight-bold" href="/auth">Sign Up</a>
+                  </li>
+                  <li class="d-flex align-items-center">
+                    <a class="d-flex align-items-center font-weight-bold" href="/auth">Log In</a>
+                  </li>
+                  
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>
+<section class="individual_banner">
+  <div class="container">
+    <div class="future">
+      <div class="future_left">
+        <h1 class="font-weight-bold">Future-proof yourself</h1>
+        <p>Future-proof your career. Our talent pipeline platform delivers a personalized experience to meet
+          your unique professional needs.
+        </p>
+      </div>
+      <div class="future_right d-flex align-items-center justify-content-center">
+        <div>
+          <h3 class="font-weight-bold text-center">Start Learning Today!</h3>
+          <p class="text-center r_account">Enter your email below to create your <span class="font-weight-bold">FREE
+              Refactored
+              account.</span>
+          </p>
+          <form class="individual_form" id='submitemailform'>
+            <div class="form-group">
+              <label for="exampleInputEmail1" class="label_text font-weight-bold">Email</label>
+              <input type="email" id='emailinput' data-authurl="/auth" class="form-control" placeholder="" aria-describedby="emailHelp">
+            </div>
+          </form>
+          <div class="d-flex justify-content-center align-items-center submit">
+            <a id='submitemail' class="btn btn-danger btn_yellow  submit_holder" href="JavaScript:void(0);">Submit</a>
+          </div>
+          <p class="p_t text-center">By submitting this information you agree to our<span class="font-weight-bold">
+              Privacy
+              Policy</span> and
+            <span class="font-weight-bold">Terms of
+              Use.</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="data_human">
+  <div class="container">
+    <div class="data_human_holder">
+      <div class="d_h_left">
+        <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/illustration.png" alt="illustration" class="img-fluid image">
+      </div>
+      <div class="d_h_right d-flex align-items-center">
+        <div>
+          <div class="d_h_one">
+            <h1 class="font-weight-bold">Why Data?</h1>
+            <p>In this Age of AI and increasing automation in the workplace, data skills are
+              indispensable.
+              Every role across every industry will soon require some level of data fluency. Becoming
+              a
+              data
+              thinker and continuously building those skills will not only future-proof your career
+              but
+              will
+              open up to you a world of new, exciting and rewarding career opportunities.
+            </p>
+          </div>
+          <div class="d_h_two">
+            <h1 class="font-weight-bold">Why Human Skills?</h1>
+            <p>The demand for human skills - like communication, collaboration, lifelong learning, and
+              problem solving - is already high in the labor market. As rapid technological
+              innovations continue to redefine the workplace, the ability to manage the human side of
+              work will become critical to one's success in the future of work.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="count_down_timer">
+  <div class="container">
+    <div class="c_d_t_main">
+      <div class="c_d_t_holder">
+        <div class="c_d_t_one">
+          <h4 class="font-weight-bold">5,000+</h4>
+          <p> individuals impacted</p>
+        </div>
+        <div class="c_d_t_one">
+          <h4 class="font-weight-bold">45%</h4>
+          <p>of our learners are women</p>
+        </div>
+        <div class="c_d_t_one">
+          <h4 class="font-weight-bold">30%</h4>
+          <p>average salary increase </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="learn">
+  <div class="learn_block">
+    <div class="container">
+      <h1 class="font-weight-bold text-center">Learn Your Way</h1>
+      <div class="learn_block_holder">
+        <div class="learn_one">
+          <div class="learn_pic d-flex align-items-center justify-content-center">
+            <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/selfpaced_icn.png" alt="selfpaced" class="img-fluid image">
+          </div>
+          <div class="learn_text">
+            <h5 class="font-weight-bold text-center">Self-Paced</h5>
+            <p class="text-center">Effective on-demand learning experience designed to fit your
+              schedule
+              anywhere, any time.
+            </p>
+          </div>
+          <div class="d-flex justify-content-center align-items-center learn_more1">
+            <a class="btn btn-danger btn_yellow  learn_more3" href="JavaScript:void(0);">Learn More</a>
+          </div>
+        </div>
+        <div class="learn_one">
+          <div class="learn_pic d-flex align-items-center justify-content-center">
+            <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/hybrid_icon.png" alt="hybrid" class="img-fluid image">
+          </div>
+          <div class="learn_text">
+            <h5 class="font-weight-bold text-center">Hybrid</h5>
+            <p class="text-center">Hybrid gives you both the live interaction and feeling of
+              community
+              of a classroom, with the flexibility of an online course.
+            </p>
+          </div>
+          <div class="d-flex justify-content-center align-items-center learn_more1">
+            <a class="btn btn-danger btn_yellow  learn_more3" href="JavaScript:void(0);">Learn More</a>
+          </div>
+        </div>
+        <div class="learn_one">
+          <div class="learn_pic d-flex align-items-center justify-content-center">
+            <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/instructor_icon.png" alt="instructor" class="img-fluid image">
+          </div>
+          <div class="learn_text">
+            <h5 class="font-weight-bold text-center">Instructor-Led</h5>
+            <p class="text-center">Join one of our Colaberry on-campus or remote bootcamps to launch
+              or
+              advance your career in tech.
+            </p>
+          </div>
+          <div class="d-flex justify-content-center align-items-center learn_more1">
+            <a class="btn btn-danger btn_yellow learn_more3" href="JavaScript:void(0);">Learn More</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="learn_holder">
+  </div>
+</section>
+<section class="our_offering_holder position-relative">
+  <img class="img-fuild w-100" src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/cloud_bkgrd.png" alt="image">
+  <div class="container">
+    <h1 class="font-weight-bold text-center">Some of Our Offerings</h1>
+    <ul class="ul_li">
+      <li><a href="JavaScript:void(0);" data-item="courses" class="tabs font-weight-bold">Course</a></li>
+      <li><a href="JavaScript:void(0);" data-item="tech" class="tabs font-weight-bold ">Technology</a></li>
+      <li><a href="JavaScript:void(0);" data-item="career" class="tabs font-weight-bold">Career</a></li>
+      <li><a href="JavaScript:void(0);" data-item="topic" class="tabs font-weight-bold">Topic</a></li>
+      <li><a href="individual-all.html" data-item="all" class="tabs font-weight-bold active">All</a></li>
+    </ul>
+    <div class="tab_block_container">
+      <div class="tab_block_holder">
+        <div class="offering_block tab_block tab_block_courses">
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/da_icon.png" alt="python" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Data Analytics</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ds_icon.png" alt="sql" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Data Science I</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one_parent_last">
+              <div class="tab_one cm cl bo">
+                <div class="tab_image d-flex justify-content-center align-items-center">
+                  <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ds_icon.png" alt="python" class="img-fluid image individual_all_image">
+                </div>
+                <div class="tab_text d-flex justify-content-center align-items-center">
+                  <h5 class="font-weight-bold text-center">Data Science II</h5>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="offering_block tab_block tab_block_topic">
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/stats_icon.png" alt="python" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Statistics</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/progress_icon.png" alt="sql" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">The Process of Data Science</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/regression_icon.png" alt="qlik" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Regression Models</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/class_icon.png" alt="tableau" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Classification Models</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/unsupervised_icon.png" alt="powerbi" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Unsupervised
+                  Models
+                </h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ml_icon.png" alt="jupyter" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Foundations of
+                  Machine Learning
+                </h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/group_icon.png" alt="jupyter" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Selecting and
+                  Grouping Data
+                </h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/variables_icon.png" alt="bokeh" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Working with Variables </h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ssrs_icon.png" alt="bokeh" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Introduction to the SSRS Architecture
+                </h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/audit_icon.png" alt="bokeh" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Auditing & Error Handling</h5>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="offering_block tab_block tab_block_career">
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/da_icon.png" alt="python" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Data Analytics</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl ">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ds_icon.png" alt="sql" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Data Science</h5>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="offering_block tab_block tab_block_all active_block">
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/da_icon.png" alt="python" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Data Analytics</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ds_icon.png" alt="sql" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Data Science I</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one_parent_last">
+              <div class="tab_one cm cl bo">
+                <div class="tab_image d-flex justify-content-center align-items-center">
+                  <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ds_icon.png" alt="python" class="img-fluid image individual_all_image">
+                </div>
+                <div class="tab_text d-flex justify-content-center align-items-center">
+                  <h5 class="font-weight-bold text-center">Data Science II</h5>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/stats_icon.png" alt="python" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Statistics</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/progress_icon.png" alt="sql" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">The Process of Data Science</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/regression_icon.png" alt="qlik" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Regression Models</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/class_icon.png" alt="tableau" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Classification Models</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/unsupervised_icon.png" alt="powerbi" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Unsupervised
+                  Models</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ml_icon.png" alt="jupyter" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Foundations of
+                  Machine Learning</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/group_icon.png" alt="jupyter" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Selecting and
+                  Grouping Data</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/variables_icon.png" alt="bokeh" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Working with Variables </h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/ssrs_icon.png" alt="bokeh" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Introduction to the SSRS Architecture
+                </h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/audit_icon.png" alt="bokeh" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Auditing & Error Handling</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/python_icon.png" alt="python" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold">Python</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl d5 bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/sql_icon.png" alt="sql" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Microsoft SQL Server</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/qlik_icon.png" alt="qlik" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Qlik</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl d5 bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/tableau_icon.png" alt="tableau" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Tableau</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/powerbi_icon.png" alt="powerbi" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Power BI</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl d5 bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/jupyter_icon.png" alt="jupyter" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Jupyter</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/bokeh.png" alt="bokeh" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Bokeh</h5>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="offering_block tab_block tab_block_tech">
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/python_icon.png" alt="python" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold">Python</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl d5 bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/sql_icon.png" alt="sql" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Microsoft SQL Server</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/qlik_icon.png" alt="qlik" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Qlik</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl d5 bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/tableau_icon.png" alt="tableau" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Tableau</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/powerbi_icon.png" alt="powerbi" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Power BI</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl d5 bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/jupyter_icon.png" alt="jupyter" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Jupyter</h5>
+              </div>
+            </div>
+          </div>
+          <div class="tab_one_holder">
+            <div class="tab_one cm cl bo">
+              <div class="tab_image d-flex justify-content-center align-items-center">
+                <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/bokeh.png" alt="bokeh" class="img-fluid image individual_all_image">
+              </div>
+              <div class="tab_text d-flex justify-content-center align-items-center">
+                <h5 class="font-weight-bold text-center">Bokeh</h5>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="our_offering_tab">
+  </div>
+  <div class="right_arrow">
+    <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/rightarrow_icn.png" alt="right" class="img-fluid image right_arrow">
+  </div>
+  <div class="our_offering_mobile">
+  </div>
+</section>
+<section class="testimonial">
+  <div class="container">
+    <div class="testimonial_holder">
+      <div class="testimonial_left  d-flex align-items-center">
+        <div>
+          <h2 class="text-left">“I gained the knowledge and confidence to get a great job. Their people,
+            process and
+            technology
+            approach helped me to be job ready on day one.”
+          </h2>
+          <h2 class="text-right">- Mohamed Khan</h2>
+        </div>
+      </div>
+      <div class="testimonial_right">
+        <div class="testimonial_pic">
+          <img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/testimonial.png" alt="testimonial" class="img-fluid image testimonial_r_pic">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="question d-flex align-items-center">
+  <div class="container text-center">
+    <div class="question_block">
+      <h1 class="font-weight-bold">Ready to learn?</h1>
+      <div class="d-flex justify-content-center align-items-center learn_more">
+        <a class="btn btn-danger btn_yellow font-weight-bold sign_up" href="/auth">Sign Up</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- start footer -->
+<section class="footer">
+  <div class="container">
+    <div class="footer_inner">
+      <div class="footer_left">
+        <div class="footer_left_inner">
+          <div class="left_one">
+            <h1 class="font-weight-bold">LEARN</h1>
+            <div class="footer_link">
+              <a href="/individuals/">Individuals</a>
+              <a href="/enterprise/">Enterprise</a>
+            </div>
+          </div>
+          <div class="left_one">
+            <h1 class="font-weight-bold">SUPPORT</h1>
+            <div class="footer_link">
+              <a href="/contact-us/">Contact Us
+              </a>
+            </div>
+          </div>
+          <div class="left_one">
+            <h1 class="font-weight-bold">COMPANY
+            </h1>
+            <div class="footer_link">
+              <a href="/privacy/" target="_blank">Privacy Policy</a>
+              <a href="/terms/" target="_blank">Terms of Use </a>
+            </div>
+          </div>
+          <div class="left_one">
+            <h1 class="font-weight-bold">FOLLOW
+            </h1>
+            <div class="footer_link">
+              <a href="https://colaberry.com/blog">Blog
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="footer_right">
+        <div class="logo_link">
+          <a href="https://colaberry.com"><img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/footer_logo2.png">
+          </a>
+          <a href="https://colaberry.com"><img src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/images/footer_logo1.png">
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="footer_copyright">
+  <div class="container">
+    <p>© 2021 Refactored</p>
+  </div>
+</section>
+<!-- end footer -->
+
+
+<div id="basedata"></div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+<!--<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script>-->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.0/dist/js/bootstrap.min.js"></script>
+<!--<script src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/js/popper.min.js"></script>
+<script src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/js/jquery.min.js"></script>
+<script src="https://d2quzus90i2gii.cloudfront.net/common/designsfeb2020/assets/js/jquery-ui.js"></script>-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.0/umd/popper.min.js" integrity="sha512-PZrlUFhlOigX38TOCMdaYkhiqa/fET/Lztzjn+kdGxefUZanNUfmHv+9M/wSiOHzlcLX/vcCnmvOZSHi5Dqrsw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js" integrity="sha512-uto9mlQzrs59VwILcLiRYeLKPPbS/bT71da/OEBYEwcdNUk8jYIy+D176RYoop1Da+f9mvkYrmj5MCLZWEtQuA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://d2quzus90i2gii.cloudfront.net/CACHE/js/output.486bc2d23ff1.js"></script> 
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-50774814-6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-50774814-6');
+</script>
+<!-- Start of HubSpot Embed Code -->
+<script type="text/javascript" id="hs-script-loader" async defer src="//js.hs-scripts.com/1641429.js"></script>
+<!-- End of HubSpot Embed Code -->
+
+<script src="https://d2quzus90i2gii.cloudfront.net/CACHE/js/output.bc82213e7d96.js"></script>
+
+ <div class="cookie-notice">Our site uses cookies to provide <br><br>you with the best experience.
+      <button type="button" class="btn btn-danger btn-circle btn-cross"><div id="cross"></div>
+    </button>
+    </div>
+</body>
+</html>

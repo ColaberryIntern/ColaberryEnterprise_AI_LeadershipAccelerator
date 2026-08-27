@@ -1,0 +1,10 @@
+# This directory is a byte-faithful point-in-time capture of a live website.
+#
+# `-text` disables git's end-of-line conversion for everything here. Without it, checking
+# out on Windows rewrites LF to CRLF, which silently changes every captured file: the byte
+# counts recorded in manifest.json stop matching the files they describe, and a diff
+# against a re-capture shows every line as changed.
+#
+# A capture that git is allowed to "helpfully" normalise is no longer evidence of what the
+# site actually served.
+* -text
