@@ -21,6 +21,7 @@ import PricingV2 from './pages/publicV2/PricingV2';
 import StoriesV2 from './pages/publicV2/StoriesV2';
 import StoryDetailV2 from './pages/publicV2/StoryDetailV2';
 import CapstoneRecordPage from './pages/CapstoneRecordPage';
+import PublicPortfolioProfilePage from './pages/PublicPortfolioProfilePage';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -143,6 +144,13 @@ function App() {
                 Same no-leading-slash rule as the route above, for the same reason.
             */}
             <Route path="p/:slug" element={<CapstoneRecordPage />} />
+            {/*
+                u/:slug is the PERSON; p/:slug is one project. Same layout and the
+                same no-leading-slash rule, for the same reason: both are pages a
+                stranger opens from a link a learner sent, so neither may sit behind
+                a marketing chrome that implies they are selling something.
+            */}
+            <Route path="u/:slug" element={<PublicPortfolioProfilePage />} />
           </Route>
           {/*
               Client reviewer sign-in. Deliberately OUTSIDE both marketing layouts,

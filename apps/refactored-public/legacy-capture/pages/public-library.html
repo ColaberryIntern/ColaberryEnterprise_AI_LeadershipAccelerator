@@ -1,0 +1,2316 @@
+<!-- Copyright (C) Colaberry, Inc - All Rights Reserved -->
+<!-- Unauthorized copying of this file, via any medium is strictly prohibited -->
+<!-- Proprietary and confidential -->
+<!-- Author: Colaberry Inc Developer - Dinesh <dinesh@colaberry.com>,  2019 -->
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  
+<title>Library</title>
+
+  <link rel="shortcut icon" type="image/png" href="https://d2quzus90i2gii.cloudfront.net/images/favicon.png" />
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Muli:200,300,400,600,700,800,900" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css"
+    integrity="sha512-+4zCK9k+qNFUR5X+cKL9EIR+ZOhtIloNl9GIKS57V1MyNsYpYcUrUeQc9vNfzsWfV28IaLL3i96P9sdNyeRssA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <!-- <link rel="stylesheet" href="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/css/fontawesome/css/all.css"> -->
+
+  <link rel="stylesheet" href="https://d2quzus90i2gii.cloudfront.net/CACHE/css/output.aedfbe6cecf1.css" type="text/css">
+
+  
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css"
+    integrity="sha512-+4zCK9k+qNFUR5X+cKL9EIR+ZOhtIloNl9GIKS57V1MyNsYpYcUrUeQc9vNfzsWfV28IaLL3i96P9sdNyeRssA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+<link rel="stylesheet" href="https://d2quzus90i2gii.cloudfront.net/CACHE/css/output.69aee5de6045.css" type="text/css">
+
+
+</head>
+
+<body class="home_body">
+  <nav class="menu_block sticky o_p_menu">
+    <div class="container">
+      <div class="menu">
+        <div class="header_block">
+          <div class="header_row">
+            <div class="menu_and_name_holder">
+              <div class="left_image d-flex align-items-center">
+                <a href="/"><img class="img-fluid header_logo"
+                    src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/refactored_logo_new.svg " alt="logo"></a>
+              </div>
+              <div class="menu_icon pointer" id="menu_icon">
+                <i class="menu_icon_child menu_bar_1"></i>
+                <i class="menu_icon_child menu_bar_2"></i>
+                <i class="menu_icon_child menu_bar_3"></i>
+              </div>
+            </div>
+            <div class="menu_list">
+              <div class="menu_item">
+                <div class="container">
+                  <ul class="right_menu mb-0">
+                    <li class="mobile_menu_logo  align-items-center mb-2 mt-0">
+                    </li>
+                    <li class="d-flex align-items-center"><a
+                        class="d-flex align-items-center active_individual font-weight-bold"
+                        href="/public-library/">Library</a>
+                    </li>
+                    <li class="d-flex align-items-center"><a
+                        class="d-flex align-items-center active_individual font-weight-bold"
+                        href="/organizations/">For Organizations</a>
+                    </li>
+                    <li class="d-flex align-items-center"><a class="d-flex align-items-center font-weight-bold"
+                        href="https://hire.refactored.ai/">Marketplace
+                      </a>
+                    </li>
+                    <li class="d-flex align-items-center sign_up_li"><a
+                        class="d-flex align-items-center font-weight-bold sign_up" href="/signup ">Sign Up
+                      </a>
+                    </li>
+                    <li class=" d-flex align-items-center"><a class="d-flex align-items-center font-weight-bold login"
+                          href="/signin">Log
+                          In
+                        </a>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+  
+<section class="dashboard_block new_dashboard_block">
+  <div class="container">
+    <div class="explore_library">
+      <h3>Explore Our Library</h3>
+      <p>Launch or advance your career with in-demand, job-ready data skills. Our flexible, interactive format
+        provides hands-on learning experience. Showcase your new skills with digital credentials.</p>
+      <form method="GET" id="dsh_form">
+        <div class="row">
+          <div class="col-lg-11">
+            <div class="input-group mb-3">
+              <input type="text" autocomplete="off" class="form-control" placeholder="What do you want to learn?"
+                aria-label="Recipient's username" aria-describedby="button-addon2" name="keyword"
+                value="">
+              <button class="btn btn-outline-secondary" type="submit" id="button-addon2"><img
+                  src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Bitmap%20(2).svg"></button>
+            </div>
+          </div>
+          <input type="hidden" name="dcategory" id="dcategory" value="">
+          <input type="hidden" name="dlevel" id="dlevel" value="">
+          <input type="hidden" name="dtype" id="dtype" value="">
+          <div class="col-lg-11">
+            <div class="row track_filter_row">
+              <div class="col-lg-4  col-sm-4">
+                <div class="dropdown1 shadow">
+                  <button type="button" class="btn btn-secondary dropdown-toggle1 close_d">
+                    
+                    Category
+                    
+                    <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/rightarrow_icn.png" class="rotate align">
+                  </button>
+                  <ul class="dropdown-menu1 shadow">
+                    <li class="cat_class" data="All Categories">All Categories</li>
+                    
+                    <li class="cat_class" data="Python">Python</li>
+                    
+                    <li class="cat_class" data="GraphDB">GraphDB</li>
+                    
+                    <li class="cat_class" data="Machine Learning">Machine Learning</li>
+                    
+                    <li class="cat_class" data="Data Visualization">Data Visualization</li>
+                    
+                    <li class="cat_class" data="Math and Stats">Math and Stats</li>
+                    
+                    <li class="cat_class" data="CRCST">CRCST</li>
+                    
+                    <li class="cat_class" data="Soft Skills">Soft Skills</li>
+                    
+                  </ul>
+                </div>
+              </div>
+              <div class="col-lg-4  col-sm-4">
+                <div class="dropdown1 shadow ">
+                  <button type="button" class="btn btn-secondary dropdown-toggle1 close_d">
+                    
+                    Type
+                    
+                    <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/rightarrow_icn.png" class="rotate align">
+                  </button>
+                  <ul class="dropdown-menu1 shadow">
+                    <li class="type_class" data="All Types">All Types</li>
+                    
+                    <li class="type_class" data="Tracks">Tracks</li>
+                    
+                    <li class="type_class" data="Courses">Courses</li>
+                    <li class="type_class" data="Microcourses">Micro Courses</li>
+                    <!--<li data="projects">Project</li> -->
+                  </ul>
+                </div>
+              </div>
+              <div class="col-lg-4  col-sm-4">
+                <div class="dropdown1 shadow">
+                  <button type="button" class="btn btn-secondary dropdown-toggle1 close_d">
+                    
+                    Level
+                    
+                    <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/rightarrow_icn.png" class="rotate align">
+                  </button>
+                  <ul class="dropdown-menu1 shadow">
+                    <li class="level_class" data="All Levels">All Levels</li>
+                    
+                    <li class="level_class" data="Introductory">Introductory</li>
+                    
+                    <li class="level_class" data="Intermediate">Intermediate</li>
+                    
+                    <li class="level_class" data="Advanced">Advanced</li>
+                    
+                    <li class="level_class" data="Basic">Basic</li>
+                    
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+      </form>
+    </div>
+    
+    <div class="m_courses">
+      <div class="responsive_center">
+        <h5 class="font-weight-bold mobile_text_center">Tracks</h5>
+        <div class="dashboard_content_holder">
+          <div class="tab_block_container tab_block_container_tracks dashbord_dashbord dashbord_dashbord_hidden mt-4">
+            <div class="tab_block_holder">
+              <div class="tab_block tab_block_dashboard tab_dashboard_block">
+                
+                <div class="tab_one_holder">
+                  <div style="cursor: pointer;" class="tab_one cm cl">
+                    
+                      <div class="main_track_row" onclick=window.open("/track-course/5/detail",'_self')>
+                        <div class="top_left box">
+                          <div class="progress track_progress track_grey_progress mx-auto" data-value='0'>
+                            <span class="progress-left">
+                              <span class="progress-bar"></span>
+                            </span>
+                            <span class="progress-right">
+                              <span class="progress-bar"></span>
+                            </span>
+                            <div
+                              class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                              <div class="count">
+                                
+                                <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg" alt="python">
+                                
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <!-- <div class="top_right box" onclick=window.open("/track-course/5/detail",'_self') >
+                              <div class="track">Track <span class="float-right">000 Xp</span></div>
+                              <div class="title">Data Science - III</div>
+                              <p>This is the Data Science - III track which h…</p>
+                              <div class="levels">
+                                <span class="level">Category : <b>Machine Learning</b></span> <span class="level">Level : <b>Advanced</b></span>
+                              </div>
+                            </div> -->
+                        <div class="top_right box">
+                          <div class="title">Data Science - III <span class="float-right">000 XP</span>
+                          </div>
+                          <div class="hours_courses"><span class="item"><img
+                                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/time_icon.png">
+                              00 Hours</span> <span class="item"><img
+                                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/courses_icon_blue.png">
+                              8 Courses</span></div>
+                          <div class="levels">
+                            <span class="level">Category :
+                              <b> ML </b></span> <span class="level">Level :
+                              <b>Advanced</b></span>
+                          </div>
+                          <div class="progress_enroll">
+                            <span class="progress_1">100% Completed</span>
+                            <!-- <span class="enroll"><a href="#">Enroll in Track</a></span> -->
+                          </div>
+                        </div>
+                        <div class="bottom box track_bottom"
+                          style='display: none;'>
+                          <ul>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Bias Variance Tradeoff and Regularization</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">SVMs and Kernel Tricks</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Decision Trees for Prediction</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Random Forests</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Advanced Tree Algorithms</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Unsupervised Learning and K-means Clustering</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">DBScan and Dimensionality Reduction</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Hierarchical Clustering</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star"><span><img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg"
+                                    alt="python" class="img-fluid image individual_all_image" /></span>
+                              </div>
+                              <div class="title">Badge of Accomplishment</div>
+                            </li>
+                          </ul>
+
+                        </div>
+                      </div>
+                      
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div style="cursor: pointer;" class="tab_one cm cl">
+                    
+                      <div class="main_track_row" onclick=window.open("/track-course/4/detail",'_self')>
+                        <div class="top_left box">
+                          <div class="progress track_progress track_grey_progress mx-auto" data-value='0'>
+                            <span class="progress-left">
+                              <span class="progress-bar"></span>
+                            </span>
+                            <span class="progress-right">
+                              <span class="progress-bar"></span>
+                            </span>
+                            <div
+                              class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                              <div class="count">
+                                
+                                <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg" alt="python">
+                                
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <!-- <div class="top_right box" onclick=window.open("/track-course/4/detail",'_self') >
+                              <div class="track">Track <span class="float-right">000 Xp</span></div>
+                              <div class="title">Pre-Data Science</div>
+                              <p>Courses essential for Data Science program</p>
+                              <div class="levels">
+                                <span class="level">Category : <b>Machine Learning</b></span> <span class="level">Level : <b>Introductory</b></span>
+                              </div>
+                            </div> -->
+                        <div class="top_right box">
+                          <div class="title">Pre-Data Science <span class="float-right">000 XP</span>
+                          </div>
+                          <div class="hours_courses"><span class="item"><img
+                                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/time_icon.png">
+                              00 Hours</span> <span class="item"><img
+                                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/courses_icon_blue.png">
+                              7 Courses</span></div>
+                          <div class="levels">
+                            <span class="level">Category :
+                              <b> ML </b></span> <span class="level">Level :
+                              <b>Introductory</b></span>
+                          </div>
+                          <div class="progress_enroll">
+                            <span class="progress_1">100% Completed</span>
+                            <!-- <span class="enroll"><a href="#">Enroll in Track</a></span> -->
+                          </div>
+                        </div>
+                        <div class="bottom box track_bottom"
+                          style='display: none;'>
+                          <ul>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">1 - Getting started with Python</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">2 - Building blocks of a Program</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">3 - Numpy and Pandas</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">5 - Data and SQL using Python</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">6 - Working with Files in Python</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">7 - Working with APIs and Webscraping</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Foundational Math for Data Science</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star"><span><img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg"
+                                    alt="python" class="img-fluid image individual_all_image" /></span>
+                              </div>
+                              <div class="title">Badge of Accomplishment</div>
+                            </li>
+                          </ul>
+
+                        </div>
+                      </div>
+                      
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div style="cursor: pointer;" class="tab_one cm cl">
+                    
+                      <div class="main_track_row" onclick=window.open("/track-course/3/detail",'_self')>
+                        <div class="top_left box">
+                          <div class="progress track_progress track_grey_progress mx-auto" data-value='0'>
+                            <span class="progress-left">
+                              <span class="progress-bar"></span>
+                            </span>
+                            <span class="progress-right">
+                              <span class="progress-bar"></span>
+                            </span>
+                            <div
+                              class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                              <div class="count">
+                                
+                                <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg" alt="python">
+                                
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <!-- <div class="top_right box" onclick=window.open("/track-course/3/detail",'_self') >
+                              <div class="track">Track <span class="float-right">000 Xp</span></div>
+                              <div class="title">Data Science I</div>
+                              <p>This track is specially curated for CARE. It…</p>
+                              <div class="levels">
+                                <span class="level">Category : <b>Python</b></span> <span class="level">Level : <b>Intermediate</b></span>
+                              </div>
+                            </div> -->
+                        <div class="top_right box">
+                          <div class="title">Data Science I <span class="float-right">000 XP</span>
+                          </div>
+                          <div class="hours_courses"><span class="item"><img
+                                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/time_icon.png">
+                              00 Hours</span> <span class="item"><img
+                                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/courses_icon_blue.png">
+                              2 Courses</span></div>
+                          <div class="levels">
+                            <span class="level">Category :
+                              <b> Python </b></span> <span class="level">Level :
+                              <b>Intermediate</b></span>
+                          </div>
+                          <div class="progress_enroll">
+                            <span class="progress_1">100% Completed</span>
+                            <!-- <span class="enroll"><a href="#">Enroll in Track</a></span> -->
+                          </div>
+                        </div>
+                        <div class="bottom box track_bottom"
+                          style='display: none;'>
+                          <ul>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Python for Data Scientists</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Python Data Handling</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star"><span><img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg"
+                                    alt="python" class="img-fluid image individual_all_image" /></span>
+                              </div>
+                              <div class="title">Badge of Accomplishment</div>
+                            </li>
+                          </ul>
+
+                        </div>
+                      </div>
+                      
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div style="cursor: pointer;" class="tab_one cm cl">
+                    
+                      <div class="main_track_row" onclick=window.open("/track-course/2/detail",'_self')>
+                        <div class="top_left box">
+                          <div class="progress track_progress track_grey_progress mx-auto" data-value='0'>
+                            <span class="progress-left">
+                              <span class="progress-bar"></span>
+                            </span>
+                            <span class="progress-right">
+                              <span class="progress-bar"></span>
+                            </span>
+                            <div
+                              class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                              <div class="count">
+                                
+                                <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg" alt="python">
+                                
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <!-- <div class="top_right box" onclick=window.open("/track-course/2/detail",'_self') >
+                              <div class="track">Track <span class="float-right">000 Xp</span></div>
+                              <div class="title">Data Science - II</div>
+                              <p>
+
+Python is a simple, easy-to-learn,&amp;nbsp;…</p>
+                              <div class="levels">
+                                <span class="level">Category : <b>Python</b></span> <span class="level">Level : <b>Advanced</b></span>
+                              </div>
+                            </div> -->
+                        <div class="top_right box">
+                          <div class="title">Data Science - II <span class="float-right">000 XP</span>
+                          </div>
+                          <div class="hours_courses"><span class="item"><img
+                                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/time_icon.png">
+                              00 Hours</span> <span class="item"><img
+                                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/courses_icon_blue.png">
+                              8 Courses</span></div>
+                          <div class="levels">
+                            <span class="level">Category :
+                              <b> Python </b></span> <span class="level">Level :
+                              <b>Advanced</b></span>
+                          </div>
+                          <div class="progress_enroll">
+                            <span class="progress_1">100% Completed</span>
+                            <!-- <span class="enroll"><a href="#">Enroll in Track</a></span> -->
+                          </div>
+                        </div>
+                        <div class="bottom box track_bottom"
+                          style='display: none;'>
+                          <ul>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Linear Algebra</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Introduction to Statistics and Probability</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Distributions and Associated Statistics</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Statistics Revisited</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Linear Regression Models</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Model Selection and Polynomial Regression</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Classification and Logistic Regression</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star">
+                                <span>
+                                  <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg" alt="python"
+                                    class="img-fluid image individual_all_image">
+                                </span>
+                              </div>
+                              <div class="title">Classification - Naive Bayes</div>
+                            </li>
+                            
+                            <li>
+                              <div class="star"><span><img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/Normal.svg"
+                                    alt="python" class="img-fluid image individual_all_image" /></span>
+                              </div>
+                              <div class="title">Badge of Accomplishment</div>
+                            </li>
+                          </ul>
+
+                        </div>
+                      </div>
+                      
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+
+    
+    <div class="m_courses">
+      <div class="responsive_center">
+        <h5 class="font-weight-bold mobile_text_center">Courses</h5>
+        <div class="dashboard_content_holder">
+          <div class="tab_block_container dashbord_dashbord dashbord_dashbord_hidden">
+            <div class="tab_block_holder">
+              <div class="tab_block tab_block_dashboard">
+                <!-- start course card-->
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/aws-deepracer/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">AWS DeepRacer</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/Math-and-Stats-for-ML/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Machine Learning</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Intermediate</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">DATA SCIENCE 2 - FOUNDATIONS OF ML</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/Linear-Algebra/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Linear Algebra</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/Interview-Prep/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Machine Learning</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Intermediate</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Interview Prep</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/Python-Essentials-For-Data-Science/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Python Essentials For Data Science</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/Data-Science-Project-Instructions/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Machine Learning</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Data Science Project Instructions</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/introduction-to-tiger-graph/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Intermediate</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">TigerGraph Using Python</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/Data-Science---I/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Data Science - I</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/Data-Science---II/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Math and Stats</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Intermediate</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Data Science - II</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/Data-Science---III/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Machine Learning</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Advanced</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Data Science - III</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/web-scraping/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Advanced</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Web Scraping in Python</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/data-handling/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Python Data Handling</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/python-for-data-scientists/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Python for Data Scientists</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/database-and-sql/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Database and SQL</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/cloud-apis/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Advanced</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Cloud APIs</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/foundational-math-for-data-science/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Math and Stats</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Foundational Math for Data Science</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/probability/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Math and Stats</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Probability</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/linear-regression-models/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Machine Learning</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Linear Regression Models</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/svms-and-svr/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Machine Learning</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Intermediate</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">SVMs and SVR</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/tree-methods/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Machine Learning</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Intermediate</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Tree Models</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/unsupervised-learning/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Unsupervised Learning</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/linear-models-for-classification/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Machine Learning</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Classification and Logistic Regres…</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color course_color nbhtml"  data-nbhtmllink="/course/OPT-Training/"  >
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/course_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">OPT Training</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <!-- end course card -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+
+    
+    <div class="m_courses">
+      <div class="responsive_center">
+        <h5 class="font-weight-bold mobile_text_center">Micro-Courses</h5>
+        <div class="dashboard_content_holder">
+          <div class="tab_block_container dashbord_dashbord dashbord_dashbord_hidden">
+            <div class="tab_block_holder">
+              <div class="tab_block tab_block_dashboard">
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/normality-tests/24c311b1936a4037b29ef78d629f1320/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Normality Tests</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/plotly/b28e7553b3284e65bea2fc1eb97a7ef8/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Plotly</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/data-stories/a385075d80654f09950b8fc8787f412e/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Data Stories</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/intro-to-graph/f255a9d82fcf4675a95b27513198355a/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">GraphDB</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Introduction to Graph Analytics</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/perceptron/bd58f23c228f4ffe864d81bc0c625ca3/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Introductory</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Perceptron</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/intro-to-numpy/a7520a1ff9be4563b6a22acb667e5146/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Intro to Numpy</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/intro-to-pandas/27ca88c49e9c4b1abcd5e36b92cb1546/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Intro to Pandas</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/getting-started-with-python/36d22ac4b9604b1d80a5bcda52c22b40/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Getting Started with Python</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/introduction-to-data-visualization/c174ba94421249b89ad16a27c006b4dc/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Introduction to Data Visualization</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color mc_color nbhtml" data-nbhtmllink="/learn/intro-data-handling/e24843abba2242959af2eb568a879c14/">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count">
+                            
+                            <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/microcourse_badge.svg" alt="python">
+                            
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Python</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);"></a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Introduction to Python Data Handling</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    
+
+    <div style="display: none;" class="m_courses">
+      <div class="responsive_center">
+        <h5 class="font-weight-bold mobile_text_center">Notebooks</h5>
+        <div class="dashboard_content_holder">
+          <div class="tab_block_container dashbord_dashbord dashbord_dashbord_hidden mt-4">
+            <div class="tab_block_holder">
+              <div class="tab_block tab_block_dashboard">
+                <div class="tab_one_holder">
+                  <div class="tab_one cm cl bo">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color nb_color">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count"> <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg"
+                              alt="python">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Tag</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Level</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center tab_text_unset track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Notebook Title</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                <div class="tab_one_holder das_font">
+                  <div class="tab_one cm cl">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color nb_color">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count"> <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg"
+                              alt="python">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Tag</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Level</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center das_font_block track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Notebook Title</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                <div class="tab_one_holder das_font">
+                  <div class="tab_one cm cl">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color nb_color">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='0'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count"> <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg"
+                              alt="python">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Tag</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Level</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center das_font_block track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Notebook Title</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                <div class="tab_one_holder das_font">
+                  <div class="tab_one cm cl">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color nb_color">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='100'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count"> <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg"
+                              alt="python">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Tag</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Level</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center das_font_block track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Notebook Title</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                <div class="tab_one_holder das_font">
+                  <div class="tab_one cm cl">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color nb_color">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='100'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count"> <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg"
+                              alt="python">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Tag</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Level</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center das_font_block track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Notebook Title</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+                <div class="tab_one_holder das_font">
+                  <div class="tab_one cm cl">
+                    <div class="tab_image d-flex justify-content-center align-items-center project_color nb_color">
+                      <div class="progress course_progress grey_progress mx-auto" data-value='100'>
+                        <span class="progress-left">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <span class="progress-right">
+                          <span class="progress-bar"></span>
+                        </span>
+                        <div
+                          class="progress-value w-100 h-100 rounded-circle d-flex align-items-center justify-content-center">
+                          <div class="count"> <img src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/badges/default_badge.svg"
+                              alt="python">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dash_bottom track_dash_bottom">
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Tag</a>
+                      </div>
+                      <div class="dash_bottom_one align-items-center d-flex">
+                        <a href="JavaScript:void(0);">Level</a>
+                      </div>
+                    </div>
+                    <div
+                      class="tab_text d-flex justify-content-center align-items-center das_font_block track_font_block">
+                      <h5 class="font-weight-bold text-center dashbord_h5">Notebook Title</h5>
+                    </div>
+                    <div class="xp text-center">100xp</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="cookie-notice">
+  Our site uses cookies to provide <br><br>you with the best experience.
+  <button type="button" class="btn btn-danger btn-circle btn-cross">
+    <div id="cross"></div>
+  </button>
+</div>
+
+
+  <section class="footer ">
+    <div class="container ">
+      <div class="footer_inner ">
+        <div class="footer_left ">
+          <div class="footer_left_inner ">
+            <div class="left_one footer_left_content box1 ">
+              <a href="/ "  class="text-center d-block text-lg-left"><img class="img-fluid header_logo "
+                  src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/refactored_logo_new.svg " alt="logo "></a>
+              <p class="mt-4 mb-5 ">Refactored AI provides and end-to-end solutions to develop today’s
+                workforce for success in tomorrow’s workplace and transform organizations into agile,
+                AI-powered industry leaders - at scale.</p>
+              <p class="small mob_tab_none ">
+                <a href="/terms/" target="_blank">Terms Of Use</a>
+                <a href="/privacy/" target="_blank">Privacy Policy</a>
+              <p class="small mt-2 mob_tab_none ">All rights reserved © 2026 - Refactored AI</p>
+              <div class="social_icons mt-3 mob_tab_none ">
+                <a target="_blank" href="https://www.facebook.com/refactoredAI/"><img class="img-fluid "
+                    src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/new_images/Facebook.png " alt="Facebook logo "></a>
+                <a target="_blank" href="https://twitter.com/refactoredAI"><img class="img-fluid "
+                    src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/new_images/Twitter.png " alt="Twitter logo "></a>
+              </div>
+            </div>
+            <div class="left_one box2 ">
+              <h1 class="font-weight-bold ">LEARN</h1>
+              <div class="footer_link ">
+                <a href="/public-library/">Library</a>
+                <a href="/public-library/">Tracks</a>
+                <!-- <a href="/public-library/" >Projests</a> -->
+                <a href="/public-library/">Courses</a>
+              </div>
+            </div>
+            <div class="left_one box3 ">
+              <h1 class="font-weight-bold ">PLATFORM</h1>
+              <div class="footer_link ">
+                <a href="/organizations/">For Organizations</a>
+                <a href="https://hire.refactored.ai/">Marketplace</a>
+                <a href="https://blog.colaberry.com/with-a-little-help-from-ai/">Video Feedback System</a>
+                <!-- <a href="#">Help Center</a> -->
+                <!-- <a href="#">Mobile App</a> -->
+              </div>
+            </div>
+            <div class="left_one box4 ">
+              <h1 class="font-weight-bold ">ABOUT
+              </h1>
+              <div class="footer_link ">
+                <a href="/">About</a>
+                <a href="/contact-us/">Contact Us</a>
+                <a href="/sitemap.xml">Sitemap</a>
+              </div>
+            </div>
+
+
+
+          </div>
+        </div>
+        <div class="footer_right ">
+          <div class="logo_link ">
+            <a target="_blank" href="https://www.colaberry.com/"><img
+                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/footer_logo2.png ">
+            </a>
+            <a target="_blank" href="https://training.colaberry.com/"><img
+                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/images/footer_logo1.png ">
+            </a>
+          </div>
+        </div>
+        <div class="footer_tab_mob_block text-center ">
+          <div class="social_icons mt-3 ">
+            <a target="_blank" href="https://www.facebook.com/refactoredAI/"><img class="img-fluid "
+                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/new_images/Facebook.png " alt="Facebook logo "></a>
+            <a target="_blank" href="https://twitter.com/refactoredAI"><img class="img-fluid "
+                src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/new_images/Twitter.png " alt="Twitter logo "></a>
+          </div>
+          <p class="small mt-4 ">
+            <a href="/terms/" target="_blank">Terms Of Use</a>
+            <a href="/privacy/" target="_blank">Privacy Policy</a>
+          <p class="small mt-2 ">All rights reserved © 2026 - Refactored AI</p>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" crossorigin="anonymous"></script>
+  <script src="https://code.jquery.com/jquery-2.2.0.min.js" type="text/javascript"></script>
+  <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js" crossorigin="anonymous"></script>
+  <!-- <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script> -->
+
+  <!-- <script src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/js/popper.min.js"></script>
+  <script src="https://code.jquery.com/jquery-2.2.0.min.js" type="text/javascript"></script>
+  <script src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/js/jquery-ui.js"></script> -->
+  <script src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/js/main.js"></script>
+  <script src="https://d2quzus90i2gii.cloudfront.net/dashboard_css/assets/js/slick.js"></script>
+  
+<script src="https://d2quzus90i2gii.cloudfront.net/js/dashboard.js"></script>
+<script>
+  $(document).ready(function () {
+    $(".type_class").on("click", function () {
+      $("#dtype").val($(this).attr("data"));
+      $("#dsh_form").submit();
+    })
+    $(".level_class").on("click", function () {
+      $("#dlevel").val($(this).attr("data"));
+      $("#dsh_form").submit();
+    })
+    $(".cat_class").on("click", function () {
+      $("#dcategory").val($(this).attr("data"));
+      $("#dsh_form").submit();
+    })
+
+    $(".dropdown-toggle1").click(function() {
+      $(".dropdown-toggle1").not(this).addClass("close_d").removeClass("open_d");
+      $(".dropdown-toggle1").not(this).find("img:first").addClass("rotate").removeClass("rotate_1");
+      $(".dropdown-toggle1").not(this).next("ul").css("display", "none");
+      if ($(this).find("img:first").hasClass("rotate_1")) {
+        $(this).find("img:first").toggleClass("rotate_1 rotate");
+      } else {
+        $(this).find("img:first").toggleClass("rotate rotate_1");
+      }
+      $(this).siblings(".dropdown-menu1").slideToggle("600");
+    });
+    
+    $(function () {
+      // ------------------------------------------------------- //
+      // Multi Level dropdowns
+      // ------------------------------------------------------ //
+      $("ul.dropdown-menu [data-toggle='dropdown']").on("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        $(this).siblings().toggleClass("show");
+
+
+        if (!$(this).next().hasClass('show')) {
+          $(this).parents('.dropdown-menu').first().find('.show').removeClass("show");
+        }
+        $(this).parents('li.nav-item.dropdown.show').on('hidden.bs.dropdown', function (e) {
+          $('.dropdown-submenu .show').removeClass("show");
+        });
+
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

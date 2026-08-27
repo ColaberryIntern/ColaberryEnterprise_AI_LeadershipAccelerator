@@ -1,0 +1,96 @@
+{
+  "captured_from": "https://www.refactored.ai",
+  "captured_note": "Public marketing pages only. The 1,715 /learn/ and 193 /course/ pages are deliberately excluded.",
+  "pages": [
+    {
+      "path": "/",
+      "status": 200,
+      "file": "pages/index.html",
+      "bytes": 78135,
+      "title": "Refactored|Home Page",
+      "textChars": 6835
+    },
+    {
+      "path": "/individuals/",
+      "status": 200,
+      "file": "pages/individuals.html",
+      "bytes": 43047,
+      "title": "Individuals",
+      "textChars": 2751
+    },
+    {
+      "path": "/enterprise/",
+      "status": 200,
+      "file": "pages/enterprise.html",
+      "bytes": 26993,
+      "title": "Enterprise",
+      "textChars": 3000
+    },
+    {
+      "path": "/contact-us/",
+      "status": 200,
+      "file": "pages/contact-us.html",
+      "bytes": 13479,
+      "title": "Contact",
+      "textChars": 505
+    },
+    {
+      "path": "/feedback/",
+      "status": 200,
+      "file": "pages/feedback.html",
+      "bytes": 9301,
+      "title": "ContactFeedback",
+      "textChars": 344
+    },
+    {
+      "path": "/enterprise-feedback/",
+      "status": 200,
+      "file": "pages/enterprise-feedback.html",
+      "bytes": 24464,
+      "title": "Enterprise Feedback",
+      "textChars": 2927
+    },
+    {
+      "path": "/privacy/",
+      "status": 200,
+      "file": "pages/privacy.html",
+      "bytes": 473597,
+      "title": "Privacy Policy | Colaberry",
+      "textChars": 24701
+    },
+    {
+      "path": "/terms/",
+      "status": 200,
+      "file": "pages/terms.html",
+      "bytes": 486445,
+      "title": "Terms of Use | Colaberry",
+      "textChars": 38406
+    },
+    {
+      "path": "/thank-you/",
+      "status": 200,
+      "file": "pages/thank-you.html",
+      "bytes": 15859,
+      "title": "Refactored",
+      "textChars": 485
+    },
+    {
+      "path": "/public-library/",
+      "status": 200,
+      "file": "pages/public-library.html",
+      "bytes": 126297,
+      "title": "Library",
+      "textChars": 4626
+    },
+    {
+      "path": "/organizations/",
+      "status": 200,
+      "file": "pages/organizations.html",
+      "bytes": 52624,
+      "title": "Refactored",
+      "textChars": 6514
+    }
+  ],
+  "assets_referenced": 202,
+  "bytes_note": "bytes = size on disk (UTF-8), not JavaScript string length."
+}
