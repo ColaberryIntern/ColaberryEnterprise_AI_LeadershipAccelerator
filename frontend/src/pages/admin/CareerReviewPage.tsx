@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   fetchReviewQueue, submitReviewDecision, fetchRecordForReview,
+  fetchPortfolioReviewQueue, submitPortfolioDecision, type PortfolioQueueItem,
   ReviewQueueItem, ReviewDecision, RecordForReview,
 } from '../../services/careerApi';
 import ReviewRecordPreview from './ReviewRecordPreview';
@@ -33,11 +34,29 @@ const CareerReviewPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Portfolio pages are a SECOND queue over a different thing. Shipping the request and
+  // decide endpoints without this list left a learner waiting on a review no reviewer
+  // could see -- Ali hit exactly that within minutes of the deploy.
+  const [pages, setPages] = useState<PortfolioQueueItem[] | null>(null);
+  const [pagesError, setPagesError] = useState<string | null>(null);
   const [preview, setPreview] = useState<RecordForReview | null>(null);
   const [previewFor, setPreviewFor] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setErr(null);
+    // A failure here must be VISIBLE. `.catch(() => setPages([]))` turned a 401 into a
+    // clean "Nothing to review", which is how a wrong-token bug survived a deploy and a
+    // round of live verification: the screen looked correct and was lying.
+    fetchPortfolioReviewQueue()
+      .then((rows) => { setPages(rows); setPagesError(null); })
+      .catch((e: any) => {
+        setPages([]);
+        setPagesError(
+          e?.response?.status === 401 || e?.response?.status === 403
+            ? 'Could not load portfolio pages: not authorised. Try signing in again.'
+            : 'Could not load portfolio pages. They may be waiting but hidden.',
+        );
+      });
     fetchReviewQueue()
       .then((r) => { setItems(r.items); setKind(r.reviewer_kind); })
       .catch((e: any) => {
@@ -86,7 +105,59 @@ const CareerReviewPage: React.FC = () => {
       {msg && <div className="cr-banner ok" role="status">{msg}</div>}
       {err && <div className="cr-banner err" role="alert">{err}</div>}
 
-      {items !== null && items.length === 0 && !err && (
+      {pagesError && <div className="cr-banner err" role="alert">{pagesError}</div>}
+
+      {/* Portfolio pages: the person-level page at /portfolio/:slug. */}
+      {pages !== null && pages.length > 0 && (
+        <section className="cr-group">
+          <h2 className="cr-h2">
+            Portfolio pages ({pages.length})
+          </h2>
+          {pages.map((p) => (
+            <article className="cr-card" key={p.enrollment_id}>
+              <div className="cr-card-head">
+                <div>
+                  <div className="cr-name">{p.full_name || 'Unnamed learner'}</div>
+                  <div className="cr-muted cr-mono">{p.public_path}</div>
+                </div>
+                <div className="cr-muted">
+                  asked {new Date(p.requested_at).toLocaleDateString()}
+                </div>
+              </div>
+              <div className="cr-actions">
+                <button
+                  type="button" className="cr-btn" disabled={busy}
+                  onClick={async () => {
+                    setBusy(true); setErr(null);
+                    try {
+                      await submitPortfolioDecision(p.enrollment_id, 'approved');
+                      setMsg(`Approved. ${p.public_path} is now live.`);
+                      load();
+                    } catch (e: any) {
+                      setErr(e?.response?.data?.error || 'Could not record that decision.');
+                    } finally { setBusy(false); }
+                  }}
+                >Approve and publish</button>
+                <button
+                  type="button" className="cr-btn ghost" disabled={busy}
+                  onClick={async () => {
+                    setBusy(true); setErr(null);
+                    try {
+                      await submitPortfolioDecision(p.enrollment_id, 'changes_requested');
+                      setMsg('Sent back for changes.');
+                      load();
+                    } catch (e: any) {
+                      setErr(e?.response?.data?.error || 'Could not record that decision.');
+                    } finally { setBusy(false); }
+                  }}
+                >Ask for changes</button>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+
+      {items !== null && items.length === 0 && (pages === null || pages.length === 0) && !err && !pagesError && (
         <div className="cr-empty">
           <p>Nothing to review.</p>
           <p className="cr-muted">

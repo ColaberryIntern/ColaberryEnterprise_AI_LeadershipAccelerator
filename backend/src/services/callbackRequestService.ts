@@ -114,6 +114,8 @@ export async function requestInstantCallback(
       email: payload.email,
       marketingOptIn: true,
       source: 'training_site:request_callback',
+      // The request this consent came from, so the row is traceable.
+      correlationId: correlation_id,
       consentText: CALLBACK_CONSENT_TEXT,
       expiresAt,
     });

@@ -156,8 +156,12 @@ const ClientSignIn: React.FC<ClientSignInProps> = ({ clientId, onSignedIn }) => 
           </p>
 
           {!resolvedClientId && (
-            <div className="alert alert-warning small mb-3" role="alert">
-              Sign-in is not configured for this environment.
+            // States the limit AND what to do about it. The bare version said only
+            // "not configured", which is accurate and useless to the person reading it:
+            // they cannot configure anything, and it left them no next step.
+            <div className="alert alert-warning small mb-3 text-start" role="alert">
+              <strong>Sign-in is not available yet.</strong> Please contact your Colaberry
+              contact and they will restore your access to this review.
             </div>
           )}
 
