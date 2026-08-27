@@ -1,4 +1,4 @@
-import { promptBrief } from '../kitHtml';
+import { promptBrief, splitScript } from '../kitHtml';
 import type { KitSlide } from '../kitSpec';
 
 /**
@@ -82,5 +82,60 @@ describe('promptBrief', () => {
     } as Partial<KitSlide>));
     expect(out).toContain('READ-ALONG on this step — nothing to paste.');
     expect(out).not.toContain('PROMPT ON THIS STEP');
+  });
+});
+
+/**
+ * splitScript — the SAY / DO / NOTE separation. Ali, 2026-08-27, presenting
+ * from the un-split version: "I don't know if I'm supposed to read any of it
+ * and it is really hard to follow. Trying to read it when the new slide comes
+ * on and trying not to take a long pause is hard to do."
+ *
+ * The load-bearing property is that neither screen ever mixes the two roles —
+ * a spoken line must never appear in the direction, and direction must never
+ * appear where the instructor is reading aloud.
+ */
+describe('splitScript', () => {
+  it('routes SAY lines to the read screen and DO/NOTE to the preface', () => {
+    const r = splitScript(
+      'SAY: Read this out.\nDO: Put it on screen.\nNOTE: Watch the clock.',
+      'the body paragraph',
+    );
+    expect(r.say).toBe('Read this out.');
+    expect(r.setup).toBe('DO: Put it on screen.\nNOTE: Watch the clock.');
+  });
+
+  it('strips the SAY tag from spoken text but keeps DO/NOTE tags for colouring', () => {
+    const r = splitScript('SAY: Hello.\nDO: Click it.', undefined);
+    expect(r.say).not.toMatch(/SAY:/);
+    expect(r.setup).toMatch(/^DO:/);
+  });
+
+  it('keeps multiple spoken lines separated so they read as separate beats', () => {
+    const r = splitScript('SAY: First beat.\nDO: Something.\nSAY: Second beat.', undefined);
+    expect(r.say).toBe('First beat.\n\nSecond beat.');
+  });
+
+  it('never lets direction reach the read screen', () => {
+    const r = splitScript('DO: Run it.\nNOTE: Then wait.\nSAY: Only this.', 'body');
+    expect(r.say).toBe('Only this.');
+    expect(r.say).not.toMatch(/DO:|NOTE:/);
+  });
+
+  it('degrades cleanly for an untagged script: body is spoken, script is context', () => {
+    // Every week except the one authored against this is untagged, and must
+    // keep behaving exactly as it did before the tags existed.
+    const r = splitScript('Walk the diagram node by node.', 'The paragraph they read.');
+    expect(r.say).toBe('The paragraph they read.');
+    expect(r.setup).toBe('NOTE: Walk the diagram node by node.');
+  });
+
+  it('falls back to the body when a slide tags direction but no spoken line', () => {
+    const r = splitScript('DO: Just run it.', 'Fallback prose.');
+    expect(r.say).toBe('Fallback prose.');
+  });
+
+  it('handles a slide with neither script nor body without throwing', () => {
+    expect(splitScript(undefined, undefined)).toEqual({ say: '', setup: '' });
   });
 });

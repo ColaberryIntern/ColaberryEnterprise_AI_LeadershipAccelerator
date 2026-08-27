@@ -303,7 +303,9 @@ function slideSection(spec: KitSpec, slide: KitSlide): string {
     `data-mode="${attr(modeForSlide(slide))}" ` +
     `data-segstart="${attr(slide.segStartMin)}" data-segend="${attr(slide.segEndMin)}" ` +
     `data-seglabel="${attr(slide.segmentLabel)}" data-slidetitle="${attr(slide.title)}" ` +
-    `data-tip="${attr(slide.presenterTip || '')}" data-body="${attr(slide.body || '')}" data-pub="${attr(slide.publicValue || '')}">` +
+    `data-tip="${attr(slide.presenterTip || '')}" data-body="${attr(slide.body || '')}" data-pub="${attr(slide.publicValue || '')}" ` +
+    `data-say="${attr(splitScript(slide.presenterTip, slide.body).say)}" ` +
+    `data-setup="${attr(splitScript(slide.presenterTip, slide.body).setup)}">` +
     `<div class="kinner">${slideInnerHtml(spec, slide)}</div>` +
     '</section>'
   );
@@ -321,6 +323,43 @@ function timelineHtml(spec: KitSpec): string {
     })
     .join('');
   return `<div class="kpace-timeline">${bars}<span class="now" id="kpacenow" style="left:0%"></span></div>`;
+}
+
+/**
+ * Split an authored instructor script into the two things it actually
+ * contains, because they are needed at different moments and one of them is
+ * spoken out loud.
+ *
+ * A script line may be tagged:
+ *   SAY:  — read this out, verbatim, to the room
+ *   DO:   — set the environment: run it, click it, open it, put it on screen
+ *   NOTE: — commentary: why this matters, what to watch for, when to move on
+ *
+ * Ali, 2026-08-27, after presenting from the un-split version: "I don't know
+ * if I'm supposed to read any of it and it is really hard to follow. Trying to
+ * read it when the new slide comes on and trying not to take a long pause is
+ * hard to do." A single paragraph of mixed direction and prose forces the
+ * instructor to parse it live, mid-sentence, in front of a room.
+ *
+ * Untagged scripts (every week except the one authored against this) degrade
+ * cleanly: the whole script becomes NOTE, and the slide's own body paragraph
+ * remains the read-aloud text, which is exactly the behaviour they had before.
+ */
+export function splitScript(script: string | undefined, body: string | undefined): { say: string; setup: string } {
+  const raw = (script || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const tagged = raw.filter((l) => /^(SAY|DO|NOTE):/i.test(l));
+  if (!tagged.length) {
+    // Untagged: the script is all direction, the body is what gets spoken.
+    return { say: body || '', setup: script ? 'NOTE: ' + script : '' };
+  }
+  const say = tagged
+    .filter((l) => /^SAY:/i.test(l))
+    .map((l) => l.replace(/^SAY:\s*/i, ''))
+    .join('\n\n');
+  const setup = tagged.filter((l) => /^(DO|NOTE):/i.test(l)).join('\n');
+  // A slide that tags direction but never tags a spoken line still has to give
+  // the instructor something to read, so the body stands in.
+  return { say: say || body || '', setup };
 }
 
 /**

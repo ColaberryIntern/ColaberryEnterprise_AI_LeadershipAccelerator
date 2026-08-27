@@ -306,14 +306,14 @@ describe('Class Kit deck — reveal control is a toggle, not one-way (classkit-d
  * concatenated into one blob that appeared only on full-screen.
  */
 describe('broadcastCurrent splits the preface from the read-aloud text', () => {
-  it('sends the slide body as presenter_tip and the cue as presenter_preface', async () => {
+  it('sends only the spoken lines as presenter_tip and only the direction as presenter_preface', async () => {
     const calls: Array<{ url: string; body: any }> = [];
     bootDeck({
       slideCount: 2,
       live: { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' },
       slideAttrs: [
-        { 'data-tip': 'Short cue for slide 0', 'data-body': 'The long paragraph for slide 0.', 'data-slidetitle': 'Slide 0' },
-        { 'data-tip': 'Short cue for slide 1', 'data-body': 'The long paragraph for slide 1.', 'data-slidetitle': 'Slide 1' },
+        { 'data-say': 'The words for slide 0.', 'data-setup': 'DO: Put it on screen.', 'data-slidetitle': 'Slide 0' },
+        { 'data-say': 'The words for slide 1.', 'data-setup': 'DO: Run it.', 'data-slidetitle': 'Slide 1' },
       ],
       fetch: (url: unknown, init: unknown) => {
         calls.push({ url: url as string, body: JSON.parse((init as { body: string }).body) });
@@ -322,39 +322,42 @@ describe('broadcastCurrent splits the preface from the read-aloud text', () => {
     });
     // show(0) fires on boot, which is where broadcastCurrent's first call happens.
     expect(calls.length).toBe(1);
-    expect(calls[0].body.presenter_tip).toBe('The long paragraph for slide 0.');
-    expect(calls[0].body.presenter_preface).toBe('Short cue for slide 0');
+    expect(calls[0].body.presenter_tip).toBe('The words for slide 0.');
+    expect(calls[0].body.presenter_preface).toBe('DO: Put it on screen.');
     expect(calls[0].body.next_title).toBe('Slide 1');
   });
 
-  it('leads the preface with the step\'s prompt brief, then the cue', () => {
+  it('leads the preface with the step\'s prompt brief, then the direction', () => {
     const calls: Array<{ body: any }> = [];
     bootDeck({
       slideCount: 1,
       live: { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' },
       slideMeta: [{ prompt_brief: '▶ PROMPT ON THIS STEP — runs in Claude Code' }],
-      slideAttrs: [{ 'data-tip': 'Run it live.', 'data-body': 'Body text.' }],
+      slideAttrs: [{ 'data-say': 'Spoken.', 'data-setup': 'DO: Run it live.' }],
       fetch: (_url: unknown, init: unknown) => {
         calls.push({ body: JSON.parse((init as { body: string }).body) });
         return Promise.resolve({ ok: true });
       },
     });
     expect(calls[0].body.presenter_preface)
-      .toBe('▶ PROMPT ON THIS STEP — runs in Claude Code\n\nRun it live.');
+      .toBe('▶ PROMPT ON THIS STEP — runs in Claude Code\nDO: Run it live.');
   });
 
-  it('falls back to the cue for presenter_tip when a slide authors no body', () => {
+  it('never leaks a spoken line into the preface, or direction into the read screen', () => {
     const calls: Array<{ body: any }> = [];
     bootDeck({
       slideCount: 1,
       live: { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' },
-      slideAttrs: [{ 'data-tip': 'Only a cue, no body paragraph.', 'data-body': '' }],
+      slideAttrs: [{ 'data-say': 'Say this out loud.', 'data-setup': 'NOTE: Watch the clock.' }],
       fetch: (_url: unknown, init: unknown) => {
         calls.push({ body: JSON.parse((init as { body: string }).body) });
         return Promise.resolve({ ok: true });
       },
     });
-    expect(calls[0].body.presenter_tip).toBe('Only a cue, no body paragraph.');
+    // The whole point: glancing at either screen must never require deciding
+    // which half of it is yours to speak.
+    expect(calls[0].body.presenter_tip).not.toMatch(/NOTE:|DO:/);
+    expect(calls[0].body.presenter_preface).not.toContain('Say this out loud.');
   });
 
   it('never broadcasts when live is disabled (rehearse / standalone mode)', () => {

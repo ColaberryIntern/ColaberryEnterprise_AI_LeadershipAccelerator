@@ -150,16 +150,18 @@ export function deckScript(): string {
     // READ-ALOUD half is the slide's own paragraph, and it surfaces only once
     // the diagram is full-screened, which is precisely when the projected
     // screen has stopped showing that paragraph to the room.
-    var cue = tipEl ? (tipEl.getAttribute('data-tip') || '') : '';
-    var bodyText = tipEl ? (tipEl.getAttribute('data-body') || '') : '';
+    // data-say / data-setup are pre-split server-side (splitScript in
+    // kitHtml.ts) so the spoken lines and the direction never arrive mixed.
+    var sayText = tipEl ? (tipEl.getAttribute('data-say') || '') : '';
+    var setupText = tipEl ? (tipEl.getAttribute('data-setup') || '') : '';
     var brief = sm.prompt_brief || '';
-    var preface = brief && cue ? (brief + '\\n\\n' + cue) : (brief || cue);
+    var preface = brief && setupText ? (brief + '\\n' + setupText) : (brief || setupText);
     var nextTitle = (i + 1 < slides.length) ? (slides[i + 1].getAttribute('data-slidetitle') || '') : 'End of class';
     var body = {
       slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
       phase: sm.phase, question: q, broadcast_prompts: sm.broadcast_prompts,
       prompt: sm.prompt || undefined,
-      presenter_tip: bodyText || cue, presenter_preface: preface, next_title: nextTitle,
+      presenter_tip: sayText, presenter_preface: preface, next_title: nextTitle,
       diagram_fullscreen: diagramFull,
     };
     fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {
