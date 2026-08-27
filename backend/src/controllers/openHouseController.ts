@@ -47,6 +47,8 @@ export async function handleOpenHouseRegister(req: Request, res: Response, next:
         // we are currently permitted to email, which is worse than silence.
         marketingOptIn: payload.marketing_opt_in,
         source: 'training_site:open_house_register',
+        // The request this consent came from, so the row is traceable.
+        correlationId: correlation_id,
         consentText: payload.marketing_consent_text ?? SIGNUP_CONSENT_TEXT,
         // NOT req.ip / req.get(): this route is service-to-service, so those
         // describe the training site's server, not the person who ticked.
