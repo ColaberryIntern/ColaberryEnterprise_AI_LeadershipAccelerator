@@ -20,6 +20,7 @@ import {
   previewAgentIdentity,
   getAgentEnrollmentId,
   getAgentAdminUserId,
+  getAgentId,
   __resetAgentIdentityCacheForTests,
   type AgentIdentityConfig,
 } from '../agentIdentitySeed';
@@ -418,6 +419,46 @@ describe('getAgentEnrollmentId / getAgentAdminUserId — per-email cache', () =>
     __resetAgentIdentityCacheForTests('agent-a@colaberry.com');
     await getAgentEnrollmentId('agent-a@colaberry.com');
     expect(mockEnrollmentFindOne).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Cost-tracking fix (2026-08-27) — Ali, live: "isn't [cost] part of it?"
+// Resolves the real AiAgent.id via AdminUser.agent_id so a caller can tag its
+// real LLM calls with a real agent_id (see reeseReplyService.ts /
+// reeseOutreachMessageService.ts, the two real callers this exists for).
+describe('getAgentId — per-email cache', () => {
+  it('resolves the real AiAgent.id via the AdminUser.agent_id FK, and caches it', async () => {
+    __resetAgentIdentityCacheForTests('agent-c@colaberry.com');
+    mockAdminUserFindOne.mockResolvedValueOnce({ id: 'admin-c', agent_id: 'aiagent-c' });
+
+    const id = await getAgentId('agent-c@colaberry.com');
+    expect(id).toBe('aiagent-c');
+    expect(mockAdminUserFindOne).toHaveBeenCalledTimes(1);
+
+    // Second call reuses the cache, no second DB call.
+    const again = await getAgentId('agent-c@colaberry.com');
+    expect(again).toBe('aiagent-c');
+    expect(mockAdminUserFindOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('honesty boundary: null when no AdminUser is linked yet, never a guessed id', async () => {
+    __resetAgentIdentityCacheForTests('agent-d@colaberry.com');
+    mockAdminUserFindOne.mockResolvedValueOnce(null);
+
+    const id = await getAgentId('agent-d@colaberry.com');
+
+    expect(id).toBeNull();
+  });
+
+  it('__resetAgentIdentityCacheForTests clears this cache too, not just enrollment/admin', async () => {
+    __resetAgentIdentityCacheForTests('agent-e@colaberry.com');
+    mockAdminUserFindOne.mockResolvedValue({ id: 'admin-e', agent_id: 'aiagent-e' });
+    await getAgentId('agent-e@colaberry.com');
+    expect(mockAdminUserFindOne).toHaveBeenCalledTimes(1);
+
+    __resetAgentIdentityCacheForTests('agent-e@colaberry.com');
+    await getAgentId('agent-e@colaberry.com');
+    expect(mockAdminUserFindOne).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -7,13 +7,18 @@
  */
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../../learnerContextService', () => ({ getLearnerContextBlock: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({ getReeseAgentId: jest.fn() }));
 
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { getLearnerContextBlock } from '../../learnerContextService';
+import { getReeseAgentId } from '../reeseIdentitySeed';
 import { generateOutreachMessage } from '../reeseOutreachMessageService';
 
 const mockGetInstrumentedOpenAI = getInstrumentedOpenAI as unknown as jest.Mock;
 const mockGetLearnerContextBlock = getLearnerContextBlock as unknown as jest.Mock;
+const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
+
+const REESE_AGENT_ID = 'reese-agent-1';
 
 // Module-scoped OpenAI client cache (same convention as reeseReplyService.ts) —
 // ONE stable mock function reference across the whole file, reset (not
@@ -23,6 +28,7 @@ const mockCreateCompletion = jest.fn();
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetLearnerContextBlock.mockResolvedValue('LEARNER CONTEXT BLOCK');
+  mockGetReeseAgentId.mockResolvedValue(REESE_AGENT_ID);
   mockCreateCompletion.mockReset();
   mockCreateCompletion.mockResolvedValue({ choices: [{ message: { content: 'A real, grounded outreach message.' } }] });
   mockGetInstrumentedOpenAI.mockReturnValue({ chat: { completions: { create: mockCreateCompletion } } });
@@ -44,6 +50,12 @@ describe('generateOutreachMessage', () => {
     expect(systemPrompt).toContain('11 days');
     expect(systemPrompt).toContain('4%');
     expect(systemPrompt).toContain('Confirm re-engagement within 7 days.');
+    // Cost-tracking fix (2026-08-27) — the real agent_id must be resolved and
+    // passed at client construction (module-scope singleton, first test only —
+    // same caveat as reeseReplyService.test.ts).
+    expect(mockGetInstrumentedOpenAI).toHaveBeenCalledWith(
+      expect.objectContaining({ workflow_id: 'reese_autonomous_outreach', agent_id: REESE_AGENT_ID }),
+    );
   });
 
   it('frames a first message as INITIATING contact, not a reply', async () => {

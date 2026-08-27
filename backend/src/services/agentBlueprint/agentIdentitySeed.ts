@@ -114,6 +114,7 @@ export interface AgentIdentityPreview {
 // and never re-created.
 const enrollmentIdCache = new Map<string, string | null>();
 const adminUserIdCache = new Map<string, string | null>();
+const agentIdCache = new Map<string, string | null>();
 
 export async function getAgentEnrollmentId(email: string): Promise<string | null> {
   if (enrollmentIdCache.has(email)) return enrollmentIdCache.get(email)!;
@@ -131,10 +132,26 @@ export async function getAgentAdminUserId(email: string): Promise<string | null>
   return id;
 }
 
-/** Test-only: clears one agent's memoized ids (both caches) so tests can simulate a fresh process. */
+/** Cost-tracking fix (2026-08-27) — Ali, live: "isn't [cost] part of it?" Real,
+ * instrumented LLM calls for Reese (67 in 30 days, $0.02, 58,908 tokens per
+ * `ai_events`) were invisible to every per-agent cost query because her call
+ * sites tag `workflow_id` but never `agent_id`. This resolves the real
+ * `AiAgent.id` via the same `AdminUser.agent_id` FK `agentDetailService.ts`
+ * already reads, so a caller can pass a real id into
+ * `getInstrumentedOpenAI({ agent_id: ... })` instead of leaving it null. */
+export async function getAgentId(email: string): Promise<string | null> {
+  if (agentIdCache.has(email)) return agentIdCache.get(email)!;
+  const admin = await AdminUser.findOne({ where: { email } });
+  const id = admin?.agent_id ?? null;
+  agentIdCache.set(email, id);
+  return id;
+}
+
+/** Test-only: clears one agent's memoized ids (all three caches) so tests can simulate a fresh process. */
 export function __resetAgentIdentityCacheForTests(email: string): void {
   enrollmentIdCache.delete(email);
   adminUserIdCache.delete(email);
+  agentIdCache.delete(email);
 }
 
 export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<AgentIdentityIds> {

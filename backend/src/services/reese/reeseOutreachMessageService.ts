@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { getLearnerContextBlock } from '../learnerContextService';
 import { REESE_PERSONA_BLOCK } from './reeseSystemPrompt';
+import { getReeseAgentId } from './reeseIdentitySeed';
 import type { ReeseOutreachSignalType } from '../../models/ReeseOutreach';
 
 // Reese Phase 2 (Autonomous Outreach) — real, unique message generation for
@@ -17,9 +18,16 @@ import type { ReeseOutreachSignalType } from '../../models/ReeseOutreach';
 // interpolated in) — the model is instructed to describe only what it's told,
 // not invent specifics.
 
+// Cost-tracking fix (2026-08-27) — same gap and same fix as
+// reeseReplyService.ts: this client tagged `workflow_id` but never
+// `agent_id`, so these real, instrumented calls were invisible to every
+// per-agent cost query.
 let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'reese_autonomous_outreach' });
+async function getOpenAI(): Promise<OpenAI> {
+  if (!_openai) {
+    const agentId = await getReeseAgentId();
+    _openai = getInstrumentedOpenAI({ workflow_id: 'reese_autonomous_outreach', agent_id: agentId ?? undefined });
+  }
   return _openai;
 }
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
@@ -74,7 +82,8 @@ export async function generateOutreachMessage(input: GenerateOutreachMessageInpu
     `Never invent specifics beyond what's given above. Keep it to a few sentences, per your voice principles.`,
   ].join('\n');
 
-  const completion = await getOpenAI().chat.completions.create({
+  const openai = await getOpenAI();
+  const completion = await openai.chat.completions.create({
     model: MODEL,
     messages: [
       { role: 'system', content: systemPrompt },
