@@ -127,7 +127,64 @@ const CAPSTONE_REVIEWS: string[] = [
      ON capstone_review_approvals (enrollment_id, requested_at) WHERE decision IS NULL`,
 ];
 
-const STATEMENTS: string[] = [...DROP_SUPERSEDED, ...CAPSTONE_REVIEWS, ...MENTOR_SCOPES];
+/**
+ * The person-level public portfolio at /u/:slug.
+ *
+ * THIS IS NOT `career_publications` COMING BACK. That table was deleted on 2026-08-25
+ * because it stored a compiled record whole plus a versions table, which is exactly what
+ * `capstone_records` + `capstone_record_versions` already do. This table stores NO
+ * compiled content and has NO versions table. It holds three things a projection cannot
+ * compute for itself: where the page lives (`slug`), who may see it (`visibility`), and
+ * the small set of LEARNER-AUTHORED strings a human actually approved.
+ *
+ * LIVE WHERE THE SYSTEM IS THE AUTHOR, FROZEN WHERE THE LEARNER IS.
+ *
+ *   capabilities   computed from the append-only evidence ledger -> read LIVE. New
+ *                  verified evidence appearing on the page is the point.
+ *   records        only already-published capstone records, each individually reviewed
+ *                  -> read LIVE, because each one already passed a human.
+ *   headline       learner-authored free text -> FROZEN in `approved_identity`. Read
+ *   avatar         live, a learner could be approved and then change their headline to
+ *                  anything, or upload any image, and it would sit on a public
+ *                  colaberry.ai URL under Colaberry's name.
+ *
+ * So `approved_identity` is a review artifact, not a content snapshot: it exists only so
+ * that what a reviewer read is what a stranger sees.
+ *
+ * `visibility` defaults to `unlisted`, never `public`. Ali, 2026-08-25: default noindex,
+ * the learner opts in to being indexable.
+ */
+const PORTFOLIO_PAGES: string[] = [
+  `CREATE TABLE IF NOT EXISTS career_portfolio_pages (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     enrollment_id UUID NOT NULL,
+     slug VARCHAR(160) NOT NULL,
+     status VARCHAR(24) NOT NULL DEFAULT 'draft',
+     visibility VARCHAR(24) NOT NULL DEFAULT 'unlisted',
+     approved_identity JSONB,
+     approved_at TIMESTAMPTZ,
+     approved_by VARCHAR(255),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // One page per learner. Without this, a retried create makes a second page and the
+  // slug a learner shared silently stops being the one that resolves.
+  `CREATE UNIQUE INDEX IF NOT EXISTS career_portfolio_pages_enrollment_unique
+     ON career_portfolio_pages (enrollment_id)`,
+  // A slug is an address. Two people cannot hold the same one, ever.
+  `CREATE UNIQUE INDEX IF NOT EXISTS career_portfolio_pages_slug_unique
+     ON career_portfolio_pages (LOWER(slug))`,
+  // The public reader's only lookup: resolve a slug that is actually viewable.
+  `CREATE INDEX IF NOT EXISTS career_portfolio_pages_public_lookup
+     ON career_portfolio_pages (LOWER(slug)) WHERE status = 'published'`,
+];
+
+const STATEMENTS: string[] = [
+  ...DROP_SUPERSEDED,
+  ...CAPSTONE_REVIEWS,
+  ...MENTOR_SCOPES,
+  ...PORTFOLIO_PAGES,
+];
 
 /**
  * Runs every statement, logging and continuing on failure. A schema step must never be
