@@ -643,7 +643,7 @@ export const WEEK5_PACK: WeekPack = {
         {
           icon: '🔬', tone: 'leaf', eyebrow: 'Before you build — two hours you can skip',
           title: 'The tool that never fired, and the tab that would have said so in nine seconds',
-          body: 'A student last cohort spent two hours convinced their server was broken. They rewrote the function twice, restarted everything four times, and started questioning whether they were suited to this. When a mentor finally sat down, the first thing she did was open the inspector, look at the Tools panel, and see that the server was advertising nothing at all — the file had changed after the server started. Nine seconds, one panel.',
+          body: 'A developer spent two hours convinced their server was broken. They rewrote the function twice, restarted everything four times, and started questioning whether they were suited to this. When a colleague finally sat down with them, the first thing she did was open the inspector, look at the Tools panel, and see that the server was advertising nothing at all — the file had changed after the server started. Nine seconds, one panel.',
           punch: 'You will not out-think a bug you cannot see. Open the window before you start guessing.',
         },
       ],
@@ -1195,7 +1195,7 @@ export const WEEK5_PACK: WeekPack = {
         {
           icon: '🤝', tone: 'violet', eyebrow: 'Before you build — what actually changes tonight',
           title: 'The first time somebody else uses something you built, it stops being homework',
-          body: 'A student last cohort built a small server over a Thursday evening that exposed her team’s shipment-status lookup. She registered it, showed a colleague on Friday, and by the following Wednesday two other people on her team had it installed and were asking Claude about shipments in plain English. She did not write documentation, run a training session, or ship an application. She wrote one connector and it spread by itself.',
+          body: 'A logistics coordinator built a small server one evening that exposed her team’s shipment-status lookup. She registered it, showed a colleague the next morning, and by the following week two other people on her team had it installed and were asking Claude about shipments in plain English. She did not write documentation, run a training session, or ship an application. She wrote one connector and it spread by itself.',
           punch: 'Everything before tonight, you built for yourself. This one, other people can pick up and use.',
         },
       ],
@@ -1203,7 +1203,7 @@ export const WEEK5_PACK: WeekPack = {
         {
           icon: '🚧', tone: 'amber', eyebrow: 'Why we hold the gate',
           title: 'The build that skipped the inspector and lost ninety minutes to a client bug that was not a client bug',
-          body: 'Two students last cohort raced ahead and wrote their client before verifying the server. The client threw a strange error, so they rewrote the client. Then they rewrote the connection handling. Then they questioned their Python. When a mentor opened the inspector, the server was advertising no tools at all — it had never registered one. They had spent ninety minutes debugging a perfectly correct client against a server that had nothing to say.',
+          body: 'Two engineers on the same team raced ahead and wrote their client before verifying the server. The client threw a strange error, so they rewrote the client. Then they rewrote the connection handling. Then they started questioning their Python. When somebody finally opened the inspector, the server was advertising no tools at all — it had never registered one. They had spent ninety minutes debugging a perfectly correct client against a server that had nothing to say.',
           punch: 'Every checkpoint tonight is green in the inspector before we move. That rule costs you two minutes and saves you ninety.',
         },
       ],

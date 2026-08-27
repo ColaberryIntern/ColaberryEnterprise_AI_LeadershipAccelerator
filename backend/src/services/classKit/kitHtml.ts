@@ -215,13 +215,19 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
     case 'assignment':
       return assignmentHtml(slide);
     case 'teach':
+      // The lead paragraph sits BELOW the diagram, not above it. It is the
+      // text the instructor reads out loud, so putting it at the top of the
+      // slide hands the room the next two minutes of narration before it is
+      // spoken — the diagram is what the class should be looking at while
+      // they listen. It stays on the slide (it is the record, and the
+      // recording needs it), just underneath the thing being talked about.
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
         `<h2 class="ktitle">${esc(slide.title)}</h2>` +
-        teachLeadHtml(slide.body) +
         cardGridHtml(slide.bullets) +
         (slide.prompt ? buildBayHtml(slide) : '') +
         diagramHtml(slide) +
+        teachLeadHtml(slide.body) +
         evidenceHtml(slide)
       );
     case 'interaction':
@@ -317,6 +323,33 @@ function timelineHtml(spec: KitSpec): string {
   return `<div class="kpace-timeline">${bars}<span class="now" id="kpacenow" style="left:0%"></span></div>`;
 }
 
+/**
+ * The one-glance answer to "is there something to run on this step, and what
+ * will it do?" — built for the instructor's phone, which surfaces it the
+ * moment they land on a slide, BEFORE they start reading the prompt itself.
+ *
+ * Derived entirely from fields the slide already authors, so it works for
+ * every week without anyone maintaining a second copy of the same information
+ * — and it cannot drift away from the prompt it describes. Saying "no prompt"
+ * out loud matters as much as describing one: the instructor should never
+ * have to scan the slide to find out whether they are about to type.
+ */
+export function promptBrief(slide: KitSlide): string {
+  const p = slide.prompt;
+  if (!p) return '○ No prompt on this step — talk to the diagram.';
+  if (p.kind === 'review') {
+    return '📖 READ-ALONG on this step — nothing to paste.'
+      + (p.label ? '\nWhat it shows: ' + p.label : '');
+  }
+  const where = p.pasteWhere || 'Claude Code';
+  const lines = ['▶ PROMPT ON THIS STEP — runs in ' + where + (p.ccMode ? ' (' + p.ccMode + ')' : '')];
+  if (p.label) lines.push('What it is: ' + p.label);
+  if (p.expectedResult) lines.push('What it produces: ' + p.expectedResult);
+  if (p.stopCondition) lines.push('Done when: ' + p.stopCondition);
+  if (p.rescue) lines.push('If it misfires: ' + p.rescue);
+  return lines.join('\n');
+}
+
 /** Render the full self-contained Class Kit deck for a session. */
 export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): string {
   const m = spec.meta;
@@ -346,6 +379,10 @@ export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): strin
     return {
       id: s.id, mode, phase, title: s.title, segment_label: s.segmentLabel,
       question, prompt,
+      // Independent of `prompt` above, which only populates on build-mode
+      // slides. A prompt on a `present`-mode slide (the build map's primitive
+      // map, for one) still has to be announced on the instructor's phone.
+      prompt_brief: promptBrief(s),
       broadcast_prompts: s.kind === 'broadcast' ? spec.builderBroadcastPrompts : undefined,
     };
   });
