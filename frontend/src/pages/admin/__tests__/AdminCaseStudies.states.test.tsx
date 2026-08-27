@@ -68,6 +68,27 @@ async function mountDetail(tab?: string): Promise<void> {
 }
 
 /**
+ * Open the PREVIEW tab's raw-vs-projection payload, which is what the tab used
+ * to open ON and is now one button behind.
+ *
+ * WHY THE ASSERTIONS BELOW DID NOT MOVE WITH IT. On 2026-08-27 the PREVIEW tab's
+ * default view became the RENDERED page, and `CaseStudyPreviewPanel` — the two
+ * JSON columns and the delta between them — moved behind "Show payload". The
+ * three tests that read those columns are unchanged in what they assert; they
+ * gained this one line and nothing else. Two of them are the leak proof for a
+ * private repository, and a leak proof that stops finding its target is worse
+ * than one that was deleted, because it goes on reporting green.
+ *
+ * `H.click` resolves through `H.el`, which THROWS by name when an id is absent.
+ * So this helper cannot silently no-op: if the toggle is renamed or removed, the
+ * tests that call it fail HERE rather than passing vacuously further down.
+ */
+async function openPayload(): Promise<void> {
+  H.click('cs-preview-payload-toggle');
+  await H.settle();
+}
+
+/**
  * A FAILED LOAD AND AN EMPTY RESULT MUST NOT RENDER THE SAME.
  *
  * The admin leads page shipped the collapsed version of this: it caught a failed
@@ -175,6 +196,7 @@ describe('AdminCaseStudyDetailPage — the publish gate speaks in full', () => {
   // produces, and `cs-preview` lives on the preview tab.
   it('shows the gate would refuse, with its reasons, from a preview that wrote nothing', async () => {
     await mountDetail('preview');
+    await openPayload();
     H.click(CASE_STUDY_CONTROLS.preview);
     await H.settle();
     expect(H.text()).toContain('gate: would refuse');
@@ -227,6 +249,7 @@ describe('AdminCaseStudyDetailPage — a private repository is never named in a 
     // column, this test fails and forces them to decide consciously rather than
     // quietly breaking the review comparison.
     await mountDetail('preview');
+    await openPayload();
     H.click('cs-preview');
     await H.settle();
 
@@ -238,6 +261,7 @@ describe('AdminCaseStudyDetailPage — a private repository is never named in a 
 
   it('the PUBLIC projection column never names it, even with the raw column open', async () => {
     await mountDetail('preview');
+    await openPayload();
     H.click('cs-preview');
     await H.settle();
 

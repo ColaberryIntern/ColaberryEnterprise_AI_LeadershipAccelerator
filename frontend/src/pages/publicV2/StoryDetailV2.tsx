@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
-import CaseStudyCTA from '../../components/caseStudy/CaseStudyCTA';
-import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVerificationBadge';
 import {
   CaseStudyNotFoundError,
   describeCaseStudyError,
@@ -15,20 +13,10 @@ import {
   trackCaseStudyShare,
   trackCaseStudyView,
 } from '../../utils/caseStudyTracking';
-import {
-  NOT_FOUND_BODY,
-  NOT_FOUND_HEADING,
-  heroFacts,
-  heroMetricsFor,
-  visibleSections,
-} from './storyDetailV2Model';
+import { NOT_FOUND_BODY, NOT_FOUND_HEADING } from './storyDetailV2Model';
 import type { DetailState } from './storyDetailV2Model';
 import { storySeoExtras } from './storySeoModel';
-import StoryHeroActions from './StoryHeroActions';
-import StoryContextStrip from './StoryContextStrip';
-import StorySectionList from './StorySectionList';
-import { storyIndicators } from './storyIndicatorModel';
-import { placeStoryFigures } from './storyFigurePlacement';
+import StoryDetailArticle from './StoryDetailArticle';
 import './storyDetailV2.css';
 /* The picture rules, split out when the page stylesheet passed CLAUDE.md's
    500-line ceiling. A second side-effect import rather than an `@import` from
@@ -38,6 +26,18 @@ import './storyMediaV2.css';
 
 /**
  * StoryDetailV2 - the Enterprise detail surface at `/stories/:slug` (spec 23).
+ *
+ * WHAT THIS FILE STILL OWNS, AFTER THE ARTICLE MOVED OUT. The fetch, the four
+ * load states, the tracking emitters and the SEO head. The rendered body is
+ * `StoryDetailArticle`, which takes a record and a surface and nothing else.
+ *
+ * THE SPLIT IS A SEAM, NOT A TIDY-UP. The admin Story Studio's PREVIEW tab has
+ * to show an operator the PAGE rather than a payload, and it already holds the
+ * projection - `GET /api/admin/case-studies/:id/preview` returns exactly the
+ * shape this page fetches. Mounting the same component there is what makes the
+ * preview incapable of disagreeing with production. A second renderer would
+ * drift one commit at a time, and the first person to notice would be whoever
+ * approved something that turned out not to be what shipped.
  *
  * IT COMPOSES, IT DOES NOT REDRAW. Timeline, architecture, measurement,
  * roadmap, artifacts, the CTA and the two-axis verification badge are the
@@ -264,17 +264,7 @@ function StoryDetailV2(): React.ReactElement {
 
   /* ------------------------------------------------------------ ready --- */
 
-  const sections = visibleSections(record, surface);
   const extras = storySeoExtras(record, surface);
-  const metrics = heroMetricsFor(record);
-  const facts = heroFacts(record);
-  const indicators = storyIndicators(record, sections);
-  /* Pictures are placed BETWEEN sections, from the sections that actually
-     survived `visibleSections`, so a figure can never follow a heading this
-     record does not print. `placedHrefs` then goes down to the artifacts band,
-     which subtracts them from its carousel - the same picture appearing inline
-     and again in a track ten centimetres below reads as a rendering fault. */
-  const figures = placeStoryFigures(record.artifacts, sections);
 
   return (
     <>
@@ -287,72 +277,17 @@ function StoryDetailV2(): React.ReactElement {
         jsonLd={extras ? extras.jsonLd : null}
       />
 
-      {/* The click handler is an observer on a container, the pattern
-          `StoriesV2` already uses on its results list. No eslint-disable
-          comment: the production config does not load every plugin, and a
-          disable for a rule it never enabled is itself a build failure. */}
-      <article className="cbv2-story" onClick={onStoryClick}>
-        <section className="cbv2-pagehero" aria-labelledby="cbv2-story-title">
-          <div className="cbv2-wrap cbv2-story__hero">
-            <p className="cbv2-story__crumb">
-              <Link to="/stories">All published projects</Link>
-            </p>
-            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{surface.hero.eyebrow}</p>
-            <h1 id="cbv2-story-title">{record.title}</h1>
-            {record.standfirst ? (
-              <p className="cbv2-pagehero__lede">{record.standfirst}</p>
-            ) : null}
-
-            <CaseStudyVerificationBadge
-              className="cbv2-story__badge"
-              verificationClass={record.verificationClass}
-              verificationMethod={record.verificationMethod}
-            />
-
-            {/* The counts, the facts grid and the headline figures used to stack
-                here. They are one band down now, on light ground - see
-                `StoryContextStrip`. The masthead was measured at 1142px and
-                2201px and is the heaviest thing on the page, so the format's
-                rule for it is subtract, never add. */}
-
-            {/* The surface's offer, and the repository when the projection was
-                willing to publish one. Both are real destinations; the copy-link
-                control keeps its own row below, with its own live region. */}
-            <div className="cbv2-story__actions">
-              <StoryHeroActions cta={record.cta} repositories={record.repositories} />
-            </div>
-
-            <div className="cbv2-story__share">
-              <button
-                type="button"
-                className="cbv2-btn cbv2-btn--ghost cbv2-btn--sm"
-                onClick={onShare}
-                data-testid="story-share"
-              >
-                Copy link
-              </button>
-              <span className="cbv2-story__share-state" aria-live="polite">
-                {shareState === 'copied' ? 'Link copied.' : null}
-                {shareState === 'failed'
-                  ? 'This browser would not let us copy. The address is in the address bar.'
-                  : null}
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <StoryContextStrip indicators={indicators} facts={facts} metrics={metrics} />
-
-        <StorySectionList record={record} sections={sections} figures={figures} />
-
-        {sections.includes('cta') ? (
-          <section className="cbv2-rv cbv2-section cbv2-section--inverse" data-section="cta">
-            <div className="cbv2-wrap cbv2-wrap--narrow cbv2-story__cta" data-story-zone="cta">
-              <CaseStudyCTA cta={record.cta} headingLevel={2} />
-            </div>
-          </section>
-        ) : null}
-      </article>
+      {/* ONE RENDERER, TWO CALLERS. The markup lives in `StoryDetailArticle`
+          because the admin Story Studio's PREVIEW tab mounts the same component
+          with an already-fetched projection. A preview drawn by its own code
+          would drift from this page and start lying about what ships. */}
+      <StoryDetailArticle
+        record={record}
+        surface={surface}
+        onStoryClick={onStoryClick}
+        onShare={onShare}
+        shareState={shareState}
+      />
     </>
   );
 }
