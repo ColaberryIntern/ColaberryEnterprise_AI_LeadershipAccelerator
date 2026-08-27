@@ -51,6 +51,19 @@ export function slugify(input: string): string {
     .slice(0, 120);
 }
 
+/**
+ * Addresses nobody may hold.
+ *
+ * `share` is the load-bearing one: `/portfolio/share/:token` is a real route, and React
+ * Router ranks its static segment above `/portfolio/:slug`. A learner who minted the
+ * slug `share` would get an address that silently resolves to somebody else's page
+ * forever. The rest are reserved because they read as system pages rather than people.
+ */
+const RESERVED_SLUGS = new Set([
+  'share', 'admin', 'api', 'login', 'logout', 'signup', 'portal', 'new', 'edit',
+  'settings', 'search', 'about', 'help', 'support', 'p', 'u', 'me',
+]);
+
 function err(status: number, message: string, error_class: string) {
   return Object.assign(new Error(message), { status, error_class });
 }
@@ -79,7 +92,7 @@ async function readPage(enrollmentId: string): Promise<PortfolioPageState | null
     visibility: r.visibility,
     review_requested_at: r.review_requested_at ? new Date(r.review_requested_at).toISOString() : null,
     approved_at: r.approved_at ? new Date(r.approved_at).toISOString() : null,
-    public_path: `/u/${r.slug}`,
+    public_path: `/portfolio/${r.slug}`,
   };
 }
 
@@ -98,7 +111,11 @@ export async function getOrCreatePage(enrollmentId: string): Promise<PortfolioPa
 
   // One retry with a numbered suffix. The unique index is the real guard, so a race
   // between two requests for the same person resolves to one row either way.
-  for (const candidate of [base, `${base}-2`]) {
+  // A reserved base is suffixed rather than rejected: the learner's name is not their
+  // fault, and `share-2` is a working address where `share` would be a dead one.
+  const safeBase = RESERVED_SLUGS.has(base) ? `${base}-page` : base;
+
+  for (const candidate of [safeBase, `${safeBase}-2`]) {
     try {
       await sequelize.query(
         `INSERT INTO career_portfolio_pages (enrollment_id, slug)

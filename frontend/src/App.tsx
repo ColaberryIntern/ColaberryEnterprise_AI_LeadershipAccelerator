@@ -145,12 +145,20 @@ function App() {
             */}
             <Route path="p/:slug" element={<CapstoneRecordPage />} />
             {/*
-                u/:slug is the PERSON; p/:slug is one project. Same layout and the
-                same no-leading-slash rule, for the same reason: both are pages a
-                stranger opens from a link a learner sent, so neither may sit behind
-                a marketing chrome that implies they are selling something.
+                portfolio/:slug is the PERSON; p/:slug is one project. Spelled out
+                rather than /u/, because /u/ and /p/ are one character apart carrying
+                the SAME slug, and Ali reached for the wrong one within a minute of it
+                shipping. A student sending a recruiter the wrong page would not find
+                out until the recruiter had already read it.
+
+                Ranked above /portfolio/share/:token by React Router's specificity
+                rules, since a static segment beats a dynamic one. `share` is also a
+                reserved slug, so nobody can mint an address that route would shadow.
+
+                Same no-leading-slash rule as the route above, for the same reason:
+                both are pages a stranger opens from a link a learner sent.
             */}
-            <Route path="u/:slug" element={<PublicPortfolioProfilePage />} />
+            <Route path="portfolio/:slug" element={<PublicPortfolioProfilePage />} />
           </Route>
           {/*
               Client reviewer sign-in. Deliberately OUTSIDE both marketing layouts,

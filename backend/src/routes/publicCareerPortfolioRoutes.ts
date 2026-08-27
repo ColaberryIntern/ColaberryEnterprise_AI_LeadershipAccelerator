@@ -2,16 +2,16 @@ import { Router, Request, Response } from 'express';
 import { getPublicPortfolioBySlug } from '../services/career/careerPortfolioPageService';
 
 /**
- * GET /api/public/u/:slug — the person-level public portfolio.
+ * GET /api/public/portfolios/:slug — the person-level public portfolio.
  *
  * UNAUTHENTICATED BY DESIGN, which is why the payload is built by
  * `careerPortfolioPublicProjection` as a named-field allow-list and never by filtering a
  * profile object. This route shapes nothing itself; it decides status codes and headers.
  *
- * NOT MOUNTED UNDER `/api/public/portfolio/`. That prefix already belongs to
- * `publicPortfolioRoutes.ts` and its share-token page, and `:token` would happily match
- * a slug — a route collision that would resolve by mount order and be maddening to
- * debug. `/api/public/u/:slug` shares no prefix with it.
+ * PLURAL, AND THAT IS THE WHOLE POINT. `/api/public/portfolio/` (singular) already
+ * belongs to `publicPortfolioRoutes.ts` and its share-token page, where `:token` would
+ * happily match a slug — a collision resolved by mount order and maddening to debug.
+ * `portfolios` is one character away from that trap and cannot fall into it.
  *
  * 404 FOR BOTH "NO SUCH PAGE" AND "NOT VIEWABLE". The service returns null for either,
  * and this route cannot tell them apart. A 403 would confirm that a person by that name
@@ -23,7 +23,7 @@ import { getPublicPortfolioBySlug } from '../services/career/careerPortfolioPage
  */
 const router = Router();
 
-router.get('/api/public/u/:slug', async (req: Request, res: Response): Promise<void> => {
+router.get('/api/public/portfolios/:slug', async (req: Request, res: Response): Promise<void> => {
   const slug = String(req.params.slug || '');
 
   // A slug is an address, not free text. Reject anything that is not one before it
