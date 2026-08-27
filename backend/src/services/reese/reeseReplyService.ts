@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
-import { getReeseEnrollmentId, getReeseAdminUserId } from './reeseIdentitySeed';
+import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId } from './reeseIdentitySeed';
 import { buildReeseSystemPrompt } from './reeseSystemPrompt';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicketLinkService';
 import { agentHasTool } from '../agents/tools/agentToolRegistry';
@@ -24,9 +24,19 @@ import type { AttachmentRef } from '../agents/tools/types';
 // Reuses mentorService.ts's LLM-call plumbing pattern (getInstrumentedOpenAI,
 // same model env var) rather than a new client.
 
+// Cost-tracking fix (2026-08-27) — Ali, live: "isn't [cost] part of it?"
+// This client was tagging `workflow_id: 'reese'` but never `agent_id`, so
+// Reese's real, instrumented LLM calls (67 in 30 days, $0.02, 58,908 tokens
+// per ai_events) were invisible to every per-agent cost query, including her
+// own Trust evidence section and the Trust Command Center's roster. Resolved
+// once, memoized (getReeseAgentId() is itself cached) — the singleton is now
+// built async so the real id is known before the first real call.
 let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'reese' });
+async function getOpenAI(): Promise<OpenAI> {
+  if (!_openai) {
+    const agentId = await getReeseAgentId();
+    _openai = getInstrumentedOpenAI({ workflow_id: 'reese', agent_id: agentId ?? undefined });
+  }
   return _openai;
 }
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
@@ -137,7 +147,8 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
       }),
     ];
 
-    const completion = await getOpenAI().chat.completions.create({
+    const openai = await getOpenAI();
+    const completion = await openai.chat.completions.create({
       // A text-only model 400s on image parts, which would take the whole reply
       // down instead of degrading — so a turn carrying images goes to a known
       // vision-capable model unless the operator named one.
