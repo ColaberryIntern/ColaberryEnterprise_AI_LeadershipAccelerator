@@ -152,8 +152,14 @@ export function deckScript(): string {
     // screen has stopped showing that paragraph to the room.
     // data-say / data-setup are pre-split server-side (splitScript in
     // kitHtml.ts) so the spoken lines and the direction never arrive mixed.
-    var sayText = tipEl ? (tipEl.getAttribute('data-say') || '') : '';
-    var setupText = tipEl ? (tipEl.getAttribute('data-setup') || '') : '';
+    // A deck is a static snapshot taken when Present is pressed, so a tab
+    // opened before a deploy has no data-say/data-setup at all — and the phone
+    // then shows "no notes for this slide", which reads as authoring missing
+    // rather than as a stale tab. Fall back to the older attributes, which
+    // every deck has always carried, so a stale deck degrades to the previous
+    // behaviour instead of going blank.
+    var sayText = tipEl ? (tipEl.getAttribute('data-say') || tipEl.getAttribute('data-body') || '') : '';
+    var setupText = tipEl ? (tipEl.getAttribute('data-setup') || tipEl.getAttribute('data-tip') || '') : '';
     var brief = sm.prompt_brief || '';
     var preface = brief && setupText ? (brief + '\\n' + setupText) : (brief || setupText);
     var nextTitle = (i + 1 < slides.length) ? (slides[i + 1].getAttribute('data-slidetitle') || '') : 'End of class';
