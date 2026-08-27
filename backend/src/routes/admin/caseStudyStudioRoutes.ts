@@ -161,8 +161,35 @@ function run<T>(res: Response, work: () => Promise<T>): Promise<void> {
   return work().then((payload) => { res.json(payload); }).catch((err) => { sendError(res, err); });
 }
 
-/** Written to provenance and to `decided_by`. Never logged here. */
-const actorOf = (req: Request): string => req.admin?.email || req.admin?.sub || 'admin';
+/**
+ * Written to provenance and to `decided_by`. Never logged here.
+ *
+ * IT REFUSES RATHER THAN INVENTS. The previous version ended `|| 'admin'`, and
+ * that literal was the whole gap between this file's header — "promoteDraft…
+ * requires a named human actor" — and what was actually enforced.
+ * `requireAdmin` checks `role` and nothing else: it never requires `sub` or
+ * `email` to be present, so a token carrying neither passed the guard, and
+ * `promoteDraft`'s own check is `actor.trim().length === 0`, which the string
+ * `'admin'` satisfies. An AI-drafted value could therefore be promoted into
+ * snapshot content, and the provenance entry that is supposed to say WHO took
+ * responsibility for it would say `admin` — which names nobody.
+ *
+ * That is worse than an error, because it is an audit trail that reads as
+ * complete. The quarantine model in `caseStudyAiDraftStore.ts` rests entirely
+ * on "a named human is accountable for this value"; a default actor is that
+ * claim with the name removed. So an unattributable caller is refused here, at
+ * the boundary, in the same fail-closed direction as every other rule in this
+ * subsystem.
+ */
+const actorOf = (req: Request): string => {
+  const actor = (req.admin?.email || req.admin?.sub || '').trim();
+  if (!actor) {
+    throw new CaseStudyAdminError('ValidationError',
+      'This action is recorded against the person who took it, and your session carries no identity. Sign in again.',
+      { field: 'actor' });
+  }
+  return actor;
+};
 
 const correlationOf = (req: Request): string | undefined => {
   const header = req.header('x-correlation-id');
@@ -283,7 +310,9 @@ router.get('/api/admin/case-studies/:id/story-drafts', requireAdmin, (req: Reque
 router.post('/api/admin/case-studies/:id/story-drafts/:draftId/promote', requireAdmin, (req: Request, res: Response) => {
   const params = parse(draftParams, req.params, res);
   if (!params) return;
-  void run(res, () => promoteDraft({
+  // `async` so that a refusal from `actorOf` becomes a rejected promise `run`
+  // can map, rather than a synchronous throw Express would turn into a bare 500.
+  void run(res, async () => promoteDraft({
     caseStudyId: params.id,
     draftId: params.draftId,
     actor: actorOf(req),
@@ -322,7 +351,8 @@ router.patch('/api/admin/case-studies/:id/artifacts/:artifactId', requireAdmin, 
   if (!params) return;
   const body = parse(artifactBody, req.body, res);
   if (!body) return;
-  void run(res, () => setArtifactStatus({
+  // `async` for the same reason as the promote route above.
+  void run(res, async () => setArtifactStatus({
     caseStudyId: params.id,
     artifactId: params.artifactId,
     status: body.status,

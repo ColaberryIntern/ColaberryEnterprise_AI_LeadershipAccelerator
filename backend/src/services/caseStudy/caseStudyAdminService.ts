@@ -52,6 +52,9 @@ import { scoreCaseStudyReadiness } from './caseStudyReadinessService';
 import type { CaseStudyReadinessReport } from './caseStudyReadinessService';
 import { repoLogIdentity } from './caseStudyRepoReader';
 import {
+  assertNotPublished, assertSlugChangeAllowed,
+} from './caseStudyAdminPublicationGuard';
+import {
   CaseStudyAdminError, createCaseStudyRow, errorClassOf, loadCaseStudyRow, log,
   rethrowSlugConflict, slugifyCaseStudyTitle, toSnapshotSummary, toSummary, validate,
 } from './caseStudyAdminStore';
@@ -366,40 +369,6 @@ export async function createCaseStudyFromRepoCollection(
  * `status` to `approved` here does NOT publish anything — `publishCaseStudy`
  * re-runs the whole gate on every call.
  */
-/**
- * Refuse to archive a Case Study that is still published somewhere.
- *
- * Shared by BOTH doors to the archived state — `archiveCaseStudy` and
- * `updateCaseStudy({status:'archived'})`. It lived inline in the first of those
- * only, which meant the general-purpose PATCH could reach the same state
- * unguarded and leave `case_studies.status` disagreeing with
- * `case_study_publications` about whether the record exists.
- *
- * Deliberately does NOT unpublish on the admin's behalf: spec §35 treats archive
- * and unpublish as distinct operations, and silently taking a public-facing
- * action from a verb that reads as bookkeeping is how a record disappears from
- * a live site without anyone deciding it should. The error names the surfaces,
- * so the recovery is one explicit click.
- */
-async function assertNotPublished(
-  caseStudyId: string,
-  correlationId: string,
-  event: string,
-): Promise<void> {
-  const live = await CaseStudyPublication.findAll({
-    where: { case_study_id: caseStudyId, status: 'published' },
-  });
-  if ((live ?? []).length === 0) return;
-
-  const surfaces = (live ?? []).map((p) => p.surface_key).sort();
-  log(event, 'failure', correlationId, {
-    case_study_id: caseStudyId, error_class: 'CaseStudyPublished',
-  });
-  throw new CaseStudyAdminError('CaseStudyPublished',
-    `This Case Study is still published to ${surfaces.join(', ')}. Unpublish it before archiving.`,
-    { surfaces });
-}
-
 export async function updateCaseStudy(input: unknown): Promise<CaseStudySummary> {
   const data = validate(updateInputSchema, input, 'Case Study update');
   const correlationId = ensureTraceId(data.correlationId);
@@ -441,13 +410,25 @@ export async function updateCaseStudy(input: unknown): Promise<CaseStudySummary>
     // paths to one state transition and only one was checked: an admin could
     // archive a still-published record through a general-purpose PATCH, leaving
     // `case_studies.status = 'archived'` while `case_study_publications` kept
-    // serving it. Not a public leak — the public read is driven by the
-    // publication row, so the story stays live — but the two tables then
-    // disagree about whether the record exists, and the next person to trust
-    // `status` is misled. A guard on one of two doors is not a guard.
+    // serving it. It IS a public change — `isCandidatePubliclyVisible` reads
+    // `candidate.archived`, which `toCandidate` sources from the live
+    // `case_studies` row, so archiving pulls the page while the publication row
+    // still says `published`. (An earlier version of this comment claimed the
+    // opposite — "the story stays live" — and was wrong; the predicate at
+    // `caseStudyFilterService.ts` is the authority.) Two tables then disagree
+    // about whether the record exists, and the next person to trust `status` is
+    // misled. A guard on one of two doors is not a guard.
     await assertNotPublished(data.caseStudyId, correlationId, 'case_study.admin_updated');
     values.archived_at = new Date();
   }
+
+  // The slug IS the published URL and the public read takes it from this
+  // mutable row, not from the frozen snapshot — so renaming a live record moves
+  // its address with no gate, no republish and no audit trail. See the guard's
+  // own header for why snapshot immutability does not cover this.
+  await assertSlugChangeAllowed(
+    data.caseStudyId, correlationId, 'case_study.admin_updated', row.slug, p.slug,
+  );
 
   try {
     await row.update(values as never);
