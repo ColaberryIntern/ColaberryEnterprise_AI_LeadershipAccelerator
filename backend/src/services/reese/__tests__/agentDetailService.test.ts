@@ -497,7 +497,7 @@ describe('getAgentDetail', () => {
       const result = await getAgentDetail('agent-1');
 
       expect(result!.authorization_summary).toEqual(summary);
-      expect(mockAuthSummary).toHaveBeenCalledWith('agent-1', 30);
+      expect(mockAuthSummary).toHaveBeenCalledWith('agent-1', 'Reese', 30);
     });
 
     it('these 3 fields key on the real AiAgent id directly, independent of whether a linked AdminUser identity exists', async () => {
@@ -507,7 +507,7 @@ describe('getAgentDetail', () => {
 
       expect(mockPersonaHistory).toHaveBeenCalledWith('agent-1');
       expect(mockCostRows).toHaveBeenCalledWith(30, 'agent-1');
-      expect(mockAuthSummary).toHaveBeenCalledWith('agent-1', 30);
+      expect(mockAuthSummary).toHaveBeenCalledWith('agent-1', 'Reese', 30);
     });
   });
 
