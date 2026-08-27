@@ -33,6 +33,7 @@
 import { sequelize } from '../../config/database';
 import { getCareerProfile } from './careerProfileService';
 import type { PortfolioPageVisibility } from './careerPortfolioPageService';
+import { visibleEnrollmentIds, type ReviewerIdentity } from './careerMentorScopeService';
 
 const VISIBILITIES: PortfolioPageVisibility[] = ['private', 'unlisted', 'public'];
 
@@ -222,4 +223,56 @@ export async function decidePortfolioReview(args: {
 /** The Studio panel's read: where do I stand, and where does my page live? */
 export async function getPortfolioPageState(enrollmentId: string): Promise<PortfolioPageState> {
   return getOrCreatePage(enrollmentId);
+}
+
+export interface PortfolioQueueItem {
+  enrollment_id: string;
+  slug: string;
+  full_name: string | null;
+  requested_at: string;
+  public_path: string;
+}
+
+/**
+ * The reviewer's queue of portfolio pages awaiting a decision.
+ *
+ * THIS EXISTS BECAUSE ITS ABSENCE WAS A SHIPPED DEAD END. `requestPortfolioReview` writes
+ * `career_portfolio_pages.review_requested_at`, but the reviewer surface only ever queried
+ * `capstone_review_approvals` — a different table, for records. So a learner could ask for
+ * review, see "waiting on a mentor", and no mentor would ever see it. Ali hit this within
+ * minutes of the deploy. A request that nothing reads is worse than no button at all,
+ * because it tells the learner something is happening.
+ *
+ * Scoped with `visibleEnrollmentIds`, the SAME function the record queue uses: `null`
+ * means admin and no filter, `[]` means a mentor with no grants who must see nothing.
+ * Those two must never be conflated — an empty array meaning "no filter" would show every
+ * learner on the platform to a mentor with no grants at all.
+ */
+export async function listPortfolioReviewQueue(
+  reviewer: ReviewerIdentity,
+): Promise<PortfolioQueueItem[]> {
+  const visible = await visibleEnrollmentIds(reviewer);
+  if (visible !== null && visible.length === 0) return [];
+
+  const scoped = visible === null ? '' : ' AND p.enrollment_id = ANY($1::uuid[])';
+  const [rows] = await sequelize.query(
+    // enrollments carries `full_name`, not first/last -- checked against the live schema
+    // rather than assumed. LEFT JOIN so a queue item still renders if the enrollment row
+    // is missing: a reviewer seeing "Unnamed" is recoverable, an empty queue is not.
+    `SELECT p.enrollment_id, p.slug, p.review_requested_at, e.full_name
+       FROM career_portfolio_pages p
+       LEFT JOIN enrollments e ON e.id = p.enrollment_id
+      WHERE p.review_requested_at IS NOT NULL
+        AND p.status <> 'published'${scoped}
+      ORDER BY p.review_requested_at ASC`,
+    visible === null ? {} : { bind: [visible] },
+  );
+
+  return (rows as any[]).map((r) => ({
+    enrollment_id: r.enrollment_id,
+    slug: r.slug,
+    full_name: r.full_name ?? null,
+    requested_at: new Date(r.review_requested_at).toISOString(),
+    public_path: `/portfolio/${r.slug}`,
+  }));
 }

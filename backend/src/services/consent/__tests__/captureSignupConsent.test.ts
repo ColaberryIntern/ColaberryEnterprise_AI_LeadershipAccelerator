@@ -117,3 +117,43 @@ describe('the wording is shared', () => {
     expect(SIGNUP_CONSENT_TEXT).toMatch(/unsubscribe/i);
   });
 });
+
+describe('correlation_id makes a consent row traceable', () => {
+  it('threads the request id into evidence', async () => {
+    await captureSignupConsent({
+      email: 'a@b.com',
+      marketingOptIn: true,
+      source: 'training_site:contact',
+      correlationId: 'req-abc-123',
+    });
+    expect(recordConsentMock.mock.calls[0][0].evidence).toMatchObject({
+      correlation_id: 'req-abc-123',
+    });
+  });
+
+  it('records null rather than omitting the key when no request id exists', async () => {
+    // An explicit null says "this row has no trace" — a MISSING key is
+    // indistinguishable from an older row written before the field existed.
+    await captureSignupConsent({
+      email: 'a@b.com',
+      marketingOptIn: true,
+      source: 'free_signup',
+    });
+    const ev = recordConsentMock.mock.calls[0][0].evidence;
+    expect(ev).toHaveProperty('correlation_id');
+    expect(ev.correlation_id).toBeNull();
+  });
+
+  it('is why an orphaned grant had nowhere to start', async () => {
+    // 2026-08-25: consent written for ali+jake@colaberry.com, zero matching
+    // leads rows, and no way to find the request that produced it. This field
+    // is the fix for the CLASS, not just that instance.
+    await captureSignupConsent({
+      email: 'ali+jake@colaberry.com',
+      marketingOptIn: true,
+      source: 'training_site:contact',
+      correlationId: 'would-have-found-it',
+    });
+    expect(recordConsentMock.mock.calls[0][0].evidence.correlation_id).toBe('would-have-found-it');
+  });
+});

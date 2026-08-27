@@ -46,6 +46,8 @@ export async function createExternalLead(req: Request, res: Response, next: Next
         // we are currently permitted to email, which is worse than silence.
         marketingOptIn: payload.marketing_opt_in,
         source: `training_site:${payload.source}`.slice(0, 120),
+        // The request this consent came from, so the row is traceable.
+        correlationId: correlation_id,
         consentText: payload.marketing_consent_text ?? SIGNUP_CONSENT_TEXT,
         // NOT req.ip / req.get(): this route is service-to-service, so those
         // describe the training site's server, not the person who ticked.
