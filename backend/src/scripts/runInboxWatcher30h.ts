@@ -191,8 +191,47 @@ async function loadStudentFacts(email: string): Promise<StudentFacts | null> {
   return facts;
 }
 
+/**
+ * Do we know this person at all?
+ *
+ * Deliberately WIDER than `loadStudentFacts`, which requires an active,
+ * portal-enabled enrollment because it is answering "can I diagnose their
+ * portal access". This is answering "is there a human behind this address",
+ * so a withdrawn student, a deferred one, or a staff member all count. Kepha
+ * Ohanga was dropped by the old gate while sitting on a deferred enrollment;
+ * a check that only matched active students would have dropped him again.
+ *
+ * Returns `null` on a failed read. The caller escalates on `null`, so a
+ * database problem surfaces to a human instead of silently reclassifying
+ * everyone as a stranger.
+ */
+async function isKnownPerson(email: string): Promise<boolean | null> {
+  const addr = (email || '').toLowerCase().trim();
+  if (!addr.includes('@')) return false;
+
+  try {
+    const { default: Enrollment } = await import('../models/Enrollment');
+    // Any enrollment at all, whatever its status.
+    if (await Enrollment.count({ where: { email: addr } }) > 0) return true;
+  } catch (err: any) {
+    console.error(`[watcher] enrollment lookup failed for ${addr}: ${err?.message}`);
+    return null;
+  }
+
+  try {
+    const { default: AdminUser } = await import('../models/AdminUser');
+    if (await AdminUser.count({ where: { email: addr } }) > 0) return true;
+  } catch (err: any) {
+    console.error(`[watcher] admin lookup failed for ${addr}: ${err?.message}`);
+    return null;
+  }
+
+  return false;
+}
+
 const dataAccess: WatcherDataAccess = {
   loadStudentFacts,
+  isKnownPerson,
   /**
    * WIRED TO A REFUSAL, NOT TO requestMagicLink.
    *
