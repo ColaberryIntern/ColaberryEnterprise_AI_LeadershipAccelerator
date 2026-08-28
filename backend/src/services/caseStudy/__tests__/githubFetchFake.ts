@@ -108,7 +108,22 @@ export function treePayload(entries: readonly TreeEntry[], truncated = false): R
 /* ────────────────────────────────────────────────────────────── the double ── */
 
 const DEFAULT_REPO = json(repoPayload());
-const DEFAULT_COMMITS = json([{ sha: 'c0ffee0000000000000000000000000000000000' }]);
+/**
+ * The real endpoint returns the commit object alongside the sha. This fixture
+ * used to send `[{ sha }]` alone, which is a shape GitHub never produces — so
+ * every suite in this directory exercised a payload with no dates in it, and a
+ * date-reading feature could be entirely absent while 825 tests passed. A
+ * fixture that agrees with a bug is how the bug survives its own test suite.
+ */
+const DEFAULT_COMMITS = json([
+  {
+    sha: 'c0ffee0000000000000000000000000000000000',
+    commit: {
+      author: { date: '2026-01-05T11:00:00Z' },
+      committer: { date: '2026-01-06T12:00:00Z' },
+    },
+  },
+]);
 const DEFAULT_LANGUAGES = json({ TypeScript: 90_000, Python: 12_000 });
 const DEFAULT_TREE = json(treePayload([]));
 

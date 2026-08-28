@@ -300,7 +300,7 @@ export async function analyzeRepository(input: AnalyzeRepositoryInput): Promise<
 
   // Visibility is known from here on, so nothing below may name a private repo.
   const head = await readCommitHead(owner, repo, opts, correlationId, issues, metadata.visibility);
-  if (head && typeof head === 'object') return head;
+  if (head && 'status' in head) return head;
 
   const languageBytes = await readLanguages(owner, repo, opts, issues);
   const persisted = input.persistedTree;
@@ -328,7 +328,12 @@ export async function analyzeRepository(input: AnalyzeRepositoryInput): Promise<
     repoOwner: metadata.owner,
     repoName: metadata.name,
     repoUrl: `https://github.com/${metadata.owner}/${metadata.name}`,
-    metadata: { ...metadata, languageBytes, latestCommitSha: typeof head === 'string' ? head : null },
+    metadata: {
+      ...metadata,
+      languageBytes,
+      latestCommitSha: head?.sha ?? null,
+      latestCommitAt: head?.committedAt ?? null,
+    },
     derived: mergeRepoFacts(pathFacts, contentFacts, {
       apiLanguages: languageBytes.map((entry) => entry.name),
       homepage: metadata.homepage,
