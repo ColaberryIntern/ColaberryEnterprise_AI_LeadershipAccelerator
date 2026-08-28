@@ -123,6 +123,26 @@ export interface PublicPortfolioResult {
  * Null covers "no such slug" AND "exists but not viewable" on purpose — see the 404-not-403
  * note above. The caller cannot tell them apart, which is the intent.
  */
+/**
+ * The SAME payload a stranger would see, for a reviewer deciding on an unpublished page.
+ *
+ * WHY THIS EXISTS. The reviewer screen shipped with Approve and Ask-for-changes buttons
+ * and nothing to look at. Ali: "It's just asking me to give changes but I can't view what
+ * I'm supposed to be approving." A review gate where the reviewer cannot see the thing is
+ * not a review gate.
+ *
+ * It bypasses `publicViewDecision` deliberately -- everything awaiting review is by
+ * definition unpublished, so the public reader 404s on all of it. It bypasses NOTHING
+ * else: the payload is built by the same `projectPublicPortfolio` allow-list, so a
+ * reviewer sees exactly what a stranger would and no more. The projection is pure, which
+ * is what makes that guarantee real rather than aspirational.
+ *
+ * The CALLER checks `canReview` before calling this.
+ */
+export async function getPortfolioPreview(enrollmentId: string, now: Date = new Date()) {
+  return { portfolio: await buildPortfolio(enrollmentId, now) };
+}
+
 export async function getPublicPortfolioBySlug(
   slug: string,
   now: Date = new Date(),
@@ -131,17 +151,32 @@ export async function getPublicPortfolioBySlug(
   const decision = publicViewDecision(page);
   if (!page || !decision.viewable) return null;
 
+  return {
+    portfolio: await buildPortfolio(page.enrollment_id, now, page.approved_identity),
+    indexable: decision.indexable,
+  };
+}
+
+/**
+ * Build the public payload for one learner. Shared by the public reader and the reviewer
+ * preview so the two can never render different things.
+ */
+async function buildPortfolio(
+  enrollmentId: string,
+  now: Date,
+  approvedIdentity: unknown = null,
+): Promise<PublicPortfolio> {
   // A profile that fails to load is a shorter page, not a 500. The projection turns an
   // empty profile into an empty portfolio rather than throwing.
   let profile: unknown = null;
   try {
-    profile = await getCareerProfile(page.enrollment_id);
+    profile = await getCareerProfile(enrollmentId);
   } catch (err: any) {
     console.warn(JSON.stringify({
       timestamp: now.toISOString(), level: 'warn', service: 'backend',
       event: 'public_portfolio_profile_unavailable', outcome: 'partial',
       error_class: err?.error_class || err?.name || 'Error',
-      context: { slug: page.slug },
+      context: { enrollment_id: enrollmentId },
     }));
   }
 
@@ -150,11 +185,16 @@ export async function getPublicPortfolioBySlug(
   let records: unknown = [];
   try {
     const [rows] = await sequelize.query(
-      `SELECT slug, content_json->'system'->>'project_name' AS title, published_at
+      // `descriptor` is selected so the projection can fall back to the document's own
+      // first heading when `project_name` is null, rather than printing the slug.
+      `SELECT slug,
+              content_json->'system'->>'project_name' AS project_name,
+              content_json->'system'->>'descriptor'   AS descriptor,
+              published_at
          FROM capstone_records
         WHERE enrollment_id = $1 AND status = 'published' AND visibility <> 'private'
         ORDER BY published_at DESC NULLS LAST`,
-      { bind: [page.enrollment_id] },
+      { bind: [enrollmentId] },
     );
     records = rows;
   } catch (err: any) {
@@ -162,16 +202,15 @@ export async function getPublicPortfolioBySlug(
       timestamp: now.toISOString(), level: 'warn', service: 'backend',
       event: 'public_portfolio_records_unavailable', outcome: 'partial',
       error_class: err?.error_class || err?.name || 'Error',
-      context: { slug: page.slug },
+      context: { enrollment_id: enrollmentId },
     }));
   }
 
-  return {
-    portfolio: projectPublicPortfolio({
-      profile: withApprovedIdentity(profile, page.approved_identity),
-      records,
-      generatedAt: now.toISOString(),
-    }),
-    indexable: decision.indexable,
-  };
+  return projectPublicPortfolio({
+    // On an unapproved page `approvedIdentity` is null, so the reviewer sees the LIVE
+    // headline -- which is the text they are being asked to approve.
+    profile: withApprovedIdentity(profile, approvedIdentity),
+    records,
+    generatedAt: now.toISOString(),
+  });
 }

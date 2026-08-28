@@ -21,6 +21,7 @@ import {
   type PortfolioDecision,
 } from '../services/career/careerPortfolioPageWriteService';
 import { canReview, type ReviewerIdentity } from '../services/career/careerMentorScopeService';
+import { getPortfolioPreview } from '../services/career/careerPortfolioPageService';
 
 /** The learner is always the caller. */
 const eid = (req: Request) => req.participant!.sub;
@@ -94,6 +95,26 @@ export async function handleRequestPortfolioPageReview(req: Request, res: Respon
 export async function handleGetPortfolioReviewQueue(req: Request, res: Response, next: NextFunction) {
   try {
     res.json({ ok: true, items: await listPortfolioReviewQueue(reviewer(req)) });
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * GET /api/admin/career/portfolio-review/:enrollmentId/preview
+ *
+ * What the reviewer is deciding on. The screen shipped with Approve and Ask-for-changes
+ * and nothing to look at, which is not a review gate.
+ *
+ * Serves the same allow-list payload the public page would, whatever the page's status --
+ * everything awaiting review is unpublished, so the public reader 404s on all of it.
+ */
+export async function handleGetPortfolioPreview(req: Request, res: Response, next: NextFunction) {
+  const enrollmentId = String(req.params.enrollmentId || '');
+  try {
+    if (!(await canReview(reviewer(req), enrollmentId))) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    res.json({ ok: true, ...await getPortfolioPreview(enrollmentId) });
   } catch (e) { fail(res, e, next); }
 }
 

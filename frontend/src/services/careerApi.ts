@@ -313,3 +313,15 @@ export async function submitPortfolioDecision(
   );
   return res.data.page;
 }
+
+/**
+ * What the reviewer is deciding on — the same payload the public page renders.
+ *
+ * Admin route, so `api` and not `portalApi`.
+ */
+export async function fetchPortfolioPreview(enrollmentId: string): Promise<any> {
+  const res = await api.get<{ ok: boolean; portfolio: any }>(
+    `/api/admin/career/portfolio-review/${encodeURIComponent(enrollmentId)}/preview`,
+  );
+  return res.data.portfolio;
+}

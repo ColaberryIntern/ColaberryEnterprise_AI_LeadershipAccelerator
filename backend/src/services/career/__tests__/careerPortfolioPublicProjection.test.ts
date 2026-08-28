@@ -137,6 +137,43 @@ describe('careerPortfolioPublicProjection', () => {
     }
   });
 
+  describe('record titles never render a slug', () => {
+    // ali-muwwakkil appeared as a PROJECT TITLE on Ali's own live page, because
+    // project_name was null and the fallback was the slug.
+    const withRecords = (records: any) =>
+      projectPublicPortfolio({ profile: loadedProfile(), records, generatedAt: AT }).records;
+
+    it('prefers the compiled project_name', () => {
+      expect(withRecords([{ slug: 'x', project_name: 'LandJet Growth Engine' }])[0].title)
+        .toBe('LandJet Growth Engine');
+    });
+
+    it("falls back to the descriptor's own first heading, not the slug", () => {
+      const out = withRecords([{
+        slug: 'ali-muwwakkil',
+        project_name: null,
+        descriptor: '# Enterprise AI Strategy\n\n**Organization:** Colaberry\n',
+      }]);
+      expect(out[0].title).toBe('Enterprise AI Strategy');
+      expect(out[0].title).not.toBe('ali-muwwakkil');
+    });
+
+    it('strips emphasis from a heading rather than printing the markup', () => {
+      expect(withRecords([{ slug: 'x', descriptor: '## **Bold** Title' }])[0].title)
+        .toBe('Bold Title');
+    });
+
+    it('says "Untitled record" when there is nothing real to use', () => {
+      expect(withRecords([{ slug: 'ali-muwwakkil' }])[0].title).toBe('Untitled record');
+      expect(withRecords([{ slug: 'x', descriptor: 'no heading here' }])[0].title)
+        .toBe('Untitled record');
+    });
+
+    it('still links the record, whatever the title', () => {
+      expect(withRecords([{ slug: 'ali-muwwakkil' }])[0].slug).toBe('ali-muwwakkil');
+    });
+  });
+
   it('is pure: same input, same output, and no clock of its own', () => {
     expect(project()).toEqual(project());
     expect(project().generated_at).toBe(AT);

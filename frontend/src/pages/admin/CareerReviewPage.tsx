@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import PortfolioBody from '../../components/portfolio/PortfolioBody';
 import {
   fetchReviewQueue, submitReviewDecision, fetchRecordForReview,
-  fetchPortfolioReviewQueue, submitPortfolioDecision, type PortfolioQueueItem,
+  fetchPortfolioReviewQueue, submitPortfolioDecision, fetchPortfolioPreview,
+  type PortfolioQueueItem,
   ReviewQueueItem, ReviewDecision, RecordForReview,
 } from '../../services/careerApi';
 import ReviewRecordPreview from './ReviewRecordPreview';
@@ -39,6 +41,8 @@ const CareerReviewPage: React.FC = () => {
   // could see -- Ali hit exactly that within minutes of the deploy.
   const [pages, setPages] = useState<PortfolioQueueItem[] | null>(null);
   const [pagesError, setPagesError] = useState<string | null>(null);
+  // The page under review, rendered with the SAME component the public page uses.
+  const [pagePreview, setPagePreview] = useState<Record<string, any>>({});
   const [preview, setPreview] = useState<RecordForReview | null>(null);
   const [previewFor, setPreviewFor] = useState<string | null>(null);
 
@@ -124,6 +128,30 @@ const CareerReviewPage: React.FC = () => {
                   asked {new Date(p.requested_at).toLocaleDateString()}
                 </div>
               </div>
+
+              {/* A reviewer must SEE what they are approving. This is the same
+                  component and the same payload the public page renders. */}
+              {pagePreview[p.enrollment_id] === undefined ? (
+                <button
+                  type="button" className="cr-btn ghost" disabled={busy}
+                  onClick={async () => {
+                    setErr(null);
+                    try {
+                      const pf = await fetchPortfolioPreview(p.enrollment_id);
+                      setPagePreview((m) => ({ ...m, [p.enrollment_id]: pf }));
+                    } catch {
+                      setErr('Could not load the preview for this page.');
+                    }
+                  }}
+                >Show me the page</button>
+              ) : pagePreview[p.enrollment_id] === null ? (
+                <p className="cr-muted">Preview unavailable.</p>
+              ) : (
+                <div className="cr-preview">
+                  <PortfolioBody portfolio={pagePreview[p.enrollment_id]} />
+                </div>
+              )}
+
               <div className="cr-actions">
                 <button
                   type="button" className="cr-btn" disabled={busy}
