@@ -30,21 +30,48 @@ const APP = __dirname;
 const CAPTURE = path.join(APP, 'legacy-capture', 'pages');
 const SRC = path.join(APP, 'src');
 
-// capture filename -> page served. The skeleton's own form page is preserved separately
-// as platform-interest.html; it is the one form this app actually owns.
+// capture filename -> path served.
+//
+// DIRECTORY FORM, NOT FLAT FILES, and this is the difference between a working copy and a
+// broken one. The real site serves `/individuals/` with a trailing slash, so every link in
+// the captured markup points at a directory. Written flat as `individuals.html`, nothing
+// resolves: `try_files` looks for `/individuals/`, `/individuals//` and `/individuals/.html`
+// and finds none of them. Every navigation link 404s while the homepage looks perfect.
+//
+// Writing `individuals/index.html` reproduces the original URL exactly, so the captured
+// links work untouched and no nginx rewrite has to paper over a mismatch we created.
+//
+// The skeleton's own form page is preserved separately as platform-interest.html; it is
+// the one form this app actually owns.
 const PAGES = {
   'index.html': 'index.html',
-  'individuals.html': 'individuals.html',
-  'enterprise.html': 'enterprise.html',
-  'organizations.html': 'organizations.html',
-  'public-library.html': 'public-library.html',
-  'contact-us.html': 'contact-us.html',
-  'feedback.html': 'feedback.html',
-  'enterprise-feedback.html': 'enterprise-feedback.html',
-  'thank-you.html': 'thank-you.html',
-  'privacy.html': 'privacy.html',
-  'terms.html': 'terms.html',
+  'individuals.html': 'individuals/index.html',
+  'enterprise.html': 'enterprise/index.html',
+  'organizations.html': 'organizations/index.html',
+  'public-library.html': 'public-library/index.html',
+  'contact-us.html': 'contact-us/index.html',
+  'feedback.html': 'feedback/index.html',
+  'enterprise-feedback.html': 'enterprise-feedback/index.html',
+  'thank-you.html': 'thank-you/index.html',
+  'privacy.html': 'privacy/index.html',
+  'terms.html': 'terms/index.html',
 };
+
+/**
+ * Remove pages this script wrote in a previous shape, so a re-run cannot leave a stale
+ * flat `individuals.html` sitting beside the new `individuals/index.html`. Two files
+ * claiming the same page is how a fix appears to work locally and not in production.
+ */
+function removeStaleFlatPages() {
+  for (const to of Object.values(PAGES)) {
+    if (!to.includes('/')) continue;
+    const flat = path.join(SRC, path.basename(path.dirname(to)) + '.html');
+    if (fs.existsSync(flat)) {
+      fs.unlinkSync(flat);
+      console.log(`  removed stale ${path.basename(flat)}`);
+    }
+  }
+}
 
 const TRACKER =
   '\n<!-- Refactored.ai platform tracking. Added by the rebuild: the point of taking over\n' +
@@ -118,6 +145,7 @@ function main() {
     process.exit(2);
   }
   fs.mkdirSync(SRC, { recursive: true });
+  removeStaleFlatPages();
 
   let ported = 0;
   const report = [];
@@ -129,7 +157,9 @@ function main() {
     }
     const original = fs.readFileSync(source, 'utf8');
     const out = markRecaptchaSiteKey(injectTracker(relativiseSelfLinks(original)));
-    fs.writeFileSync(path.join(SRC, to), out, 'utf8');
+    const target = path.join(SRC, to);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, out, 'utf8');
 
     const hasTracker = out.includes('track-v2.js');
     const absLeft = countAbsoluteSelfLinks(out);
