@@ -16,18 +16,18 @@ import { sequelize } from '../config/database';
 export interface CaseStudyArtifactAttributes {
   id?: string;
   case_study_id: string;
-  /** diagram | document | demo | repo_file | screenshot | other */
+  /** screenshot | architecture | photo | demo | deck | roadmap | report | evaluation | code | document | other */
   artifact_type?: string;
   title: string;
   description?: string | null;
-  /** repo | platform | manual | manifest */
+  /** repo | portfolio_artifact | manual | generated */
   source_type?: string;
   source_ref?: string | null;
   source_commit_sha?: string | null;
   portfolio_artifact_id?: string | null;
   public_url?: string | null;
   preview_url?: string | null;
-  /** private | internal | public */
+  /** public | request_only | private */
   visibility?: string;
   /** candidate | approved | rejected */
   status?: string;

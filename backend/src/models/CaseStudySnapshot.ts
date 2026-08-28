@@ -24,7 +24,7 @@ export interface CaseStudySnapshotAttributes {
   content?: Record<string, any>;
   provenance?: Record<string, any>;
   generated_at?: Date;
-  /** repo_sync | manual | ai_draft */
+  /** repo_sync | platform_sync | human_edit */
   generated_by?: string;
   approved_by?: string | null;
   approved_at?: Date | null;

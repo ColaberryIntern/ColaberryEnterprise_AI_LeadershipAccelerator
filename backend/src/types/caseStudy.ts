@@ -43,6 +43,9 @@
  * equivalence that does not exist (`OWNER_ATTESTED` has no Case Study analogue,
  * and `pending` has no claims-registry analogue), and the first person to write
  * `VERIFIED -> 'verified'` would quietly promote an unevidenced claim.
+ *
+ * `case_study_metrics.verification_class`, `case_study_evidence.verification_class`,
+ * `case_study_quotes.verification_class`.
  */
 export type CaseStudyVerificationClass = 'verified' | 'anonymized' | 'illustrative' | 'pending';
 
@@ -51,6 +54,8 @@ export type CaseStudyVerificationClass = 'verified' | 'anonymized' | 'illustrati
  * axes, not a hierarchy. `class: 'verified', method: 'repo'` (a commit proves it)
  * and `class: 'anonymized', method: 'client'` (the client confirmed it but will
  * not be named) are both valid and mean different things. Spec §14.
+ *
+ * `case_study_metrics.verification_method`.
  */
 export type CaseStudyVerificationMethod =
   | 'client'
@@ -108,13 +113,14 @@ export type CaseStudyVisibility = 'public' | 'anonymized' | 'private';
 export type CaseStudyOrganizationIdentityMode = 'named' | 'anonymized' | 'hidden';
 
 /**
- * `case_studies.builder_identity_mode`, and the per-contributor display mode.
+ * `case_studies.builder_identity_mode` and `case_study_quotes.attribution_mode`,
+ * and the per-contributor display mode.
  * Consent, expressed as a type: naming a person is one of three states, not a
  * nullable string somebody forgets to check.
  */
 export type CaseStudyBuilderIdentityMode = 'named' | 'role_only' | 'anonymous';
 
-/** Who did the work. Spec §23 "Who built it". */
+/** Who did the work. `case_study_quotes.attribution_kind`. Spec §23 "Who built it". */
 export type CaseStudyBuiltByType =
   | 'learner'
   | 'intern'
@@ -230,6 +236,18 @@ export type CaseStudySyncStatus = 'running' | 'success' | 'partial' | 'failed' |
 
 /** `case_study_collections.status`. */
 export type CaseStudyCollectionStatus = 'draft' | 'published';
+
+/**
+ * `case_study_repo_collections.status`.
+ *
+ * The column is a bare VARCHAR with a DEFAULT of 'active' and no CHECK, so this
+ * union is the only statement of what belongs in it. Only `active` is written
+ * today — `caseStudyRepoCollection.ts` supplies it as the findOrCreate default
+ * and nothing archives a collection. `archived` is kept because the column is
+ * unconstrained and the value would be accepted, which is a different situation
+ * from a value some guard actively rejects.
+ */
+export type CaseStudyRepoCollectionStatus = 'active' | 'archived';
 
 /**
  * "What happened next" (spec §23) AND the `project_status` filter (spec §31).
@@ -504,6 +522,8 @@ export interface CaseStudySnapshotContent {
  * contract from day one — that is what makes "adding Training is a publication
  * row, not a schema change" a real property rather than an aspiration — but only
  * `enterprise` is publishable in Phase 1 and the publish gate rejects the rest.
+ *
+ * `case_study_collections.surface_key`, `case_study_publications.surface_key`.
  */
 export type CaseStudySurfaceKey = 'enterprise' | 'training' | 'ai-flotation' | 'refactored';
 

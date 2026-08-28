@@ -18,7 +18,7 @@ export interface CaseStudyEvidenceAttributes {
   case_study_id: string;
   evidence_record_id?: string | null;
   metric_id?: string | null;
-  /** repo | platform | manual | client | manifest */
+  /** evidence_record | github_commit | github_pr | repo_file | artifact | client_confirmation | internal_measurement | manual */
   source_type?: string;
   source_ref?: string | null;
   source_commit_sha?: string | null;

@@ -132,7 +132,7 @@ export interface CaseStudyStoryline {
 
 /* ─────────────────────────────────────────────────── the AI drafts ──── */
 
-/** Where a proposed value stands. `proposed` is the quarantine. */
+/** Where a proposed value stands. `case_study_ai_drafts.status`. `proposed` is the quarantine. */
 export type CaseStudyAiDraftStatus = 'proposed' | 'promoted' | 'rejected';
 
 /**
@@ -215,7 +215,7 @@ export type CaseStudyQuoteAttribution =
       readonly kind: CaseStudyBuiltByType;
     };
 
-/** How the words were obtained. Mirrors `CaseStudyEvidenceSourceType`'s intent. */
+/** How the words were obtained. `case_study_quotes.quote_source`. Mirrors `CaseStudyEvidenceSourceType`'s intent. */
 export type CaseStudyQuoteSource =
   | 'client_confirmation'
   | 'recorded_interview'
