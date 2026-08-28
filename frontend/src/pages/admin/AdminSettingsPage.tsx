@@ -485,6 +485,37 @@ function IntegrationsTab({ settings, onChange }: FieldProps) {
             />
           </div>
         </div>
+
+        {/*
+          A GHL v1 API key is scoped to ONE sub-account, so the key above can only
+          ever write to the account it was minted in. Open-house and training-site
+          signups belong in a different one. Until this field is filled in, those
+          leads are withheld from GHL rather than written to the wrong account.
+        */}
+        <div className="row g-3 mt-1 pt-3 border-top">
+          <div className="col-md-8">
+            <label className="form-label small">
+              School of Data Analytics API Key
+              <span className="text-secondary fw-normal"> — routes open house and training site leads</span>
+            </label>
+            <input
+              type="password"
+              className="form-control"
+              value={settings.ghl_api_key_school_of_data_analytics ?? ''}
+              onChange={(e) => onChange('ghl_api_key_school_of_data_analytics', e.target.value)}
+              placeholder="Bearer token minted in the School of Data Analytics sub-account"
+              disabled={!settings.ghl_enabled}
+            />
+          </div>
+          <div className="col-md-4 d-flex align-items-end">
+            <div className="form-text">
+              {settings.ghl_api_key_school_of_data_analytics
+                ? 'Set. Open house and training site leads sync to this account.'
+                : 'Not set. Those leads are held back rather than sent to the wrong account.'}
+            </div>
+          </div>
+        </div>
+
         <div className="form-text mt-2">
           GHL integration syncs leads to GoHighLevel contacts with Interest Group tags, sends SMS via the Cory_SMS_Composed custom field (triggers GHL workflow), and receives reply webhooks.
           Webhook URL: <code>/api/webhook/ghl/sms-reply</code>

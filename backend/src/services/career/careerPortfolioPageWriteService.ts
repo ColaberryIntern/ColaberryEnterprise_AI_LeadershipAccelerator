@@ -155,7 +155,9 @@ export async function setPortfolioVisibility(
 /** Asking twice while a request is open is a no-op, not a second thing in a queue. */
 export async function requestPortfolioReview(enrollmentId: string): Promise<PortfolioPageState> {
   const page = await getOrCreatePage(enrollmentId);
-  if (page.review_requested_at && page.status !== 'published') return page;
+  // Asking twice while a request is open is a no-op whatever the status. A published page
+  // may absolutely ask again -- that is how new work reaches the page.
+  if (page.review_requested_at) return page;
 
   await sequelize.query(
     `UPDATE career_portfolio_pages
@@ -198,7 +200,11 @@ export async function decidePortfolioReview(args: {
     return (await readPage(enrollmentId))!;
   }
 
-  if (page.status === 'published') return page; // idempotent approve
+  // Idempotent ONLY when there is nothing pending. A published page carrying a request
+  // is an update, and approving it must re-freeze so the new work actually publishes.
+  // Without this distinction the freeze became a one-way door: approved once, never
+  // changeable again.
+  if (page.status === 'published' && !page.review_requested_at) return page;
 
   const profile: any = await getCareerProfile(enrollmentId).catch(() => null);
   // Everything LEARNER-AUTHORED is frozen at the moment of approval: the headline, the
@@ -266,8 +272,11 @@ export async function listPortfolioReviewQueue(
     `SELECT p.enrollment_id, p.slug, p.review_requested_at, e.full_name
        FROM career_portfolio_pages p
        LEFT JOIN enrollments e ON e.id = p.enrollment_id
-      WHERE p.review_requested_at IS NOT NULL
-        AND p.status <> 'published'${scoped}
+      -- No status filter. A PUBLISHED page with a pending request is an UPDATE awaiting
+      -- review, and it must reach a reviewer. Filtering it out made an approved page
+      -- impossible to change: the learner could ask, and nobody would ever see it.
+      -- review_requested_at is cleared on every decision, so a settled page is absent.
+      WHERE p.review_requested_at IS NOT NULL${scoped}
       ORDER BY p.review_requested_at ASC`,
     visible === null ? {} : { bind: [visible] },
   );

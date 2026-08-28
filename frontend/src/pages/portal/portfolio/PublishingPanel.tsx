@@ -131,7 +131,7 @@ const PublishingPanel: React.FC = () => {
       {/* ── visibility: the learner's own choice ── */}
       {status && status.state !== 'no_record' && (
         <section className="cp-card" aria-labelledby="cp-vis-h">
-          <h2 id="cp-vis-h">Who can see it</h2>
+          <h2 id="cp-vis-h">Who can see this record</h2>
           <p className="cp-muted">
             This is yours to set, and it is separate from review. A mentor approves that the work
             is ready; you decide the audience.
