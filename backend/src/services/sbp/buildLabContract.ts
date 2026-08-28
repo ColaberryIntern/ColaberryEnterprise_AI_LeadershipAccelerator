@@ -54,6 +54,25 @@ export interface LabInput {
  */
 export const DOCUMENT_WEEKS: readonly number[] = [11];
 
+/**
+ * Step labs that legitimately do NOT end by committing a recording.
+ *
+ * Weeks 3 and 4 were rebuilt by a different session into the correct seven-step
+ * shape, but they end differently — no screen capture, so no `artifacts/week-0N/`
+ * folder. The audit reported that on its first production run and Ali decided
+ * 2026-08-28 not to add one: it would mean adding pedagogy to another session's
+ * labs rather than correcting a path, and week 4's portfolio deliverable is
+ * "before/after of one prompt with eval scores", which its existing steps already
+ * produce.
+ *
+ * Recorded as a DECISION rather than left as a standing violation, because a
+ * checker that always reports the same two failures is one people learn to
+ * ignore — and then it stops catching the failures that matter. Week 3's
+ * blueprint does still ask for a demo video; if that is ever added, delete 3 from
+ * this list and the rule starts applying again on its own.
+ */
+export const NO_RECORDING_WEEKS: readonly number[] = [3, 4];
+
 /** Every week that should carry a step-based lab. */
 export const STEP_WEEKS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12];
 
@@ -126,7 +145,7 @@ export function checkLab(lab: LabInput): LabViolation[] {
   // The last step of every rebuilt lab commits a recording to the week's folder,
   // and the capability inventory looks for run evidence at exactly that path.
   const artifactPath = weekArtifactPath(lab.week);
-  if (!html.includes(artifactPath)) {
+  if (!NO_RECORDING_WEEKS.includes(lab.week) && !html.includes(artifactPath)) {
     v('commits_to_week_folder', `never mentions ${artifactPath} — the recording has nowhere to land and run evidence will never be found`);
   }
 
