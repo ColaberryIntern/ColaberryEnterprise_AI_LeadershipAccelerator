@@ -72,6 +72,7 @@ import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLeve
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
 import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema';
+import { ensureAgentManagerConversationSchema } from './db/ensureAgentManagerConversationSchema';
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
@@ -2661,6 +2662,11 @@ async function start(): Promise<void> {
   // AiAgent.system_prompt. Additive, idempotent, no flag. No seeder writes
   // to it; a manager writes the first row via POST .../directives.
   await ensureManagerDirectiveSchema();
+  // AI Workforce Management, Checkpoint C — Direct Agent Communication:
+  // a manager's continuous conversation thread with their agent. Additive,
+  // idempotent, no flag. No seeder writes to it; a manager writes the first
+  // row via GET .../conversation (find-or-create) or POST .../messages.
+  await ensureAgentManagerConversationSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
