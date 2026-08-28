@@ -99,6 +99,24 @@ async function mountDetail(capability?: CaseStudyCapability): Promise<void> {
   await H.settle();
 }
 
+/**
+ * Open the PREVIEW tab's raw-vs-projection payload, where the §18 "preview"
+ * control lives since 2026-08-27.
+ *
+ * The tab's default view became the RENDERED page on that date and the two JSON
+ * columns — with the `cs-preview` re-read button that heads them — moved behind
+ * "Show payload". The capability test is unchanged in what it asserts: same
+ * click, same API call with the same arguments, same four strings. It gained
+ * this one line.
+ *
+ * `H.click` goes through `H.el`, which THROWS by name on a missing id, so a
+ * renamed toggle fails here instead of leaving the capability unproven.
+ */
+async function openPayload(): Promise<void> {
+  H.click('cs-preview-payload-toggle');
+  await H.settle();
+}
+
 /** Type an override value and press Apply, the §34 human-copy path. */
 async function applyOverride(capability: CaseStudyCapability, value: string): Promise<void> {
   H.setValue(`${control(capability)}-input`, value);
@@ -317,6 +335,7 @@ const REQUIRED_CONTROLS: readonly RequiredControl[] = [
     name: 'preview',
     run: async () => {
       await mountDetail('preview');
+      await openPayload();
       api.previewCaseStudy.mockClear();
       H.click(control('preview'));
       await H.settle();

@@ -72,6 +72,23 @@ async function openTab(key: string): Promise<void> {
   await H.settle();
 }
 
+/**
+ * Open the PREVIEW tab's raw-vs-projection payload.
+ *
+ * On 2026-08-27 the PREVIEW tab's default view became the RENDERED page and the
+ * two JSON columns moved behind a "Show payload" button. The style contract
+ * below is unchanged in what it asserts — it gained this one line. The columns
+ * are still reachable, so the two declarations that were the difference between
+ * a 1440px document and a 7745px one still have to be on them.
+ *
+ * `H.click` goes through `H.el`, which THROWS by name on a missing id, so this
+ * cannot quietly become a no-op that leaves the assertions below unreached.
+ */
+async function openPayload(): Promise<void> {
+  H.click('cs-preview-payload-toggle');
+  await H.settle();
+}
+
 /* ------------------------------------------- the gate band survives tabs --- */
 
 describe('the publish gate band is above the tab strip, not inside a tab', () => {
@@ -290,6 +307,7 @@ describe('the preview JSON is contained rather than allowed to widen the page', 
     '%s wraps instead of widening', async (testId) => {
       await mountDetail();
       await openTab('preview');
+      await openPayload();
       H.click('cs-preview');
       await H.settle();
 

@@ -1,5 +1,6 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { SectionCard, StatusBadge } from '../../components/admin/shell';
+import CaseStudySurfaceTabs from './CaseStudySurfaceTabs';
 import {
   LIVE_SURFACE_KEY, SURFACE_LENS_TABS, bandSummary, canonicalFacts, draftState,
   lensComposition, publicationState,
@@ -15,10 +16,17 @@ import type { CaseStudyDetail, CaseStudySurfaceKey, CaseStudySurfacePreview } fr
  * projection, so an operator watching them not move while the band list
  * reshuffles is watching the lens model hold.
  *
- * SEGMENTED TABS, NOT A SLIDER. Four audiences are not a continuum, and a slider
- * would imply an interpolated surface halfway between Training and Refactored,
- * which is meaningless. `role="tablist"` is the correct pattern because the tabs
+ * SEGMENTED TABS, NOT A SLIDER — and the control itself now lives in
+ * `CaseStudySurfaceTabs`, shared with the PREVIEW tab, which acquired a surface
+ * selector of its own. Four audiences are not a continuum, and a slider would
+ * imply an interpolated surface halfway between Training and Refactored, which
+ * is meaningless. `role="tablist"` is the correct pattern because the tabs
  * select which view of ONE object is shown.
+ *
+ * THIS TAB AND PREVIEW NO LONGER SHARE A SURFACE. Until 2026-08-27 both read
+ * `desk.lensSurface`, so "the lens I am inspecting" and "the surface I am
+ * previewing" were one piece of state and moving either moved both. They are two
+ * questions. This panel keeps the desk's lens; PREVIEW owns its own.
  *
  * SWITCHING A TAB WRITES NOTHING. It refires the preview GET, which is a read
  * endpoint that persists nothing. This component has no publish path at all —
@@ -51,27 +59,6 @@ interface Props {
 export default function CaseStudySurfaceLab({
   recordTitle, activeSurface, onSelectSurface, detail, preview, loading, error,
 }: Props): React.ReactElement {
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  /**
-   * Arrow-key navigation across the tablist, per the ARIA tabs pattern: Left and
-   * Right move and select, Home and End jump to the ends. Without it a keyboard
-   * user has to Tab through four controls to reach the fourth, which is the
-   * behaviour a tablist exists to replace.
-   */
-  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number): void => {
-    const last = SURFACE_LENS_TABS.length - 1;
-    let next: number | null = null;
-    if (event.key === 'ArrowRight') next = index === last ? 0 : index + 1;
-    else if (event.key === 'ArrowLeft') next = index === 0 ? last : index - 1;
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = last;
-    if (next === null) return;
-    event.preventDefault();
-    onSelectSurface(SURFACE_LENS_TABS[next].key);
-    tabRefs.current[next]?.focus();
-  };
-
   const activeTab = SURFACE_LENS_TABS.find((t) => t.key === activeSurface) ?? SURFACE_LENS_TABS[0];
   const projection = preview?.projection ?? null;
   const surface = preview?.surface ?? null;
@@ -85,43 +72,18 @@ export default function CaseStudySurfaceLab({
       title="Preview story as" icon="layout-grid-line" className="mb-4"
       subtitle="Four audience lenses over one verified record. Switching a lens reads; it never writes, publishes or changes the record."
     >
-      <div
-        role="tablist"
-        aria-label="Surface lens"
-        className="btn-group flex-wrap mb-3"
-        data-testid="cs-surface-lab-tablist"
-      >
-        {SURFACE_LENS_TABS.map((tab, index) => {
-          const selected = tab.key === activeSurface;
-          return (
-            <button
-              key={tab.key}
-              ref={(el) => { tabRefs.current[index] = el; }}
-              type="button"
-              role="tab"
-              id={`cs-lens-tab-${tab.key}`}
-              aria-selected={selected}
-              aria-controls="cs-lens-panel"
-              tabIndex={selected ? 0 : -1}
-              className={`btn ${selected ? 'btn-dark' : 'btn-outline-secondary'} px-3`}
-              style={{ minHeight: '44px', minWidth: '44px' }}
-              data-testid={`cs-lens-tab-${tab.key}`}
-              onClick={() => onSelectSurface(tab.key)}
-              onKeyDown={(event) => onKeyDown(event, index)}
-              disabled={loading}
-            >
-              <span className="text-uppercase fw-semibold small">{tab.label}</span>
-              {/* The live surface is marked in TEXT, not by colour alone — the
-                  same rule the roadmap glyphs follow. */}
-              {tab.key === LIVE_SURFACE_KEY && (
-                <span className="d-block small fw-normal" data-testid="cs-lens-live-marker">
-                  ↑ LIVE
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* The segmented control moved to `CaseStudySurfaceTabs` when PREVIEW
+          acquired one of its own. Two copies of four tabs would agree on the day
+          they were written and diverge afterwards. */}
+      <CaseStudySurfaceTabs
+        activeSurface={activeSurface}
+        onSelectSurface={onSelectSurface}
+        loading={loading}
+        idPrefix="cs-lens-"
+        tablistTestId="cs-surface-lab-tablist"
+        panelId="cs-lens-panel"
+        ariaLabel="Surface lens"
+      />
 
       {error && (
         <div className="alert alert-danger" data-testid="cs-surface-lab-error">{error}</div>

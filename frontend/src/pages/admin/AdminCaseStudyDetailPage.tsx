@@ -4,14 +4,16 @@ import { PageHeader, StatusBadge } from '../../components/admin/shell';
 import {
   CaseStudyActionBand, CaseStudyAnalyzePanel, CaseStudyArtifactsPanel, CaseStudyConsentPanel,
   CaseStudyContributorsPanel, CaseStudyDraftPanel, CaseStudyEvidencePanel, CaseStudyGateBand,
-  CaseStudyMetricsPanel, CaseStudyNarrativePanel, CaseStudyPreviewPanel, CaseStudyProvenancePanel,
+  CaseStudyMetricsPanel, CaseStudyNarrativePanel, CaseStudyProvenancePanel,
   CaseStudyPublishPanel, CaseStudyQuotesPanel, CaseStudyReadinessPanel, CaseStudyRepositoriesPanel,
   CaseStudyStorylinePanel, CaseStudyStudioTabStrip, CaseStudySyncPanel, CaseStudyVisualsPanel,
   DEFAULT_STUDIO_TAB, formatDate, readProvenance,
 } from '../../components/admin/caseStudy';
 import type { CaseStudyStudioTabKey } from '../../components/admin/caseStudy';
+import CaseStudyRenderedPreview from './CaseStudyRenderedPreview';
 import CaseStudySurfaceLab from './CaseStudySurfaceLab';
 import { PUBLISH_SURFACE, useCaseStudyDesk } from './useCaseStudyDesk';
+import { useCaseStudyPreviewLens } from './useCaseStudyPreviewLens';
 import { useCaseStudyStudio } from './useCaseStudyStudio';
 
 /**
@@ -58,6 +60,20 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
 
   const desk = useCaseStudyDesk(id);
   const studio = useCaseStudyStudio(id, desk.load);
+  /**
+   * PREVIEW's OWN surface, and its own read.
+   *
+   * It is lazy on purpose — the second argument is `tab === 'preview'`, so
+   * arriving on a record does not fire a second copy of the desk's preview GET,
+   * and an admin who is not on the surface-lab allowlist never meets a 403 they
+   * did not ask for. It is held HERE rather than inside the panel so leaving the
+   * tab and coming back does not reset the surface the operator chose.
+   *
+   * It starts on `PUBLISH_SURFACE` because that is the one live surface, and it
+   * is passed as a VALUE, never wired back: nothing in this lens can reach
+   * `publishCaseStudy`. See `useCaseStudyPreviewLens`.
+   */
+  const previewLens = useCaseStudyPreviewLens(id, tab === 'preview', PUBLISH_SURFACE);
 
   /** Fetch only what the open tab needs. See the hook's header. */
   useEffect(() => {
@@ -282,14 +298,15 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
         ) : null}
 
         {tab === 'preview' ? (
-          <CaseStudyPreviewPanel
-            preview={desk.rawPanelOpen ? desk.preview : null}
-            loading={desk.previewLoading} error={desk.previewError}
-            surfaceKey={desk.lensSurface}
-            onPreview={() => {
-              desk.setRawPanelOpen(true);
-              void desk.runPreview(desk.lensSurface);
-            }}
+          <CaseStudyRenderedPreview
+            lens={previewLens}
+            /* `rawPanelOpen` is reused rather than replaced. It already means
+               "the reviewer deliberately asked for the raw snapshot", which is
+               what the payload toggle asks — and the raw column names private
+               repositories by a disclosed exception, so it must stay opt-in
+               rather than appear for anyone who merely opened the tab. */
+            payloadOpen={desk.rawPanelOpen}
+            onTogglePayload={desk.setRawPanelOpen}
           />
         ) : null}
 

@@ -87,6 +87,28 @@
   .num-before{color:var(--cherry-deep);font-weight:700;font-family:var(--mono)}
   .num-after{color:var(--leaf-deep);font-weight:700;font-family:var(--mono)}
 
+  /* ── authoring reference (appended 2026-08-27) ── */
+  pre.code{background:#1A1A1A;color:#E9E9E8;border-radius:8px;padding:14px 16px;
+    overflow-x:auto;font-family:var(--mono);font-size:.775rem;line-height:1.55;margin:0;
+    -webkit-overflow-scrolling:touch}
+  pre.code b{color:#8FD0EA;font-weight:400}
+  pre.code i{color:#9FCF86;font-style:normal}
+  .tag{font-size:.625rem;font-weight:700;padding:2px 7px;border-radius:9999px;
+    white-space:nowrap;letter-spacing:.03em;text-transform:uppercase}
+  .t-req{background:var(--cherry-bg);color:var(--cherry-deep)}
+  .t-opt{background:var(--sunken);color:var(--muted)}
+  .t-sys{background:var(--berry-bg);color:var(--berry-deep)}
+  .t-ai{background:var(--leaf-bg);color:var(--leaf-deep)}
+  .t-sug{background:var(--amber-bg);color:#8A5606}
+  .t-hum{background:var(--cherry-bg);color:var(--cherry-deep)}
+  .legend{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+  .src{font-family:var(--mono);font-size:.6875rem;color:var(--muted);
+    display:block;margin-top:3px;overflow-wrap:anywhere}
+  table.ref{min-width:860px}
+  table.ref td:first-child{font-family:var(--mono);font-size:.775rem;white-space:nowrap}
+  h4.grp{font-size:.8125rem;margin:18px 0 8px;color:var(--strong)}
+  h4.grp:first-child{margin-top:0}
+
   footer{color:var(--muted);font-size:.8125rem;padding:24px 0 60px}
 </style>
 
@@ -908,6 +930,918 @@
       unpublished, archived or overridden. <b>The approved snapshot and the publication are
       byte-identical before and after</b>, which is the thing that actually matters &mdash; the only
       field that moved is the draft head, which is what a sync is for.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════ AUTHORING REFERENCE ══════════════ -->
+  <div class="banner info" style="margin-top:34px">
+    <b>The four sections below are an authoring reference, not part of the walkthrough above.</b>
+    They answer four questions asked of this system: what is the empty variable set, what does every
+    field mean, which fields may AI configure, and what would a prompt to build another record look
+    like. <b>Every field name, enum value and constraint below was read out of the source</b> and
+    carries its <code>file:line</code>. Where the system cannot do something, this reference says so
+    beside the field it affects rather than describing an intention.
+  </div>
+
+  <!-- ─────────────────────────────────────────── 1. THE EMPTY VARIABLE SET ── -->
+  <section class="stop">
+    <h2><span class="num">&sect;1</span> The empty variable set
+      <p class="q">&ldquo;I should also have an empty set of how to pass in the
+        variables.&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>What this object is</h3>
+      <p>It is <code>case_study_snapshots.content</code>, typed as
+      <code>CaseStudySnapshotContent</code>.
+      <span class="src">backend/src/types/caseStudy.ts:486&ndash;499</span></p>
+      <p><b>Exactly three keys are required</b> &mdash; <code>identity</code>,
+      <code>heroMetrics</code> and <code>taxonomy</code> &mdash; because a record cannot be rendered
+      or filtered without them. An empty <code>heroMetrics</code> array is legal: a record with no
+      verified figure renders a proof point instead of an invented number. <b>Every other section is
+      optional</b>, because the detail page hides unsupported sections rather than rendering them
+      empty, so &ldquo;absent&rdquo; must be representable and distinct from &ldquo;present but
+      blank&rdquo;.</p>
+    </div>
+
+    <div class="step">
+      <h3>How you actually pass it in &mdash; and the thing that surprises people</h3>
+      <p><b>There is no endpoint that accepts this object.</b> Nothing in the admin API takes a
+      content blob. Content arrives one of two ways: a <b>sync</b> builds it from attached
+      repositories, or a human <b>overrides one path at a time</b>:</p>
+      <pre class="code">POST /api/admin/case-studies/:id/overrides
+{ "path": "identity.standfirst", "value": "...", "note": "why" }</pre>
+      <p class="src">route backend/src/routes/admin/caseStudyAdminRoutes.ts:336&ndash;344 &middot;
+        body schema :135&ndash;138</p>
+      <ul class="tight" style="margin-top:12px">
+        <li><b>A path whose parent does not exist is refused, not conjured.</b> The call answers
+          <b>400</b> with <em>&ldquo;The path &hellip; does not exist in this snapshot, so the edit
+          was not applied. Edit a field the snapshot already carries.&rdquo;</em> You cannot author a
+          record by pushing this skeleton at it &mdash; you can only edit fields a sync already put
+          there.
+          <span class="src">backend/src/services/caseStudy/caseStudyAdminReview.ts:236&ndash;243</span></li>
+        <li><b>Every override mints a new draft snapshot version</b> in your name, stamped provenance
+          <code>human_override</code>. It does not publish and cannot alter an approved snapshot.
+          <span class="src">caseStudyAdminReview.ts:256&ndash;266 &middot;
+            caseStudySnapshotOverrides.ts:148&ndash;152</span></li>
+        <li><b>The value is never type-checked.</b> The schema is <code>value: z.unknown()</code> and
+          the writer sets it verbatim. <b>A misspelled enum is accepted, stored, and then renders
+          blank</b> &mdash; nothing rejects it at write time. This is why the enum columns in
+          &sect;2 matter more than they look, and it is how a template shipped two wrong enums
+          without anything failing.
+          <span class="src">caseStudyAdminRoutes.ts:136 &middot;
+            caseStudySnapshotOverrides.ts:141</span></li>
+      </ul>
+      <p style="margin-top:12px">So <b>the skeleton is a planning artifact.</b> Fill it in offline;
+      it then tells you which override calls to make, in which order, with which values.</p>
+    </div>
+
+    <div class="step">
+      <h3>The skeleton, every field, no values</h3>
+      <p>Optional keys are present here so the shape is complete. <b>Delete every key you are not
+      filling in</b> rather than sending it empty &mdash; absent hides the band, blank does
+      not.</p>
+      <pre class="code">{
+  "identity": {
+    "slug": "",
+    "title": "",
+    "standfirst": "",
+    "summary": "",
+    "organizationDisplayName": null,
+    "organizationIdentityMode": "",
+    "organizationNamingConsent": false,
+    "builderIdentityMode": "",
+    "builderNamingConsent": false,
+    "builtByType": "",
+    "programLabel": "",
+    "engagementWindow": {
+      "start": "", "end": "", "durationLabel": "",
+      "verification": { "class": "", "method": "", "verifiedAt": "", "evidenceId": "" }
+    },
+    "productionStatus": {
+      "status": "",
+      "verification": { "class": "", "method": "", "verifiedAt": "", "evidenceId": "" }
+    }
+  },
+
+  "heroMetrics": [
+    {
+      "key": "", "label": "", "valueDisplay": "",
+      "numericValue": null, "unit": "", "metricType": "",
+      "verification": { "class": "", "method": "", "verifiedAt": "", "evidenceId": "" },
+      "isHeadline": true, "publishable": false,
+      "measurement": {
+        "baseline": "", "sample": "", "measured": "", "methodology": "", "limitations": []
+      }
+    }
+  ],
+
+  "situation": {
+    "narrative": [], "constraints": [], "goals": [],
+    "verification": { "class": "", "method": "", "verifiedAt": "", "evidenceId": "" }
+  },
+
+  "buildTimeline": [
+    {
+      "date": "", "endDate": "", "label": "", "detail": "",
+      "source": "", "sourceRef": "",
+      "verification": { "class": "", "method": "", "verifiedAt": "", "evidenceId": "" }
+    }
+  ],
+
+  "architecture": {
+    "narrative": [], "stack": [], "capabilities": [],
+    "integrations": [], "dataStores": [],
+    "diagram": {
+      "nodes": [ { "id": "", "label": "", "kind": "" } ],
+      "edges": [ { "from": "", "to": "", "label": "" } ]
+    },
+    "diagramSource": ""
+  },
+
+  "measurement": {
+    "narrative": [],
+    "metrics": [
+      {
+        "key": "", "label": "", "valueDisplay": "",
+        "numericValue": null, "unit": "", "metricType": "",
+        "verification": { "class": "", "method": "", "verifiedAt": "", "evidenceId": "" },
+        "isHeadline": false, "publishable": false,
+        "measurement": {
+          "baseline": "", "sample": "", "measured": "", "methodology": "", "limitations": []
+        }
+      }
+    ]
+  },
+
+  "roadmap": [
+    {
+      "label": "", "status": "", "detail": "",
+      "verification": { "class": "", "method": "", "verifiedAt": "", "evidenceId": "" }
+    }
+  ],
+
+  "contributors": [
+    { "displayMode": "named", "displayName": "", "role": "", "kind": "",
+      "consentRecordedAt": "" },
+    { "displayMode": "role_only", "role": "", "kind": "" },
+    { "displayMode": "anonymous", "kind": "" }
+  ],
+
+  "artifacts": [
+    {
+      "id": "", "artifactType": "", "title": "", "description": "",
+      "sourceType": "", "sourceRef": "", "sourceCommitSha": "",
+      "visibility": "", "status": "", "publicUrl": "", "previewUrl": ""
+    }
+  ],
+
+  "repositories": [
+    {
+      "repoOwner": "", "repoName": "", "repoUrl": "", "role": "",
+      "visibility": "", "accessStatus": "", "allowPublicRepoLink": false,
+      "defaultBranch": "", "lastSeenSha": "", "lastSyncedAt": ""
+    }
+  ],
+
+  "taxonomy": {
+    "industry": "", "primaryCapability": "",
+    "capabilities": [], "stack": [],
+    "programKey": "", "builtByType": "",
+    "deliverables": [], "projectStatus": ""
+  }
+}</pre>
+      <p style="margin-top:11px"><b>Two of these arrays you do not author.</b>
+      <code>repositories[]</code> is written by attach and sync, and
+      <code>artifacts[].id</code> is a database id &mdash; both are shown for completeness so the
+      shape is not misleading, not because you fill them in by hand.</p>
+    </div>
+
+    <div class="banner warn" style="margin:0 18px 18px">
+      <b>Where this contradicts the shipped template.</b>
+      <code>docs/case-study/CASE_STUDY_AUTHORING_TEMPLATE.json</code> was checked field by field
+      against the types for this reference. Its two previously-wrong enums
+      (<code>builtByType</code>, <code>productionStatus</code>) are now <b>correct</b> &mdash; both
+      carry a &ldquo;CORRECTED&rdquo; note and both match the code. <b>Nine further gaps remain</b>,
+      listed in &sect;2 and marked <span class="tag t-req">missing from template</span>.
+    </div>
+  </section>
+
+  <!-- ────────────────────────────────────────── 2. THE FULL SET, ANNOTATED ── -->
+  <section class="stop">
+    <h2><span class="num">&sect;2</span> Every field, annotated, grouped by the tab that owns it
+      <p class="q">&ldquo;I&rsquo;d like the full set.&rdquo;</p></h2>
+
+    <div class="step">
+      <p>Grouped by the seven tabs so the reference maps onto the screen. The tab order is the order
+      of the work and is defined as data.
+      <span class="src">frontend/src/components/admin/caseStudy/caseStudyStudioTabs.ts:57&ndash;89</span></p>
+      <div class="legend">
+        <span class="tag t-req">required</span>
+        <span class="tag t-opt">optional &mdash; hides when absent</span>
+        <span class="tag t-sys">system-written, not authored</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <h4 class="grp">TRUTH &mdash; <code>identity</code>, the consent axis</h4>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Path</th><th>Type</th><th class="n">Req</th><th>Allowed values</th><th>What it does / if omitted</th></tr></thead>
+          <tbody>
+            <tr><td>identity.slug</td><td>string</td><td class="n"><span class="tag t-req">yes</span></td><td>lowercase, hyphenated</td>
+              <td>The <code>/stories/:slug</code> address. <b>Missing from the shipped template.</b><span class="src">rubric caseStudyReadinessRubric.ts:221&ndash;223</span></td></tr>
+            <tr><td>identity.title</td><td>string</td><td class="n"><span class="tag t-req">yes</span></td><td>free text</td>
+              <td>Page heading and index card both read it.<span class="src">types/caseStudy.ts:311</span></td></tr>
+            <tr><td>identity.standfirst</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>free text</td>
+              <td>One sentence under the title. Card renders it.<span class="src">types/caseStudy.ts:313</span></td></tr>
+            <tr><td>identity.summary</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>free text</td>
+              <td>Short summary; the card renders it alongside the standfirst. <b>Missing from the shipped template.</b><span class="src">types/caseStudy.ts:314 &middot; rubric :229&ndash;231</span></td></tr>
+            <tr><td>identity.organizationDisplayName</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>free text or null</td>
+              <td>Required when the mode is <code>named</code>; must be <em>absent</em> when the mode is <code>hidden</code>, or the gate blocks.<span class="src">gate caseStudyPublishRules.ts:261&ndash;270</span></td></tr>
+            <tr><td>identity.organizationIdentityMode</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td><td><code>named</code> &middot; <code>anonymized</code> &middot; <code>hidden</code></td>
+              <td>Drift between this and the record row is itself a blocker.<span class="src">types/caseStudy.ts:108 &middot; gate :245&ndash;249</span></td></tr>
+            <tr><td>identity.organizationNamingConsent</td><td>boolean</td><td class="n"><span class="tag t-req">yes</span></td><td>true / false</td>
+              <td><code>named</code> without consent &rArr; blocker <code>organization_consent</code>.<span class="src">gate :255&ndash;260</span></td></tr>
+            <tr><td>identity.builderIdentityMode</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td><td><code>named</code> &middot; <code>role_only</code> &middot; <code>anonymous</code></td>
+              <td><span class="src">types/caseStudy.ts:115</span></td></tr>
+            <tr><td>identity.builderNamingConsent</td><td>boolean</td><td class="n"><span class="tag t-req">yes</span></td><td>true / false</td>
+              <td><code>named</code> without consent &rArr; blocker <code>builder_consent</code>.<span class="src">gate :291&ndash;295</span></td></tr>
+            <tr><td>identity.builtByType</td><td>enum</td><td class="n"><span class="tag t-opt">no</span></td>
+              <td><code>learner</code> &middot; <code>intern</code> &middot; <code>client_team</code> &middot; <code>colaberry_team</code> &middot; <code>ai_flotation_team</code> &middot; <code>joint_team</code></td>
+              <td>Six values, no others. <code>client</code> and <code>partner</code> are <b>not</b> members &mdash; and the admin API <b>accepts them with a 200 and then silently discards them</b> at the next snapshot build, because the write path validates a free string and the build narrows with a function that returns <code>undefined</code> for a non-member. No error is ever shown.<span class="src">types/caseStudy.ts:118&ndash;125 &middot; free-string write caseStudyAdminService.ts:129 &middot; silent drop caseStudySyncSources.ts:100&ndash;102, 155</span></td></tr>
+            <tr><td>identity.programLabel</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>free text</td>
+              <td>Hides when absent. <b>Missing from the shipped template.</b><span class="src">types/caseStudy.ts:321</span></td></tr>
+            <tr><td>identity.engagementWindow</td><td>object</td><td class="n"><span class="tag t-opt">no</span></td>
+              <td><code>start</code> (required), <code>end</code>, <code>durationLabel</code>, <code>verification</code> (required)</td>
+              <td>Duration renders <em>only</em> when verified, which is why verification is paired into the object. <b>Missing from the shipped template.</b><span class="src">types/caseStudy.ts:323&ndash;328</span></td></tr>
+            <tr><td>identity.productionStatus</td><td>object</td><td class="n"><span class="tag t-opt">no</span></td>
+              <td><code>status</code>: <code>shipped</code> &middot; <code>in_progress</code> &middot; <code>paused</code> &middot; <code>not_pursued</code> &middot; <code>unknown</code>; plus <code>verification</code></td>
+              <td>Typed as <code>CaseStudyRoadmapStatus</code> &mdash; it genuinely does share the roadmap vocabulary. Verified with no <code>evidenceId</code> &rArr; <code>proof_metadata_missing</code>.<span class="src">types/caseStudy.ts:329&ndash;332 &middot; :244&ndash;249 &middot; gate :371&ndash;375</span></td></tr>
+            <tr><td>contributors[]</td><td>union</td><td class="n"><span class="tag t-opt">no</span></td>
+              <td>3 shapes keyed on <code>displayMode</code>: <code>named</code> (needs <code>displayName</code>, <code>role</code>, <code>kind</code>, <code>consentRecordedAt</code>) &middot; <code>role_only</code> (<code>role</code>, <code>kind</code>) &middot; <code>anonymous</code> (<code>kind</code>)</td>
+              <td>A discriminated union, so &ldquo;named without consent&rdquo; has no shape to occupy. <code>kind</code> takes the <code>builtByType</code> values. <b>Absent from the shipped template entirely.</b><span class="src">types/caseStudy.ts:414&ndash;431 &middot; gate :301&ndash;315</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 class="grp">TRUTH &mdash; <code>taxonomy</code>, the filter vocabulary</h4>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Path</th><th>Type</th><th class="n">Req</th><th>Allowed values</th><th>What it does / if omitted</th></tr></thead>
+          <tbody>
+            <tr><td>taxonomy.industry</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>free text</td><td>Facet on the index.</td></tr>
+            <tr><td>taxonomy.primaryCapability</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>free text</td><td>Facet on the index.</td></tr>
+            <tr><td>taxonomy.capabilities</td><td>string[]</td><td class="n"><span class="tag t-req">yes</span></td><td>free text</td><td>The <code>/stories</code> filters read it. Rubric wants 2&ndash;4.<span class="src">rubric :243&ndash;245</span></td></tr>
+            <tr><td>taxonomy.stack</td><td>string[]</td><td class="n"><span class="tag t-req">yes</span></td><td>free text</td><td>Auto-filled by sync. Rubric wants 3&ndash;5.<span class="src">rubric :239&ndash;241</span></td></tr>
+            <tr><td>taxonomy.deliverables</td><td>string[]</td><td class="n"><span class="tag t-req">yes</span></td><td>free text</td><td>Required array; may be empty.<span class="src">types/caseStudy.ts:472</span></td></tr>
+            <tr><td>taxonomy.programKey</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>free text</td><td><b>Missing from the shipped template.</b><span class="src">types/caseStudy.ts:470</span></td></tr>
+            <tr><td>taxonomy.builtByType</td><td>enum</td><td class="n"><span class="tag t-opt">no</span></td><td>as above</td><td>Read in preference to <code>identity.builtByType</code> by the projection.<span class="src">caseStudyPublicProjection.ts:181</span></td></tr>
+            <tr><td>taxonomy.projectStatus</td><td>enum</td><td class="n"><span class="tag t-opt">no</span></td><td>the five roadmap statuses</td><td>Distinct from <code>identity.productionStatus</code>. <b>Missing from the shipped template.</b><span class="src">types/caseStudy.ts:473</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="step">
+      <h4 class="grp">STORY &mdash; the prose, the figures, and the two story assets</h4>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Path</th><th>Type</th><th class="n">Req</th><th>Allowed values</th><th>What it does / if omitted</th></tr></thead>
+          <tbody>
+            <tr><td>situation.narrative</td><td>string[]</td><td class="n"><span class="tag t-req">yes*</span></td><td>free prose</td>
+              <td>*Required only if <code>situation</code> is present at all. Rubric wants 2+ paragraphs.<span class="src">types/caseStudy.ts:337 &middot; rubric :258&ndash;260</span></td></tr>
+            <tr><td>situation.constraints / .goals</td><td>string[]</td><td class="n"><span class="tag t-opt">no</span></td><td>free prose</td><td>Hide when absent.</td></tr>
+            <tr><td>situation.verification</td><td>object</td><td class="n"><span class="tag t-req">yes*</span></td><td>class + method</td><td>Required whenever <code>situation</code> exists.<span class="src">types/caseStudy.ts:340</span></td></tr>
+            <tr><td>architecture.stack / .capabilities</td><td>string[]</td><td class="n"><span class="tag t-req">yes*</span></td><td>free text</td><td>Both required whenever <code>architecture</code> exists.<span class="src">types/caseStudy.ts:368&ndash;369</span></td></tr>
+            <tr><td>architecture.narrative</td><td>string[]</td><td class="n"><span class="tag t-opt">no</span></td><td>free prose</td><td>Band returns <code>null</code> when empty.<span class="src">CaseStudyArchitecture.tsx:47</span></td></tr>
+            <tr><td>architecture.integrations / .dataStores</td><td>string[]</td><td class="n"><span class="tag t-opt">no</span></td><td>free text</td><td>Hide when absent.</td></tr>
+            <tr><td>measurement.metrics</td><td>object[]</td><td class="n"><span class="tag t-req">yes*</span></td><td>see metric entry below</td><td>Band hides only when narrative <em>and</em> metrics are both empty.<span class="src">CaseStudyMeasurement.tsx:55</span></td></tr>
+            <tr><td>heroMetrics</td><td>object[]</td><td class="n"><span class="tag t-req">yes</span></td><td>same shape as a metric</td><td>Required key; an <b>empty array is legal</b> and renders a proof point instead of an invented number. The shipped template fills this with prose notes, which is not a valid value.<span class="src">types/caseStudy.ts:487</span></td></tr>
+            <tr><td>roadmap[]</td><td>object[]</td><td class="n"><span class="tag t-opt">no</span></td>
+              <td><code>label</code> + <code>status</code> + <code>verification</code> required; <code>detail</code> optional</td>
+              <td>Band returns <code>null</code> when empty. Items admitting what was <em>not</em> solved are the most credible.<span class="src">types/caseStudy.ts:399&ndash;404 &middot; CaseStudyRoadmap.tsx:30</span></td></tr>
+            <tr><td>buildTimeline[]</td><td>object[]</td><td class="n"><span class="tag t-opt">no</span></td>
+              <td><code>date</code>, <code>label</code>, <code>source</code>, <code>verification</code> required; <code>source</code> &isin; <code>commit</code> &middot; <code>pull_request</code> &middot; <code>release</code> &middot; <code>project_stage</code> &middot; <code>artifact</code> &middot; <code>milestone</code> &middot; <code>manual</code></td>
+              <td>Band returns <code>null</code> when empty. <b>Absent from the shipped template entirely.</b><span class="src">types/caseStudy.ts:265&ndash;272, 343&ndash;352 &middot; CaseStudyTimeline.tsx:49</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 class="grp">The metric entry, in full</h4>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Field</th><th>Type</th><th class="n">Req</th><th>Allowed values</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>key</td><td>string</td><td class="n"><span class="tag t-req">yes</span></td><td>stable snake_case</td><td>Mirrors <code>case_study_metrics.metric_key</code>.</td></tr>
+            <tr><td>label / valueDisplay</td><td>string</td><td class="n"><span class="tag t-req">yes</span></td><td>free text</td><td>Never invent a <code>valueDisplay</code> to fill a card.<span class="src">rubric :334&ndash;337</span></td></tr>
+            <tr><td>metricType</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td>
+              <td><code>business_outcome</code> &middot; <code>delivery</code> &middot; <code>performance</code> &middot; <code>scale</code> &middot; <code>quality</code> &middot; <code>adoption</code> &middot; <code>technical</code></td>
+              <td><b>Required, and absent from the shipped template entirely.</b> Seven values.<span class="src">types/caseStudy.ts:133&ndash;140</span></td></tr>
+            <tr><td>numericValue / unit</td><td>number / string</td><td class="n"><span class="tag t-opt">no</span></td><td>&mdash;</td><td><b>Missing from the shipped template.</b><span class="src">types/caseStudy.ts:298&ndash;299</span></td></tr>
+            <tr><td>isHeadline</td><td>boolean</td><td class="n"><span class="tag t-req">yes</span></td><td>true / false</td><td>A headline figure needs baseline, sample or methodology or the gate blocks.<span class="src">gate :363&ndash;368</span></td></tr>
+            <tr><td>publishable</td><td>boolean</td><td class="n"><span class="tag t-req">yes</span></td><td>true / false</td><td>Defaults <b>false</b> in the table. Only publishable metrics are gate-visible.<span class="src">ensureCaseStudySchema.ts:213 &middot; gate :169</span></td></tr>
+            <tr><td>verification.class</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td><td><code>verified</code> &middot; <code>anonymized</code> &middot; <code>illustrative</code> &middot; <code>pending</code></td><td><code>pending</code> on a visible metric &rArr; blocker <code>metric_pending</code>.<span class="src">types/caseStudy.ts:47 &middot; gate :223&ndash;231</span></td></tr>
+            <tr><td>verification.method</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td>
+              <td><code>client</code> &middot; <code>repo</code> &middot; <code>platform</code> &middot; <code>internal</code> &middot; <code>self</code> &middot; <code>manual</code></td>
+              <td><b>Six values. The shipped template lists five &mdash; it omits <code>manual</code></b>, which is also the column default.<span class="src">types/caseStudy.ts:55&ndash;61 &middot; ensureCaseStudySchema.ts:203</span></td></tr>
+            <tr><td>verification.verifiedAt</td><td>ISO datetime</td><td class="n"><span class="tag t-opt">no</span></td><td>&mdash;</td><td>Its absence is why <code>pending</code> exists. <b>Missing from the shipped template.</b><span class="src">types/caseStudy.ts:91</span></td></tr>
+            <tr><td>verification.evidenceId</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td><code>case_study_evidence.id</code></td><td>Required in practice: <code>verified</code> with no evidenceId &rArr; <code>proof_metadata_missing</code>.<span class="src">gate :357&ndash;361</span></td></tr>
+            <tr><td>measurement.limitations</td><td>string[]</td><td class="n"><span class="tag t-req">yes*</span></td><td>free text</td><td>*Required whenever <code>measurement</code> is present. An empty array is an explicit &ldquo;none&rdquo;, which differs from &ldquo;nobody considered it&rdquo;.<span class="src">types/caseStudy.ts:289</span></td></tr>
+            <tr><td>measurement.measured</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>free text</td><td><b>Missing from the shipped template.</b><span class="src">types/caseStudy.ts:287</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="banner warn" style="margin-top:14px">
+        <b>Limit &mdash; the metrics in this object are not the metrics a chart can read.</b> These
+        live in snapshot content. A chart names rows in the <code>case_study_metrics</code> table,
+        and there is <b>no route, no UI control and no service function</b> that creates, lists or
+        updates one &mdash; verified by enumerating all 37 case-study routes and every write call in
+        <code>services/caseStudy/</code>. Metrics are the only case-study asset with no write path
+        anywhere in the application; the table and model are fully specified, the way in is not. So a
+        content metric renders on the page, and a chart naming the same key still resolves nothing:
+        <em>&ldquo;No metric on this record carries that key.&rdquo;</em>
+        <span class="src">resolver caseStudyChartService.ts:84&ndash;95 &middot;
+          table ensureCaseStudySchema.ts:189&ndash;218 &middot;
+          the offered keys come from the snapshot, admitted in-code at
+          frontend/src/pages/admin/AdminCaseStudyDetailPage.tsx:113&ndash;117</span>
+      </div>
+
+      <h4 class="grp">STORY &mdash; storyline (a story asset, not part of content)</h4>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Column</th><th>Type</th><th class="n">Req</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>storyline_text</td><td>TEXT</td><td class="n"><span class="tag t-req">yes</span></td>
+              <td>One row per record &mdash; <code>case_study_id</code> is the primary key, so saving replaces.<span class="src">ensureCaseStudyStoryAssets.ts:57&ndash;63</span></td></tr>
+            <tr><td>authored_by</td><td>VARCHAR(255)</td><td class="n"><span class="tag t-sys">system</span></td><td>Taken from the acting admin session.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:10px">What the field says of itself on screen, verbatim: <b>&ldquo;This is
+      editorial direction, not a fact about the record.&rdquo;</b> It <em>&ldquo;aims the draft
+      generator and tells the next reviewer what this record is for. It is stored outside the
+      snapshot entirely, so it cannot be published, cannot appear on any surface, and is never
+      scanned as a claim. Write what you think the story is, including the parts you have not proved
+      yet.&rdquo;</em>
+      <span class="src">frontend/src/components/admin/caseStudy/CaseStudyStorylinePanel.tsx:45&ndash;50
+        &middot; routes GET/PUT/DELETE caseStudyStudioRoutes.ts:203&ndash;231</span></p>
+
+      <h4 class="grp">STORY &mdash; quotes (the highest-risk asset in the system)</h4>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Column</th><th>Type</th><th class="n">Req</th><th>Allowed values / default</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>quote_text</td><td>TEXT</td><td class="n"><span class="tag t-req">yes</span></td><td>&mdash;</td><td>Human-supplied. There is no generate route for a quote.</td></tr>
+            <tr><td>attribution_mode</td><td>VARCHAR(20)</td><td class="n"><span class="tag t-req">yes</span></td><td><code>named</code> &middot; <code>role_only</code> &middot; <code>anonymous</code></td>
+              <td><code>named</code> requires both <code>display_name</code> and <code>consent_recorded_at</code> &mdash; a SQL CHECK, so it is unstorable otherwise, including through direct SQL.<span class="src">ensureCaseStudyStoryAssets.ts:131&ndash;134</span></td></tr>
+            <tr><td>display_name / attribution_role</td><td>VARCHAR(255)</td><td class="n"><span class="tag t-opt">no</span></td><td>&mdash;</td><td>Required by the CHECK when named.</td></tr>
+            <tr><td>attribution_kind</td><td>VARCHAR(40)</td><td class="n"><span class="tag t-req">yes</span></td><td>the <code>builtByType</code> vocabulary</td><td>&mdash;</td></tr>
+            <tr><td>consent_recorded_at</td><td>TIMESTAMPTZ</td><td class="n"><span class="tag t-opt">no</span></td><td>&mdash;</td><td>Required by the CHECK when named.</td></tr>
+            <tr><td>quote_source</td><td>VARCHAR(40)</td><td class="n"><span class="tag t-req">yes</span></td><td>&mdash;</td><td>Where the words came from.</td></tr>
+            <tr><td>verification_class</td><td>VARCHAR(20)</td><td class="n"><span class="tag t-req">yes</span></td><td>default <code>pending</code></td><td>Cannot be approved while <code>pending</code>.<span class="src">caseStudyQuoteService.ts:213&ndash;220</span></td></tr>
+            <tr><td>approved</td><td>BOOLEAN</td><td class="n"><span class="tag t-req">yes</span></td><td>default <b>false</b></td><td>A fresh quote is publishable on no axis at all.<span class="src">ensureCaseStudyStoryAssets.ts:125&ndash;126</span></td></tr>
+            <tr><td colspan="5"><b>Worth knowing:</b> approving a quote through the Story Studio always sets the class to <code>anonymized</code>, never <code>verified</code> &mdash; the hook hardcodes it, deliberately, as <em>&ldquo;the honest default for a quote a human recorded but has not independently corroborated&rdquo;</em>. <b><code>verified</code> is not reachable from the UI at all</b>, only by calling the API directly. And <code>attribution_kind</code> has no control either: the panel sends <code>client_team</code> for all three display modes, and the route validates it as a free string rather than an enum.<span class="src">frontend/src/pages/admin/useCaseStudyStudio.ts:285&ndash;291 &middot; kind CaseStudyQuotesPanel.tsx:72&ndash;78 &middot; route caseStudyStudioRoutes.ts:110</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="step">
+      <h4 class="grp">VISUALS &mdash; artifacts, the diagram, and charts</h4>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Path / column</th><th>Type</th><th class="n">Req</th><th>Allowed values</th><th>What it does / if omitted</th></tr></thead>
+          <tbody>
+            <tr><td>artifacts[].artifactType</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td>
+              <td><code>screenshot</code> &middot; <code>architecture</code> &middot; <code>photo</code> &middot; <code>demo</code> &middot; <code>deck</code> &middot; <code>roadmap</code> &middot; <code>report</code> &middot; <code>evaluation</code> &middot; <code>code</code> &middot; <code>document</code> &middot; <code>other</code></td>
+              <td>Eleven values in the type, and the template lists all eleven &mdash; but <b>the sync only recognises ten</b>. See the limit below.<span class="src">types/caseStudy.ts:175&ndash;187</span></td></tr>
+            <tr><td>artifacts[].sourceType</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td>
+              <td><code>repo</code> &middot; <code>portfolio_artifact</code> &middot; <code>manual</code> &middot; <code>generated</code></td>
+              <td><b>Required, and missing from the shipped template.</b><span class="src">types/caseStudy.ts:189</span></td></tr>
+            <tr><td>artifacts[].visibility</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td><td><code>public</code> &middot; <code>request_only</code> &middot; <code>private</code></td><td><span class="src">types/caseStudy.ts:192</span></td></tr>
+            <tr><td>artifacts[].status</td><td>enum</td><td class="n"><span class="tag t-req">yes</span></td><td><code>candidate</code> &middot; <code>approved</code> &middot; <code>rejected</code></td>
+              <td>Only <code>approved</code> renders. Band returns <code>null</code> when none.<span class="src">types/caseStudy.ts:195 &middot; CaseStudyArtifacts.tsx:78</span></td></tr>
+            <tr><td>artifacts[].id</td><td>string</td><td class="n"><span class="tag t-sys">system</span></td><td>uuid</td><td>Internal &mdash; never projected publicly.<span class="src">types/caseStudy.ts:434</span></td></tr>
+            <tr><td>architecture.diagram</td><td>object</td><td class="n"><span class="tag t-opt">no</span></td>
+              <td><code>nodes[]</code> (<code>id</code>, <code>label</code>, <code>kind</code> &isin; service / datastore / agent / ui / integration / job / other) and <code>edges[]</code> (<code>from</code>, <code>to</code>, <code>label?</code>)</td>
+              <td>The <em>verified</em> node/edge list, rendered as text on purpose. <b>Absent from the shipped template.</b><span class="src">types/caseStudy.ts:354&ndash;372</span></td></tr>
+            <tr><td>architecture.diagramSource</td><td>string</td><td class="n"><span class="tag t-opt">no</span></td><td>mermaid, capped 8000 chars</td>
+              <td>A drawing a <em>person</em> made. Nothing generates it. It renders beside the verified list, not instead of it. Angle brackets are refused outright.<span class="src">types/caseStudy.ts:374&ndash;392</span></td></tr>
+            <tr><td>charts.chart_type</td><td>VARCHAR(20)</td><td class="n"><span class="tag t-req">yes</span></td><td><b><code>bar</code> &middot; <code>ranking</code> only</b> &mdash; a SQL CHECK</td><td><span class="src">ensureCaseStudyStoryAssets.ts:165</span></td></tr>
+            <tr><td>charts.metric_keys</td><td>TEXT[]</td><td class="n"><span class="tag t-req">yes</span></td><td>default <code>{}</code></td>
+              <td>Names <code>case_study_metrics.metric_key</code> values. <b>There is deliberately no <code>values</code> column</b> &mdash; a chart references numbers, never carries them.<span class="src">ensureCaseStudyStoryAssets.ts:155&ndash;165</span></td></tr>
+            <tr><td>charts.approved</td><td>BOOLEAN</td><td class="n"><span class="tag t-req">yes</span></td><td>default <b>false</b></td><td>Unapproved charts never render publicly.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="banner warn" style="margin-top:14px">
+        <b>Limit &mdash; <code>artifactType: "photo"</code> does not survive a sync.</b> The type and
+        the template both offer eleven artifact types, but the sync's narrowing list contains
+        <b>ten</b> &mdash; <code>photo</code> is absent &mdash; and the narrowing call coerces
+        anything unrecognised to <code>'other'</code>. So a photograph is <b>silently rewritten to
+        <code>other</code></b> in snapshot content, which defeats the atmosphere-versus-evidence
+        distinction the type was built to carry. Nothing reports this to the author.
+        <span class="src">list caseStudySyncSources.ts:117 &middot;
+          coercion :236 (<code>oneOf(ARTIFACT_TYPES, row.artifact_type, 'other')</code>)</span>
+      </div>
+
+      <div class="banner warn" style="margin-top:12px">
+        <b>Limit &mdash; quotes and charts are authorable but never published.</b> Both have full
+        tables, models, services, routes and Story Studio panels. Neither has any public consumer:
+        <code>listPublishableQuotes</code> has <b>zero callers</b> outside tests, there is no quote
+        key on the public detail payload, and the chart functions are imported only by the admin
+        studio router. <b>Approving a quote does not put it on a page</b>, because no page reads
+        quotes. This is the single most surprising thing in the system and it is worth knowing before
+        you spend effort collecting consent.
+        <span class="src">verified by call-site search across backend/src excluding tests</span>
+      </div>
+
+      <div class="banner warn" style="margin-top:12px">
+        <b>Limit &mdash; a chart cannot be deleted.</b> The studio router exposes
+        <code>GET /charts</code>, <code>PUT /charts</code> and
+        <code>POST /charts/:chartId/approval</code>. <b>There is no DELETE.</b> An unapproved test
+        chart stays on the record permanently.
+        <span class="src">caseStudyStudioRoutes.ts:365, 376, 393 &mdash; enumerated in full</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <h4 class="grp">SURFACES, PREVIEW, PUBLISH</h4>
+      <p>None of these three tabs authors a field of the content object. <b>SURFACES writes nothing
+      at all</b> &mdash; it is read-only lens exploration. <b>PREVIEW</b> is read-only too, though it
+      runs the real publish gate. <b>PUBLISH</b> performs the four lifecycle acts and is the only one
+      of the three that writes.</p>
+      <div class="banner warn" style="margin-bottom:12px">
+        <b>Limit &mdash; the per-surface overrides cannot be authored.</b> The publication row carries
+        <code>surface_title_override</code> and <code>surface_summary_override</code>, and the public
+        store <em>reads</em> them &mdash; but <b>no code path in the repository ever writes either
+        one</b>, and the publish route body accepts only <code>{ surfaceKey, snapshotId }</code>. The
+        &ldquo;one record, two audiences&rdquo; mechanism exists in the schema and is not reachable
+        from any surface. Anything describing it as an authoring feature is describing an intention.
+        <span class="src">column ensureCaseStudySchema.ts:307 &middot;
+          read-only caseStudyPublicStore.ts:140 &middot;
+          publish body caseStudyAdminRoutes.ts:140</span>
+      </div>
+      <ul class="tight">
+        <li><b><code>surfaceKey</code></b> &isin; <code>enterprise</code> &middot;
+          <code>training</code> &middot; <code>ai-flotation</code> &middot; <code>refactored</code>.
+          All four exist in the contract from day one so that adding Training is a publication row
+          rather than a schema change &mdash; but <b>only <code>enterprise</code> is publishable</b>,
+          and the gate rejects the other three with <code>surface_not_publishable</code>.
+          <span class="src">types/caseStudy.ts:508 &middot; gate caseStudyPublishRules.ts:180&ndash;185</span></li>
+        <li><b>Limit &mdash; three of the four lenses return 403.</b> Preview is gated on
+          <code>CASE_STUDY_SURFACE_LAB_USER_IDS</code>, which defaults to <code>'off'</code> and is
+          unset on the production backend. <b><code>enterprise</code> is exempt and previews
+          normally</b>; <code>training</code>, <code>ai-flotation</code> and <code>refactored</code>
+          answer <b>403</b>, not 401.
+          <span class="src">gate backend/src/middlewares/caseStudySurfaceLabGate.ts:52&ndash;63 &middot;
+            exemption caseStudySurfaceLabAccess.ts:42, 53&ndash;59 &middot;
+            default backend/src/config/env.ts:188</span></li>
+        <li><b>Limit &mdash; external references do not exist in any form.</b> Not a type, not a
+          field, not a table, not a route, not a UI &mdash; nothing was built, not even a stub. There
+          is no surface for a customer reference, an outside testimonial or a third-party citation.
+          Quotes exist, but they are internal and consent-gated. The nearest existing concept is
+          <code>case_study_evidence</code>, which already carries <code>public_url</code> and
+          <code>is_publicly_openable</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ──────────────────────────────── 3. WHAT AI MAY AND MAY NOT CONFIGURE ── -->
+  <section class="stop">
+    <h2><span class="num">&sect;3</span> Which fields AI may configure &mdash; and which it may not
+      <p class="q">&ldquo;I&rsquo;d like to know which fields can be configured by AI (if so what&rsquo;s
+        the prompt).&rdquo;</p></h2>
+
+    <div class="banner" style="margin:0 18px 0">
+      <b>Read this first: no language model is wired to anything.</b> The draft generator is
+      deterministic string assembly &mdash; it filters and joins sentences built from repository
+      facts. It discloses this on screen as <b>&ldquo;Last run by:
+      <code>deterministic</code>&rdquo;</b>. A sweep of the entire case-study subtree and everything
+      it imports found <b>zero</b> calls to any model provider. The repo does carry provider SDKs,
+      and about forty files elsewhere in the backend use them, but <b>none is reachable from this
+      code</b>. The two matches inside the subtree are a lookup table that <em>detects</em> provider
+      names as dependency evidence in a scanned repository, which is the opposite of calling one.
+      <span class="src">engine caseStudyStoryDraftGenerator.ts:94&ndash;152 &middot;
+        the switch :184&ndash;185 &middot; on screen CaseStudyDraftPanel.tsx:78&ndash;80 &middot;
+        detector table repoDependencySignatures.ts:56&ndash;96</span>
+    </div>
+
+    <div class="step">
+      <h3>The seam, and what it reports</h3>
+      <p>One line decides the label, and production never takes the second branch:</p>
+      <pre class="code">const engine      = input.engine ?? deterministicEngine;
+const generatedBy = input.engine ? <i>'injected-engine'</i> : <i>'deterministic'</i>;</pre>
+      <p class="src">caseStudyStoryDraftGenerator.ts:184&ndash;185</p>
+      <p style="margin-top:11px"><code>generatedBy</code> takes exactly two values in this codebase.
+      <code>injected-engine</code> is reachable only when a caller passes an engine, which only tests
+      do &mdash; the production route passes just <code>recordTitle</code>, <code>storyline</code>
+      and <code>proofs</code>. <b>In production the value is always <code>deterministic</code></b>,
+      and it is carried all the way to the reviewer's screen and stored on every draft row.
+      <span class="src">route caseStudyStudioRoutes.ts:277&ndash;281 &middot;
+        column ensureCaseStudyStoryAssets.ts:84</span></p>
+    </div>
+
+    <div class="step">
+      <h3>The six field classes no AI value may ever occupy</h3>
+      <p>A denylist matched against each lower-cased path segment, in order, so a key belonging to
+      two classes reports the stricter one deterministically.</p>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Class</th><th>Matched against any path segment</th><th>Example paths it closes</th></tr></thead>
+          <tbody>
+            <tr><td>roi</td><td><code>roi</code> <code>revenue</code> <code>costsav</code> <code>savings</code> <code>payback</code> <code>profit</code></td><td>any business-outcome figure</td></tr>
+            <tr><td>quote</td><td><code>quote</code> <code>testimonial</code> <code>endorsement</code></td><td>every quote field</td></tr>
+            <tr><td>consent</td><td><code>consent</code> <code>allowpublicrepolink</code></td><td><code>identity.organizationNamingConsent</code>, <code>contributors[n].consentRecordedAt</code>, <code>repositories[n].allowPublicRepoLink</code></td></tr>
+            <tr><td>production_claim</td><td><code>production</code> <code>deployed</code> <code>deployment</code> <code>shipped</code> <code>golive</code> <code>projectstatus</code></td><td><code>identity.productionStatus.*</code>, <code>taxonomy.projectStatus</code></td></tr>
+            <tr><td>organization_identity</td><td><code>organi[sz]ation</code> <code>client</code> <code>customer</code> <code>displayname</code></td><td><code>identity.organizationDisplayName</code>, <code>contributors[n].displayName</code></td></tr>
+            <tr><td>metric</td><td><code>metric</code> <code>measurement</code> <code>numericvalue</code> <code>valuedisplay</code> <code>baseline</code> <code>methodology</code></td><td>all of <code>heroMetrics[n].*</code> and <code>measurement.*</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="src" style="margin-top:8px">union
+        backend/src/services/caseStudy/caseStudyProvenance.ts:106&ndash;107 &middot;
+        rules :113&ndash;120 &middot; classifier :128&ndash;134</p>
+
+      <p style="margin-top:12px"><b>The denylist is enforced at five independent sites</b>, three of
+      which would each be sufficient on their own: the generator filters its own output
+      (<code>caseStudyStoryDraftGenerator.ts:206&ndash;213</code>); the draft store refuses to insert
+      the row (<code>caseStudyAiDraftStore.ts:110&ndash;114</code>); <b>promotion re-screens and
+      throws a 400</b>, deliberately re-checking because the rules can change between storing and
+      promoting (<code>:243&ndash;250</code>); the provenance merge screens the value out before
+      ranking so the field stays empty even if nothing else offers one
+      (<code>caseStudyProvenance.ts:246&ndash;254</code>); and the publish gate sweeps for it again
+      (<code>caseStudyPublishClaimScan.ts:297&ndash;310</code>).</p>
+
+      <div class="banner warn" style="margin-top:12px">
+        <b>A discrepancy worth knowing, found while writing this.</b> The on-screen disclaimer says
+        AI may never write <em>&ldquo;a metric, a quotation, a client name, a business outcome, a
+        production claim, a consent record or a verification &mdash; those seven&hellip;&rdquo;</em>
+        <b>The enforced denylist has six classes, and &ldquo;a verification&rdquo; is not one of
+        them.</b> Verification paths are caught only when they hang off an already-forbidden parent
+        &mdash; <code>heroMetrics[0].verification</code> matches on <code>herometrics</code>,
+        <code>identity.productionStatus.verification</code> on <code>productionstatus</code>. A
+        standalone <code>situation.verification</code> matches no rule; it is closed by the
+        allowlist below, not by the denylist. The protection is real, the count on screen is off by
+        one.
+        <span class="src">screen CaseStudyDraftPanel.tsx:56&ndash;60 &middot;
+          code caseStudyProvenance.ts:104 (&ldquo;the six absolute NOs&rdquo;)</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>The allowlist &mdash; the only six paths AI may draft into</h3>
+      <pre class="code">export const PROPOSABLE_PATHS: readonly string[] = [
+  <i>'identity.standfirst'</i>,
+  <i>'identity.summary'</i>,
+  <i>'situation.narrative[0]'</i>,
+  <i>'situation.narrative[1]'</i>,
+  <i>'architecture.narrative[0]'</i>,
+  <i>'architecture.narrative[1]'</i>,
+];</pre>
+      <p class="src">caseStudyStoryDraftGenerator.ts:54&ndash;61</p>
+      <p style="margin-top:11px">Because this is an <b>allowlist</b>, every path not on it is
+      human-only by construction &mdash; including paths the denylist never mentions. These six were
+      chosen because they are descriptive prose about work the repository proof independently
+      establishes, and because after promotion they land inside the claim scanner's surface, so a
+      figure smuggled into one is still caught.</p>
+      <p><b>Even for these six, AI never writes the field.</b> It writes a row in
+      <code>case_study_ai_drafts</code>. The value reaches content only when a human promotes it.</p>
+    </div>
+
+    <div class="step">
+      <h3>The quarantine, and what promotion actually does</h3>
+      <ul class="tight">
+        <li><b>The row is the quarantine.</b> A generated value is written to
+          <code>case_study_ai_drafts</code> and stays there. <b>No snapshot builder, sync service,
+          publication service or projection module reads that table</b> &mdash; the only way out is
+          the promote endpoint.
+          <span class="src">ensureCaseStudyStoryAssets.ts:78&ndash;90</span></li>
+        <li><b>The generator physically cannot persist anything.</b> It imports two things &mdash; a
+          type and the path classifier. No model, no store, no database. It returns proposals.
+          <span class="src">caseStudyStoryDraftGenerator.ts:38&ndash;39</span></li>
+        <li><b>At most one live proposal per path</b>, enforced by a partial unique index scoped to
+          <code>proposed</code>. Regenerating supersedes rather than stacks, so a reviewer is never
+          shown four competing sentences for one field.
+          <span class="src">ensureCaseStudyStoryAssets.ts:97&ndash;98</span></li>
+        <li><b>Promotion requires a named human.</b> If the session carries no identity the call
+          throws: <em>&ldquo;This action is recorded against the person who took it, and your session
+          carries no identity. Sign in again.&rdquo;</em>
+          <span class="src">caseStudyStudioRoutes.ts:184&ndash;192</span></li>
+        <li><b>The promoted value lands as <code>human_override</code> in the promoter's name</b>,
+          never as <code>ai_draft</code> and never under the engine's name. The machine's involvement
+          survives only as a provenance note: <em>&ldquo;Promoted from an AI draft generated by
+          &hellip;&rdquo;</em>
+          <span class="src">caseStudyAiDraftStore.ts:252&ndash;261 &middot;
+            caseStudySnapshotOverrides.ts:148&ndash;152</span></li>
+        <li><b>Promotion creates a new draft snapshot version.</b> It does not publish, does not
+          approve, and cannot touch what is already live &mdash; an approved published snapshot is
+          immutable.
+          <span class="src">caseStudyAdminReview.ts:258&ndash;266</span></li>
+        <li><b>Rows are never deleted.</b> Rejection flips the status and records who decided, so the
+          history stays auditable.</li>
+      </ul>
+      <p style="margin-top:11px"><b><code>ai_draft</code> is the weakest of seven provenance
+      tiers</b> and, notably, <b>no production code path ever writes it into a snapshot</b>. The four
+      writers that exist emit <code>repo_extraction</code>, <code>repo_manifest</code>,
+      <code>project_facts</code> and <code>human_override</code>. The tier is defined and screened so
+      that a snapshot assembled by something other than the resolver is still caught.
+      <span class="src">precedence backend/src/types/caseStudyProvenance.ts:35&ndash;43</span></p>
+    </div>
+
+    <div class="step">
+      <h3>What the gate refuses, regardless of who wrote it</h3>
+      <div class="tablewrap">
+        <table class="ref">
+          <thead><tr><th>Blocker</th><th>The exact condition</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td>self_attested_verification</td>
+              <td><code>class === 'verified' &amp;&amp; method === 'self'</code> on a publishable metric &mdash; <em>&ldquo;a self-report is not third-party verification&rdquo;</em>. The rule then <code>continue</code>s deliberately, so the mislabel is not buried under a second finding.</td>
+              <td class="n"><span class="src">caseStudyPublishRules.ts:351&ndash;356</span></td></tr>
+            <tr><td>proof_metadata_missing</td>
+              <td><code>class === 'verified'</code> with no <code>evidenceId</code> &mdash; <em>&ldquo;a verified class with no evidence pointer is an assertion, not proof&rdquo;</em></td>
+              <td class="n"><span class="src">:357&ndash;361</span></td></tr>
+            <tr><td>proof_metadata_missing</td>
+              <td><code>isHeadline</code> with no baseline, sample <em>or</em> methodology</td>
+              <td class="n"><span class="src">:363&ndash;368</span></td></tr>
+            <tr><td>ai_generated_quote</td>
+              <td>a quoted run of <b>three or more words</b> in prose whose provenance tier is <code>ai_draft</code> <b>or</b> <code>unknown</code>. Two messages: an AI draft &ldquo;may never create a quote&rdquo;; <code>unknown</code> reads &ldquo;no provenance entry accounts for who wrote it&rdquo;.</td>
+              <td class="n"><span class="src">caseStudyPublishClaimScan.ts:281&ndash;291 &middot; regex :161</span></td></tr>
+            <tr><td>ai_generated_quote / unverified_claim</td>
+              <td>a second, independent pass: <em>any</em> <code>ai_draft</code> provenance entry at a forbidden-class path &mdash; no quotation needed</td>
+              <td class="n"><span class="src">:297&ndash;310</span></td></tr>
+            <tr><td>unverified_claim</td>
+              <td>a percentage or currency token in prose not backed by a verified figure; ROI words with no verified business-outcome metric; production words with no verified production status</td>
+              <td class="n"><span class="src">:322&ndash;337</span></td></tr>
+            <tr><td>metric_pending</td>
+              <td>a visible metric whose verification class is still <code>pending</code></td>
+              <td class="n"><span class="src">caseStudyPublishRules.ts:223&ndash;231</span></td></tr>
+            <tr><td>organization_consent / builder_consent</td>
+              <td>mode <code>named</code> without consent; a named contributor with no <code>consentRecordedAt</code>; or drift between the snapshot and the record row</td>
+              <td class="n"><span class="src">:245&ndash;315</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:10px">The gate runs <b>before any write, on every publish including a
+      repeat</b> &mdash; consent can be withdrawn between two clicks. It returns every blocker at
+      once rather than short-circuiting, and <b>there is no override flag anywhere in it</b>.
+      <span class="src">caseStudyPublicationService.ts:248&ndash;271</span></p>
+    </div>
+
+    <div class="step">
+      <h3>The per-field verdict</h3>
+      <div class="cols">
+        <div class="col can">
+          <h4>AI may draft it &mdash; 6 paths</h4>
+          <ul class="tight">
+            <li><code>identity.standfirst</code></li>
+            <li><code>identity.summary</code></li>
+            <li><code>situation.narrative[0]</code> and <code>[1]</code></li>
+            <li><code>architecture.narrative[0]</code> and <code>[1]</code></li>
+          </ul>
+          <p style="font-size:.85rem;margin-top:9px">And &ldquo;draft&rdquo; means <em>proposes a row
+          a human must promote</em>. In practice the deterministic engine only ever emits four of the
+          six &mdash; it never produces <code>identity.summary</code> or
+          <code>situation.narrative[1]</code>.</p>
+        </div>
+        <div class="col cannot">
+          <h4>Human only &mdash; everything else</h4>
+          <ul class="tight">
+            <li><b>Denylisted outright:</b> every metric and measurement field, every quote field,
+              organization and contributor names, all consent fields, production status,
+              <code>allowPublicRepoLink</code>, and anything ROI-shaped.</li>
+            <li><b>Human-only by allowlist omission</b> (not forbidden, simply not proposable):
+              <code>situation.constraints</code>, <code>situation.goals</code>,
+              <code>buildTimeline[]</code>, <code>roadmap[]</code>,
+              <code>artifacts[].title</code> and <code>.description</code>,
+              <code>architecture.integrations</code>, <code>architecture.dataStores</code>,
+              <code>identity.programLabel</code>, <code>architecture.diagramSource</code>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h4 class="grp" style="margin-top:16px">The one middle case: AI may suggest where a quote
+        belongs, but never a word of it</h4>
+      <p><code>suggestQuoteSlots</code> takes <b>three booleans</b> &mdash;
+      <code>hasApprovedQuote</code>, <code>hasNamedOrganization</code>,
+      <code>hasVerifiedOutcomeMetric</code> &mdash; and returns <b>positions and reasons</b>. It
+      cannot see or echo any text, because no text is passed to it. There is no generate route for a
+      quote anywhere; the only quote-creating endpoint takes human-supplied words.
+      <span class="src">caseStudyQuoteService.ts:241&ndash;255 &middot;
+        POST /quotes caseStudyStudioRoutes.ts:418</span></p>
+      <p><b>On the pilot record this panel offers nothing</b> &mdash; the page passes an empty list,
+      so no guidance appears about which quotes a story of this shape wants.</p>
+    </div>
+
+    <div class="step">
+      <h3>&ldquo;What&rsquo;s the prompt?&rdquo; &mdash; there is no prompt string, there is an input object</h3>
+      <p>Because the engine is deterministic, nothing resembling a natural-language prompt exists.
+      What the generator takes is this, and this is the honest answer to the question:</p>
+      <pre class="code">interface GenerateStoryDraftInput {
+  readonly recordTitle: string;
+  <b>/** Read to aim the draft. NEVER emitted as a proposed value. */</b>
+  readonly storyline: string | null;
+  readonly proofs: readonly CaseStudyRepoProof[];
+  <b>/** Injected in tests. Production omits it. */</b>
+  readonly engine?: DraftEngine;
+}</pre>
+      <p class="src">caseStudyStoryDraftGenerator.ts:154&ndash;161</p>
+      <p style="margin-top:12px">Each <code>CaseStudyRepoProof</code> is the fact payload read from
+      one repository &mdash; what it <code>proves</code>, what it
+      <code>cannotProve</code> (never empty), its <code>technologies</code>,
+      <code>architectureSignals</code>, first and last commit dates,
+      <code>candidateArtifacts</code> and <code>accessStatus</code>.
+      <code>cannotProve</code> is always seeded with four structural limits stating that a repository
+      can never prove a business outcome, a client identity, production usage, or who did the work.
+      <span class="src">backend/src/types/caseStudyStory.ts:333&ndash;363</span></p>
+      <p><b>At runtime <code>recordTitle</code> is the hardcoded literal
+      <code>'this Case Study'</code></b> &mdash; the record's real title is not passed in.
+      <span class="src">caseStudyStudioRoutes.ts:271&ndash;281</span></p>
+      <p style="margin-top:11px">What the deterministic engine does with that: it reads
+      <code>technologies</code> (first four) and <code>architectureSignals</code> (first three) from
+      the <b>first</b> proof only, and fills at most four sentence templates &mdash;
+      <em>&ldquo;&hellip; is built in X, Y, Z.&rdquo;</em>, <em>&ldquo;This record covers work in
+      owner/repo.&rdquo;</em>, <em>&ldquo;The repository carries &hellip;&rdquo;</em>,
+      <em>&ldquo;Further dependencies detected include &hellip;&rdquo;</em>. <b>No template contains
+      a numeral</b>, which is why the claim scanner has nothing to catch from the current engine.
+      <span class="src">caseStudyStoryDraftGenerator.ts:94&ndash;152</span></p>
+      <p><b>The generator distrusts its own engine's output</b> and refuses three ways, each surfaced
+      to the reviewer rather than swallowed: not on the allowlist; classified into a forbidden class;
+      or <b>the storyline handed back verbatim</b> &mdash; <em>&ldquo;Editorial direction is not a
+      fact and is never promoted into the record.&rdquo;</em> Further bounds: 40 drafts per run, 4000
+      characters per value, and <b>a proposal with no stated rationale is not stored</b>.
+      <span class="src">refusals :197&ndash;230 &middot; bounds caseStudyAiDraftStore.ts:62, 65, 121&ndash;123</span></p>
+    </div>
+
+    <div class="banner warn" style="margin:0 18px 18px">
+      <b>Two honest gaps in this model, both stated by the code itself.</b>
+      <b>(1)</b> Path-class screening is not content classification. An AI draft at a permitted path
+      could contain &ldquo;cut costs 40%&rdquo; and the provenance module would not catch it; only
+      the downstream claim scan would, over a fixed surface and a closed vocabulary. What escapes
+      both is named outright in the source: <em>&ldquo;A false sentence that uses none of the scanned
+      vocabulary &mdash; 'the system transformed their operation' &mdash; passes, and no
+      deterministic rule could reach it.&rdquo;</em> Human snapshot approval is the stated control.
+      <b>(2)</b> <code>ruleQuotes</code> blocks quotations in prose at <code>ai_draft</code> and
+      <code>unknown</code> tiers, <b>but not at a human tier</b> &mdash; so a human pasting a
+      quotation into narrative prose publishes. The consent-bearing quote row exists as the
+      alternative that keeps the prose route closed.
+      <span class="src">caseStudyProvenance.ts:26&ndash;32 &middot;
+        caseStudyPublishClaimScan.ts:33&ndash;37 &middot;
+        caseStudyQuoteService.ts:10&ndash;19</span>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────── 4. A PROMPT FOR THE NEXT CASE STUDY ── -->
+  <section class="stop">
+    <h2><span class="num">&sect;4</span> Asking for another one &mdash; the request template
+      <p class="q">&ldquo;What needs to be submitted when asking to build another one. If I were to
+        create a prompt to create another one, what would that look like?&rdquo;</p></h2>
+
+    <div class="step">
+      <h3>The five steps a request has to survive</h3>
+      <p>The tab order is the order of the work, and the authoring flow underneath it has five steps
+      with a real sequence: <b>storyline &rarr; sources &rarr; analyze &rarr; draft &rarr; edit</b>.
+      A request that cannot supply step 2 cannot reach step 4, because the draft button is disabled
+      with no repository attached: <em>&ldquo;Attach a repository first. A draft with no source to
+      describe would be invention.&rdquo;</em>
+      <span class="src">caseStudyStudioTabs.ts:18 &middot; CaseStudyDraftPanel.tsx:74&ndash;75</span></p>
+      <ol class="tight" style="padding-left:19px">
+        <li><b>Storyline</b> &mdash; editorial direction. Stored outside the snapshot, never
+          published, never scanned as a claim. Say what you think the story is, <em>including the
+          parts you have not proved</em>.</li>
+        <li><b>Sources</b> &mdash; attach 1&ndash;5 repositories. This is what the record is built
+          from; nothing else generates content.</li>
+        <li><b>Analyze / sync</b> &mdash; builds the first draft snapshot from repository facts.
+          <b>Until this runs there are no paths to override</b>, because an override on a
+          non-existent path is refused.</li>
+        <li><b>Draft</b> &mdash; deterministic proposals into the six allowed prose paths, each
+          promoted or rejected by a named human.</li>
+        <li><b>Edit</b> &mdash; one <code>POST /overrides</code> per field, then approve the
+          snapshot, then publish through the gate.</li>
+      </ol>
+    </div>
+
+    <div class="step">
+      <h3>The request template</h3>
+      <p>This is what a person writes to start a new record. It is deliberately organised around
+      <b>what no system can infer</b>.</p>
+      <pre class="code">CASE STUDY REQUEST
+
+1. STORYLINE (editorial direction, not claims)
+   What is the story? Who was this for, what changed, and why would a
+   reader care? Include the parts not yet proved.
+
+2. REPOSITORIES  (required - 1 to 5; without one, nothing can be drafted)
+   - https://github.com/&lt;owner&gt;/&lt;repo&gt;   role:
+   Private repos: may the URL be shown publicly?  yes / no
+
+3. IDENTITY AND CONSENT  (human only - no system can infer these)
+   Client / organisation name:
+   Organisation identity mode:  named | anonymized | hidden
+   Naming consent on file?      yes / no      recorded when:
+   Builder identity mode:       named | role_only | anonymous
+   Builder naming consent?      yes / no
+   Built by:  learner | intern | client_team | colaberry_team |
+              ai_flotation_team | joint_team
+
+4. METRICS  (each needs a baseline, or it does not render)
+   key | label | value shown | metricType | headline? | publishable?
+   baseline:      what it was before, over what period
+   sample:        how much, how many, over what window
+   methodology:   how it was measured        (required if headline)
+   limitations:   what this figure does NOT prove
+   verification:  class + method + evidence id
+   NOTE: class 'verified' with method 'self' is REFUSED outright.
+
+5. QUOTES  (optional; consent is not optional)
+   text:
+   attribution: named | role_only | anonymous
+   if named, display name AND a consent timestamp are BOTH required
+
+6. PRODUCTION STATUS
+   shipped | in_progress | paused | not_pursued | unknown
+   plus how it is verified, and the evidence id
+
+7. SURFACE
+   enterprise    (the only publishable surface today)</pre>
+    </div>
+
+    <div class="step">
+      <h3>A worked example &mdash; the live pilot, as it would have been requested</h3>
+      <pre class="code">1. STORYLINE
+   People with no technical background were being taught to architect AI
+   systems, and the interesting claim is that they finished able to do it.
+   The proof we actually hold is the training platform's own repository -
+   not learner outcomes, which we have not measured yet.
+
+2. REPOSITORIES
+   - the accelerator platform repository        role: primary
+   Private: URL not to be shown publicly.
+
+3. IDENTITY AND CONSENT
+   Organisation:            Colaberry
+   Organisation mode:       named        consent: yes
+   Builder mode:            role_only    consent: no
+   Built by:                colaberry_team
+
+4. METRICS
+   key: verified_competencies
+   NOTE: on this record the metric rows were never created, so any chart
+   naming this key resolves to nothing. See the limit in section 2.
+
+5. QUOTES        none - no consent on file
+6. PRODUCTION    shipped, verified by repo, evidence id required
+7. SURFACE       enterprise</pre>
+      <p style="margin-top:12px">Result: record
+      <code>268c5050-7f83-4b5d-ac39-cd44dbe433e2</code>, slug
+      <code>ai-systems-architect-training-system</code>, published to the Enterprise surface since
+      2026-08-25 and returning HTTP 200 throughout this walkthrough.</p>
+      <div class="banner warn" style="margin-top:12px">
+        <b>Do not copy this record as a model for everything.</b> It demonstrates the narrative and
+        publication path well. It is a <b>poor</b> model for charts, metrics and artifacts, which are
+        exactly the three assets that are empty or unresolvable on it: <b>0 artifacts</b>, <b>0
+        usable metric rows</b>, <b>3 charts that render nothing and cannot be deleted</b>. It is also
+        <b>not seeded</b> &mdash; it is a live production record created through the API, so it
+        cannot be recreated locally from a seed file.
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>What the requester must supply, because nothing can infer it</h3>
+      <div class="cols">
+        <div class="col cannot">
+          <h4>No system can produce these</h4>
+          <ul class="tight">
+            <li><b>Repository URLs.</b> No repo, no draft, no facts, no record worth publishing.</li>
+            <li><b>Client consent</b> &mdash; and, for a named quote or contributor, the
+              <em>timestamp</em> it was recorded. A SQL CHECK makes a named quote without one
+              literally unstorable.</li>
+            <li><b>Real metrics with baselines.</b> A figure with no account of how it was produced
+              does not render, and a headline figure with no baseline, sample or methodology blocks
+              the publish.</li>
+            <li><b>Approved quotes</b>, in the speaker's words, with consent on file.</li>
+            <li><b>Evidence ids.</b> A <code>verified</code> class with no evidence pointer is an
+              assertion, not proof.</li>
+          </ul>
+        </div>
+        <div class="col can">
+          <h4>The system supplies these for you</h4>
+          <ul class="tight">
+            <li><b>Stack and technologies</b>, from the repository sync &mdash; override only to
+              correct.</li>
+            <li><b>Architecture signals</b> and the verified node/edge diagram.</li>
+            <li><b>Build timeline</b>, from commit and release history.</li>
+            <li><b>Candidate artifacts</b> &mdash; candidates, never approvals.</li>
+            <li><b>Four prose drafts</b>, deterministic, each awaiting a human decision.</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top:13px"><b>The shortest honest summary of the whole model:</b> the machine
+      may describe what a repository structurally proves. Everything a reader would sue over
+      &mdash; a number, a name, a consent, a production claim &mdash; is written by a person, in
+      their own name, and checked again at the gate before it ships.</p>
     </div>
   </section>
 

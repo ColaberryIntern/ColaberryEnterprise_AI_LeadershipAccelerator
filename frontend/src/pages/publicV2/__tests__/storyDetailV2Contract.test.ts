@@ -78,7 +78,20 @@ const MEDIA_SOURCES = [
   path.join(PAGE_DIR, 'StoryContextStrip.tsx'),
   path.join(PAGE_DIR, 'StorySituation.tsx'),
   path.join(PAGE_DIR, 'storySeoModel.ts'),
+  /* The rendered body itself, extracted from this page's `ready` branch so the
+     admin Story Studio's PREVIEW tab can mount THE PAGE instead of drawing a
+     second one. It is listed here for the same reason every file above is: it
+     is page-local, it is not in the closed `components/caseStudy/` set, and
+     without an entry here it could carry a hex literal, an inline style object,
+     a class outside the namespace or a control character and nothing in this
+     repository would say so. It is now the most important file in the list -
+     the admin preview renders it, so a defect in it is a defect an operator
+     approves a publish against. */
+  path.join(PAGE_DIR, 'StoryDetailArticle.tsx'),
 ];
+
+/** The page-local file the article moved into. Read wherever PAGE is read. */
+const ARTICLE = path.join(PAGE_DIR, 'StoryDetailArticle.tsx');
 
 /**
  * The picture rules, split out of `storyDetailV2.css` when it passed CLAUDE.md's
@@ -174,10 +187,13 @@ describe('the case-study component directory is untouched', () => {
   });
 
   it('composes those components rather than redrawing them', () => {
-    // The page holds the hero and the CTA; the section dispatcher holds the
-    // rest. Both are read, because "which file imports it" is a layout decision
-    // and this rule is about not reimplementing any of them.
-    const source = stripComments(read(PAGE)) + stripComments(read(SECTIONS));
+    // The article holds the hero and the CTA; the section dispatcher holds the
+    // rest; the page holds neither since the article was extracted. All three
+    // are read, because "which file imports it" is a layout decision and this
+    // rule is about not reimplementing any of them.
+    const source = stripComments(read(PAGE))
+      + stripComments(read(ARTICLE))
+      + stripComments(read(SECTIONS));
     for (const component of ['CaseStudyTimeline', 'CaseStudyArchitecture',
       'CaseStudyMeasurement', 'CaseStudyRoadmap', 'CaseStudyArtifacts', 'CaseStudyCTA',
       'CaseStudyVerificationBadge']) {
