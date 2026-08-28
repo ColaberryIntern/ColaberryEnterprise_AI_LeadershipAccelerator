@@ -98,16 +98,28 @@ export function checkLab(lab: LabInput): LabViolation[] {
   const downloads = (html.match(/Downloads folder/gi) || []).length;
   if (downloads > 0) v('no_downloads_folder', `${downloads} prompt(s) still save to the Downloads folder instead of the repo`);
 
+  // A document week is exempt from having STEPS and from committing a recording.
+  // It is NOT exempt from putting its documents somewhere findable.
+  //
+  // That exemption originally covered the evidence rule too, and it hid a real
+  // defect: week 11 named no folder at ALL — its five prompts saved to the
+  // Downloads folder — while `capabilityInventory` declares ARCHITECTURE with
+  // evidence `architecture/`. The capability could not be satisfied by any
+  // student following the lab exactly, and the checker written to catch that was
+  // skipping the one week it was true of.
   if (DOCUMENT_WEEKS.includes(lab.week)) {
-    // Nothing further to assert. This week is documents ON PURPOSE and the rest
-    // of the contract does not apply to it.
+    checkEvidence(lab.week, html, v);
     return out;
   }
 
   const steps = stepCount(html);
   if (steps === 0) {
+    // Everything else assumes a step lab. An unconverted lab does not name the
+    // evidence folder EITHER, but that is a consequence of the shape rather than
+    // an independent defect — converting it fixes both, and reporting both buries
+    // the one fact an editor can act on.
     v('has_steps', 'no "Step N" headings — this is still the old pick-one-of-five shape');
-    return out;  // every remaining rule assumes a step lab; reporting them would be noise
+    return out;
   }
   if (steps < 5) v('enough_steps', `only ${steps} steps — the rebuilt labs run 7`);
 
@@ -118,16 +130,21 @@ export function checkLab(lab: LabInput): LabViolation[] {
     v('commits_to_week_folder', `never mentions ${artifactPath} — the recording has nowhere to land and run evidence will never be found`);
   }
 
-  // THE IMPORTANT ONE. If the lab tells a student to build `mcp-server/` and the
-  // inventory looks for `mcp-server/`, they agree. Rename either and a student who
-  // did everything right reads as having built nothing.
-  for (const evidence of expectedEvidenceFor(lab.week)) {
+  checkEvidence(lab.week, html, v);
+  return out;
+}
+
+/**
+ * THE IMPORTANT RULE. If the lab tells a student to build `mcp-server/` and the
+ * inventory looks for `mcp-server/`, they agree. Rename either and a student who
+ * did everything right reads as having built nothing, with no error anywhere.
+ */
+function checkEvidence(week: number, html: string, v: (rule: string, detail: string) => void): void {
+  for (const evidence of expectedEvidenceFor(week)) {
     if (!html.includes(evidence)) {
       v('evidence_path_agrees', `capabilityInventory expects "${evidence}" for this week, but the lab never tells the student to create it`);
     }
   }
-
-  return out;
 }
 
 /** Check a whole curriculum. Weeks absent from the input are themselves a violation. */
