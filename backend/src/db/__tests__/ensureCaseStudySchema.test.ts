@@ -117,6 +117,18 @@ describe('ensureCaseStudySchema — statement contract', () => {
     expect(statements.some((s) =>
       /UNIQUE INDEX.*case_study_repositories \(collection_id\) WHERE role = 'primary'/.test(s),
     )).toBe(true);
+    // one metric row per (case study, metric key). resolveChart builds
+    // `new Map(metrics.map((m) => [m.metric_key, m]))`, which keeps the LAST
+    // duplicate silently — so two rows sharing a key do not error, they render a
+    // chart plotting an arbitrary one of them. Asserted as UNIQUE and unqualified:
+    // a WHERE clause here would leave the duplicate representable in exactly the
+    // pending state a producer writes.
+    expect(statements.some((s) =>
+      /UNIQUE INDEX.*case_study_metrics \(case_study_id, metric_key\)/.test(s),
+    )).toBe(true);
+    expect(statements.some((s) =>
+      /UNIQUE INDEX.*case_study_metrics \(case_study_id, metric_key\) WHERE/.test(s),
+    )).toBe(false);
   });
 
   it('defaults closed: consent, publishability and visibility all default to the safe value', () => {
@@ -242,6 +254,12 @@ describe('parseCreatedColumns — the parity source of truth', () => {
       'cs_publications_unique_case_surface',
       'cs_snapshots_unique_case_version',
       'cs_repositories_unique_per_collection',
+      // The point of naming this one explicitly: it is the index whose absence is
+      // invisible. A missing unique index does not break a query, it just stops
+      // refusing a duplicate — so it must be in the list assertCaseStudySchema()
+      // checks against pg_indexes, or "boot ran clean" would cover a database
+      // where the constraint silently never applied.
+      'cs_metrics_unique_case_key',
     ]));
   });
 });
