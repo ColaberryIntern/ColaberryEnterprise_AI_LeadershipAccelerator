@@ -6,9 +6,19 @@
  * remediation (15 admin route files were unauthenticated). Recognized guards: requireAdmin (the
  * standard admin gate), requireCoryAuthorized (Cory's command interface), requireAnyAdmin (any
  * admin-portal identity incl. bridge-minted staff mgmt tokens — used by /api/admin/me which
- * self-scopes by role), requireSection (per-section mgmt-RBAC guard), and requireSalesOrAdmin
- * (sales + admin, used by lead routes). A new admin route file with no guard fails CI loudly
- * instead of silently shipping an open endpoint.
+ * self-scopes by role), requireSection (per-section mgmt-RBAC guard), requireSalesOrAdmin
+ * (sales + admin, used by lead routes), and requireAgentManagerOrAdmin (AI Workforce Management —
+ * a super_admin, or an admin whose own org_member is upstream of the target agent; wraps
+ * requireAdmin internally, so it's a strictly narrower gate, not a bypass). A new admin route file
+ * with no guard fails CI loudly instead of silently shipping an open endpoint.
+ *
+ * 2026-08-28: added requireAgentManagerOrAdmin after discovering agentRoleCharterRoutes.ts
+ * correctly failed this check — it uses the real guard, but the guard name wasn't recognized yet.
+ * (agentDetailRoutes.ts, which adopted the same guard one PR earlier, had passed only by accident:
+ * this lint does a plain substring search over the WHOLE file including comments, and that file's
+ * own prose happened to contain the literal text "requireAdmin". That's a pre-existing weakness in
+ * how this check matches — a comment mentioning a guard name passes as readily as a real import —
+ * not something this change attempts to fix; it's flagged here for whoever next touches this file.)
  *
  * Run: `node scripts/lint-route-auth.js`
  */
@@ -16,7 +26,14 @@ const fs = require('fs');
 const path = require('path');
 
 const DIR = path.resolve(__dirname, '../backend/src/routes/admin');
-const GUARDS = ['requireAdmin', 'requireCoryAuthorized', 'requireAnyAdmin', 'requireSection', 'requireSalesOrAdmin'];
+const GUARDS = [
+  'requireAdmin',
+  'requireCoryAuthorized',
+  'requireAnyAdmin',
+  'requireSection',
+  'requireSalesOrAdmin',
+  'requireAgentManagerOrAdmin',
+];
 
 let files;
 try {
