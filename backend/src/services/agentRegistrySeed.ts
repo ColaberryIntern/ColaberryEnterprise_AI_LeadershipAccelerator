@@ -30,6 +30,17 @@ interface AgentSeedEntry {
 const AGENT_REGISTRY: AgentSeedEntry[] = [
   // --- schedulerService.ts cron jobs ---
   {
+    agent_name: 'ExplorerContentSync',
+    agent_type: 'scheduled_processor',
+    module: 'runContentSync',
+    source_file: 'backend/src/services/explorerGrowth/content/runContentSync.ts',
+    trigger_type: 'cron',
+    schedule: '50 2 * * *',
+    category: 'behavioral',
+    description:
+      'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute and an hour before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
+  },
+  {
     agent_name: 'ExplorerGovernorDecide',
     agent_type: 'scheduled_processor',
     module: 'runGovernor',

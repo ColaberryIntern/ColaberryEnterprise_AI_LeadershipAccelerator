@@ -44,6 +44,7 @@ import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomS
 import { instrumentCronJob } from './cronInstrumentation';
 import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
 import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
+import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
   isWithinSendWindow,
   isWithinCallSchedule,
@@ -1746,6 +1747,30 @@ export function startScheduler(): void {
       await runScheduledGovernor();
     }).catch((err) => {
       console.error('[Scheduler] ExplorerGovernorDecide failed:', err);
+    });
+  });
+
+  // Explorer Growth OS - content registry sync (EPIC 5 T006).
+  //
+  // 02:50 UTC, THIRTY MINUTES BEFORE the profile recompute and a full hour
+  // before the Governor decides. Ordering is the point again: the Governor
+  // resolves content at decision time, so a registry refreshed after it runs
+  // would serve yesterday's catalogue for a day.
+  //
+  // PROJECTS ONLY. It reads published curriculum and writes registry rows; it
+  // decides nothing and sends nothing. The no-send guard's sweep now covers
+  // services/explorerGrowth/content, so a mailer import there fails the build.
+  //
+  // runContentSync checks isExplorerFeatureEnabled('journeyIntelligence')
+  // itself and returns {skippedReason:'flag_off'} when off, so this is dark
+  // until both the master flag and the sub-flag are on. Registered in
+  // agentRegistrySeed as ExplorerContentSync so it is pausable from
+  // Admin > Agents without a redeploy.
+  cron.schedule('50 2 * * *', () => {
+    instrumentCronJob('ExplorerContentSync', async () => {
+      await runContentSync();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerContentSync failed:', err);
     });
   });
 
