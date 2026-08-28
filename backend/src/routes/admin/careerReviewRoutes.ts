@@ -7,7 +7,11 @@ import {
   handleGetRecordForReview,
 } from '../../controllers/careerPublicationController';
 import { grantScope, revokeScope, listScopes } from '../../services/career/careerMentorScopeService';
-import { handlePortfolioPageDecision, handleGetPortfolioReviewQueue } from '../../controllers/careerPortfolioPageController';
+import {
+  handlePortfolioPageDecision,
+  handleGetPortfolioReviewQueue,
+  handleGetPortfolioPreview,
+} from '../../controllers/careerPortfolioPageController';
 
 const router = Router();
 
@@ -33,6 +37,7 @@ router.post('/api/admin/career/review/:recordId', requireCareerReviewer, handleR
 // The person-level page. Same reviewer gate, and the per-learner scope check lives in
 // the controller so a mentor cannot act on someone else's learner.
 router.get('/api/admin/career/portfolio-review-queue', requireCareerReviewer, handleGetPortfolioReviewQueue);
+router.get('/api/admin/career/portfolio-review/:enrollmentId/preview', requireCareerReviewer, handleGetPortfolioPreview);
 router.post('/api/admin/career/portfolio-review/:enrollmentId', requireCareerReviewer, handlePortfolioPageDecision);
 
 // ── Mentor privilege, admin-only ───────────────────────────────────────────

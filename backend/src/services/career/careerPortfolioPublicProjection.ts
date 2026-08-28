@@ -118,6 +118,37 @@ function httpUrl(v: unknown): string | null {
   }
 }
 
+/**
+ * A record's title, and NEVER its slug.
+ *
+ * `ali-muwwakkil` rendered as a project title on Ali's own live page, because
+ * `system.project_name` was null and the fallback was the slug. A URL fragment presented
+ * as the name of someone's work reads as broken software to the hiring manager it is
+ * shown to.
+ *
+ * The fallback chain uses only REAL data, never an invented name:
+ *   1. `project_name` as compiled
+ *   2. the descriptor's own first heading -- the document titled itself
+ *   3. "Untitled record" -- honest, and still a working link
+ */
+function recordTitle(r: any): string {
+  const named = str(r.title) ?? str(r.project_name);
+  if (named) return named;
+
+  const descriptor = str(r.descriptor);
+  if (descriptor) {
+    for (const line of descriptor.split('\n')) {
+      const m = /^\s{0,3}#{1,3}\s+(.+?)\s*#*\s*$/.exec(line);
+      // Strip inline emphasis so a heading like `# **Strategy**` does not keep its stars.
+      if (m) {
+        const heading = m[1].replace(/[*_`]/g, '').trim();
+        if (heading) return heading.slice(0, 160);
+      }
+    }
+  }
+  return 'Untitled record';
+}
+
 // ── The projection. ───────────────────────────────────────────────────────
 
 export interface ProjectPortfolioInput {
@@ -158,7 +189,7 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     .filter((r) => r && typeof r === 'object' && str(r.slug))
     .map((r) => ({
       slug: str(r.slug)!,
-      title: str(r.title) ?? str(r.slug)!,
+      title: recordTitle(r),
       published_at: str(r.published_at),
     }));
 

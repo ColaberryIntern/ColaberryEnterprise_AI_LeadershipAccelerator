@@ -91,3 +91,9 @@
          opacity: .7; margin: 0 0 12px; font-weight: 700; }
 .cr-name { font-weight: 700; font-size: 16px; }
 .cr-mono { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; }
+
+/* The page under review, rendered exactly as the public page renders it. */
+.cr-preview {
+  margin: 14px 0 4px; border: 1px solid var(--border-subtle); border-radius: 12px;
+  background: var(--surface, rgba(255,255,255,.02)); overflow: hidden;
+}
