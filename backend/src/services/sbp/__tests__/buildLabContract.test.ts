@@ -8,7 +8,7 @@
  * checker that runs against production also run here, with no database.
  */
 import {
-  DOCUMENT_WEEKS, STEP_WEEKS,
+  DOCUMENT_WEEKS, NO_RECORDING_WEEKS, STEP_WEEKS,
   checkCurriculum, checkLab, expectedEvidenceFor, weekArtifactPath,
 } from '../buildLabContract';
 
@@ -80,6 +80,23 @@ describe('checkLab', () => {
 
   it('catches a lab whose recording has nowhere to land', () => {
     const lab = { ...goodLab(5), bodyHtml: goodLab(5).bodyHtml.replace('artifacts/week-05/', 'somewhere') };
+    expect(rules(checkLab(lab))).toContain('commits_to_week_folder');
+  });
+
+  it('accepts the two weeks that legitimately end without a recording', () => {
+    // Weeks 3 and 4 come from another session and end differently. Ali decided
+    // 2026-08-28 not to add a recording step rather than edit their pedagogy, so
+    // this is a recorded decision. Without it the audit reports the same two
+    // failures forever and becomes one people learn to ignore.
+    for (const week of NO_RECORDING_WEEKS) {
+      const lab = { ...goodLab(week), bodyHtml: goodLab(week).bodyHtml.replace(weekArtifactPath(week), '') };
+      expect(rules(checkLab(lab))).not.toContain('commits_to_week_folder');
+    }
+  });
+
+  it('does not let that exception widen to other weeks', () => {
+    // Week 7 has a recording step and must keep naming somewhere to put it.
+    const lab = { ...goodLab(7), bodyHtml: goodLab(7).bodyHtml.replace('artifacts/week-07/', '') };
     expect(rules(checkLab(lab))).toContain('commits_to_week_folder');
   });
 
