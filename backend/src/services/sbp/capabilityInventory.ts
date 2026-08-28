@@ -89,8 +89,15 @@ export const CAPABILITIES: readonly CapabilityDef[] = [
     evidence: ['CLAUDE.md'] },
   { id: 'SKILLS', label: 'Agent Skills', weeks: [2], shape: 'collection', producer: 'curriculum',
     evidence: ['.claude/skills/'], minimum: 3 },
+  // `inbox/` rather than the tidier `eval/` + `tools/` I first wrote here. Those
+  // were read off the blueprint's PROSE ("API client, tool definitions, eval
+  // script") and the week 3 lab creates neither — it builds `inbox/` and a script
+  // whose filename the student chooses. The lab audit caught the disagreement on
+  // its first production run, which is the entire reason that checker derives its
+  // expectations from this file: an evidence path invented from a description is
+  // a path no student will ever produce.
   { id: 'WORKFLOW_ASSISTANT', label: 'Workflow Assistant', weeks: [3], shape: 'module', producer: 'curriculum',
-    evidence: ['eval/', 'tools/'] },
+    evidence: ['inbox/'] },
   { id: 'PROMPT_LIBRARY', label: 'Prompt Library', weeks: [4], shape: 'collection', producer: 'curriculum',
     evidence: ['prompts/'], minimum: 3 },
   { id: 'MCP_SERVER', label: 'MCP Server', weeks: [5, 6], shape: 'service', producer: 'curriculum',
