@@ -216,6 +216,40 @@ export const CASE_STUDY_STATEMENTS: string[] = [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_cs_metrics_case_publishable ON case_study_metrics (case_study_id, publishable)`,
   `CREATE INDEX IF NOT EXISTS idx_cs_metrics_verification_class ON case_study_metrics (verification_class)`,
+  // ONE row per (case study, metric key). This is a correctness constraint, not a
+  // lookup optimisation, and the failure it prevents is silent rather than loud:
+  // `resolveChart` (caseStudyChartService.ts:87) builds
+  // `new Map(metrics.map((m) => [m.metric_key, m]))`, and Map construction keeps
+  // the LAST entry for a repeated key without complaint. Two rows sharing a key
+  // therefore render a chart that is quietly wrong — it plots a real, verified,
+  // publishable number, just not the one anybody chose — and nothing anywhere
+  // reports that a choice was made. A duplicate that throws on write is a bug
+  // report; a duplicate that resolves to an arbitrary row is a published claim
+  // nobody can trace.
+  //
+  // Applied NOW, before the first producer exists, because it can never be
+  // cheaper: the table has no write path anywhere in backend/src (two `findAll`
+  // call sites, zero create/upsert/update/bulkCreate, and no `INSERT INTO
+  // case_study_metrics` in the repository), so there is no existing data for the
+  // index build to reject. Added after rows accumulate, this becomes a
+  // data-cleanup exercise on figures that may already be published.
+  //
+  // A UNIQUE INDEX rather than an ALTER TABLE ... ADD CONSTRAINT for one concrete
+  // reason: Postgres has no `ADD CONSTRAINT IF NOT EXISTS`, so the constraint form
+  // cannot satisfy this module's every-statement-is-idempotent rule, and a
+  // non-idempotent statement here would warn on every boot forever. The unique
+  // index enforces the same invariant, raises the same SQLSTATE 23505, and names
+  // itself as the violated constraint. It is also the house pattern — 79 other
+  // `CREATE UNIQUE INDEX IF NOT EXISTS` statements across backend/src/db, 8 of
+  // them in this file.
+  //
+  // NOT partial. Every other unique index in this file that carries a WHERE clause
+  // does so because the invariant is genuinely conditional (one PRIMARY repo per
+  // collection; one PROPOSED draft per path). This invariant is not: a duplicate
+  // key is wrong while pending, because the producer would accumulate a new row on
+  // every run instead of updating one, and `loadCandidateMetrics` would hand the
+  // snapshot builder two entries for one key.
+  `CREATE UNIQUE INDEX IF NOT EXISTS cs_metrics_unique_case_key ON case_study_metrics (case_study_id, metric_key)`,
 
   // --- case_study_evidence ------------------------------------------------------
   // `evidence_record_id` links the existing evidence_records table without owning
@@ -360,73 +394,21 @@ export const CASE_STUDY_STATEMENTS: string[] = [
 ];
 
 /**
- * Pull `table.column` pairs out of the CREATE TABLE statements themselves.
+ * The two DDL parsers live in `caseStudyDdlParser.ts`. They moved there when this
+ * file crossed CLAUDE.md's 500-line ceiling; see that module's header for what
+ * moved and, more importantly, what deliberately did not.
  *
- * Pure and exported so (a) the post-check below can never drift from the DDL it
- * checks, and (b) the model-parity test can assert every column created here has
- * a matching Sequelize attribute. That parity guard is not theoretical: on
- * 2026-08-22 nine models were given columns in Postgres that were never declared
- * as attributes, and because Sequelize only ever reads and writes attributes it
- * knows about, the entire tenancy runtime did nothing while every test passed.
+ * They are RE-EXPORTED here rather than merely relocated. Three suites and the
+ * Story Studio peer module import them from this path — including
+ * `models/__tests__/caseStudyModelParity.test.ts:295`, which asserts its own
+ * import specifiers are exactly `['../../db/ensureCaseStudySchema', 'fs',
+ * 'path']`. Keeping the surface intact is what makes the split invisible to
+ * every guard, instead of requiring each guard to be edited to accommodate a
+ * refactor — and an edited guard is a weakened guard.
  */
-export function parseCreatedColumns(statements: string[]): string[] {
-  const NON_COLUMN = /^(UNIQUE|PRIMARY|CONSTRAINT|FOREIGN|CHECK|EXCLUDE)\b/i;
-  const columns: string[] = [];
+export { parseCreatedColumns, parseCreatedIndexes } from './caseStudyDdlParser';
 
-  for (const stmt of statements) {
-    const header = stmt.match(/CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\(/i);
-    if (!header) continue;
-    const table = header[1];
-
-    const body = stmt.slice(stmt.indexOf('(') + 1, stmt.lastIndexOf(')'));
-
-    // Split on top-level commas, NOT on newlines. Splitting by line had two holes:
-    // a column definition wrapped across two lines produced a phantom entry from
-    // the continuation, and two columns declared on one physical line silently
-    // dropped the second. The silent one is the dangerous half — this list is the
-    // parity source of truth, and a column it fails to report is a column the
-    // parity test will never require a model to declare, which is precisely how
-    // the 2026-08-22 tenancy runtime ended up inert with every test green.
-    // Depth tracking keeps `UNIQUE (a, b)` and `gen_random_uuid()` intact.
-    const parts: string[] = [];
-    let depth = 0;
-    let current = '';
-    for (const ch of body) {
-      if (ch === '(') depth++;
-      else if (ch === ')') depth--;
-      if (ch === ',' && depth === 0) {
-        parts.push(current);
-        current = '';
-      } else {
-        current += ch;
-      }
-    }
-    parts.push(current);
-
-    for (const part of parts) {
-      const definition = part.trim().replace(/\s+/g, ' ');
-      if (!definition || NON_COLUMN.test(definition)) continue;
-      const name = definition.match(/^([a-z_][a-z0-9_]*)\s+/i);
-      if (name) columns.push(`${table}.${name[1]}`);
-    }
-  }
-  return columns;
-}
-
-/**
- * Index names, derived from the DDL for the same reason the column list is:
- * a hand-maintained subset silently stops covering whatever is added later.
- *
- * The first version of this file hardcoded 8 of the 19 indexes, which meant the
- * other 11 could be entirely absent from production and assertCaseStudySchema()
- * would still report ok — a post-check with a hole in it is worse than none,
- * because it produces false confidence rather than no confidence.
- */
-export function parseCreatedIndexes(statements: string[]): string[] {
-  return statements
-    .map((s) => s.replace(/\s+/g, ' ').match(/CREATE (?:UNIQUE )?INDEX IF NOT EXISTS (\w+)/i)?.[1])
-    .filter((name): name is string => Boolean(name));
-}
+import { parseCreatedColumns, parseCreatedIndexes } from './caseStudyDdlParser';
 
 export const CASE_STUDY_REQUIRED_COLUMNS: string[] = parseCreatedColumns(CASE_STUDY_STATEMENTS);
 
