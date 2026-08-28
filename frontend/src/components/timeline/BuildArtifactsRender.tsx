@@ -108,7 +108,45 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
   const [localDone, setLocalDone] = useState(false);
   const [repoSync, setRepoSync] = useState<string | null>(null);
   const [syncRepo, setSyncRepo] = useState<{ owner: string; name: string } | null>(null);
+  // Connecting a repo FROM HERE, rather than sending the student to Projects.
+  //
+  // The only other way to connect is `WorkspaceRepoPanel`, which renders solely
+  // inside a project workspace — so a student with no project has never been
+  // shown the option at all. Measured 2026-08-27: of the 8 students producing
+  // real work with no repo connected, SIX had no project, including one with 17
+  // submitted artifacts. They were not ignoring the step; it did not exist for
+  // them.
+  //
+  // `/api/portal/project/setup/github` is enrollment-keyed and calls
+  // `ensureProject` before connecting, so it creates the project on the way and
+  // needs nothing to exist first. It was already built and had no caller in the
+  // UI — this is the front door, not a new mechanism.
+  const [showConnect, setShowConnect] = useState(false);
+  const [repoInput, setRepoInput] = useState('');
+  const [tokenInput, setTokenInput] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [connectErr, setConnectErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const connectRepo = async () => {
+    const url = repoInput.trim();
+    if (!url) { setConnectErr('Paste the GitHub address of your repository.'); return; }
+    setConnectErr(''); setConnecting(true);
+    try {
+      await portalApi.post('/api/portal/project/setup/github', {
+        repo_url: url,
+        // Optional. Without it the platform can read the repo but not write to
+        // it, which is a legitimate choice — the student's own commits are what
+        // matter, and every point they earn is recorded server-side regardless.
+        ...(tokenInput.trim() ? { access_token: tokenInput.trim() } : {}),
+      });
+      setShowConnect(false);
+      setRepoSync(null);          // the warning no longer applies
+      setRepoInput(''); setTokenInput('');
+    } catch (err: any) {
+      setConnectErr(err?.response?.data?.error || 'Could not connect that repository. Check the address and try again.');
+    } finally { setConnecting(false); }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -218,6 +256,37 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
               <div className="ba-sync warn">
                 This is saved here, but <b>not in GitHub yet</b> — you haven&rsquo;t connected a repository.
                 Connect one and your artifacts, including this one, sync automatically.
+                {!showConnect && (
+                  <div style={{ marginTop: 10 }}>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" style={{ fontWeight: 700 }}
+                      onClick={() => setShowConnect(true)}>
+                      <i className="ri-github-fill me-1" />Connect a repository
+                    </button>
+                  </div>
+                )}
+                {showConnect && (
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input className="pw-in" style={{ width: '100%', padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13.5 }}
+                      placeholder="https://github.com/your-name/your-repo"
+                      value={repoInput} onChange={(e) => setRepoInput(e.target.value)} disabled={connecting} />
+                    <input className="pw-in" style={{ width: '100%', padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13.5 }}
+                      placeholder="GitHub token (optional — only needed if you want us to commit for you)"
+                      value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} disabled={connecting} />
+                    <div style={{ fontSize: 12.5, color: 'var(--mut)', lineHeight: 1.5 }}>
+                      You don&rsquo;t need the token. Without it we can read your repo and everything still counts —
+                      you just commit your own work, which is better for your GitHub profile anyway.
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="btn btn-sm" disabled={connecting}
+                        style={{ background: 'var(--accent)', color: '#fff', fontWeight: 700 }} onClick={connectRepo}>
+                        {connecting ? 'Connecting…' : 'Connect'}
+                      </button>
+                      <button type="button" className="btn btn-sm btn-outline-secondary" disabled={connecting}
+                        onClick={() => { setShowConnect(false); setConnectErr(''); }}>Cancel</button>
+                    </div>
+                    {connectErr && <div style={{ fontSize: 12.5, color: '#b42318' }}>{connectErr}</div>}
+                  </div>
+                )}
               </div>
             )}
             {repoSync === 'no_access' && (
