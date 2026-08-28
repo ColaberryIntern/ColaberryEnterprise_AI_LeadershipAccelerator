@@ -35,6 +35,31 @@
  * or via docker exec with the repo mounted.
  */
 
+const path = require('path');
+
+/**
+ * Resolve the compiled backend from either place this can run.
+ *
+ * From a repo checkout the build sits at ../../backend/dist. Inside the backend
+ * container it is /app/dist - the image ships `backend/`, not the repo root, so a
+ * path relative to this file does not exist there. Trying both means the same script
+ * runs in both places instead of one of them silently being unsupported.
+ */
+const BACKEND_DIST = (() => {
+  const candidates = [
+    process.env.BACKEND_DIST,
+    path.join(__dirname, '..', '..', 'backend', 'dist'),
+    '/app/dist',
+  ].filter(Boolean);
+  for (const dir of candidates) {
+    try {
+      require.resolve(path.join(dir, 'config', 'database'));
+      return dir;
+    } catch (_) { /* try the next */ }
+  }
+  throw new Error(`Could not find the compiled backend. Tried: ${candidates.join(', ')}`);
+})();
+
 const ALLOWED_DATABASES = ['accelerator_dev1', 'accelerator_dev', 'accelerator_test'];
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3001';
 
@@ -47,7 +72,7 @@ const check = (label, actual, expected) => {
 };
 
 async function main() {
-  const { sequelize } = require('../../backend/dist/config/database');
+  const { sequelize } = require(path.join(BACKEND_DIST, 'config/database'));
   const { QueryTypes } = require('sequelize');
   const {
     DeliveryProject,
@@ -55,14 +80,14 @@ async function main() {
     DeliveryProjectMember,
     PlatformIdentity,
     TenantAccessAudit,
-  } = require('../../backend/dist/models');
+  } = require(path.join(BACKEND_DIST, 'models'));
   const {
     CLIENT_TOKEN_AUDIENCE,
     CLIENT_TOKEN_TTL_SECONDS,
     CLIENT_TOKEN_TYPE,
-  } = require('../../backend/dist/modules/delivery/clientAuth');
+  } = require(path.join(BACKEND_DIST, 'modules/delivery/clientAuth'));
   const jwt = require('jsonwebtoken');
-  const { env } = require('../../backend/dist/config/env');
+  const { env } = require(path.join(BACKEND_DIST, 'config/env'));
 
   const [{ db }] = await sequelize.query('SELECT current_database()::text AS db', {
     type: QueryTypes.SELECT,
