@@ -92,6 +92,36 @@ async function findPageBySlug(slug: string): Promise<PortfolioPageRow | null> {
 }
 
 /**
+ * The learner's live project rows, shaped for the projection.
+ *
+ * `share_token`, the score columns and the internal documents are never selected -- the
+ * projection would refuse them anyway, and not fetching them means they cannot be logged
+ * by accident either.
+ */
+export async function readLiveProjects(enrollmentId: string, now: Date = new Date()): Promise<any[]> {
+  try {
+    const [rows] = await sequelize.query(
+      `SELECT name, organization_name, industry, primary_business_problem,
+              selected_use_case, automation_goal, project_stage,
+              github_repo_url, portfolio_url
+         FROM projects
+        WHERE enrollment_id = $1 AND archived_at IS NULL
+        ORDER BY created_at ASC`,
+      { bind: [enrollmentId] },
+    );
+    return rows as any[];
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_projects_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+    return [];
+  }
+}
+
+/**
  * The learner-authored fields a human approved, overlaid onto the live profile.
  *
  * This is why `approved_identity` exists. Capabilities and records are read live because
@@ -110,6 +140,18 @@ function withApprovedIdentity(profile: any, approved: unknown): any {
       ...(typeof a.avatar_data_url === 'string' ? { avatar_data_url: a.avatar_data_url } : {}),
     },
   };
+}
+
+/**
+ * The approved project set, or `[]`.
+ *
+ * `[]` and not "read live": a page approved before projects were ever projected has no
+ * approved set, and showing unreviewed text would defeat the freeze. The learner asks for
+ * review again and their work appears.
+ */
+function approvedProjectsOf(approved: unknown): any[] {
+  const a: any = approved;
+  return a && typeof a === 'object' && Array.isArray(a.projects) ? a.projects : [];
 }
 
 export interface PublicPortfolioResult {
@@ -152,7 +194,12 @@ export async function getPublicPortfolioBySlug(
   if (!page || !decision.viewable) return null;
 
   return {
-    portfolio: await buildPortfolio(page.enrollment_id, now, page.approved_identity),
+    portfolio: await buildPortfolio(
+      page.enrollment_id,
+      now,
+      page.approved_identity,
+      approvedProjectsOf(page.approved_identity),
+    ),
     indexable: decision.indexable,
   };
 }
@@ -165,6 +212,8 @@ async function buildPortfolio(
   enrollmentId: string,
   now: Date,
   approvedIdentity: unknown = null,
+  /** null = read projects LIVE (reviewer preview); an array = the APPROVED set. */
+  approvedProjects: unknown[] | null = null,
 ): Promise<PublicPortfolio> {
   // A profile that fails to load is a shorter page, not a 500. The projection turns an
   // empty profile into an empty portfolio rather than throwing.
@@ -206,10 +255,17 @@ async function buildPortfolio(
     }));
   }
 
+  // PROJECT TEXT IS LEARNER-AUTHORED, so the public page reads the APPROVED set, not the
+  // live one -- otherwise a learner could be approved and then rewrite their business
+  // problem into anything. The reviewer preview passes null and gets the live rows,
+  // because the live text is exactly what they are being asked to approve.
+  const projects = approvedProjects ?? await readLiveProjects(enrollmentId, now);
+
   return projectPublicPortfolio({
     // On an unapproved page `approvedIdentity` is null, so the reviewer sees the LIVE
     // headline -- which is the text they are being asked to approve.
     profile: withApprovedIdentity(profile, approvedIdentity),
+    projects,
     records,
     generatedAt: now.toISOString(),
   });

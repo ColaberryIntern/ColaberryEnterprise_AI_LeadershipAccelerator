@@ -87,7 +87,7 @@ describe('careerPortfolioPublicProjection', () => {
     // If someone adds a field to the payload, this fails until they consider it here.
     expect(Object.keys(project()).sort()).toEqual([
       'capabilities', 'generated_at', 'identity', 'private_repository_count',
-      'records', 'repositories',
+      'projects', 'records', 'repositories',
     ]);
   });
 
@@ -171,6 +171,90 @@ describe('careerPortfolioPublicProjection', () => {
 
     it('still links the record, whatever the title', () => {
       expect(withRecords([{ slug: 'ali-muwwakkil' }])[0].slug).toBe('ali-muwwakkil');
+    });
+  });
+
+  describe('projects carry the substance and refuse the internals', () => {
+    // A row as `projects` actually stores it, internals included.
+    const row = {
+      name: null,
+      selected_use_case: 'AI-Powered Curriculum Orchestration System',
+      organization_name: 'Colaberry Enterprise AI Accelerator',
+      industry: 'Education Technology / AI Training',
+      primary_business_problem: 'Scaling personalized AI leadership training',
+      automation_goal: 'Automate content personalization',
+      project_stage: 'implementation',
+      github_repo_url: 'https://github.com/x/y',
+      portfolio_url: 'https://enterprise.colaberry.ai',
+      // Everything below must never reach a reader.
+      share_token: 'SENTINEL_SHARE_TOKEN',
+      maturity_score: 20,
+      health_score: 41,
+      velocity_score: 3,
+      stability_score: 9,
+      claude_md_content: 'SENTINEL_CLAUDE_MD',
+      requirements_document: 'SENTINEL_REQUIREMENTS',
+      project_variables: { SENTINEL_VAR: 1 },
+      data_sources: ['SENTINEL_DATA_SOURCE'],
+      executive_summary: 'SENTINEL_EXEC_SUMMARY',
+    };
+    const withProjects = (projects: any) =>
+      projectPublicPortfolio({ profile: loadedProfile(), projects, records: [], generatedAt: AT });
+
+    it('publishes the substance a reader needs', () => {
+      expect(withProjects([row]).projects[0]).toEqual({
+        title: 'AI-Powered Curriculum Orchestration System',
+        organization: 'Colaberry Enterprise AI Accelerator',
+        industry: 'Education Technology / AI Training',
+        problem: 'Scaling personalized AI leadership training',
+        automation_goal: 'Automate content personalization',
+        stage: 'implementation',
+        repo_url: 'https://github.com/x/y',
+        demo_url: 'https://enterprise.colaberry.ai/',
+      });
+    });
+
+    it('never leaks a share token or an internal score', () => {
+      const serialized = JSON.stringify(withProjects([row]));
+      for (const s of ['SENTINEL_SHARE_TOKEN', 'SENTINEL_CLAUDE_MD', 'SENTINEL_REQUIREMENTS',
+        'SENTINEL_VAR', 'SENTINEL_DATA_SOURCE', 'SENTINEL_EXEC_SUMMARY']) {
+        expect(serialized).not.toContain(s);
+      }
+      for (const k of ['share_token', 'maturity_score', 'health_score', 'velocity_score',
+        'stability_score', 'claude_md_content', 'requirements_document']) {
+        expect(serialized).not.toContain(`"${k}"`);
+      }
+    });
+
+    it('prefers an explicit name over the use case', () => {
+      expect(withProjects([{ ...row, name: 'PropertyPulse AI' }]).projects[0].title)
+        .toBe('PropertyPulse AI');
+    });
+
+    it('drops a row that cannot title itself, rather than printing a blank card', () => {
+      // An abandoned intake is not a portfolio entry.
+      expect(withProjects([{ organization_name: 'X', project_stage: 'discovery' }]).projects)
+        .toHaveLength(0);
+    });
+
+    it('keeps a sparse project honest instead of padding it', () => {
+      expect(withProjects([{ name: 'PropertyPulse AI', project_stage: 'discovery' }]).projects[0])
+        .toEqual({
+          title: 'PropertyPulse AI', organization: null, industry: null, problem: null,
+          automation_goal: null, stage: 'discovery', repo_url: null, demo_url: null,
+        });
+    });
+
+    it('refuses a non-http repo or demo url', () => {
+      const out = withProjects([{ ...row, github_repo_url: 'javascript:alert(1)', portfolio_url: 'ftp://x' }]);
+      expect(out.projects[0].repo_url).toBeNull();
+      expect(out.projects[0].demo_url).toBeNull();
+    });
+
+    it('treats a missing or malformed projects input as no projects', () => {
+      for (const bad of [undefined, null, 'nope', 42, {}]) {
+        expect(withProjects(bad as any).projects).toEqual([]);
+      }
     });
   });
 

@@ -80,6 +80,38 @@ export interface PublicRecord {
   published_at: string | null;
 }
 
+/**
+ * A project, as a stranger may see it.
+ *
+ * WHAT THE `projects` ROW CARRIES THAT MUST NOT CROSS, and why each is refused:
+ *
+ *   share_token                a LIVE ACCESS CREDENTIAL. Publishing it would hand every
+ *                              reader the private share link.
+ *   maturity_score             20 out of 100 printed beside someone's name is a grade,
+ *   health_score               not a portfolio. Same class as `capability.bands`: the
+ *   velocity_score             portal shows these to their owner to guide them, never to
+ *   stability_score            rank them in front of an employer.
+ *   requirements_completion_pct
+ *   readiness_score_breakdown
+ *   claude_md_content          internal build instructions
+ *   requirements_document      internal working document
+ *   project_variables          internal config, may name systems and credentials
+ *   data_sources               may name internal systems
+ *   executive_summary          already published, in full, on the record page
+ *
+ * None have a shape to occupy below.
+ */
+export interface PublicProject {
+  title: string;
+  organization: string | null;
+  industry: string | null;
+  problem: string | null;
+  automation_goal: string | null;
+  stage: string | null;
+  repo_url: string | null;
+  demo_url: string | null;
+}
+
 export interface PublicRepository {
   name: string;
   url: string;
@@ -88,6 +120,7 @@ export interface PublicRepository {
 export interface PublicPortfolio {
   identity: PublicIdentity;
   capabilities: PublicCapability[];
+  projects: PublicProject[];
   records: PublicRecord[];
   repositories: PublicRepository[];
   /** Work that exists behind a private repo, stated as a count and nothing more. */
@@ -153,6 +186,8 @@ function recordTitle(r: any): string {
 
 export interface ProjectPortfolioInput {
   profile: unknown;
+  /** Rows from `projects`. Learner-authored, so the caller passes the APPROVED set. */
+  projects?: unknown;
   /** Already-PUBLISHED capstone records. An unpublished record is not passed in. */
   records: unknown;
   generatedAt: string;
@@ -184,6 +219,23 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
       last_demonstrated_at: str(c.last_demonstrated_at),
     }));
 
+  const rawProjects: any[] = Array.isArray(input.projects) ? input.projects : [];
+  const projects: PublicProject[] = rawProjects
+    .filter((p) => p && typeof p === 'object')
+    // A project with no name AND no use case has nothing to call itself; a row that
+    // cannot be titled is an abandoned intake, not a portfolio entry.
+    .map((p) => ({
+      title: str(p.name) ?? str(p.selected_use_case) ?? '',
+      organization: str(p.organization_name),
+      industry: str(p.industry),
+      problem: str(p.primary_business_problem),
+      automation_goal: str(p.automation_goal),
+      stage: str(p.project_stage),
+      repo_url: httpUrl(p.github_repo_url),
+      demo_url: httpUrl(p.portfolio_url),
+    }))
+    .filter((p) => p.title !== '');
+
   const rawRecords: any[] = Array.isArray(input.records) ? input.records : [];
   const records: PublicRecord[] = rawRecords
     .filter((r) => r && typeof r === 'object' && str(r.slug))
@@ -211,6 +263,7 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
   return {
     identity,
     capabilities,
+    projects,
     records,
     repositories,
     private_repository_count: privateCount,

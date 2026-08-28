@@ -24,6 +24,11 @@ interface Capability {
   last_demonstrated_at: string | null;
 }
 interface RecordLink { slug: string; title: string; published_at: string | null }
+interface ProjectItem {
+  title: string; organization: string | null; industry: string | null;
+  problem: string | null; automation_goal: string | null; stage: string | null;
+  repo_url: string | null; demo_url: string | null;
+}
 interface Repository { name: string; url: string }
 
 interface Portfolio {
@@ -32,6 +37,7 @@ interface Portfolio {
     avatar_data_url: string | null; linkedin_url: string | null;
   };
   capabilities: Capability[];
+  projects: ProjectItem[];
   records: RecordLink[];
   repositories: Repository[];
   private_repository_count: number;
@@ -57,6 +63,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
   const { identity, capabilities, records, repositories, private_repository_count } = portfolio;
+  const projects = portfolio.projects || [];
 
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px 96px', color: BODY }}>
@@ -114,8 +121,43 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
         </Section>
       )}
 
+      {/* THE SYSTEM, not a link to a document about it. A reader wants the problem it
+          solves, the code, and something running -- in that order. */}
+      {projects.length > 0 && (
+        <Section title={`What they built (${projects.length})`}>
+          {projects.map((p, i) => (
+            <article key={`${p.title}-${i}`} style={{ padding: '14px 0', borderBottom: `1px solid ${LINE}` }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: INK, margin: 0 }}>{p.title}</h3>
+              {(p.stage || p.industry || p.organization) && (
+                <div style={{ fontSize: 13, color: MUTED, marginTop: 3 }}>
+                  {[p.stage, p.industry, p.organization].filter(Boolean).join(' · ')}
+                </div>
+              )}
+              {p.problem && (
+                <p style={{ margin: '10px 0 0', color: BODY }}>{p.problem}</p>
+              )}
+              {p.automation_goal && (
+                <p style={{ margin: '6px 0 0', color: MUTED, fontSize: 14 }}>{p.automation_goal}</p>
+              )}
+              {(p.repo_url || p.demo_url) && (
+                <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
+                  {p.demo_url && (
+                    <a href={p.demo_url} target="_blank" rel="noopener noreferrer"
+                       style={{ color: ACCENT, fontWeight: 600, textDecoration: 'none' }}>See it running</a>
+                  )}
+                  {p.repo_url && (
+                    <a href={p.repo_url} target="_blank" rel="noopener noreferrer"
+                       style={{ color: ACCENT, fontWeight: 600, textDecoration: 'none' }}>The code</a>
+                  )}
+                </div>
+              )}
+            </article>
+          ))}
+        </Section>
+      )}
+
       {records.length > 0 && (
-        <Section title={`What they built (${records.length})`}>
+        <Section title={`Written up (${records.length})`}>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {records.map((r) => (
               <li key={r.slug} style={{ padding: '10px 0', borderBottom: `1px solid ${LINE}` }}>
@@ -150,7 +192,7 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
 
       {/* An entirely empty portfolio is a real state and says so plainly, rather than
           rendering a page of blank headings that reads as abandonment. */}
-      {!capabilities.length && !records.length && !repositories.length && (
+      {!capabilities.length && !records.length && !repositories.length && !projects.length && (
         <p style={{ color: MUTED, marginTop: 40 }}>
           This portfolio does not have any published work yet.
         </p>

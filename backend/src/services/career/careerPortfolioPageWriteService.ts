@@ -32,7 +32,7 @@
 
 import { sequelize } from '../../config/database';
 import { getCareerProfile } from './careerProfileService';
-import type { PortfolioPageVisibility } from './careerPortfolioPageService';
+import { readLiveProjects, type PortfolioPageVisibility } from './careerPortfolioPageService';
 import { visibleEnrollmentIds, type ReviewerIdentity } from './careerMentorScopeService';
 
 const VISIBILITIES: PortfolioPageVisibility[] = ['private', 'unlisted', 'public'];
@@ -201,9 +201,13 @@ export async function decidePortfolioReview(args: {
   if (page.status === 'published') return page; // idempotent approve
 
   const profile: any = await getCareerProfile(enrollmentId).catch(() => null);
+  // Everything LEARNER-AUTHORED is frozen at the moment of approval: the headline, the
+  // avatar, and now the project text too. A learner must not be able to be approved and
+  // then rewrite their business problem into something a reviewer never read.
   const frozen = {
     title: profile?.identity?.title ?? null,
     avatar_data_url: profile?.identity?.avatar_data_url ?? null,
+    projects: await readLiveProjects(enrollmentId),
   };
 
   await sequelize.query(
