@@ -101,15 +101,22 @@ describe('checkLab', () => {
     expect(rules(checkLab(lab))).toContain('not_seeded');
   });
 
-  it('exempts the document week from every step rule', () => {
-    // Week 11's deliverable genuinely IS a document package. Converting it would
-    // break a week that works, so the contract must not demand steps of it.
-    const w11 = { week: 11, bodyHtml: '<h4>Architecture Decision Records</h4><h4>7-Layer Table</h4>' };
-    expect(checkLab(w11)).toEqual([]);
+  it('exempts the document week from the step rules but NOT from evidence', () => {
+    // Week 11's deliverable genuinely IS a document package, so demanding steps
+    // of it would break a week that works. It still has to put those documents
+    // somewhere findable: the exemption originally covered the evidence rule
+    // too, and that hid a real defect — week 11 named no folder at all while
+    // ARCHITECTURE expected `architecture/`, so the capability could never be
+    // satisfied by anyone.
+    const noFolder = { week: 11, bodyHtml: '<h4>Architecture Decision Records</h4><h4>7-Layer Table</h4>' };
+    expect(rules(checkLab(noFolder))).toEqual(['evidence_path_agrees']);
+
+    const withFolder = { week: 11, bodyHtml: '<h4>ADRs</h4> save them in architecture/ ' };
+    expect(checkLab(withFolder)).toEqual([]);
   });
 
   it('still holds the document week to the Downloads rule', () => {
-    const w11 = { week: 11, bodyHtml: '<h4>ADRs</h4> save to my Downloads folder ' };
+    const w11 = { week: 11, bodyHtml: '<h4>ADRs</h4> architecture/ save to my Downloads folder ' };
     expect(rules(checkLab(w11))).toEqual(['no_downloads_folder']);
   });
 
@@ -123,7 +130,7 @@ describe('checkCurriculum', () => {
   it('passes a complete, well-formed curriculum', () => {
     const labs = [
       ...STEP_WEEKS.map((w) => goodLab(w)),
-      { week: 11, bodyHtml: '<h4>Architecture Package</h4>' },
+      { week: 11, bodyHtml: '<h4>Architecture Package</h4> save them in architecture/ ' },
     ];
     expect(checkCurriculum(labs)).toEqual([]);
   });
@@ -133,7 +140,7 @@ describe('checkCurriculum', () => {
     // examined the labs it was handed would have called that curriculum clean.
     const labs = [
       ...STEP_WEEKS.filter((w) => w !== 12).map((w) => goodLab(w)),
-      { week: 11, bodyHtml: '<h4>Architecture Package</h4>' },
+      { week: 11, bodyHtml: '<h4>Architecture Package</h4> architecture/ ' },
     ];
     const violations = checkCurriculum(labs);
     expect(violations).toEqual([{ week: 12, rule: 'lab_exists', detail: 'no build lab for this week at all' }]);
