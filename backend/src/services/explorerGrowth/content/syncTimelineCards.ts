@@ -63,10 +63,52 @@ interface CardRow {
   subtitle: string | null;
   description: string | null;
   week: number | null;
+  bucket: string | null;
   priority: number;
   release_date: Date | null;
   type_tags: unknown;
   type_category: string | null;
+}
+
+/**
+ * How a card's bucket becomes its registry priority. Higher wins.
+ *
+ * WHY THIS EXISTS. The first production run resolved `activation_first_step` to
+ * **"Session 1 Evaluation"** for all 134 dormant learners. Not a bug in the
+ * resolver — `ORDER BY priority DESC` was doing exactly what it was told, and
+ * ALL 585 published cards carry `priority = 0`, so the tiebreaker fell through
+ * to `published_at, id` and an evaluation form won the slot meant for someone
+ * who has never engaged. Correct machinery, absurd outcome.
+ *
+ * `bucket` is the signal that does exist. `pre_class` holds the orientation and
+ * welcome material — "Welcome to Your Free AI Preview" lives there — so it
+ * outranks core teaching, which in turn outranks doing-the-work and
+ * after-the-work stages. That is the order a learner meets them in.
+ *
+ * AN UNKNOWN BUCKET GETS 50, THE COLUMN DEFAULT, MEANING "NO OPINION". It sits
+ * below `learn` and above `reflect`: a bucket nobody has ranked should be
+ * treated as unremarkable rather than promoted to the front or buried. Deliberately
+ * not a hard failure — a new bucket is a content decision, and refusing to
+ * project the card would hide it entirely rather than rank it modestly.
+ *
+ * `timeline_cards.priority` is NOT folded in, because it is 0 on every one of
+ * the 585 published cards and therefore carries no signal at all. If it ever
+ * does, this is where it belongs.
+ */
+const BUCKET_PRIORITY: Record<string, number> = {
+  pre_class: 90, // orientation, welcome, warmups — where a newcomer starts
+  learn: 70, // core teaching
+  practice: 60, // applying it
+  build: 55, // building with it
+  reflect: 40, // after the work
+  share: 35,
+  advance: 30,
+};
+
+/** The registry priority for a card, from its bucket. */
+export function priorityForBucket(bucket: string | null | undefined): number {
+  if (!bucket) return 50;
+  return BUCKET_PRIORITY[bucket] ?? 50;
 }
 
 /**
@@ -87,6 +129,7 @@ const PROJECTION_SQL = `
          tc.subtitle,
          tc.description,
          tc.week,
+         tc.bucket,
          tc.priority,
          tc.release_date,
          ctd.tags     AS type_tags,
@@ -126,7 +169,7 @@ function toAssetRow(row: CardRow): AssetRow {
     url: `/portal/runtime/${row.id}`,
     topic_tags: topicTags(row),
     journey_stage_tags: [stageTagForWeek(row.week)],
-    priority: row.priority ?? 0,
+    priority: priorityForBucket(row.bucket),
     published_at: row.release_date,
   };
 }
