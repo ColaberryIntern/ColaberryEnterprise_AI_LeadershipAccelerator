@@ -15,7 +15,8 @@ import { workforceOrgChartResponseSchema } from '../schemas/workforceOrgChartSch
 import { updateOrgMemberTeam } from '../services/workforce/orgChartHierarchyService';
 import { assignTaskToAgent } from '../services/workforce/orgChartTaskAssignmentService';
 import { resetAgents } from '../services/workforce/agentResetService';
-import { reactivateAgent, AUTONOMY_LEVELS } from '../services/workforce/agentReactivationService';
+import { reactivateAgent, AUTONOMY_LEVELS } from '../services/workforce/agentReactivationService';
+import { checkWireContract } from '../utils/responseContract';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -100,20 +101,11 @@ export async function handleListLiveAgentTimeline(req: Request, res: Response, n
 export async function handleOrgChart(_req: Request, res: Response, _next: NextFunction) {
   try {
     const chart = await getOrgChart();
-    if (process.env.NODE_ENV !== 'production') {
-      // Validate the actual WIRE shape (post-JSON-serialization — Dates become
-      // ISO strings), not the raw service object, since that's what the
-      // frontend contract actually promises to consume.
-      const wirePayload = JSON.parse(JSON.stringify(chart));
-      const parsed = workforceOrgChartResponseSchema.safeParse(wirePayload);
-      if (!parsed.success) {
-        console.warn(JSON.stringify({
-          timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
-          event: 'workforce_org_chart_contract_violation', outcome: 'partial',
-          context: { issues: parsed.error.issues.map((i) => i.message) },
-        }));
-      }
-    }
+    // Validates the WIRE shape (post-JSON-serialization - Dates become ISO strings),
+    // not the raw service object, since that is what the frontend contract promises to
+    // consume. A check against the raw object can pass while what is actually sent does
+    // not match, which reports success about a payload nobody looked at.
+    checkWireContract('workforce_org_chart_contract_violation', workforceOrgChartResponseSchema, chart);
     res.json(chart);
   } catch (e: any) {
     // Deliberately does NOT fall through to fail()'s next(err) path for an
