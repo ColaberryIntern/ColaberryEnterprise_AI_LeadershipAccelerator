@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, August 26, 2026 at 12:32 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">82 changes</span></div>
+    <div class="meta">Generated Friday, August 28, 2026 at 12:27 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">85 changes</span></div>
   </header>
   <main>
     
@@ -1287,6 +1287,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Merge verified by **content on `origin/main`**, not by the badge: the `engagement` allowlist kind, `DeliveryShell` wired into the portal, and the contract test all present.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The reasoning changed, not the patience. Branch protection encodes &quot;a human with authority must review this&quot;; Ali is the DRI and had done so explicitly and repeatedly, and the tool could not express it. Of the two ways past the block, **`--admin` leaves an honest audit trail** - merged by admin, no independent review - whereas approving as `ColaberryIntern` would have recorded an independent review that never happened, since I wrote every line in the diff. **A false-clean record is worse than an openly bypassed one.** Also worth carrying forward: PRs opened via `gh` are authored by `ColaberryIntern` and Ali can approve them normally; PRs he opens in the browser make him the author and can only be merged, never approved.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">83</span>
+          <h2>**Magic-link sign-in, because clients do not all have Google accounts**</h2>
+          <span class="badge">2026-08-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali, on the shipped surface: *&quot;what if the client don&#39;t have a gmail account&quot;* - then *&quot;let&#39;s just keep with the magic link since that&#39;s what we are using for B2C and B2B.&quot;* He was right and I had it backwards. Google Sign-In assumes a Google account, and the executives this surface serves - transit authorities, banks, agencies - are overwhelmingly Microsoft 365 shops whose IT frequently blocks creating one. **I built the door convenient for us rather than the one that opens for them**, and presented that earlier choice as a straight preference when magic link was always the more robust primary for external clients. Modelled on `sponsorAuthService`, which already solves this for sponsors - the same shape of user - with three things deliberately **tighter**: the table stores a **SHA-256 hash** rather than the raw token (sponsors store the raw UUID, so that column *is* the credential); **one hour** rather than 30 days; and `consumed_at` makes it **single-use**. Added rate limiting the sponsor path has none of - one per address per minute, six per hour, keyed on the **email** rather than on whether an identity was found, because a limit that engaged only for real accounts would make response timing an enumeration oracle. **Authorization is unchanged:** redeeming proves control of a mailbox and nothing more; `decideClientSignIn` still requires a membership that already exists, and both doors share one `mintSessionFor` so they cannot drift into one being weaker.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Proven end to end against the running instance, not inferred.** `request-link` returns an identical 202 for an address with access, one without, and a malformed one - while the token table showed **only the address with access** received one, stored hashed. The email was **delivered to a real inbox** (subject confirmed via Gmail, msgId logged). Redeem returned 200 with a session scoped to one project; a second redeem of the same token returned **401**, proving single use; and that session opened `/client/projects` with 200. **560 tests across 21 suites**, 19 of them new and covering the rules with no database, mailer or clock - hashing, the expiry boundary at the exact instant, single use, the rate-limit window, capitalisation not bypassing the limit, and the uniform messages not naming a reason. Live in production; `delivery_client_signin_tokens` confirmed present in `accelerator_prod` with all eight columns.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Two smaller decisions.** The URL token is stripped from the address bar before use - a magic link left in the URL lands in browser history, screenshots and the referer of the next request, and is live until redeemed. The email names no project, engagement or company, because a mailbox is not a controlled surface. **Obsoleted something shipped the day before:** the expired-session screen had been gated on a Google client id so it would not offer a sign-in that could not complete; magic link needs no provider configured, so the gate became dead code and was removed rather than left as an always-true condition.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">84</span>
+          <h2>**Dev had been unable to send any email for at least 24 hours**</h2>
+          <span class="badge">2026-08-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Nothing in this feature - a pre-existing environment fault found while verifying it. The dev backend&#39;s `MANDRILL_API_KEY` differed from production&#39;s (23 characters against 25) and Mandrill rejected it with `535 authentication failed`, **33 times in 24 hours**. Every dev email had been failing silently. Ali applied the fix (copying prod&#39;s key into `/opt/acc-rename/.env`); email then sent successfully on the first attempt.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Confirmed functionally rather than by comparing secrets - a link request produced `[Email] Client sign-in link sent ... msgId: &lt;...&gt;` with no send errors, and the message arrived in the real inbox.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The permission classifier blocked me from moving the secret**, correctly - that guard exists precisely for writing a production credential into another environment, and it also blocked merely *reading* the key to hash it. I did not work around it; I handed Ali a single command and verified the outcome functionally instead. Worth recording that **the first command I gave him failed** because I used `|` as the `sed` delimiter and PowerShell parsed those as pipes; the replacement used `,` and no nested quotes. **The diagnostic lesson is larger than the bug:** `logAuthFailure` writes to the `ai_events` TABLE, not stdout, so `docker logs` looked completely clean while errors accumulated. On this backend a quiet log is not evidence of a quiet system.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">85</span>
+          <h2>**INCIDENT: I took the production backend down for about four minutes**</h2>
+          <span class="badge">2026-08-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The production deploy of the magic-link work hit a container-naming race, exited **1**, and left `accelerator-backend` in `Created` state - not running. An orphaned `afb17d60a5e4_accelerator-nginx` container was the other half of the race. **The site continued returning 200 the whole time**, because nginx serves the static frontend without the backend, so from outside it looked healthy while every API call failed. Recovered by removing the orphan container and bringing the backend up with `--no-deps`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend confirmed healthy by calling it **inside its own container** (401 on the client route, which is correct), then the full surface verified through the real hostname: `/`, `/client` and `/client/projects` all 200, client API 401 unauthenticated, `request-link` 202.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Caught only because the real exit code was checked and container state looked at afterwards.** The compose output alone would not have shown it, and neither would the site being up. **The root cause is the sixth concurrent-deploy collision of this session:** another session&#39;s deploy was in flight each time, and while I waited for a clear box before every deploy, *clear* was only ever a snapshot - another deploy started between the check and the build. Five times that timing held and the sixth it did not. A lockfile around the deploy would fix it properly; waiting-and-hoping is not a control. **A second mistake, smaller and entirely mine:** after fixing the real fault I chased 404s by curling `http://localhost/api/...`, which does not match the `server_name` and falls through to a default block, and restarted nginx on the strength of that. The proxy had been healthy throughout - `wget` from inside nginx returned 401 correctly. **Diagnosing a proxy through the wrong host and reading the result as a failure is the same error this session has been cataloguing all along**, committed while cleaning up after myself.</span></div>
           
         </div>
       </article>
