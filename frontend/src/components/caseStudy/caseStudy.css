@@ -1,0 +1,656 @@
+/* ============================================================================
+   caseStudy.css -- the case-study module.
+
+   TOKENS. Every value resolves to a semantic token declared in
+   `colaberry/tokens/*.css`. `src/styles/tokens.css` is a SECOND, older token
+   system (`--color-primary`, `--space-md`, `--font-size-lg`) that the V2 public
+   site forbids; `caseStudyTokens.test.ts` derives the forbidden name list by
+   differencing the two files, so this rule is checked rather than remembered.
+   The same test asserts every token referenced here is actually declared, which
+   is what catches an invented step like `--space-7` (the scale runs 6 then 8).
+
+   NAMESPACE. `cbv2-cs-*` only, so nothing here can leak into portal or admin.
+   No CSS Modules, no Bootstrap, no CSS-in-JS: one plain side-effect import.
+
+   320px. No fixed widths and no fixed columns. Every grid track is
+   `minmax(0, 1fr)` or auto-fill with a `min()` floor, so a long token, a long
+   URL or a narrow phone cannot push the page into horizontal overflow.
+   ========================================================================== */
+
+/* ------------------------------------------------------------ primitives --- */
+
+/* The module carries its own visually-hidden helper rather than borrowing
+   publicV2's, so a component still announces correctly when it is rendered
+   outside the V2 public shell. */
+.cbv2-cs-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* THE QUIET META LABELS ARE `--text-muted`, NOT `--text-subtle`, and that is a
+   legibility fix rather than a taste one. Every label in this file that used
+   `--text-subtle` is 12px or 14px painted on `--surface-card`, which the browser
+   computes at 3.36:1 - below the 4.5:1 WCAG 2.1 AA floor for text this size, and
+   measured on the live page across eight classes at once: the eyebrows above
+   Capabilities, Stack and Integrations, the measurement terms, the artifact
+   type labels, the timeline dates, the filter tallies and the notes.
+   `--text-muted` is the next step up the same neutral ramp and measures 5.33:1.
+   Nothing else about these labels changes; they are still the quietest text on
+   the surface, they are simply readable now. Found by the rendered-contrast
+   sweep in `tests/systemV2/caseStudyPublic.e2e.js`, which exists because
+   token-level checks cannot see what a browser actually paints. */
+.cbv2-cs-eyebrow {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cbv2-cs-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cbv2-cs-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--surface-subtle);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+
+.cbv2-cs-note {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+
+/* Focus is never removed, only restyled. Both an outline and a ring, so the
+   indicator survives a forced-colors mode that drops box-shadow. */
+.cbv2-cs-card__link:focus-visible,
+.cbv2-cs-filters input:focus-visible,
+.cbv2-cs-filters summary:focus-visible,
+.cbv2-cs-artifact__link:focus-visible,
+.cbv2-cs-artifact__request:focus-visible,
+.cbv2-cs-cta__button:focus-visible {
+  outline: var(--border-2) solid var(--border-focus);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-xs);
+}
+
+/* --------------------------------------------------------- verification --- */
+/* Class and method are two different questions, so they are two elements.    */
+
+.cbv2-cs-verify {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.cbv2-cs-verify__method {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cbv2-cs-verify__sep {
+  color: var(--border-strong);
+}
+
+/* ---------------------------------------------------------------- ledger --- */
+
+.cbv2-cs-ledger {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.cbv2-cs-ledger__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--surface-subtle);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+/* `dt` precedes `dd` in the markup so the pairing is correct for assistive
+   technology; `order` puts the figure on top visually without reordering the
+   document. */
+.cbv2-cs-ledger__value {
+  order: -1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-heading);
+  color: var(--text-strong);
+}
+
+.cbv2-cs-ledger__label {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ card --- */
+
+.cbv2-cs-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: box-shadow var(--dur-fast) var(--ease-standard);
+}
+
+.cbv2-cs-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.cbv2-cs-card__media {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.cbv2-cs-card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--ls-tight);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-cs-card__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cbv2-cs-card__link:hover {
+  text-decoration: underline;
+}
+
+.cbv2-cs-card__standfirst {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-relaxed);
+  color: var(--text-body);
+}
+
+.cbv2-cs-card__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The no-verified-metric card. A proof point, never an invented figure: the
+   block exists so the layout does not need a number to look finished. */
+.cbv2-cs-card__proof {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+  border-left: var(--border-3) solid var(--chart-1);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.cbv2-cs-card__proof-value {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-cs-card__proof-label {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: var(--border-1) solid var(--border-subtle);
+}
+
+/* --------------------------------------------------------------- filters --- */
+
+.cbv2-cs-filters {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.cbv2-cs-filters__group {
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+
+.cbv2-cs-filters__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+}
+
+.cbv2-cs-filters__count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-filters__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.cbv2-cs-filters__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-page);
+  font-size: var(--fs-caption);
+  color: var(--text-body);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+/* Selection is carried by the checkbox state and by a word in the accessible
+   name, never by the fill alone. */
+.cbv2-cs-filters__option:has(input:checked) {
+  border-color: var(--border-strong);
+  background: var(--surface-sunken);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+}
+
+.cbv2-cs-filters__tally {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------- timeline --- */
+
+.cbv2-cs-timeline {
+  display: grid;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cbv2-cs-timeline__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding-left: var(--space-4);
+  border-left: var(--border-2) solid var(--border-subtle);
+}
+
+.cbv2-cs-timeline__date {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-wide);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-timeline__label {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+}
+
+.cbv2-cs-timeline__detail {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-relaxed);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-timeline__item .cbv2-cs-tag {
+  justify-self: start;
+}
+
+/* ---------------------------------------------------------- architecture --- */
+
+.cbv2-cs-arch {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.cbv2-cs-arch__prose p {
+  margin: 0 0 var(--space-3);
+  line-height: var(--lh-relaxed);
+  color: var(--text-body);
+}
+
+.cbv2-cs-arch__nodes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cbv2-cs-arch__node {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--surface-subtle);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.cbv2-cs-arch__node-label {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-cs-arch__node-kind {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-arch__edges {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-arch__edge {
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------------------- measurement --- */
+
+.cbv2-cs-measure {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.cbv2-cs-measure__metric {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.cbv2-cs-measure__context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--fs-caption);
+}
+
+.cbv2-cs-measure__term {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-measure__value {
+  margin: 0 0 var(--space-2);
+  color: var(--text-body);
+  line-height: var(--lh-normal);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-cs-measure__limits {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--text-muted);
+  line-height: var(--lh-normal);
+}
+
+/* --------------------------------------------------------------- roadmap --- */
+
+.cbv2-cs-roadmap {
+  display: grid;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cbv2-cs-roadmap__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--surface-subtle);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.cbv2-cs-roadmap__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-roadmap__label {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-cs-roadmap__detail {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-relaxed);
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------- artifacts --- */
+
+.cbv2-cs-artifacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cbv2-cs-artifact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.cbv2-cs-artifact__type {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  color: var(--text-muted);
+}
+
+.cbv2-cs-artifact__title {
+  margin: 0;
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+/* THE PRIMITIVE OWNS THE APPEARANCE. Both controls carry
+   `cbv2-btn cbv2-btn--secondary cbv2-btn--sm` from publicV2.css, so nothing here
+   sets colour, weight or size: a `color` declaration on a single-class selector
+   in this file would win or lose against the primitive purely on bundle order,
+   which is not a thing a button's contrast should depend on.
+
+   `--secondary` and not `--ghost` deliberately. `cbv2-btn--ghost` paints
+   `--text-on-inverse` on a transparent ground and belongs on the dark masthead;
+   on this light band it would be near-white on near-white, which is the exact
+   contrast failure the /stories masthead shipped and had to be fixed. */
+.cbv2-cs-artifact__link,
+.cbv2-cs-artifact__request {
+  align-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* The fallback when no caller supplied a request destination: a STATE, not a
+   control. Spec section 23 forbids a fake request or download button, so this is
+   deliberately not styled to look pressable. */
+.cbv2-cs-artifact__state {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cbv2-cs-artifact__desc {
+  margin: 0;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-normal);
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------------- cta --- */
+
+.cbv2-cs-cta {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-8);
+  background: var(--surface-inverse);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.cbv2-cs-cta__eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  /* Derived from the on-inverse token rather than a raw ramp, so it follows the
+     theme instead of pinning one grey. */
+  color: color-mix(in srgb, var(--text-on-inverse) 70%, transparent);
+}
+
+.cbv2-cs-cta__heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--ls-tight);
+  color: var(--text-on-inverse);
+  overflow-wrap: anywhere;
+}
+
+.cbv2-cs-cta__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-min);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-body-sm);
+  text-decoration: none;
+}
+
+/* -------------------------------------------------------------- motion ----- */
+/* publicV2.css carries a catch-all scoped to `.cbv2-shell`. These components
+   are also used outside that shell, so they neutralise their own transitions. */
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-cs-card {
+    transition-duration: 0.01ms;
+  }
+}

@@ -228,3 +228,44 @@
 @media (prefers-reduced-motion: reduce) {
   .cp-ring-fill, .cp-chev { transition: none; }
 }
+
+/* ── publishing: reviewer notes + visibility choice ───────────────────── */
+.cp-note-block {
+  background: var(--sunken); border: 1px solid var(--border); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; padding: 12px 15px; font-size: 14px; line-height: 1.6;
+  color: var(--body); margin: 12px 0;
+}
+.cp-row-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+.cp-vis { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 9px; }
+.cp-vis-opt {
+  width: 100%; text-align: left; appearance: none; cursor: pointer; font: inherit;
+  background: var(--sunken); border: 1px solid var(--border-sub); border-radius: 11px; padding: 13px 15px;
+}
+.cp-vis-opt:hover { border-color: var(--border); }
+.cp-vis-opt:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.cp-vis-opt[disabled] { opacity: .6; cursor: not-allowed; }
+/* Selected state carries a text label change too (aria-pressed), never colour alone. */
+.cp-vis-opt.on { border-color: var(--leaf-text); background: var(--surface); box-shadow: inset 3px 0 0 var(--leaf-text); }
+.cp-vis-label { display: block; font-weight: 700; color: var(--strong); font-size: 14.5px; }
+.cp-vis-opt.on .cp-vis-label::after { content: ' — current'; color: var(--leaf-text); font-weight: 600; }
+.cp-vis-detail { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+/* ── The person-level page controls (/u/:slug) ───────────────────────────── */
+.cp-address { margin: 14px 0 6px; font-size: 15px; word-break: break-all; }
+.cp-address a { color: var(--text-link); text-decoration: none; font-weight: 600; }
+.cp-mono { font-family: var(--mono, ui-monospace, monospace); color: var(--text-muted); }
+.cp-state { margin: 0 0 14px; color: var(--text-body); font-size: 14px; }
+.cp-sub { margin: 22px 0 4px; font-size: 15px; font-weight: 700; color: var(--text-strong); }
+.cp-choices { display: grid; gap: 10px; margin-top: 12px; }
+.cp-choice {
+  text-align: left; padding: 12px 14px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--border-subtle); background: transparent; color: inherit;
+}
+.cp-choice:disabled { cursor: default; opacity: .7; }
+.cp-choice.is-current { border-color: var(--text-link); }
+.cp-choice-l { display: block; font-weight: 700; color: var(--text-strong); }
+.cp-choice-l em { font-style: normal; color: var(--text-link); font-weight: 600; }
+.cp-choice-h { display: block; font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.cp-fine { margin-top: 14px; font-size: 12.5px; color: var(--text-muted); font-style: italic; }
+.cp-error { margin-top: 12px; color: var(--danger, #b42318); font-size: 14px; }

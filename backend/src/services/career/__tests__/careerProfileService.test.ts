@@ -8,6 +8,10 @@ jest.mock('../careerEvidenceAdapters', () => {
     __esModule: true,
     // deriveEvidenceLevel is pure and tested for real, not mocked.
     deriveEvidenceLevel: actual.deriveEvidenceLevel,
+    // Same reason: isVerifiedLevel is the one allow-list deciding what counts as
+    // verified, shared by the readiness gate, this service and the public projection.
+    // Stubbing it here would let this suite pass while the three disagree.
+    isVerifiedLevel: actual.isVerifiedLevel,
     identityAdapter: jest.fn(),
     skillAdapter: jest.fn(),
     artifactAdapter: jest.fn(),

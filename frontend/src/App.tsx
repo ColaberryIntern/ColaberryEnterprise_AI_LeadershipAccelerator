@@ -7,6 +7,8 @@ import ScrollToTop from './components/ScrollToTop';
 import RouteLoading from './components/ui/RouteLoading';
 import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
+import ClientSignIn from './pages/refactored/ClientSignIn';
+import ClientPortal from './pages/refactored/ClientPortal';
 import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
 import HomeV2 from './pages/publicV2/HomeV2';
 import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
@@ -17,6 +19,9 @@ import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
 import PricingV2 from './pages/publicV2/PricingV2';
 import StoriesV2 from './pages/publicV2/StoriesV2';
+import StoryDetailV2 from './pages/publicV2/StoryDetailV2';
+import CapstoneRecordPage from './pages/CapstoneRecordPage';
+import PublicPortfolioProfilePage from './pages/PublicPortfolioProfilePage';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -108,7 +113,77 @@ function App() {
             <Route path="start" element={<Navigate to="/try" replace />} />
             <Route path="pricing" element={<PricingV2 />} />
             <Route path="stories" element={<StoriesV2 />} />
+            {/*
+                The published-record detail surface. Declared WITHOUT a leading
+                slash, like every other child of this layout route -- a leading
+                slash here would make it an absolute path and it would not nest.
+
+                DELIBERATELY NOT LAZY. The shared cbv2- primitives this page
+                leans on (.cbv2-pagehero, .cbv2-section, .cbv2-btn, .cbv2-rv)
+                live in homeV2.css / servicesV2.css / publicV2.css /
+                cinematicV2.css and are only in the bundle because these V2 pages
+                are imported statically here. Splitting this route out would ship
+                it without its own layout primitives -- see the warning at the
+                top of proofV2.css.
+            */}
+            <Route path="stories/:slug" element={<StoryDetailV2 />} />
+            {/*
+                A student's shareable Capstone Record. Lives under PublicLayoutV2
+                rather than in the legacy publicRoutes block, and the layout is the
+                whole point rather than a detail:
+
+                  - V2 is the site's real header. A page a student sends to a hiring
+                    manager showing the retired navbar reads as a dead corner of the
+                    site, which is the opposite of what the page is for.
+                  - PublicLayout (V1) calls initTracker() UNCONDITIONALLY. That would
+                    fingerprint the hiring manager opening someone's portfolio before
+                    asking them anything. V2 gates all attribution on consent.
+                  - V1 mounts the Maya chat widget. A marketing chat bot does not
+                    belong on top of a person's credential.
+
+                Same no-leading-slash rule as the route above, for the same reason.
+            */}
+            <Route path="p/:slug" element={<CapstoneRecordPage />} />
+            {/*
+                portfolio/:slug is the PERSON; p/:slug is one project. Spelled out
+                rather than /u/, because /u/ and /p/ are one character apart carrying
+                the SAME slug, and Ali reached for the wrong one within a minute of it
+                shipping. A student sending a recruiter the wrong page would not find
+                out until the recruiter had already read it.
+
+                Ranked above /portfolio/share/:token by React Router's specificity
+                rules, since a static segment beats a dynamic one. `share` is also a
+                reserved slug, so nobody can mint an address that route would shadow.
+
+                Same no-leading-slash rule as the route above, for the same reason:
+                both are pages a stranger opens from a link a learner sent.
+            */}
+            <Route path="portfolio/:slug" element={<PublicPortfolioProfilePage />} />
           </Route>
+          {/*
+              Client reviewer sign-in. Deliberately OUTSIDE both marketing layouts,
+              for the same reasons that moved p/:slug out of the legacy block — and
+              they are sharper here, because this page is the front door to a paying
+              client's engagement:
+
+                - PublicLayout (V1) calls initTracker() UNCONDITIONALLY. That would
+                  fingerprint a client's executive reviewer before they have signed
+                  in or consented to anything. They are not a lead.
+                - V1 is the retired navbar and marketing footer, offering "Start free"
+                  and "Book a walkthrough" to someone who is already a customer.
+                - V1 mounts the Maya sales chat widget. A prospecting bot does not
+                  belong on the door to a delivery review.
+
+              V2 was not the answer either: it is still the marketing site. This surface
+              wants no site chrome at all, so it gets none. The page supplies its own
+              full-height centred layout.
+          */}
+          <Route path="/client" element={<ClientSignIn />} />
+          {/*
+              Where sign-in actually goes. Same standalone treatment and the same reason:
+              a client reviewer is not a lead, so no marketing chrome and no tracker.
+          */}
+          <Route path="/client/projects" element={<ClientPortal />} />
           <Route element={<PublicLayout />}>
             {publicRoutes}
           </Route>

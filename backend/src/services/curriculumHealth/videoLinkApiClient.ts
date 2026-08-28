@@ -112,6 +112,17 @@ export interface ApiVideo {
   regionBlocked: string[] | null;
   /** contentDetails.contentRating.ytRating, e.g. 'ytAgeRestricted'. */
   ytRating: string | null;
+  /**
+   * True length in whole seconds, read from `contentDetails.duration`.
+   *
+   * NULL means the response carried no parseable duration. It is never 0 — the
+   * watch gate divides by this to derive a percentage, so a silent 0 would be
+   * either a division by zero or a card that completes on the first frame.
+   * Costs no extra quota: `contentDetails` is already in PARTS for
+   * regionRestriction, so this is a field we were already paying for and
+   * discarding.
+   */
+  durationSeconds: number | null;
 }
 
 export type VideoLookup =
@@ -162,6 +173,28 @@ function readEmbeddable(status: Record<string, unknown>): boolean | null {
   return null;
 }
 
+/**
+ * PURE — ISO-8601 media duration (`PT7M58S`, `PT1H2M3S`, `P1DT2H`) to whole
+ * seconds. Returns null, never 0, for anything it cannot read.
+ *
+ * The null-not-zero rule is the whole contract. `watchProgressMath` treats a
+ * duration of 0 as "never measurable" and fails the gate OPEN; it treats a small
+ * positive number as ground truth and gates against it. Returning 0 for an
+ * unreadable duration would therefore quietly mark videos complete. A live
+ * stream reports `P0D`, which parses to 0 and is likewise returned as null —
+ * a stream has no length to be 75% of.
+ */
+export function parseIso8601Duration(raw: unknown): number | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(raw.trim());
+  if (!m) return null;
+  const [, d, h, min, sec] = m;
+  if (d === undefined && h === undefined && min === undefined && sec === undefined) return null;
+  const total = Number(d || 0) * 86400 + Number(h || 0) * 3600 + Number(min || 0) * 60 + Number(sec || 0);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return Math.round(total);
+}
+
 /** Shape one `videos.list` item. Pure; exported for the unit tests. */
 export function readApiVideo(item: Record<string, unknown>): ApiVideo | null {
   const id = str(item.id);
@@ -183,6 +216,7 @@ export function readApiVideo(item: Record<string, unknown>): ApiVideo | null {
     regionAllowed: strList(region.allowed),
     regionBlocked: strList(region.blocked),
     ytRating: str(rating.ytRating),
+    durationSeconds: parseIso8601Duration(details.duration),
   };
 }
 

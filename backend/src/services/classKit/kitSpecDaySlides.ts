@@ -319,7 +319,12 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       eyebrow: '🗺️ Build map', title: 'The checkpoints', bullets: t.buildMap,
       diagram: buildCheckpointDiagram(t.checkpoints),
       diagramCaption: 'Everyone moves together, checkpoint to checkpoint. Stuck? The rescue branch catches you up.',
-      presenterTip: 'Show the safety rails: the checkpoints and the rescue branch. Nobody gets left behind. Confirm CP0 before the first prompt.',
+      presenterTip: [
+        'SAY: These are tonight’s checkpoints. We move together — nobody goes past one until the room is through it.',
+        'SAY: And if you fall behind, that rescue branch is how you catch up. Nobody gets stranded tonight.',
+        'DO: Walk the boxes left to right on screen, then point at the rescue branch.',
+        'NOTE: Confirm CP0 with the room before you open the first prompt. Say the safety rails once, plainly, then move.',
+      ].join('\n'),
     }));
   }
   out.push(...teachToSlides(tteach, 'build-map', map));
@@ -401,13 +406,23 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
   if (beforeAfter) {
     out.push(slide(cta, -1, 'beforeafter', {
       title: beforeAfter.label || 'Before → After', beforeAfter,
-      presenterTip: 'Let the two columns do the talking. This is the transformation payoff — pause here.',
+      presenterTip: [
+        'SAY: Look at the left column. That was you walking in on Monday.',
+        'SAY: Now the right one. Every line there is something you can do tonight that you could not do then.',
+        'DO: Pause. Let the two columns sit on screen — do not narrate every row.',
+        'NOTE: This is the transformation payoff of the week. Reading the rows out loud is what kills it.',
+      ].join('\n'),
     }));
   }
   out.push(slide(cta, 0, 'assignment', {
     eyebrow: 'Prove it by Friday', title: wc.assignment.title,
     brief: buildWeekBrief(meta.week, wc),
-    presenterTip: 'Restate the assignment and the proof. Learn it Monday, build it Thursday, prove it by Friday.',
+    presenterTip: [
+      'SAY: Here is what you owe by Friday, and here is exactly what counts as proof.',
+      'SAY: Learn it Monday, build it Thursday, prove it by Friday. That is the rhythm every single week.',
+      'DO: Read the proof line off the slide rather than from memory — that is the part people get wrong.',
+      'NOTE: Restate it even if you covered it during the build. This is the last thing they see before they leave.',
+    ].join('\n'),
   }));
 
   return out;

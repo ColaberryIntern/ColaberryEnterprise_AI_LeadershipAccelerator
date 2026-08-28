@@ -422,11 +422,11 @@ import TenantAccessAudit from './TenantAccessAudit';
 // sequelize.models, so an unregistered model is an invisible one.
 import DeliveryEngagement from './DeliveryEngagement';
 import DeliveryProject from './DeliveryProject';
-import CareerPublication from './CareerPublication';
-import CareerPublicationSnapshot from './CareerPublicationSnapshot';
-import CareerPublicationApproval from './CareerPublicationApproval';
+import CapstoneReviewApproval from './CapstoneReviewApproval';
+import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
+import DeliveryClientSigninToken from './DeliveryClientSigninToken';
 import DeliveryContract from './DeliveryContract';
 import DeliveryDecision from './DeliveryDecision';
 import DeliveryEvent from './DeliveryEvent';
@@ -445,6 +445,25 @@ import DeliveryChangeRequest from './DeliveryChangeRequest';
 import GraphNode from './GraphNode';
 import GraphEdge from './GraphEdge';
 import GraphEvent from './GraphEvent';
+
+// --- Case Study OS ---
+import CaseStudy from './CaseStudy';
+import CaseStudyRepoCollection from './CaseStudyRepoCollection';
+import CaseStudyRepository from './CaseStudyRepository';
+import CaseStudySnapshot from './CaseStudySnapshot';
+import CaseStudyMetric from './CaseStudyMetric';
+import CaseStudyEvidence from './CaseStudyEvidence';
+import CaseStudyArtifact from './CaseStudyArtifact';
+import CaseStudyPublication from './CaseStudyPublication';
+import CaseStudySyncRun from './CaseStudySyncRun';
+import CaseStudyCollection from './CaseStudyCollection';
+// Story Studio assets. Schema lives in db/ensureCaseStudyStoryAssets.ts, a peer
+// of ensureCaseStudySchema.ts rather than an extension of it — see that file's
+// header for why the ten-table core was left byte-untouched.
+import CaseStudyStoryline from './CaseStudyStoryline';
+import CaseStudyAiDraft from './CaseStudyAiDraft';
+import CaseStudyQuote from './CaseStudyQuote';
+import CaseStudyChart from './CaseStudyChart';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1508,16 +1527,31 @@ export {
   LeadTenantContext,
   CommunicationPreference,
   TenantAccessAudit,
+  // Case Study OS
+  CaseStudy,
+  CaseStudyRepoCollection,
+  CaseStudyRepository,
+  CaseStudySnapshot,
+  CaseStudyMetric,
+  CaseStudyEvidence,
+  CaseStudyArtifact,
+  CaseStudyPublication,
+  CaseStudySyncRun,
+  CaseStudyCollection,
+  CaseStudyStoryline,
+  CaseStudyAiDraft,
+  CaseStudyQuote,
+  CaseStudyChart,
   // Refactored AI Delivery OS (Gate 1)
   DeliveryEngagement,
   DeliveryProject,
   DeliveryProjectSourceLink,
 
   // Living Career Portfolio (Gate 10 — versioned publication)
-  CareerPublication,
-  CareerPublicationSnapshot,
-  CareerPublicationApproval,
+  CapstoneReviewApproval,
+  CareerMentorScope,
   DeliveryProjectMember,
+  DeliveryClientSigninToken,
   DeliveryContract,
   DeliveryDecision,
   DeliveryEvent,
@@ -1771,6 +1805,45 @@ CommunicationPreference.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 CommunicationPreference.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
 CommunicationPreference.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
 
+// --- Case Study OS associations ---
+// Both directions with a named `as` so an eager `include` reads the same way from
+// either end. Only INTRA-Case-Study edges are declared: `project_id`, `tenant_id`,
+// `brand_id`, `github_connection_id`, `evidence_record_id` and
+// `portfolio_artifact_id` are bare UUID columns with no foreign key (see the
+// ensureCaseStudySchema.ts header for why), so associating them to Project,
+// Tenant, Brand, GitHubConnection, EvidenceRecord or PortfolioArtifact would
+// assert a referential integrity the schema deliberately does not have.
+CaseStudy.hasMany(CaseStudyRepoCollection, { foreignKey: 'case_study_id', as: 'repoCollections' });
+CaseStudyRepoCollection.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+// Repositories hang off the COLLECTION, not off the Case Study directly: the
+// collection is what bounds them (max 20) and what dedupes them case-insensitively.
+CaseStudyRepoCollection.hasMany(CaseStudyRepository, { foreignKey: 'collection_id', as: 'repositories' });
+CaseStudyRepository.belongsTo(CaseStudyRepoCollection, { foreignKey: 'collection_id', as: 'collection' });
+
+CaseStudy.hasMany(CaseStudySnapshot, { foreignKey: 'case_study_id', as: 'snapshots' });
+CaseStudySnapshot.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudyMetric, { foreignKey: 'case_study_id', as: 'metrics' });
+CaseStudyMetric.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudyEvidence, { foreignKey: 'case_study_id', as: 'evidence' });
+CaseStudyEvidence.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudyArtifact, { foreignKey: 'case_study_id', as: 'artifacts' });
+CaseStudyArtifact.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudyPublication, { foreignKey: 'case_study_id', as: 'publications' });
+CaseStudyPublication.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudySyncRun, { foreignKey: 'case_study_id', as: 'syncRuns' });
+CaseStudySyncRun.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+// CaseStudyCollection intentionally has NO association. Despite the name it is a
+// saved editorial FILTER DEFINITION, not a membership list: which Case Studies it
+// contains is evaluated from `filter_config` at read time. An association would
+// imply a foreign key that does not exist and invite an `include` that returns
+// nothing while looking correct.
 // --- Refactored AI Delivery OS (Gate 1) associations ---------------------------------
 //
 // TENANCY BY PARENT. Only DeliveryEngagement and DeliveryProject belong to a Tenant/Brand

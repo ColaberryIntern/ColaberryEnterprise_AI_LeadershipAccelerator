@@ -1,4 +1,5 @@
 import { buildAgentSystemPrompt } from '../agentBlueprint/agentSystemPrompt';
+import { getReeseAgentId } from './reeseIdentitySeed';
 
 /**
  * Reese's system prompt — voice/persona rules transplanted from the locked
@@ -55,10 +56,24 @@ GUARDRAILS (never do these):
  * Never throws — a learner-context failure degrades gracefully to the persona
  * block alone (mirrors mentorService.ts's fail-safe pattern for getLearnerContextBlock,
  * defended again here in case a caller mocks/overrides that function to reject).
+ *
+ * AI Workforce Management, Checkpoint C (2026-08-28) — Reese is the first real
+ * agent to carry active ManagerDirective rows into her own runtime prompt,
+ * via agentSystemPrompt.ts's generic agentId option. A lookup failure here
+ * (identity not seeded yet, DB hiccup) degrades to the exact same
+ * pre-Checkpoint-C behavior — no directive block, not a broken reply.
  */
 export async function buildReeseSystemPrompt(enrollmentId: string): Promise<string> {
+  let agentId: string | undefined;
+  try {
+    agentId = (await getReeseAgentId()) ?? undefined;
+  } catch {
+    agentId = undefined;
+  }
+
   return buildAgentSystemPrompt(REESE_PERSONA_BLOCK, enrollmentId, {
     agentLabel: 'reese',
+    agentId,
     closingLine:
       '\nThis is a direct-message conversation, not a lesson-scoped chat — you may ' +
       "be asked about anything across the student's whole journey. Reply in Reese's " +

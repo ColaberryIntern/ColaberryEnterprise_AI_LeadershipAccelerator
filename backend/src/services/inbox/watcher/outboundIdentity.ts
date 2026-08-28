@@ -44,6 +44,31 @@ export const OUTBOUND_COPY_HEADER = 'x-colaberry-outbound-copy';
 export const IDEMPOTENCY_HEADER = 'x-colaberry-idempotency-key';
 export const SEND_LEDGER_FILENAME = 'send-ledger.jsonl';
 
+/**
+ * Addresses that belong to a campaign recipient but never appear in the ledger.
+ *
+ * ── WHY THE LEDGER ALONE IS NOT THE WHOLE ROSTER ────────────────────────────
+ *
+ * The roster is read off the send ledger so it cannot drift from who actually
+ * received the campaign, and that is still the right default. But it answers
+ * "which ADDRESSES did we mail", and the guard needs "which PEOPLE are we
+ * talking to". Those come apart when a student writes from a second address.
+ *
+ * Checked against production on 2026-08-25: five active, portal-enabled
+ * enrollments carry the same person's name as someone on the ledger under a
+ * different address. Mail from any of them hits `not_campaign_recipient`, which
+ * is the one skip reason that does NOT escalate -- the student is ignored
+ * outright rather than handed to a human. That is the quiet half of the failure
+ * where a sweep ran a roster of 15 against a cohort of 18.
+ *
+ * So this file is a deliberate, reviewed widening of the roster, kept separate
+ * from the ledger because the ledger is a record of sends and must not be
+ * edited to say we mailed someone we did not.
+ *
+ * Format: a JSON array of addresses, or { "addresses": [...] }.
+ */
+export const ROSTER_EXTRA_FILENAME = 'roster-extra.json';
+
 export interface OutboundLedgerView {
   /** False means: do not auto-reply to anything. Escalate-only. */
   available: boolean;
@@ -76,6 +101,64 @@ export function normalizeMessageId(raw: string | null | undefined): string {
 
 export function sendLedgerPath(runDir: string): string {
   return path.join(runDir, SEND_LEDGER_FILENAME);
+}
+
+export function rosterExtraPath(runDir: string): string {
+  return path.join(runDir, ROSTER_EXTRA_FILENAME);
+}
+
+export interface RosterExtra {
+  addresses: string[];
+  /** Set when the file exists but could not be used. */
+  error?: string;
+}
+
+/**
+ * Read the supplementary roster.
+ *
+ * A MISSING file is the normal case and yields no addresses -- the ledger is
+ * the roster, exactly as before.
+ *
+ * A file that exists but cannot be read or parsed is an ERROR rather than an
+ * empty list, and the caller turns it into escalate-only. The reasoning matches
+ * the corrupt-ledger rule a few lines down: this file's whole job is to stop
+ * particular students being ignored, so treating a broken one as "no extras"
+ * would silently restore the exact failure it was added to prevent, and it
+ * would look completely healthy while doing it.
+ */
+export function loadRosterExtra(runDir: string): RosterExtra {
+  const file = rosterExtraPath(runDir);
+  let raw: string;
+  try {
+    if (!fs.existsSync(file)) return { addresses: [] };
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err: any) {
+    return { addresses: [], error: `Cannot read ${file}: ${err?.message ?? err}` };
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err: any) {
+    return { addresses: [], error: `${file} is not valid JSON: ${err?.message ?? err}` };
+  }
+
+  const list = Array.isArray(parsed) ? parsed : parsed?.addresses;
+  if (!Array.isArray(list)) {
+    return {
+      addresses: [],
+      error: `${file} must be a JSON array of addresses, or an object with an "addresses" array.`,
+    };
+  }
+
+  const addresses: string[] = [];
+  for (const entry of list) {
+    if (typeof entry !== 'string' || !entry.includes('@')) {
+      return { addresses: [], error: `${file} contains an entry that is not an address: ${JSON.stringify(entry)}` };
+    }
+    addresses.push(entry.trim().toLowerCase());
+  }
+  return { addresses };
 }
 
 function empty(
@@ -148,6 +231,20 @@ export function loadOutboundLedger(runDir: string): OutboundLedgerView {
       recipients.add(rec.recipient.trim().toLowerCase());
     }
   }
+
+  // The supplementary roster widens `recipients` ONLY. It never contributes a
+  // message id, so it cannot affect which mail is recognised as our own -- that
+  // discrimination stays anchored to what was really sent.
+  const extra = loadRosterExtra(runDir);
+  if (extra.error) {
+    return empty(
+      'corrupt',
+      `${extra.error} This file exists to stop specific students being ignored as ` +
+      '"not a campaign recipient", so a broken one is treated as a broken roster rather than ' +
+      'as an empty one.',
+    );
+  }
+  for (const addr of extra.addresses) recipients.add(addr);
 
   return { available: true, messageIds, businessEventIds, sentCount, recipients };
 }

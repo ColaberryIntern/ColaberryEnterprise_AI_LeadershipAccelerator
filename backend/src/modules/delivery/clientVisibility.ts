@@ -158,6 +158,8 @@ export function findForbiddenFields(value: unknown, maxDepth = 8): ForbiddenFiel
 
 /** Object kinds the client surface serves. */
 export type ClientObjectKind =
+  | 'brand'
+  | 'engagement'
   | 'project'
   | 'decision'
   | 'design'
@@ -176,15 +178,58 @@ export type ClientObjectKind =
  * `builder_authority` (an assessment of a person), no story internals.
  */
 export const CLIENT_FIELD_ALLOWLIST: Record<ClientObjectKind, readonly string[]> = {
-  project: ['id', 'name', 'summary', 'status', 'started_at', 'target_date', 'engagement_id'],
+  // The brand this engagement is delivered under. NAME ONLY, and that is the whole point:
+  // a client room is not Colaberry's room, it is the room of whichever brand owns the
+  // engagement - AI Flotation, Refactored.ai, CPN. Rendering a hardcoded identity here
+  // would have to be undone the first time a non-Colaberry brand delivers a project.
+  //
+  // Colours and logo are deliberately NOT here. `brands.default_theme_key` exists and is
+  // seeded for all five brands, but nothing implements it - there is no theme registry,
+  // no per-theme CSS and no consumer. Projecting a theme key the client surface cannot
+  // honour would be shipping a promise instead of a feature. Ali's call, deferred.
+  //
+  // Absent: slug and status (internal), metadata (an open bag), tenant_id, and
+  // default_theme_key until something can act on it.
+  brand: ['id', 'name'],
+  // The engagement a project belongs to. A client is shown its NAME because a project
+  // without the engagement around it reads as an orphan - but almost nothing else.
+  //
+  // Deliberately absent, and the first one is the sharp one: `source_lead_id` links the
+  // engagement back to the marketing lead it came from, which is our funnel record and
+  // none of the client's business. Also absent: tenant_id, brand_id, organization_id,
+  // every *_identity_id, `metadata` (an open JSON bag - anything could end up there),
+  // `archived_at` and `engagement_type`, which is our commercial classification.
+  engagement: ['id', 'name', 'status', 'start_at', 'target_end_at'],
+  // `summary`, `started_at` and `target_date` were named here and DO NOT EXIST on
+  // DeliveryProject. Because toClientShape skips undefined values, they vanished in
+  // silence rather than failing, and the client saw a thinner project than intended.
+  // These are the real columns; clientAllowlistContract.test.ts now pins them.
+  project: [
+    'id',
+    'name',
+    'status',
+    'engagement_id',
+    // The client's own problem statement and the product idea, both written for them.
+    // `workflow_summary` and `existing_system_summary` are deliberately excluded: they
+    // are our analysis of how they work today, not something they asked to be shown.
+    'business_problem',
+    'product_idea',
+  ],
+  // `title` and `requires_client_approval` were named here and DO NOT EXIST. The result
+  // was worse than a missing label: the projection carried a status and a rationale but
+  // NO STATEMENT OF WHAT WAS DECIDED - the one thing a decision record exists to say.
   decision: [
     'id',
-    'title',
     'decision_type',
     'status',
+    // The three that actually carry the decision.
+    'question',
+    'recommendation',
+    'final_decision',
     'rationale',
     'decided_at',
-    'requires_client_approval',
+    // Deliberately absent: `options` (a JSON blob that can carry internal notes),
+    // `affected_nodes`, and every *_identity_id - who decided is internal.
   ],
   design: ['id', 'title', 'summary', 'preview_ref', 'status', 'updated_at'],
   release: ['id', 'name', 'status', 'released_at', 'summary', 'evidence_summary'],
@@ -192,13 +237,15 @@ export const CLIENT_FIELD_ALLOWLIST: Record<ClientObjectKind, readonly string[]>
   // proof, not our CI output.
   evidence_summary: ['dimension', 'outcome', 'checked_at'],
   change_request: ['id', 'title', 'description', 'status', 'requested_at', 'impact_summary'],
+  // `scope` and `accepted_by_name` were named here and DO NOT EXIST; the real columns
+  // are `scope_kind` and `accepted_by_identity_id`. The identity id is NOT projected -
+  // a client is owed the fact of acceptance, not our internal identifier for the person.
   acceptance: [
     'id',
-    'scope',
+    'scope_kind',
     'promised_acceptance',
     'preview_ref',
     'evidence_summary',
-    'accepted_by_name',
     'accepted_at',
     'comments',
     'exceptions',

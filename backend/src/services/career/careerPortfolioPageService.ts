@@ -1,0 +1,272 @@
+/**
+ * careerPortfolioPageService — resolving /u/:slug, and the one rule about who may see it.
+ *
+ * THE VIEW DECISION LIVES IN EXACTLY ONE PURE FUNCTION. `publicViewDecision` below is
+ * the only place that answers "may a stranger see this page?". It is exported and tested
+ * on its own so that a second surface — a reviewer preview, an admin tool, an OG-image
+ * renderer — cannot quietly grow a more generous idea of "viewable" than the public
+ * reader has. Every caller asks it; nobody re-implements it.
+ *
+ * STATUS AND VISIBILITY ARE INDEPENDENT AXES, deliberately.
+ *
+ *   status      draft | published      has a human approved this page?
+ *   visibility  private | unlisted | public    who did the LEARNER choose to show it to?
+ *
+ * Both must pass. A published page set back to `private` disappears, and an `unlisted`
+ * page that was never approved was never visible in the first place. Collapsing these
+ * into one column would make "approved" and "shared" the same act, and they are not:
+ * a mentor approves that the work is ready, the learner decides the audience.
+ *
+ * `unlisted` RETURNS 200 AND ASKS NOT TO BE INDEXED. It is a real page for anyone
+ * holding the link — that is the point of sharing one — but `indexable` is false, so the
+ * route sends `X-Robots-Tag: noindex`. Only `public` is an opt-in to being findable.
+ *
+ * A PAGE THAT MAY NOT BE SEEN IS 404, NOT 403. A 403 confirms the slug exists and that
+ * someone by that name has a portfolio; a 404 says nothing at all. For a page keyed on a
+ * person's name that difference is the whole disclosure.
+ *
+ * FAILURE-FIRST. (1) A missing profile or a failed record query degrades to a shorter
+ * page, never a 500 — the projection is defensive and a portfolio with no records is a
+ * legitimate portfolio. (2) No retry: one DB read each, no external calls. (3) Recovery:
+ * fix the underlying profile and the next request reflects it, because capabilities are
+ * read live. (4) Handled: unknown slug, unapproved page, revoked visibility, missing
+ * profile, unreadable records. Not handled: nothing that reaches the caller.
+ */
+
+import { sequelize } from '../../config/database';
+import { getCareerProfile } from './careerProfileService';
+import { projectPublicPortfolio, type PublicPortfolio } from './careerPortfolioPublicProjection';
+
+export type PortfolioPageStatus = 'draft' | 'published';
+export type PortfolioPageVisibility = 'private' | 'unlisted' | 'public';
+
+export interface PortfolioPageRow {
+  enrollment_id: string;
+  slug: string;
+  status: PortfolioPageStatus;
+  visibility: PortfolioPageVisibility;
+  approved_identity: unknown;
+}
+
+export interface ViewDecision {
+  /** May a stranger holding this URL see the page at all? */
+  viewable: boolean;
+  /** May a search engine index it? Only ever true for an explicit `public` opt-in. */
+  indexable: boolean;
+}
+
+/**
+ * The whole access rule, in one pure function. No I/O, no clock, no request object.
+ *
+ * Written as a positive allow-list on both axes: an unrecognised status or visibility
+ * (a value added next year, a typo, a hand-edited row) is NOT viewable. The safe default
+ * for a page carrying a person's name is invisible.
+ */
+export function publicViewDecision(page: Pick<PortfolioPageRow, 'status' | 'visibility'> | null): ViewDecision {
+  if (!page) return { viewable: false, indexable: false };
+  const approved = page.status === 'published';
+  if (!approved) return { viewable: false, indexable: false };
+
+  switch (page.visibility) {
+    case 'public':
+      return { viewable: true, indexable: true };
+    case 'unlisted':
+      return { viewable: true, indexable: false };
+    // 'private', and anything unrecognised, falls through to invisible.
+    default:
+      return { viewable: false, indexable: false };
+  }
+}
+
+/** Slugs are compared case-insensitively; `/u/Ali` and `/u/ali` are the same address. */
+async function findPageBySlug(slug: string): Promise<PortfolioPageRow | null> {
+  const [rows] = await sequelize.query(
+    `SELECT enrollment_id, slug, status, visibility, approved_identity
+       FROM career_portfolio_pages
+      WHERE LOWER(slug) = LOWER($1)
+      LIMIT 1`,
+    { bind: [slug] },
+  );
+  const row = (rows as any[])[0];
+  return row ? (row as PortfolioPageRow) : null;
+}
+
+/**
+ * The learner's live project rows, shaped for the projection.
+ *
+ * `share_token`, the score columns and the internal documents are never selected -- the
+ * projection would refuse them anyway, and not fetching them means they cannot be logged
+ * by accident either.
+ */
+export async function readLiveProjects(enrollmentId: string, now: Date = new Date()): Promise<any[]> {
+  try {
+    const [rows] = await sequelize.query(
+      `SELECT name, organization_name, industry, primary_business_problem,
+              selected_use_case, automation_goal, project_stage,
+              github_repo_url, portfolio_url
+         FROM projects
+        WHERE enrollment_id = $1 AND archived_at IS NULL
+        ORDER BY created_at ASC`,
+      { bind: [enrollmentId] },
+    );
+    return rows as any[];
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_projects_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+    return [];
+  }
+}
+
+/**
+ * The learner-authored fields a human approved, overlaid onto the live profile.
+ *
+ * This is why `approved_identity` exists. Capabilities and records are read live because
+ * the system authored them; a headline is read from the review artifact because the
+ * learner authored it and a reviewer signed off on that exact text.
+ */
+function withApprovedIdentity(profile: any, approved: unknown): any {
+  if (!approved || typeof approved !== 'object') return profile;
+  const a: any = approved;
+  return {
+    ...profile,
+    identity: {
+      ...(profile?.identity ?? {}),
+      // Only these two are learner-authored. Everything else stays as the system has it.
+      ...(typeof a.title === 'string' ? { title: a.title } : {}),
+      ...(typeof a.avatar_data_url === 'string' ? { avatar_data_url: a.avatar_data_url } : {}),
+    },
+  };
+}
+
+/**
+ * The approved project set, or `[]`.
+ *
+ * `[]` and not "read live": a page approved before projects were ever projected has no
+ * approved set, and showing unreviewed text would defeat the freeze. The learner asks for
+ * review again and their work appears.
+ */
+function approvedProjectsOf(approved: unknown): any[] {
+  const a: any = approved;
+  return a && typeof a === 'object' && Array.isArray(a.projects) ? a.projects : [];
+}
+
+export interface PublicPortfolioResult {
+  portfolio: PublicPortfolio;
+  indexable: boolean;
+}
+
+/**
+ * Resolve a slug to a public payload, or null if it may not be seen.
+ *
+ * Null covers "no such slug" AND "exists but not viewable" on purpose — see the 404-not-403
+ * note above. The caller cannot tell them apart, which is the intent.
+ */
+/**
+ * The SAME payload a stranger would see, for a reviewer deciding on an unpublished page.
+ *
+ * WHY THIS EXISTS. The reviewer screen shipped with Approve and Ask-for-changes buttons
+ * and nothing to look at. Ali: "It's just asking me to give changes but I can't view what
+ * I'm supposed to be approving." A review gate where the reviewer cannot see the thing is
+ * not a review gate.
+ *
+ * It bypasses `publicViewDecision` deliberately -- everything awaiting review is by
+ * definition unpublished, so the public reader 404s on all of it. It bypasses NOTHING
+ * else: the payload is built by the same `projectPublicPortfolio` allow-list, so a
+ * reviewer sees exactly what a stranger would and no more. The projection is pure, which
+ * is what makes that guarantee real rather than aspirational.
+ *
+ * The CALLER checks `canReview` before calling this.
+ */
+export async function getPortfolioPreview(enrollmentId: string, now: Date = new Date()) {
+  return { portfolio: await buildPortfolio(enrollmentId, now) };
+}
+
+export async function getPublicPortfolioBySlug(
+  slug: string,
+  now: Date = new Date(),
+): Promise<PublicPortfolioResult | null> {
+  const page = await findPageBySlug(String(slug || '').trim());
+  const decision = publicViewDecision(page);
+  if (!page || !decision.viewable) return null;
+
+  return {
+    portfolio: await buildPortfolio(
+      page.enrollment_id,
+      now,
+      page.approved_identity,
+      approvedProjectsOf(page.approved_identity),
+    ),
+    indexable: decision.indexable,
+  };
+}
+
+/**
+ * Build the public payload for one learner. Shared by the public reader and the reviewer
+ * preview so the two can never render different things.
+ */
+async function buildPortfolio(
+  enrollmentId: string,
+  now: Date,
+  approvedIdentity: unknown = null,
+  /** null = read projects LIVE (reviewer preview); an array = the APPROVED set. */
+  approvedProjects: unknown[] | null = null,
+): Promise<PublicPortfolio> {
+  // A profile that fails to load is a shorter page, not a 500. The projection turns an
+  // empty profile into an empty portfolio rather than throwing.
+  let profile: unknown = null;
+  try {
+    profile = await getCareerProfile(enrollmentId);
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_profile_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
+  // ONLY published records. An unpublished record is never passed to the projection,
+  // so the projection never has to know about draft work at all.
+  let records: unknown = [];
+  try {
+    const [rows] = await sequelize.query(
+      // `descriptor` is selected so the projection can fall back to the document's own
+      // first heading when `project_name` is null, rather than printing the slug.
+      `SELECT slug,
+              content_json->'system'->>'project_name' AS project_name,
+              content_json->'system'->>'descriptor'   AS descriptor,
+              published_at
+         FROM capstone_records
+        WHERE enrollment_id = $1 AND status = 'published' AND visibility <> 'private'
+        ORDER BY published_at DESC NULLS LAST`,
+      { bind: [enrollmentId] },
+    );
+    records = rows;
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_records_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
+  // PROJECT TEXT IS LEARNER-AUTHORED, so the public page reads the APPROVED set, not the
+  // live one -- otherwise a learner could be approved and then rewrite their business
+  // problem into anything. The reviewer preview passes null and gets the live rows,
+  // because the live text is exactly what they are being asked to approve.
+  const projects = approvedProjects ?? await readLiveProjects(enrollmentId, now);
+
+  return projectPublicPortfolio({
+    // On an unapproved page `approvedIdentity` is null, so the reviewer sees the LIVE
+    // headline -- which is the text they are being asked to approve.
+    profile: withApprovedIdentity(profile, approvedIdentity),
+    projects,
+    records,
+    generatedAt: now.toISOString(),
+  });
+}

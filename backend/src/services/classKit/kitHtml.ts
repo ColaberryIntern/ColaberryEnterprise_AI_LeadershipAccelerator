@@ -108,6 +108,17 @@ function diagramHtml(slide: KitSlide): string {
       slide.bullets.map((b) => `<li>${esc(b)}</li>`).join('') +
       '</ol></aside>'
     : '';
+  // The Definitions row sits directly under Key points. A zoomed diagram is
+  // what the room (and the recording) is looking at while a new term gets
+  // spoken for the first time, so the vocabulary belongs on that same screen
+  // rather than only in the instructor's script.
+  const defs = slide.definitions && slide.definitions.length
+    ? '<aside class="kdiag-defs"><div class="kdiag-side-hd">Definitions</div><dl class="kdiag-defs-list">' +
+      slide.definitions
+        .map((d) => `<div class="kdiag-def"><dt>${esc(d.term)}</dt><dd>${esc(d.meaning)}</dd></div>`)
+        .join('') +
+      '</dl></aside>'
+    : '';
   const where = slide.prompt
     ? (slide.prompt.kind === 'review'
       ? '<span class="kdiag-where">📖 Read-along — nothing to paste</span>'
@@ -119,11 +130,12 @@ function diagramHtml(slide: KitSlide): string {
     where +
     '</div>';
   return (
-    '<div class="kdiagram" onclick="window.__toggleDiagramFull ? window.__toggleDiagramFull(this) : this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
+    '<div class="kdiagram' + (defs ? ' kdiagram--hasdefs' : '') + '" onclick="window.__toggleDiagramFull ? window.__toggleDiagramFull(this) : this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
     head +
     '<div class="kdiag-stage">' +
     `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
     side +
+    defs +
     '</div>' +
     (slide.diagramCaption ? `<div class="kdiagram-cap"><span class="kdiagram-cap-ico">🧭</span><span>${esc(slide.diagramCaption)}</span></div>` : '') +
     foot +
@@ -203,13 +215,19 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
     case 'assignment':
       return assignmentHtml(slide);
     case 'teach':
+      // The lead paragraph sits BELOW the diagram, not above it. It is the
+      // text the instructor reads out loud, so putting it at the top of the
+      // slide hands the room the next two minutes of narration before it is
+      // spoken — the diagram is what the class should be looking at while
+      // they listen. It stays on the slide (it is the record, and the
+      // recording needs it), just underneath the thing being talked about.
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
         `<h2 class="ktitle">${esc(slide.title)}</h2>` +
-        teachLeadHtml(slide.body) +
         cardGridHtml(slide.bullets) +
         (slide.prompt ? buildBayHtml(slide) : '') +
         diagramHtml(slide) +
+        teachLeadHtml(slide.body) +
         evidenceHtml(slide)
       );
     case 'interaction':
@@ -285,7 +303,9 @@ function slideSection(spec: KitSpec, slide: KitSlide): string {
     `data-mode="${attr(modeForSlide(slide))}" ` +
     `data-segstart="${attr(slide.segStartMin)}" data-segend="${attr(slide.segEndMin)}" ` +
     `data-seglabel="${attr(slide.segmentLabel)}" data-slidetitle="${attr(slide.title)}" ` +
-    `data-tip="${attr(slide.presenterTip || '')}" data-body="${attr(slide.body || '')}" data-pub="${attr(slide.publicValue || '')}">` +
+    `data-tip="${attr(slide.presenterTip || '')}" data-body="${attr(slide.body || '')}" data-pub="${attr(slide.publicValue || '')}" ` +
+    `data-say="${attr(splitScript(slide.presenterTip, slide.body).say)}" ` +
+    `data-setup="${attr(splitScript(slide.presenterTip, slide.body).setup)}">` +
     `<div class="kinner">${slideInnerHtml(spec, slide)}</div>` +
     '</section>'
   );
@@ -303,6 +323,78 @@ function timelineHtml(spec: KitSpec): string {
     })
     .join('');
   return `<div class="kpace-timeline">${bars}<span class="now" id="kpacenow" style="left:0%"></span></div>`;
+}
+
+/**
+ * Split an authored instructor script into the two things it actually
+ * contains, because they are needed at different moments and one of them is
+ * spoken out loud.
+ *
+ * A script line may be tagged:
+ *   SAY:  — read this out, verbatim, to the room
+ *   DO:   — set the environment: run it, click it, open it, put it on screen
+ *   NOTE: — commentary: why this matters, what to watch for, when to move on
+ *
+ * Ali, 2026-08-27, after presenting from the un-split version: "I don't know
+ * if I'm supposed to read any of it and it is really hard to follow. Trying to
+ * read it when the new slide comes on and trying not to take a long pause is
+ * hard to do." A single paragraph of mixed direction and prose forces the
+ * instructor to parse it live, mid-sentence, in front of a room.
+ *
+ * Untagged scripts (every week except the one authored against this) degrade
+ * cleanly: the whole script becomes NOTE, and the slide's own body paragraph
+ * remains the read-aloud text, which is exactly the behaviour they had before.
+ */
+export function splitScript(script: string | undefined, body: string | undefined): { say: string; setup: string } {
+  const raw = (script || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const tagged = raw.filter((l) => /^(SAY|DO|NOTE):/i.test(l));
+  if (!tagged.length) {
+    // Untagged: the script is all direction, the body is what gets spoken.
+    return { say: body || '', setup: (script ? 'NOTE: ' + script : '') + (body ? '\nSAY: ' + body : '') };
+  }
+  // The read screen is the slide's own paragraph — "the 2nd paragraph which
+  // tells you exactly what to say" (Ali, 2026-08-27). The script's SAY lines
+  // are cues and stand in only when a slide has no paragraph of its own.
+  const sayLines = tagged
+    .filter((l) => /^SAY:/i.test(l))
+    .map((l) => l.replace(/^SAY:\s*/i, ''))
+    .join('\n\n');
+  const say = body || sayLines;
+  // `setup` is the WHOLE script in authored order, tags intact — spoken lines
+  // included. The instructor needs their opening words the instant the slide
+  // lands, or the pause this exists to remove just moves to the top of the
+  // slide: "trying to read it when the new slide comes on and trying not to
+  // take a long pause is hard to do" (Ali, 2026-08-27). Colour is what keeps
+  // the roles separable here; the zoom view below is where SAY stands alone.
+  const setup = tagged.join('\n');
+  return { say: say || '', setup };
+}
+
+/**
+ * The one-glance answer to "is there something to run on this step, and what
+ * will it do?" — built for the instructor's phone, which surfaces it the
+ * moment they land on a slide, BEFORE they start reading the prompt itself.
+ *
+ * Derived entirely from fields the slide already authors, so it works for
+ * every week without anyone maintaining a second copy of the same information
+ * — and it cannot drift away from the prompt it describes. Saying "no prompt"
+ * out loud matters as much as describing one: the instructor should never
+ * have to scan the slide to find out whether they are about to type.
+ */
+export function promptBrief(slide: KitSlide): string {
+  const p = slide.prompt;
+  if (!p) return '○ No prompt on this step — talk to the diagram.';
+  if (p.kind === 'review') {
+    return '📖 READ-ALONG on this step — nothing to paste.'
+      + (p.label ? '\nWhat it shows: ' + p.label : '');
+  }
+  const where = p.pasteWhere || 'Claude Code';
+  const lines = ['▶ PROMPT ON THIS STEP — runs in ' + where + (p.ccMode ? ' (' + p.ccMode + ')' : '')];
+  if (p.label) lines.push('What it is: ' + p.label);
+  if (p.expectedResult) lines.push('What it produces: ' + p.expectedResult);
+  if (p.stopCondition) lines.push('Done when: ' + p.stopCondition);
+  if (p.rescue) lines.push('If it misfires: ' + p.rescue);
+  return lines.join('\n');
 }
 
 /** Render the full self-contained Class Kit deck for a session. */
@@ -334,6 +426,10 @@ export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): strin
     return {
       id: s.id, mode, phase, title: s.title, segment_label: s.segmentLabel,
       question, prompt,
+      // Independent of `prompt` above, which only populates on build-mode
+      // slides. A prompt on a `present`-mode slide (the build map's primitive
+      // map, for one) still has to be announced on the instructor's phone.
+      prompt_brief: promptBrief(s),
       broadcast_prompts: s.kind === 'broadcast' ? spec.builderBroadcastPrompts : undefined,
     };
   });

@@ -260,7 +260,9 @@ const RuntimeWorkspace: React.FC = () => {
           Read the post — {blogGate.state?.read_s ?? 0}s of {blogGate.state?.required_s ?? 120}s to collect your points
           <span style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.12)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${blogReadPct}%`, background: '#367895', transition: 'width .5s ease' }} /></span>
         </span>
-      : <button className="rt-btn cta" disabled={busy === 'complete'} onClick={collectBlogPts}>Collect +{card.points?.learning ?? 10} pts</button>;
+      // No `?? 10` here: a card that carries no learning points must not advertise ten
+      // of them. When there are none to collect the action is a plain completion.
+      : <button className="rt-btn cta" disabled={busy === 'complete'} onClick={collectBlogPts}>{(card.points?.learning ?? 0) > 0 ? `Collect +${card.points?.learning} pts` : 'Mark complete'}</button>;
   // Comments always render in the right rail now (every card type), so the center is a
   // single, clean scroll.
   const commentsBlock = (

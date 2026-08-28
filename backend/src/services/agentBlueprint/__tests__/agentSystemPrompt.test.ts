@@ -6,11 +6,16 @@
 jest.mock('../../learnerContextService', () => ({
   getLearnerContextBlock: jest.fn(),
 }));
+jest.mock('../../managerDirectiveService', () => ({
+  getActiveDirectiveTexts: jest.fn(),
+}));
 
 import { getLearnerContextBlock } from '../../learnerContextService';
+import { getActiveDirectiveTexts } from '../../managerDirectiveService';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 
 const mockLearnerContext = getLearnerContextBlock as unknown as jest.Mock;
+const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
 
 const CURRICULUM_QA_PERSONA = `You are CurriculumQA, a review agent that checks generated curriculum content for
 factual and pedagogical quality before it reaches students.
@@ -67,5 +72,49 @@ describe('buildAgentSystemPrompt', () => {
     });
     expect(prompt).toContain('asynchronous review queue');
     expect(prompt).not.toContain('direct-message conversation');
+  });
+});
+
+describe('buildAgentSystemPrompt — manager directive injection (Checkpoint C, 2026-08-28)', () => {
+  it('regression: omitting agentId never calls getActiveDirectiveTexts at all (byte-for-byte backward compat with every pre-Checkpoint-C caller)', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-6');
+
+    expect(mockActiveDirectives).not.toHaveBeenCalled();
+    expect(prompt).not.toContain('MANAGER DIRECTIVES');
+  });
+
+  it('happy path: agentId with active directives injects a real MANAGER DIRECTIVES block', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockActiveDirectives.mockResolvedValue(['Always loop in the manager on financial tickets.', 'Never discuss pricing before Tuesday.']);
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-7', { agentId: 'agent-1' });
+
+    expect(mockActiveDirectives).toHaveBeenCalledWith('agent-1');
+    expect(prompt).toContain('MANAGER DIRECTIVES');
+    expect(prompt).toContain('Always loop in the manager on financial tickets.');
+    expect(prompt).toContain('Never discuss pricing before Tuesday.');
+    expect(prompt).toContain('never grant you anything beyond what you already have');
+  });
+
+  it('boundary: agentId given but zero active directives — no directive block, no crash', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockActiveDirectives.mockResolvedValue([]);
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-8', { agentId: 'agent-2' });
+
+    expect(mockActiveDirectives).toHaveBeenCalledWith('agent-2');
+    expect(prompt).not.toContain('MANAGER DIRECTIVES');
+  });
+
+  it('the directive block never appears inside the persona block itself — it is additive text, never mutating what was passed in', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockActiveDirectives.mockResolvedValue(['Escalate any unresolved thread after 48 hours.']);
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-9', { agentId: 'agent-3' });
+
+    const personaEndIndex = prompt.indexOf('GUARDRAILS') + 'GUARDRAILS'.length;
+    const directiveIndex = prompt.indexOf('MANAGER DIRECTIVES');
+    expect(directiveIndex).toBeGreaterThan(personaEndIndex);
   });
 });

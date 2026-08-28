@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { auditMiddleware } from '../middlewares/auditMiddleware';
-import { requireSection } from '../middlewares/authMiddleware';
+import { requireAdmin, requireSection } from '../middlewares/authMiddleware';
 import { mgmtSectionGate } from '../middlewares/mgmtSectionGate';
+import { caseStudySurfaceLabGate } from '../middlewares/caseStudySurfaceLabGate';
 import authRoutes from './admin/authRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import leadRoutes from './admin/leadRoutes';
 import organizationRoutes from './admin/organizationRoutes';
+import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
+import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
@@ -77,6 +80,8 @@ import routingRuleRoutes from './admin/routingRuleRoutes';
 import ingestLogRoutes from './admin/ingestLogRoutes';
 import workLedgerRoutes from './admin/workLedgerRoutes';
 import agentDetailRoutes from './admin/agentDetailRoutes';
+import agentRoleCharterRoutes from './admin/agentRoleCharterRoutes';
+import managerDirectiveRoutes from './admin/managerDirectiveRoutes';
 import generatorRoutes from './admin/generatorRoutes';
 import autonomousIngestRoutes from './admin/autonomousRoutes';
 import automatedReportsRoutes from './admin/automatedReportsRoutes';
@@ -103,6 +108,38 @@ router.use(authRoutes);
 router.use(cohortRoutes);
 router.use(leadRoutes);
 router.use(organizationRoutes);
+// Case Study OS admin surface. Every path is fully qualified
+// (/api/admin/case-studies/...) and carries requireAdmin per route, so its
+// position among the sibling sub-routers is not load-bearing — but it MUST stay
+// below router.use(mgmtSectionGate) above, or scoped management roles bypass the
+// section check entirely. Its PATH_SECTION entry maps it to 'program', the same
+// section /api/admin/projects uses: a Case Study is the publishable projection
+// of a Project, so the roles that manage Projects manage these.
+// Case Study four-lens surface lab — the ONLY code path in the system that
+// renders a non-enterprise surface. Mounted PATH-SCOPED, above the sub-router it
+// guards, and deliberately not as `router.use(gate)` inside
+// caseStudyAdminRoutes: sub-routers here mount with no path prefix, so an
+// unscoped guard inside one applies to every later router's paths as well. That
+// has already caused a production outage in this repo.
+//
+// `requireAdmin` is repeated here rather than relied upon from the sub-router
+// because middleware on this mount runs BEFORE the route's own guards, and the
+// lab gate needs `req.admin.sub` to exist. It is scoped to this one path, so it
+// cannot leak onto a sibling.
+//
+// It refuses a REQUEST, not a route: an `enterprise` preview, and every other
+// Case Study admin call, passes through untouched.
+router.use('/api/admin/case-studies/:id/preview', requireAdmin, caseStudySurfaceLabGate);
+router.use(caseStudyAdminRoutes);
+// Story Studio authoring routes. A SIBLING of the review-desk router rather than
+// growth inside it: that file is what a reviewer can do, this one is what an
+// author can do, and keeping the two route tables separately readable is worth
+// more than one import. Mounted identically — no path prefix, `requireAdmin` on
+// each route individually — and every path sits under `/api/admin/case-studies`,
+// so `mgmtSectionGate`'s existing `program` row already covers them. A new
+// prefix would be deny-by-default for every scoped management role while legacy
+// admin passed, which is a surface that half-works and looks fine.
+router.use(caseStudyStudioRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
 router.use(settingsRoutes);
@@ -182,6 +219,8 @@ router.use(routingRuleRoutes);
 router.use(ingestLogRoutes);
 router.use(workLedgerRoutes);
 router.use(agentDetailRoutes);
+router.use(agentRoleCharterRoutes);
+router.use(managerDirectiveRoutes);
 router.use(generatorRoutes);
 router.use(autonomousIngestRoutes);
 router.use(automatedReportsRoutes);

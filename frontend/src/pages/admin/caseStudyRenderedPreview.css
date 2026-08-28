@@ -1,0 +1,74 @@
+/* ============================================================================
+   caseStudyRenderedPreview.css -- the frame the admin PREVIEW tab renders the
+   public story page inside.
+
+   THE ISOLATION DECISION, WRITTEN DOWN WHERE IT IS IMPLEMENTED.
+
+   The public page's markup is drawn by `pages/publicV2/StoryDetailArticle.tsx`
+   and styled by seven stylesheets: publicV2.css, cinematicV2.css, homeV2.css,
+   servicesV2.css, storyDetailV2.css, storyMediaV2.css and
+   components/caseStudy/caseStudy.css. EVERY selector in all seven is inside the
+   `cbv2-` namespace -- verified by reading them, and enforced for three of them
+   by `caseStudyStyleContract.test.ts` and `storyDetailV2Contract.test.ts`. The
+   only two exceptions are `html.cbv2-reveal-on .cbv2-rv[.is-in]`, which are
+   still scoped to a `cbv2-` class.
+
+   A namespace that complete is what makes a CONTAINER, rather than an iframe,
+   the right mechanism: there is nothing in those sheets that can match an
+   element of the admin shell, because the admin shell assigns Bootstrap classes
+   and `cs-` test ids and no `cbv2-` class anywhere. The trade-off is stated in
+   `CaseStudyRenderedPreview.tsx`.
+
+   THIS FILE IS THEREFORE SMALL ON PURPOSE. It draws a frame and neutralises one
+   animation. It must never grow into a second opinion about how the story page
+   looks: a rule here that changes the story's own layout is a rule that makes
+   the preview stop being a preview.
+
+   Tokens only (colaberry/tokens/*.css). No raw hex, no rgb()/rgba().
+   ========================================================================== */
+
+.cs-story-preview {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-page);
+  /* The story page paints full-bleed bands (`.cbv2-pagehero`,
+     `.cbv2-section--inverse`). Clipping them to the frame is what makes this
+     read as a viewport onto a page rather than as colour leaking into a panel. */
+  overflow: hidden;
+  /* A new stacking context, so nothing in the story can paint over the admin
+     chrome above it. */
+  isolation: isolate;
+}
+
+/* ---------------------------------------------------------- scroll reveal --- */
+
+/*
+ * THE ONE RULE THAT IS NOT COSMETIC.
+ *
+ * `cinematicV2.css` hides every `.cbv2-rv` element -- which on this page is
+ * every section -- whenever `<html>` carries `cbv2-reveal-on`. That class is put
+ * there by `useReveal`, which lives in `PublicLayoutV2` and never runs on an
+ * admin route; its cleanup removes the class, so in normal use it is absent and
+ * the sections default to visible.
+ *
+ * "In normal use" is not a guarantee, and the failure mode is the worst one this
+ * panel has: a preview that renders a masthead and then nothing at all, which
+ * looks exactly like a record with no content. So the frame states its own
+ * answer rather than inheriting one.
+ *
+ * THE DOUBLED CLASS IS DELIBERATE. `html.cbv2-reveal-on .cbv2-rv` scores
+ * (0,2,1); a plain `.cs-story-preview .cbv2-rv` scores (0,2,0) and LOSES.
+ * Repeating the class takes this to (0,3,0), which wins on class count without
+ * depending on which stylesheet the bundler happens to emit second.
+ */
+.cs-story-preview .cbv2-rv.cbv2-rv {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+/* ---------------------------------------------------------------- caption --- */
+
+.cs-story-preview-caption {
+  color: var(--text-subtle);
+}

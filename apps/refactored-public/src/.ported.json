@@ -1,0 +1,73 @@
+{
+  "generated_by": "port-from-capture.js",
+  "source": "legacy-capture/pages",
+  "note": "Faithful port of the site as captured. Forms are intentionally untouched — see the header of port-from-capture.js.",
+  "pages": [
+    {
+      "page": "index.html",
+      "bytes": 78520,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "individuals/index.html",
+      "bytes": 43432,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "enterprise/index.html",
+      "bytes": 27378,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "organizations/index.html",
+      "bytes": 53009,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "public-library/index.html",
+      "bytes": 126680,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "contact-us/index.html",
+      "bytes": 13925,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "feedback/index.html",
+      "bytes": 9686,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "enterprise-feedback/index.html",
+      "bytes": 24849,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "thank-you/index.html",
+      "bytes": 16223,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "privacy/index.html",
+      "bytes": 473909,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    },
+    {
+      "page": "terms/index.html",
+      "bytes": 486736,
+      "tracker": true,
+      "absoluteSelfLinksLeft": 0
+    }
+  ]
+}

@@ -36,6 +36,7 @@ import { DEFAULT_MODEL } from '../components/costEstimationService';
 import { generateIntelCardContent } from './intelCardContent';
 import { rankImportance } from './rssParser';
 import { videoMetadataForUrl } from '../../utils/videoUrl';
+import { resolveCardTiming } from './videoDurationLookup';
 import { decideBootAction } from './aiNewsBootDecision';
 import {
   NormalizedIntelItem,
@@ -156,6 +157,21 @@ export async function materializeIntelCard(item: IntelItem, model = DEFAULT_MODE
     await item.update({ summary_json: content });
   }
 
+  // `item.url` alone is invisible to the player: videoFromMetadata reads only
+  // `metadata.video`, and nothing anywhere reads item.url. Video-bearing sources
+  // (ai_video_stream) therefore produced cards with a real YouTube link that
+  // could never play. Mirror the link into `video` when, and only when, it is
+  // genuinely playable — a plain article link must stay absent here or every
+  // non-video intel card would render a dead player box.
+  //
+  // Then resolve the video's TRUE length from the provider. `estimated_time` was
+  // previously the literal 6 for every card this pipeline created, which is the
+  // denominator the 75%-watched gate divides by: 11 published cards were left
+  // mathematically impossible to complete because the real video was shorter
+  // than 75% of the guess. Unknown length falls back to the same 6, now named.
+  const videoBlock = videoMetadataForUrl(item.url, item.title);
+  const timing = await resolveCardTiming(videoBlock);
+
   // Standalone, program-wide, published card. week=null (a dateless feed card);
   // release_date carries the item's date for feed ordering.
   const card = await TimelineCard.create({
@@ -167,7 +183,7 @@ export async function materializeIntelCard(item: IntelItem, model = DEFAULT_MODE
     visibility: 'published',
     status: 'active',
     release_date: item.published_at || null,
-    estimated_time: 6,
+    estimated_time: timing.estimatedMinutes,
     difficulty: 'intro',
     points: { learning: 5 },
     cohort_id: null,
@@ -178,13 +194,7 @@ export async function materializeIntelCard(item: IntelItem, model = DEFAULT_MODE
       source: `${slug}_pipeline`,
       intel_item_id: item.id,
       item: { title: item.title, source: item.source, url: item.url, date: item.published_at },
-      // `item.url` alone is invisible to the player: videoFromMetadata reads only
-      // `metadata.video`, and nothing anywhere reads item.url. Video-bearing
-      // sources (ai_video_stream) therefore produced cards with a real YouTube
-      // link that could never play. Mirror the link into `video` when, and only
-      // when, it is genuinely playable — a plain article link must stay absent
-      // here or every non-video intel card would render a dead player box.
-      ...(videoMetadataForUrl(item.url, item.title) ? { video: videoMetadataForUrl(item.url, item.title) } : {}),
+      ...(timing.video ? { video: timing.video } : {}),
     },
     // as any: the TimelineCard create payload is broader than the strict attrs
     // typing (mirrors materializeNewsCard); the shape is validated by the DB.

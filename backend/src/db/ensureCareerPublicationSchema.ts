@@ -1,31 +1,27 @@
 import { sequelize } from '../config/database';
 
 /**
- * Living Career Portfolio — Gate 10 (versioned publication) schema.
+ * Career portfolio governance schema — the review gate and mentor scoping that sit on
+ * top of the Capstone Record.
  *
- * Idempotent raw DDL, same pattern as ensureRefactoredDeliverySchema.ts /
- * ensureMultiTenantSchema.ts. Everything is CREATE ... IF NOT EXISTS, so a partial
- * database self-heals and re-running boot is a no-op. Deliberately NOT
- * `sync({alter:true})` — an ungated boot sync against this repo's model graph has
- * previously driven Postgres into OOM.
+ * Idempotent raw DDL, same pattern as ensureRefactoredDeliverySchema.ts. Everything is
+ * CREATE/DROP ... IF EXISTS, so a partial database self-heals and re-running boot is a
+ * no-op. Deliberately NOT `sync({alter:true})` — an ungated boot sync against this repo's
+ * model graph has previously driven Postgres into OOM.
  *
- * THE INVARIANT THIS SCHEMA EXISTS TO ENFORCE (build plan §23):
+ * CONVERGENCE, 2026-08-25. This file originally created a second public-portfolio stack
+ * (`career_publications` + `career_publication_snapshots`) that duplicated
+ * `capstone_records` + `capstone_record_versions` almost field for field. Two sessions had
+ * independently built the same product and landed on the same design. Ali's call: the
+ * Capstone Record at /p/:slug wins, because it shipped and is live.
  *
- *   The private Career Studio is live and changes constantly.
- *   The public portfolio is an IMMUTABLE APPROVED SNAPSHOT.
+ * So what remains here is only what Capstone genuinely lacked:
  *
- * New class work must grow the private portfolio without silently changing what an
- * employer already looked at. That is a data-model property here, not a discipline
- * someone has to remember: `career_publication_snapshots.payload` is written once at
- * submission and has no update path anywhere in the codebase.
+ *   capstone_review_approvals   a human must approve before status becomes 'published'
+ *   career_mentor_scopes        which learners a given mentor may review
  *
- * WHY APPROVALS ARE A SEPARATE TABLE. The obvious design puts `reviewed_by` /
- * `decision` / `reviewer_notes` on the snapshot row. That would mean the snapshot is
- * mutated after creation, and "immutable except for the columns we mutate" is not
- * immutable — it is an invitation for the payload to be edited too, one convenient
- * patch at a time. Keeping the decision in `career_publication_approvals` lets the
- * snapshot table be genuinely append-only, which is what makes "the public page cannot
- * have changed since review" checkable rather than merely intended.
+ * The superseded tables are dropped at boot rather than by hand, so any environment that
+ * already created them converges on the next deploy.
  */
 
 /** Structured, non-fatal failure log. One bad statement must never stop the server. */
@@ -46,93 +42,152 @@ function logStatementFailure(sql: string, err: unknown): void {
   );
 }
 
+
+
+
 /**
- * One publication per person. `slug` is the public identity and is UNIQUE across the
- * platform — collision handling lives in the service (plan §58), because a database
- * error is a bad way to discover that two people share a name.
+ * Which learners a mentor is over.
  *
- * `current_snapshot_id` is what the public page renders. It is nullable and stays NULL
- * until a human approves something: there is no state in which a publication exists and
- * silently serves unreviewed content.
+ * Ali, 2026-08-25: "mentors should be able to see all the projects and details that
+ * they are over" and "mentor privilege can be controlled by admin". Two separate
+ * grants, deliberately: mgmt_role = mentor decides whether they may open the review
+ * surface AT ALL, and THIS table decides whose portfolios they see inside it. Without
+ * the second, a mentor role alone would expose every learner on the platform.
+ *
+ * scope_type is COHORT or ENROLLMENT so an admin can grant breadth ("you mentor the
+ * July cohort") or precision ("you mentor these four people") without needing two
+ * different tables or a migration when the answer changes.
+ *
+ * Revocation is a timestamp, never a delete: who could see whose portfolio, and when,
+ * is exactly the kind of question that gets asked months later.
  */
-const PUBLICATIONS: string[] = [
-  `CREATE TABLE IF NOT EXISTS career_publications (
+const MENTOR_SCOPES: string[] = [
+  `CREATE TABLE IF NOT EXISTS career_mentor_scopes (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     mentor_enrollment_id UUID NOT NULL,
+     scope_type VARCHAR(16) NOT NULL,
+     scope_id UUID NOT NULL,
+     granted_by VARCHAR(255) NOT NULL,
+     granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     revoked_at TIMESTAMPTZ,
+     revoked_by VARCHAR(255),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // One LIVE grant per (mentor, scope). Re-granting something already granted must be
+  // a no-op rather than a second row that has to be revoked twice.
+  `CREATE UNIQUE INDEX IF NOT EXISTS career_mentor_scopes_live_unique
+     ON career_mentor_scopes (mentor_enrollment_id, scope_type, scope_id)
+     WHERE revoked_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS career_mentor_scopes_mentor
+     ON career_mentor_scopes (mentor_enrollment_id) WHERE revoked_at IS NULL`,
+];
+
+/**
+ * CONVERGENCE, 2026-08-25. `career_publications` and `career_publication_snapshots`
+ * duplicated `capstone_records` and `capstone_record_versions` almost field for field —
+ * two sessions independently landed on "store the compiled record whole, keep a versions
+ * table". Capstone shipped first and is live, so it wins and these are dropped rather
+ * than reconciled. All three were empty in production, so nothing migrated.
+ *
+ * DROP IF EXISTS, not a manual cleanup, so an environment that already created them
+ * self-heals on the next boot exactly like every other statement in this file.
+ */
+const DROP_SUPERSEDED: string[] = [
+  `DROP TABLE IF EXISTS career_publication_approvals`,
+  `DROP TABLE IF EXISTS career_publication_snapshots`,
+  `DROP TABLE IF EXISTS career_publications`,
+];
+
+/**
+ * The review gate Capstone lacked. One row per review of one record version: created when
+ * the learner asks (decision NULL), stamped when a human decides.
+ *
+ * The partial unique index is what makes "ask twice" a no-op instead of two identical
+ * things in a reviewer's queue.
+ */
+const CAPSTONE_REVIEWS: string[] = [
+  `CREATE TABLE IF NOT EXISTS capstone_review_approvals (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     record_id UUID NOT NULL,
+     enrollment_id UUID NOT NULL,
+     version INTEGER NOT NULL,
+     requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     decision VARCHAR(24),
+     reviewer_id VARCHAR(255),
+     reviewer_email VARCHAR(255),
+     reviewer_notes TEXT,
+     decided_at TIMESTAMPTZ,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // At most ONE pending review per record. Asking again while one is open returns the
+  // existing request rather than queueing a reviewer a second copy.
+  `CREATE UNIQUE INDEX IF NOT EXISTS capstone_review_pending_unique
+     ON capstone_review_approvals (record_id) WHERE decision IS NULL`,
+  `CREATE INDEX IF NOT EXISTS capstone_review_queue
+     ON capstone_review_approvals (enrollment_id, requested_at) WHERE decision IS NULL`,
+];
+
+/**
+ * The person-level public portfolio at /u/:slug.
+ *
+ * THIS IS NOT `career_publications` COMING BACK. That table was deleted on 2026-08-25
+ * because it stored a compiled record whole plus a versions table, which is exactly what
+ * `capstone_records` + `capstone_record_versions` already do. This table stores NO
+ * compiled content and has NO versions table. It holds three things a projection cannot
+ * compute for itself: where the page lives (`slug`), who may see it (`visibility`), and
+ * the small set of LEARNER-AUTHORED strings a human actually approved.
+ *
+ * LIVE WHERE THE SYSTEM IS THE AUTHOR, FROZEN WHERE THE LEARNER IS.
+ *
+ *   capabilities   computed from the append-only evidence ledger -> read LIVE. New
+ *                  verified evidence appearing on the page is the point.
+ *   records        only already-published capstone records, each individually reviewed
+ *                  -> read LIVE, because each one already passed a human.
+ *   headline       learner-authored free text -> FROZEN in `approved_identity`. Read
+ *   avatar         live, a learner could be approved and then change their headline to
+ *                  anything, or upload any image, and it would sit on a public
+ *                  colaberry.ai URL under Colaberry's name.
+ *
+ * So `approved_identity` is a review artifact, not a content snapshot: it exists only so
+ * that what a reviewer read is what a stranger sees.
+ *
+ * `visibility` defaults to `unlisted`, never `public`. Ali, 2026-08-25: default noindex,
+ * the learner opts in to being indexable.
+ */
+const PORTFOLIO_PAGES: string[] = [
+  `CREATE TABLE IF NOT EXISTS career_portfolio_pages (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      enrollment_id UUID NOT NULL,
-     slug VARCHAR(80) NOT NULL,
+     slug VARCHAR(160) NOT NULL,
      status VARCHAR(24) NOT NULL DEFAULT 'draft',
-     current_snapshot_id UUID,
-     talent_network_opt_in BOOLEAN NOT NULL DEFAULT FALSE,
+     visibility VARCHAR(24) NOT NULL DEFAULT 'unlisted',
+     approved_identity JSONB,
+     review_requested_at TIMESTAMPTZ,
+     approved_at TIMESTAMPTZ,
+     approved_by VARCHAR(255),
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
-  // One publication per learner. Two rows would make "which portfolio is theirs?"
-  // depend on read order.
-  `CREATE UNIQUE INDEX IF NOT EXISTS career_publications_enrollment_unique
-     ON career_publications (enrollment_id)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS career_publications_slug_unique
-     ON career_publications (slug)`,
-  // The public reader looks up by slug AND status; a published-only partial index keeps
-  // that path from scanning suspended/draft rows.
-  `CREATE INDEX IF NOT EXISTS career_publications_published_slug
-     ON career_publications (slug) WHERE status = 'published'`,
+  // One page per learner. Without this, a retried create makes a second page and the
+  // slug a learner shared silently stops being the one that resolves.
+  // Idempotent for a table that may already exist from an earlier deploy of this file.
+  `ALTER TABLE career_portfolio_pages ADD COLUMN IF NOT EXISTS review_requested_at TIMESTAMPTZ`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS career_portfolio_pages_enrollment_unique
+     ON career_portfolio_pages (enrollment_id)`,
+  // A slug is an address. Two people cannot hold the same one, ever.
+  `CREATE UNIQUE INDEX IF NOT EXISTS career_portfolio_pages_slug_unique
+     ON career_portfolio_pages (LOWER(slug))`,
+  // The public reader's only lookup: resolve a slug that is actually viewable.
+  `CREATE INDEX IF NOT EXISTS career_portfolio_pages_public_lookup
+     ON career_portfolio_pages (LOWER(slug)) WHERE status = 'published'`,
 ];
 
-/**
- * APPEND-ONLY. There is no UPDATE or DELETE path to this table anywhere in the codebase
- * — the same contract `student_skill_evidence` holds for CAPE evidence.
- *
- * `content_hash` is a sha256 of the payload. It gives the idempotency the build plan
- * asks for in §61 ("same publication retry → one version"): resubmitting a portfolio
- * that has not changed since the last pending request is recognised as the same
- * submission rather than queuing a reviewer a second identical thing to read.
- */
-const SNAPSHOTS: string[] = [
-  `CREATE TABLE IF NOT EXISTS career_publication_snapshots (
-     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     publication_id UUID NOT NULL,
-     version INTEGER NOT NULL,
-     payload JSONB NOT NULL,
-     content_hash VARCHAR(64) NOT NULL,
-     requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   )`,
-  // Version numbers are per publication and dense: v1, v2, v3 as an employer would
-  // expect to see them, not global ids.
-  `CREATE UNIQUE INDEX IF NOT EXISTS career_publication_snapshots_version_unique
-     ON career_publication_snapshots (publication_id, version)`,
-  `CREATE INDEX IF NOT EXISTS career_publication_snapshots_publication
-     ON career_publication_snapshots (publication_id, version DESC)`,
+const STATEMENTS: string[] = [
+  ...DROP_SUPERSEDED,
+  ...CAPSTONE_REVIEWS,
+  ...MENTOR_SCOPES,
+  ...PORTFOLIO_PAGES,
 ];
-
-/**
- * One decision per snapshot, enforced by a unique index rather than by the service
- * remembering to check. A reviewer double-clicking "Approve" is a real thing (plan §63
- * lists it explicitly as a failure to test), and the second insert must lose cleanly.
- *
- * A rejected or changes-requested snapshot is never revised: the learner keeps working
- * and submits a NEW snapshot, so the record of what was reviewed and what was decided
- * stays exactly as it was.
- */
-const APPROVALS: string[] = [
-  `CREATE TABLE IF NOT EXISTS career_publication_approvals (
-     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     snapshot_id UUID NOT NULL,
-     publication_id UUID NOT NULL,
-     decision VARCHAR(24) NOT NULL,
-     reviewer_id VARCHAR(255) NOT NULL,
-     reviewer_email VARCHAR(255),
-     reviewer_notes TEXT,
-     decided_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS career_publication_approvals_snapshot_unique
-     ON career_publication_approvals (snapshot_id)`,
-  `CREATE INDEX IF NOT EXISTS career_publication_approvals_publication
-     ON career_publication_approvals (publication_id, decided_at DESC)`,
-];
-
-const STATEMENTS: string[] = [...PUBLICATIONS, ...SNAPSHOTS, ...APPROVALS];
 
 /**
  * Runs every statement, logging and continuing on failure. A schema step must never be

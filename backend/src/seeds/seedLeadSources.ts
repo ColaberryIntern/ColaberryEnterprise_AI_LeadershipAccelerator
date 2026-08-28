@@ -209,6 +209,36 @@ const SEEDS: SeedSource[] = [
       },
     ],
   },
+  {
+    // Refactored.ai's own public site. Missing for the same reason `cpn` and
+    // `ai-flotation` were: `ecosystemSeedData.ts` names the slug for the backfill, which
+    // classifies a source but never creates one. The refactored-public app has been
+    // shipping a form posting to `source=refactored` that could not have worked —
+    // `/api/leads/ingest` answers "Unknown or inactive source" when no row exists.
+    //
+    // `field_map` matches what that form actually sends, verified against the built
+    // page rather than assumed: name, email, company, consent_contact, page_url.
+    slug: 'refactored',
+    name: 'Refactored.ai',
+    domain: 'refactored.ai',
+    entry_points: [
+      {
+        slug: 'platform_interest',
+        name: 'Platform Interest',
+        page: '/platform-interest',
+        form_name: 'platform-interest',
+        description: 'Platform interest form on the Refactored.ai public site',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+    ],
+  },
 ];
 
 async function run() {

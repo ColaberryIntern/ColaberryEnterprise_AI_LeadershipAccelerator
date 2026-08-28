@@ -16,11 +16,44 @@ export interface AgentDetailTicket {
   id: string;
   ticket_number: number | null;
   title: string;
+  /** Task visibility (2026-08-26) — the real narrative already written at
+   * ticket-creation time (e.g. "Signal: inactivity. Goal: ..."), verbatim.
+   * Answers "what was this looking for, why did it fire" without any new
+   * parsing — whatever the creating code actually wrote. */
+  description: string | null;
   status: string;
   priority: string;
   type: string;
   created_at: string | null;
   updated_at: string | null;
+}
+
+/** Task visibility (2026-08-26) — Ali, live, on Reese's real page: "which
+ * tickets each [task] creates, so I can see which task is creating the
+ * most tickets." Real tickets grouped by `type`, sub-grouped by real
+ * `metadata.signal_type` only where it's actually present. */
+export interface AgentDetailTicketTypeBreakdown {
+  type: string;
+  count: number;
+  by_signal: Array<{ signal_type: string; count: number }>;
+}
+
+/** Task visibility (2026-08-26) — Ali, live: "I need to see what those
+ * [tasks] are... what triggers them... I should be able to see that."
+ * Sibling `AiAgent` rows sharing this agent's real `module` — its own
+ * separately-registered recurring jobs (e.g. Reese's autonomous-outreach
+ * sweep), never visible on this page before. */
+export interface AgentDetailRelatedTask {
+  id: string;
+  agent_name: string;
+  description: string | null;
+  trigger_type: string | null;
+  schedule: string | null;
+  enabled: boolean;
+  status: string;
+  last_run_at: string | null;
+  run_count: number;
+  error_count: number;
 }
 
 /** One tool's own reads/produces, so the UI can show a per-tool drill-down
@@ -80,6 +113,41 @@ export interface AgentDetailTrustContract {
   last_activity_at: string | null;
 }
 
+/** Trust Contract Phase 1 (2026-08-26) — a real, observed change to this
+ * agent's `persona_version`. `[]` for an agent whose version has never
+ * changed since this table started tracking — the common case on day one,
+ * never fabricated history reaching further back than real data exists. */
+export interface AgentDetailPersonaVersionHistoryRow {
+  id: string;
+  persona_version: string;
+  previous_version: string | null;
+  source: string;
+  created_at: string;
+}
+
+/** Trust Contract Phase 1 (2026-08-26) — real, queryable `ai_events` cost for
+ * this agent over the last 30 days, the same number the Trust Command Center
+ * itself would show. `null` when this agent has zero cost-tracked events in
+ * the window — not an error, just genuinely nothing to report yet. */
+export interface AgentDetailCostSummary {
+  cost_usd: number;
+  runs: number;
+}
+
+/** Trust Contract Phase 1 (2026-08-26) — real `authorizeAgentAction()`
+ * verdicts for this agent over the last 30 days. Makes the "declared
+ * autonomy_level vs. what's actually enforced" gap visible: `enforced_count`
+ * is the subset of decisions made under real `abac_enforcement=enforce`
+ * mode, not shadow. */
+export interface AgentDetailAuthorizationSummary {
+  window_days: number;
+  total: number;
+  allow: number;
+  approval: number;
+  block: number;
+  enforced_count: number;
+}
+
 export interface AgentDetail {
   agent: {
     id: string;
@@ -105,6 +173,11 @@ export interface AgentDetail {
    * "how many open tickets does this agent have" display. */
   open_ticket_count: number;
   tickets: AgentDetailTicket[];
+  ticket_breakdown: AgentDetailTicketTypeBreakdown[];
+  related_tasks: AgentDetailRelatedTask[];
+  persona_version_history: AgentDetailPersonaVersionHistoryRow[];
+  cost_summary: AgentDetailCostSummary | null;
+  authorization_summary: AgentDetailAuthorizationSummary;
   capabilities: AgentDetailCapabilities;
   reports_to: AgentDetailReportsTo | null;
   trust_contract: AgentDetailTrustContract;

@@ -4,6 +4,7 @@ import { Op } from 'sequelize';
 import { seedReeseIdentity } from './reese/reeseIdentitySeed';
 import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
 import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
+import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
 
 interface AgentSeedEntry {
   agent_name: string;
@@ -28,6 +29,17 @@ interface AgentSeedEntry {
 
 const AGENT_REGISTRY: AgentSeedEntry[] = [
   // --- schedulerService.ts cron jobs ---
+  {
+    agent_name: 'ExplorerContentSync',
+    agent_type: 'scheduled_processor',
+    module: 'runContentSync',
+    source_file: 'backend/src/services/explorerGrowth/content/runContentSync.ts',
+    trigger_type: 'cron',
+    schedule: '50 2 * * *',
+    category: 'behavioral',
+    description:
+      'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute and an hour before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
+  },
   {
     agent_name: 'ExplorerGovernorDecide',
     agent_type: 'scheduled_processor',
@@ -2906,6 +2918,11 @@ export async function seedAgentRegistry(): Promise<void> {
     });
 
     if (!created) {
+      // Trust Contract Phase 1 (2026-08-26) — capture the real version change
+      // BEFORE it's applied below, while `agent.persona_version` still holds
+      // the pre-update value. No-ops (the common case) when the registry
+      // entry's version matches what's already stored.
+      await recordPersonaVersionChangeIfNeeded(agent.id, agent.persona_version, entry);
       // Update registry fields on existing agents (preserves status, config, run stats)
       await agent.update({
         agent_type: entry.agent_type,
@@ -2926,6 +2943,10 @@ export async function seedAgentRegistry(): Promise<void> {
       });
     } else {
       console.log(`[AI Ops] Registered agent: ${entry.agent_name}`);
+      // Trust Contract Phase 1 — the first version this table has ever seen
+      // for a brand-new agent. previousVersion is null (nothing to diff
+      // against, not stored via findOrCreate's own comparison).
+      await recordPersonaVersionChangeIfNeeded(agent.id, null, entry);
     }
 
     // Safety: Force-disable agents that bypass safety pipelines

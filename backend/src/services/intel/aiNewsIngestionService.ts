@@ -33,6 +33,7 @@ import { resolvePrompt } from '../components/promptTesterService';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
 import { generateIntelCardContent } from './intelCardContent';
 import { parseRssFeed, rankImportance, RssItem } from './rssParser';
+import { FALLBACK_ESTIMATED_MINUTES } from './videoDurationLookup';
 import { decideBootAction } from './aiNewsBootDecision';
 
 export const NEWS_TYPE_SLUG = 'ai_news_flash';
@@ -169,7 +170,14 @@ export async function materializeNewsCard(item: AiNewsItem, model = DEFAULT_MODE
     visibility: 'published',
     status: 'active',
     release_date: item.published_at || null,
-    estimated_time: 6,
+    // AI News Flash cards are articles, never video: this path writes no
+    // `metadata.video`, so nothing here feeds the watch gate's denominator and
+    // the value is a pure reading-time label. Named rather than left as a bare
+    // literal `6` so it reads as the deliberate default it is, and so a future
+    // reader does not mistake it for a measurement (the identical literal on the
+    // video-bearing path in intelPipeline WAS mistaken for one, and gated 11
+    // cards at a length no student could reach).
+    estimated_time: FALLBACK_ESTIMATED_MINUTES,
     difficulty: 'intro',
     points: { learning: 5 },
     cohort_id: null,

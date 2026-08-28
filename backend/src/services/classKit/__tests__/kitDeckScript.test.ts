@@ -63,6 +63,8 @@ function bootDeck(opts: {
   slideCount?: number;
   live?: { enabled: boolean; broadcastEndpoint?: string; token?: string };
   slideAttrs?: Array<Record<string, string>>;
+  /** Extra fields merged onto each slide's __KIT__ model (prompt_brief, etc). */
+  slideMeta?: Array<Record<string, unknown>>;
   fetch?: (...args: unknown[]) => Promise<unknown>;
 } = {}) {
   const elementIds = [
@@ -101,7 +103,10 @@ function bootDeck(opts: {
       __KIT__: {
         segments: [],
         totalMinutes: 120,
-        slides: Array.from({ length: slideCount }, (_, n) => ({ id: 's' + n, title: 'Slide ' + n, segment_label: 'Test', phase: 'x' })),
+        slides: Array.from({ length: slideCount }, (_, n) => ({
+          id: 's' + n, title: 'Slide ' + n, segment_label: 'Test', phase: 'x',
+          ...(opts.slideMeta?.[n] || {}),
+        })),
         live: opts.live || { enabled: false },
         meta: { sessionId: 'test-session' },
       },
@@ -291,15 +296,24 @@ describe('Class Kit deck — reveal control is a toggle, not one-way (classkit-d
   });
 });
 
-describe('broadcastCurrent presenter_tip (instructor phone gets the long text)', () => {
-  it('combines the short presenter cue and the slide\'s own body text with a blank-line separator', async () => {
+/**
+ * The two halves are broadcast SEPARATELY (Ali, 2026-08-27, testing Session 11
+ * a couple of hours before teaching it). The instructor's phone needs the
+ * set-up direction the moment they land on a slide — including whether there
+ * is a prompt to run and what it does — and the read-aloud paragraph only once
+ * the diagram is full-screened, which is exactly when the projected screen has
+ * stopped showing that paragraph to the room. Before this they were
+ * concatenated into one blob that appeared only on full-screen.
+ */
+describe('broadcastCurrent splits the preface from the read-aloud text', () => {
+  it('sends only the spoken lines as presenter_tip and only the direction as presenter_preface', async () => {
     const calls: Array<{ url: string; body: any }> = [];
-    const deck = bootDeck({
+    bootDeck({
       slideCount: 2,
       live: { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' },
       slideAttrs: [
-        { 'data-tip': 'Short cue for slide 0', 'data-body': 'The long paragraph for slide 0.', 'data-slidetitle': 'Slide 0' },
-        { 'data-tip': 'Short cue for slide 1', 'data-body': 'The long paragraph for slide 1.', 'data-slidetitle': 'Slide 1' },
+        { 'data-say': 'The words for slide 0.', 'data-setup': 'DO: Put it on screen.', 'data-slidetitle': 'Slide 0' },
+        { 'data-say': 'The words for slide 1.', 'data-setup': 'DO: Run it.', 'data-slidetitle': 'Slide 1' },
       ],
       fetch: (url: unknown, init: unknown) => {
         calls.push({ url: url as string, body: JSON.parse((init as { body: string }).body) });
@@ -308,22 +322,42 @@ describe('broadcastCurrent presenter_tip (instructor phone gets the long text)',
     });
     // show(0) fires on boot, which is where broadcastCurrent's first call happens.
     expect(calls.length).toBe(1);
-    expect(calls[0].body.presenter_tip).toBe('Short cue for slide 0\n\nThe long paragraph for slide 0.');
+    expect(calls[0].body.presenter_tip).toBe('The words for slide 0.');
+    expect(calls[0].body.presenter_preface).toBe('DO: Put it on screen.');
     expect(calls[0].body.next_title).toBe('Slide 1');
   });
 
-  it('falls back to whichever of cue/body is present when only one is authored', () => {
+  it('leads the preface with the step\'s prompt brief, then the direction', () => {
     const calls: Array<{ body: any }> = [];
     bootDeck({
       slideCount: 1,
       live: { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' },
-      slideAttrs: [{ 'data-tip': '', 'data-body': 'Only a body paragraph, no cue.' }],
+      slideMeta: [{ prompt_brief: '▶ PROMPT ON THIS STEP — runs in Claude Code' }],
+      slideAttrs: [{ 'data-say': 'Spoken.', 'data-setup': 'DO: Run it live.' }],
       fetch: (_url: unknown, init: unknown) => {
         calls.push({ body: JSON.parse((init as { body: string }).body) });
         return Promise.resolve({ ok: true });
       },
     });
-    expect(calls[0].body.presenter_tip).toBe('Only a body paragraph, no cue.');
+    expect(calls[0].body.presenter_preface)
+      .toBe('▶ PROMPT ON THIS STEP — runs in Claude Code\nDO: Run it live.');
+  });
+
+  it('never leaks a spoken line into the preface, or direction into the read screen', () => {
+    const calls: Array<{ body: any }> = [];
+    bootDeck({
+      slideCount: 1,
+      live: { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' },
+      slideAttrs: [{ 'data-say': 'Say this out loud.', 'data-setup': 'NOTE: Watch the clock.' }],
+      fetch: (_url: unknown, init: unknown) => {
+        calls.push({ body: JSON.parse((init as { body: string }).body) });
+        return Promise.resolve({ ok: true });
+      },
+    });
+    // The whole point: glancing at either screen must never require deciding
+    // which half of it is yours to speak.
+    expect(calls[0].body.presenter_tip).not.toMatch(/NOTE:|DO:/);
+    expect(calls[0].body.presenter_preface).not.toContain('Say this out loud.');
   });
 
   it('never broadcasts when live is disabled (rehearse / standalone mode)', () => {

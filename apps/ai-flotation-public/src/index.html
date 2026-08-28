@@ -92,7 +92,7 @@
             payload.visitor_fingerprint = localStorage.getItem('rfx_fp') || undefined;
           } catch (e) { /* blocked storage: ingest still works, just unlinked */ }
 
-          fetch(API + '/api/ingest?source={{brand.sourceSlug}}&entry=workflow_intake', {
+          fetch(API + '/api/leads/ingest?source={{brand.sourceSlug}}&entry=workflow_intake', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

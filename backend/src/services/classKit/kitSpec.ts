@@ -13,7 +13,7 @@ import {
   WEEK_CLASS_CONTENT, ORIENTATION_PLAN,
 } from '../../data/classSessionPlan';
 import { weekBlueprint } from '../../data/weekBlueprints';
-import { TeachSlide, EvidenceClaim } from '../../data/classTeachContent';
+import { TeachSlide, EvidenceClaim, TermDefinition } from '../../data/classTeachContent';
 import {
   SegmentTemplate, SegmentMode, runOfShowFor, scaleSegments,
   formatClock, durationMinutes, formatLongDate, weekdayOf,
@@ -52,6 +52,9 @@ export interface KitSlide {
   diagramCaption?: string;
   /** Sourced factual claims (rendered as a small source footer). */
   evidence?: EvidenceClaim[];
+  /** New vocabulary the slide introduces — rendered as the "Definitions" row
+   * beneath "Key points" in the full-screen diagram view. */
+  definitions?: TermDefinition[];
   /** Guidance shown in the instructor's presenter rail, never to the room. */
   presenterTip?: string;
   /** Reminder of what this segment is worth as public content. */
@@ -206,6 +209,7 @@ export function teachToSlides(teach: TeachSlide[], segId: string, seg: KitSegmen
         prompt: t.code ? { ...t.code, label: t.code.label, prompt: t.code.code } : undefined,
         diagram: t.diagram,
         evidence: t.evidence,
+        definitions: t.definitions,
         presenterTip: t.script || seg.purpose,
       }),
     );
@@ -323,7 +327,12 @@ export function openingSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
       title: 'Your phone is your class controller',
       subtitle: 'Scan once. Stay connected the whole class.',
       bullets: PHONE_RULES,
-      presenterTip: 'Give the rules once, up front. 60 seconds. Everyone scans before you move on.',
+      presenterTip: [
+        'SAY: Your phone is your controller for this class. Scan once now and stay connected the whole way through.',
+        'SAY: I will ask you questions on it, and I can see when the room is stuck. That is how I know when to slow down.',
+        'DO: Wait until you can see people scanning before you advance. Do not talk over it.',
+        'NOTE: Sixty seconds, once, up front. Everyone scans before you move on — chasing stragglers later costs far more.',
+      ].join('\n'),
     }),
   ];
 }

@@ -2,6 +2,7 @@ import {
   seedAgentIdentity,
   getAgentEnrollmentId,
   getAgentAdminUserId,
+  getAgentId,
   __resetAgentIdentityCacheForTests,
   type AgentIdentityIds,
 } from '../agentBlueprint/agentIdentitySeed';
@@ -46,6 +47,21 @@ export async function getReeseAdminUserId(): Promise<string | null> {
 
 /** Test-only: clears the memoized id so tests can simulate a fresh process. */
 export function __resetReeseAdminUserIdCacheForTests(): void {
+  __resetAgentIdentityCacheForTests(REESE_EMAIL);
+}
+
+// Cost-tracking fix (2026-08-27) — Reese's real AiAgent.id, used by
+// reeseReplyService.ts/reeseOutreachMessageService.ts to tag their real LLM
+// calls with a real agent_id so per-agent cost queries (this agent's own
+// Trust evidence section, and the Trust Command Center's own roster/detail
+// views, which read the exact same ai_events table) can actually find them —
+// see agentIdentitySeed.ts's getAgentId() for why they couldn't before.
+export async function getReeseAgentId(): Promise<string | null> {
+  return getAgentId(REESE_EMAIL);
+}
+
+/** Test-only: clears the memoized id so tests can simulate a fresh process. */
+export function __resetReeseAgentIdCacheForTests(): void {
   __resetAgentIdentityCacheForTests(REESE_EMAIL);
 }
 

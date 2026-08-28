@@ -35,7 +35,13 @@ describe('consent normalization + candidates', () => {
   it('normalizes email + phone, drops junk', () => {
     expect(normalizeEmail('  Ali@Colaberry.COM ')).toBe('ali@colaberry.com');
     expect(normalizeEmail('not-an-email')).toBeNull();
-    expect(normalizePhone('(972) 555-1234')).toBe('+9725551234');
+    // WAS '+9725551234' — this assertion pinned the defect. A bare 10-digit US
+    // number now keys as +1##########, so it matches the same number written
+    // with its country code. Before the fix those were two different keys for
+    // one person, and a consent lookup finds a row only under the key it was
+    // written with.
+    expect(normalizePhone('(972) 555-1234')).toBe('+19725551234');
+    expect(normalizePhone('+1 (972) 555-1234')).toBe('+19725551234');
     expect(normalizePhone('123')).toBeNull();
   });
 
@@ -47,7 +53,7 @@ describe('consent normalization + candidates', () => {
     ]);
     const voice = subjectCandidates({ channel: 'voice', leadId: 7, email: 'A@b.com', phone: '9725551234' });
     expect(voice).toEqual([
-      { subject_type: 'phone', subject_id: '+9725551234' },
+      { subject_type: 'phone', subject_id: '+19725551234' },
       { subject_type: 'lead', subject_id: '7' },
     ]);
   });

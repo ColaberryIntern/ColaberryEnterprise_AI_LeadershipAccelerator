@@ -34,6 +34,11 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
   ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
   ['/api/admin/feed-control', 'program'],
+  // Case Study OS (spec §20). Same section as '/api/admin/projects': a Case
+  // Study is the publishable projection of a platform Project, so the roles that
+  // manage Projects manage these. Without this row the gate is deny-by-default
+  // and every scoped mgmt token 403s here while legacy admin passes.
+  ['/api/admin/case-studies', 'program'],
   ['/api/admin/ceo', 'intelligence'], ['/api/admin/cb-system', 'intelligence'], ['/api/admin/intelligence', 'intelligence'],
   ['/api/admin/insights', 'intelligence'], ['/api/admin/governance', 'intelligence'],
   ['/api/admin/tickets', 'system'], ['/api/admin/reports', 'system'], ['/api/admin/settings', 'system'],

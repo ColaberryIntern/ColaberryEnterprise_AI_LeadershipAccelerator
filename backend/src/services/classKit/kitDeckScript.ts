@@ -143,18 +143,31 @@ export function deckScript(): string {
       theater: sm.question.theater ? { state: theaterState[sm.id] || 'voting' } : undefined,
     } : null;
     var tipEl = slides[i];
-    // The phone gets the FULL text — the short presenter cue plus the slide's
-    // own paragraph — so it is genuinely the "long version" of what's on
-    // screen. The projected slide itself is unchanged by this; only what
-    // reaches the instructor's own phone is affected.
-    var cue = tipEl ? (tipEl.getAttribute('data-tip') || '') : '';
-    var bodyText = tipEl ? (tipEl.getAttribute('data-body') || '') : '';
-    var presenterTip = cue && bodyText ? (cue + '\\n\\n' + bodyText) : (cue || bodyText);
+    // The phone gets the slide's two halves SEPARATELY, because they serve two
+    // different moments. The PREFACE — what this step's prompt does, then the
+    // presenter cue — lands the instant you arrive on the slide: it is
+    // direction, read silently, before anything is said out loud. The
+    // READ-ALOUD half is the slide's own paragraph, and it surfaces only once
+    // the diagram is full-screened, which is precisely when the projected
+    // screen has stopped showing that paragraph to the room.
+    // data-say / data-setup are pre-split server-side (splitScript in
+    // kitHtml.ts) so the spoken lines and the direction never arrive mixed.
+    // A deck is a static snapshot taken when Present is pressed, so a tab
+    // opened before a deploy has no data-say/data-setup at all — and the phone
+    // then shows "no notes for this slide", which reads as authoring missing
+    // rather than as a stale tab. Fall back to the older attributes, which
+    // every deck has always carried, so a stale deck degrades to the previous
+    // behaviour instead of going blank.
+    var sayText = tipEl ? (tipEl.getAttribute('data-say') || tipEl.getAttribute('data-body') || '') : '';
+    var setupText = tipEl ? (tipEl.getAttribute('data-setup') || tipEl.getAttribute('data-tip') || '') : '';
+    var brief = sm.prompt_brief || '';
+    var preface = brief && setupText ? (brief + '\\n' + setupText) : (brief || setupText);
     var nextTitle = (i + 1 < slides.length) ? (slides[i + 1].getAttribute('data-slidetitle') || '') : 'End of class';
     var body = {
       slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
       phase: sm.phase, question: q, broadcast_prompts: sm.broadcast_prompts,
-      prompt: sm.prompt || undefined, presenter_tip: presenterTip, next_title: nextTitle,
+      prompt: sm.prompt || undefined,
+      presenter_tip: sayText, presenter_preface: preface, next_title: nextTitle,
       diagram_fullscreen: diagramFull,
     };
     fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {

@@ -3,6 +3,11 @@ import { CommunicationLog } from '../models';
 import { V1CallbackInput } from '../schemas/v1CallbackSchema';
 import { ingestExternalLead } from './externalLeadIngestService';
 import { evaluateSend } from './communicationSafetyService';
+import {
+  captureSignupConsent,
+  CALLBACK_CONSENT_TEXT,
+  CALLBACK_CONSENT_TTL_DAYS,
+} from './consent/captureSignupConsent';
 import { triggerVoiceCall } from './synthflowService';
 import { logCommunication } from './communicationLogService';
 
@@ -71,6 +76,56 @@ export async function requestInstantCallback(
   if (recent) {
     log('info', 'callback_deduplicated', 'success', { correlation_id, lead_id: leadId, existing_call_id: recent.provider_message_id });
     return { status: 'deduplicated', lead_id: leadId, call_id: recent.provider_message_id, deduped: true };
+  }
+
+  // 2.5 Record the voice consent the person just gave — BEFORE the safety gate,
+  //     never after.
+  //
+  //     ORDERING IS THE WHOLE FIX. evaluateSend below asks the consent gate
+  //     whether this number may be called, and with consent_enforcement=enforce
+  //     and no express voice grant on record it answers `no_express_consent` and
+  //     refuses the very call the person just asked for. Writing the grant after
+  //     the gate would create a row, pass any naive test, and still refuse THIS
+  //     caller — only the next one would get through. Between dedup and the gate
+  //     is the only correct position.
+  //
+  //     The affirmative act here is the request itself, not a ticked box: someone
+  //     pressing "call me now" is asking to be phoned at the number they typed.
+  //     So marketingOptIn is true by construction, and consent_text describes what
+  //     they DID rather than a permission they were asked to grant.
+  //
+  //     Bounded on purpose. An express request to be called must not quietly
+  //     become a standing telemarketing licence for this number — that would be
+  //     the original consent bug inverted, over-permission manufactured by a
+  //     record instead of by its absence. It lapses after
+  //     CALLBACK_CONSENT_TTL_DAYS; getCurrentConsent honours expires_at.
+  //
+  //     Guarded HERE, not only inside the helper. captureSignupConsent cannot
+  //     throw, but a call site can — an unguarded req.get('user-agent') did
+  //     exactly that on the enrollment path and swallowed the whole response. A
+  //     failure to record must never cost someone their callback.
+  try {
+    const expiresAt = new Date(Date.now() + CALLBACK_CONSENT_TTL_DAYS * 24 * 60 * 60 * 1000);
+    await captureSignupConsent({
+      channel: 'voice',
+      // Keyed on the phone, because that is what a voice send looks consent up
+      // by. An email-keyed row would be invisible to the gate below.
+      phone: payload.phone,
+      email: payload.email,
+      marketingOptIn: true,
+      source: 'training_site:request_callback',
+      // The request this consent came from, so the row is traceable.
+      correlationId: correlation_id,
+      consentText: CALLBACK_CONSENT_TEXT,
+      expiresAt,
+    });
+  } catch (consentErr) {
+    log('error', 'callback_consent_capture_failed', 'failure', {
+      correlation_id,
+      lead_id: leadId,
+      error_class: consentErr instanceof Error ? consentErr.constructor.name : 'UnknownError',
+      message: consentErr instanceof Error ? consentErr.message : String(consentErr),
+    });
   }
 
   // 3. Shared safety pipeline: scheduler pause, global rate limit, unsubscribe/DND,

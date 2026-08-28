@@ -25,6 +25,25 @@
 #
 # --- entries below this line ---
 
+# refactored.ai legacy capture — Google reCAPTCHA SITE key on the contact page.
+#
+# WHY THIS IS NOT A SECRET: it is a `data-sitekey` on a `g-recaptcha` div. reCAPTCHA
+# site keys are public by design — Google requires them to be embedded in the HTML of
+# every page that renders the widget, so this exact string is already served to every
+# visitor of https://www.refactored.ai/contact-us/. The half that must stay private is
+# the reCAPTCHA SECRET key, which lives server-side and is not in this capture.
+#
+# WHY A FINGERPRINT RATHER THAN AN INLINE `gitleaks:allow`: this file is a byte-faithful
+# point-in-time capture of a live page. Editing it to insert a scanner directive would
+# change bytes the capture exists to preserve, break the sizes recorded in
+# manifest.json, and make a future re-capture diff as though the page had changed. The
+# capture must not be edited, so the exception belongs here.
+#
+# NOTE: line-anchored, and that is correct. Re-running capture.js after the site changes
+# will move or remove this line, the finding returns, and it gets re-reviewed rather than
+# silently inheriting an old exemption.
+apps/refactored-public/legacy-capture/pages/contact-us.html:generic-api-key:195
+
 # PROGRESS.md, 2026-06-23 entry (session CC-20260623-w9f2).
 #
 # WHY THIS IS NOT A SECRET: the value is the string `local-crm-test-secret`,

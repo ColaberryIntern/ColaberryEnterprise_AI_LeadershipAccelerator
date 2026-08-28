@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { openHouseRegisterSchema } from '../schemas/openHouseSchema';
 import { createExplorerEnrollment } from '../services/enrollmentService';
 import { getCurrentOpenHouseEvent } from '../services/openHouseEventService';
+import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../services/consent/captureSignupConsent';
 
 function log(
   level: 'info' | 'warn' | 'error',
@@ -28,6 +29,39 @@ export async function handleOpenHouseRegister(req: Request, res: Response, next:
   try {
     const payload = openHouseRegisterSchema.parse(req.body);
     const { enrollment, created } = await createExplorerEnrollment(payload);
+
+    // Marketing consent, if they ticked the box. Recorded on repeat registrations
+    // too (created === false): someone who did not tick the first time and does
+    // tick now is giving consent now, and ConsentRecord is append-only anyway.
+    //
+    // Guarded HERE as well as inside the helper. captureSignupConsent is
+    // swallow-safe, but a call site is not automatically so - an unguarded
+    // `req.get('user-agent')` threw at exactly this spot in enrollmentController
+    // and the outer catch turned it into a request that never answered. The
+    // person must get their account whatever happens to the consent write.
+    try {
+      await captureSignupConsent({
+        email: payload.email,
+        // Absent or false records NOTHING. It is not a revocation: writing
+        // `revoked` for someone who simply did not tick would suppress a person
+        // we are currently permitted to email, which is worse than silence.
+        marketingOptIn: payload.marketing_opt_in,
+        source: 'training_site:open_house_register',
+        // The request this consent came from, so the row is traceable.
+        correlationId: correlation_id,
+        consentText: payload.marketing_consent_text ?? SIGNUP_CONSENT_TEXT,
+        // NOT req.ip / req.get(): this route is service-to-service, so those
+        // describe the training site's server, not the person who ticked.
+        ipAddress: payload.ip_address ?? null,
+        userAgent: payload.user_agent ?? null,
+      });
+    } catch (consentErr) {
+      log('error', 'consent_capture_failed', 'failure', {
+        correlation_id,
+        error_class: consentErr instanceof Error ? consentErr.constructor.name : 'UnknownError',
+        message: consentErr instanceof Error ? consentErr.message : String(consentErr),
+      });
+    }
 
     const status = created ? 201 : 200;
     log('info', 'open_house_register_end', 'success', {

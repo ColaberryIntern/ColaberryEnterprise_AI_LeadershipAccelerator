@@ -285,7 +285,7 @@ pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transpa
 .kdiagram-cap-ico{flex:none;font-size:1.15em;line-height:1}
 /* The enriched full-screen diagram view. Everything below is hidden inline and
    only composes when .kdiagram--full is on, so the normal slide is untouched. */
-.kdiag-hd,.kdiag-side,.kdiag-ft{display:none}
+.kdiag-hd,.kdiag-side,.kdiag-defs,.kdiag-ft{display:none}
 .kdiag-stage{display:contents}
 .kdiagram--full{cursor:zoom-out;position:fixed;inset:0;z-index:9999;
   background:radial-gradient(120% 120% at 50% 0%,#1e293b 0%,#0f172a 62%,#0b1220 100%);
@@ -316,6 +316,19 @@ pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transpa
 .kdiag-side-list li::before{content:counter(kds);position:absolute;left:0;top:.1em;width:1.65em;height:1.65em;
   display:grid;place-items:center;border-radius:8px;background:var(--cherry);color:#fff;
   font-size:.78em;font-weight:800}
+/* Definitions — the row under Key points. New vocabulary gets explained on the
+   same screen the diagram is on, which is the screen the room and the class
+   recording are actually looking at. Only slides that author definitions get
+   .kdiagram--hasdefs, and only those give the diagram less height, so every
+   existing zoomed diagram keeps the size it had. */
+.kdiagram--full .kdiag-defs{display:block;width:100%;flex:0 1 auto;min-height:0;
+  background:rgba(232,146,12,.10);border:1.5px solid rgba(232,146,12,.34);border-radius:20px;padding:1.6vh 2vw;overflow:auto}
+.kdiagram--full.kdiagram--hasdefs pre.mermaid{height:36vh;max-height:36vh}
+.kdiag-defs .kdiag-side-hd{color:#fbbf24}
+.kdiag-defs-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(34ch,1fr));gap:.9vh 2.2vw}
+.kdiag-def{display:block}
+.kdiag-def dt{font-size:clamp(13px,.34vw + .72vh,19px);font-weight:800;color:#fde68a;letter-spacing:-.1px}
+.kdiag-def dd{margin:.2em 0 0;font-size:clamp(12px,.3vw + .66vh,17px);line-height:1.4;font-weight:600;color:#e2e8f0}
 .kdiagram--full .kdiagram-cap{flex:none;max-width:88vw;background:rgba(54,120,149,.2);border-color:rgba(125,211,252,.5);color:#e0f2fe}
 .kdiagram--full .kdiag-ft{display:flex;flex:none;width:100%;align-items:center;justify-content:space-between;gap:2vw;
   border-top:1px solid rgba(255,255,255,.13);padding-top:1.1vh}
@@ -327,7 +340,13 @@ pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transpa
 .kdiagram--full .kdiagram-cap{max-width:80ch}
 
 /* teach-slide "lead with the conclusion" insight card */
-.kteach-lead{margin-top:2.2vh;display:flex;gap:12px;align-items:flex-start;max-width:68ch;
+/* The lead paragraph is parked a full screen below the fold ON PURPOSE. It is
+   the text the instructor reads out loud, so the room must not be able to read
+   it before it is spoken. Moving it under the diagram was not enough — on a
+   short slide it still landed inside the viewport. The instructor can scroll
+   to it, and it stays in the deck so the recording and the printed kit keep
+   the full narration. Print resets this (see @media print below). */
+.kteach-lead{margin-top:96vh;display:flex;gap:12px;align-items:flex-start;max-width:68ch;
   background:var(--bg-soft);border:1.5px solid var(--line);border-left:5px solid var(--berry);border-radius:14px;padding:1.6vh 1.6vw}
 .kteach-ico{flex:none;font-size:clamp(18px,2vh,24px);line-height:1.3}
 .kteach-lead p{font-size:clamp(15px,.6vw + .85vh,22px);line-height:1.5;color:var(--ink-2);font-weight:600}
@@ -478,6 +497,9 @@ body.mode-story .ktoggles:hover{opacity:1}
   #kpace,#krail,#kprogress,#kcounter,#khint,.ktoggles,#kqr-overlay,#knotes,#ktoast{display:none !important}
   .kstage{position:static;inset:auto}
   .kslide{display:flex !important;position:relative;page-break-after:always;height:100vh;inset:auto}
+  /* On paper there is no fold to hide the narration behind, and a 96vh margin
+     would blow every teach slide onto a second blank page. */
+  .kteach-lead{margin-top:2.2vh}
   @page{size:letter landscape;margin:0}
 }
 `;
