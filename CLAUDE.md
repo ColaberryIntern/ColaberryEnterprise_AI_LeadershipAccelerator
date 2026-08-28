@@ -699,7 +699,11 @@ Claude may assume:
 - Git is present
 - CI runs automated tests where they exist (manual testing is the current default for most surfaces)
 - Production VPS access over SSH is available to the operator. **This repository is public: the host address, SSH account, and stack directory are deliberately NOT recorded here.** Read them from the operator's private ops notes or the deployment vault, never from a tracked file.
-- Deploy procedure (run from the stack directory on the production host): `git pull origin main`, then `docker compose -f docker-compose.production.yml up -d --build [service]`. Confirm `HEAD` matches `origin/main` before building; a dirty tree rebuilds stale code.
+- **Deploy procedure: use `scripts/deploy-prod.sh` from the stack directory on the production host.** It takes an exclusive lock, refuses a dirty tree, confirms `HEAD` matches `origin/main`, runs the build unpiped so the real exit code survives, and then **verifies the containers are actually running**.
+
+  Do not run `docker compose ... up -d --build` directly. Multiple Claude sessions deploy to this box concurrently: on 2026-08-28 two deploys raced, one exited 1 on a container-naming collision, and `accelerator-backend` sat in `created` state for about four minutes while the site kept returning 200 - nginx serves the static frontend without the backend, so the outage was invisible from outside. Checking for a running deploy first does not help; a check is a snapshot and the other deploy can start immediately after it. That was the sixth collision in a single session.
+
+  After any deploy, verify through the **real hostname**. `localhost` does not match `server_name` and falls through to a default block that 404s `/api`, which reads as a broken proxy when nothing is wrong.
 
 Claude must NOT assume:
 - Moltbot exists
