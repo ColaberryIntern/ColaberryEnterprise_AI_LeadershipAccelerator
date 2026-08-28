@@ -717,6 +717,50 @@ export async function ensureRefactoredDeliverySchema(): Promise<void> {
   console.log('[DB] Refactored delivery schema ensured');
 }
 
+/**
+ * Magic-link sign-in for client reviewers.
+ *
+ * Ali: *"let's just keep with the magic link since that's what we are using for B2C and
+ * B2B."* Google SSO assumes a Google account, and the audience for this surface -
+ * executives at transit authorities, banks, agencies - are overwhelmingly Microsoft 365
+ * shops whose IT often blocks creating one. A magic link works for ANY email address,
+ * with no account anywhere.
+ *
+ * Modelled on `sponsorAuthService`, which already solves this for sponsors - the same
+ * shape of user: outside the org, no platform account, scoped access to one thing. Three
+ * things are deliberately TIGHTER than that implementation:
+ *
+ *   1. The table stores a SHA-256 HASH, never the token. Sponsors store the raw UUID, so
+ *      anyone who can read that column can sign in as the sponsor. Hashing means a
+ *      database leak yields no usable sessions.
+ *   2. `consumed_at` makes a link SINGLE-USE. A link that still works after use is a
+ *      live credential sitting in an inbox, and mail archives outlive engagements.
+ *   3. Short expiry, set by the service rather than the schema, against the sponsor
+ *      pattern's 30 days. A login link is not a bearer token for a month.
+ *
+ * `email` is stored alongside so a request can be rate-limited without first resolving an
+ * identity - the rate limit has to work for addresses that match nobody, or it becomes an
+ * enumeration oracle in itself.
+ */
+const CLIENT_MAGIC_LINK: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_client_signin_tokens (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     email VARCHAR(255) NOT NULL,
+     token_hash VARCHAR(64) NOT NULL,
+     expires_at TIMESTAMPTZ NOT NULL,
+     consumed_at TIMESTAMPTZ,
+     requested_ip VARCHAR(64),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // Redemption looks the token up by hash. Unique so a hash collision or a duplicated
+  // insert cannot produce two rows with different consumed_at states.
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_client_signin_tokens_hash_unique
+     ON delivery_client_signin_tokens (token_hash)`,
+  // Rate limiting reads recent requests per address.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_client_signin_email_created
+     ON delivery_client_signin_tokens (email, created_at)`,
+];
 /** Exported so the schema test can assert the statement list without a database. */
 export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...ORGANIZATION_RELAXATION,
@@ -729,4 +773,5 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...QUALITY_EVIDENCE,
   ...CLIENT_REVIEW_ROOM,
   ...CAPACITY_AND_ECONOMICS,
+  ...CLIENT_MAGIC_LINK,
 ];
