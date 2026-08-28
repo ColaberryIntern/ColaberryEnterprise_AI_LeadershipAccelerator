@@ -30,7 +30,8 @@ export interface ErrorSpikeAlert {
 
 // ─── Watched event types ────────────────────────────────────────────────────
 
-const WATCHED_EVENT_TYPES: Record<string, string> = {
+/** Exported so a test can assert what is deliberately NOT watched, not only what is. */
+export const WATCHED_EVENT_TYPES: Record<string, string> = {
   admin_auth_failed: 'auth',
   sales_or_admin_auth_failed: 'auth',
   cory_auth_failed: 'auth',
@@ -40,6 +41,17 @@ const WATCHED_EVENT_TYPES: Record<string, string> = {
   ghl_request_failed: 'external_api_ghl',
   basecamp_request_failed: 'external_api_basecamp',
   synthflow_call_failed: 'external_api_synthflow',
+
+  // Client sign-in link failures. ONLY the two that mean something is broken:
+  // `..._request_error` is a send or database failure, `..._redeem_error` is a
+  // failure while exchanging a valid link for a session.
+  //
+  // Deliberately NOT watched: delivery_client_link_no_membership (fires on every
+  // probe of an unknown address - normal, and paging on it would page on being
+  // scanned), delivery_client_link_rate_limited, and delivery_client_link_invalid
+  // (expired or reused links are ordinary). Those are refusals working, not faults.
+  delivery_client_link_request_error: 'delivery_client_signin',
+  delivery_client_redeem_error: 'delivery_client_signin',
 };
 
 // ─── Thresholds ─────────────────────────────────────────────────────────────
@@ -80,6 +92,20 @@ const WINDOW_HOURS = 1;
 const THRESHOLD_OVERRIDES: Record<string, { warning: number; critical: number }> = {
   admin_auth_failed: { warning: 150, critical: 250 },
   participant_auth_failed: { warning: 30, critical: 60 },
+
+  // Far below the shared default of 10/25, and deliberately so. The default suits a
+  // high-volume surface where a handful of failures is noise. This one is the
+  // opposite shape: a client reviewer population is tens of people, these events fire
+  // ONLY when someone actually tried to sign in and it broke, and the endpoint answers
+  // every caller identically by design - so a client who gets nothing cannot tell
+  // anyone, and the failure is invisible from the outside.
+  //
+  // The realistic bad day is SMTP credentials expiring: every client is locked out of
+  // their own engagement at once, and at 10/hour that might never fire. Dev sat broken
+  // for over 24 hours on exactly that fault and nothing noticed. One failure here is
+  // worth looking at.
+  delivery_client_link_request_error: { warning: 1, critical: 3 },
+  delivery_client_redeem_error: { warning: 1, critical: 3 },
 };
 
 /** Thresholds for one event type: its override, else the shared default. */
