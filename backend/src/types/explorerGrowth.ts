@@ -248,3 +248,51 @@ export type ExplorerAssetType =
   | 'TOOL'
   | 'RESOURCE'
   | 'REFERRAL_OPPORTUNITY';
+
+// --- Asset PURPOSES, which are not asset KINDS (§10) -------------------------
+
+/**
+ * What a Governor action asks content FOR — the message's purpose.
+ *
+ * DELIBERATELY SEPARATE FROM `ExplorerAssetType` ABOVE, which says what a piece
+ * of content IS. The two vocabularies share zero members and must never be
+ * merged: `weekly_digest` is not a thing you store, it is a request for recent
+ * LESSON assets. Collapsing them is what this epic exists to undo.
+ *
+ * Until now `ContentAssetQuery.asset_type` was `string`, so the Governor could
+ * ask for `'weekly_digest'` while the registry could only ever hold `'LESSON'` —
+ * an impossible join that typechecked, that no test on either side could fail,
+ * and that the `VARCHAR(32)` column could not catch either. Naming the purposes
+ * is what turns that from a silent nothing into a compile error.
+ *
+ * A CONST ARRAY, NOT A BARE UNION. A TypeScript union cannot be enumerated at
+ * runtime, so a bare union would leave `assetPurposeMap`'s exhaustiveness check
+ * with nothing to walk. The array is the source and the union derives from it,
+ * which keeps the two from drifting.
+ *
+ * The eight values are measured, not designed: they are every `asset_type` the
+ * five candidate generators emit, read back out of the 153 real decision rows.
+ */
+export const EXPLORER_ASSET_PURPOSES = [
+  'activation_first_step',
+  'activation_restart',
+  'lesson_recommendation',
+  'weekly_digest',
+  'community_digest',
+  'friction_recovery',
+  'enrollment_offer',
+  'referral_invite',
+] as const;
+
+export type ExplorerAssetPurpose = (typeof EXPLORER_ASSET_PURPOSES)[number];
+
+/**
+ * Where a piece of content sits in the journey.
+ *
+ * The third vocabulary, and the one that already caused this bug a second time:
+ * a learner's `ExplorerPrimaryState` and a card's stage tag are different
+ * alphabets, so nothing may compare them directly. `PRIMARY_STATE_TO_STAGE` in
+ * `services/explorerGrowth/content/assetPurposeMap.ts` is the only sanctioned
+ * bridge between them.
+ */
+export type ExplorerStageTag = 'activation' | 'learning' | 'evergreen';
