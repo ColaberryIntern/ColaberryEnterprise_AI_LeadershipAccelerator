@@ -38,6 +38,9 @@ interface RecordArtifact {
 }
 interface RecordPost { week: number; ritual: string; headline: string; body: string | null }
 interface RecordCompetency { domain: string; label: string; evidence_count: number }
+interface RecordCapability {
+  id: string; label: string; count: number; proven?: boolean; on_sample?: boolean;
+}
 
 interface CapstoneRecord {
   identity: {
@@ -50,6 +53,8 @@ interface CapstoneRecord {
   };
   artifacts: RecordArtifact[];
   competencies: RecordCompetency[];
+  /** Optional: absent for records compiled before this band, and for no connected repo. */
+  capabilities?: RecordCapability[];
   posts: RecordPost[];
   bookend: { opening: string | null; closing: string | null };
 }
@@ -128,6 +133,7 @@ function CapstoneRecordPage() {
   }
 
   const { identity, system, artifacts, competencies, posts, bookend } = record;
+  const capabilities = record.capabilities ?? [];
   const weeks = Array.from(new Set(artifacts.map((a) => a.week))).sort((x, y) => x - y);
 
   return (
@@ -251,6 +257,37 @@ function CapstoneRecordPage() {
                   {' '}· {c.evidence_count} {c.evidence_count === 1 ? 'piece' : 'pieces'} of evidence
                 </span>
               </span>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* What they built in their own repo. Separate from "What they can prove":
+          competencies are assessed, these are committed files. */}
+      {capabilities.length > 0 && (
+        <Section title="Built in their repo">
+          <div style={{ display: 'grid', gap: 10 }}>
+            {capabilities.map((c) => (
+              <div key={c.id} style={{
+                display: 'flex', justifyContent: 'space-between', gap: 12,
+                paddingBottom: 10, borderBottom: `1px solid ${LINE}`, flexWrap: 'wrap',
+              }}>
+                <span style={{ color: INK, fontWeight: 600 }}>
+                  {c.label}
+                  {/* Week 3 permits building against the sample. Saying so is the point:
+                      silence here would imply work on a real system. */}
+                  {c.on_sample && (
+                    <span style={{ color: MUTED, fontWeight: 500 }}> · built on the sample</span>
+                  )}
+                </span>
+                <span style={{ color: MUTED, fontSize: 13.5 }}>
+                  {c.count > 1 && <>{c.count} of them</>}
+                  {/* `proven` means a run was evidenced. Its ABSENCE is not a denial, so
+                      nothing is printed for it -- a service can be built and not yet
+                      demonstrated, and that is an honest state. */}
+                  {c.proven && <>{c.count > 1 ? ' · ' : ''}demonstrated</>}
+                </span>
+              </div>
             ))}
           </div>
         </Section>

@@ -82,6 +82,39 @@ export interface RecordCompetency {
   evidence_count: number;
 }
 
+/**
+ * Band 3b — what they BUILT IN THEIR OWN REPO, read from the committed file tree.
+ *
+ * The artifact band only ever showed UPLOADED artifacts the platform mirrored, and the
+ * mirror handles `.md`, `.txt` and `.csv` alone. The rebuilt labs have students build in
+ * their own repo and commit it themselves, so a student could do everything right and
+ * still see a nearly empty page. This band is that work.
+ *
+ * THREE DISTINCTIONS THIS BAND MUST KEEP, because collapsing any one of them turns the
+ * page into a claim the evidence does not support:
+ *
+ *   count    a COLLECTION counts distinct immediate children, not files. A skills
+ *            directory of 32 entries is a handful of skills, not 32 — and a floor of 3
+ *            would otherwise be met by one skill split across three files.
+ *   proven   a service EXISTING is not a service DEMONSTRATED. `proven` requires an
+ *            actual recording; the reader once scored an MCP server as proven off a
+ *            spreadsheet upload. Claiming a demo that never happened is worse than
+ *            claiming nothing.
+ *   on_sample built against the provided sample rather than their own system. Week 3
+ *            permits it explicitly, so the page says so plainly rather than implying
+ *            work on a real system — the same line `built_on_sample` already draws.
+ */
+export interface RecordCapability {
+  id: string;
+  label: string;
+  /** Distinct immediate children for a collection; 1 for a single artefact. */
+  count: number;
+  /** A service whose run has been evidenced. Absent for shapes that cannot be run. */
+  proven?: boolean;
+  /** Built against the sample rather than their own project. */
+  on_sample?: boolean;
+}
+
 /** Band 4 — their own words, in week order. */
 export interface RecordPost {
   week: number;
@@ -98,6 +131,11 @@ export interface CapstoneRecord {
   system: RecordSystem;
   artifacts: RecordArtifact[];
   competencies: RecordCompetency[];
+  /**
+   * Optional so every record compiled before this band existed stays valid, and so a
+   * student with no connected repo simply has no band rather than an empty heading.
+   */
+  capabilities?: RecordCapability[];
   posts: RecordPost[];
   /**
    * The bookend. Week 1's Roll Call asks what they want AI to take off their
