@@ -9,6 +9,7 @@ import { resolveContactability } from '../explorerContactabilityService';
 import { decideForLearner, RULESET_VERSION } from './decideForLearner';
 import { safeConsent } from './contactPolicy';
 import { redactForLogs } from '../../../utils/piiRedaction';
+import { resolveAllForCandidate } from '../content/resolveContentAssets';
 import type { Candidate, ContactPolicyInput, GovernorContext } from './types';
 
 /**
@@ -152,6 +153,21 @@ async function runOne(
     },
   });
 
+  // EPIC 5. Resolve the WINNING candidate's asset queries here rather than
+  // inside decideForLearner, which is pure by design and must stay usable
+  // without a database. `decision.required_assets` is the winner's OWN list -
+  // not a re-derivation from candidate_actions, which holds every candidate's
+  // and would attach a suppressed action's content to a decision that never
+  // chose it.
+  //
+  // A gap does NOT drop the decision. It records with the reason named, which
+  // is what lets the shadow review say "these N have no asset behind them"
+  // rather than quietly showing fewer rows.
+  const { assets: resolvedAssets, gaps: assetGaps } = await resolveAllForCandidate(
+    decision.required_assets,
+    ctx.asOf,
+  );
+
   if (!dryRun) {
     const existing = await ExplorerJourneyDecision.findOne({
       where: { enrollment_id: enrollmentId, decision_date: decision.decision_date },
@@ -174,6 +190,9 @@ async function runOne(
       channel: decision.channel,
       candidate_actions: decision.candidate_actions as any,
       suppressed_actions: decision.suppressed_actions as any,
+      // Until EPIC 5 NOTHING anywhere assigned this column, and all 153 rows
+      // read `[]` - every decision naming an asset type with no asset behind it.
+      selected_content_assets: resolvedAssets as any,
       // `reason` is the NOT NULL text column. The campaign key lives inside
       // candidate_actions (jsonb) rather than being invented as a column, and
       // selected_campaign_id stays null until EPIC 6 resolves a real campaign.
@@ -181,6 +200,9 @@ async function runOne(
         ...decision.rationale,
         decision.campaign_key ? `campaign=${decision.campaign_key}` : null,
         decision.consent_note ? `consent: ${decision.consent_note}` : null,
+        // Named, not counted. "3 gaps" tells a reviewer nothing about WHICH
+        // purpose has no content behind it.
+        assetGaps.length ? `asset gaps: ${assetGaps.join(', ')}` : null,
       ]
         .filter(Boolean)
         .join(' | '),

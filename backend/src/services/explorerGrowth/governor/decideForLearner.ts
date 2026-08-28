@@ -15,6 +15,7 @@ import { evaluateContact } from './contactPolicy';
 import type {
   Candidate,
   ContactPolicyInput,
+  ContentAssetQuery,
   GovernorContext,
   SuppressedCandidate,
 } from './types';
@@ -50,6 +51,20 @@ export interface Decision {
   rationale: string[];
   /** Present when the winning action was permitted without consent evidence. */
   consent_note?: string;
+  /**
+   * What the WINNING candidate asks content for. EPIC 5.
+   *
+   * A pointer, not a re-derivation. `candidate_actions` holds every candidate's
+   * `required_assets`, so a caller wanting the winner's had to match on
+   * `(action_type, campaign_key)` and hope that pair is unique. It is today, but
+   * "mostly unique" is the reasoning that produced a 276-vs-143 double count
+   * during this epic's own discovery, and resolving the wrong candidate's assets
+   * would attach content to a decision that never chose it.
+   *
+   * Still PURE: this is data the arbiter already had and discarded, not I/O.
+   * Resolution happens in the run loop, so this function stays database-free.
+   */
+  required_assets: ContentAssetQuery[];
 }
 
 /** UTC day key. Matches the UNIQUE (enrollment_id, decision_date) index. */
@@ -74,6 +89,10 @@ function waitDecision(
     suppressed_actions: suppressed,
     executed: false,
     rationale: [reason],
+    // No winner, so nothing to resolve. Empty rather than absent: the run loop
+    // iterates this unconditionally and an undefined would be a crash on the
+    // 10 learners who WAIT.
+    required_assets: [],
   };
 }
 
@@ -155,6 +174,7 @@ export function decideForLearner(ctx: GovernorContext, opts: DecideOptions): Dec
     suppressed_actions: suppressed,
     executed: false,
     rationale: winner.rationale,
+    required_assets: winner.required_assets,
   };
 
   // Carry the "we had no consent evidence" flag onto the row, so the shadow
