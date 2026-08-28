@@ -61,7 +61,10 @@ const PortfolioAddressPanel: React.FC = () => {
   if (!page) return <p className="cp-muted">Loading…</p>;
 
   const isLive = page.status === 'published' && page.visibility !== 'private';
-  const awaitingReview = !!page.review_requested_at && page.status !== 'published';
+  // A published page can have a pending request too — that is an UPDATE awaiting review.
+  // Excluding it here would leave the button enabled and the state line silent while a
+  // request was already open.
+  const awaitingReview = !!page.review_requested_at;
 
   return (
     <section className="cp-card">
@@ -80,26 +83,41 @@ const PortfolioAddressPanel: React.FC = () => {
       {/* The shipping state, said plainly. "Approved" and "shared" are different things
           and the learner needs to know which one is missing. */}
       <p className="cp-state">
-        {isLive && <>Live. Approved{page.approved_at ? ` on ${new Date(page.approved_at).toLocaleDateString()}` : ''}.</>}
+        {isLive && !awaitingReview && <>Live. Approved{page.approved_at ? ` on ${new Date(page.approved_at).toLocaleDateString()}` : ''}.</>}
+        {isLive && awaitingReview && <>Live, and an update is waiting on a mentor.</>}
         {!isLive && page.status === 'published' && <>Approved, but set to “Only me”, so nobody can open it.</>}
         {!isLive && awaitingReview && <>Waiting on a mentor to review it.</>}
         {!isLive && page.status !== 'published' && !awaitingReview && <>Not published yet.</>}
       </p>
 
-      {page.status !== 'published' && (
-        <button
-          className="cp-btn"
-          disabled={busy || awaitingReview}
-          onClick={() => run(requestPortfolioPageReview)}
-        >
-          {awaitingReview ? 'Review requested' : 'Ask for review'}
-        </button>
+      {/* ALWAYS available, including once live. Project text is frozen at approval, so
+          without this an approved page could never publish new work: the learner adds a
+          project and has no path to a reviewer. A one-way door. The live page keeps
+          serving the old approved snapshot until the update is approved, so asking is
+          safe and never takes the page down. */}
+      <button
+        className="cp-btn"
+        disabled={busy || awaitingReview}
+        onClick={() => run(requestPortfolioPageReview)}
+      >
+        {awaitingReview
+          ? 'Review requested'
+          : page.status === 'published'
+            ? 'Send my latest work for review'
+            : 'Ask for review'}
+      </button>
+      {page.status === 'published' && !awaitingReview && (
+        <p className="cp-fine" style={{ marginTop: 8 }}>
+          Your page stays live while an update is reviewed. New projects appear once a
+          mentor approves them.
+        </p>
       )}
 
-      <h4 className="cp-sub">Who can see it</h4>
+      <h4 className="cp-sub">Who can see your portfolio page</h4>
       <p className="cp-muted" style={{ marginTop: 0 }}>
-        This is yours to set, and it is separate from review. A mentor approves that the
-        work is ready; you decide the audience.
+        This controls the portfolio page above, not the individual record below. It is
+        yours to set and separate from review: a mentor approves that the work is ready,
+        you decide the audience.
       </p>
       <div className="cp-choices">
         {OPTIONS.map((o) => (
