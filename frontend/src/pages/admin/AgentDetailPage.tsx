@@ -1,20 +1,33 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { getAgentDetail, AgentDetail } from '../../services/agentDetailApi';
 import { resetAgents, reactivateAgent, AUTONOMY_LEVELS, AutonomyLevel, AUTONOMY_LEVEL_DESCRIPTIONS } from '../../services/workforceOrgChartApi';
-import { PageHeader, StatCard, SectionCard, StatusBadge } from '../../components/admin/shell';
-import { timeAgo } from '../../components/admin/shell/trust';
-import AgentToolsCapabilitiesCard from '../../components/admin/AgentToolsCapabilitiesCard';
-import AgentTicketActivityTable from '../../components/admin/AgentTicketActivityTable';
-import AgentScheduledTasksCard from '../../components/admin/AgentScheduledTasksCard';
-import AgentTrustSummaryCard from '../../components/admin/AgentTrustSummaryCard';
-import { getTicketTypeLabel, getTicketTypeTone } from '../../utils/ticketTypeMeta';
+import { PageHeader, StatCard } from '../../components/admin/shell';
+import AgentOverviewTab from '../../components/admin/AgentOverviewTab';
+import AgentCharterTab from '../../components/admin/AgentCharterTab';
 
 // Agent Detail — Ali's requested transparency page: who this agent is, its real
 // system prompt, its real tools/capabilities, its live status, and its linked
 // ProofDesk ticket activity. Built generically (works for any AiAgent id) so it
 // is the reusable blueprint for every future agent, not a one-off Reese page.
 // Same independent-panel-failure posture as AdminWorkLedgerHealthPage.tsx.
+//
+// AI Workforce Management, Checkpoint B (2026-08-28) — tab shell, minimal-first
+// slice (Ali's explicit choice over building all 10 planned tabs at once):
+// "Overview" is everything this page already had, extracted verbatim into
+// AgentOverviewTab.tsx; "Charter" is the one new real capability
+// (AgentRoleCharter, PR #1898). The other 8 tabs from
+// docs/architecture/ai-workforce-management/TARGET_ARCHITECTURE.md
+// (Talk/Work/Decisions/Reports/Trust/Goals/Memory/Tools & Access/Activity)
+// are NOT stubbed in here — a grayed-out tab for a capability that doesn't
+// exist yet would misrepresent what this page can actually do. Add a tab only
+// when its backend is real, per this repo's own "never fabricate" posture.
+
+type TabKey = 'overview' | 'charter';
+const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
+  { key: 'overview', label: 'Overview', icon: 'dashboard-line' },
+  { key: 'charter', label: 'Charter', icon: 'briefcase-4-line' },
+];
 
 const STATUS_TONE: Record<AgentDetail['live_status'], 'success' | 'warning' | 'neutral'> = {
   online: 'success',
@@ -28,6 +41,7 @@ export default function AgentDetailPage() {
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
   // AI Workforce Reset (2026-08-24) — Ali, live: deactivate an agent and
   // cancel its open tickets, reversible (enabled:false, real ticket
   // cancellation) — see workforceOrgChartApi.ts::resetAgents().
@@ -113,14 +127,11 @@ export default function AgentDetailPage() {
     );
   }
 
-  if (error || !detail) {
+  if (error || !detail || !id) {
     return <div className="alert alert-danger">{error || 'Agent not found'}</div>;
   }
 
-  const {
-    agent, identity, live_status, tickets, ticket_breakdown, related_tasks,
-    persona_version_history, cost_summary, authorization_summary, capabilities, trust_contract,
-  } = detail;
+  const { agent, identity, live_status } = detail;
   // Agent Alias & Identity Fix — same fix as the Live Agents card list: prefer the
   // real AdminUser.display_name over the raw technical agent_name. Falls back to
   // agent_name for a non-blueprint agent (identity is null — no linked AdminUser).
@@ -215,235 +226,22 @@ export default function AgentDetailPage() {
         </div>
       </PageHeader>
 
-      <SectionCard title="Identity" icon="user-star-line">
-        {identity ? (
-          <dl className="row mb-0">
-            <dt className="col-sm-3">Real staff account</dt>
-            <dd className="col-sm-9">{identity.display_name || identity.email} ({identity.email})</dd>
-            <dt className="col-sm-3">AI-operated</dt>
-            <dd className="col-sm-9">
-              {identity.is_ai_operated ? (
-                <span className="badge bg-info-subtle text-info-emphasis">AI-operated (admin view only — never shown to students)</span>
-              ) : (
-                'No'
-              )}
-            </dd>
-            <dt className="col-sm-3">Agent type</dt>
-            <dd className="col-sm-9"><code>{agent.agent_type}</code>{agent.category && <> · <code>{agent.category}</code></>}</dd>
-          </dl>
-        ) : (
-          <p className="text-muted mb-0">No linked staff identity yet.</p>
-        )}
-      </SectionCard>
+      <ul className="nav nav-tabs mb-4">
+        {TABS.map((tab) => (
+          <li key={tab.key} className="nav-item">
+            <button
+              className={`nav-link ${activeTab === tab.key ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              <i className={`ri-${tab.icon} me-1`} aria-hidden="true" />
+              {tab.label}
+            </button>
+          </li>
+        ))}
+      </ul>
 
-      <SectionCard
-        title="Trust Contract"
-        icon="shield-check-line"
-        subtitle="The Instant dimension — is this agent actually running, on schedule, reliably. Permitted, Transparent, and Contextual are covered by Tools, Reports to, and Reads/Produces below."
-      >
-        <p className="text-muted small mb-3">
-          Grounded in Ram Katamaraja's{' '}
-          <a href="https://www.amazon.com/dp/B0GX32N413" target="_blank" rel="noopener noreferrer">
-            Trust Before Intelligence
-          </a>{' '}
-          INPACT™ framework — every value below is a real, pre-existing field, never invented.
-        </p>
-        <div className="row g-3 mb-1">
-          <div className="col-6 col-lg-3">
-            <StatCard
-              label="Autonomy level (Permitted)"
-              value={agent.autonomy_level || 'Not yet set'}
-              icon="key-2-line"
-              tone={agent.autonomy_level ? 'success' : 'neutral'}
-            />
-          </div>
-        </div>
-        {trust_contract.trigger_type ? (
-          <div className="row g-3">
-            <div className="col-6 col-lg-3">
-              <StatCard label="Trigger" value={trust_contract.trigger_type} icon="timer-line" tone="neutral" />
-            </div>
-            <div className="col-6 col-lg-3">
-              <StatCard label="Schedule" value={trust_contract.schedule || '—'} icon="calendar-line" tone="neutral" />
-            </div>
-            <div className="col-6 col-lg-3">
-              {/* Trust Contract fix (2026-08-24) — Ali, live, on Reese's real page:
-                  "Reese has several tickets... but this says it's never been run."
-                  `last_run_at` stays honestly null for an event-driven agent (it's
-                  never invoked through the cron scheduler wrapper) — that part was
-                  correct. What was wrong is showing bare "Never" with no other
-                  signal, right above a ticket table full of recent activity. When
-                  there's no scheduler run but there IS real ticket activity, show
-                  THAT instead, labeled for what it actually is. */}
-              <StatCard
-                label={trust_contract.last_run_at || !trust_contract.last_activity_at ? 'Last run' : 'Last activity'}
-                value={
-                  trust_contract.last_run_at
-                    ? timeAgo(trust_contract.last_run_at)
-                    : trust_contract.last_activity_at
-                      ? timeAgo(trust_contract.last_activity_at)
-                      : 'Never'
-                }
-                icon={trust_contract.last_run_at || !trust_contract.last_activity_at ? 'history-line' : 'ticket-2-line'}
-                tone="neutral"
-              />
-            </div>
-            <div className="col-6 col-lg-3">
-              <StatCard
-                label="Avg duration"
-                value={trust_contract.avg_duration_ms ? `${(trust_contract.avg_duration_ms / 1000).toFixed(1)}s` : '—'}
-                icon="speed-line"
-                tone="neutral"
-              />
-            </div>
-            <div className="col-6 col-lg-3">
-              <StatCard label="Total runs" value={trust_contract.run_count} icon="repeat-line" tone="neutral" />
-            </div>
-            <div className="col-6 col-lg-3">
-              <StatCard
-                label="Errors"
-                value={trust_contract.error_count}
-                icon="error-warning-line"
-                tone={trust_contract.error_count > 0 ? 'warning' : 'success'}
-              />
-            </div>
-          </div>
-        ) : (
-          <p className="text-muted mb-0">
-            <i className="ri-information-line" aria-hidden="true" /> This agent isn't invoked through the
-            scheduled-run tracker (it's a real, identity-only or on-demand process) — no schedule/run data to
-            show, disclosed honestly rather than a fabricated "no runs yet."
-          </p>
-        )}
-        {trust_contract.last_error && (
-          <div className="alert alert-warning mt-3 mb-0 py-2 small">
-            <strong>Last error:</strong> {trust_contract.last_error}
-            {trust_contract.last_error_at && <> — {timeAgo(trust_contract.last_error_at)}</>}
-          </div>
-        )}
-      </SectionCard>
-
-      <AgentTrustSummaryCard
-        costSummary={cost_summary}
-        authorizationSummary={authorization_summary}
-        versionHistory={persona_version_history}
-      />
-
-      <SectionCard title="System prompt" icon="chat-3-line" subtitle="The real, current text sent to the model for every conversation this agent has.">
-        {agent.system_prompt ? (
-          <pre className="bg-light p-3 rounded" style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', maxHeight: '420px', overflowY: 'auto' }}>
-            {agent.system_prompt}
-          </pre>
-        ) : (
-          <p className="text-muted mb-0">No system prompt recorded.</p>
-        )}
-      </SectionCard>
-
-      <SectionCard
-        title="Reports to"
-        icon="git-branch-line"
-        subtitle="This agent's real accountability chain — AI Leadership if direct, or through one or more AI Leadership agents to a real human (org-chart hierarchy)."
-      >
-        {detail.reports_to ? (
-          <>
-            {detail.reports_to.immediate_agent && (
-              <p className="mb-2">
-                Reports directly to{' '}
-                <Link to={`/admin/agents/${detail.reports_to.immediate_agent.id}`}>
-                  <strong>{detail.reports_to.immediate_agent.name}</strong>
-                </Link>
-                {' '}(AI Leadership) — open its own detail page for its tools, chain, and tickets.
-              </p>
-            )}
-            <ol className="mb-3" style={{ paddingLeft: '1.1rem' }}>
-              {detail.reports_to.trail.map((hop, i) => (
-                <li key={i} className="mb-1"><code>{hop}</code></li>
-              ))}
-            </ol>
-            {detail.reports_to.resolved_human ? (
-              <p className="mb-0">
-                Ultimately accountable to <strong>{detail.reports_to.resolved_human.name}</strong>
-                {' '}({detail.reports_to.resolved_human.email}).
-              </p>
-            ) : (
-              <p className="text-muted mb-0">
-                <i className="ri-error-warning-line" aria-hidden="true" /> This chain does not currently resolve to a real human — disclosed honestly rather than guessed.
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="text-muted mb-0">No reports-to chain configured for this agent.</p>
-        )}
-      </SectionCard>
-
-      <AgentToolsCapabilitiesCard byTool={capabilities.by_tool} />
-
-      <SectionCard
-        title="What this agent reads / produces"
-        icon="database-2-line"
-        subtitle="Derived from this agent's real, live tools_granted plus the real ticket types it has actually created — never hand-written, so it can't drift from reality."
-      >
-        <div className="row g-4">
-          <div className="col-md-6">
-            <h6 className="text-uppercase text-muted small mb-2">Reads</h6>
-            {capabilities.reads.length > 0 ? (
-              <ul className="list-unstyled mb-0">
-                {capabilities.reads.map((r) => (
-                  <li key={r} className="mb-1">
-                    <span className="badge bg-info-subtle text-info-emphasis me-2">
-                      <i className="ri-eye-line" aria-hidden="true" />
-                    </span>
-                    {r}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted mb-0">This agent's granted tools don't read any external data source.</p>
-            )}
-          </div>
-          <div className="col-md-6">
-            <h6 className="text-uppercase text-muted small mb-2">Produces</h6>
-            {capabilities.produces.length > 0 ? (
-              <ul className="list-unstyled mb-0">
-                {capabilities.produces.map((p) => (
-                  <li key={p} className="mb-1">
-                    <span className="badge bg-success-subtle text-success-emphasis me-2">
-                      <i className="ri-add-circle-line" aria-hidden="true" />
-                    </span>
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted mb-0">This agent's granted tools don't produce anything on their own.</p>
-            )}
-          </div>
-        </div>
-
-        {capabilities.produced_ticket_types.length > 0 && (
-          <div className="mt-3">
-            <h6 className="text-uppercase text-muted small mb-2">Ticket types actually created (live, unlimited)</h6>
-            <div className="d-flex flex-wrap gap-2">
-              {capabilities.produced_ticket_types.map((t) => (
-                <StatusBadge key={t} label={getTicketTypeLabel(t)} tone={getTicketTypeTone(t)} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {capabilities.undocumented_tools.length > 0 && (
-          <div className="mt-3">
-            <p className="text-muted small mb-0">
-              <i className="ri-information-line" aria-hidden="true" /> {capabilities.undocumented_tools.length === 1 ? 'One tool' : `${capabilities.undocumented_tools.length} tools`} granted to this agent
-              {' '}(<code>{capabilities.undocumented_tools.join(', ')}</code>) {capabilities.undocumented_tools.length === 1 ? 'has' : 'have'} no documented reads/produces yet — disclosed honestly rather than guessed.
-            </p>
-          </div>
-        )}
-      </SectionCard>
-
-      <AgentScheduledTasksCard tasks={related_tasks} />
-
-      <AgentTicketActivityTable tickets={tickets} ticketBreakdown={ticket_breakdown} />
+      {activeTab === 'overview' && <AgentOverviewTab detail={detail} />}
+      {activeTab === 'charter' && <AgentCharterTab agentId={id} agentName={displayName} />}
     </>
   );
 }
