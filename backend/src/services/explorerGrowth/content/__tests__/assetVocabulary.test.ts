@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { EXPLORER_ASSET_PURPOSES } from '../../../../types/explorerGrowth';
-import type { ExplorerAssetPurpose, ExplorerAssetType } from '../../../../types/explorerGrowth';
 
 /**
  * EPIC 5 T001 — the seam that could not be seen.
@@ -100,18 +99,22 @@ describe('the const array is the source, and the union follows it', () => {
     expect(new Set(EXPLORER_ASSET_PURPOSES).size).toBe(8);
   });
 
-  it('types a purpose variable from the array, not the other way round', () => {
-    const p: ExplorerAssetPurpose = 'weekly_digest';
-    expect(EXPLORER_ASSET_PURPOSES).toContain(p);
-    // @ts-expect-error a KIND is not a PURPOSE — this line failing to error
-    // would mean the seam is untyped again.
-    const wrong: ExplorerAssetPurpose = 'LESSON';
-    expect(wrong).toBe('LESSON');
-  });
-
-  it('does not accept a purpose where a kind belongs', () => {
-    // @ts-expect-error the mirror of the assertion above, in the other direction.
-    const wrong: ExplorerAssetType = 'weekly_digest';
-    expect(wrong).toBe('weekly_digest');
+  it('keeps its type-level guard somewhere the compiler actually reads', () => {
+    // THESE ASSERTIONS USED TO LIVE HERE, AND WERE READ BY NOTHING.
+    // `tsconfig.json` excludes `**/__tests__/**`, so `tsc --noEmit` never
+    // compiles this file — `--listFiles` reports zero .test.ts among 4,661.
+    // ts-jest runs `isolatedModules`, i.e. transpile-only, so a blatant type
+    // error passes green here too. Two tests named as type checks asserted only
+    // that a string equalled itself, and reverting the narrowing to `string`
+    // would have left every gate green.
+    //
+    // They now live in `assetVocabulary.typecheck.ts`, a plain source file that
+    // `include: ["src/**/*"]` matches. This test exists so that deleting that
+    // file is a visible failure rather than a silent loss of the guard.
+    const guard = path.join(__dirname, '..', 'assetVocabulary.typecheck.ts');
+    expect(fs.existsSync(guard)).toBe(true);
+    const src = fs.readFileSync(guard, 'utf8');
+    expect(src).toContain('@ts-expect-error');
+    expect((src.match(/@ts-expect-error/g) || []).length).toBeGreaterThanOrEqual(3);
   });
 });
