@@ -490,6 +490,40 @@ export function mirrorVerifiedCompletion(projectId: string, taskId: string): voi
   write(list); notify();
 }
 
+/**
+ * Record a SELF-DIRECTED task (Demo Prep: PREP-1..PREP-6) as done.
+ *
+ * These are rehearsals, recordings and Demo Day itself. The verifier never sees
+ * them — they carry no acceptance criteria and are absent from the published
+ * plan — so `verified_at` is never stamped and the repo can say nothing about
+ * them. The student is the only one who can know they happened.
+ *
+ * Deliberately NOT `markTaskDone`: that emits a status push, and `complete` is
+ * not in `CLIENT_SETTABLE_STATUSES`, so it would fire exactly the 409 the
+ * comment on `mirrorVerifiedCompletion` describes. Deliberately NOT
+ * `mirrorVerifiedCompletion` either: its activity line reads "Confirmed from
+ * your repo by the build pipeline", which for a prep task would be a claim the
+ * platform cannot support. Same local bookkeeping, no server write, honest
+ * wording.
+ *
+ * Safe to call twice: a task already `done` is left alone.
+ */
+export function markSelfDirectedDone(projectId: string, taskId: string): void {
+  const list = read();
+  const p = list.find((x) => x.id === projectId);
+  if (!p) return;
+  for (const l of p.lists) {
+    const t = l.tasks.find((x) => x.id === taskId);
+    if (t && t.state !== 'done') {
+      t.state = 'done'; t.due = 'done';
+      p.activity.unshift({ id: 'a' + Date.now(), kind: 'done', who: 'You', time: 'just now',
+        title: `Completed: ${t.title}`, body: 'You marked this done. This step is not checked from your repo.' });
+      break;
+    }
+  }
+  write(list); notify();
+}
+
 export function skipTask(projectId: string, taskId: string): void {
   const list = read();
   const p = list.find((x) => x.id === projectId);

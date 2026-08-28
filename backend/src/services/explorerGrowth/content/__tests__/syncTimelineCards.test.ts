@@ -3,7 +3,12 @@ jest.mock('../../../../config/database', () => ({
   sequelize: { query: (...a: unknown[]) => queryMock(...a) },
 }));
 
-import { syncTimelineCards, retireMissingCards, stageTagForWeek } from '../syncTimelineCards';
+import {
+  syncTimelineCards,
+  retireMissingCards,
+  stageTagForWeek,
+  priorityForBucket,
+} from '../syncTimelineCards';
 
 /**
  * EPIC 5 T003.
@@ -29,6 +34,7 @@ const card = (over: Record<string, unknown> = {}) => ({
   subtitle: 'Start here',
   description: 'A much longer rendered description',
   week: 0,
+  bucket: 'pre_class',
   priority: 10,
   release_date: null,
   type_tags: ['self-study', 'foundations'],
@@ -193,5 +199,57 @@ describe('retiring is deactivation, and it cannot run away', () => {
     queryMock.mockResolvedValue([[], 0]);
     await retireMissingCards(['a']);
     expect(String(queryMock.mock.calls[0][0])).toContain('source_id IS NOT NULL');
+  });
+});
+
+describe('bucket decides priority, because nothing else can', () => {
+  it('ranks pre_class above learn — the whole point of this change', () => {
+    // The first production run resolved activation_first_step to "Session 1
+    // Evaluation" for 134 dormant learners. Every published card has
+    // priority 0, so ORDER BY priority DESC was inert and an evaluation form
+    // won the slot meant for someone who has never engaged.
+    expect(priorityForBucket('pre_class')).toBeGreaterThan(priorityForBucket('learn'));
+  });
+
+  it('orders the buckets the way a learner meets them', () => {
+    const order = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
+    const values = order.map(priorityForBucket);
+    expect(values).toEqual([...values].sort((a, b) => b - a));
+    expect(new Set(values).size).toBe(order.length); // no accidental ties
+  });
+
+  it('gives an unknown bucket no opinion rather than the front of the queue', () => {
+    // 50 is the column default. Below learn, above reflect: a bucket nobody has
+    // ranked is unremarkable, not promoted and not buried.
+    expect(priorityForBucket('some_new_bucket')).toBe(50);
+    expect(priorityForBucket('some_new_bucket')).toBeLessThan(priorityForBucket('learn'));
+    expect(priorityForBucket('some_new_bucket')).toBeGreaterThan(priorityForBucket('reflect'));
+  });
+
+  it('survives a null bucket without crashing the whole sync', () => {
+    expect(priorityForBucket(null)).toBe(50);
+    expect(priorityForBucket(undefined)).toBe(50);
+  });
+
+  it('writes the derived priority, NOT the one stored on the card', async () => {
+    // timeline_cards.priority is 0 on all 585 published cards, so it carries no
+    // signal. The fixture sets 10 to prove that value is ignored.
+    givenCards([card({ bucket: 'pre_class', priority: 10 })]);
+    await syncTimelineCards();
+    const upsert = queryMock.mock.calls.find((c) => String(c[0]).includes('INSERT'));
+    expect(upsert![1].replacements.priority).toBe(90);
+  });
+
+  it('reads the bucket in the projection query', async () => {
+    givenCards([]);
+    await syncTimelineCards();
+    expect(String(queryMock.mock.calls[0][0])).toContain('tc.bucket');
+  });
+
+  it('would now pick a pre_class card over a learn card of the same stage', async () => {
+    // The regression, expressed as the ranking it produces.
+    const welcome = priorityForBucket('pre_class');
+    const evaluation = priorityForBucket('learn');
+    expect(welcome).toBeGreaterThan(evaluation);
   });
 });
