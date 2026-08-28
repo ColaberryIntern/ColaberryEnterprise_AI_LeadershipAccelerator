@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import portalApi from '../../../utils/portalApi';
 import { runtimeCss } from '../runtime/runtimeKit';
 import {
-  getProject, canonicalProjectId, mirrorVerifiedCompletion, skipTask, isTaskBlocked, projectProgress,
+  getProject, canonicalProjectId, mirrorVerifiedCompletion, markSelfDirectedDone, skipTask, isTaskBlocked, projectProgress,
   StudentProject, ProjectTask,
 } from './projectsStore';
 import {
@@ -13,7 +13,7 @@ import WorkspaceRepoPanel from './WorkspaceRepoPanel';
 import { refreshProjectsFromBackend } from './projectSync';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
-import StoryCompletionPanel from './StoryCompletionPanel';
+import StoryCompletionPanel, { isSelfDirectedStory } from './StoryCompletionPanel';
 import {
   useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
   type SentAttachment,
@@ -534,10 +534,15 @@ const ProjectWorkspacePage: React.FC = () => {
               storyKey={storyKey}
               locallyDone={locallyDone}
               onMarkDone={() => {
-                // Mirrors the completion the platform already granted into the
-                // local board. Deliberately NOT a status push: the server is
-                // where this came from, and pushing it back earns a 409.
-                mirrorVerifiedCompletion(project.id, task.id);
+                // Two different completions behind one button. A verified story
+                // is the platform's call being mirrored locally; a Demo Prep
+                // task is the student's own, because nothing ever verifies it.
+                // Neither pushes a status: `complete` is not client-settable.
+                if (isSelfDirectedStory(storyKey)) {
+                  markSelfDirectedDone(project.id, task.id);
+                } else {
+                  mirrorVerifiedCompletion(project.id, task.id);
+                }
                 setTick((n) => n + 1);
                 goBack();
               }}
