@@ -70,6 +70,7 @@ import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema'
 import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema';
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
+import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
@@ -2649,6 +2650,11 @@ async function start(): Promise<void> {
   // version genuinely changes. Additive, idempotent, no flag. Must run
   // before seedAgentRegistry() so the table exists on a fresh boot.
   await ensureAgentPersonaVersionHistorySchema();
+  // AI Workforce Management, Checkpoint B — an agent's business-facing job
+  // description, manager-editable, separate from system_prompt. Additive,
+  // idempotent, no flag. No seeder writes to it; a manager writes the first
+  // row via PUT /api/admin/agents/:id/charter, so no ordering dependency.
+  await ensureAgentRoleCharterSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
