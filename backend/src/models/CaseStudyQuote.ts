@@ -32,7 +32,7 @@ export interface CaseStudyQuoteAttributes {
   attribution_mode: string;
   display_name?: string | null;
   attribution_role?: string | null;
-  /** colaberry_team | client_team | joint | individual — CaseStudyBuiltByType */
+  /** learner | intern | client_team | colaberry_team | ai_flotation_team | joint_team */
   attribution_kind: string;
   consent_recorded_at?: Date | null;
   /** client_confirmation | recorded_interview | written_statement | public_statement */

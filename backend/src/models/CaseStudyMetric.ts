@@ -23,7 +23,7 @@ export interface CaseStudyMetricAttributes {
   value_display?: string | null;
   numeric_value?: number | null;
   unit?: string | null;
-  /** technical | business | delivery | quality */
+  /** business_outcome | delivery | performance | scale | quality | adoption | technical */
   metric_type?: string;
   /** verified | anonymized | illustrative | pending */
   verification_class?: string;

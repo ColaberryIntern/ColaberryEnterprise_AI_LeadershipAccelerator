@@ -29,18 +29,18 @@ export interface CaseStudyAttributes {
   id?: string;
   slug: string;
   title: string;
-  /** draft | review | approved | archived */
+  /** draft | review | approved | published | archived */
   status?: string;
   /** Bare UUID, deliberately not a FK — see the ensureCaseStudySchema.ts header. */
   project_id?: string | null;
-  /** repo_collection | project | manual */
+  /** platform_project | repo_collection | manual | engagement */
   source_type?: string;
   canonical_summary?: string | null;
   industry?: string | null;
   primary_capability?: string | null;
   program_key?: string | null;
   built_by_type?: string | null;
-  /** private | internal | public */
+  /** public | anonymized | private */
   visibility?: string;
   organization_display_name?: string | null;
   organization_is_anonymized?: boolean;

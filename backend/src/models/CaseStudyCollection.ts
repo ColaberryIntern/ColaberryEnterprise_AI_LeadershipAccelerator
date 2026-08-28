@@ -23,7 +23,7 @@ export interface CaseStudyCollectionAttributes {
   description?: string | null;
   filter_config?: Record<string, any>;
   sort_config?: Record<string, any>;
-  /** draft | published | archived */
+  /** draft | published */
   status?: string;
   created_at?: Date;
   updated_at?: Date;

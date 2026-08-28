@@ -113,6 +113,8 @@ export interface CaseStudyRepoMetadataFacts {
   readonly pushedAt: string | null;
   readonly license: { readonly key: string; readonly name: string; readonly spdxId: string | null } | null;
   readonly latestCommitSha: string | null;
+  /** Committer date of `latestCommitSha`, ISO-8601. Null when unreadable. */
+  readonly latestCommitAt: string | null;
   readonly isFork: boolean;
   readonly isArchived: boolean;
 }
@@ -156,7 +158,32 @@ export const treePayloadSchema = z.object({
   truncated: z.boolean().optional(),
 });
 
-const commitsPayloadSchema = z.array(z.object({ sha: z.string() }));
+const commitsPayloadSchema = z.array(
+  z.object({
+    sha: z.string(),
+    // `GET /commits` has always returned the commit object; this schema parsed
+    // the sha and threw the rest away, which is why no commit date existed
+    // anywhere in the analyzer's output.
+    //
+    // The `.catch(undefined)` on this branch is load bearing, and its placement
+    // was settled by measurement rather than by taste. Without it, a date of the
+    // wrong TYPE — which is what a GitHub shape change looks like — fails the
+    // WHOLE array parse; the read then reports "commit head was not the expected
+    // shape" and the repository loses its SHA to protect a date nothing needed.
+    // One `.catch` HERE is enough: it absorbs both a malformed date and a
+    // `commit` branch that is not an object at all. Repeating `.catch` on the
+    // inner author/committer objects covers strictly less (it cannot survive a
+    // non-object `commit`) and was removed as redundant once a mutation showed
+    // it protecting nothing the outer one did not already protect.
+    commit: z
+      .object({
+        author: z.object({ date: z.string().optional() }).optional(),
+        committer: z.object({ date: z.string().optional() }).optional(),
+      })
+      .optional()
+      .catch(undefined),
+  })
+);
 const languagesPayloadSchema = z.record(z.string(), z.number());
 
 function safeJson(body: string): unknown {
@@ -326,16 +353,31 @@ export async function readMetadata(
       ? { key: d.license.key || '', name: d.license.name || '', spdxId: d.license.spdx_id ?? null }
       : null,
     latestCommitSha: null,
+    latestCommitAt: null,
     isFork: d.fork === true,
     isArchived: d.archived === true,
   };
 }
 
-/** `string` = head SHA. A `RepoAnalysisFailure` = the repository has no commits. */
+/**
+ * The head commit of the default branch.
+ *
+ * `committedAt` is the COMMITTER date, not the author date. The two differ after
+ * a rebase or a cherry-pick, and the committer date is when the commit actually
+ * landed on this branch — which is what an elapsed-delivery measurement is
+ * about. The author date is a fallback only because a commit object missing its
+ * committer is better answered with the other date than with nothing.
+ */
+export interface RepoCommitHead {
+  readonly sha: string;
+  readonly committedAt: string | null;
+}
+
+/** A `RepoAnalysisFailure` = the repository has no commits. */
 export async function readCommitHead(
   owner: string, repo: string, opts: GitHubReadOptions, correlationId: string,
   issues: RepoAnalysisIssue[], visibility?: CaseStudyRepoVisibility,
-): Promise<string | null | RepoAnalysisFailure> {
+): Promise<RepoCommitHead | null | RepoAnalysisFailure> {
   let result: RawResult;
   try {
     result = await githubApiRequest('GET', `${repoPath(owner, repo)}/commits?per_page=1`, opts);
@@ -363,7 +405,11 @@ export async function readCommitHead(
   if (!parsed.data.length) {
     return fail(owner, repo, 'RepoEmpty', 'repository has no commits', correlationId, 200, visibility);
   }
-  return parsed.data[0].sha;
+  const head = parsed.data[0];
+  return {
+    sha: head.sha,
+    committedAt: head.commit?.committer?.date ?? head.commit?.author?.date ?? null,
+  };
 }
 
 /** Best-effort. Losing it costs a language breakdown, not the repository. */

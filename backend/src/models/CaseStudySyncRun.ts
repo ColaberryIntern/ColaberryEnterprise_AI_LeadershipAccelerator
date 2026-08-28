@@ -16,9 +16,29 @@ import { sequelize } from '../config/database';
 export interface CaseStudySyncRunAttributes {
   id?: string;
   case_study_id: string;
-  /** manual | scheduled | webhook */
+  /**
+   * `CaseStudySyncTrigger` — manual | webhook | reconciliation | project_update.
+   *
+   * CORRECTED. This read `manual | scheduled | webhook`, which was wrong in BOTH
+   * directions: it named `scheduled`, which the Zod enum in
+   * `caseStudySyncService.ts` rejects outright, and omitted `reconciliation` and
+   * `project_update`, which it accepts.
+   *
+   * The direction of the fix matters more than the fix. A stale comment is the
+   * most plausible cause of someone later "correcting" the working enum to match
+   * the broken documentation, so comments follow the union and never the reverse.
+   * `scheduled` is a value nothing can produce: there is no cron entry for Case
+   * Study sync, and the metric provenance scope declined to add one.
+   */
   trigger?: string;
-  /** running | success | partial | failed */
+  /**
+   * `CaseStudySyncStatus` — running | success | partial | failed | unchanged.
+   *
+   * CORRECTED. `unchanged` was missing, and it is the one that matters: it is the
+   * idempotent-rerun outcome. A reader trusting this comment would conclude a
+   * re-sync must end in one of four states and never reach the fifth — which is
+   * exactly the state a correctly-behaving no-op sync returns.
+   */
   status?: string;
   repos_attempted?: number;
   repos_succeeded?: number;

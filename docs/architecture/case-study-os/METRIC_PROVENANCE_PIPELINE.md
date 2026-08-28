@@ -168,13 +168,24 @@ The run record **is** a `case_study_evidence` row:
 
 | Column | Value |
 |---|---|
-| `source_type` | `'repo'` or `'platform'` |
+| `source_type` | `'internal_measurement'` |
 | `source_ref` | the run id |
 | `source_commit_sha` | the pinned sha, for repo-derived definitions |
 | `title` | `<definition label> — computed <ISO date>` |
 | `metadata` | `{ definition_key, definition_version, inputs, computed_at, correlation_id }` |
 | `metric_id` | the metric row's UUID |
 | `verification_class` | mirrors the metric's |
+
+**CORRECTED.** This table originally specified `source_type` as `'repo'` or
+`'platform'`. Neither is a member of `CaseStudyEvidenceSourceType`, whose real
+members are `evidence_record | github_commit | github_pr | repo_file | artifact |
+client_confirmation | internal_measurement | manual`. The error came from the doc
+comment on `CaseStudyEvidence.ts`, which listed `repo | platform | manual | client
+| manifest` — four invented values and seven omitted ones — and which this
+document was written from. A metric run record is the platform measuring itself,
+so `internal_measurement` is the honest member; the repository provenance travels
+in `source_commit_sha` and `metadata.inputs`, which is where it is checkable.
+The comment is now pinned by `caseStudyModelDocContract.test.ts`.
 
 Then `case_study_metrics.evidence_id` = that row's id. Both UUIDs are minted before either write, which the bare-UUID design explicitly permits (`CaseStudyMetric.ts:11-12`). The evidence row has no `updated_at` and no delete path in the Case Study services, so the run record is append-only by construction.
 

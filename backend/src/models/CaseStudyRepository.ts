@@ -23,7 +23,7 @@ export interface CaseStudyRepositoryAttributes {
   repo_owner: string;
   repo_name: string;
   repo_url: string;
-  /** primary | supporting | reference | other */
+  /** primary | frontend | backend | agents | data | infra | docs | evals | demo | other */
   role?: string;
   /** public | private | unknown */
   visibility?: string;
@@ -32,7 +32,7 @@ export interface CaseStudyRepositoryAttributes {
   default_branch?: string | null;
   last_seen_sha?: string | null;
   last_synced_at?: Date | null;
-  /** ok | unauthorized | not_found | unknown */
+  /** connected | read_only | unavailable | deleted | rate_limited | unknown */
   access_status?: string;
   allow_public_repo_link?: boolean;
   metadata?: Record<string, any>;
