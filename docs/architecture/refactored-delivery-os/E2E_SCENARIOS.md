@@ -153,8 +153,36 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 | C | Multi-project builder | ✅ Gates 2, 11, 12 | ⛔ no |
 | D | Government | ✅ Gates 5, 9, 13, 14 | ⛔ no |
 | E | Existing student Project | ✅ Gate 1 | ⛔ no |
-| F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ⛔ no |
+| F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ✅ **YES — 2026-08-28, passed** |
 | G | Production feedback | ✅ Gate 14 | ⛔ no |
+
+## Scenario F — executed 2026-08-28, PASSED
+
+Run against the dev instance by `scripts/e2e/scenarioF-crossTenant.js`:
+
+```
+[F] own tenant: Refactored.ai | foreign tenant: Career Pathways Network
+[F] foreign project exists: dfd8ae06-e0e8-41c2-b53a-fb1447a258dd
+
+  PASS  own project is reachable                             200
+  PASS  EXISTING foreign-tenant project returns 404, not 403 404
+  PASS  unknown id is indistinguishable from a foreign one   404
+  PASS  the attempt is recorded in TenantAccessAudit         true
+        resource_type=delivery_project action=read reason=project_not_in_client_session
+```
+
+**Writing it caught a real gap.** `requireDeliveryProjectAccess` logged a cross-tenant
+attempt to `ai_events` only — it never wrote `TenantAccessAudit`, the table that exists
+specifically to answer *who tried to read whose data*. The scenario asserts on that row,
+so it would have failed. Now recorded through `recordAccessDecision`.
+
+**The foreign project genuinely exists**, in a genuinely different tenant. An earlier
+spot-check used a random uuid, which proves less than it looks: an id matching nothing
+returns 404 from almost any implementation. A 403-shaped bug only shows against a real
+row belonging to someone else. The first assertion is the control — without it a blanket
+404 would read as a pass.
+
+---
 
 ## What it would take
 
@@ -170,3 +198,18 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 7. **Authorization** — §20 currently forbids the deploy that four of these require.
 
 Items 1–6 are engineering. Item 7 is a decision only Ali can make.
+
+### Status of that list as of 2026-08-28 — all seven are cleared
+
+| # | Blocker | Now |
+|---|---|---|
+| 1 | A deployable environment | ✅ dev and production both run the delivery OS |
+| 2 | The Agent SDK binding | ✅ `claudeAgentSdkProvider.ts` |
+| 3 | A GitHub Actions runner workflow | ✅ `delivery-execution-runner.yml` |
+| 4 | Schema rehearsal against real Postgres | ✅ 19 tables, 3 environments, identical |
+| 5 | An answer to the client identity question | ✅ magic-link sign-in, verified end to end |
+| 6 | Both UI surfaces | ✅ `ClientPortal` and `BuilderWorkspace` |
+| 7 | Authorization for the deploy | ✅ Ali authorised production |
+
+So the remaining six scenarios are blocked on **being written**, not on anything missing.
+F is done. A–E and G are the work.

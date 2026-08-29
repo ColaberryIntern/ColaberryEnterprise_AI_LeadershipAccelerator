@@ -7,6 +7,7 @@ import {
   CLIENT_TOKEN_TYPE,
   type ClientSessionClaims,
 } from '../modules/delivery/clientAuth';
+import { recordAccessDecision } from '../modules/tenancy/tenantAccessAudit';
 
 /**
  * deliveryClientAuth — the guard for the client review surface.
@@ -116,6 +117,39 @@ export function requireDeliveryProjectAccess(paramName = 'projectId') {
 
     if (!claims.delivery_project_ids.includes(requested)) {
       logAuthFailure('delivery_client_foreign_project', null, 'delivery_client', req.ip, req);
+
+      // Also record it in the tenant-isolation audit trail. This guard previously logged
+      // ONLY to ai_events, which meant a cross-tenant attempt against the client surface
+      // never reached the table that exists specifically to answer "who tried to read
+      // whose data". E2E scenario F asserts on that row, and it would have failed.
+      //
+      // Fire-and-forget by design: recordAccessDecision never affects an authorization
+      // outcome and resolves even when the write fails, so awaiting it would add latency
+      // to a refusal without changing it. The refusal below is already decided.
+      void recordAccessDecision({
+        ctx: {
+          platformIdentityId: claims.sub ?? null,
+          // A client session is deliberately not tenant-scoped: it carries project ids,
+          // not a tenant. Null is the honest value rather than a guess.
+          tenantId: null,
+          brandId: null,
+          organizationId: null,
+          roles: [],
+          isPlatformSuperAdmin: false,
+          authorizedTenantIds: [],
+        },
+        resourceType: 'delivery_project',
+        resourceId: requested,
+        action: 'read',
+        decision: 'denied',
+        reason: 'project_not_in_client_session',
+        actorEmail: claims.email ?? null,
+        ipAddress: req.ip ?? null,
+      }).catch(() => {
+        // recordAccessDecision already shouts about a failed write; swallowing here
+        // keeps a bookkeeping failure from surfacing as an unhandled rejection.
+      });
+
       res.status(404).json({ error: 'Not found' });
       return;
     }
