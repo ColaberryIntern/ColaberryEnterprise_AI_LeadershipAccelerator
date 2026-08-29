@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { getLearnerSkillProfile } from '../services/cape/capeProficiencyService';
 import { getSkillEvidenceHistory } from '../services/cape/capeSkillEvidenceHistoryService';
-import { skillProfileResponseSchema, architectureSkillIdSchema, skillEvidenceHistoryResponseSchema } from '../schemas/capeSchema';
+import { skillProfileResponseSchema, architectureSkillIdSchema, skillEvidenceHistoryResponseSchema } from '../schemas/capeSchema';
+import { checkResponseContract } from '../utils/responseContract';
 
 const eid = (req: Request) => req.participant!.sub;
 
@@ -25,16 +26,7 @@ function fail(res: Response, e: any, next: NextFunction) {
 export async function handleGetSkillProfile(req: Request, res: Response, next: NextFunction) {
   try {
     const profile = await getLearnerSkillProfile(eid(req));
-    if (process.env.NODE_ENV !== 'production') {
-      const parsed = skillProfileResponseSchema.safeParse(profile);
-      if (!parsed.success) {
-        console.warn(JSON.stringify({
-          timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
-          event: 'cape_skill_profile_contract_violation', outcome: 'partial',
-          context: { issues: parsed.error.issues.map((i) => i.message) },
-        }));
-      }
-    }
+    checkResponseContract('cape_skill_profile_contract_violation', skillProfileResponseSchema, profile);
     res.json(profile);
   } catch (e) { fail(res, e, next); }
 }
@@ -52,16 +44,7 @@ export async function handleGetSkillEvidenceHistory(req: Request, res: Response,
   }
   try {
     const history = await getSkillEvidenceHistory(eid(req), parsedSkill.data);
-    if (process.env.NODE_ENV !== 'production') {
-      const parsed = skillEvidenceHistoryResponseSchema.safeParse(history);
-      if (!parsed.success) {
-        console.warn(JSON.stringify({
-          timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
-          event: 'cape_skill_evidence_history_contract_violation', outcome: 'partial',
-          context: { issues: parsed.error.issues.map((i) => i.message) },
-        }));
-      }
-    }
+    checkResponseContract('cape_skill_evidence_history_contract_violation', skillEvidenceHistoryResponseSchema, history);
     res.json(history);
   } catch (e) { fail(res, e, next); }
 }
