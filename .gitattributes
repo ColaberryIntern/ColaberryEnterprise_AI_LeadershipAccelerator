@@ -37,3 +37,11 @@ PROGRESS.md merge=union
 # Same reasoning for the Claude Code hooks: .claude/settings.json invokes them via
 # `bash <path>`, and stray CR bytes in the body surface as `$'\r': command not found`.
 .claude/hooks/** text eol=lf
+
+# Every shell script, for exactly the same reason one rung up: these run on the
+# Linux production host, and a CRLF shebang fails with "bad interpreter". The two
+# rules above cover hooks only, so scripts/deploy-prod.sh - which is now the
+# production deploy control - was relying on git's default behaviour rather than a
+# guarantee. One careless commit from a machine with core.autocrlf=true would have
+# been enough to break deploys entirely.
+*.sh text eol=lf
