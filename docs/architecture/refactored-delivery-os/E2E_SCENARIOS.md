@@ -149,13 +149,49 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 | # | Scenario | Components built & unit-tested | E2E executed |
 |---|---|---|---|
 | A | Intern sandbox | ✅ Gates 7, 8, 9, 11 | ⛔ no |
-| B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ⛔ no — also blocked on identity |
+| B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ⚠️ **PARTIAL — 2026-08-29, projection half passed; acceptance half has no writer** |
 | C | Multi-project builder | ✅ Gates 2, 11, 12 | ⛔ no |
 | D | Government | ✅ Gates 5, 9, 13, 14 | ⛔ no |
 | E | Existing student Project | ✅ Gate 1 | ⛔ no |
 | F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ✅ **YES — 2026-08-28, passed** |
 | G | Production feedback | ✅ Gate 14 | ⛔ no |
 
+## Scenario B (projection half) — executed 2026-08-29, PASSED
+
+B's blocker in this doc was **client identity**. Magic-link sign-in resolved it.
+
+Run by `scripts/e2e/scenarioB-clientProjection.js`:
+
+```
+[B] stamped 4 private values on c3edcf4c-f0a7-4ff4-9a06-b30c2064693a
+
+  PASS  the client can actually reach the project            200
+  PASS  "workflow_summary" does not reach the client
+  PASS  "existing_system_summary" does not reach the client
+  PASS  "delivery_profile_key" does not reach the client
+  PASS  "trust_profile_key" does not reach the client
+  PASS  no forbidden-category field in the response          0
+  PASS  no project key outside the allowlist                 0
+```
+
+**It writes private data before reading.** A leak test against a project with nothing
+private in it proves nothing — the response would be clean because there was nothing to
+leak. The canaries are genuinely builder-shaped values stamped on the row the client CAN
+reach, so the test can fail for the right reason.
+
+The last assertion is the one that catches what the canaries did not anticipate: every key
+present must be named by the allowlist, not merely free of known-bad values.
+
+### NOT covered
+
+B's full chain ends in a `delivery_client_acceptances` row whose snapshots match what the
+client saw. **Nothing writes acceptances yet**, so that half is not executed and is not
+claimed. Marked PARTIAL rather than executed deliberately: a scenario marked done that
+quietly tested a third of itself is worse than one marked partial, because the first stops
+anybody looking again — which is how this document came to list seven blockers that had
+all been cleared.
+
+---
 ## Scenario F — executed 2026-08-28, PASSED
 
 Run against the dev instance by `scripts/e2e/scenarioF-crossTenant.js`:
