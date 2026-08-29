@@ -184,6 +184,45 @@ row belonging to someone else. The first assertion is the control — without it
 
 ---
 
+## Why A, C, D and G cannot be written as tests yet (2026-08-29)
+
+Scenario C was attempted and abandoned, for a reason worth recording.
+
+**The Gate 9-14 delivery logic has no production callers.** Verified per symbol against
+the non-test tree, after discarding two names that turned out not to exist at all:
+
+| Symbol | Gate | Real callers |
+|---|---|---|
+| `assessOverload` | 12 | **0** |
+| `decideCapacityOverride` | 12 | **0** |
+| `evaluateQualityGate` | 9 | **0** |
+| `evaluateReleaseGate` | 14 | **0** (its one hit is a doc comment) |
+| `assertModeIsSupportOnly` | 11 | **0** (doc comment) |
+| `resolveProfile` | 13 | **0** |
+| `summarizeLedger` | 11 | **0** |
+| `evaluateClaim` | 11 | 1, inside its own module |
+| `buildCaseStudy` | 15 | **9** - genuinely wired |
+
+These are well-designed, well-tested pure functions that nothing invokes. **The capacity
+guard does not guard**: a builder could be assigned a hundred projects and no code path
+would refuse, because no assignment path calls it.
+
+That is why C has nothing to observe. Its stated observable is *the fourth concurrent
+assignment is refused by `assessOverload`* - and there is no assignment path that consults
+it. A script calling `assessOverload` directly would duplicate the unit tests that already
+cover it (`capacityEconomics.test.ts` asserts the refusal, the override, `reliesOnOverride`,
+and the expiry fallback) while LOOKING like an executed scenario. That is the failure mode
+this document already fell into once.
+
+A, D and G are the same shape: their observables depend on the quality gate, delivery
+profiles and the release gate, none of which any runtime path reaches.
+
+**So the remaining scenarios are not blocked on being written. They are blocked on the
+gates being wired** - which is a build, not a test-writing exercise. F and B were
+executable precisely because the client surface IS wired end to end.
+
+---
+
 ## What it would take
 
 1. **A deployable environment** the delivery OS can run in — the dev instance, not
