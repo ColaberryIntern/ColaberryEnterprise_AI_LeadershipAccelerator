@@ -1,3 +1,5 @@
+import type { ZodType } from 'zod';
+
 /**
  * responseContract — check an outbound payload against its declared shape.
  *
@@ -30,10 +32,19 @@
  * existing, and it is small next to the database work that produced the payload.
  */
 
-/** The minimal surface this needs from a Zod schema, so the util imports no zod. */
-export interface SafeParsable {
-  safeParse(value: unknown): { success: boolean; error?: { issues: Array<{ path: (string | number)[]; message: string }> } };
-}
+/**
+ * The schema surface this needs.
+ *
+ * This was originally a hand-written structural type, on the reasoning that the util
+ * should not import zod. That was a false economy and it did not compile: zod's
+ * `safeParse` returns a DISCRIMINATED UNION (`{ success: true, data }` or
+ * `{ success: false, error }`), which is not assignable to a `{ success: boolean;
+ * error?: ... }` shape. Inventing a structural type instead of using the real one
+ * produced a type that agreed with my assumption and disagreed with zod.
+ *
+ * `ZodType` is the real thing, and zod is already a core dependency here.
+ */
+export type SafeParsable = Pick<ZodType, 'safeParse'>;
 
 /**
  * Validate `payload` against `schema` and log a structured warning if it drifts.
@@ -60,7 +71,7 @@ export function checkResponseContract(
       event,
       outcome: 'partial',
       context: {
-        issues: (parsed.error?.issues ?? []).map((i) =>
+        issues: parsed.error.issues.map((i) =>
           i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message,
         ),
       },

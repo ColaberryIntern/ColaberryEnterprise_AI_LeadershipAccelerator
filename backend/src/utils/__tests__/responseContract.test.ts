@@ -1,4 +1,4 @@
-import { checkResponseContract, checkWireContract } from '../responseContract';
+import { checkResponseContract, checkWireContract, type SafeParsable } from '../responseContract';
 
 /**
  * The response-contract checker.
@@ -13,13 +13,21 @@ import { checkResponseContract, checkWireContract } from '../responseContract';
  * NODE_ENV**.
  */
 
-const okSchema = { safeParse: () => ({ success: true }) };
+/**
+ * Test doubles, cast deliberately.
+ *
+ * `SafeParsable` is `Pick<ZodType, 'safeParse'>`, whose real signature is far wider than
+ * these stubs need. A double satisfying it structurally would be a partial
+ * reimplementation of zod, which would test zod rather than this helper. The cast says:
+ * this stands in for a schema, and only the success/error shape matters here.
+ */
+const okSchema = { safeParse: () => ({ success: true }) } as unknown as SafeParsable;
 const badSchema = {
   safeParse: () => ({
     success: false,
     error: { issues: [{ path: ['profile', 'name'], message: 'Required' }] },
   }),
-};
+} as unknown as SafeParsable;
 
 describe('checkResponseContract', () => {
   let warn: jest.SpyInstance;
@@ -63,7 +71,7 @@ describe('checkResponseContract', () => {
     };
     // The check itself is allowed to fail; what it must not do is take the response
     // down with it. If this ever throws, a contract check becomes an outage.
-    expect(() => checkResponseContract('e', exploding as never, {})).toThrow();
+    expect(() => checkResponseContract('e', exploding as unknown as SafeParsable, {})).toThrow();
     // Documented rather than silently swallowed: callers invoke this before res.json,
     // so a throwing schema is a programming error worth surfacing in tests - but no
     // schema in this repo throws, and a passing/failing parse never does.
@@ -73,7 +81,7 @@ describe('checkResponseContract', () => {
     const rootIssue = {
       safeParse: () => ({ success: false, error: { issues: [{ path: [], message: 'Expected object' }] } }),
     };
-    checkResponseContract('e', rootIssue, {});
+    checkResponseContract('e', rootIssue as unknown as SafeParsable, {});
     expect(JSON.parse(warn.mock.calls[0][0] as string).context.issues).toEqual(['Expected object']);
   });
 });
@@ -98,7 +106,7 @@ describe('checkWireContract', () => {
       },
     };
     const when = new Date('2026-08-28T00:00:00.000Z');
-    checkWireContract('e', recording, { when });
+    checkWireContract('e', recording as unknown as SafeParsable, { when });
     expect(seen[0]).toEqual({ when: '2026-08-28T00:00:00.000Z' });
     expect((seen[0] as { when: unknown }).when).not.toBeInstanceOf(Date);
   });
