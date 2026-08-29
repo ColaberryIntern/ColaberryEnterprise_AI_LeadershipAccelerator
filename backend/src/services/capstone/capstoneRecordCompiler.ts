@@ -31,6 +31,7 @@
 import {
   CapstoneRecord,
   RecordArtifact,
+  RecordCapability,
   RecordCompetency,
   RecordPost,
 } from './capstoneRecordContract';
@@ -65,6 +66,18 @@ export interface CompilerInputs {
     verification?: string | null;
   }>;
   competencies: Array<{ domain_id?: string | null; label?: string | null; evidence_count?: number }>;
+  /**
+   * Already MERGED by the caller. The compiler does not ratchet, because ratcheting
+   * needs prior state and this function must stay pure.
+   */
+  capabilities?: Array<{
+    id?: string | null;
+    label?: string | null;
+    present?: boolean;
+    count?: number;
+    proven?: boolean;
+    onSample?: boolean;
+  }>;
   posts: Array<{
     week?: number | null;
     headline?: string | null;
@@ -128,6 +141,32 @@ function compileCompetencies(rows: CompilerInputs['competencies']): RecordCompet
     .sort((a, b) => (b.evidence_count - a.evidence_count) || a.domain.localeCompare(b.domain));
 }
 
+/**
+ * What they built in their own repo.
+ *
+ * `present` is the gate, not `count`. A single module is `present` with `count: 1`, and
+ * requiring a count above zero would drop every non-collection capability.
+ *
+ * `proven` and `on_sample` are emitted ONLY when true. An absent flag reads as absent
+ * rather than as a denial, and `proven: false` printed beside a service would read as a
+ * failed demo rather than one that simply has not happened yet.
+ */
+function compileCapabilities(rows: CompilerInputs['capabilities']): RecordCapability[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    // `c &&` first: a null entry in the array must degrade to a shorter band, not a
+    // throw that takes the whole record compile down with it.
+    .filter((c) => c && typeof c === 'object' && c.present === true && clean(c.id))
+    .map((c) => ({
+      id: clean(c.id)!,
+      label: clean(c.label) ?? clean(c.id)!,
+      count: typeof c.count === 'number' && c.count > 0 ? Math.floor(c.count) : 1,
+      ...(c.proven === true ? { proven: true } : {}),
+      ...(c.onSample === true ? { on_sample: true } : {}),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 function compilePosts(rows: CompilerInputs['posts']): RecordPost[] {
   return rows
     .filter((p) => p.shared === true && typeof p.week === 'number' && clean(p.headline))
@@ -177,6 +216,12 @@ export function compileCapstoneRecord(inputs: CompilerInputs): CapstoneRecord {
     },
     artifacts: compileArtifacts(inputs.artifacts),
     competencies: compileCompetencies(inputs.competencies),
+    // Omitted entirely when empty, so a student with no connected repo gets no heading
+    // rather than an empty one. An empty band reads as failure; an absent band reads as
+    // "not this part of the story".
+    ...(compileCapabilities(inputs.capabilities).length
+      ? { capabilities: compileCapabilities(inputs.capabilities) }
+      : {}),
     posts,
     bookend: compileBookend(posts),
   };

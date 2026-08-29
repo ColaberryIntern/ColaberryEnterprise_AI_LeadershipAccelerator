@@ -183,3 +183,70 @@ describe('determinism', () => {
     expect(JSON.stringify(compileCapstoneRecord(inputs()))).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
 });
+
+describe('capabilities — what they built in their own repo', () => {
+  const withCaps = (capabilities: any) =>
+    compileCapstoneRecord(inputs({ capabilities })).capabilities;
+
+  it('omits the band entirely when there is nothing, rather than an empty heading', () => {
+    // An empty band reads as failure; an absent band reads as "not this part of
+    // the story". A student with no connected repo has not failed at anything.
+    expect(compileCapstoneRecord(inputs()).capabilities).toBeUndefined();
+    expect(withCaps([])).toBeUndefined();
+    expect(withCaps([{ id: 'workspace', present: false, count: 0 }])).toBeUndefined();
+  });
+
+  it('gates on `present`, not on count, so a single module survives', () => {
+    // Requiring count > 0 would drop every non-collection capability.
+    const out = withCaps([{ id: 'workspace', label: 'Workspace', present: true, count: 1 }]);
+    expect(out).toEqual([{ id: 'workspace', label: 'Workspace', count: 1 }]);
+  });
+
+  it('keeps a collection count as observed', () => {
+    // A count is distinct immediate children, decided by the reader. The compiler
+    // must not reinterpret it.
+    const out = withCaps([{ id: 'skills', label: 'Skills', present: true, count: 4 }]);
+    expect(out![0].count).toBe(4);
+  });
+
+  it('emits `proven` only when true, never as a denial', () => {
+    // `proven: false` printed beside a service reads as a FAILED demo rather than
+    // one that simply has not happened yet.
+    const built = withCaps([{ id: 'mcp', label: 'MCP server', present: true, count: 1 }]);
+    expect(built![0]).not.toHaveProperty('proven');
+
+    const shown = withCaps([{ id: 'mcp', label: 'MCP server', present: true, count: 1, proven: true }]);
+    expect(shown![0].proven).toBe(true);
+
+    const denied = withCaps([{ id: 'mcp', label: 'MCP', present: true, count: 1, proven: false }]);
+    expect(denied![0]).not.toHaveProperty('proven');
+  });
+
+  it('carries `on_sample` so the page never implies work on a real system', () => {
+    const out = withCaps([{ id: 'automation', label: 'Automation', present: true, count: 1, onSample: true }]);
+    expect(out![0].on_sample).toBe(true);
+    const own = withCaps([{ id: 'automation', label: 'Automation', present: true, count: 1 }]);
+    expect(own![0]).not.toHaveProperty('on_sample');
+  });
+
+  it('falls back to the id when no label is supplied, and never invents one', () => {
+    expect(withCaps([{ id: 'prompt_library', present: true, count: 5 }])![0].label)
+      .toBe('prompt_library');
+  });
+
+  it('is deterministic: same input, same output, stable order', () => {
+    const shuffled = [
+      { id: 'workspace', label: 'Workspace', present: true, count: 1 },
+      { id: 'automation', label: 'Automation', present: true, count: 1 },
+      { id: 'skills', label: 'Skills', present: true, count: 4 },
+    ];
+    expect(withCaps(shuffled)!.map((c) => c.label)).toEqual(['Automation', 'Skills', 'Workspace']);
+    expect(withCaps(shuffled)).toEqual(withCaps([...shuffled].reverse()));
+  });
+
+  it('does not throw on junk', () => {
+    for (const bad of [undefined, null, 'nope', 42, [null], [{}]]) {
+      expect(() => compileCapstoneRecord(inputs({ capabilities: bad as any }))).not.toThrow();
+    }
+  });
+});
