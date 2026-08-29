@@ -123,8 +123,17 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
   // persists an Inventory today, so without this the merge would always see `null` and
   // a single unreadable tree would silently strip the band on the next compile -- the
   // exact outcome the ratchet exists to prevent.
+  // Loaded BEFORE the capability block, because the sample/own join below needs it.
+  // Whether a capability was built against the provided sample is artifact evidence,
+  // not repository evidence -- a file tree cannot say whose inbox it was pointed at.
+  const { default: PortfolioArtifact } = await import('../../models/PortfolioArtifact');
+  const artifactRows: any[] = await PortfolioArtifact
+    .findAll({ where: { enrollment_id: project.enrollment_id, kind: 'build_artifact' } })
+    .catch(() => []);
+
   const { readCapabilitiesFromRepo } = await import('../sbp/capabilityRepoReader');
   const { mergeInventory, capabilityById } = await import('../sbp/capabilityInventory');
+  const { sampleFlagReader } = await import('./capabilitySampleFlags');
 
   const { default: CapstoneRecordModel } = await import('../../models/CapstoneRecord');
   const priorRecord: any = await CapstoneRecordModel
@@ -150,12 +159,21 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
     : null;
 
   const observed = await readCapabilitiesFromRepo(project.enrollment_id);
-  const inventory = mergeInventory(stored, observed);
 
-  const { default: PortfolioArtifact } = await import('../../models/PortfolioArtifact');
-  const artifactRows: any[] = await PortfolioArtifact
-    .findAll({ where: { enrollment_id: project.enrollment_id, kind: 'build_artifact' } })
-    .catch(() => []);
+  // Decorated BEFORE the merge, not after. `mergeInventory` honours an explicit `false`
+  // as "rebuilt on the real project, and it never goes back", which is how a student
+  // sheds the caveat by redoing the work -- applying it afterwards would bypass that.
+  // An `undefined` flag is left alone, so silence never clears a disclosure.
+  const sampleFlag = sampleFlagReader(artifactRows.map((row) => row.content || {}));
+  const observedWithSample: Inventory = {
+    ...observed,
+    entries: observed.entries.map((e) => {
+      const flag = sampleFlag(e.id);
+      return flag === undefined ? e : { ...e, onSample: flag };
+    }),
+  };
+
+  const inventory = mergeInventory(stored, observedWithSample);
 
   const inputs: CompilerInputs = {
     enrollment: {
