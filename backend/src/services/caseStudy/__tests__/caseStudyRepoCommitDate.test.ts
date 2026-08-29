@@ -18,6 +18,8 @@
  */
 import { analyzeRepository } from '../caseStudyRepoAnalyzer';
 import type { RepoAnalysisOutcome, RepoAnalysisSuccess } from '../caseStudyRepoAnalyzer';
+import { readCommitDate } from '../caseStudyRepoReader';
+import type { RepoAnalysisIssue } from '../caseStudyRepoReader';
 import { makeGitHubFake, json, SENTINEL_TOKEN } from './githubFetchFake';
 
 const SHA = 'c0ffee0000000000000000000000000000000000';
@@ -132,5 +134,67 @@ describe('the analyzer keeps the head commit date it already receives', () => {
       fetchImpl: gh.impl,
     });
     expect(gh.urls.filter((u) => u.includes('/commits'))).toHaveLength(1);
+  });
+});
+
+describe('readCommitDate — the date of ONE NAMED commit', () => {
+  const PINNED = '0123456789abcdef0123456789abcdef01234567';
+
+  /** One read against a chosen `/commits/{sha}` reply. */
+  async function readPinned(body: unknown, status = 200) {
+    const gh = makeGitHubFake({ commits: { status, body: JSON.stringify(body) } });
+    const issues: RepoAnalysisIssue[] = [];
+    const date = await readCommitDate(
+      'acme', 'atlas', PINNED,
+      { fetchImpl: gh.impl, correlationId: 'cid-pinned' },
+      issues
+    );
+    return { date, issues, gh };
+  }
+
+  it('reads the committer date of the sha it was asked for', async () => {
+    const { date, issues, gh } = await readPinned({
+      sha: PINNED,
+      commit: { author: { date: AUTHORED }, committer: { date: COMMITTED } },
+    });
+    expect(date).toBe(COMMITTED);
+    expect(issues).toEqual([]);
+    // The sha must be IN the path. Reading the branch head instead would make a
+    // published figure grow every time somebody pushes.
+    expect(gh.urls.some((u) => u.includes(`/commits/${PINNED}`))).toBe(true);
+  });
+
+  it('falls back to the author date when there is no committer', async () => {
+    const { date } = await readPinned({ sha: PINNED, commit: { author: { date: AUTHORED } } });
+    expect(date).toBe(AUTHORED);
+  });
+
+  it('returns null and classifies a 404 — a pin that is gone cannot be reproduced', async () => {
+    const { date, issues } = await readPinned({ message: 'No commit found for SHA' }, 404);
+    // Force-pushed away, or its branch deleted. That is a fact about the
+    // evidence, not a broken read, and it must not read as a zero.
+    expect(date).toBeNull();
+    expect(issues).toHaveLength(1);
+    expect(issues[0].error_class).toBe('RepoNotFound');
+  });
+
+  it('returns null on a malformed payload rather than throwing', async () => {
+    const { date, issues } = await readPinned({ nonsense: true });
+    expect(date).toBeNull();
+    expect(issues[0].message).toContain('not the expected shape');
+  });
+
+  it('keeps a wrong-typed date from costing the read', async () => {
+    // Same `.catch(undefined)` tolerance as the head read: the commit branch
+    // degrades, the parse still succeeds, and the caller gets a null date rather
+    // than a classified shape failure.
+    const { date, issues } = await readPinned({ sha: PINNED, commit: { committer: { date: 1773481800 } } });
+    expect(date).toBeNull();
+    expect(issues).toEqual([]);
+  });
+
+  it('costs exactly one request', async () => {
+    const { gh } = await readPinned({ sha: PINNED, commit: { committer: { date: COMMITTED } } });
+    expect(gh.urls).toHaveLength(1);
   });
 });
