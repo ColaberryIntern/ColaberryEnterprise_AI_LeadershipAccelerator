@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { runMetric } from '../../services/caseStudy/metrics/metricRunner';
 import { METRIC_DEFINITION_KEYS } from '../../services/caseStudy/metrics/metricDefinitions';
+import {
+  listMeasuredMetrics, MetricPromotionError, promoteMetric,
+} from '../../services/caseStudy/metrics/metricPromotion';
 import { ensureTraceId } from '../../utils/requestContext';
 
 /**
@@ -39,6 +42,19 @@ import { ensureTraceId } from '../../utils/requestContext';
 const router = Router();
 
 const idParams = z.object({ id: z.uuid() });
+
+const promoteParams = z.object({
+  id: z.uuid(),
+  // The key is a stable identifier, not free text; bounded so a pathological
+  // value cannot reach a query.
+  metricKey: z.string().trim().min(1).max(120),
+});
+
+const promoteBody = z.object({
+  verificationClass: z.enum(['verified', 'anonymized', 'illustrative', 'pending']),
+  publishable: z.boolean(),
+  isHeadline: z.boolean(),
+}).strict();
 
 const runBody = z.object({
   // The registry is the enum, so a key that no definition implements is refused
@@ -123,6 +139,83 @@ router.get(
   requireAdmin,
   (_req: Request, res: Response) => {
     res.json({ definitionKeys: METRIC_DEFINITION_KEYS });
+  }
+);
+
+/**
+ * Every measured figure on a record.
+ *
+ * THIS ENDPOINT IS WHY A MEASURED METRIC WAS INVISIBLE. The admin panel reads
+ * metrics from SNAPSHOT CONTENT, while `resolveChart` resolves against the
+ * `case_study_metrics` table — a mismatch already recorded in
+ * `AdminCaseStudyDetailPage.tsx`, whose comment ends "Closing that needs a
+ * metric-listing endpoint the API does not have." This is that endpoint.
+ */
+router.get(
+  '/api/admin/case-studies/:id/metrics',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const params = parse(idParams, req.params, res);
+    if (!params) return;
+    try {
+      res.json({ metrics: await listMeasuredMetrics(params.id) });
+    } catch {
+      res.status(500).json({ error: 'Could not load metrics', error_class: 'InternalError' });
+    }
+  }
+);
+
+/**
+ * Promote — or demote — a measured figure. The human half of the pipeline.
+ *
+ * THE ACTOR COMES FROM THE SESSION AND IS NEVER READ FROM THE BODY. Two
+ * independent things enforce that: the body schema is `.strict()` so an
+ * `actor` field is refused outright, and this line reads `req.admin` and
+ * nothing else. Either alone would do it; both together mean removing one does
+ * not open a hole. An identityless session is refused rather than defaulted —
+ * `|| 'admin'` here would be the whole difference between an audit column and
+ * a decoration, and that exact literal was removed from the Story Studio router
+ * for the same reason.
+ */
+router.post(
+  '/api/admin/case-studies/:id/metrics/:metricKey/promote',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const params = parse(promoteParams, req.params, res);
+    if (!params) return;
+    const body = parse(promoteBody, req.body, res);
+    if (!body) return;
+
+    const actor = (req.admin?.email || req.admin?.sub || '').trim();
+    if (!actor) {
+      res.status(400).json({
+        error: 'This decision is recorded against the person who made it, and your session carries no identity. Sign in again.',
+        error_class: 'ValidationError',
+      });
+      return;
+    }
+
+    try {
+      const promoted = await promoteMetric({
+        caseStudyId: params.id,
+        metricKey: params.metricKey,
+        verificationClass: body.verificationClass,
+        publishable: body.publishable,
+        isHeadline: body.isHeadline,
+        actor,
+        // Read once, here, like the run route's `computedAt`.
+        decidedAt: new Date().toISOString(),
+      });
+      res.json({ metric: promoted });
+    } catch (err) {
+      if (err instanceof MetricPromotionError) {
+        res.status(err.http_status).json({
+          error: err.message, error_class: err.error_class, ...err.details,
+        });
+        return;
+      }
+      res.status(500).json({ error: 'Promotion failed', error_class: 'InternalError' });
+    }
   }
 );
 
