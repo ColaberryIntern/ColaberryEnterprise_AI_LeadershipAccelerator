@@ -74,6 +74,7 @@ import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaV
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
 import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema';
 import { ensureAgentManagerConversationSchema } from './db/ensureAgentManagerConversationSchema';
+import { ensureAgentGoalSchema } from './db/ensureAgentGoalSchema';
 import { ensureAgentOneOnOneSchema } from './db/ensureAgentOneOnOneSchema';
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
@@ -2671,6 +2672,11 @@ async function start(): Promise<void> {
   // idempotent, no flag. No seeder writes to it; a manager writes the first
   // row via GET .../conversation (find-or-create) or POST .../messages.
   await ensureAgentManagerConversationSchema();
+  // AI Workforce Management, Checkpoint D — a manager-set target for a
+  // real, computable metric on an agent. Additive, idempotent, no flag. No
+  // seeder writes to it; a manager writes the first row via
+  // POST .../goals.
+  await ensureAgentGoalSchema();
   // AI Workforce Management, Checkpoint D — a manager's structured 1:1
   // check-in record with their agent. Additive, idempotent, no flag. No
   // seeder writes to it; a manager writes the first row via
