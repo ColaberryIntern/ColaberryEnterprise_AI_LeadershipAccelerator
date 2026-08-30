@@ -427,6 +427,8 @@ import CareerMentorScope from './CareerMentorScope';
 import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
 import DeliveryProjectMember from './DeliveryProjectMember';
 import DeliveryClientSigninToken from './DeliveryClientSigninToken';
+import DeliveryCapacityOverride from './DeliveryCapacityOverride';
+import DeliveryStory from './DeliveryStory';
 import DeliveryContract from './DeliveryContract';
 import DeliveryDecision from './DeliveryDecision';
 import DeliveryEvent from './DeliveryEvent';
@@ -1552,6 +1554,8 @@ export {
   CareerMentorScope,
   DeliveryProjectMember,
   DeliveryClientSigninToken,
+  DeliveryCapacityOverride,
+  DeliveryStory,
   DeliveryContract,
   DeliveryDecision,
   DeliveryEvent,

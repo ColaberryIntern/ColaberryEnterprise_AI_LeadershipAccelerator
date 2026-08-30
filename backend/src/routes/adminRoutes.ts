@@ -9,6 +9,7 @@ import leadRoutes from './admin/leadRoutes';
 import organizationRoutes from './admin/organizationRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
+import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
@@ -85,6 +86,7 @@ import managerDirectiveRoutes from './admin/managerDirectiveRoutes';
 import managerInboxRoutes from './admin/managerInboxRoutes';
 import agentManagerConversationRoutes from './admin/agentManagerConversationRoutes';
 import agentGoalRoutes from './admin/agentGoalRoutes';
+import agentOneOnOneRoutes from './admin/agentOneOnOneRoutes';
 import generatorRoutes from './admin/generatorRoutes';
 import autonomousIngestRoutes from './admin/autonomousRoutes';
 import automatedReportsRoutes from './admin/automatedReportsRoutes';
@@ -143,6 +145,15 @@ router.use(caseStudyAdminRoutes);
 // prefix would be deny-by-default for every scoped management role while legacy
 // admin passed, which is a surface that half-works and looks fine.
 router.use(caseStudyStudioRoutes);
+// Case Study metric runs. A THIRD sibling for the same reason the first two are
+// apart: the review desk is what a reviewer can do, Story Studio is what an
+// author can do, and this is what an operator can MEASURE. It is also the only
+// one of the three whose routes spend GitHub quota, which is worth being able to
+// see in one route table. Mounted identically — no path prefix, `requireAdmin`
+// on each route individually — and every path sits under
+// `/api/admin/case-studies`, so `mgmtSectionGate`'s existing `program` row
+// already covers it.
+router.use(caseStudyMetricRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
 router.use(settingsRoutes);
@@ -227,6 +238,7 @@ router.use(managerDirectiveRoutes);
 router.use(managerInboxRoutes);
 router.use(agentManagerConversationRoutes);
 router.use(agentGoalRoutes);
+router.use(agentOneOnOneRoutes);
 router.use(generatorRoutes);
 router.use(autonomousIngestRoutes);
 router.use(automatedReportsRoutes);
