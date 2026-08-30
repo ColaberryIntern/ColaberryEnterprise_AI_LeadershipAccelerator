@@ -35,11 +35,36 @@
 #   LOCK_WAIT=900 ./scripts/deploy-prod.sh   # wait longer for a busy box
 #   SKIP_PULL=1 ./scripts/deploy-prod.sh     # deploy what is already checked out
 #
+#   # dev, which needs its own project name and deploys detached commits:
+#   STACK_DIR=/opt/acc-rename COMPOSE_FILE=docker-compose.dev.yml \
+#     COMPOSE_PROJECT=accelerator-dev SKIP_PULL=1 ALLOW_DETACHED_HEAD=1 \
+#     DIRTY_ALLOW=.env.dev \
+#     ./scripts/deploy-prod.sh backend
+#
 set -euo pipefail
 
 STACK_DIR="${STACK_DIR:-/opt/colaberry-accelerator}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.production.yml}"
+# Dev compose ALWAYS needs an explicit -p; without it the project name is derived
+# from the directory and the containers are not the ones you think they are.
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-}"
+# ONE LOCK PER BOX, not per stack, and deliberately so. Dev and production share a
+# Docker daemon, CPU and a Postgres on this host, and parallel builds have OOM-ed
+# Postgres here before. A dev deploy queueing behind a production one is correct
+# behaviour rather than an inconvenience.
 LOCK_FILE="${LOCK_FILE:-/var/lock/colaberry-deploy.lock}"
+# Dev runs detached at whatever commit is being tested, so the origin/main check is
+# skipped there. It stays ON by default: silently letting production build something
+# other than main is exactly the mistake that check exists to prevent.
+ALLOW_DETACHED_HEAD="${ALLOW_DETACHED_HEAD:-0}"
+# Paths permitted to differ from the checkout. EMPTY by default, so production keeps
+# refusing any modification. Dev needs `.env.dev`, which is tracked and legitimately
+# differs per environment - without this the dirty-tree guard blocks every dev deploy,
+# and a guard that always fires gets bypassed rather than heeded.
+#
+# Space-separated exact paths, never a pattern: a pattern is how this quietly grows
+# until it covers the file that actually mattered.
+DIRTY_ALLOW="${DIRTY_ALLOW:-}"
 # Long enough to queue behind a real build, short enough to fail rather than hang
 # forever if a lock is somehow orphaned.
 LOCK_WAIT="${LOCK_WAIT:-600}"
@@ -53,6 +78,11 @@ fail() { printf '[deploy] FAILED: %s\n' "$*" >&2; exit 1; }
 
 command -v flock >/dev/null 2>&1 || fail "flock not available; cannot serialise deploys"
 cd "$STACK_DIR" || fail "stack directory not found: $STACK_DIR"
+
+COMPOSE_ARGS="-f $COMPOSE_FILE"
+if [ -n "$COMPOSE_PROJECT" ]; then
+  COMPOSE_ARGS="-p $COMPOSE_PROJECT $COMPOSE_ARGS"
+fi
 
 # ---------------------------------------------------------------------------
 # The lock. Everything below runs while holding it.
@@ -73,6 +103,11 @@ log "lock acquired; deploying: ${SERVICES[*]}"
 # Preflight. A dirty tree silently rebuilds stale code.
 # ---------------------------------------------------------------------------
 DIRTY="$(git status --porcelain | grep -v '^??' || true)"
+for allowed in $DIRTY_ALLOW; do
+  # Drop only lines whose path is exactly this entry.
+  DIRTY="$(printf '%s\n' "$DIRTY" | awk -v f="$allowed" '$NF != f' || true)"
+done
+DIRTY="$(printf '%s' "$DIRTY" | sed '/^[[:space:]]*$/d')"
 if [ -n "$DIRTY" ]; then
   printf '%s\n' "$DIRTY" >&2
   fail "tracked files are modified. Build would ship something other than origin/main."
@@ -86,7 +121,7 @@ fi
 git fetch origin --quiet || true
 HEAD_SHA="$(git rev-parse HEAD)"
 MAIN_SHA="$(git rev-parse origin/main)"
-if [ "$HEAD_SHA" != "$MAIN_SHA" ]; then
+if [ "$HEAD_SHA" != "$MAIN_SHA" ] && [ "$ALLOW_DETACHED_HEAD" != "1" ]; then
   fail "HEAD ($HEAD_SHA) is not origin/main ($MAIN_SHA). Refusing to build."
 fi
 log "building $HEAD_SHA"
@@ -97,7 +132,7 @@ log "building $HEAD_SHA"
 # ---------------------------------------------------------------------------
 BUILD_LOG="$(mktemp /tmp/deploy-XXXXXX.log)"
 set +e
-docker compose -f "$COMPOSE_FILE" up -d --build --no-deps "${SERVICES[@]}" >"$BUILD_LOG" 2>&1
+docker compose $COMPOSE_ARGS up -d --build --no-deps "${SERVICES[@]}" >"$BUILD_LOG" 2>&1
 BUILD_EXIT=$?
 set -e
 
@@ -121,7 +156,7 @@ fi
 sleep 3
 BAD=0
 for svc in "${SERVICES[@]}"; do
-  CID="$(docker compose -f "$COMPOSE_FILE" ps -q "$svc" || true)"
+  CID="$(docker compose $COMPOSE_ARGS ps -q "$svc" || true)"
   if [ -z "$CID" ]; then
     log "NOT RUNNING: $svc has no container"
     BAD=1
