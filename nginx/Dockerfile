@@ -19,12 +19,17 @@ RUN node apps/refactored-public/build.js
 
 FROM nginx:alpine
 COPY --from=builder /app/frontend/build /usr/share/nginx/html
-COPY --from=builder /app/apps/refactored-public/dist /usr/share/nginx/refactored-preview
+COPY --from=builder /app/apps/refactored-public/dist /usr/share/nginx/refactored
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
-# Its own server block on its own hostname; nginx loads every *.conf in conf.d. The
-# cutover config (nginx/refactored.conf) is deliberately NOT copied — it is not ready to
-# serve and must not activate by accident.
+# Two server blocks on their own hostnames; nginx loads every *.conf in conf.d.
+#
+# The cutover config is now shipped as well. That is safe because a server block only ever
+# responds to its own `server_name`, and nothing sends refactored.ai here until its DNS
+# moves — which is a separate, deliberate act. Shipping it now means the path can be
+# verified by Host header BEFORE any traffic depends on it, rather than discovering a
+# mistake at cutover.
 COPY nginx/refactored-preview.conf /etc/nginx/conf.d/refactored-preview.conf
+COPY nginx/refactored.conf         /etc/nginx/conf.d/refactored.conf
 # Included by nginx.conf at server level and re-included in every location that
 # declares its own add_header (nginx does not inherit add_header into those).
 COPY nginx/security-headers.conf /etc/nginx/security-headers.conf
