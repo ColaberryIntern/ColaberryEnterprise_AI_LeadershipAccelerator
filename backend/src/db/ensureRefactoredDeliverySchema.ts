@@ -742,6 +742,48 @@ export async function ensureRefactoredDeliverySchema(): Promise<void> {
  * identity - the rate limit has to work for addresses that match nobody, or it becomes an
  * enumeration oracle in itself.
  */
+/**
+ * Delivery stories.
+ *
+ * Gate 7 shipped the Story Contract as **pure logic with nowhere to live** - the comment
+ * above records that `delivery_stories` did not exist. That was survivable while nothing
+ * consumed a story, and it stopped being survivable the moment the quality gate was
+ * wired: `evaluateQualityGate` takes a `DeliveryStoryContract`, and there was no way to
+ * produce a persisted one.
+ *
+ * The contract is stored as JSONB in `contract` rather than exploded into twenty columns.
+ * `DeliveryStoryContract` has eighteen optional fields, most of them arrays, and it is
+ * still moving; a column per field would mean a migration every time Gate 7's shape
+ * changed, and `validateStoryContract` - not the database - is what decides whether a
+ * contract is well-formed. The columns that ARE promoted (`title`, `status`,
+ * `risk_level`) are the ones something queries or filters by.
+ *
+ * `story_key` is the caller's stable identifier - the `storyId` inside the contract -
+ * unique per project so a replayed create is an update rather than a duplicate. Two
+ * stories with the same id on one project would make evidence ambiguous, which is the
+ * one thing evidence cannot afford to be.
+ */
+const DELIVERY_STORIES: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_stories (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     story_key VARCHAR(120) NOT NULL,
+     title TEXT NOT NULL,
+     status VARCHAR(30) NOT NULL DEFAULT 'proposed',
+     risk_level VARCHAR(20),
+     is_ui_story BOOLEAN NOT NULL DEFAULT FALSE,
+     contract JSONB NOT NULL,
+     created_by_identity_id UUID,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // One story per key per project. Evidence joins on story_id, so a duplicate key would
+  // make it ambiguous which story a piece of evidence proved anything about.
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_stories_project_key_unique
+     ON delivery_stories (delivery_project_id, story_key)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_stories_project_status
+     ON delivery_stories (delivery_project_id, status)`,
+];
 const CLIENT_MAGIC_LINK: string[] = [
   `CREATE TABLE IF NOT EXISTS delivery_client_signin_tokens (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -773,5 +815,6 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...QUALITY_EVIDENCE,
   ...CLIENT_REVIEW_ROOM,
   ...CAPACITY_AND_ECONOMICS,
+  ...DELIVERY_STORIES,
   ...CLIENT_MAGIC_LINK,
 ];
