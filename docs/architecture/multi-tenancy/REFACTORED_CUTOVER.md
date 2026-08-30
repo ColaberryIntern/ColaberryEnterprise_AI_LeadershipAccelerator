@@ -32,40 +32,65 @@ to the existing origin untouched. Each page moves from *proxied* to *ours* as it
 redesigned. That turns one irreversible decision into a series of reversible ones, and the
 worst case for a marketing page becomes a marketing page rather than a locked-out student.
 
-## Two traps encoded in the config
+## Three traps encoded in the config
 
-**Proxy by IP, never by name.** Once DNS points here, `proxy_pass https://refactored.ai`
-resolves to *us* and loops until nginx runs out of workers. `54.218.30.47` is the only
-address that still means "the old box" after the cutover.
+**Proxy to the NLB's hostname, not to an IP.** An earlier revision of this file hardcoded
+`54.218.30.47` and called it "the old box". It is not a box — it is whatever the prod
+Network Load Balancer currently resolves to, and **NLB addresses rotate**. That version
+would have passed every test and then broken silently, weeks later, the first time AWS
+moved it. The config now targets
+`refactored-nlb-prod-2edb9df08b1ba450.elb.us-west-2.amazonaws.com`.
+
+**Assign the upstream name to a variable.** nginx resolves a literal hostname in
+`proxy_pass` exactly once, at startup, which would reintroduce the same staleness a
+restart later. A variable forces per-request resolution against the configured `resolver`.
+
+Proxying by name is safe *here* only because the NLB hostname always means the load
+balancer. Proxying to `refactored.ai` itself would resolve to **us** after the cutover and
+loop until nginx ran out of workers.
 
 **`try_files` discards `add_header`.** The fallback into `@legacy` is an internal redirect,
 so headers set in the outer block are dropped. Any header that must survive belongs in the
 location that finally serves the response.
 
-## Prerequisite that is NOT yet solved: TLS
+## TLS: use certbot with DNS-01. Do NOT move the zone to Cloudflare.
 
-This is the real remaining blocker, and it is worth being explicit about.
+An earlier revision of this document recommended moving `refactored.ai` to Cloudflare, on
+the same reasoning that every other Colaberry domain lives there. **That recommendation was
+wrong, and it was wrong because it was made before anyone read the zone.**
 
-`enterprise.colaberry.ai` is fronted by **Cloudflare**, which terminates TLS and talks to
-our nginx over plain HTTP — which is why the existing server blocks only `listen 80`.
+Exporting the Route 53 zone showed 45 records. `refactored.ai` is not a website's domain —
+it is the DNS root of a live platform:
 
-`refactored.ai` is on **Route 53 pointing straight at EC2**. There is no Cloudflare in
-front of it. So pointing it at this server means our nginx has to answer HTTPS for
-`refactored.ai` and `www.refactored.ai`, and it currently holds no certificate for either.
-
-Two ways to solve it, and this is a decision rather than a detail:
-
-| Option | What it means |
+| What is on it | Records |
 |---|---|
-| **Put Cloudflare in front**, as the Colaberry domains already are | Consistent with the rest of the estate; TLS terminates at Cloudflare; nginx keeps listening on 80. Requires moving the domain's DNS to Cloudflare. |
-| **Issue a certificate on this server** (certbot / Let's Encrypt) | Keeps DNS in Route 53. Adds a renewal to maintain, and the cert can only be issued once the domain already points here — so there is a brief ordering problem to plan around. |
+| **Auth0 customer login** | `login.refactored.ai` → `…edge.tenants.auth0.com` |
+| **Two load balancers** | prod + stage NLBs behind apex, `www`, `accounts`, `survey`, `stage`, `stgaccounts`, `stgsurvey` |
+| **Internal infrastructure** | `jenkins`, `git`, `vpn`, `api`, `testapi`, `docs`, `stage-accounts-k8s` |
+| **Four email senders** | Google MX; Mandrill SPF + 3 DKIM; SendGrid `em.` + s1/s2; Mailchimp k2/k3; Amazon SES ×3 — all under `DMARC p=reject` |
+| **8 ACM validation CNAMEs** | auto-renewing AWS certificates |
+| **3 `_acme-challenge` TXT** | Let's Encrypt renewals |
+
+Moving the nameservers would migrate customer authentication, CI, VPN, staging and four
+email providers in a single cutover, under a DMARC policy where a missed DKIM record means
+mail is **rejected**, not degraded. There is also a hard technical blocker: Route 53 ALIAS
+records do not exist in Cloudflare, and the apex is an ALIAS to an NLB. Cloudflare can
+approximate it with CNAME flattening, but that is a behaviour change at the root of a live
+platform.
+
+**Certbot with a DNS-01 challenge is strictly better here.** It proves control by writing
+one TXT record through the Route 53 API and deleting it again. Nothing else in the zone is
+touched, the certificate exists *before* any traffic moves so there is no ordering problem,
+and renewal automates through the same API. The blast radius is one temporary TXT record
+rather than an entire platform's DNS.
 
 ## Order of operations
 
-1. **Snapshot the EC2 instance** (optional but cheap). Not strictly required: as long as
-   the old box keeps running, rollback is a DNS change back. It matters only if that
-   instance is ever going to be deleted.
-2. **Resolve TLS** — pick one of the two options above.
+1. **No EC2 snapshot is needed.** An earlier revision suggested one; the origin is not a
+   single EC2 instance we could snapshot, it is a Network Load Balancer fronting a fleet.
+   Rollback is a DNS change back, and the old stack keeps running untouched throughout.
+2. **Issue the certificate with certbot DNS-01** against Route 53, for `refactored.ai`
+   and `www.refactored.ai`. Do this first: it needs no traffic to have moved.
 3. **Serve the rebuild on a subdomain first** and compare it against the live site
    side by side. Nothing customer-facing changes at this step.
 4. **Run `seedEcosystem`** so the `www.refactored.ai` brand domain row reaches production.
@@ -83,6 +108,11 @@ Two ways to solve it, and this is a decision rather than a detail:
 - **The 1,908 catalogue pages are not rebuilt.** They are proxied. Migrating that content
   is a separate project with a different shape.
 - **Assets still load from the legacy CloudFront distribution**
-  (`d2quzus90i2gii.cloudfront.net`). That is a *separate* AWS resource from the EC2
-  instance — if the instance is ever decommissioned, verify the distribution independently
-  or the pages lose their styling.
+  (`d2quzus90i2gii.cloudfront.net`). That is a *separate* AWS resource from the load
+  balancer and its targets — if the old stack is ever decommissioned, verify the
+  distribution independently or the pages lose their styling.
+- **Nothing else in the zone is touched.** Only `refactored.ai` and `www.refactored.ai`
+  change. `login` (Auth0), `accounts`, `survey`, `api`, `git`, `jenkins`, `vpn`, every
+  `stg*` host, all four email senders and all eleven certificate-validation records keep
+  pointing exactly where they point today. That is the whole argument for changing two
+  records rather than migrating a zone.
