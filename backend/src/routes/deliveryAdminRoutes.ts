@@ -1,6 +1,7 @@
 import { Request, Response, Router } from 'express';
 import { requireAdmin } from '../middlewares/authMiddleware';
 import { assignBuilderToProject } from '../services/delivery/builderAssignment';
+import { evaluateStoryGate, recordEvidence, upsertStory } from '../services/delivery/storyEvidence';
 
 /**
  * deliveryAdminRoutes — the operator side of the delivery OS. One action, to begin with.
@@ -103,4 +104,138 @@ router.post(
   },
 );
 
+/**
+ * POST /api/refactored/admin/projects/:projectId/stories
+ *
+ * Body: a `DeliveryStoryContract` plus optional `isUiStory`.
+ *
+ * **A contract with blocking issues is refused, not stored.** Gate 7's validator draws
+ * the line at whether a problem would mislead about what is being built; storing one
+ * that misleads means the quality gate later reasons about a story that does not
+ * describe reality, and every verdict after that is worthless. Warnings are returned
+ * and stored, because a thin contract is still a real one.
+ */
+router.post(
+  '/api/refactored/admin/projects/:projectId/stories',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    const contract = req.body?.contract;
+    if (!projectId || !contract || typeof contract.storyId !== 'string') {
+      res.status(400).json({ error: 'projectId and a contract with a storyId are required.' });
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const models = require('../models');
+      const out = await upsertStory({
+        projectId,
+        contract,
+        isUiStory: req.body?.isUiStory === true,
+        actorIdentityId: null,
+        models,
+      });
+
+      if ('refused' in out) {
+        // 422: the request was well-formed JSON but the contract itself is not valid.
+        res.status(422).json({ error: 'The story contract has blocking issues.', issues: out.issues });
+        return;
+      }
+      res.status(out.created ? 201 : 200).json(out);
+    } catch (err) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'delivery-admin',
+        event: 'story_upsert_failed', outcome: 'failure',
+        error_class: (err as Error)?.constructor?.name ?? 'Error', context: { projectId },
+      }));
+      res.status(500).json({ error: 'Could not save the story.' });
+    }
+  },
+);
+
+/**
+ * POST /api/refactored/admin/projects/:projectId/evidence
+ *
+ * Records one measurement. **Idempotent** on the Gate 9 key, because master plan §15
+ * requires a replayed execution callback to produce no duplicate evidence - a runner
+ * retrying a webhook is the normal case, and two rows for one measurement would let a
+ * single test run satisfy a dimension twice.
+ */
+router.post(
+  '/api/refactored/admin/projects/:projectId/evidence',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    const { dimension, evidenceType, outcome } = req.body ?? {};
+    if (!projectId || !dimension || !evidenceType || !outcome) {
+      res.status(400).json({ error: 'dimension, evidenceType and outcome are required.' });
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const models = require('../models');
+      const out = await recordEvidence({
+        projectId,
+        storyId: typeof req.body?.storyId === 'string' ? req.body.storyId : null,
+        dimension,
+        evidenceType,
+        outcome,
+        subjectSha: req.body?.subjectSha ?? null,
+        sourceRef: req.body?.sourceRef ?? null,
+        payload: req.body?.payload ?? null,
+        models,
+      });
+      // 200 rather than 201 on a dedup: nothing was created, and a caller retrying a
+      // webhook should be able to tell that from the status alone.
+      res.status(out.deduped ? 200 : 201).json(out);
+    } catch (err) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'delivery-admin',
+        event: 'evidence_record_failed', outcome: 'failure',
+        error_class: (err as Error)?.constructor?.name ?? 'Error', context: { projectId },
+      }));
+      res.status(500).json({ error: 'Could not record the evidence.' });
+    }
+  },
+);
+
+/**
+ * GET /api/refactored/admin/projects/:projectId/stories/:storyKey/quality-gate
+ *
+ * Runs Gate 9 against the evidence **actually recorded** for the story. The caller
+ * chooses which story and which commit; it does not get to supply the evidence, because
+ * a caller passing its own list could pass the gate by describing a healthier world than
+ * the one that exists.
+ *
+ * Returns 200 with the verdict either way - a failing gate is an answer, not an error.
+ */
+router.get(
+  '/api/refactored/admin/projects/:projectId/stories/:storyKey/quality-gate',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    const storyKey = typeof req.params?.storyKey === 'string' ? req.params.storyKey : '';
+    const candidateSha = typeof req.query?.sha === 'string' ? req.query.sha : null;
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const models = require('../models');
+      const out = await evaluateStoryGate({ projectId, storyKey, candidateSha, models });
+      if (!out) {
+        res.status(404).json({ error: 'No such story on this project.' });
+        return;
+      }
+      res.json(out);
+    } catch (err) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'delivery-admin',
+        event: 'quality_gate_failed', outcome: 'failure',
+        error_class: (err as Error)?.constructor?.name ?? 'Error', context: { projectId, storyKey },
+      }));
+      res.status(500).json({ error: 'Could not evaluate the quality gate.' });
+    }
+  },
+);
 export default router;
