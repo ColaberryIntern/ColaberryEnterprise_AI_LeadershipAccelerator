@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import request from 'supertest';
 
@@ -16,11 +18,25 @@ import request from 'supertest';
  */
 
 const runMetric = jest.fn();
+const promoteMetric = jest.fn();
+const listMeasuredMetrics = jest.fn();
 
 jest.mock('../../../services/caseStudy/metrics/metricRunner', () => ({
   __esModule: true,
   runMetric: (...a: any[]) => runMetric(...a),
 }));
+
+jest.mock('../../../services/caseStudy/metrics/metricPromotion', () => {
+  const actual = jest.requireActual('../../../services/caseStudy/metrics/metricPromotion');
+  return {
+    __esModule: true,
+    // The real error class, so the route's `instanceof` check is exercised
+    // rather than bypassed by a stand-in that only looks like it.
+    MetricPromotionError: actual.MetricPromotionError,
+    promoteMetric: (...a: any[]) => promoteMetric(...a),
+    listMeasuredMetrics: (...a: any[]) => listMeasuredMetrics(...a),
+  };
+});
 
 let allowAdmin = true;
 jest.mock('../../../middlewares/authMiddleware', () => ({
@@ -32,6 +48,9 @@ jest.mock('../../../middlewares/authMiddleware', () => ({
   },
 }));
 
+// Resolves through the mock above, which re-exports the REAL class — so the
+// route's `instanceof` check is exercised rather than bypassed by a stand-in.
+import { MetricPromotionError } from '../../../services/caseStudy/metrics/metricPromotion';
 import caseStudyMetricRoutes from '../caseStudyMetricRoutes';
 
 const CASE_ID = '11111111-1111-4111-8111-111111111111';
@@ -64,6 +83,8 @@ describe('authorization', () => {
   const ROUTES: ReadonlyArray<[string, string]> = [
     ['post', RUN_PATH],
     ['get', '/api/admin/case-studies/metrics/definitions'],
+    ['get', `/api/admin/case-studies/${CASE_ID}/metrics`],
+    ['post', `/api/admin/case-studies/${CASE_ID}/metrics/delivery_elapsed_days/promote`],
   ];
 
   it.each(ROUTES)('%s %s refuses an unauthenticated caller', async (method, path) => {
@@ -200,6 +221,106 @@ describe('the definitions listing', () => {
     const res = await request(app()).get('/api/admin/case-studies/metrics/definitions');
     expect(res.status).toBe(200);
     expect(res.body.definitionKeys).toContain('delivery_elapsed_days');
+  });
+});
+
+describe('listing the measured figures', () => {
+  const LIST_PATH = `/api/admin/case-studies/${CASE_ID}/metrics`;
+
+  it('returns what the panel has never been able to see', async () => {
+    listMeasuredMetrics.mockResolvedValue([
+      { metricKey: 'delivery_elapsed_days', valueDisplay: '181 days', publishable: false },
+    ]);
+    const res = await request(app()).get(LIST_PATH);
+    expect(res.status).toBe(200);
+    expect(res.body.metrics[0].metricKey).toBe('delivery_elapsed_days');
+    expect(listMeasuredMetrics).toHaveBeenCalledWith(CASE_ID);
+  });
+
+  it('refuses a case study id that is not a uuid', async () => {
+    const res = await request(app()).get('/api/admin/case-studies/nope/metrics');
+    expect(res.status).toBe(400);
+    expect(listMeasuredMetrics).not.toHaveBeenCalled();
+  });
+});
+
+describe('promoting a figure', () => {
+  const PROMOTE_PATH = `/api/admin/case-studies/${CASE_ID}/metrics/delivery_elapsed_days/promote`;
+  const body = { verificationClass: 'verified', publishable: true, isHeadline: false };
+
+  beforeEach(() => {
+    promoteMetric.mockResolvedValue({
+      metricKey: 'delivery_elapsed_days', verificationClass: 'verified',
+      verificationMethod: 'repo', publishable: true, isHeadline: false,
+      verifiedBy: 'ali@colaberry.com', verifiedAt: '2026-08-31T10:00:00Z',
+    });
+  });
+
+  it('passes the session identity as the actor', async () => {
+    const res = await request(app()).post(PROMOTE_PATH).send(body);
+    expect(res.status).toBe(200);
+    // Taken from the session, never from the request body: a caller must not be
+    // able to promote a figure in somebody else's name.
+    expect(promoteMetric.mock.calls[0][0].actor).toBe('ali@colaberry.com');
+    expect(res.body.metric.verifiedBy).toBe('ali@colaberry.com');
+  });
+
+  it('will not let the request body choose who is credited', async () => {
+    await request(app()).post(PROMOTE_PATH).send({ ...body, actor: 'someone.else@example.com' });
+    // `.strict()` refuses the field outright, so there is no path where a
+    // supplied name reaches the service.
+    expect(promoteMetric).not.toHaveBeenCalled();
+  });
+
+  it('never reads the actor from the request body, independent of the schema', () => {
+    // A REQUEST-LEVEL TEST CANNOT SEE THIS. `.strict()` refuses an `actor` field,
+    // so a handler reading `req.body.actor` behaves identically to one reading
+    // the session — every assertion above passes either way, which a mutation
+    // confirmed. The hole only opens if BOTH the schema and this line change, so
+    // the second defence is pinned here against the source rather than the
+    // response.
+    const src = fs.readFileSync(
+      path.join(__dirname, '..', 'caseStudyMetricRoutes.ts'), 'utf8'
+    );
+    const handler = src.slice(src.indexOf('/metrics/:metricKey/promote'));
+    expect(handler).toContain("req.admin?.email || req.admin?.sub");
+    expect(handler).not.toMatch(/req\.body[^\n]*actor/);
+    // Non-vacuity: the slice really is the promote handler.
+    expect(handler).toContain('promoteMetric(');
+  });
+
+  it('refuses an unknown verification class', async () => {
+    const res = await request(app()).post(PROMOTE_PATH).send({ ...body, verificationClass: 'trustworthy' });
+    expect(res.status).toBe(400);
+    expect(promoteMetric).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a self-verification refusal as a 400 with its class', async () => {
+    promoteMetric.mockRejectedValue(
+      new MetricPromotionError('SelfVerification', 'A self-report is not third-party verification.')
+    );
+    const res = await request(app()).post(PROMOTE_PATH).send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.error_class).toBe('SelfVerification');
+    // The operator needs to know WHICH rule stopped them, while they can still
+    // change the choice.
+    expect(res.body.error).toContain('third-party verification');
+  });
+
+  it('surfaces an unmeasured metric as a 404', async () => {
+    promoteMetric.mockRejectedValue(
+      new MetricPromotionError('MetricNotFound', 'Run it first.', { metricKey: 'x' })
+    );
+    const res = await request(app()).post(PROMOTE_PATH).send(body);
+    expect(res.status).toBe(404);
+    expect(res.body.error_class).toBe('MetricNotFound');
+  });
+
+  it('maps an unexpected failure to 500 without leaking its message', async () => {
+    promoteMetric.mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432 as cs_admin'));
+    const res = await request(app()).post(PROMOTE_PATH).send(body);
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('cs_admin');
   });
 });
 
