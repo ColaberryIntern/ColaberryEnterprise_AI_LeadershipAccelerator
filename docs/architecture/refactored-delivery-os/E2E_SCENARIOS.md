@@ -150,12 +150,55 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 |---|---|---|---|
 | A | Intern sandbox | ✅ Gates 7, 8, 9, 11 | ⛔ no |
 | B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ⚠️ **PARTIAL — 2026-08-29, projection half passed; acceptance half has no writer** |
-| C | Multi-project builder | ✅ Gates 2, 11, 12 | ⛔ no |
+| C | Multi-project builder | ✅ Gates 2, 11, 12 | ✅ **YES — 2026-08-30, passed** (mentor-exception half still unwired) |
 | D | Government | ✅ Gates 5, 9, 13, 14 | ⛔ no |
 | E | Existing student Project | ✅ Gate 1 | ⛔ no |
 | F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ✅ **YES — 2026-08-28, passed** |
 | G | Production feedback | ✅ Gate 14 | ⛔ no |
 
+## Scenario C — executed 2026-08-30, PASSED
+
+**C could not be written until Gate 12 was wired.** `assessOverload` had zero production
+callers and there was no assignment path at all, so there was nothing to refuse. A script
+calling the pure function directly would have duplicated `capacityEconomics.test.ts` while
+looking like an executed scenario.
+
+`POST /api/refactored/admin/projects/:id/assign` now consults the capacity model, so every
+assertion below drives the real endpoint:
+
+```
+  PASS  assignment 1 of 3 is accepted                      201
+  PASS  assignment 2 of 3 is accepted                      201
+  PASS  assignment 3 of 3 is accepted                      201
+  PASS  the FOURTH assignment is refused                   409
+  PASS    refused for capacity, not something else         overloaded
+  PASS    and nothing was written                          3
+  PASS  a LIVE override admits the fourth                  201
+  PASS    and the reliance is surfaced                     true
+  PASS  an EXPIRED override no longer lifts the cap        409
+  PASS    refused for capacity                             overloaded
+  PASS  a client-side role is refused by the builder path  422
+```
+
+Three of those matter more than the rest:
+
+**Nothing was written on refusal.** A guard that says no and assigns anyway is worse than
+no guard, because it reports safety it did not deliver.
+
+**The expired override no longer lifts the cap.** This spec calls that out as the part
+that rots silently, and it is right: every other assertion here would still pass if expiry
+broke.
+
+**The fourth is refused, not the fifth.** The service assesses the assignment being
+CONSIDERED (`activeProjects + 1`). Assessing the current count would find `3 <= 3` and
+allow it, letting every builder land exactly one over their cap forever.
+
+### NOT covered
+
+The `builder_overloaded` **mentor exception** half. `mentorExceptions` is still unwired, so
+nothing raises one from this path. Marked partial in that respect rather than claimed.
+
+---
 ## Scenario B (projection half) — executed 2026-08-29, PASSED
 
 B's blocker in this doc was **client identity**. Magic-link sign-in resolved it.
