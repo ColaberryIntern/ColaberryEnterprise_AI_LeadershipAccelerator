@@ -48,7 +48,7 @@ interface CapstoneRecord {
     repo_url: string | null; demo_url: string | null; certification: string | null;
   };
   system: {
-    project_name: string | null; descriptor: string | null;
+    project_name: string | null; what_it_does: string | null; descriptor: string | null;
     architecture_mermaid: string | null; hours_reclaimed: number | null;
   };
   artifacts: RecordArtifact[];
@@ -175,28 +175,57 @@ function CapstoneRecordPage() {
         )}
       </header>
 
-      {/* The system */}
-      {(system.project_name || system.descriptor) && (
+      {/* THE SYSTEM, in one line.
+          The descriptor is a full generated strategy document -- eight numbered
+          sections, a roadmap table whose rows read "Architecture - 0 artifact(s)" and
+          "Portfolio - Pending", an ROI forecast for work not yet done. Leading with it
+          buried the actual work under a proposal and advertised incompleteness to the
+          one audience this page exists to persuade. It now sits behind a disclosure at
+          the foot of the page; what a reader needs first is what the thing does. */}
+      {(system.project_name || system.what_it_does) && (
         <Section title="What they built">
           {system.project_name && (
-            <h3 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px' }}>{system.project_name}</h3>
+            <h3 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 8px' }}>{system.project_name}</h3>
           )}
-          {system.descriptor && (
-            /* Markdown, not a paragraph. The descriptor is compiled from the project's
-               executive deliverable and is a full document -- headings, GFM tables, bold.
-               Rendered flat it reached hiring managers as a wall of literal ## and |. */
-            <div style={{ fontSize: 15.5, color: BODY }}>
-              <RecordProse>{system.descriptor}</RecordProse>
-            </div>
+          {system.what_it_does && (
+            <p style={{ fontSize: 16.5, color: BODY, margin: 0, maxWidth: '62ch' }}>
+              {system.what_it_does}
+            </p>
           )}
-          {/* `> 0`, not just `is a number`. A compiled 0 rendered as
-              "0 hours a month reclaimed", which reads as a measured result of nothing --
-              the record's own rule is that an absent band renders as absent. */}
           {typeof system.hours_reclaimed === 'number' && system.hours_reclaimed > 0 && (
             <p style={{ fontSize: 14, color: MUTED, marginTop: 12, marginBottom: 0 }}>
               {system.hours_reclaimed} hours a month reclaimed
             </p>
           )}
+        </Section>
+      )}
+
+      {capabilities.length > 0 && (
+        <Section title="Proven in their repo">
+          <div style={{ display: 'grid', gap: 10 }}>
+            {capabilities.map((c) => (
+              <div key={c.id} style={{
+                display: 'flex', justifyContent: 'space-between', gap: 12,
+                paddingBottom: 10, borderBottom: `1px solid ${LINE}`, flexWrap: 'wrap',
+              }}>
+                <span style={{ color: INK, fontWeight: 600 }}>
+                  {c.label}
+                  {/* Week 3 permits building against the sample. Saying so is the point:
+                      silence here would imply work on a real system. */}
+                  {c.on_sample && (
+                    <span style={{ color: MUTED, fontWeight: 500 }}> · built on the sample</span>
+                  )}
+                </span>
+                <span style={{ color: MUTED, fontSize: 13.5 }}>
+                  {c.count > 1 && <>{c.count} of them</>}
+                  {/* `proven` means a run was evidenced. Its ABSENCE is not a denial, so
+                      nothing is printed for it -- a service can be built and not yet
+                      demonstrated, and that is an honest state. */}
+                  {c.proven && <>{c.count > 1 ? ' · ' : ''}demonstrated</>}
+                </span>
+              </div>
+            ))}
+          </div>
         </Section>
       )}
 
@@ -264,35 +293,6 @@ function CapstoneRecordPage() {
 
       {/* What they built in their own repo. Separate from "What they can prove":
           competencies are assessed, these are committed files. */}
-      {capabilities.length > 0 && (
-        <Section title="Built in their repo">
-          <div style={{ display: 'grid', gap: 10 }}>
-            {capabilities.map((c) => (
-              <div key={c.id} style={{
-                display: 'flex', justifyContent: 'space-between', gap: 12,
-                paddingBottom: 10, borderBottom: `1px solid ${LINE}`, flexWrap: 'wrap',
-              }}>
-                <span style={{ color: INK, fontWeight: 600 }}>
-                  {c.label}
-                  {/* Week 3 permits building against the sample. Saying so is the point:
-                      silence here would imply work on a real system. */}
-                  {c.on_sample && (
-                    <span style={{ color: MUTED, fontWeight: 500 }}> · built on the sample</span>
-                  )}
-                </span>
-                <span style={{ color: MUTED, fontSize: 13.5 }}>
-                  {c.count > 1 && <>{c.count} of them</>}
-                  {/* `proven` means a run was evidenced. Its ABSENCE is not a denial, so
-                      nothing is printed for it -- a service can be built and not yet
-                      demonstrated, and that is an honest state. */}
-                  {c.proven && <>{c.count > 1 ? ' · ' : ''}demonstrated</>}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
       {/* Their words */}
       {posts.length > 0 && (
         <Section title="In their words">
@@ -310,6 +310,24 @@ function CapstoneRecordPage() {
             </div>
           ))}
         </Section>
+      )}
+
+      {/* The generated write-up, LAST and COLLAPSED.
+          It is a document ABOUT the work, not the work. Available to anyone who wants it
+          and in nobody's way. Kept on the page rather than dropped: it is the student's
+          own compiled deliverable, and removing it would lose real content. */}
+      {system.descriptor && (
+        <details style={{ marginTop: 40 }}>
+          <summary style={{
+            cursor: 'pointer', fontSize: 13, letterSpacing: '.06em', textTransform: 'uppercase',
+            color: MUTED, fontWeight: 700,
+          }}>
+            Read the full write-up
+          </summary>
+          <div style={{ fontSize: 15.5, color: BODY, marginTop: 16 }}>
+            <RecordProse>{system.descriptor}</RecordProse>
+          </div>
+        </details>
       )}
 
       {/* Closing — week 12 */}

@@ -51,6 +51,19 @@ export interface RecordIdentity {
 /** Band 1 — what they built and what it replaced. */
 export interface RecordSystem {
   project_name: string | null;
+  /**
+   * ONE LINE saying what the system does, from the project's own `automation_goal`.
+   *
+   * The descriptor is a full generated strategy document -- eight numbered sections, a
+   * roadmap table, an ROI forecast. Leading a portfolio with it buries the work under a
+   * proposal, and its roadmap rows ("Architecture - 0 artifact(s) - Complete",
+   * "Portfolio - Pending") advertise incompleteness to the one audience the page exists
+   * to persuade. This field is what a reader needs first; the document goes behind a
+   * disclosure.
+   *
+   * Real data, never invented: null when the project never stated a goal.
+   */
+  what_it_does: string | null;
   /** The plan's own descriptor. Their words, not a generated summary. */
   descriptor: string | null;
   /** Mermaid source, rendered client-side. Null when they never built one. */
