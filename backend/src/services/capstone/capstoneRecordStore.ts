@@ -183,6 +183,9 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
     project: {
       name: project.name ?? null,
       descriptor: project.executive_summary ?? null,
+      // The project's own stated goal, in one line. Not a summary of the descriptor --
+      // summarising would be inventing, and this compiler invents nothing.
+      what_it_does: project.automation_goal ?? null,
       repo_url: pointer?.url ?? null,
       demo_url: project.portfolio_url ?? null,
       hours_reclaimed: null,
