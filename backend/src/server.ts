@@ -9,6 +9,7 @@ import { traceMiddleware } from './middlewares/traceMiddleware';
 import healthRoutes from './routes/healthRoutes';
 import deliveryClientAuthRoutes from './routes/deliveryClientAuthRoutes';
 import deliveryClientRoutes from './routes/deliveryClientRoutes';
+import deliveryAdminRoutes from './routes/deliveryAdminRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
@@ -141,6 +142,8 @@ app.use(deliveryClientAuthRoutes);
 // admin tree: routes mounted after adminRoutes inherit its guard and answer 401 to a
 // perfectly valid client token.
 app.use(deliveryClientRoutes);
+// Admin-gated; requireAdmin is applied per-route inside.
+app.use(deliveryAdminRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
