@@ -44,6 +44,7 @@ import { seedDepartments } from './seeds/seedDepartments';
 import { seedCurriculumTypeDefinitions } from './seeds/seedCurriculumTypeDefinitions';
 import { seedCurriculumCourseLinks } from './seeds/seedCurriculumCourseLinks';
 import { seedAllCampaigns } from './seeds/seedAllCampaigns';
+import { ensureExplorerCampaignKeyIndex } from './db/ensureExplorerCampaignKeyIndex';
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
@@ -2913,6 +2914,13 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[Deploy] Landing page / deployment seed failed:', err?.message);
   }
+  // Explorer campaign_key uniqueness, BEFORE seedAllCampaigns below - the seed
+  // creates the rows this index constrains, so it has to exist first rather than
+  // race them. Never throws: a duplicate would make CREATE UNIQUE INDEX raise,
+  // and start() is called bare with app.listen() as its last statement, so an
+  // uncontained throw here would stop the backend binding its port.
+  try { await ensureExplorerCampaignKeyIndex(); } catch (err: any) { console.warn('[DB] explorer campaign key index failed (non-fatal):', err?.message); }
+
   // Run campaign seeding in background — it may make slow external API calls (GHL)
   // that should not block server startup
   seedAllCampaigns().catch((err) =>
