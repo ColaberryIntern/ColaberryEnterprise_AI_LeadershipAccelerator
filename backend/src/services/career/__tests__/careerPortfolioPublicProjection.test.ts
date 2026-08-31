@@ -91,23 +91,58 @@ describe('careerPortfolioPublicProjection', () => {
     ]);
   });
 
-  it('drops unverified capabilities entirely', () => {
-    const out = project({
-      capabilities: [
-        { name: 'Nothing behind it', evidence_level: 'none', evidence_count: 0 },
-        { name: 'Only a resume claim', evidence_level: 'resume', evidence_count: 4 },
-        { name: 'Real', evidence_level: 'colaberry_verified', evidence_count: 2 },
-      ],
-    });
-    expect(out.capabilities.map((c) => c.name)).toEqual(['Real']);
-  });
+  describe('capabilities come from the REPO, never from curriculum consumption', () => {
+    const withCaps = (capabilities: any) =>
+      projectPublicPortfolio({ profile: loadedProfile(), capabilities, records: [], generatedAt: AT })
+        .capabilities;
 
-  it('drops a verified capability with no evidence behind it', () => {
-    // "Verified - 0 pieces of evidence" is a contradiction, not a selling point.
-    const out = project({
-      capabilities: [{ name: 'Hollow', evidence_level: 'delivery_verified', evidence_count: 0 }],
+    it('publishes what was committed', () => {
+      expect(withCaps([{ id: 'skills', label: 'Agent Skills', present: true, count: 5 }]))
+        .toEqual([{ name: 'Agent Skills', count: 5 }]);
     });
-    expect(out.capabilities).toHaveLength(0);
+
+    it('gates on `present`, so a single artefact survives and an absent one does not', () => {
+      expect(withCaps([{ id: 'workspace', label: 'Workspace', present: true, count: 1 }]))
+        .toHaveLength(1);
+      expect(withCaps([{ id: 'workspace', label: 'Workspace', present: false, count: 0 }]))
+        .toHaveLength(0);
+    });
+
+    it('emits `proven` and `on_sample` only when true', () => {
+      const built = withCaps([{ id: 'mcp', label: 'MCP', present: true, count: 1 }])[0];
+      expect(built).not.toHaveProperty('proven');
+      expect(built).not.toHaveProperty('on_sample');
+      const shown = withCaps([{ id: 'mcp', label: 'MCP', present: true, count: 1, proven: true, onSample: true }])[0];
+      expect(shown.proven).toBe(true);
+      expect(shown.on_sample).toBe(true);
+    });
+
+    it('CANNOT publish an assessment evidence count, whatever the profile holds', () => {
+      // The profile carries `capabilities` with evidence_level and evidence_count sourced
+      // from student_architecture_skill. Audited 2026-08-31: all 8,895 rows are
+      // source='timeline' -- curriculum opened, one row PER BAND -- with a constant
+      // proficiency of 60 and confidence of 1.0. It rendered as
+      // "Verified by Colaberry - 240 pieces of evidence" on a page built for recruiters.
+      // It must never reach the payload again, and the profile is no longer even read.
+      const out = projectPublicPortfolio({
+        profile: loadedProfile(),   // its capabilities carry evidence_count: 7
+        capabilities: [],
+        records: [],
+        generatedAt: AT,
+      });
+      expect(out.capabilities).toEqual([]);
+      const serialized = JSON.stringify(out);
+      expect(serialized).not.toContain('evidence_count');
+      expect(serialized).not.toContain('evidence_level');
+      expect(serialized).not.toContain('colaberry_verified');
+      expect(serialized).not.toContain('delivery_verified');
+    });
+
+    it('treats junk as no capabilities rather than throwing', () => {
+      for (const bad of [undefined, null, 'nope', 42, [null], [{}]]) {
+        expect(() => withCaps(bad as any)).not.toThrow();
+      }
+    });
   });
 
   it('counts a private repo without naming or linking it', () => {
