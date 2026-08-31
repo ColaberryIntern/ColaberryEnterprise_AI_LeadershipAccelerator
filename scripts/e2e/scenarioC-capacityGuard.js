@@ -115,10 +115,18 @@ async function main() {
   }
 
   // --- an admin session to drive the real endpoint ------------------------------------
+  // A REAL identity. The token here used to carry the subject 'e2e-c-admin', which was
+  // harmless only because the route silently discarded the actor. Once assignment started
+  // recording it, a non-UUID subject made every insert fail.
+  const adminEmail = 'e2e-c-admin@colaberry.com';
+  let admin = await PlatformIdentity.findOne({ where: { primary_email: adminEmail } });
+  if (!admin) {
+    admin = await PlatformIdentity.create({ primary_email: adminEmail, display_name: 'E2E-C Admin' });
+  }
   const adminToken = jwt.sign(
-    { id: 'e2e-c-admin', email: 'e2e-c-admin@colaberry.com', role: 'super_admin' },
+    { id: admin.id, sub: admin.id, platform_identity_id: admin.id, email: adminEmail, role: 'super_admin' },
     env.jwtSecret,
-    { expiresIn: 600 },
+    { expiresIn: 900 },
   );
 
   const assign = async (projectId) => {
