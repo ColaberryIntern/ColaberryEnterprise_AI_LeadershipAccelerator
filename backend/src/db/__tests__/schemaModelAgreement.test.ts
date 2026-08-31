@@ -3,11 +3,24 @@
 // The instance is constructed without connecting, which is what the other delivery model
 // contract tests already rely on - no database is touched here.
 import { REFACTORED_DELIVERY_SCHEMA_STATEMENTS } from '../ensureRefactoredDeliverySchema';
-import DeliveryStory from '../../models/DeliveryStory';
+import DeliveryAgentDefinition from '../../models/DeliveryAgentDefinition';
+import DeliveryAgentTrustRequirement from '../../models/DeliveryAgentTrustRequirement';
 import DeliveryCapacityOverride from '../../models/DeliveryCapacityOverride';
+import DeliveryChangeRequest from '../../models/DeliveryChangeRequest';
+import DeliveryClientAcceptance from '../../models/DeliveryClientAcceptance';
 import DeliveryClientSigninToken from '../../models/DeliveryClientSigninToken';
-import DeliveryProjectMember from '../../models/DeliveryProjectMember';
+import DeliveryContract from '../../models/DeliveryContract';
+import DeliveryDecision from '../../models/DeliveryDecision';
+import DeliveryDiscovery from '../../models/DeliveryDiscovery';
+import DeliveryEngagement from '../../models/DeliveryEngagement';
+import DeliveryEvent from '../../models/DeliveryEvent';
 import DeliveryEvidence from '../../models/DeliveryEvidence';
+import DeliveryOpportunity from '../../models/DeliveryOpportunity';
+import DeliveryProject from '../../models/DeliveryProject';
+import DeliveryProjectMember from '../../models/DeliveryProjectMember';
+import DeliveryProjectSourceLink from '../../models/DeliveryProjectSourceLink';
+import DeliveryRelease from '../../models/DeliveryRelease';
+import DeliveryStory from '../../models/DeliveryStory';
 
 /**
  * The DDL and the Sequelize models must describe the same table.
@@ -57,12 +70,36 @@ function ddlColumnsFor(table: string): string[] {
 }
 
 const PAIRS: Array<{ table: string; model: { getAttributes(): Record<string, unknown> } }> = [
-  { table: 'delivery_stories', model: DeliveryStory },
+  { table: 'delivery_agent_definitions', model: DeliveryAgentDefinition },
+  { table: 'delivery_agent_trust_requirements', model: DeliveryAgentTrustRequirement },
   { table: 'delivery_capacity_overrides', model: DeliveryCapacityOverride },
+  { table: 'delivery_change_requests', model: DeliveryChangeRequest },
+  { table: 'delivery_client_acceptances', model: DeliveryClientAcceptance },
   { table: 'delivery_client_signin_tokens', model: DeliveryClientSigninToken },
-  { table: 'delivery_project_members', model: DeliveryProjectMember },
+  { table: 'delivery_contracts', model: DeliveryContract },
+  { table: 'delivery_decisions', model: DeliveryDecision },
+  { table: 'delivery_discoveries', model: DeliveryDiscovery },
+  { table: 'delivery_engagements', model: DeliveryEngagement },
+  { table: 'delivery_events', model: DeliveryEvent },
   { table: 'delivery_evidence', model: DeliveryEvidence },
+  { table: 'delivery_opportunities', model: DeliveryOpportunity },
+  { table: 'delivery_projects', model: DeliveryProject },
+  { table: 'delivery_project_members', model: DeliveryProjectMember },
+  { table: 'delivery_project_source_links', model: DeliveryProjectSourceLink },
+  { table: 'delivery_releases', model: DeliveryRelease },
+  { table: 'delivery_stories', model: DeliveryStory },
 ];
+
+/**
+ * DDL tables with no model, each for a stated reason. A new table must land in PAIRS or
+ * here - the tripwire below refuses to let one land in neither.
+ */
+const UNPAIRED: Record<string, string> = {
+  builder_authority_profiles: 'Gate 11 authority profiles; read through raw queries, no model yet.',
+  delivery_execution_runs: 'Execution telemetry; written by the run recorder, never modelled.',
+  delivery_metric_access_log: 'Append-only access log; deliberately has no ORM surface.',
+  delivery_trust_layer_map: 'Static trust-layer mapping; seeded, not written by the app.',
+};
 
 describe('DDL and models describe the same tables', () => {
   for (const { table, model } of PAIRS) {
@@ -88,6 +125,22 @@ describe('DDL and models describe the same tables', () => {
       });
     });
   }
+
+  it('ENROLLS every delivery table - coverage here was opt-in and I forgot to opt in', () => {
+    // The defect this test was written to catch, in the test itself. PAIRS is
+    // hand-maintained, so `delivery_releases` was added with a model and a DDL group and
+    // simply never listed - 16 assertions passed, none of them about the new table. A
+    // contract test with opt-in coverage proves only what somebody remembered to enroll.
+    const declared = REFACTORED_DELIVERY_SCHEMA_STATEMENTS.join(String.fromCharCode(10))
+      .split(/CREATE TABLE IF NOT EXISTS /)
+      .slice(1)
+      .map((s) => s.slice(0, s.indexOf(" ")).trim())
+      .filter(Boolean);
+
+    const covered = new Set([...PAIRS.map((p) => p.table), ...Object.keys(UNPAIRED)]);
+    const unenrolled = declared.filter((t) => !covered.has(t));
+    expect({ unenrolled }).toEqual({ unenrolled: [] });
+  });
 
   it('parses real column names rather than silently matching nothing', () => {
     // Guards the parser itself. If the regex stopped matching, every assertion above
