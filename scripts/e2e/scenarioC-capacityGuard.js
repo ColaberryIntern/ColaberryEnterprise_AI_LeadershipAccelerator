@@ -64,6 +64,7 @@ async function main() {
   const {
     DeliveryProject, DeliveryEngagement, DeliveryProjectMember,
     PlatformIdentity, BuilderAuthorityProfile, DeliveryCapacityOverride,
+    DeliveryStory,
   } = models;
   const jwt = require('jsonwebtoken');
   const { env } = require(path.join(BACKEND_DIST, 'config/env'));
@@ -188,9 +189,74 @@ async function main() {
   });
   check('a client-side role is refused by the builder path', clientRole.status, 422);
 
+  // --- the mentor-exception half, unwired until Gate 11 shipped ------------------------
+  //
+  // THE SPEC ASSUMES A LINK THE CODE DOES NOT HAVE. This scenario's stated observable is
+  // "the fourth concurrent assignment is refused ... AND a builder_overloaded mentor
+  // exception appears". Those are two different notions of overload:
+  //
+  //   assessOverload      counts ACTIVE PROJECTS   against max_parallel_projects
+  //   builder_overloaded  counts CONCURRENT STORIES against maxConcurrentStories
+  //
+  // A builder at their project cap raises no mentor exception at all. Asserted below
+  // rather than worked around, so the gap is visible instead of assumed.
+  const mentorQueue = async () => {
+    const res = await fetch(
+      `${BASE_URL}/api/refactored/admin/builders/${builder.id}/mentor-queue`,
+      { headers: { Authorization: `Bearer ${adminToken}` } },
+    );
+    return { status: res.status, body: await res.json().catch(() => ({})) };
+  };
+
+  await DeliveryStory.destroy({ where: { assigned_to_identity_id: builder.id } });
+
+  const atProjectCap = await mentorQueue();
+  check('the mentor queue is reachable', atProjectCap.status, 200);
+  // The finding, pinned as an assertion.
+  check(
+    'being at PROJECT cap raises NO builder_overloaded exception',
+    (atProjectCap.body.exceptions || []).some((e) => e.kind === 'builder_overloaded'),
+    false,
+  );
+  // And the queue says what it could not see, rather than implying it looked.
+  check(
+    '  and the queue reports its blind spots',
+    (atProjectCap.body.unsourceable || []).length >= 2,
+    true,
+  );
+
+  // Now overload the thing the exception actually measures: in-flight stories.
+  for (let i = 1; i <= 6; i += 1) {
+    await DeliveryStory.create({
+      delivery_project_id: projects[0].id,
+      story_key: `E2E-C-STORY-${i}`,
+      title: `E2E-C story ${i}`,
+      status: 'in_progress',
+      risk_level: 'R1',
+      is_ui_story: false,
+      contract: { storyId: `E2E-C-STORY-${i}`, title: `E2E-C story ${i}` },
+      assigned_to_identity_id: builder.id,
+      rework_count: 0,
+    });
+  }
+
+  const overloaded = await mentorQueue();
+  check(
+    'six in-flight stories DO raise builder_overloaded',
+    (overloaded.body.exceptions || []).some((e) => e.kind === 'builder_overloaded'),
+    true,
+  );
+  check('  the state reports the real count', overloaded.body.state?.concurrentStories, 6);
+  const overload = (overloaded.body.exceptions || []).find((e) => e.kind === 'builder_overloaded');
+  check('  it is a problem, not an opportunity', overload?.nature, 'problem');
+  check('  and the detail names the count', (overload?.detail || '').includes('6'), true);
+
+  await DeliveryStory.destroy({ where: { assigned_to_identity_id: builder.id } });
+
   console.log(`\n[C] ${failures === 0 ? 'SCENARIO C PASSED' : `SCENARIO C FAILED (${failures})`}`);
-  console.log('[C] NOT covered: the builder_overloaded MENTOR EXCEPTION half — mentorExceptions');
-  console.log('[C] is still unwired, so no exception is raised by this path yet.');
+  console.log('[C] FINDING: the capacity guard counts PROJECTS and the mentor exception');
+  console.log('[C] counts STORIES. Being at project cap raises no mentor exception - the');
+  console.log('[C] causal link this scenario spec implies does not exist in the code.');
   process.exit(failures === 0 ? 0 : 1);
 }
 
