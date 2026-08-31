@@ -325,3 +325,29 @@ export async function fetchPortfolioPreview(enrollmentId: string): Promise<any> 
   );
   return res.data.portfolio;
 }
+
+// ── Per-post consent ───────────────────────────────────────────────────────
+
+export interface PostConsentRow {
+  id: string;
+  week: number | null;
+  ritual: string | null;
+  headline: string | null;
+  excerpt: string | null;
+  shared: boolean;
+  removed: boolean;
+}
+
+export async function fetchPostConsent(): Promise<PostConsentRow[]> {
+  const res = await portalApi.get('/api/portal/career/post-consent');
+  return res.data.posts;
+}
+
+/**
+ * Setting consent recompiles the record server-side in the same request, so revoking
+ * actually removes the post from the published page rather than only flipping a column.
+ */
+export async function setPostConsent(postId: string, shared: boolean): Promise<PostConsentRow> {
+  const res = await portalApi.put(`/api/portal/career/post-consent/${encodeURIComponent(postId)}`, { shared });
+  return res.data.post;
+}
