@@ -6,7 +6,8 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { getCareerProfile } from '../services/career/careerProfileService';
-import { careerProfileResponseSchema } from '../schemas/careerPortfolioSchema';
+import { careerProfileResponseSchema } from '../schemas/careerPortfolioSchema';
+import { checkResponseContract } from '../utils/responseContract';
 
 /**
  * The subject is ALWAYS the caller. No route in this file accepts an enrollment
@@ -36,16 +37,7 @@ function fail(res: Response, e: any, next: NextFunction) {
 export async function handleGetCareerProfile(req: Request, res: Response, next: NextFunction) {
   try {
     const profile = await getCareerProfile(eid(req));
-    if (process.env.NODE_ENV !== 'production') {
-      const parsed = careerProfileResponseSchema.safeParse(profile);
-      if (!parsed.success) {
-        console.warn(JSON.stringify({
-          timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
-          event: 'career_profile_contract_violation', outcome: 'partial',
-          context: { issues: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) },
-        }));
-      }
-    }
+    checkResponseContract('career_profile_contract_violation', careerProfileResponseSchema, profile);
     res.json(profile);
   } catch (e) { fail(res, e, next); }
 }

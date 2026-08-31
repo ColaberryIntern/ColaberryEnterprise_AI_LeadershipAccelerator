@@ -28,6 +28,9 @@
 import { compileCapstoneRecord, CompilerInputs } from './capstoneRecordCompiler';
 import { CapstoneRecord as RecordShape, recordGaps } from './capstoneRecordContract';
 import { buildCapstoneSlug, resolveUniqueSlug } from './capstoneSlug';
+// Type-only: erased at compile time, so it does not undo the dynamic-import pattern
+// this file uses to keep model loading lazy.
+import type { Inventory } from '../sbp/capabilityInventory';
 
 export type CompileOutcome = 'created' | 'updated' | 'unchanged' | 'no_project';
 
@@ -110,10 +113,67 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
   const { resolveProjectRepo } = await import('../projectRepoResolver');
   const pointer = await resolveProjectRepo(projectId, project.github_repo_url).catch(() => null);
 
+  // ── What they built in their own repo ────────────────────────────────────
+  //
+  // THE RATCHET LIVES HERE, not in the compiler, which must stay pure. `mergeInventory`
+  // never lowers a count and never un-sets `present`, so a failed repo read or a student
+  // refactoring a folder cannot erase credit for work they did.
+  //
+  // The prior state it ratchets against is THE LAST COMPILED RECORD. Nothing else
+  // persists an Inventory today, so without this the merge would always see `null` and
+  // a single unreadable tree would silently strip the band on the next compile -- the
+  // exact outcome the ratchet exists to prevent.
+  // Loaded BEFORE the capability block, because the sample/own join below needs it.
+  // Whether a capability was built against the provided sample is artifact evidence,
+  // not repository evidence -- a file tree cannot say whose inbox it was pointed at.
   const { default: PortfolioArtifact } = await import('../../models/PortfolioArtifact');
   const artifactRows: any[] = await PortfolioArtifact
     .findAll({ where: { enrollment_id: project.enrollment_id, kind: 'build_artifact' } })
     .catch(() => []);
+
+  const { readCapabilitiesFromRepo } = await import('../sbp/capabilityRepoReader');
+  const { mergeInventory, capabilityById } = await import('../sbp/capabilityInventory');
+  const { sampleFlagReader } = await import('./capabilitySampleFlags');
+
+  const { default: CapstoneRecordModel } = await import('../../models/CapstoneRecord');
+  const priorRecord: any = await CapstoneRecordModel
+    .findOne({ where: { project_id: projectId } })
+    .catch(() => null);
+
+  const priorBand: any[] = Array.isArray(priorRecord?.content_json?.capabilities)
+    ? priorRecord.content_json.capabilities
+    : [];
+  // Rehydrate the stored band into an Inventory so the merge has something to hold.
+  // `on_sample` is the record's spelling; `onSample` is the inventory's.
+  const stored: Inventory | null = priorBand.length
+    ? {
+      enrollmentId: project.enrollment_id,
+      entries: priorBand.map((c: any) => ({
+        id: c.id,
+        present: true,
+        count: typeof c.count === 'number' ? c.count : 1,
+        ...(c.proven === true ? { proven: true } : {}),
+        ...(c.on_sample === true ? { onSample: true } : {}),
+      })),
+    }
+    : null;
+
+  const observed = await readCapabilitiesFromRepo(project.enrollment_id);
+
+  // Decorated BEFORE the merge, not after. `mergeInventory` honours an explicit `false`
+  // as "rebuilt on the real project, and it never goes back", which is how a student
+  // sheds the caveat by redoing the work -- applying it afterwards would bypass that.
+  // An `undefined` flag is left alone, so silence never clears a disclosure.
+  const sampleFlag = sampleFlagReader(artifactRows.map((row) => row.content || {}));
+  const observedWithSample: Inventory = {
+    ...observed,
+    entries: observed.entries.map((e) => {
+      const flag = sampleFlag(e.id);
+      return flag === undefined ? e : { ...e, onSample: flag };
+    }),
+  };
+
+  const inventory = mergeInventory(stored, observedWithSample);
 
   const inputs: CompilerInputs = {
     enrollment: {
@@ -121,8 +181,18 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
       cohort_name: null,
     },
     project: {
-      name: project.name ?? null,
+      // `selected_use_case` is the FALLBACK, not an afterthought: `name` is null on real
+      // rows and the use case is what the project is actually called. Leading the page
+      // with a field that is usually empty left "What they built" with no title at all.
+      name: project.name ?? project.selected_use_case ?? null,
       descriptor: project.executive_summary ?? null,
+      // The project's own stated goal, in one line. Not a summary of the descriptor --
+      // summarising would be inventing, and this compiler invents nothing.
+      what_it_does: project.automation_goal ?? null,
+      problem: project.primary_business_problem ?? null,
+      stage: project.project_stage ?? null,
+      industry: project.industry ?? null,
+      organization: project.organization_name ?? null,
       repo_url: pointer?.url ?? null,
       demo_url: project.portfolio_url ?? null,
       hours_reclaimed: null,
@@ -146,6 +216,16 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
     // Read in parallel below; both degrade to [] rather than throwing, so one
     // unreadable band costs that band and not the whole record.
     competencies: [],
+    // Labels come from the capability definitions, not from the repo: the reader
+    // observes paths, and a human-readable name is not something a file tree carries.
+    capabilities: inventory.entries.map((e) => ({
+      id: e.id,
+      label: capabilityById(e.id)?.label ?? e.id,
+      present: e.present,
+      count: e.count,
+      proven: e.proven,
+      onSample: e.onSample,
+    })),
     posts: [],
     certification: null,
   };

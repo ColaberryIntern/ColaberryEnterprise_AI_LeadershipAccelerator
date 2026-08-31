@@ -742,6 +742,117 @@ export async function ensureRefactoredDeliverySchema(): Promise<void> {
  * identity - the rate limit has to work for addresses that match nobody, or it becomes an
  * enumeration oracle in itself.
  */
+/**
+ * Delivery stories.
+ *
+ * Gate 7 shipped the Story Contract as **pure logic with nowhere to live** - the comment
+ * above records that `delivery_stories` did not exist. That was survivable while nothing
+ * consumed a story, and it stopped being survivable the moment the quality gate was
+ * wired: `evaluateQualityGate` takes a `DeliveryStoryContract`, and there was no way to
+ * produce a persisted one.
+ *
+ * The contract is stored as JSONB in `contract` rather than exploded into twenty columns.
+ * `DeliveryStoryContract` has eighteen optional fields, most of them arrays, and it is
+ * still moving; a column per field would mean a migration every time Gate 7's shape
+ * changed, and `validateStoryContract` - not the database - is what decides whether a
+ * contract is well-formed. The columns that ARE promoted (`title`, `status`,
+ * `risk_level`) are the ones something queries or filters by.
+ *
+ * `story_key` is the caller's stable identifier - the `storyId` inside the contract -
+ * unique per project so a replayed create is an update rather than a duplicate. Two
+ * stories with the same id on one project would make evidence ambiguous, which is the
+ * one thing evidence cannot afford to be.
+ */
+/**
+ * Delivery releases.
+ *
+ * `delivery_releases` did not exist - the Gate 9 schema comment says releases belong to
+ * Gate 14, and Gate 14 shipped `evaluateReleaseGate` as pure logic with nothing to
+ * evaluate. The gate had zero production callers for the same reason the quality gate
+ * did: there was no release to ask about.
+ *
+ * ## A release is a RECORD, not a deployment
+ *
+ * `releaseGate.ts` draws this line itself: `evaluateReleaseGate` answers *readiness* and
+ * `assertDeploymentAuthorized` answers *may this be deployed*. They are separate
+ * functions because they are separate questions, and conflating them would mean a row
+ * appearing in this table could push code. It cannot. Creating a release candidate
+ * records an intention and invites the gate to object.
+ *
+ * ## approved_by_identity_id is the point of the table
+ *
+ * The gate blocks with `approver_missing` when it is absent, and its own comment says
+ * *a release is approved by a person, never by a pipeline*. Storing the approver next to
+ * the checks is what makes that claim auditable later rather than merely asserted at the
+ * moment of approval.
+ *
+ * `check_results` and `goals_scores` are JSONB for the same reason the story contract is:
+ * both are small, evolving shapes that a validator - not Postgres - decides the
+ * correctness of. `profile_key` is promoted because the gate's mandatory-check set is
+ * derived from it, so a release cannot be interpreted without it.
+ */
+const DELIVERY_RELEASES: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_releases (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     version VARCHAR(60) NOT NULL,
+     status VARCHAR(30) NOT NULL DEFAULT 'candidate',
+     profile_key VARCHAR(60) NOT NULL,
+     candidate_sha VARCHAR(64),
+     check_results JSONB NOT NULL DEFAULT '[]'::jsonb,
+     waived_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
+     goals_scores JSONB,
+     approved_by_identity_id UUID,
+     approved_at TIMESTAMPTZ,
+     created_by_identity_id UUID,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // One release per version per project. Two rows sharing a version would make
+  // "what shipped" unanswerable, which is the one question a release record exists for.
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_releases_project_version_unique
+     ON delivery_releases (delivery_project_id, version)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_releases_project_status
+     ON delivery_releases (delivery_project_id, status)`,
+];
+const DELIVERY_STORIES: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_stories (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     story_key VARCHAR(120) NOT NULL,
+     title TEXT NOT NULL,
+     status VARCHAR(30) NOT NULL DEFAULT 'proposed',
+     risk_level VARCHAR(20),
+     is_ui_story BOOLEAN NOT NULL DEFAULT FALSE,
+     contract JSONB NOT NULL,
+     assigned_to_identity_id UUID,
+     rework_count INTEGER NOT NULL DEFAULT 0,
+     created_by_identity_id UUID,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // Added after the table shipped, so both forms are required: the CREATE above serves a
+  // fresh database, these serve dev and production, where delivery_stories already exists.
+  //
+  // Gate 11 needs three per-builder story counts and the table identified no builder at
+  // all - only created_by_identity_id, which is who FILED the story. Using that as the
+  // builder was available and wrong, and would have made every mentor exception about
+  // workload quietly incorrect rather than absent.
+  //
+  // rework_count rather than a boolean: "came back twice" and "came back once" are
+  // different signals, and a boolean cannot be un-set without losing the history.
+  `ALTER TABLE delivery_stories ADD COLUMN IF NOT EXISTS assigned_to_identity_id UUID`,
+  `ALTER TABLE delivery_stories ADD COLUMN IF NOT EXISTS rework_count INTEGER NOT NULL DEFAULT 0`,
+  // The Gate 11 assembler counts in-flight and completed stories per builder.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_stories_assigned
+     ON delivery_stories (assigned_to_identity_id, status)`,
+  // One story per key per project. Evidence joins on story_id, so a duplicate key would
+  // make it ambiguous which story a piece of evidence proved anything about.
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_stories_project_key_unique
+     ON delivery_stories (delivery_project_id, story_key)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_stories_project_status
+     ON delivery_stories (delivery_project_id, status)`,
+];
 const CLIENT_MAGIC_LINK: string[] = [
   `CREATE TABLE IF NOT EXISTS delivery_client_signin_tokens (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -773,5 +884,7 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...QUALITY_EVIDENCE,
   ...CLIENT_REVIEW_ROOM,
   ...CAPACITY_AND_ECONOMICS,
+  ...DELIVERY_STORIES,
+  ...DELIVERY_RELEASES,
   ...CLIENT_MAGIC_LINK,
 ];

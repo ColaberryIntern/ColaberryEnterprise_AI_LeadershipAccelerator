@@ -23,6 +23,14 @@ export interface OrgMemberAttributes {
   invited_by?: string | null;
   /** Bridge to the platform-wide human identity. Nullable during migration. */
   platform_identity_id?: string | null;
+  /**
+   * IANA timezone (e.g. 'America/Chicago'). Defaults to the same literal every
+   * cron timezone value in this repo already uses, so an unset member is not
+   * a different behavior, just an explicit one. Real prerequisite for any
+   * feature that lets a manager pick a delivery time (AI Workforce
+   * Management, Checkpoint D — Report Subscriptions).
+   */
+  timezone?: string;
   joined_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
@@ -38,6 +46,7 @@ class OrgMember extends Model<OrgMemberAttributes> implements OrgMemberAttribute
   declare invite_status: OrgMemberInviteStatus;
   declare invited_by: string | null;
   declare platform_identity_id: string | null;
+  declare timezone: string;
   declare joined_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
@@ -90,6 +99,11 @@ OrgMember.init(
     // Declared because the DDL adds this column and Sequelize only touches
     // attributes the model knows about.
     platform_identity_id: { type: DataTypes.UUID, allowNull: true },
+    timezone: {
+      type: DataTypes.STRING(60),
+      allowNull: false,
+      defaultValue: 'America/Chicago',
+    },
   },
   {
     sequelize,

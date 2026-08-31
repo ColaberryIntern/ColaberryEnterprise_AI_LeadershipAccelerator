@@ -1,0 +1,19 @@
+import { deliveryElapsedDays } from './deliveryElapsedDays';
+import type { MetricDefinition } from './metricDefinition';
+
+/**
+ * Every metric definition the runner can execute.
+ *
+ * Stage 3 of `METRIC_PROVENANCE_PIPELINE.md` adds two more definitions with zero
+ * new mechanism, and this list is where that claim gets tested: if adding
+ * `production_systems_declared` needs anything beyond one entry here and one
+ * module beside it, then the definition interface got the boundary wrong.
+ */
+export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [deliveryElapsedDays];
+
+/** The definition for a key, or null. Keys are stable and equal `metric_key`. */
+export function findMetricDefinition(key: string): MetricDefinition | null {
+  return METRIC_DEFINITIONS.find((d) => d.key === key) ?? null;
+}
+
+export const METRIC_DEFINITION_KEYS: readonly string[] = METRIC_DEFINITIONS.map((d) => d.key);

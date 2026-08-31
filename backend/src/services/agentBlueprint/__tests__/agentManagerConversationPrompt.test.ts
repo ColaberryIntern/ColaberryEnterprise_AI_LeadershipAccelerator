@@ -1,0 +1,63 @@
+/**
+ * buildAgentManagerConversationSystemPrompt — AI Workforce Management,
+ * Checkpoint C. Pins the honest-empty-persona fallback (never fabricates a
+ * persona for an agent with no configured system_prompt) and real directive
+ * injection.
+ */
+jest.mock('../../managerDirectiveService', () => ({ getActiveDirectiveTexts: jest.fn() }));
+
+import { getActiveDirectiveTexts } from '../../managerDirectiveService';
+import { buildAgentManagerConversationSystemPrompt } from '../agentManagerConversationPrompt';
+
+const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+describe('buildAgentManagerConversationSystemPrompt', () => {
+  it('happy path: uses the agent\'s real system_prompt as the base persona', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese, a mentor.');
+
+    expect(prompt).toContain('You are Reese, a mentor.');
+    expect(prompt).not.toContain('No system prompt has been configured');
+  });
+
+  it('boundary: an agent with no system_prompt gets an honest, minimal frame — never a fabricated persona', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-2', 'NewAgent', null);
+
+    expect(prompt).toContain('NewAgent');
+    expect(prompt).toContain('No system prompt has been configured for you yet');
+  });
+
+  it('happy path: active directives are injected', async () => {
+    mockActiveDirectives.mockResolvedValue(['Always be concise.']);
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(mockActiveDirectives).toHaveBeenCalledWith('agent-1');
+    expect(prompt).toContain('MANAGER DIRECTIVES');
+    expect(prompt).toContain('Always be concise.');
+  });
+
+  it('boundary: zero active directives means no directive block', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(prompt).not.toContain('MANAGER DIRECTIVES');
+  });
+
+  it('always frames this as a manager conversation and forbids pretending to be human', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(prompt.toLowerCase()).toContain('manager');
+    expect(prompt.toLowerCase()).toContain('never pretend to be human');
+  });
+});

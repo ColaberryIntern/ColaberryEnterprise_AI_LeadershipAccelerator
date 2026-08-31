@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { env } from '../config/env';
 import { getTodayPlan } from '../services/cape/capeTodayPlanService';
 import { recordFeedback, startTestOut, CapeTodayPlanFeedbackError } from '../services/cape/capeTodayPlanFeedbackService';
-import { todayPlanFeedbackInputSchema, todayPlanTestOutInputSchema, todayPlanResponseSchema } from '../schemas/capeSchema';
+import { todayPlanFeedbackInputSchema, todayPlanTestOutInputSchema, todayPlanResponseSchema } from '../schemas/capeSchema';
+import { checkResponseContract } from '../utils/responseContract';
 
 const eid = (req: Request) => req.participant!.sub;
 
@@ -30,16 +31,7 @@ export async function handleGetTodayPlan(req: Request, res: Response, next: Next
   }
   try {
     const plan = await getTodayPlan(eid(req));
-    if (process.env.NODE_ENV !== 'production') {
-      const parsed = todayPlanResponseSchema.safeParse(plan);
-      if (!parsed.success) {
-        console.warn(JSON.stringify({
-          timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
-          event: 'cape_today_plan_contract_violation', outcome: 'partial',
-          context: { issues: parsed.error.issues.map((i) => i.message) },
-        }));
-      }
-    }
+    checkResponseContract('cape_today_plan_contract_violation', todayPlanResponseSchema, plan);
     res.json(plan);
   } catch (e) { fail(res, e, next); }
 }

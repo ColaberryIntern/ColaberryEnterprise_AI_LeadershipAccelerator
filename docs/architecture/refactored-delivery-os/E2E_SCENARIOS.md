@@ -149,12 +149,158 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 | # | Scenario | Components built & unit-tested | E2E executed |
 |---|---|---|---|
 | A | Intern sandbox | ✅ Gates 7, 8, 9, 11 | ⛔ no |
-| B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ⛔ no — also blocked on identity |
-| C | Multi-project builder | ✅ Gates 2, 11, 12 | ⛔ no |
+| B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ⚠️ **PARTIAL — 2026-08-29, projection half passed; acceptance half has no writer** |
+| C | Multi-project builder | ✅ Gates 2, 11, 12 | ✅ **YES — 2026-08-30, passed** (mentor-exception half still unwired) |
 | D | Government | ✅ Gates 5, 9, 13, 14 | ⛔ no |
 | E | Existing student Project | ✅ Gate 1 | ⛔ no |
-| F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ⛔ no |
+| F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ✅ **YES — 2026-08-28, passed** |
 | G | Production feedback | ✅ Gate 14 | ⛔ no |
+
+## Scenario C — executed 2026-08-30, PASSED
+
+**C could not be written until Gate 12 was wired.** `assessOverload` had zero production
+callers and there was no assignment path at all, so there was nothing to refuse. A script
+calling the pure function directly would have duplicated `capacityEconomics.test.ts` while
+looking like an executed scenario.
+
+`POST /api/refactored/admin/projects/:id/assign` now consults the capacity model, so every
+assertion below drives the real endpoint:
+
+```
+  PASS  assignment 1 of 3 is accepted                      201
+  PASS  assignment 2 of 3 is accepted                      201
+  PASS  assignment 3 of 3 is accepted                      201
+  PASS  the FOURTH assignment is refused                   409
+  PASS    refused for capacity, not something else         overloaded
+  PASS    and nothing was written                          3
+  PASS  a LIVE override admits the fourth                  201
+  PASS    and the reliance is surfaced                     true
+  PASS  an EXPIRED override no longer lifts the cap        409
+  PASS    refused for capacity                             overloaded
+  PASS  a client-side role is refused by the builder path  422
+```
+
+Three of those matter more than the rest:
+
+**Nothing was written on refusal.** A guard that says no and assigns anyway is worse than
+no guard, because it reports safety it did not deliver.
+
+**The expired override no longer lifts the cap.** This spec calls that out as the part
+that rots silently, and it is right: every other assertion here would still pass if expiry
+broke.
+
+**The fourth is refused, not the fifth.** The service assesses the assignment being
+CONSIDERED (`activeProjects + 1`). Assessing the current count would find `3 <= 3` and
+allow it, letting every builder land exactly one over their cap forever.
+
+### NOT covered
+
+The `builder_overloaded` **mentor exception** half. `mentorExceptions` is still unwired, so
+nothing raises one from this path. Marked partial in that respect rather than claimed.
+
+---
+## Scenario B (projection half) — executed 2026-08-29, PASSED
+
+B's blocker in this doc was **client identity**. Magic-link sign-in resolved it.
+
+Run by `scripts/e2e/scenarioB-clientProjection.js`:
+
+```
+[B] stamped 4 private values on c3edcf4c-f0a7-4ff4-9a06-b30c2064693a
+
+  PASS  the client can actually reach the project            200
+  PASS  "workflow_summary" does not reach the client
+  PASS  "existing_system_summary" does not reach the client
+  PASS  "delivery_profile_key" does not reach the client
+  PASS  "trust_profile_key" does not reach the client
+  PASS  no forbidden-category field in the response          0
+  PASS  no project key outside the allowlist                 0
+```
+
+**It writes private data before reading.** A leak test against a project with nothing
+private in it proves nothing — the response would be clean because there was nothing to
+leak. The canaries are genuinely builder-shaped values stamped on the row the client CAN
+reach, so the test can fail for the right reason.
+
+The last assertion is the one that catches what the canaries did not anticipate: every key
+present must be named by the allowlist, not merely free of known-bad values.
+
+### NOT covered
+
+B's full chain ends in a `delivery_client_acceptances` row whose snapshots match what the
+client saw. **Nothing writes acceptances yet**, so that half is not executed and is not
+claimed. Marked PARTIAL rather than executed deliberately: a scenario marked done that
+quietly tested a third of itself is worse than one marked partial, because the first stops
+anybody looking again — which is how this document came to list seven blockers that had
+all been cleared.
+
+---
+## Scenario F — executed 2026-08-28, PASSED
+
+Run against the dev instance by `scripts/e2e/scenarioF-crossTenant.js`:
+
+```
+[F] own tenant: Refactored.ai | foreign tenant: Career Pathways Network
+[F] foreign project exists: dfd8ae06-e0e8-41c2-b53a-fb1447a258dd
+
+  PASS  own project is reachable                             200
+  PASS  EXISTING foreign-tenant project returns 404, not 403 404
+  PASS  unknown id is indistinguishable from a foreign one   404
+  PASS  the attempt is recorded in TenantAccessAudit         true
+        resource_type=delivery_project action=read reason=project_not_in_client_session
+```
+
+**Writing it caught a real gap.** `requireDeliveryProjectAccess` logged a cross-tenant
+attempt to `ai_events` only — it never wrote `TenantAccessAudit`, the table that exists
+specifically to answer *who tried to read whose data*. The scenario asserts on that row,
+so it would have failed. Now recorded through `recordAccessDecision`.
+
+**The foreign project genuinely exists**, in a genuinely different tenant. An earlier
+spot-check used a random uuid, which proves less than it looks: an id matching nothing
+returns 404 from almost any implementation. A 403-shaped bug only shows against a real
+row belonging to someone else. The first assertion is the control — without it a blanket
+404 would read as a pass.
+
+---
+
+## Why A, C, D and G cannot be written as tests yet (2026-08-29)
+
+Scenario C was attempted and abandoned, for a reason worth recording.
+
+**The Gate 9-14 delivery logic has no production callers.** Verified per symbol against
+the non-test tree, after discarding two names that turned out not to exist at all:
+
+| Symbol | Gate | Real callers |
+|---|---|---|
+| `assessOverload` | 12 | **0** |
+| `decideCapacityOverride` | 12 | **0** |
+| `evaluateQualityGate` | 9 | **0** |
+| `evaluateReleaseGate` | 14 | **0** (its one hit is a doc comment) |
+| `assertModeIsSupportOnly` | 11 | **0** (doc comment) |
+| `resolveProfile` | 13 | **0** |
+| `summarizeLedger` | 11 | **0** |
+| `evaluateClaim` | 11 | 1, inside its own module |
+| `buildCaseStudy` | 15 | **9** - genuinely wired |
+
+These are well-designed, well-tested pure functions that nothing invokes. **The capacity
+guard does not guard**: a builder could be assigned a hundred projects and no code path
+would refuse, because no assignment path calls it.
+
+That is why C has nothing to observe. Its stated observable is *the fourth concurrent
+assignment is refused by `assessOverload`* - and there is no assignment path that consults
+it. A script calling `assessOverload` directly would duplicate the unit tests that already
+cover it (`capacityEconomics.test.ts` asserts the refusal, the override, `reliesOnOverride`,
+and the expiry fallback) while LOOKING like an executed scenario. That is the failure mode
+this document already fell into once.
+
+A, D and G are the same shape: their observables depend on the quality gate, delivery
+profiles and the release gate, none of which any runtime path reaches.
+
+**So the remaining scenarios are not blocked on being written. They are blocked on the
+gates being wired** - which is a build, not a test-writing exercise. F and B were
+executable precisely because the client surface IS wired end to end.
+
+---
 
 ## What it would take
 
@@ -170,3 +316,18 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 7. **Authorization** — §20 currently forbids the deploy that four of these require.
 
 Items 1–6 are engineering. Item 7 is a decision only Ali can make.
+
+### Status of that list as of 2026-08-28 — all seven are cleared
+
+| # | Blocker | Now |
+|---|---|---|
+| 1 | A deployable environment | ✅ dev and production both run the delivery OS |
+| 2 | The Agent SDK binding | ✅ `claudeAgentSdkProvider.ts` |
+| 3 | A GitHub Actions runner workflow | ✅ `delivery-execution-runner.yml` |
+| 4 | Schema rehearsal against real Postgres | ✅ 19 tables, 3 environments, identical |
+| 5 | An answer to the client identity question | ✅ magic-link sign-in, verified end to end |
+| 6 | Both UI surfaces | ✅ `ClientPortal` and `BuilderWorkspace` |
+| 7 | Authorization for the deploy | ✅ Ali authorised production |
+
+So the remaining six scenarios are blocked on **being written**, not on anything missing.
+F is done. A–E and G are the work.
