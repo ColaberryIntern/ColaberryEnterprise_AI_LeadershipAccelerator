@@ -76,6 +76,7 @@ import { ensureManagerDirectiveSchema } from './db/ensureManagerDirectiveSchema'
 import { ensureAgentManagerConversationSchema } from './db/ensureAgentManagerConversationSchema';
 import { ensureAgentGoalSchema } from './db/ensureAgentGoalSchema';
 import { ensureAgentOneOnOneSchema } from './db/ensureAgentOneOnOneSchema';
+import { ensureAgentReportSubscriptionSchema } from './db/ensureAgentReportSubscriptionSchema';
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
@@ -790,6 +791,12 @@ async function ensureOrgSchema() {
     // automatically added to this org's roster (and removed on demotion). See
     // communityService.setMemberRole → syncStaffToAutoOrgs.
     `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS auto_staff_sync BOOLEAN NOT NULL DEFAULT false`,
+    // AI Workforce Management, Checkpoint D prerequisite (REPORTING_MAP.md's
+    // "Timezone prerequisite" finding): no per-user timezone existed anywhere
+    // in the codebase, so a report-subscription delivery-time picker had
+    // nowhere honest to read from. Default matches the literal every cron
+    // timezone value elsewhere in this repo already uses.
+    `ALTER TABLE org_members ADD COLUMN IF NOT EXISTS timezone VARCHAR(60) NOT NULL DEFAULT 'America/Chicago'`,
   ];
   for (const sql of statements) {
     try {
@@ -2682,6 +2689,12 @@ async function start(): Promise<void> {
   // seeder writes to it; a manager writes the first row via
   // POST .../one-on-ones.
   await ensureAgentOneOnOneSchema();
+  // AI Workforce Management, Checkpoint D — a manager's standing request to
+  // receive a recurring email report about an agent, at their own delivery
+  // hour and timezone. Additive, idempotent, no flag. No seeder writes to
+  // it; a manager writes the first row via POST .../report-subscriptions.
+  // Report generation/delivery is a separate, later piece.
+  await ensureAgentReportSubscriptionSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
