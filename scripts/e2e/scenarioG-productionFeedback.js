@@ -108,7 +108,7 @@ async function main() {
     operator = await PlatformIdentity.create({ primary_email: email, display_name: 'E2E-G Operator' });
   }
   const adminToken = jwt.sign(
-    { id: operator.id, platform_identity_id: operator.id, email, role: 'super_admin' },
+    { id: operator.id, sub: operator.id, platform_identity_id: operator.id, email, role: 'super_admin' },
     env.jwtSecret,
     { expiresIn: 900 },
   );
