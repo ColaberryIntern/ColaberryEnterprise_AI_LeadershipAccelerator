@@ -358,7 +358,10 @@ export function splitScript(script: string | undefined, body: string | undefined
   const tagged = raw.filter((l) => /^(SAY|DO|NOTE|SITUATION|ROOM|MOOD|OPEN):/i.test(l));
   if (!tagged.length) {
     // Untagged: the script is all direction, the body is what gets spoken.
-    return { say: body || '', setup: (script ? 'NOTE: ' + script : '') + (body ? '\nSAY: ' + body : '') };
+    // The body is deliberately NOT repeated into `setup` — it is the entire
+    // content of the read screen, and echoing it onto the arrival screen is
+    // what made both screens look identical.
+    return { say: body || '', setup: script ? 'NOTE: ' + script : '' };
   }
   // The read screen is the slide's own paragraph — "the 2nd paragraph which
   // tells you exactly what to say" (Ali, 2026-08-27). The script's SAY lines
@@ -368,13 +371,21 @@ export function splitScript(script: string | undefined, body: string | undefined
     .map((l) => l.replace(/^SAY:\s*/i, ''))
     .join('\n\n');
   const say = body || sayLines;
-  // `setup` is the WHOLE script in authored order, tags intact — spoken lines
-  // included. The instructor needs their opening words the instant the slide
-  // lands, or the pause this exists to remove just moves to the top of the
-  // slide: "trying to read it when the new slide comes on and trying not to
-  // take a long pause is hard to do" (Ali, 2026-08-27). Colour is what keeps
-  // the roles separable here; the zoom view below is where SAY stands alone.
-  const setup = tagged.join('\n');
+  // The two screens must share NOTHING: "the pre click and the post click text
+  // should be completely different. I do not need the same thing pre click that
+  // will be shown post click. The preclick should setup the atmosphere and
+  // environment before I say what's in the post click" (Ali, 2026-08-31).
+  //
+  // So `setup` is the atmosphere — SITUATION / ROOM / MOOD / OPEN / DO / NOTE —
+  // and every SAY line moves to the read screen, where the spoken words belong.
+  // OPEN stays here on purpose: it is the one or two words that get the slide
+  // moving, and without them the pause this whole split exists to remove just
+  // reappears at the top of every slide.
+  //
+  // The exception is a slide with no paragraph of its own. There, the SAY lines
+  // ARE the read screen (see `say` above), so dropping them from setup costs
+  // nothing and keeps the two screens disjoint either way.
+  const setup = tagged.filter((l) => !/^SAY:/i.test(l)).join('\n');
   return { say: say || '', setup };
 }
 
