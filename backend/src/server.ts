@@ -38,6 +38,7 @@ import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
+import { startRepoTreeRefresh } from './services/repoTree/repoTreeRefreshService';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 import { seedDepartments } from './seeds/seedDepartments';
@@ -78,6 +79,7 @@ import { ensureAgentManagerConversationSchema } from './db/ensureAgentManagerCon
 import { ensureAgentGoalSchema } from './db/ensureAgentGoalSchema';
 import { ensureAgentOneOnOneSchema } from './db/ensureAgentOneOnOneSchema';
 import { ensureAgentReportSubscriptionSchema } from './db/ensureAgentReportSubscriptionSchema';
+import { ensureAgentReportRunSchema } from './db/ensureAgentReportRunSchema';
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
@@ -2696,6 +2698,12 @@ async function start(): Promise<void> {
   // it; a manager writes the first row via POST .../report-subscriptions.
   // Report generation/delivery is a separate, later piece.
   await ensureAgentReportSubscriptionSchema();
+  // AI Workforce Management, Checkpoint D — one attempt to generate/deliver
+  // a subscription's report for one delivery period. Additive, idempotent,
+  // no flag. No seeder writes to it; the AgentReportSubscriptionDispatch
+  // cron (schedulerService.ts) writes the first row on the first tick
+  // where an enabled subscription's local delivery hour matches.
+  await ensureAgentReportRunSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
@@ -3047,6 +3055,12 @@ async function start(): Promise<void> {
   if (env.enableFollowUpScheduler) {
     startScheduler();
   }
+
+  // Keep the platform's view of student repositories current. Nothing re-read a repo
+  // after the one-time setup flows, so a student could commit finished work and have
+  // the portfolio keep showing a months-old snapshot. Read-only against GitHub, capped
+  // per sweep, and safe to call twice.
+  startRepoTreeRefresh();
 
   // Register the cognitive-incident email subscriber (BC #10099862873 P1 item 3,
   // idempotent — re-registering on restart is safe, registerIncidentSubscriber

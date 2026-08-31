@@ -1714,6 +1714,23 @@ export function startScheduler(): void {
     });
   });
 
+  // AI Workforce Management, Checkpoint D — AgentReportSubscription
+  // dispatch. A single 15-minute tick checks every enabled subscription's
+  // OWN local hour (via its real timezone) against its configured delivery
+  // hour, rather than one cron job per timezone — real per-subscriber
+  // timezone-safety without N schedules. The DB-unique-constrained insert
+  // inside dispatchDueReportRuns() is the actual idempotency guard: a tick
+  // that fires more than once inside the same delivery hour (or a retried
+  // tick) cannot send the same period twice.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('AgentReportSubscriptionDispatch', async () => {
+      const { dispatchDueReportRuns } = await import('./agentReportRunService');
+      await dispatchDueReportRuns();
+    }).catch((err) => {
+      console.error('[Scheduler] Agent report subscription dispatch error:', err);
+    });
+  });
+
   // Explorer Growth OS — nightly profile recompute (EPIC 3 T006).
   //
   // RECOMPUTES ONLY. It scores and classifies; it decides nothing and sends

@@ -16,6 +16,7 @@ jest.mock('../../models', () => ({ OpenHouseEvent: { findAll: jest.fn() } }));
 import {
   ccppRowToView, centralWallClockToInstant, withinDays, getNextPublicEvent,
   getUpcomingPublicEvents, isKnownPublicEvent, __resetPublicEventsCache,
+  PUBLIC_EVENT_GROUP,
 } from '../publicEventsService';
 import { OpenHouseEvent } from '../../models';
 
@@ -128,6 +129,50 @@ describe('publicEventsService', () => {
       sqlMock.__request.query.mockResolvedValue({ recordset: [ccppRow('42', 'X Open House', '2026-07-16T18:30:00Z')] });
       expect(await isKnownPublicEvent('42')).toBe(true);
       expect(await isKnownPublicEvent('nope')).toBe(false);
+    });
+  });
+
+  // The portal's visibility rule lives entirely in this SQL, so assert the SQL —
+  // a recordset-only test passes just as happily against a WHERE that hides
+  // everything. Regression guard for the AI-track events (AI Internship
+  // Presentation et al.) that the old name-only allowlist silently dropped.
+  describe('visibility rule: the CCPP Registration label', () => {
+    const runAndGetSql = async (): Promise<string> => {
+      sqlMock.__request.query.mockResolvedValue({ recordset: [] });
+      await getUpcomingPublicEvents(30);
+      return String(sqlMock.__request.query.mock.calls[0][0]);
+    };
+
+    it('selects events carrying the Registration event-group label', async () => {
+      const q = await runAndGetSql();
+      expect(q).toMatch(/EventBrite_EventAccess/);
+      expect(q).toMatch(/EventBrite_EventGroups/);
+      expect(q).toMatch(/a\.IsActive\s*=\s*1/);
+      expect(q).toMatch(/g\.GroupName\s*=\s*@group/);
+      // Bound as a parameter, never interpolated into the statement text.
+      expect(sqlMock.__request.input).toHaveBeenCalledWith('group', 'NVarChar', PUBLIC_EVENT_GROUP);
+      expect(PUBLIC_EVENT_GROUP).toBe('Registration');
+      expect(q).not.toContain(`'${PUBLIC_EVENT_GROUP}'`);
+    });
+
+    it('matches the label with EXISTS so multi-group events are not duplicated', async () => {
+      const q = await runAndGetSql();
+      expect(q).toMatch(/EXISTS\s*\(/);
+      // A top-level join onto EventBrite_EventAccess would emit one row per
+      // active group and eat the TOP (@lim) budget with duplicates.
+      expect(q).not.toMatch(/FROM\s+EventBrite_Events\s+e\s+INNER\s+JOIN\s+EventBrite_EventAccess/i);
+    });
+
+    it("still OR's the deprecated name fallback for occurrences CCPP left unlabelled", async () => {
+      const q = await runAndGetSql();
+      expect(q).toMatch(/OR\s+e\.Name LIKE '%Open House%'/);
+      expect(q).toMatch(/e\.Name LIKE '%Financial Literacy%'/);
+    });
+
+    it('keeps the live-status and forward-window guards', async () => {
+      const q = await runAndGetSql();
+      expect(q).toMatch(/e\.Status = 'live'/);
+      expect(q).toMatch(/e\.StartDate > GETUTCDATE\(\)/);
     });
   });
 
