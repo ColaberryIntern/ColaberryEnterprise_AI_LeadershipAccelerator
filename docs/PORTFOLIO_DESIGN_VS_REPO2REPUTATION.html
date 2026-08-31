@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio design — measured against Repo2Reputation</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#0b1220; --body:#334155; --muted:#64748b;
+    --line:#e2e8f0; --accent:#b91c1c; --soft:#fef2f2; --ok:#15803d; --warn:#b45309;
+    --code:#f1f5f9; --shadow:0 1px 2px rgba(15,23,42,.05),0 10px 30px rgba(15,23,42,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0a0f1a;--card:#111827;--ink:#f1f5f9;--body:#cbd5e1;--muted:#94a3b8;
+      --line:#1f2937;--accent:#f87171;--soft:#1e1315;--ok:#4ade80;--warn:#fbbf24;
+      --code:#0f172a;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--body);
+       font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:52px 24px 110px}
+  .eyebrow{font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;
+           text-transform:uppercase;color:var(--muted)}
+  h1{font-size:34px;line-height:1.15;color:var(--ink);margin:14px 0 12px;letter-spacing:-.022em}
+  .lede{font-size:17.5px;max-width:64ch;margin:0 0 20px}
+  h2{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+     font-weight:700;margin:52px 0 16px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  h3{font-size:19px;color:var(--ink);margin:26px 0 8px;letter-spacing:-.01em}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+        padding:22px 26px;box-shadow:var(--shadow);margin:0 0 16px}
+  .alarm{border-left:3px solid var(--accent);background:var(--soft)}
+  .alarm b{color:var(--ink)}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;margin:6px 0}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+  td.k{color:var(--ink);font-weight:600;white-space:nowrap}
+  .no{color:var(--accent);font-weight:700}
+  .yes{color:var(--ok);font-weight:700}
+  .warn{color:var(--warn);font-weight:700}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:16px 18px;
+      overflow-x:auto;font-size:13px;line-height:1.6;color:var(--ink);margin:12px 0 0}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:720px){.cols{grid-template-columns:1fr}}
+  .q{background:var(--card);border:1px solid var(--accent);border-radius:14px;
+     padding:20px 24px;margin:14px 0}
+  .q h3{margin-top:0;color:var(--ink)}
+  ul{margin:8px 0 0;padding-left:20px} li{margin:5px 0}
+  footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);
+         color:var(--muted);font-size:13.5px}
+  .tag{display:inline-block;font:700 10px/1 ui-monospace,monospace;letter-spacing:.1em;
+       text-transform:uppercase;padding:5px 9px;border-radius:999px;border:1px solid currentColor}
+  .t-no{color:var(--accent)} .t-ok{color:var(--ok)} .t-warn{color:var(--warn)}
+</style>
+</head>
+<body><div class="wrap">
+
+<div class="eyebrow">Colaberry Enterprise AI · design note</div>
+<h1>What the portfolio should be, measured against Repo2Reputation</h1>
+<p class="lede">
+  You asked me to design against Kesetebirhan's product rather than iterate on ours again.
+  Doing that properly meant auditing what evidence we actually hold. That audit changed the
+  answer, and it found something live that needs fixing regardless of what we build next.
+</p>
+
+<h2>The finding that changes everything</h2>
+
+<div class="card alarm">
+  <span class="tag t-no">Live now</span>
+  <h3 style="margin-top:12px">We publish content consumption as proof of capability</h3>
+  <p style="margin:0 0 10px">
+    <code>/portfolio/&lt;slug&gt;</code> renders <b>“System Design · Verified by Colaberry ·
+    240 pieces of evidence.”</b> A recruiter reads that as demonstrated skill. It is not.
+  </p>
+  <p style="margin:0 0 10px">
+    Every one of the platform's <b>8,895 evidence rows across 73 learners</b> has
+    <code>source = 'timeline'</code>. Zero exceptions. Timeline means curriculum content
+    opened. And a single item writes <b>one row per band</b>, so the counts multiply:
+  </p>
+<pre>idempotency_key: timeline:&lt;learner&gt;:&lt;item&gt;:system_design:application
+idempotency_key: timeline:&lt;learner&gt;:&lt;item&gt;:system_design:knowledge
+                            ^ same item, two "pieces of evidence"</pre>
+  <p style="margin:12px 0 0">
+    <code>proficiency</code> is a flat <code>60.00</code> for 140 of 277 rows and
+    <code>confidence</code> is exactly <code>1.000</code> throughout. Those are constants,
+    not measurements. <b>This is attendance data wearing the language of assessment.</b>
+  </p>
+</div>
+
+<h2>What we actually hold</h2>
+<div class="card">
+<table>
+  <tr><th>Source</th><th>What it proves</th><th>Coverage</th><th>Publishable?</th></tr>
+  <tr>
+    <td class="k">student_skill_evidence</td>
+    <td>curriculum items opened</td>
+    <td>8,895 rows · 73 learners</td>
+    <td class="no">No — not as capability</td>
+  </tr>
+  <tr>
+    <td class="k">Repo file tree</td>
+    <td>files actually committed</td>
+    <td>22 of 25 connected repos</td>
+    <td class="yes">Yes — earned</td>
+  </tr>
+  <tr>
+    <td class="k">Intake fields</td>
+    <td>what they said they would build</td>
+    <td>7 of 494 have a repo URL<br>1 of 494 states a problem</td>
+    <td class="warn">Yes, but nearly empty</td>
+  </tr>
+  <tr>
+    <td class="k">Community posts</td>
+    <td>their own words, per-post consent</td>
+    <td>39 posts, 19 learners — <b>unreachable</b>, no consent toggle exists</td>
+    <td class="warn">Yes, if consent shipped</td>
+  </tr>
+</table>
+<p style="margin:14px 0 0;color:var(--muted);font-size:14.5px">
+  One trustworthy stream. Two that look richer than they are. That is the whole problem,
+  and no amount of layout work touches it.
+</p>
+</div>
+
+<h2>His product versus ours</h2>
+<div class="cols">
+  <div class="card">
+    <h3 style="margin-top:0">Repo2Reputation</h3>
+    <table>
+      <tr><td class="k">Audience</td><td><b>Recruiters</b> — a first-class role with search, filters, shortlists and contact consent</td></tr>
+      <tr><td class="k">Pipeline</td><td>repo → analysis → skill inference → <b>LLM narrative</b> → page</td></tr>
+      <tr><td class="k">Output</td><td>headline, about narrative, engineering strengths, project descriptions, <b>PDF resume</b></td></tr>
+      <tr><td class="k">Skills</td><td><b>inferred from code</b></td></tr>
+      <tr><td class="k">Trust model</td><td>grounded in analysed repositories rather than self-report</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">Ours today</h3>
+    <table>
+      <tr><td class="k">Audience</td><td>“someone with a link”. No recruiter concept exists</td></tr>
+      <tr><td class="k">Pipeline</td><td>intake fields + file-tree scan → render</td></tr>
+      <tr><td class="k">Output</td><td>a web page</td></tr>
+      <tr><td class="k">Skills</td><td>timeline consumption, <b>mislabelled as evidence</b></td></tr>
+      <tr><td class="k">Trust model</td><td><b>a human mentor approves before publish</b> — he has no equivalent</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <p style="margin:0">
+    He infers skills from code <b>because that is all he has</b>. We assumed we had better —
+    assessed evidence — and we do not. What we do have that he lacks is a
+    <b>human review gate</b>, which is the thing that would make generated narrative safe to
+    publish.
+  </p>
+</div>
+
+<h2>Proposed page</h2>
+<div class="card">
+<pre>Emmanuel Sane
+AI Systems Architect · Cohort July 2026
+[ See it running ]   [ The code ]
+
+WHAT THEY BUILT
+CoreOps
+implementation · Oklahoma Turnpike Authority
+&lt;the problem it solves, in their words&gt;
+&lt;what it automates&gt;
+
+PROVEN IN THEIR REPO                      ← the only earned evidence
+Agent Skills                    7 committed
+Architect Workspace             present
+MCP Server                      built, not yet demonstrated
+
+WHAT THEY SHIPPED
+week 4  intake-router.md        pinned to commit a3f9c1
+week 7  eval-harness.md         pinned to commit 77bd02
+
+IN THEIR OWN WORDS                        ← needs the consent toggle
+week 9  "The war story"
+
+▸ Read the full write-up                  ← generated document, collapsed</pre>
+  <p style="margin:14px 0 0">
+    <b>Deliberately absent:</b> the “N pieces of evidence” band, until the number means what
+    it says. Removing a flattering claim is the single highest-value change on this page —
+    one inflated section costs the reader's belief in every other line.
+  </p>
+</div>
+
+<h2>What closing the gap would take</h2>
+<div class="card">
+<table>
+  <tr><th>#</th><th>Work</th><th>Why</th><th>Size</th></tr>
+  <tr><td class="k">1</td><td><b>Stop publishing consumption as evidence</b></td><td>It is live and misleading now</td><td>small</td></tr>
+  <tr><td class="k">2</td><td>Consent toggle for community posts</td><td>39 posts from 19 learners are stranded with no way to share them</td><td>small</td></tr>
+  <tr><td class="k">3</td><td>Deepen the repo read — languages, frameworks, architecture signals</td><td>His step 1. We stop at folder presence</td><td>medium</td></tr>
+  <tr><td class="k">4</td><td>Infer skills from what the code shows</td><td>Replaces the number we should not be publishing with one we can defend</td><td>medium</td></tr>
+  <tr><td class="k">5</td><td>Generated narrative, <b>behind the existing review gate</b></td><td>His differentiator. Our mentor approval is what makes it safe</td><td>large</td></tr>
+  <tr><td class="k">6</td><td>Fix intake, or drop it</td><td>7 of 494 completed it. A field nobody fills is not a data source</td><td>product</td></tr>
+</table>
+</div>
+
+<h2>Three decisions that are yours</h2>
+
+<div class="q">
+  <h3>1. Do we generate narrative?</h3>
+  <p style="margin:0 0 8px">
+    His product's whole value is that an LLM writes the story from analysed code. Our
+    compiler's stated guarantee is that it <b>invents nothing</b> — that is why a student can
+    defend every line of it at the Expo.
+  </p>
+  <p style="margin:0"><b>These are in direct tension.</b> The reconciliation available to us and
+  not to him: generate only from verified evidence, and let the mentor approve the text
+  before it publishes. The gate already exists and already works.</p>
+</div>
+
+<div class="q">
+  <h3>2. Is the audience a recruiter?</h3>
+  <p style="margin:0">He built for recruiters explicitly — search, shortlists, consented contact.
+  If ours is for hiring managers a student sends a link to, that is a different and simpler
+  product, and we should say so rather than half-build his.</p>
+</div>
+
+<div class="q">
+  <h3>3. Is intake worth saving?</h3>
+  <p style="margin:0">Of 494 enrollments, <b>35</b> have any project, <b>7</b> a repo URL,
+  <b>1</b> a business problem. Either that flow gets fixed, or the page should be built
+  entirely on the repo — which is what he did.</p>
+</div>
+
+<h2>My recommendation</h2>
+<div class="card">
+  <p style="margin:0 0 10px"><b>Do 1 and 2 this week.</b> One removes a live misleading claim;
+  the other unlocks 39 pieces of real student writing that currently cannot reach any page.
+  Neither is large and both make the page more honest immediately.</p>
+  <p style="margin:0 0 10px"><b>Then 3 and 4.</b> Deepening the repo read is the highest-value
+  build, because the repo is the only evidence we have that a student actually earned.</p>
+  <p style="margin:0"><b>Decide 5 explicitly.</b> Generated narrative is the biggest change to
+  what this platform promises. It should be a decision, not a drift.</p>
+</div>
+
+<footer>
+  Session CC-20260823-p4k9 · 2026-08-31 · figures queried from production, read-only.<br>
+  Correction recorded: I earlier told Ali the evidence pipeline was “barely producing”,
+  generalising from his own ledger of one row. It holds 8,895 rows across 73 learners —
+  and none of them mean what the page currently says they mean.
+</footer>
+
+</div></body>
+</html>

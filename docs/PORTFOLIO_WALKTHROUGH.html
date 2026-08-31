@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio walkthrough — four steps</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#fff; --ink:#0f172a; --body:#334155; --muted:#64748b;
+    --line:#e2e8f0; --accent:#b91c1c; --accent-soft:#fef2f2; --ok:#15803d;
+    --code:#f1f5f9; --shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b1120; --card:#111827; --ink:#f1f5f9; --body:#cbd5e1; --muted:#94a3b8;
+      --line:#1f2937; --accent:#f87171; --accent-soft:#1f1315; --ok:#4ade80;
+      --code:#0f172a; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--body);
+       font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;}
+  .wrap{max-width:860px;margin:0 auto;padding:48px 24px 96px}
+  header{margin-bottom:8px}
+  .eyebrow{font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;
+           text-transform:uppercase;color:var(--muted)}
+  h1{font-size:32px;line-height:1.2;color:var(--ink);margin:12px 0 10px;letter-spacing:-.02em}
+  .lede{font-size:17px;color:var(--body);margin:0 0 34px;max-width:62ch}
+
+  .note{background:var(--accent-soft);border:1px solid var(--line);border-left:3px solid var(--accent);
+        border-radius:10px;padding:16px 18px;margin:0 0 34px}
+  .note b{color:var(--ink)}
+
+  ol.steps{list-style:none;counter-reset:s;margin:0;padding:0}
+  ol.steps>li{counter-increment:s;position:relative;background:var(--card);border:1px solid var(--line);
+       border-radius:14px;padding:22px 24px 22px 68px;margin:0 0 16px;box-shadow:var(--shadow)}
+  ol.steps>li::before{content:counter(s);position:absolute;left:22px;top:22px;width:30px;height:30px;
+       border-radius:50%;background:var(--ink);color:var(--card);display:grid;place-items:center;
+       font:700 15px/1 inherit}
+  li.hero{border-color:var(--accent)}
+  li.hero::before{background:var(--accent);color:#fff}
+  .tag{display:inline-block;font:600 10px/1 ui-monospace,monospace;letter-spacing:.1em;
+       text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);
+       border-radius:999px;padding:4px 9px;margin-bottom:10px}
+  h2{font-size:19px;color:var(--ink);margin:0 0 6px;letter-spacing:-.01em}
+  .where{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px;
+         background:var(--code);border:1px solid var(--line);border-radius:8px;
+         padding:8px 11px;margin:10px 0;word-break:break-all}
+  .where a{color:inherit;text-decoration:none}
+  .expect{margin:12px 0 0;padding:12px 14px;border-left:2px solid var(--line)}
+  .expect strong{color:var(--ink)}
+  ul{margin:8px 0 0;padding-left:20px}
+  li.b{margin:5px 0}
+
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:16px;
+      overflow-x:auto;font-size:13px;line-height:1.6;color:var(--ink);margin:14px 0 0}
+  h3{font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+     margin:40px 0 12px;font-weight:700}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;
+         padding:20px 24px;box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;font-size:14.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:.05em;text-transform:uppercase}
+  td.k{color:var(--ink);font-weight:600;white-space:nowrap}
+  .ok{color:var(--ok);font-weight:600}
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);
+         color:var(--muted);font-size:13.5px}
+  @media print{body{background:#fff}.panel,ol.steps>li{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Colaberry Enterprise AI · Portfolio</div>
+  <h1>Walk the four steps</h1>
+  <p class="lede">
+    Everything is deployed. Your portfolio page currently shows no projects, and that is
+    the design working rather than failing. These four steps unfreeze it, and step 2 is
+    the piece you asked for and could not see before.
+  </p>
+</header>
+
+<div class="note">
+  <b>Why projects are missing right now.</b> Project text is written by you, not computed by
+  the system, so it is frozen at the moment a reviewer approves it. Your page was approved
+  before projects were ever published, so its snapshot has none. Nobody can be approved and
+  then quietly rewrite what a reviewer read. Asking for review again refreshes the snapshot.
+</div>
+
+<ol class="steps">
+
+  <li>
+    <h2>Ask for review</h2>
+    <div class="where"><a href="https://enterprise.colaberry.ai/portal/portfolio">enterprise.colaberry.ai/portal/portfolio</a> → <b>Publishing</b> tab</div>
+    <div class="expect">
+      <strong>Do:</strong> press <em>Ask for review</em> in the “Your portfolio page” panel.<br>
+      <strong>You should see:</strong> the button becomes <em>Review requested</em>, and the
+      status line reads “Waiting on a mentor to review it.”
+    </div>
+  </li>
+
+  <li class="hero">
+    <span class="tag">The part you asked for</span>
+    <h2>See the page before you judge it</h2>
+    <div class="where"><a href="https://enterprise.colaberry.ai/admin/career-review">enterprise.colaberry.ai/admin/career-review</a></div>
+    <div class="expect">
+      <strong>Do:</strong> find your name under <em>Portfolio pages</em>, then press
+      <em>Show me the page</em>.<br>
+      <strong>You should see:</strong> the portfolio rendered inline, above the decision
+      buttons. This is the same component and the same payload the public page uses, so what
+      you approve is exactly what publishes.
+    </div>
+    <ul>
+      <li class="b">Hard-refresh first (<b>Ctrl</b>+<b>Shift</b>+<b>R</b>) — the bundle changed.</li>
+      <li class="b">If it says <b>not authorised</b> instead of an empty list, that is the new
+          visible error. Tell me and I will fix it rather than you guessing.</li>
+    </ul>
+  </li>
+
+  <li>
+    <h2>Approve and publish</h2>
+    <div class="where">Same screen → <b>Approve and publish</b></div>
+    <div class="expect">
+      <strong>What this does:</strong> freezes your project text into the approved snapshot
+      and sets the page live. It is the only path that publishes — no automatic route exists.
+    </div>
+  </li>
+
+  <li>
+    <h2>Open it as a stranger would</h2>
+    <div class="where"><a href="https://enterprise.colaberry.ai/portfolio/ali-muwwakkil">enterprise.colaberry.ai/portfolio/ali-muwwakkil</a></div>
+    <div class="expect">
+      <strong>You should see:</strong> “What they built” leading with the system, and the
+      generated document demoted to “Written up”.
+    </div>
+  </li>
+
+</ol>
+
+<h3>What step 4 should render</h3>
+<div class="panel">
+<pre>WHAT THEY BUILT (2)
+
+  AI-Powered Curriculum Orchestration System
+  implementation · Education Technology / AI Training · Colaberry Enterprise AI Accelerator
+  Scaling personalized AI leadership training while maintaining quality and engagement
+  Automate content personalization, progress tracking, and learner guidance
+  [ See it running ]   [ The code ]
+
+  PropertyPulse AI
+  discovery
+
+WRITTEN UP (1)
+  Enterprise AI Strategy — Executive Deliverable</pre>
+  <p style="margin:14px 0 0;color:var(--muted);font-size:14px">
+    PropertyPulse AI shows as a name and a stage because that is all it holds. It is not
+    padded out, deliberately — one inflated section costs the page every other claim on it.
+  </p>
+</div>
+
+<h3>Deployed and verified</h3>
+<div class="panel">
+<table>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td class="k">Public API</td><td><span class="ok">HTTP 200</span>, <code>projects</code> now in the contract</td></tr>
+  <tr><td class="k">Project payload</td><td>use case, problem, goal, repo and demo all present</td></tr>
+  <tr><td class="k">share_token in payload</td><td><span class="ok">absent</span> — it is a live access credential and is refused by shape</td></tr>
+  <tr><td class="k">Internal scores</td><td><span class="ok">absent</span> — maturity, health, velocity, stability</td></tr>
+  <tr><td class="k">Backend tests</td><td><span class="ok">96 / 96</span> across 5 suites</td></tr>
+</table>
+</div>
+
+<h3>What I could not check myself</h3>
+<div class="panel">
+  <p style="margin:0">
+    Step 2 needs your admin session. That is the exact hop where a wrong-token bug hid from
+    me earlier today — every server-side check passed while the screen was broken for you —
+    so I would rather you look at it than have me assert it works.
+  </p>
+</div>
+
+<footer>
+  Session CC-20260823-p4k9 · deployed 2026-08-28 ·
+  <a href="https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/1908" style="color:inherit">PR #1908</a>
+  <br>
+  Separately: another session recreated the backend container during this deploy, and
+  <b>1 of 432 active learners has a repo connected</b> — the reason most portfolios would
+  still be thin.
+</footer>
+
+</div>
+</body>
+</html>
