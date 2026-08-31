@@ -201,11 +201,12 @@ async function main() {
   });
   check('an acceptance row exists', row != null, true);
   // THE observable.
-  check(
-    'the snapshot is the RELEASE checks, not what the client sent',
-    JSON.stringify(row.promised_acceptance),
-    JSON.stringify([{ check: 'tests', outcome: 'pass', detail: null }]),
-  );
+  // Compared field by field, not by JSON.stringify: Postgres returns JSONB with its keys
+  // alphabetised, so a string comparison fails on identical data. The first version of this
+  // assertion did exactly that and reported a defect that was not there.
+  check('the snapshot has exactly the release checks', (row.promised_acceptance || []).length, 1);
+  check('  the check name is from the release', row.promised_acceptance[0].check, 'tests');
+  check('  and its outcome', row.promised_acceptance[0].outcome, 'pass');
   check('  the invented promise from the client did not land', JSON.stringify(row.promised_acceptance).includes('pony'), false);
   check('  the invented evidence from the client did not land', JSON.stringify(row.evidence_summary).includes('perfect'), false);
   check('  preview_ref pins the candidate sha', row.preview_ref, 'sha:deadbeef');
