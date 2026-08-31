@@ -79,6 +79,7 @@ import { ensureAgentManagerConversationSchema } from './db/ensureAgentManagerCon
 import { ensureAgentGoalSchema } from './db/ensureAgentGoalSchema';
 import { ensureAgentOneOnOneSchema } from './db/ensureAgentOneOnOneSchema';
 import { ensureAgentReportSubscriptionSchema } from './db/ensureAgentReportSubscriptionSchema';
+import { ensureAgentReportRunSchema } from './db/ensureAgentReportRunSchema';
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
@@ -2697,6 +2698,12 @@ async function start(): Promise<void> {
   // it; a manager writes the first row via POST .../report-subscriptions.
   // Report generation/delivery is a separate, later piece.
   await ensureAgentReportSubscriptionSchema();
+  // AI Workforce Management, Checkpoint D — one attempt to generate/deliver
+  // a subscription's report for one delivery period. Additive, idempotent,
+  // no flag. No seeder writes to it; the AgentReportSubscriptionDispatch
+  // cron (schedulerService.ts) writes the first row on the first tick
+  // where an enabled subscription's local delivery hour matches.
+  await ensureAgentReportRunSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();

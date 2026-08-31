@@ -110,7 +110,7 @@ async function main() {
   console.log(`[A] intern ${intern.id} on project ${project.id}`);
 
   const adminToken = jwt.sign(
-    { id: mentor.id, platform_identity_id: mentor.id, email: mentorEmail, role: 'super_admin' },
+    { id: mentor.id, sub: mentor.id, platform_identity_id: mentor.id, email: mentorEmail, role: 'super_admin' },
     env.jwtSecret,
     { expiresIn: 900 },
   );
@@ -128,19 +128,30 @@ async function main() {
 
   // --- the story ------------------------------------------------------------------------
   const story = await api('POST', `/api/refactored/admin/projects/${project.id}/stories`, {
+    // Real field names, read from validateStoryContract rather than invented. The first
+    // version of this fixture used businessOutcome / acceptanceCriteria / requirements and
+    // a riskLevel of 'low'. None of those exist: the fields are fulfills / acceptance, and
+    // risk levels are R0-R5. The contract was refused 422, correctly.
     contract: {
       storyId: STORY_KEY,
       title: 'Intern sandbox: add a CSV export to the reporting page',
-      businessOutcome: 'An analyst can take the weekly numbers into a spreadsheet.',
-      acceptanceCriteria: [
+      fulfills: ['REQ-A-1'],
+      riskLevel: 'R1',
+      acceptance: [
         'A download button appears on the reporting page.',
         'The file contains the same rows the page displays.',
       ],
-      requirements: ['REQ-A-1'],
+      failurePaths: ['The report query times out and the download returns an error.'],
+      testRequirements: ['A unit test asserting the CSV rows match the rendered rows.'],
     },
     isUiStory: true,
   });
   check('a story contract is accepted', story.status, 201);
+  if (story.status !== 201) {
+    // Print what the validator objected to, so a fixture drift is diagnosable from the
+    // run output instead of requiring a second trip through the validator source.
+    console.log(`  issues: ${JSON.stringify(story.body.issues)}`);
+  }
 
   // --- evidence, recorded through the real endpoint ---------------------------------------
   const evidence = await api('POST', `/api/refactored/admin/projects/${project.id}/evidence`, {
