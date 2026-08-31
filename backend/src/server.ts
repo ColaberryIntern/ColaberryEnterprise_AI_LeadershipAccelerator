@@ -38,6 +38,7 @@ import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
+import { startRepoTreeRefresh } from './services/repoTree/repoTreeRefreshService';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 import { seedDepartments } from './seeds/seedDepartments';
@@ -3054,6 +3055,12 @@ async function start(): Promise<void> {
   if (env.enableFollowUpScheduler) {
     startScheduler();
   }
+
+  // Keep the platform's view of student repositories current. Nothing re-read a repo
+  // after the one-time setup flows, so a student could commit finished work and have
+  // the portfolio keep showing a months-old snapshot. Read-only against GitHub, capped
+  // per sweep, and safe to call twice.
+  startRepoTreeRefresh();
 
   // Register the cognitive-incident email subscriber (BC #10099862873 P1 item 3,
   // idempotent — re-registering on restart is safe, registerIncidentSubscriber
