@@ -11,7 +11,8 @@
  * | Concern | Behaviour |
  * |---|---|
  * | One repo fails | Caught per connection. The sweep continues; one bad repo costs that repo. |
- * | Rate limit | Hard cap per run (`limit`). Oldest-first selection means the backlog drains across runs. |
+ * | Rate limit | Paced between connections, and the sweep yields after repeated throttling. See `repoTreeRateLimit.ts` -- the first production run 403'd all 25 because a cap alone bounds how many requests a run makes, not how fast. |
+ * | Backlog size | Hard cap per run (`limit`). Oldest-first selection means it drains across runs. |
  * | Token expired / repo deleted | `syncFileTree` throws, logged with `error_class`, connection left untouched for the next sweep. |
  * | Recompile fails | Caught separately. A refreshed tree is still an improvement, so the sync is not rolled back. |
  * | Run overlaps a previous run | Guarded by `running`, because a sweep can outlive its interval. |
@@ -26,18 +27,25 @@
  */
 import cron, { type ScheduledTask } from 'node-cron';
 import { RefreshCandidate, selectStale } from './repoTreeStaleness';
+import {
+  DEFAULT_DELAY_MS, delayBefore, isRateLimited, shouldBackOff,
+} from './repoTreeRateLimit';
 
 export interface RefreshSummary {
   attempted: number;
   succeeded: number;
   failed: number;
   recompiled: number;
+  /** True when the sweep stopped early because GitHub was throttling us. */
+  backedOff: boolean;
 }
 
 /** Default cadence and batch size. Six hours keeps a student's work at most a session old. */
 export const DEFAULT_MAX_AGE_HOURS = 6;
 export const DEFAULT_LIMIT = 25;
 const DEFAULT_CRON = '17 */6 * * *'; // offset from the hour so it does not pile onto other jobs
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 function log(event: string, outcome: string, context: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({
@@ -79,10 +87,14 @@ async function recompileIfRecordExists(enrollmentId: string): Promise<boolean> {
 export async function refreshStaleRepoTrees(opts?: {
   maxAgeHours?: number;
   limit?: number;
+  delayMs?: number;
 }): Promise<RefreshSummary> {
   const maxAgeHours = opts?.maxAgeHours ?? DEFAULT_MAX_AGE_HOURS;
   const limit = opts?.limit ?? DEFAULT_LIMIT;
-  const summary: RefreshSummary = { attempted: 0, succeeded: 0, failed: 0, recompiled: 0 };
+  const delayMs = opts?.delayMs ?? DEFAULT_DELAY_MS;
+  const summary: RefreshSummary = {
+    attempted: 0, succeeded: 0, failed: 0, recompiled: 0, backedOff: false,
+  };
 
   const { default: GitHubConnection } = await import('../../models/GitHubConnection');
   const rows: any[] = await GitHubConnection.findAll().catch((err: any) => {
@@ -104,12 +116,23 @@ export async function refreshStaleRepoTrees(opts?: {
 
   const { syncFileTree } = await import('../githubService');
 
-  for (const enrollmentId of due) {
+  let consecutiveRateLimited = 0;
+
+  for (let i = 0; i < due.length; i += 1) {
+    const enrollmentId = due[i];
+
+    // Pacing, not politeness. The first production sweep fired ~50 requests inside a
+    // second and GitHub 403'd all 25 connections; a single sync straight afterwards
+    // succeeded. The cap bounds how many requests a run makes, never how fast.
+    const wait = delayBefore(i, delayMs);
+    if (wait > 0) await sleep(wait);
+
     summary.attempted += 1;
     const startedAt = Date.now();
     try {
       const { fileCount } = await syncFileTree(enrollmentId);
       summary.succeeded += 1;
+      consecutiveRateLimited = 0;
       log('repo_tree_refreshed', 'success', {
         enrollment_id: enrollmentId, file_count: fileCount, duration_ms: Date.now() - startedAt,
       });
@@ -124,10 +147,26 @@ export async function refreshStaleRepoTrees(opts?: {
       }
     } catch (err: any) {
       summary.failed += 1;
+      const throttled = isRateLimited(err?.message);
+      consecutiveRateLimited = throttled ? consecutiveRateLimited + 1 : 0;
+
       log('repo_tree_refresh_failed', 'failure', {
         enrollment_id: enrollmentId, error_class: err?.name ?? 'Error', error: err?.message,
-        duration_ms: Date.now() - startedAt,
+        rate_limited: throttled, duration_ms: Date.now() - startedAt,
       });
+
+      // Yield rather than work through the rest of the batch. Continuing would turn one
+      // blocked request into twenty-five and deepen the block. Nothing is lost: selection
+      // is oldest-first and only a success stamps `last_sync_at`, so the untouched
+      // connections come back at the head of the next sweep.
+      if (shouldBackOff(consecutiveRateLimited)) {
+        summary.backedOff = true;
+        log('repo_tree_refresh_backed_off', 'failure', {
+          consecutive_rate_limited: consecutiveRateLimited,
+          remaining: due.length - (i + 1),
+        });
+        break;
+      }
     }
   }
 
