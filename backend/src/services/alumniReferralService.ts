@@ -222,11 +222,35 @@ export async function submitReferral(
         order: [['created_at', 'DESC']],
       });
     }
-    // Fallback to any active warm_nurture
+    // NO FALLBACK. This used to drop through to `{ type: 'warm_nurture',
+    // status: 'active' }` ordered by `created_at DESC` — the newest active
+    // warm-nurture campaign, whatever it happened to be.
+    //
+    // That is a type-and-recency match, not a targeting decision, and it fires
+    // exactly when something is already wrong: the named referral campaign is
+    // paused or renamed. So a person personally introduced by an alumnus would
+    // be enrolled into whichever unrelated campaign was created most recently
+    // and receive its copy — an activation nudge telling them to start a course
+    // they have never heard of, say. Wrong message, real person, and invisible:
+    // the referral still reads `campaign_assigned` and every count looks healthy.
+    //
+    // A missing campaign is now REPORTED, not substituted. The lead is still
+    // created and the referrer still credited (both happen above); only the
+    // enrollment is skipped, and the referral stays at `lead_created`, which is
+    // exactly what is true.
     if (!campaign) {
-      campaign = await Campaign.findOne({
-        where: { type: 'warm_nurture', status: 'active' },
-        order: [['created_at', 'DESC']],
+      const sought =
+        data.referral_type === 'introduced'
+          ? 'active campaign named "Colaberry Alumni Referrals Campaign"'
+          : 'a cold_outbound campaign';
+      console.warn(
+        `[AlumniReferral] No campaign for referral ${referral.id} (${data.referral_type}) — ` +
+          `looked for ${sought}. Lead created and referrer credited; no enrollment.`,
+      );
+      await ReferralActivityEvent.create({
+        referral_id: referral.id,
+        event_type: 'campaign_assignment_failed',
+        metadata: { referral_type: data.referral_type, sought, lead_id: lead.id },
       });
     }
 
