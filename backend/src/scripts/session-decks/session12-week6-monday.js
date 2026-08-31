@@ -336,21 +336,22 @@ const teach = [
   /* ================= MICRO-BUILD — 2 built, 2 taught =============== */
   {
     segment: 'micro-build', eyebrow: '🔍 The floor', title: 'You cannot verify a notification you cannot see — Inspector open first',
-    body: 'Everything in this segment is invisible unless you have something that shows you the protocol traffic. The MCP Inspector is a browser tool that speaks MCP directly, so you can call your tools by hand and watch notifications arrive live without writing any client code. Run this in your TERMINAL, not in Claude Code, from your Week 5 server folder. Do not move past this slide until one of your existing tools round-trips. This is the floor for the rest of tonight and all of Thursday.',
+    body: 'Everything in this segment is invisible unless you have something that shows you the protocol traffic. The MCP Inspector is a browser tool that speaks MCP directly, so you can call your tools by hand and watch notifications arrive live without writing any client code. You are not going to set it up by hand — you are going to direct Claude Code to work out how your server builds and starts, get the Inspector running against it, and prove it with a real tool call. Do not move past this slide until one of your existing tools round-trips. This is the floor for the rest of tonight and all of Thursday.',
     bullets: [
       'The Inspector speaks MCP — no client code needed',
       'This is how you will SEE progress ticks arrive',
+      'Let Claude Code find your build path — do not guess it',
       'Get one Week 5 tool answering before you add anything',
       'Red connection? Mentor now, not at the break.',
     ],
     code: {
       kind: 'paste',
-      pasteWhere: 'your TERMINAL (not Claude Code)',
-      label: 'Terminal — launch your Week 5 server under the Inspector',
-      code: '# 1. from inside your Week 5 MCP server folder\nnpm install\n\n# 2. launch YOUR server under the MCP Inspector\nnpx @modelcontextprotocol/inspector node build/server.js\n\n# 3. in the browser window that opens:\n#    Connect  ->  Tools  ->  pick any tool  ->  Run\n#    you must get a real result back before you go on',
-      expectedResult: 'A browser window opens, the connection goes green, your Week 5 tools are listed, and one tool call returns a real result.',
+      pasteWhere: 'Claude Code',
+      label: 'Claude Code prompt — get the Inspector running against MY server',
+      code: 'Get the MCP Inspector running against the MCP server in this project, so I can call my tools by hand and watch protocol traffic live.\n\n1. First work out how this server actually builds and starts. Tell me the build output path you found and how you found it, before you run anything.\n2. Install dependencies if they are missing, build the server, then launch it under the MCP Inspector.\n3. Run these steps yourself in this project — do not print commands for me to copy and paste.\n4. When it is up, tell me the URL to open, and name which of my existing tools to call first as a smoke test.\n5. If the connection fails, read the actual startup error and fix the cause. Do not re-run the same command hoping for a different result.\n\nStop when I can call one of my own tools in the Inspector and get a real result back.',
+      expectedResult: 'Claude Code names your build path, starts the Inspector, and hands you a URL. The connection goes green, your Week 5 tools are listed, and one tool call returns a real result.',
       stopCondition: 'One of your own tools round-trips in the Inspector.',
-      rescue: 'Nothing loads? Check you are in the server folder and that the build output path matches the command. If the connection drops instantly, run your server on its own first and read the startup error.',
+      rescue: 'If it stalls, tell it to run your server on its own first and read the startup error out loud to you — the cause is almost always a wrong build path or a missing build step, and it can find both faster than you can.',
     },
     diagram: `flowchart LR
   T["⌨️ Your terminal"] --> INS["🔍 MCP Inspector"]
@@ -358,10 +359,11 @@ const teach = [
   SRV --> RES["✅ A real result"]`,
     script: [
       'SITUATION: Build segment opens. This is a GATE, not a lesson — nothing after it works without it.',
-      'ROOM: Screen-share your terminal. Inspector command ready to paste. Mentors standing, not sitting.',
+      'ROOM: Screen-share Claude Code. Mentors standing, not sitting.',
       'MOOD: Brisk and operational. No storytelling here.',
-      'OPEN: "Nothing we build next is visible unless you can see the protocol traffic. Terminal, not Claude Code."',
+      'OPEN: "Nothing we build next is visible unless you can see the protocol traffic. So we are going to have Claude Code stand that up for us."',
       'DO: Demonstrate ONCE, slowly, then STOP TALKING and let the room work.',
+      'NOTE: Everything tonight is a prompt. Nobody types a shell command — if it needs a terminal, Claude Code drives the terminal.',
       'NOTE: Use the pulse rail as a hard gate — nobody starts the build on a red connection. Mentors to anyone stuck immediately.',
     ].join('\n'),
   },
