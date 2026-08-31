@@ -20,6 +20,8 @@ import DeliveryProject from '../../models/DeliveryProject';
 import DeliveryProjectMember from '../../models/DeliveryProjectMember';
 import DeliveryProjectSourceLink from '../../models/DeliveryProjectSourceLink';
 import DeliveryRelease from '../../models/DeliveryRelease';
+import DeliverySignalCandidate from '../../models/DeliverySignalCandidate';
+import DeliveryExperienceClaim from '../../models/DeliveryExperienceClaim';
 import DeliveryStory from '../../models/DeliveryStory';
 
 /**
@@ -87,6 +89,8 @@ const PAIRS: Array<{ table: string; model: { getAttributes(): Record<string, unk
   { table: 'delivery_project_members', model: DeliveryProjectMember },
   { table: 'delivery_project_source_links', model: DeliveryProjectSourceLink },
   { table: 'delivery_releases', model: DeliveryRelease },
+  { table: 'delivery_signal_candidates', model: DeliverySignalCandidate },
+  { table: 'delivery_experience_claims', model: DeliveryExperienceClaim },
   { table: 'delivery_stories', model: DeliveryStory },
 ];
 

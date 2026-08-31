@@ -148,13 +148,13 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 
 | # | Scenario | Components built & unit-tested | E2E executed |
 |---|---|---|---|
-| A | Intern sandbox | ✅ Gates 7, 8, 9, 11 | ⛔ no |
+| A | Intern sandbox | ✅ Gates 7, 8, 9, 11 | ✍️ **WRITTEN 2026-08-31, not yet executed** |
 | B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ⚠️ **PARTIAL — 2026-08-29, projection half passed; acceptance half has no writer** |
 | C | Multi-project builder | ✅ Gates 2, 11, 12 | ✅ **YES — 2026-08-30, passed** (mentor-exception half still unwired) |
-| D | Government | ✅ Gates 5, 9, 13, 14 | ⛔ no |
-| E | Existing student Project | ✅ Gate 1 | ⛔ no |
+| D | Government | ✅ Gates 5, 9, 13, 14 | ✍️ **WRITTEN 2026-08-31, not yet executed** |
+| E | Existing student Project | ✅ Gate 1 | ✍️ **WRITTEN 2026-08-31, not yet executed** |
 | F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ✅ **YES — 2026-08-28, passed** |
-| G | Production feedback | ✅ Gate 14 | ⛔ no |
+| G | Production feedback | ✅ Gate 14 | ✍️ **WRITTEN 2026-08-31, not yet executed** |
 
 ## Scenario C — executed 2026-08-30, PASSED
 
@@ -331,3 +331,66 @@ Items 1–6 are engineering. Item 7 is a decision only Ali can make.
 
 So the remaining six scenarios are blocked on **being written**, not on anything missing.
 F is done. A–E and G are the work.
+
+
+---
+
+## A, D, E and G — written 2026-08-31. NOT YET EXECUTED.
+
+The scripts exist and the paths they drive exist. **No result is reported here, because
+they have not been run against a running instance yet.** This document's own rule.
+
+Writing them was mostly not a test-writing exercise. Each of the four needed a production
+path that did not exist:
+
+| # | Script | What had to be built first |
+|---|---|---|
+| A | `scenarioA-experienceLedger.js` | `delivery_experience_claims` + `experienceClaims.ts` + 2 endpoints. `evaluateClaim` had no table, so no claim could ever be earned. |
+| D | `scenarioD-governmentRelease.js` | 5 release endpoints and `waiveReleaseCheck`. Nothing could record a waiver. |
+| E | `scenarioE-studentProjectIntact.js` | `projectSourceLink.ts` + 2 endpoints. `DeliveryProjectSourceLink` had a model and a table and **no service or route at all**. |
+| G | `scenarioG-productionFeedback.js` | `delivery_signal_candidates` + `signalIntake.ts` + 2 endpoints. `operateSignals.ts` was pure with nowhere to write, so no signal could arrive. |
+
+### What each one is actually careful about
+
+**D** asserts the *control* as well as the failure: after recording every mandatory check
+except accessibility, the only remaining check blocker must be accessibility. Without that,
+"not ready" could mean anything at all was missing and the test would pass even if the gate
+had stopped looking. It also asserts that a recorded `not_run` does not satisfy the gate —
+recording a check without measuring it is the cheapest way to quiet one — and that the
+waiver is **still on the record after approval**, since folding it away at that point would
+leave a finished record claiming a clean government release that never had an a11y run.
+
+**E** compares `row_to_json` of the whole student row as a string, not a field-by-field
+check of the columns the script thinks matter. `updated_at` is inside that JSON, so a bare
+touch — the most likely regression and the easiest to miss — fails. It uses the **oldest
+existing** student project rather than one it created, because a row with no enrollment and
+no progression is a weak subject for a §24 non-regression claim.
+
+**G** tests an absence, so it snapshots counts of every table a signal could plausibly have
+written to plus the project row itself, before and after. A script asserting only "a
+candidate exists" would pass just as happily on a system that also silently opened a story.
+
+**A** is marked **PARTIAL by design**: it covers story → evidence → earned claim traceable
+to a real `delivery_evidence` row, and every refusal path. It does **not** cover the
+`-> Claude Code ->` leg — the evidence is recorded through the evidence endpoint, not
+produced by an autonomous agent run, and nothing in the script proves an agent executed
+anything.
+
+### Two rules that came out of writing these
+
+**The caller never describes its own evidence.** `claimFromEvidence` reads `evidence_type`
+and `outcome` from the row and has no parameter for them. A caller that can describe its
+own evidence can substantiate anything, and the ledger would record claims about a world it
+was told existed.
+
+**Silence is not an attestation.** `evaluateClaim` rejects `builderDidTheWork: false`, but
+the field is optional on `ClaimCandidate`, so *omitting* it passes. That is credit for
+attendance arriving through the one door the pure rule leaves open, so the service requires
+an explicit boolean and the column is `NOT NULL`.
+
+### Still not covered by anything
+
+- **A's agent-run leg.** Needs `ExecutionProvider` actually executing.
+- **B's acceptance half.** `delivery_client_acceptances` still has no writer.
+- **C's mentor-exception half.** Now unblocked — Gate 11 is wired as of PR #1949 — but the
+  scenario has not been extended to assert it.
