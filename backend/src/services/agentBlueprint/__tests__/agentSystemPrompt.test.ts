@@ -9,13 +9,18 @@ jest.mock('../../learnerContextService', () => ({
 jest.mock('../../managerDirectiveService', () => ({
   getActiveDirectiveTexts: jest.fn(),
 }));
+jest.mock('../../agentMemoryProposalService', () => ({
+  getApprovedMemoryTexts: jest.fn(),
+}));
 
 import { getLearnerContextBlock } from '../../learnerContextService';
 import { getActiveDirectiveTexts } from '../../managerDirectiveService';
+import { getApprovedMemoryTexts } from '../../agentMemoryProposalService';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 
 const mockLearnerContext = getLearnerContextBlock as unknown as jest.Mock;
 const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
+const mockApprovedMemory = getApprovedMemoryTexts as unknown as jest.Mock;
 
 const CURRICULUM_QA_PERSONA = `You are CurriculumQA, a review agent that checks generated curriculum content for
 factual and pedagogical quality before it reaches students.
@@ -30,6 +35,7 @@ GUARDRAILS (never do these):
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockApprovedMemory.mockResolvedValue([]);
 });
 
 describe('buildAgentSystemPrompt', () => {
@@ -81,7 +87,9 @@ describe('buildAgentSystemPrompt — manager directive injection (Checkpoint C, 
     const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-6');
 
     expect(mockActiveDirectives).not.toHaveBeenCalled();
+    expect(mockApprovedMemory).not.toHaveBeenCalled();
     expect(prompt).not.toContain('MANAGER DIRECTIVES');
+    expect(prompt).not.toContain('APPROVED MEMORY');
   });
 
   it('happy path: agentId with active directives injects a real MANAGER DIRECTIVES block', async () => {
@@ -116,5 +124,42 @@ describe('buildAgentSystemPrompt — manager directive injection (Checkpoint C, 
     const personaEndIndex = prompt.indexOf('GUARDRAILS') + 'GUARDRAILS'.length;
     const directiveIndex = prompt.indexOf('MANAGER DIRECTIVES');
     expect(directiveIndex).toBeGreaterThan(personaEndIndex);
+  });
+});
+
+describe('buildAgentSystemPrompt — approved memory injection (Checkpoint E, 2026-08-31)', () => {
+  it('happy path: agentId with approved memory injects a real APPROVED MEMORY block — the actual proof approval state is read by the runtime, not a dead flag', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockActiveDirectives.mockResolvedValue([]);
+    mockApprovedMemory.mockResolvedValue(['This learner responds best to worked examples before theory.']);
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-10', { agentId: 'agent-4' });
+
+    expect(mockApprovedMemory).toHaveBeenCalledWith('agent-4');
+    expect(prompt).toContain('APPROVED MEMORY');
+    expect(prompt).toContain('This learner responds best to worked examples before theory.');
+  });
+
+  it('boundary: agentId given but zero approved memories — no memory block, no crash', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockActiveDirectives.mockResolvedValue([]);
+    mockApprovedMemory.mockResolvedValue([]);
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-11', { agentId: 'agent-5' });
+
+    expect(mockApprovedMemory).toHaveBeenCalledWith('agent-5');
+    expect(prompt).not.toContain('APPROVED MEMORY');
+  });
+
+  it('directives and approved memory can both appear in the same prompt, as two distinct additive blocks', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockActiveDirectives.mockResolvedValue(['Escalate unresolved threads after 48 hours.']);
+    mockApprovedMemory.mockResolvedValue(['This learner prefers written feedback over live calls.']);
+
+    const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-12', { agentId: 'agent-6' });
+
+    expect(prompt).toContain('MANAGER DIRECTIVES');
+    expect(prompt).toContain('APPROVED MEMORY');
+    expect(prompt.indexOf('APPROVED MEMORY')).toBeGreaterThan(prompt.indexOf('MANAGER DIRECTIVES'));
   });
 });
