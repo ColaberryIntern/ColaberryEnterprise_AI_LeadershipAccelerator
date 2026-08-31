@@ -763,6 +763,58 @@ export async function ensureRefactoredDeliverySchema(): Promise<void> {
  * stories with the same id on one project would make evidence ambiguous, which is the
  * one thing evidence cannot afford to be.
  */
+/**
+ * Delivery releases.
+ *
+ * `delivery_releases` did not exist - the Gate 9 schema comment says releases belong to
+ * Gate 14, and Gate 14 shipped `evaluateReleaseGate` as pure logic with nothing to
+ * evaluate. The gate had zero production callers for the same reason the quality gate
+ * did: there was no release to ask about.
+ *
+ * ## A release is a RECORD, not a deployment
+ *
+ * `releaseGate.ts` draws this line itself: `evaluateReleaseGate` answers *readiness* and
+ * `assertDeploymentAuthorized` answers *may this be deployed*. They are separate
+ * functions because they are separate questions, and conflating them would mean a row
+ * appearing in this table could push code. It cannot. Creating a release candidate
+ * records an intention and invites the gate to object.
+ *
+ * ## approved_by_identity_id is the point of the table
+ *
+ * The gate blocks with `approver_missing` when it is absent, and its own comment says
+ * *a release is approved by a person, never by a pipeline*. Storing the approver next to
+ * the checks is what makes that claim auditable later rather than merely asserted at the
+ * moment of approval.
+ *
+ * `check_results` and `goals_scores` are JSONB for the same reason the story contract is:
+ * both are small, evolving shapes that a validator - not Postgres - decides the
+ * correctness of. `profile_key` is promoted because the gate's mandatory-check set is
+ * derived from it, so a release cannot be interpreted without it.
+ */
+const DELIVERY_RELEASES: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_releases (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     version VARCHAR(60) NOT NULL,
+     status VARCHAR(30) NOT NULL DEFAULT 'candidate',
+     profile_key VARCHAR(60) NOT NULL,
+     candidate_sha VARCHAR(64),
+     check_results JSONB NOT NULL DEFAULT '[]'::jsonb,
+     waived_categories JSONB NOT NULL DEFAULT '[]'::jsonb,
+     goals_scores JSONB,
+     approved_by_identity_id UUID,
+     approved_at TIMESTAMPTZ,
+     created_by_identity_id UUID,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // One release per version per project. Two rows sharing a version would make
+  // "what shipped" unanswerable, which is the one question a release record exists for.
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_releases_project_version_unique
+     ON delivery_releases (delivery_project_id, version)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_releases_project_status
+     ON delivery_releases (delivery_project_id, status)`,
+];
 const DELIVERY_STORIES: string[] = [
   `CREATE TABLE IF NOT EXISTS delivery_stories (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -816,5 +868,6 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...CLIENT_REVIEW_ROOM,
   ...CAPACITY_AND_ECONOMICS,
   ...DELIVERY_STORIES,
+  ...DELIVERY_RELEASES,
   ...CLIENT_MAGIC_LINK,
 ];
