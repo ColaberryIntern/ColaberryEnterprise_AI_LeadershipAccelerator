@@ -825,10 +825,27 @@ const DELIVERY_STORIES: string[] = [
      risk_level VARCHAR(20),
      is_ui_story BOOLEAN NOT NULL DEFAULT FALSE,
      contract JSONB NOT NULL,
+     assigned_to_identity_id UUID,
+     rework_count INTEGER NOT NULL DEFAULT 0,
      created_by_identity_id UUID,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  // Added after the table shipped, so both forms are required: the CREATE above serves a
+  // fresh database, these serve dev and production, where delivery_stories already exists.
+  //
+  // Gate 11 needs three per-builder story counts and the table identified no builder at
+  // all - only created_by_identity_id, which is who FILED the story. Using that as the
+  // builder was available and wrong, and would have made every mentor exception about
+  // workload quietly incorrect rather than absent.
+  //
+  // rework_count rather than a boolean: "came back twice" and "came back once" are
+  // different signals, and a boolean cannot be un-set without losing the history.
+  `ALTER TABLE delivery_stories ADD COLUMN IF NOT EXISTS assigned_to_identity_id UUID`,
+  `ALTER TABLE delivery_stories ADD COLUMN IF NOT EXISTS rework_count INTEGER NOT NULL DEFAULT 0`,
+  // The Gate 11 assembler counts in-flight and completed stories per builder.
+  `CREATE INDEX IF NOT EXISTS idx_delivery_stories_assigned
+     ON delivery_stories (assigned_to_identity_id, status)`,
   // One story per key per project. Evidence joins on story_id, so a duplicate key would
   // make it ambiguous which story a piece of evidence proved anything about.
   `CREATE UNIQUE INDEX IF NOT EXISTS delivery_stories_project_key_unique

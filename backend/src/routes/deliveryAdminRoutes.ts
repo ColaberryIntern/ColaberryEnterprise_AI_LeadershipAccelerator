@@ -2,6 +2,7 @@ import { Request, Response, Router } from 'express';
 import { requireAdmin } from '../middlewares/authMiddleware';
 import { assignBuilderToProject } from '../services/delivery/builderAssignment';
 import { evaluateStoryGate, recordEvidence, upsertStory } from '../services/delivery/storyEvidence';
+import { mentorQueueFor } from '../services/delivery/mentorState';
 
 /**
  * deliveryAdminRoutes — the operator side of the delivery OS. One action, to begin with.
@@ -238,4 +239,44 @@ router.get(
     }
   },
 );
+/**
+ * GET /api/refactored/admin/builders/:builderIdentityId/mentor-queue
+ *
+ * Gate 11: the exceptions that should pull a mentor toward one builder, prioritised.
+ *
+ * **The response carries `unsourceable` and that is not optional.** Two of the eight
+ * inputs have no source in the schema - there is no join from a builder to a trust
+ * requirement, and `delivery_decisions.decision_type` has no vocabulary. A queue that
+ * returned six answers as if they were eight would tell a mentor a builder is fine when
+ * the truth is that nobody looked. Any UI over this must render it.
+ *
+ * Always 200. An empty queue is the intended outcome for a healthy builder, not a 404.
+ */
+router.get(
+  '/api/refactored/admin/builders/:builderIdentityId/mentor-queue',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const builderIdentityId =
+      typeof req.params?.builderIdentityId === 'string' ? req.params.builderIdentityId : '';
+    if (!builderIdentityId) {
+      res.status(400).json({ error: 'builderIdentityId is required.' });
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const models = require('../models');
+      const out = await mentorQueueFor({ builderIdentityId, models });
+      res.json(out);
+    } catch (err) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'delivery-admin',
+        event: 'mentor_queue_failed', outcome: 'failure',
+        error_class: (err as Error)?.constructor?.name ?? 'Error', context: { builderIdentityId },
+      }));
+      res.status(500).json({ error: 'Could not build the mentor queue.' });
+    }
+  },
+);
+
 export default router;
