@@ -264,14 +264,13 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
           tipEl.classList.toggle('empty', !tip);
         }
       } else {
-        // A Present tab opened before the two-screen split shipped broadcasts
-        // presenter_tip and no presenter_preface at all, and this screen then
-        // showed "No set-up notes for this slide" — the set-up paragraph read
-        // as DELETED rather than as a stale tab (Ali, 2026-08-31). That tab's
-        // presenter_tip IS the authored script, which is exactly the set-up
-        // paragraph this screen wants, so fall back to it instead of going
-        // blank. A current tab never reaches the fallback.
-        var pre = d.presenter_preface || d.presenter_tip || '';
+        // Deliberately NO fallback to presenter_tip here. That is the text the
+        // read screen shows, so borrowing it would put identical content on
+        // both screens — "the pre click and the post click text should be
+        // completely different" (Ali, 2026-08-31). Staleness is handled
+        // server-side now: getPresenterNotes rebuilds the slide from the
+        // session's own spec, so this field is populated for any tab, any age.
+        var pre = d.presenter_preface || '';
         if (pre !== lastPre) {
           lastPre = pre;
           // Nothing here is spoken; untagged text is context by default.

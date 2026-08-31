@@ -96,19 +96,53 @@ describe('promptBrief', () => {
  * appear where the instructor is reading aloud.
  */
 describe('splitScript', () => {
-  it('gives the arrival screen the whole tagged script, and the read screen only the spoken lines', () => {
+  it('gives the arrival screen the direction only, and the read screen the spoken paragraph', () => {
     const r = splitScript(
       'SAY: Read this out.\nDO: Put it on screen.\nNOTE: Watch the clock.',
       'the body paragraph',
     );
     expect(r.say).toBe('the body paragraph');
-    expect(r.setup).toBe('SAY: Read this out.\nDO: Put it on screen.\nNOTE: Watch the clock.');
+    // SAY has moved off the arrival screen: it is spoken, so it belongs where
+    // the instructor is reading aloud, not where they are being briefed.
+    expect(r.setup).toBe('DO: Put it on screen.\nNOTE: Watch the clock.');
   });
 
-  it('strips the SAY tag from the read screen but keeps every tag on arrival for colouring', () => {
+  it('keeps the four arrival categories on arrival, opening words included', () => {
+    const r = splitScript(
+      'SITUATION: Last slide of the act.\nROOM: Diagram up.\nMOOD: Slow down.\nOPEN: "Here we go."\nSAY: The long spoken paragraph.',
+      'the body paragraph',
+    );
+    ['SITUATION:', 'ROOM:', 'MOOD:', 'OPEN:'].forEach((t) => expect(r.setup).toContain(t));
+    // OPEN stays on arrival deliberately — it is what starts the slide without
+    // a pause, and it is one line, not the paragraph.
+    expect(r.setup).not.toContain('SAY:');
+  });
+
+  it('strips the SAY tag from the read screen and keeps SAY off the arrival screen', () => {
     const r = splitScript('SAY: Hello.\nDO: Click it.', undefined);
     expect(r.say).not.toMatch(/SAY:/);
-    expect(r.setup).toBe('SAY: Hello.\nDO: Click it.');
+    expect(r.setup).toBe('DO: Click it.');
+  });
+
+  /* Ali, 2026-08-31, presenting from the first version: "the pre click and the
+   * post click text should be completely different. I do not need the same
+   * thing pre click that will be shown post click." Duplication is not
+   * cosmetic here — it makes the instructor read the same paragraph twice
+   * hunting for the difference, mid-slide, in front of a room. */
+  it('never puts the same text on both screens', () => {
+    const cases: Array<[string | undefined, string | undefined]> = [
+      ['SAY: Spoken.\nDO: Direction.', 'The paragraph.'],
+      ['SAY: Spoken.\nDO: Direction.', undefined],
+      ['An untagged script.', 'The paragraph.'],
+      ['An untagged script.', undefined],
+      [undefined, 'The paragraph.'],
+    ];
+    const strip = (s: string) => s.replace(/^(SAY|DO|NOTE|SITUATION|ROOM|MOOD|OPEN):\s*/gim, '').trim();
+    cases.forEach(([script, body]) => {
+      const r = splitScript(script, body);
+      if (!r.say || !r.setup) return;
+      expect(strip(r.setup)).not.toContain(strip(r.say));
+    });
   });
 
   it('keeps multiple spoken lines separated so they read as separate beats', () => {
@@ -127,7 +161,9 @@ describe('splitScript', () => {
     // keep behaving exactly as it did before the tags existed.
     const r = splitScript('Walk the diagram node by node.', 'The paragraph they read.');
     expect(r.say).toBe('The paragraph they read.');
-    expect(r.setup).toBe('NOTE: Walk the diagram node by node.\nSAY: The paragraph they read.');
+    // The body is NOT echoed into setup — copying it there is what made both
+    // screens identical for every week that has not been rebuilt.
+    expect(r.setup).toBe('NOTE: Walk the diagram node by node.');
   });
 
   it('falls back to the script’s SAY cues when a slide has no paragraph of its own', () => {

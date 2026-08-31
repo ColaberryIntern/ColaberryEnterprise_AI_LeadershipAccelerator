@@ -84,6 +84,29 @@ export interface KitConfig {
    * teaching as fact" review surface. null = use the authored defaults. */
   evidenceOverrides: EvidenceClaim[] | null;
 
+  /** Per-slide presenter commentary, keyed by slide id (`<segmentId>-<index>`,
+   * e.g. 'architecture-0', 'deconstruct-900', 'micro-build-950'). Sets that
+   * slide's `presenterTip`, which is what the instructor's phone shows on
+   * arrival and what `splitScript` turns into the colour-coded set-up screen.
+   *
+   * Why this exists: most slides in a deck are GENERATED rather than authored
+   * — the segment openers, story beats, question slides, the break, the
+   * trailer — and each carried one hardcoded tip reused identically every
+   * week ("Walk the diagram node by node…"). 22 of Session 12's 38 slides sat
+   * on that boilerplate, and nothing in KitConfig could reach them: an
+   * instructor could rewrite every teach slide and still land on a segment
+   * opener with commentary written for a different week. Ali, 2026-08-31, on
+   * the architecture opener: "this slide doesn't have any commentary — that
+   * shouldn't happen. ever."
+   *
+   * Keyed by id rather than added field-by-field to each generator because the
+   * ids are already stable and deterministic, so ONE hook covers every slide
+   * kind that exists now or later, and a week can author real commentary for
+   * any of them with a DB write and no deploy. Unknown ids are ignored, so a
+   * key left behind by a since-removed slide is inert rather than a crash.
+   * null = every slide keeps its generated tip. */
+  slideNotes: Record<string, string> | null;
+
   /** Deep teaching slides ("Lessons") — the multi-slide substance spliced into
    * each run-of-show segment (body/bullets/code/script/diagram). enabled:false
    * hides every teach slide for this session; max caps how many show, in
@@ -135,6 +158,7 @@ export const DEFAULT_KIT_CONFIG: KitConfig = {
   buildBayDetail: true,
   checkpointsEnabled: true,
   evidenceOverrides: null,
+  slideNotes: null,
   teach: { enabled: true, max: null, overrides: null },
   prompts: { enabled: true, max: null, overrides: null },
   interactions: { enabled: true, max: null, overrides: null },
@@ -174,6 +198,12 @@ export function mergeKitConfig(saved: unknown): KitConfig {
     buildBayDetail: typeof s.buildBayDetail === 'boolean' ? s.buildBayDetail : DEFAULT_KIT_CONFIG.buildBayDetail,
     checkpointsEnabled: typeof s.checkpointsEnabled === 'boolean' ? s.checkpointsEnabled : DEFAULT_KIT_CONFIG.checkpointsEnabled,
     evidenceOverrides: Array.isArray(s.evidenceOverrides) ? s.evidenceOverrides : DEFAULT_KIT_CONFIG.evidenceOverrides,
+    // Plain object of id -> string. Rejects arrays and null explicitly so a
+    // malformed saved config falls back to the generated tips rather than
+    // throwing mid-render on a slide the instructor is standing in front of.
+    slideNotes: s.slideNotes && typeof s.slideNotes === 'object' && !Array.isArray(s.slideNotes)
+      ? (s.slideNotes as Record<string, string>)
+      : DEFAULT_KIT_CONFIG.slideNotes,
     teach: mergeCountAndOverride(s.teach, DEFAULT_KIT_CONFIG.teach),
     prompts: mergeCountAndOverride(s.prompts, DEFAULT_KIT_CONFIG.prompts),
     // Backward-compat: a config saved under the old 3-named-slot shape
