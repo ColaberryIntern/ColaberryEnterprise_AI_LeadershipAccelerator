@@ -49,6 +49,8 @@ interface CapstoneRecord {
   };
   system: {
     project_name: string | null; what_it_does: string | null; descriptor: string | null;
+    problem: string | null; stage: string | null;
+    industry: string | null; organization: string | null;
     architecture_mermaid: string | null; hours_reclaimed: number | null;
   };
   artifacts: RecordArtifact[];
@@ -182,13 +184,27 @@ function CapstoneRecordPage() {
           buried the actual work under a proposal and advertised incompleteness to the
           one audience this page exists to persuade. It now sits behind a disclosure at
           the foot of the page; what a reader needs first is what the thing does. */}
-      {(system.project_name || system.what_it_does) && (
+      {(system.project_name || system.what_it_does || system.problem) && (
         <Section title="What they built">
           {system.project_name && (
-            <h3 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 8px' }}>{system.project_name}</h3>
+            <h3 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px', color: INK }}>
+              {system.project_name}
+            </h3>
+          )}
+          {/* Context a reader needs before the detail: for whom, in what sector, how far
+              along. Each is omitted individually when absent rather than shown blank. */}
+          {(system.stage || system.industry || system.organization) && (
+            <div style={{ fontSize: 13.5, color: MUTED, marginBottom: 14 }}>
+              {[system.stage, system.industry, system.organization].filter(Boolean).join(' · ')}
+            </div>
+          )}
+          {system.problem && (
+            <p style={{ fontSize: 17, color: INK, margin: '0 0 10px', maxWidth: '62ch', fontWeight: 500 }}>
+              {system.problem}
+            </p>
           )}
           {system.what_it_does && (
-            <p style={{ fontSize: 16.5, color: BODY, margin: 0, maxWidth: '62ch' }}>
+            <p style={{ fontSize: 16, color: BODY, margin: 0, maxWidth: '62ch' }}>
               {system.what_it_does}
             </p>
           )}

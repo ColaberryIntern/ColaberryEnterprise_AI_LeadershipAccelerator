@@ -181,11 +181,18 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
       cohort_name: null,
     },
     project: {
-      name: project.name ?? null,
+      // `selected_use_case` is the FALLBACK, not an afterthought: `name` is null on real
+      // rows and the use case is what the project is actually called. Leading the page
+      // with a field that is usually empty left "What they built" with no title at all.
+      name: project.name ?? project.selected_use_case ?? null,
       descriptor: project.executive_summary ?? null,
       // The project's own stated goal, in one line. Not a summary of the descriptor --
       // summarising would be inventing, and this compiler invents nothing.
       what_it_does: project.automation_goal ?? null,
+      problem: project.primary_business_problem ?? null,
+      stage: project.project_stage ?? null,
+      industry: project.industry ?? null,
+      organization: project.organization_name ?? null,
       repo_url: pointer?.url ?? null,
       demo_url: project.portfolio_url ?? null,
       hours_reclaimed: null,

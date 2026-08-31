@@ -64,6 +64,12 @@ export interface RecordSystem {
    * Real data, never invented: null when the project never stated a goal.
    */
   what_it_does: string | null;
+  /** The problem the system was built to solve, in the project's own words. */
+  problem: string | null;
+  /** Where the work stands, and for whom. Context a reader needs, never invented. */
+  stage: string | null;
+  industry: string | null;
+  organization: string | null;
   /** The plan's own descriptor. Their words, not a generated summary. */
   descriptor: string | null;
   /** Mermaid source, rendered client-side. Null when they never built one. */
