@@ -391,11 +391,25 @@ Now imagine that number wearing generated methodology: *"computed from 412 evide
 
 **Stage 0 — prerequisite, DRI decision (not this scope).** `UNIQUE (case_study_id, metric_key)` on `case_study_metrics`. Schema changes cross a governance boundary under `CLAUDE.md`; naming it is as far as this document goes.
 
-**Stage 1 — one definition, end to end.** `delivery_elapsed_days` only. The definition interface, the runner, the evidence-row-as-run-record, the admin route, the pending write. Ship with the full mandatory test set: happy path, repository unreadable, zero analysable repositories, run twice (byte-identical), run twice against a promoted row (refuses). Success condition: a metric row exists, `resolveChart` resolves its key, and a chart renders a real bar.
+**Stage 1 — one definition, end to end.** `delivery_elapsed_days` only. The definition interface, the runner, the evidence-row-as-run-record, the admin route, the pending write. Ship with the full mandatory test set: happy path, repository unreadable, zero analysable repositories, run twice (byte-identical), run twice against a promoted row (refuses).
+
+**Success condition — CORRECTED after running it in production on 2026-08-30.** The original read: *"a metric row exists, `resolveChart` resolves its key, and a chart renders a real bar."* **The third clause is not achievable by Stage 1, and asking for it contradicts §3.3 of this same document.** `resolveChart` applies the two locks `projectMetric` applies — `publishable` and `verification_class` — while §3.3 requires the producer to write `pending` / `publishable: false` and never promote its own output. So a bar cannot render until a human promotes, and the promote control is Stage 2. Written as it was, Stage 1 could only have been declared complete by violating its own write discipline.
+
+The achievable condition, and what was verified live:
+
+- a metric row exists — **yes**, `delivery_elapsed_days = 181 days` on `ai-systems-architect-training-system`;
+- the run record exists as a `case_study_evidence` row with `source_type: 'internal_measurement'` — **yes**;
+- the row is `pending`, `publishable: false`, with `verified_by` and `verified_at` null — **yes**;
+- re-running leaves one metric row at the same value and appends a second run record — **yes**, `created: false`, 181 → 181, 1 metric / 2 run records;
+- `resolveChart` **finds the key** and refuses it for the stated reason *"That metric is not marked publishable, so no surface may show it."* — which is the correct behaviour and also proves the §2.4 key mismatch is not present.
+
+A rendered bar belongs to Stage 2's exit criteria, not Stage 1's.
 
 **Stage 2 — the metrics panel gains a promote control.** Verification class, method, evidence link, `isHeadline`, `publishable`, all human, all audited via `verified_by` / `verified_at`. Then delete the `metrics.slice(0, 3)` override field (`CaseStudyMetricsPanel.tsx:90`), which exists only because there was no better instrument.
 
 **Stage 3 — definitions two and three.** `production_systems_declared`, `automated_test_files`. Zero new mechanism. This stage is the proof that a new metric is a new *definition*, not a new *feature* — and if it is not, Stage 1 got the interface wrong.
+
+**RESULT, 2026-08-31: the interface held.** Each definition is one module plus one line in the registry. No change to `MetricDefinition`, `MetricRunContext`, `MetricComputation`, the runner, the writer, the context assembler, the promotion service, the routes, or the panel. The route's definition enum and the panel's dropdown both derive from the registry, so both metrics became runnable in the product with no route change and no frontend work at all. A test asserts the shared machinery contains no metric key of any kind, and a mutation that leaks one into the runner reddens it — so the boundary is defended rather than merely observed once.
 
 **Stage 4 — decision gate, not a build stage.** Re-ask the cohort question against the state of the world then. It becomes worth reopening when **a second evidence source is live** (diagnostic or classroom, `StudentSkillEvidence.ts:14-21`), because until then "competency" and "completion" are the same measurement under two names. It stays closed until a publication-consent axis and a minimum-cell rule exist.
 

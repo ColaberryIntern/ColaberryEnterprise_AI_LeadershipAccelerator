@@ -31,7 +31,10 @@
  * layer — a documented deferral, not something invented here.
  */
 import { createHash } from 'crypto';
-import { z } from 'zod';
+import {
+  repoPayloadSchema, treePayloadSchema, commitsPayloadSchema, commitPayloadSchema,
+  languagesPayloadSchema, safeJson, blobsFromTreePayload, committedAtOf,
+} from './caseStudyRepoPayloads';
 import { githubApiRequest, fetchRepoFile, isRateLimitedResult } from '../sbp/repoConnect/githubRepoClient';
 import type { GitHubReadOptions, RawResult } from '../sbp/repoConnect/githubRepoClient';
 import { isRepoConnectError } from '../sbp/repoConnect/connectErrors';
@@ -126,84 +129,10 @@ export interface TreeRead {
   readonly source: 'github' | 'persisted' | 'unavailable';
 }
 
-/* ──────────────────────────────────────────────── upstream payload shapes ── */
 
-// Every field optional: a payload that is valid JSON but missing fields must
-// degrade to `null` facts, not fail the repository. Only a payload of the wrong
-// TYPE (an array where an object belongs) is a classified `Unknown`.
-const repoPayloadSchema = z.object({
-  name: z.string().optional(),
-  full_name: z.string().optional(),
-  owner: z.object({ login: z.string() }).optional(),
-  description: z.string().nullable().optional(),
-  homepage: z.string().nullable().optional(),
-  private: z.boolean().optional(),
-  default_branch: z.string().optional(),
-  topics: z.array(z.string()).optional(),
-  language: z.string().nullable().optional(),
-  created_at: z.string().nullable().optional(),
-  updated_at: z.string().nullable().optional(),
-  pushed_at: z.string().nullable().optional(),
-  license: z.object({
-    key: z.string().optional(), name: z.string().optional(), spdx_id: z.string().nullable().optional(),
-  }).nullable().optional(),
-  fork: z.boolean().optional(),
-  archived: z.boolean().optional(),
-});
-
-export const treePayloadSchema = z.object({
-  tree: z.array(z.object({
-    path: z.string(), type: z.string().optional(), size: z.number().optional(),
-  })).optional(),
-  truncated: z.boolean().optional(),
-});
-
-const commitsPayloadSchema = z.array(
-  z.object({
-    sha: z.string(),
-    // `GET /commits` has always returned the commit object; this schema parsed
-    // the sha and threw the rest away, which is why no commit date existed
-    // anywhere in the analyzer's output.
-    //
-    // The `.catch(undefined)` on this branch is load bearing, and its placement
-    // was settled by measurement rather than by taste. Without it, a date of the
-    // wrong TYPE — which is what a GitHub shape change looks like — fails the
-    // WHOLE array parse; the read then reports "commit head was not the expected
-    // shape" and the repository loses its SHA to protect a date nothing needed.
-    // One `.catch` HERE is enough: it absorbs both a malformed date and a
-    // `commit` branch that is not an object at all. Repeating `.catch` on the
-    // inner author/committer objects covers strictly less (it cannot survive a
-    // non-object `commit`) and was removed as redundant once a mutation showed
-    // it protecting nothing the outer one did not already protect.
-    commit: z
-      .object({
-        author: z.object({ date: z.string().optional() }).optional(),
-        committer: z.object({ date: z.string().optional() }).optional(),
-      })
-      .optional()
-      .catch(undefined),
-  })
-);
-const languagesPayloadSchema = z.record(z.string(), z.number());
-
-function safeJson(body: string): unknown {
-  try { return JSON.parse(body); } catch { return undefined; }
-}
-
-/** Blob entries only, with their sizes. Shared by the live and persisted paths. */
-export function blobsFromTreePayload(
-  entries: readonly { path: string; type?: string; size?: number }[],
-): { paths: string[]; sizes: Map<string, number> } {
-  const paths: string[] = [];
-  const sizes = new Map<string, number>();
-  for (const entry of entries) {
-    if (entry.type && entry.type !== 'blob') continue;
-    paths.push(entry.path);
-    if (typeof entry.size === 'number') sizes.set(entry.path, entry.size);
-  }
-  return { paths, sizes };
-}
-
+/* The payload shapes now live in `caseStudyRepoPayloads.ts`. Re-exported so the
+ * analyzer keeps one import site rather than two for the same concern. */
+export { treePayloadSchema, blobsFromTreePayload };
 /* ─────────────────────────────────────────────────────────────── logging ──── */
 
 export type LogOutcome = 'success' | 'failure' | 'partial';
@@ -406,10 +335,53 @@ export async function readCommitHead(
     return fail(owner, repo, 'RepoEmpty', 'repository has no commits', correlationId, 200, visibility);
   }
   const head = parsed.data[0];
-  return {
-    sha: head.sha,
-    committedAt: head.commit?.committer?.date ?? head.commit?.author?.date ?? null,
-  };
+  return { sha: head.sha, committedAt: committedAtOf(head) };
+}
+
+/**
+ * The committer date of ONE NAMED COMMIT — the sha an approved snapshot pinned.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM `readCommitHead`. A metric anchored to a
+ * snapshot must measure to the commit that snapshot recorded, not to whatever
+ * the branch head happens to be today. Those are the same commit only until
+ * somebody pushes; after that, measuring to the head would make a published
+ * figure grow on its own, which is precisely the instability the pipeline's
+ * stability requirement rules out.
+ *
+ * CALL IT ONLY WHEN THE HEAD IS NOT THE PIN. When the analysis already returned
+ * this sha as the head it also returned its date, so the caller has the answer
+ * for free and this request is pure waste. `pinnedCommitNeeds` decides that.
+ *
+ * BEST EFFORT. Losing the date costs the metric, never the analysis: the caller
+ * gets `null` and a classified issue, and every definition already treats an
+ * absent end date as a refusal with a stated reason rather than as a zero.
+ */
+export async function readCommitDate(
+  owner: string, repo: string, sha: string, opts: GitHubReadOptions,
+  issues: RepoAnalysisIssue[],
+): Promise<string | null> {
+  let result: RawResult;
+  try {
+    result = await githubApiRequest('GET', `${repoPath(owner, repo)}/commits/${encodeURIComponent(sha)}`, opts);
+  } catch (err) {
+    const cls = classifyThrown(err);
+    issues.push({ error_class: cls, message: `pinned commit unavailable (${cls})` });
+    return null;
+  }
+  if (!result.ok) {
+    // A 404 here is its own fact rather than a broken read: the pinned commit is
+    // gone from the repository — force-pushed away, or its branch deleted — and
+    // a metric anchored to it can no longer be reproduced by anyone.
+    const cls = result.status === 404 ? 'RepoNotFound' : classifyResult(result);
+    issues.push({ error_class: cls, message: 'pinned commit unavailable' });
+    return null;
+  }
+  const parsed = commitPayloadSchema.safeParse(safeJson(result.body));
+  if (!parsed.success) {
+    issues.push({ error_class: 'Unknown', message: 'pinned commit was not the expected shape' });
+    return null;
+  }
+  return committedAtOf(parsed.data);
 }
 
 /** Best-effort. Losing it costs a language breakdown, not the repository. */

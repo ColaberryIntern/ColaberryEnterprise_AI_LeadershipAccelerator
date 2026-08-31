@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, August 26, 2026 at 12:32 PM</div>
-    <div><span class="sid">CC-20260823-r4k9</span><span class="count">82 changes</span></div>
+    <div class="meta">Generated Sunday, August 30, 2026 at 5:09 PM</div>
+    <div><span class="sid">CC-20260823-r4k9</span><span class="count">87 changes</span></div>
   </header>
   <main>
     
@@ -1287,6 +1287,81 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Merge verified by **content on `origin/main`**, not by the badge: the `engagement` allowlist kind, `DeliveryShell` wired into the portal, and the contract test all present.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The reasoning changed, not the patience. Branch protection encodes &quot;a human with authority must review this&quot;; Ali is the DRI and had done so explicitly and repeatedly, and the tool could not express it. Of the two ways past the block, **`--admin` leaves an honest audit trail** - merged by admin, no independent review - whereas approving as `ColaberryIntern` would have recorded an independent review that never happened, since I wrote every line in the diff. **A false-clean record is worse than an openly bypassed one.** Also worth carrying forward: PRs opened via `gh` are authored by `ColaberryIntern` and Ali can approve them normally; PRs he opens in the browser make him the author and can only be merged, never approved.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">83</span>
+          <h2>**A deploy lock, after the outage proved waiting is not a control**</h2>
+          <span class="badge">2026-08-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`scripts/deploy-prod.sh` takes an exclusive `flock` for the whole deploy, refuses a dirty tree, refuses when `HEAD` is not `origin/main`, runs the build **unpiped** so the real exit code survives, and then **verifies the containers are actually running** - the check the previous day&#39;s outage needed and did not have, since compose exiting 0 *and* the site returning 200 were both true while the backend sat in `created`. On a `No such container` failure it names the orphaned-container recovery, because the error text does not suggest it. `CLAUDE.md` now points at the script rather than the raw compose command, since a lock only works if every session takes it, and records that post-deploy verification must use the **real hostname** - `localhost` does not match `server_name` and falls through to a default block that 404s `/api`. PR #1916.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Tested on the production host against **real exit codes**: a lock held by another process exits 1 and refuses to race; `HEAD` not matching `origin/main` exits 1 before building; untracked scratch files are correctly ignored rather than treated as dirty. `.gitattributes` now pins `*.sh` to LF - it already pinned the two hook directories for the same reason, and a CRLF shebang on the production deploy control would break every deploy with an error whose text does not point at line endings.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The first run of that test reported `EXIT=0` because I piped it through `tail`** - the exact masking the script exists to prevent, committed while testing the prevention. Re-checked without the pipe. `CLAUDE.md` is DRI-owned so that edit was proposed for review rather than assumed.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">84</span>
+          <h2>**Alert when a client cannot get their sign-in link**</h2>
+          <span class="badge">2026-08-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The client sign-in endpoint answers every caller identically by design, which is the security property - and it means a **systemic** failure is invisible: if SMTP credentials expire, every client silently gets nothing while the API reports success, and the client cannot tell anyone because the page cannot tell *them*. Dev sat in exactly that state for over 24 hours. **No new service was built**: `errorSpikeAlertService` already evaluates `ai_events` on an explicit allowlist and emits through the shared alert service, so the work was adding two event types to that list. PR #1919.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">22 tests, including a single failure producing a `warning` and three producing a `critical`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Threshold **1/3 against a shared default of 10/25**. The default suits a high-volume surface where a few failures are noise; this is the opposite shape - a client reviewer population is tens of people, the events fire only when someone actually tried to sign in and it broke, and the realistic bad day locks every client out at once. At 10/hour that outage might never fire. **Deliberately NOT watched:** `link_no_membership` (fires on every probe of an unknown address - paging on it would page on being scanned), `link_rate_limited`, and `link_invalid`. Those are refusals working. A test asserts their absence from the allowlist, so a later &quot;watch everything `delivery_client_*`&quot; fails rather than quietly turning the alert into noise.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">85</span>
+          <h2>**Five response-contract checks had never run in any environment**</h2>
+          <span class="badge">2026-08-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Follows directly from correcting the `NODE_ENV` claim recorded earlier in this log. Since `NODE_ENV` is `production` in **both** environments, `if (process.env.NODE_ENV !== &#39;production&#39;)` is false everywhere - so five response-contract checks across `capePortalController` (x2), `capeTodayPlanController`, `careerPortfolioController` and `workforceController` **had never executed anywhere**. CLAUDE.md&#39;s Contract Enforcement Layer requires them; the enforcement was present in the source and absent at runtime. The gate is **removed rather than corrected**: each block did `safeParse` then `console.warn`, and `res.json` ran regardless, so the condition was choosing between *log a warning* and *do nothing* and picked &quot;do nothing&quot; everywhere - and the production behaviour CLAUDE.md asks for is precisely &quot;log and continue&quot;. Extracted to `checkResponseContract` since the same eight lines appeared five times; `workforceController` keeps its distinct behaviour via `checkWireContract`, which validates the **post-serialization** shape because a `Date` is an object in memory and an ISO string on the wire. PR #1923.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">6 tests, the first pinning the property that actually failed - the check runs regardless of `NODE_ENV`, asserted across `production`, `development`, `test` and empty.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**CI caught a second mistake of the same family.** `SafeParsable` was a hand-written structural type, on the reasoning that the util should not import zod. Zod&#39;s `safeParse` returns a **discriminated union**, not assignable to a `{ success: boolean; error? }` shape, so the typecheck failed on all five call sites. I invented a type instead of using the real one, and it agreed with my assumption while disagreeing with zod. Now `Pick&lt;ZodType, &#39;safeParse&#39;&gt;`.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">86</span>
+          <h2>**Three E2E scenarios executed against a running system - the first since Gate 15**</h2>
+          <span class="badge">2026-08-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`E2E_SCENARIOS.md` had said **no** in the executed column for all seven scenarios, behind a list of seven blockers - and reading that list against what had shipped, **all seven were cleared**. The doc read as *&quot;we cannot run these&quot;* when the truth was *&quot;nobody has&quot;*. **F (cross-tenant attack)** now passes: a real CPN project, genuinely existing, genuinely another tenant&#39;s, denied with **404 not 403** and recorded in `TenantAccessAudit`. **B (projection half)** passes: four genuinely private values stamped onto the row the client *can* reach, then asserted absent from the response body. **C (capacity)** passes: three assignments accepted, the fourth refused with 409, nothing written on refusal, a live override admitting it with `reliesOnOverride` surfaced, and an **expired override no longer lifting the cap**. PRs #1925, #1928, #1938.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">All three run against the dev instance over real HTTP with real rows. Each carries a **control assertion** - F checks the own project is reachable (without it a blanket 404 would read as a pass), B checks the client can reach the project at all (a 404 would make every leak assertion pass vacuously), C checks the first three assignments succeed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Writing F caught a real gap**: `requireDeliveryProjectAccess` logged cross-tenant attempts to `ai_events` only and never wrote `TenantAccessAudit` - the table that exists specifically to answer *who tried to read whose data*. The assertion would have failed. **B is marked PARTIAL, not executed**, because its acceptance half has no writer; **C likewise**, because the `builder_overloaded` mentor exception is still unwired. A scenario marked done that quietly tested a third of itself is worse than one marked partial, because the first stops anybody looking again - which is exactly how this document came to list seven blockers that had all been cleared.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">87</span>
+          <h2>**The Gate 9-14 delivery logic had no production callers, and no write paths to have them**</h2>
+          <span class="badge">2026-08-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Scenario C was attempted and abandoned, and the reason was worth more than the test. `assessOverload`, `decideCapacityOverride`, `evaluateQualityGate`, `evaluateReleaseGate`, `assertModeIsSupportOnly`, `resolveProfile` and `summarizeLedger` had **zero production callers**; `buildCaseStudy` was the lone exception at 9. It went further than unwired: **there were no write paths at all**. Nothing assigned builders, nothing wrote `DeliveryEvidence`, and the only writer of `delivery_project_members` was a dev seed script. The `delivery_capacity_overrides` table had existed since Gate 12 **with no model**, so `effectiveMaxParallelProjects` took an `ActiveOverride` that no code path could supply - the override mechanism was **unreachable**, not merely unused. Ali chose a vertical slice over building the whole operator surface, so `POST /api/refactored/admin/projects/:id/assign` now consults the capacity model for real. PRs #1930, #1937.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">12 tests on the **wiring** rather than the arithmetic - `capacityEconomics.test.ts` already proves `assessOverload` computes correctly and proving it twice would say nothing. Then scenario C executed end to end against the endpoint. **The capacity guard now actually guards**: before this, a builder could have been put on a hundred projects and no code path would have objected.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Decisions worth revisiting. The assessment is made on `activeProjects + 1`, the assignment being **considered** - assessing the current count would find `3 &lt;= 3` and let every builder land exactly one over cap forever. Only builder-side roles consume capacity, because a client reviewer on twelve projects is a client, not an overloaded builder. A builder with no authority profile is **refused rather than defaulted**, since an unassessed person having no cap is backwards and picking a number would invent an authority decision nobody made. Capacity refusal returns **409, not 422**: the request was well-formed and the state of the world refused it. **Two of the symbol names I first grepped for do not exist at all** (`recordExperienceClaim`, `resolveDeliveryProfile`); both would have returned zero callers and looked exactly like findings, so every symbol was confirmed real before being reported absent.</span></div>
           
         </div>
       </article>

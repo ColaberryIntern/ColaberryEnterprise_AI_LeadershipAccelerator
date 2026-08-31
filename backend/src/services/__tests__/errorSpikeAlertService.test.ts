@@ -11,7 +11,7 @@
 jest.mock('../../models/AiEvent', () => ({ findAll: jest.fn(), findOne: jest.fn() }));
 jest.mock('../alertService', () => ({ emitAlert: jest.fn().mockResolvedValue({ id: 'alert-1' }) }));
 
-import { evaluateErrorSpike, checkErrorClassSpikes, thresholdsFor } from '../errorSpikeAlertService';
+import { evaluateErrorSpike, checkErrorClassSpikes, thresholdsFor, WATCHED_EVENT_TYPES } from '../errorSpikeAlertService';
 import AiEvent from '../../models/AiEvent';
 import { emitAlert } from '../alertService';
 
@@ -80,6 +80,40 @@ describe('evaluateErrorSpike — pure evaluator', () => {
  * 46, which is BELOW that baseline. These tests keep the default honest for the
  * quiet types and stop the noisy ones from crying wolf.
  */
+describe('client sign-in link failures', () => {
+  it('pages on a SINGLE failure, unlike the high-volume defaults', () => {
+    // A client reviewer population is tens of people, and the endpoint answers every
+    // caller identically by design - so a client who gets nothing cannot tell anyone.
+    // At the shared default of 10/hour, SMTP credentials expiring would lock every
+    // client out of their own engagement and might never fire. Dev sat broken for over
+    // 24 hours on exactly that fault and nothing noticed.
+    expect(thresholdsFor('delivery_client_link_request_error')).toEqual({ warning: 1, critical: 3 });
+    expect(evaluateErrorSpike('delivery_client_link_request_error', 1)[0].type).toBe('warning');
+    expect(evaluateErrorSpike('delivery_client_link_request_error', 3)[0].type).toBe('critical');
+  });
+
+  it('says nothing when nothing failed', () => {
+    expect(evaluateErrorSpike('delivery_client_link_request_error', 0)).toEqual([]);
+  });
+
+  it('watches the redeem failure on the same terms', () => {
+    expect(thresholdsFor('delivery_client_redeem_error')).toEqual({ warning: 1, critical: 3 });
+  });
+
+  it('does NOT page on refusals that are the system working', () => {
+    // These fire in normal operation: an unknown address being probed, a rate limit
+    // engaging, an expired or reused link. Alerting on them would page on being
+    // scanned, and an alert that cries wolf gets muted - taking the real one with it.
+    for (const t of [
+      'delivery_client_link_no_membership',
+      'delivery_client_link_rate_limited',
+      'delivery_client_link_invalid',
+    ]) {
+      expect(WATCHED_EVENT_TYPES[t]).toBeUndefined();
+    }
+  });
+});
+
 describe('per-event-type thresholds', () => {
   it('leaves every unlisted type on the shared default', () => {
     for (const type of ['apollo_request_failed', 'ghl_request_failed', 'basecamp_request_failed',
