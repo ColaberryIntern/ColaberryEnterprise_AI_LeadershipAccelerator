@@ -409,6 +409,8 @@ A rendered bar belongs to Stage 2's exit criteria, not Stage 1's.
 
 **Stage 3 — definitions two and three.** `production_systems_declared`, `automated_test_files`. Zero new mechanism. This stage is the proof that a new metric is a new *definition*, not a new *feature* — and if it is not, Stage 1 got the interface wrong.
 
+**RESULT, 2026-08-31: the interface held.** Each definition is one module plus one line in the registry. No change to `MetricDefinition`, `MetricRunContext`, `MetricComputation`, the runner, the writer, the context assembler, the promotion service, the routes, or the panel. The route's definition enum and the panel's dropdown both derive from the registry, so both metrics became runnable in the product with no route change and no frontend work at all. A test asserts the shared machinery contains no metric key of any kind, and a mutation that leaks one into the runner reddens it — so the boundary is defended rather than merely observed once.
+
 **Stage 4 — decision gate, not a build stage.** Re-ask the cohort question against the state of the world then. It becomes worth reopening when **a second evidence source is live** (diagnostic or classroom, `StudentSkillEvidence.ts:14-21`), because until then "competency" and "completion" are the same measurement under two names. It stays closed until a publication-consent axis and a minimum-cell rule exist.
 
 ---
