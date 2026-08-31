@@ -15,6 +15,8 @@ import CaseStudySurfaceLab from './CaseStudySurfaceLab';
 import { PUBLISH_SURFACE, useCaseStudyDesk } from './useCaseStudyDesk';
 import { useCaseStudyPreviewLens } from './useCaseStudyPreviewLens';
 import { useCaseStudyStudio } from './useCaseStudyStudio';
+import { useCaseStudyMeasurement } from './useCaseStudyMeasurement';
+import CaseStudyMeasuredMetricsPanel from '../../components/admin/caseStudy/CaseStudyMeasuredMetricsPanel';
 
 /**
  * AdminCaseStudyDetailPage — the Story Studio, seven tabs over one record.
@@ -60,6 +62,10 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
 
   const desk = useCaseStudyDesk(id);
   const studio = useCaseStudyStudio(id, desk.load);
+  // The THIRD source of metrics on this page, and deliberately distinct from
+  // desk.metrics: those come from snapshot content, these from the
+  // case_study_metrics table that resolveChart actually reads.
+  const measurement = useCaseStudyMeasurement(id);
   /**
    * PREVIEW's OWN surface, and its own read.
    *
@@ -253,6 +259,15 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
             />
             <CaseStudyMetricsPanel
               metrics={desk.metrics} busy={busy} onApplyOverride={desk.override}
+            />
+            <CaseStudyMeasuredMetricsPanel
+              metrics={measurement.metrics}
+              definitionKeys={measurement.definitionKeys}
+              busy={busy || measurement.busy}
+              lastRun={measurement.lastRun}
+              error={measurement.error}
+              onRun={measurement.onRun}
+              onPromote={measurement.onPromote}
             />
             <CaseStudyQuotesPanel
               quotes={studio.quotes}
