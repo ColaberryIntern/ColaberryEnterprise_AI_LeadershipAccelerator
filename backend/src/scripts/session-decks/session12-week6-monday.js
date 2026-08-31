@@ -61,7 +61,14 @@ const teach = [
     diagram: `flowchart LR
   W5["🧪 Week 5<br/>a helper<br/>you watch it work"] --> T["🌙 Tonight<br/>a night worker<br/>you are asleep"]
   T --> Q["❓ What happens<br/>when it goes wrong<br/>at 2 AM?"]`,
-    script: 'Open on the shift change, not on MCP. Ask for a show of hands: who has ever been the person who got called when something broke at night? Take two answers, briefly. Then land the line — "tonight the thing you built joins that category, and we are going to make sure it behaves like it." Do not say the word sampling yet.',
+    script: [
+      'SITUATION: First slide of the last night of Act II. They walked in expecting more MCP. Tonight is not about MCP, it is about their absence.',
+      'ROOM: Deck on screen. Inspector stays closed for now.',
+      'MOOD: Slow and low. This is a shift change, not a lecture opening.',
+      'OPEN: "Week 5 you built something that works while you watch it. Tonight it starts working while you sleep."',
+      'DO: Show of hands — who here has ever been the person called when something broke at night? Take two answers, briefly.',
+      'NOTE: Do not say the word sampling yet. The four upgrades land on the next slide.',
+    ].join('\n'),
   },
   {
     segment: 'checkin', eyebrow: '🗺️ Tonight, in one picture', title: 'Four things every night worker needs — and none of them are about being smarter',
@@ -80,7 +87,15 @@ const teach = [
   N --> C["📞 Calls in<br/><b>notifications</b>"]
   N --> F["🚪 Stays on<br/>their floor<br/><b>roots</b>"]
   N --> P["📋 Posting is<br/>signed for<br/><b>transport</b>"]`,
-    script: 'This is the map for the whole night — put it up and walk the four branches with your hand, slowly. Tell them plainly: "you will see this picture again four times tonight, once per upgrade." Then add the trust ladder in ONE spoken sentence rather than a slide: "Weeks 1 and 2 you approved every action; weeks 3 and 4 it ran a bounded job unattended; tonight it reaches real systems under rules you write. You are not an apprentice anymore."',
+    script: [
+      'SITUATION: The map for the entire night. Everything after this hangs off these four branches.',
+      'ROOM: Full screen on the diagram. Walk the four branches with your hand, slowly, one at a time.',
+      'MOOD: Confident and unhurried. This is the slide they should still remember in Week 12.',
+      'OPEN: "None of tonight is about making your server cleverer. It is about what a night worker needs that a daytime helper never does."',
+      'DO: Say plainly — "you will see this picture again four times tonight, once per upgrade."',
+      'SAY: Weeks 1 and 2 you approved every action. Weeks 3 and 4 it ran a bounded job unattended. Tonight it reaches real systems under rules you write. You are not an apprentice anymore.',
+      'NOTE: The trust ladder is ONE spoken sentence here, not its own slide. Do not expand it.',
+    ].join('\n'),
   },
 
   /* ================= BUSINESS PROBLEM — why it matters ============== */
@@ -97,7 +112,15 @@ const teach = [
   S["🌙 Nightly<br/>integration"] --> P["👤 One person<br/>who understands it"]
   P --> A["✈️ Unavailable"]
   A --> D["🔥 A full day of<br/>three people guessing"]`,
-    script: 'Do not rush this one. Ask them to actually picture the system and the person, and give it four or five seconds of silence — the recognition IS the teaching. Then ask one person to name the system out loud (not the person). Land it: "your company does not own that capability. It rents it, from someone who has holiday days."',
+    script: [
+      'SITUATION: First business slide. You are setting up Marcus, who lands two slides from now.',
+      'ROOM: Stay on this slide. Nothing to run.',
+      'MOOD: Quiet. Let silence do the work — this one needs four or five seconds of nothing.',
+      'OPEN: "Think of a system at your work that quietly moves data between two places every night. Now name the one person who actually understands it."',
+      'DO: Wait. Then ask ONE person to name the system out loud — the system, not the person.',
+      'SAY: Your company does not own that capability. It rents it, from someone who has holiday days.',
+      'NOTE: The recognition IS the teaching here. Do not rush to the next slide.',
+    ].join('\n'),
   },
   {
     segment: 'business-problem', eyebrow: '🌙 The 2 AM question', title: 'The failure that ruins you is not the crash. It is the one that keeps answering.',
@@ -116,7 +139,14 @@ const teach = [
   F --> Q["🤫 QUIET<br/>it keeps answering"]
   L --> N["😴 Costs a night"]
   Q --> W["💸 Costs eleven days<br/>and a customer"]`,
-    script: 'Write "LOUD or QUIET" on the whiteboard and leave it there all night — come back and point at it after each upgrade. This is the sentence you want them repeating in Week 12. Go straight into the 2 AM poll from here; the slide is the setup for the vote.',
+    script: [
+      'SITUATION: The exam question for the whole night gets set here. Everything after this is judged against it.',
+      'ROOM: Write "LOUD or QUIET" on the whiteboard now and leave it up all night. Point at it after each upgrade.',
+      'MOOD: Sharpen up. This is the turn from story into stakes.',
+      'OPEN: "A demo that breaks stops, and somebody notices. The failure that costs you money is the one that keeps answering."',
+      'SAY: At 2 AM, does yours fail loudly, or quietly?',
+      'DO: Go straight into the 2 AM poll from here — do not pause between them. This slide IS the setup for the vote.',
+    ].join('\n'),
   },
 
   /* ============= ARCHITECTURE — the four upgrades =================== */
@@ -137,7 +167,14 @@ const teach = [
   S -->|"sampling/createMessage"| C
   S -->|"notifications/progress"| C
   S -->|"roots/list"| C`,
-    script: 'This is the pivot slide of the night. Say plainly: "if you thought the server only answers, everything after this will feel like magic — and it is not magic, it is just the arrow pointing the other way." Trace the three upward arrows with your hand and name each one as an upgrade they are about to meet.',
+    script: [
+      'SITUATION: The pivot slide. Most of the room left Week 5 believing MCP only goes one way. Correct that before any upgrade.',
+      'ROOM: Diagram up. Trace the three UPWARD arrows with your hand, one at a time.',
+      'MOOD: Matter-of-fact. This is a correction, not a reveal.',
+      'OPEN: "If you thought the server only answers, everything after this will feel like magic. It is not magic. It is just the arrow pointing the other way."',
+      'DO: Name each upward arrow as an upgrade they are about to meet — sampling, notifications, roots.',
+      'NOTE: If they do not get this one, nothing in the next twenty minutes will land.',
+    ].join('\n'),
   },
   {
     segment: 'architecture', eyebrow: '🔑 Upgrade 1 of 4 — no keys of their own', title: 'Sampling: your server does the work and never holds a credential',
@@ -156,7 +193,14 @@ const teach = [
   C --> H["🙋 Human approves<br/>(optional)"]
   H --> M["🧠 Model runs"]
   M --> S`,
-    script: 'Anchor it on the contractor story that follows, then give them the review-meeting line to keep: "my server never holds a credential." Ask who has been through a security review for a piece of software — take one answer and ask what the first question was. It is always about keys.',
+    script: [
+      'SITUATION: Upgrade 1 of 4. The contractor story lands right after this and does the emotional work — this slide does the mechanical work.',
+      'ROOM: Diagram up. Point at the server node and the crossed-out key.',
+      'MOOD: Practical. This is the one that wins them a meeting at work.',
+      'OPEN: "Your server needs a model. The obvious move is to give it its own API key. Do not."',
+      'SAY: My server does the entire job and never holds a credential.',
+      'DO: Ask who has sat through a security review for software. Take ONE answer, then ask what the first question was. It is always about keys.',
+    ].join('\n'),
   },
   {
     segment: 'architecture', eyebrow: '📞 Upgrade 2 of 4 — they call in', title: 'Silence and disaster look identical from a distance',
@@ -176,7 +220,14 @@ const teach = [
   T --> L["🪵 log events<br/>+ correlationId"]
   P --> U["🙂 The person<br/>waiting now"]
   L --> O["🌙 The person<br/>at 2 AM"]`,
-    script: 'The compressed slide of the night, so slow DOWN rather than speed up. Say the shape out loud: "progress is for now, logs are for later, and they are the same instinct." The line to make them repeat: half of what people call a performance problem is really a feedback problem — the job was never broken, everybody just cancelled it at twelve seconds.',
+    script: [
+      'SITUATION: Upgrade 2 of 4, and the most compressed slide of the night — two authored slides merged into one. Slow DOWN here, do not speed up.',
+      'ROOM: Diagram up. Point at the two output arrows separately: one to "the person waiting now", one to "the person at 2 AM".',
+      'MOOD: Deliberate. This is the slide most likely to get rushed.',
+      'OPEN: "Progress is for now. Logs are for later. They are the same instinct."',
+      'SAY: Half of what people call a performance problem is really a feedback problem. The job was never broken — everybody just cancelled it at twelve seconds.',
+      'NOTE: This is the only upgrade they build live tonight, so it earns the extra minute.',
+    ].join('\n'),
   },
   {
     segment: 'architecture', eyebrow: '🚪 Upgrade 3 of 4 — they stay on their floor', title: 'Roots: the client declares the territory. Enforcing it is entirely your job.',
@@ -196,7 +247,14 @@ const teach = [
   R["📥 Request:<br/>…/../../.ssh/id_rsa"] --> RES["🧭 RESOLVE<br/>the real path"]
   RES --> CMP["⚖️ THEN compare<br/>to the roots"]
   CMP --> D["🚫 Denied<br/>+ logged"]`,
-    script: 'Make the room say "resolve first, compare second" out loud, once, together. It sounds silly and it is the single most useful thing they take home. Tell them this exact control comes back in Week 10 as a policy enforcement point — you are planting it now.',
+    script: [
+      'SITUATION: Upgrade 3 of 4, and the security control of the week. The autopsy in the next segment shows it failing.',
+      'ROOM: Diagram up. Point at the RESOLVE box, then the COMPARE box, in that order.',
+      'MOOD: Firm. This is the one with a right answer.',
+      'OPEN: "The client tells your server which directories it may work in. That declaration is information, not a fence."',
+      'DO: Make the room say "resolve first, compare second" out loud, once, together. It feels silly. Do it anyway.',
+      'NOTE: Tell them this exact control returns in Week 10 as a policy enforcement point — you are planting it now.',
+    ].join('\n'),
   },
   {
     segment: 'architecture', eyebrow: '📋 Upgrade 4 of 4 — somebody signs the posting', title: 'STDIO or HTTP, stateful or stateless — inherit this from a blog and you will pay for it',
@@ -214,7 +272,14 @@ const teach = [
   Q["❓ Who calls it,<br/>from where,<br/>how many?"] --> A["⌨️ STDIO<br/>one user, local"]
   Q --> B["🌐 HTTP + stateful<br/>many users,<br/>ONE instance"]
   Q --> C["🌐 HTTP + stateless<br/>many users,<br/>many instances"]`,
-    script: 'Go straight from this slide into the transport theater vote — the slide is the briefing and the vote is the exam, and they belong together. Do NOT reveal the answer here. Set it up with one line: "you are the architect, and in ninety seconds you have to choose."',
+    script: [
+      'SITUATION: Upgrade 4 of 4, and the briefing for the biggest moment of the night. The theater vote fires immediately after this slide.',
+      'ROOM: Diagram up, three branches visible. Do NOT advance past the vote by accident.',
+      'MOOD: Raise the energy. You are handing them a decision, not a fact.',
+      'OPEN: "Two separate decisions that people collapse into one — how it is reached, and what has to survive between requests."',
+      'SAY: You are the architect, and in ninety seconds you have to choose.',
+      'NOTE: Do NOT reveal the answer on this slide. The briefing and the vote belong together; go straight into it.',
+    ].join('\n'),
   },
 
   /* ================= DECONSTRUCT — two autopsies ==================== */
@@ -232,7 +297,14 @@ const teach = [
   LB --> A["🖥️ Replica 1<br/>✅ has the session"]
   LB --> B["🖥️ Replica 2<br/>❌"]
   LB --> C["🖥️ Replica 3<br/>❌"]`,
-    script: 'Give them the failure RATE before the cause and let the room work it out — somebody will get to "two thirds means three replicas" out loud. When they do, STOP and let them explain it to the room. A peer landing this is worth three of you landing it. Then connect it back: this is the transport decision, arriving as an incident.',
+    script: [
+      'SITUATION: First autopsy, straight after the break. This is the transport decision arriving as a real incident.',
+      'ROOM: Diagram up — load balancer and three replicas, one green and two red.',
+      'MOOD: Detective, not lecturer. You are handing them a case, not a conclusion.',
+      'OPEN: "It passed every test. Every test ran against one instance."',
+      'DO: Give them the failure RATE before the cause and WAIT. Somebody will get to "two thirds means three replicas" out loud.',
+      'NOTE: When they do, STOP and let them explain it to the room. A peer landing this is worth three of you landing it.',
+    ].join('\n'),
   },
   {
     segment: 'deconstruct', eyebrow: '🔬 Autopsy two', title: 'Wide-open roots: the exact path somebody walks out of your directory',
@@ -246,7 +318,14 @@ const teach = [
     diagram: `flowchart TD
   BAD["❌ startsWith(raw)<br/>then open"] --> ESC["🗡️ dot-dot and symlinks<br/>both walk out"]
   GOOD["✅ realpath()<br/>THEN compare"] --> STOP["🚫 Both denied<br/>and logged"]`,
-    script: 'Run the escape live on your own screen against a FAKE file you planted, and let the denial land visibly after you fix the order. Do not moralise — show the two lines, show the escape, show the reorder. Then say it once more: resolve first, compare second.',
+    script: [
+      'SITUATION: Second autopsy, and the last teaching slide before the break-out build. It pays off the roots slide.',
+      'ROOM: Have a FAKE file planted on your machine before class so you can run the escape live. Do not use a real one.',
+      'MOOD: Demonstrative, not preachy. Show, do not moralise.',
+      'OPEN: "This reads as careful. It passes review. And it is not a control."',
+      'DO: Run the escape on your own screen, then fix the order and let the denial land visibly.',
+      'SAY: Resolve first, compare second.',
+    ].join('\n'),
   },
 
   /* ================= MICRO-BUILD — 2 built, 2 taught =============== */
@@ -272,7 +351,14 @@ const teach = [
   T["⌨️ Your terminal"] --> INS["🔍 MCP Inspector"]
   INS --> SRV["🖥️ Your Week 5<br/>server"]
   SRV --> RES["✅ A real result"]`,
-    script: 'Screen-share once, slowly, then STOP TALKING and let the room work. Use the pulse rail as a hard gate — nobody starts the build on a red connection. Mentors to anyone stuck, immediately.',
+    script: [
+      'SITUATION: Build segment opens. This is a GATE, not a lesson — nothing after it works without it.',
+      'ROOM: Screen-share your terminal. Inspector command ready to paste. Mentors standing, not sitting.',
+      'MOOD: Brisk and operational. No storytelling here.',
+      'OPEN: "Nothing we build next is visible unless you can see the protocol traffic. Terminal, not Claude Code."',
+      'DO: Demonstrate ONCE, slowly, then STOP TALKING and let the room work.',
+      'NOTE: Use the pulse rail as a hard gate — nobody starts the build on a red connection. Mentors to anyone stuck immediately.',
+    ].join('\n'),
   },
   {
     segment: 'micro-build', eyebrow: '🛠️ BUILD THIS — upgrade 2', title: 'Give your slowest tool a voice, and watch it call in',
@@ -297,7 +383,14 @@ const teach = [
   CC --> D["📄 A small diff"]
   D --> R["👀 You READ it"]
   R --> I["🔍 Ticks streaming<br/>in the Inspector"]`,
-    script: 'Have two students name their slowest tool OUT LOUD before anyone pastes — it makes the exercise theirs rather than yours. Then run it and let the room watch ticks stream. Expect an audible reaction; this is the moment of the night.',
+    script: [
+      'SITUATION: The ONE live build of the night. Everything else in this segment is read-along.',
+      'ROOM: Inspector open on your screen beside Claude Code, so the ticks are visible when they arrive.',
+      'MOOD: This is the payoff. Let it be fun.',
+      'OPEN: "Pick the slowest tool on your own server. Not a demo one — yours."',
+      'DO: Have TWO students name their slowest tool out loud before anyone pastes. It makes the exercise theirs, not yours.',
+      'NOTE: Expect an audible reaction when the ticks stream. Do not talk over it.',
+    ].join('\n'),
   },
   {
     segment: 'micro-build', eyebrow: '📖 TEACHING PROMPT — upgrade 2b', title: 'The log stream you will run before Thursday — read it with me now',
@@ -321,7 +414,15 @@ const teach = [
   SRV --> EV["🪵 event + correlationId<br/>+ duration"]
   EV --> INS["🔍 Live stream"]
   RED["🚫 No keys<br/>no records"] -.-> EV`,
-    script: 'Say up front that this one is read-along, so nobody is waiting to type — that is why the room stays with you. Read requirement five out loud TWICE, then ask the group-chat question and wait for the laugh. If the honest answer is no, their log stream is not finished. That question is the takeaway.',
+    script: [
+      'SITUATION: First of the two TEACHING prompts. Nobody builds this tonight; they run it before Thursday.',
+      'ROOM: Prompt on screen, large. Nobody should have their hands on the keyboard.',
+      'MOOD: Slower, seminar pace. This is a reading, not a race.',
+      'OPEN: "We are not building this one tonight, and you are still going to learn it — because the reasoning is inside the prompt, not the code."',
+      'DO: Say up front that this is read-along, so nobody sits waiting to type. That is what keeps the room with you.',
+      'SAY: Could you paste your log stream into a group chat right now, without checking it first?',
+      'NOTE: Read requirement five out loud TWICE, then ask the group-chat question and wait for the laugh. That question is the takeaway.',
+    ].join('\n'),
   },
   {
     segment: 'micro-build', eyebrow: '📖 TEACHING PROMPT — upgrade 3', title: 'The boundary prompt — and note section four, which is the real one',
@@ -345,7 +446,15 @@ const teach = [
   T --> A["🗡️ Attacks it wrote<br/>for you"]
   A --> D["🚫 Denied"]
   D --> L["🪵 Logged"]`,
-    script: 'Read section 4 and stop on it deliberately: "ask the thing that built it to help you break it." That is a habit, not a trick, and it is the most portable idea in the session. If you have time, run one attack live on your own screen with a fake file — thirty seconds, and the denial landing visibly is worth more than any slide.',
+    script: [
+      'SITUATION: Second TEACHING prompt, and the most portable idea in the session. Also read-along.',
+      'ROOM: Prompt on screen. Your fake-file setup from the autopsy is still available if you want to demo the attack.',
+      'MOOD: Conspiratorial. You are handing them a trick that works everywhere.',
+      'OPEN: "Same deal — read now, run before Thursday. But look at section four, because that is the real one."',
+      'SAY: Ask the thing that built it to help you break it.',
+      'DO: If you have thirty seconds, run one attack live and let the denial land visibly.',
+      'NOTE: Stop deliberately on section 4. That is a habit, not a trick, and it outlives this week.',
+    ].join('\n'),
   },
   {
     segment: 'micro-build', eyebrow: '📝 BUILD THIS — graded', title: 'Ten minutes, and it is the artifact Thursday depends on',
@@ -371,7 +480,15 @@ const teach = [
   Q --> CH["⚖️ Transport +<br/>state model"]
   CH --> DOC["📄 TRANSPORT_DECISION.md"]
   DOC --> TH["🔨 Thursday"]`,
-    script: 'Close the night on the spine. Three students say their choice and one sentence of rationale out loud, and push back gently on anything that is really "whatever the tutorial used." Then set up Thursday: "you bring that decision, your Week 5 server, and the two prompts you did not run tonight. We wire all four upgrades in, and then we break two of them on purpose." Last line: "it is 2 AM. Loud, or quiet?"',
+    script: [
+      'SITUATION: Last slide of the build segment and the graded artifact. Close the night on the spine you opened with.',
+      'ROOM: Plan Mode called out explicitly. Ten minutes on the clock, visible.',
+      'MOOD: Land it. Slow down for the final three lines.',
+      'OPEN: "Your Week 6 deliverable is not a working server. It is a transport decision you can defend."',
+      'DO: Three students say their choice and ONE sentence of rationale out loud. Push back gently on anything that is really "whatever the tutorial used."',
+      'SAY: Thursday you bring that decision, your Week 5 server, and the two prompts you did not run tonight. We wire all four upgrades in, and then we break two of them on purpose.',
+      'SAY: It is 2 AM. Loud, or quiet?',
+    ].join('\n'),
   },
 ];
 
