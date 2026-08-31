@@ -11,10 +11,6 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getRecentPresenceEvents, PresenceEvent, formatDisplayName } from './sessionPresenceService';
-import { buildKitSpec } from './classKit/kitSpecDaySlides';
-import { splitScript, promptBrief } from './classKit/kitHtml';
-import { buildSessionKit } from './sessionKitService';
-import { getKitConfig } from './sessionKitConfigService';
 import type { KitSlide } from './classKit/kitSpec';
 
 export type PulseState = 'here' | 'building' | 'stuck' | 'finished';
@@ -309,6 +305,18 @@ async function slidesForSession(sessionId: string): Promise<KitSlide[] | null> {
   const hit = specCache.get(sessionId);
   const now = Date.now();
   if (hit && now - hit.at < SPEC_TTL_MS) return hit.slides;
+  // Required lazily on purpose. buildSessionKit reaches the Sequelize models,
+  // and importing those at module load pulls a live `sequelize` into every
+  // consumer of this file — which breaks the unit tests that mock the DB
+  // (Cohort.init on an undefined connection). Nothing above this line needs
+  // them, so the deck builder stays out of the module graph until a presenter
+  // phone actually asks for notes.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { buildSessionKit } = require('./sessionKitService');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { getKitConfig } = require('./sessionKitConfigService');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { buildKitSpec } = require('./classKit/kitSpecDaySlides');
   const kit = await buildSessionKit(sessionId);
   if (!kit) return null;
   const config = await getKitConfig(sessionId);
@@ -334,6 +342,8 @@ export async function getPresenterNotes(sessionId: string): Promise<PresenterNot
   let derivedSay = '';
   try {
     if (bc && typeof bc.slide_index === 'number') {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+      const { splitScript, promptBrief } = require('./classKit/kitHtml');
       const slides = await slidesForSession(sessionId);
       const s = slides?.[bc.slide_index];
       // Only trust the lookup when it is the same slide the deck is on, so a
