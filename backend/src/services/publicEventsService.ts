@@ -15,11 +15,20 @@ export { centralWallClockToInstant };
  *   - `Status` carries the Eventbrite lifecycle (live / deleted / completed /
  *     draft / ended / started / canceled). Deleted events share future dates, so
  *     we require `Status = 'live'`.
- *   - There is no category / IsPublic column, so "public" is an explicit NAME
- *     allowlist (see PUBLIC_EVENT_LIKE below): Open House, Competition, Talent
- *     Showcase, Financial Literacy, Good Life. The recurring bootcamp help
- *     sessions (Weekly Help Session, SQL After Dark, Interview Prep, IPBC
- *     Saturday, DA Bootcamp) and internal COE meetups are intentionally excluded.
+ *   - "Public" is the CCPP `Registration` event group. `EventBrite_EventGroups`
+ *     row ID 1 is named `Registration`; `EventBrite_EventAccess` maps EventId ->
+ *     EventGroupId with its own `IsActive` flag. That label is the one CCPP
+ *     maintains deliberately for prospect-facing, register-for-this events, so it
+ *     is the signal we key on. It admits the AI-track events (AI Internship
+ *     Presentation, AI Strategy And Collaboration, AI Friday Trends) and still
+ *     excludes the recurring bootcamp sessions (SQL After Dark, Interview Prep,
+ *     IPBC Saturday / Mortgage Help) and the internal COE meetups, none of which
+ *     carry the label.
+ *   - PUBLIC_EVENT_LIKE is a DEPRECATED name fallback OR'd onto the label check.
+ *     A handful of individual occurrences of otherwise-public series are missing
+ *     an active Registration row in CCPP, and dropping the name list outright
+ *     would silently un-publish events the portal shows today. Delete it once
+ *     CCPP labels those occurrences; see the PR that introduced this note.
  *
  * CCPP is only reachable from inside the prod network, so this runs in the
  * backend container. Failure-First: on any CCPP error we fall back to the
@@ -31,8 +40,14 @@ export { centralWallClockToInstant };
 // The "Next event" countdown highlights the flagship Open House (see
 // getNextPublicEvent). Match Open Houses by name since CCPP has no category column.
 const OPEN_HOUSE_RE = /open house/i;
-// Prospect-facing event types to surface. Static literals (no user input), spliced
-// into the CCPP WHERE as an OR of LIKE clauses. Add a pattern here to widen.
+// The CCPP event-group label that means "prospect-facing, registration open".
+// `EventBrite_EventGroups.GroupName`; matched by name rather than by the literal
+// ID 1 so a CCPP re-seed that renumbers the table cannot silently empty the feed.
+export const PUBLIC_EVENT_GROUP = 'Registration';
+// DEPRECATED name fallback — see the header note. Some individual occurrences of
+// public series carry no active Registration row in CCPP; without these patterns
+// they would vanish from the portal. Remove once CCPP labels every occurrence.
+// Static literals (no user input), spliced into the CCPP WHERE as OR'd LIKEs.
 const PUBLIC_EVENT_LIKE: string[] = [
   '%Open House%',
   '%Competition%',       // CAP Competition
@@ -107,20 +122,34 @@ export function withinDays(events: OpenHouseView[], nowMs: number, days: number)
 async function fetchFromCcpp(): Promise<OpenHouseView[]> {
   const pool = await connectCcpp();
   try {
-    // OR of static LIKE literals (no user input) — the public-event allowlist.
-    const allowlist = PUBLIC_EVENT_LIKE.map((p) => `Name LIKE '${p}'`).join(' OR ');
+    // OR of static LIKE literals (no user input) — the deprecated name fallback.
+    const allowlist = PUBLIC_EVENT_LIKE.map((p) => `e.Name LIKE '${p}'`).join(' OR ');
+    // EXISTS, not a JOIN: an event may carry several active group rows, and a
+    // join would emit one duplicate event per row (and burn the TOP (@lim) budget
+    // on them). The group name is bound as a parameter, not interpolated.
     const res = await pool
       .request()
       .input('days', sql.Int, FETCH_WINDOW_DAYS)
       .input('lim', sql.Int, FETCH_LIMIT)
+      .input('group', sql.NVarChar, PUBLIC_EVENT_GROUP)
       .query<CcppEventRow>(`
-        SELECT TOP (@lim) EventId, Name, Description, URL, StartDate, EndDate
-        FROM EventBrite_Events
-        WHERE Status = 'live'
-          AND StartDate > GETUTCDATE()
-          AND StartDate <= DATEADD(day, @days, GETUTCDATE())
-          AND (${allowlist})
-        ORDER BY StartDate ASC
+        SELECT TOP (@lim) e.EventId, e.Name, e.Description, e.URL, e.StartDate, e.EndDate
+        FROM EventBrite_Events e
+        WHERE e.Status = 'live'
+          AND e.StartDate > GETUTCDATE()
+          AND e.StartDate <= DATEADD(day, @days, GETUTCDATE())
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM EventBrite_EventAccess a
+              INNER JOIN EventBrite_EventGroups g ON g.ID = a.EventGroupId
+              WHERE a.EventId = e.EventId
+                AND a.IsActive = 1
+                AND g.GroupName = @group
+            )
+            OR ${allowlist}
+          )
+        ORDER BY e.StartDate ASC
       `);
     return res.recordset.map(ccppRowToView);
   } finally {
