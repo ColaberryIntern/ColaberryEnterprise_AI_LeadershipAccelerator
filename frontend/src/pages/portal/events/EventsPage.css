@@ -1,0 +1,130 @@
+/* ============================================================
+   Events page — the legacy training-site event list, rebuilt in
+   the portal without the month calendar.
+   Scoped under .evt-root. The brand token block is redefined
+   here because these tokens are NOT global in this app (same
+   arrangement as SchedulePage.css).
+   ============================================================ */
+.evt-root{
+  /* Colaberry brand */
+  --cherry:#FB2832; --cherry-text:#E5121D; --cherry-deep:#C20E1E;
+  --leaf:#77BB4A; --leaf-action:#5BA63C; --leaf-text:#468A2E;
+  --berry:#367895; --berry-hover:#2E6A86; --link:#2E6A86;
+  --amber:#E8920C; --amber-deep:#B5710A;
+  /* neutrals */
+  --white:#FFFFFF; --n50:#F8F8F7; --n100:#F1F1F0; --n200:#E4E4E3; --n300:#D8D8D8;
+  --n400:#B4B4B4; --n500:#8C8C8C; --n600:#6B6B6B; --n700:#4A4A4A; --n800:#2B2B2B; --n900:#1A1A1A;
+  /* semantic */
+  --surface-page:#FFFFFF; --surface-subtle:#F8F8F7; --surface-sunken:#F1F1F0;
+  --text-strong:#1A1A1A; --text-body:#2B2B2B; --text-muted:#6B6B6B;
+  --border-default:#D8D8D8; --border-subtle:#E4E4E3;
+  --shadow-md:0 3px 8px rgba(26,26,26,.06),0 1px 3px rgba(26,26,26,.04);
+  --shadow-lg:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);
+  --r-4:4px; --r-8:8px; --r-12:12px; --r-16:16px; --r-pill:999px;
+  --ease:cubic-bezier(0.22,1,0.36,1);
+
+  color:var(--text-body);
+}
+
+/* ===== page header ===== */
+.evt-root .evt-head{margin-bottom:28px}
+.evt-root .evt-h1{
+  font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.15;
+  color:var(--text-strong);margin:0 0 6px
+}
+.evt-root .evt-sub{font-size:15px;line-height:1.55;color:var(--text-muted);margin:0;max-width:62ch}
+
+/* ===== month grouping ===== */
+.evt-root .evt-month{margin-bottom:34px}
+.evt-root .evt-month-label{
+  font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--text-muted);margin:0 0 14px;padding-bottom:9px;
+  border-bottom:1px solid var(--border-subtle)
+}
+
+/* ===== grid =====
+   auto-fill + minmax keeps the legacy 4-up feel on a wide screen and
+   collapses to 1-up on a phone with no media queries. */
+.evt-root .evt-grid{
+  display:grid;gap:22px;
+  grid-template-columns:repeat(auto-fill,minmax(262px,1fr))
+}
+
+/* ===== card ===== */
+.evt-root .evt-card{
+  display:flex;flex-direction:column;
+  background:var(--surface-page);
+  border:1px solid var(--border-subtle);
+  border-radius:var(--r-12);
+  overflow:hidden;
+  box-shadow:var(--shadow-md);
+  transition:transform .18s var(--ease),box-shadow .18s var(--ease),border-color .18s var(--ease)
+}
+.evt-root .evt-card:hover{
+  transform:translateY(-3px);
+  box-shadow:var(--shadow-lg);
+  border-color:var(--border-default)
+}
+
+/* Fixed 16:9 frame so mixed-aspect Eventbrite artwork can't make the rows ragged. */
+.evt-root .evt-thumb{
+  position:relative;width:100%;aspect-ratio:16/9;
+  background:var(--surface-sunken);overflow:hidden;flex:none
+}
+.evt-root .evt-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.evt-root .evt-thumb-fallback{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,var(--berry) 0%,var(--berry-hover) 100%)
+}
+.evt-root .evt-thumb-fallback span{
+  font-size:44px;font-weight:800;color:#fff;opacity:.92;line-height:1
+}
+
+.evt-root .evt-body{padding:15px 17px 6px;flex:1 1 auto;display:flex;flex-direction:column}
+.evt-root .evt-when{
+  font-size:12.5px;font-weight:700;color:var(--cherry-text);
+  margin:0 0 7px;letter-spacing:.005em;line-height:1.35
+}
+.evt-root .evt-title{
+  font-size:16px;font-weight:750;line-height:1.32;color:var(--text-strong);
+  margin:0 0 9px;letter-spacing:-.005em
+}
+.evt-root .evt-blurb{
+  font-size:13.5px;line-height:1.5;color:var(--text-muted);margin:0
+}
+.evt-root .evt-ellipsis{color:var(--n400)}
+
+.evt-root .evt-foot{padding:13px 17px 16px;margin-top:auto}
+.evt-root .evt-btn{
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:13.5px;font-weight:700;text-decoration:none;
+  color:var(--berry);background:var(--surface-sunken);
+  border:1px solid var(--border-default);border-radius:var(--r-pill);
+  padding:8px 15px;
+  transition:background .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)
+}
+.evt-root .evt-btn svg{width:15px;height:15px;flex:none}
+.evt-root .evt-btn:hover{background:var(--berry);border-color:var(--berry);color:#fff}
+.evt-root .evt-btn:focus-visible{outline:2px solid var(--berry);outline-offset:2px}
+
+/* ===== loading / empty / error ===== */
+.evt-root .evt-state{
+  text-align:center;padding:56px 20px;color:var(--text-muted);
+  background:var(--surface-subtle);border:1px solid var(--border-subtle);
+  border-radius:var(--r-12)
+}
+.evt-root .evt-state p{margin:0 0 4px;font-size:14.5px}
+.evt-root .evt-state-title{font-weight:700;color:var(--text-body);font-size:15.5px}
+.evt-root .evt-spinner{
+  width:26px;height:26px;margin:0 auto 14px;border-radius:50%;
+  border:3px solid var(--border-subtle);border-top-color:var(--berry);
+  animation:evt-spin .8s linear infinite
+}
+@keyframes evt-spin{to{transform:rotate(360deg)}}
+
+/* Respect a reduced-motion preference: no lift, no spin. */
+@media (prefers-reduced-motion:reduce){
+  .evt-root .evt-card{transition:none}
+  .evt-root .evt-card:hover{transform:none}
+  .evt-root .evt-spinner{animation-duration:2.4s}
+}

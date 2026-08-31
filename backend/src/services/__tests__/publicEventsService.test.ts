@@ -45,9 +45,11 @@ describe('publicEventsService', () => {
         title: 'Colaberry Accelerator Open House',
         description: 'd',
         starts_at: new Date('2026-07-16T23:30:00Z'),
+        ends_at: new Date('2026-07-16T23:30:00Z'),
         timezone: 'America/Chicago',
         registration_url: 'https://ev/123',
         meeting_link: null,
+        image_url: null,
       });
     });
 
@@ -56,6 +58,27 @@ describe('publicEventsService', () => {
       expect(v.id).toBe('9');
       expect(v.description).toBeNull();
       expect(v.registration_url).toBeNull();
+    });
+
+    it('carries the Eventbrite promo image through as image_url', () => {
+      const url = 'https://img.evbuc.com/x?s=abc';
+      const v = ccppRowToView({ ...ccppRow('7', 'AI Internship Presentation Event', '2026-09-01T10:00:00Z'), Logo_url: url });
+      expect(v.image_url).toBe(url);
+    });
+
+    it('normalises a missing, null or blank Logo_url to null', () => {
+      const base = ccppRow('7', 'X', '2026-09-01T10:00:00Z');
+      // CCPP holds all three shapes; the UI does one truthiness check, so they
+      // must collapse to null rather than reaching it as '' or undefined.
+      expect(ccppRowToView(base).image_url).toBeNull();
+      expect(ccppRowToView({ ...base, Logo_url: null }).image_url).toBeNull();
+      expect(ccppRowToView({ ...base, Logo_url: '   ' }).image_url).toBeNull();
+    });
+
+    it('corrects ends_at as Central-as-UTC too, and leaves a null EndDate null', () => {
+      const withEnd = ccppRowToView({ ...ccppRow('7', 'X', '2026-07-16T18:30:00Z'), EndDate: new Date('2026-07-16T20:00:00Z') });
+      expect(withEnd.ends_at).toEqual(new Date('2026-07-17T01:00:00Z'));
+      expect(ccppRowToView({ ...ccppRow('7', 'X', '2026-07-16T18:30:00Z'), EndDate: null }).ends_at).toBeNull();
     });
   });
 
@@ -173,6 +196,13 @@ describe('publicEventsService', () => {
       const q = await runAndGetSql();
       expect(q).toMatch(/e\.Status = 'live'/);
       expect(q).toMatch(/e\.StartDate > GETUTCDATE\(\)/);
+    });
+
+    it('selects the promo image column the Events page renders', async () => {
+      // Without Logo_url in the SELECT the page silently falls back to lettered
+      // tiles for every card, which looks intentional rather than broken.
+      const q = await runAndGetSql();
+      expect(q).toMatch(/e\.Logo_url/);
     });
   });
 

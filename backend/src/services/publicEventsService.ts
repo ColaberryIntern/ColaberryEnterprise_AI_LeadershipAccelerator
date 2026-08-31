@@ -66,6 +66,8 @@ interface CcppEventRow {
   URL: string | null;
   StartDate: Date;
   EndDate: Date | null;
+  /** Eventbrite promo image. Absent on rows CCPP synced before the column existed. */
+  Logo_url?: string | null;
 }
 
 let cache: { at: number; events: OpenHouseView[] } | null = null;
@@ -104,9 +106,14 @@ export function ccppRowToView(r: CcppEventRow): OpenHouseView {
     description: r.Description ?? null,
     // CCPP times are Central wall-clock read as UTC — correct them to the true instant.
     starts_at: centralWallClockToInstant(new Date(r.StartDate)),
+    // Same correction for the end, which is nullable in CCPP.
+    ends_at: r.EndDate ? centralWallClockToInstant(new Date(r.EndDate)) : null,
     timezone: EVENT_TZ,
     registration_url: r.URL ?? null,
     meeting_link: null,
+    // Blank strings exist in CCPP alongside NULLs; normalise both to null so the
+    // UI's "has an image" check is a single truthiness test.
+    image_url: r.Logo_url ? String(r.Logo_url).trim() || null : null,
   };
 }
 
@@ -133,7 +140,7 @@ async function fetchFromCcpp(): Promise<OpenHouseView[]> {
       .input('lim', sql.Int, FETCH_LIMIT)
       .input('group', sql.NVarChar, PUBLIC_EVENT_GROUP)
       .query<CcppEventRow>(`
-        SELECT TOP (@lim) e.EventId, e.Name, e.Description, e.URL, e.StartDate, e.EndDate
+        SELECT TOP (@lim) e.EventId, e.Name, e.Description, e.URL, e.StartDate, e.EndDate, e.Logo_url
         FROM EventBrite_Events e
         WHERE e.Status = 'live'
           AND e.StartDate > GETUTCDATE()
@@ -171,9 +178,13 @@ async function fetchFromPostgres(): Promise<OpenHouseView[]> {
     title: e.title,
     description: e.description,
     starts_at: e.starts_at,
+    // The seeded Postgres table carries neither an end time nor an image, so the
+    // Events page renders these rows text-only rather than breaking.
+    ends_at: null,
     timezone: e.timezone,
     registration_url: e.registration_url,
     meeting_link: e.meeting_link,
+    image_url: null,
   }));
 }
 
