@@ -791,6 +791,96 @@ export async function ensureRefactoredDeliverySchema(): Promise<void> {
  * correctness of. `profile_key` is promoted because the gate's mandatory-check set is
  * derived from it, so a release cannot be interpreted without it.
  */
+/**
+ * Operate-phase signal candidates (Gate 14).
+ *
+ * `operateSignals.ts` shipped complete and PURE - ten signals, a candidate type whose
+ * status is the literal `'proposed'`, and a `requiresHumanReview` field typed as the
+ * literal `true`. It had nowhere to write, so no signal could ever arrive.
+ *
+ * ## This table cannot change production, by construction
+ *
+ * Master plan §Gate 14: a production signal *creates a candidate, not an automatic
+ * production mutation*. Nothing joins from here into stories, decisions or releases, and
+ * nothing in the service writes to them. Applying a candidate means a person creating a
+ * story through the ordinary gates - which is the control, not a missing feature.
+ *
+ * `status` is stored even though only one value is legal today. A column that can only
+ * hold one value looks redundant right up until the day a second state is added, at which
+ * point its absence is a migration on live rows instead of a default.
+ *
+ * `evidence` is JSONB because SignalReading is a discriminated union - an observed value
+ * or an explicit `not_observed` WITH ITS REASON. Flattening it to a nullable number is
+ * exactly the mistake that module exists to prevent: a zero that means 'no data' is
+ * indistinguishable from a zero that means 'nothing broke'.
+ */
+/**
+ * The Experience Ledger (Gate 11).
+ *
+ * `experienceLedger.ts` shipped as pure logic - claim types, rubrics, bands and
+ * `evaluateClaim` - with no table, so no claim could ever be earned. Scenario A's
+ * observable is *an experience_claims row that is EARNED*, and there was nowhere to put
+ * one.
+ *
+ * ## evidence_id is the point of the table
+ *
+ * A claim exists only as a consequence of a specific `delivery_evidence` row. Storing the
+ * id rather than a copy of the verdict is what makes a claim auditable later: you can go
+ * and look at what actually happened. A ledger of claims with no traceable backing is a
+ * list of assertions.
+ *
+ * ## builder_did_the_work is NOT NULL on purpose
+ *
+ * Master plan §Gate 11: no credit solely for attendance. `evaluateClaim` rejects an
+ * explicit `false`, but an OMITTED value passes its check - so at the persistence layer
+ * the column refuses to be absent. A claim earned because nobody said otherwise is
+ * precisely the credit-for-attendance this rule exists to prevent.
+ */
+const DELIVERY_EXPERIENCE_CLAIMS: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_experience_claims (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     builder_identity_id UUID NOT NULL,
+     delivery_project_id UUID NOT NULL,
+     evidence_id UUID NOT NULL,
+     claim_type VARCHAR(60) NOT NULL,
+     band VARCHAR(20) NOT NULL,
+     evidence_type VARCHAR(40) NOT NULL,
+     evidence_outcome VARCHAR(20) NOT NULL,
+     human_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+     builder_did_the_work BOOLEAN NOT NULL,
+     attested_by_identity_id UUID,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  // One claim per builder per type per evidence row. Without this a single passing test
+  // run could be claimed repeatedly and the ledger would inflate on replay alone.
+  `CREATE UNIQUE INDEX IF NOT EXISTS delivery_experience_claims_unique
+     ON delivery_experience_claims (builder_identity_id, claim_type, evidence_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_experience_claims_builder
+     ON delivery_experience_claims (builder_identity_id, claim_type)`,
+];
+
+const DELIVERY_SIGNAL_CANDIDATES: string[] = [
+  `CREATE TABLE IF NOT EXISTS delivery_signal_candidates (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     delivery_project_id UUID NOT NULL,
+     kind VARCHAR(40) NOT NULL,
+     signal VARCHAR(40) NOT NULL,
+     summary TEXT NOT NULL,
+     evidence JSONB NOT NULL,
+     status VARCHAR(20) NOT NULL DEFAULT 'proposed',
+     requires_human_review BOOLEAN NOT NULL DEFAULT TRUE,
+     about_missing_telemetry BOOLEAN NOT NULL DEFAULT FALSE,
+     created_by_identity_id UUID,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_signal_candidates_project
+     ON delivery_signal_candidates (delivery_project_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_delivery_signal_candidates_signal
+     ON delivery_signal_candidates (signal, kind)`,
+];
+
 const DELIVERY_RELEASES: string[] = [
   `CREATE TABLE IF NOT EXISTS delivery_releases (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -886,5 +976,7 @@ export const REFACTORED_DELIVERY_SCHEMA_STATEMENTS: readonly string[] = [
   ...CAPACITY_AND_ECONOMICS,
   ...DELIVERY_STORIES,
   ...DELIVERY_RELEASES,
+  ...DELIVERY_SIGNAL_CANDIDATES,
+  ...DELIVERY_EXPERIENCE_CLAIMS,
   ...CLIENT_MAGIC_LINK,
 ];

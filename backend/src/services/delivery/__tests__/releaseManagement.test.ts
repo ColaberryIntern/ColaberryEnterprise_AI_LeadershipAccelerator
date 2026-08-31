@@ -1,5 +1,6 @@
 import {
   approveRelease,
+  waiveReleaseCheck,
   createReleaseCandidate,
   evaluateRelease,
   recordReleaseCheck,
@@ -170,5 +171,102 @@ describe('evaluateRelease', () => {
       expect(out.gate.ready).toBe(false);
       expect(out.gate.blockers.some((b) => b.rule === 'approver_missing')).toBe(true);
     }
+  });
+});
+describe('waiveReleaseCheck — scenario D territory', () => {
+  it('REFUSES a waiver with no reason and writes nothing', async () => {
+    // The failure D exists to catch is not 'the gate does not block'. It is 'the gate
+    // stopped blocking for a reason nobody can see afterwards'. An unjustified waiver is
+    // indistinguishable later from the gate never having applied.
+    const release = makeRelease();
+    const out = await waiveReleaseCheck({
+      releaseId: 'release-1',
+      check: 'accessibility',
+      reason: '   ',
+      models: makeModels({ release }),
+    });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toBe('waiver_needs_reason');
+    expect(release.update).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES to waive a check that does not exist', async () => {
+    const release = makeRelease();
+    const out = await waiveReleaseCheck({
+      releaseId: 'release-1',
+      check: 'not_a_real_check',
+      reason: 'because',
+      models: makeModels({ release }),
+    });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toBe('unknown_check');
+    expect(release.update).not.toHaveBeenCalled();
+  });
+
+  it('stores the reason WITH the check, not beside it', async () => {
+    // Two parallel arrays that must stay aligned eventually do not.
+    const release = makeRelease();
+    const out = await waiveReleaseCheck({
+      releaseId: 'release-1',
+      check: 'accessibility',
+      reason: 'Client accepted a documented WCAG exception for the legacy embed.',
+      actorIdentityId: APPROVER,
+      models: makeModels({ release }),
+    });
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.waived[0].check).toBe('accessibility');
+      expect(out.waived[0].reason).toContain('WCAG');
+      expect(out.waived[0].waivedByIdentityId).toBe(APPROVER);
+    }
+  });
+
+  it('moves the check into WAIVED, never into passed', async () => {
+    // The whole observable of scenario D. A waiver that folded into `passed` would make a
+    // waived release indistinguishable from one that genuinely met the bar.
+    // accessibility is mandatory ONLY under government_public_sector, which is the
+    // profile scenario D is about. Under internal_tool the waiver would be a no-op and
+    // this test would assert nothing.
+    const release = makeRelease({
+      profile_key: 'government_public_sector',
+      waived_categories: [
+        { check: 'accessibility', reason: 'documented exception', waivedByIdentityId: null, waivedAt: 'x' },
+      ],
+    });
+    const out = await evaluateRelease({ releaseId: 'release-1', models: makeModels({ release }) });
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.gate.waived).toContain('accessibility');
+      expect(out.gate.passed).not.toContain('accessibility');
+    }
+  });
+
+  it('replaces a prior waiver of the same check rather than stacking', async () => {
+    const release = makeRelease({
+      waived_categories: [
+        { check: 'accessibility', reason: 'first', waivedByIdentityId: null, waivedAt: 'x' },
+      ],
+    });
+    const out = await waiveReleaseCheck({
+      releaseId: 'release-1', check: 'accessibility', reason: 'second and better',
+      models: makeModels({ release }),
+    });
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.waived).toHaveLength(1);
+      expect(out.waived[0].reason).toBe('second and better');
+    }
+  });
+
+  it('still accepts a legacy bare-string waiver', async () => {
+    // The column shipped holding plain strings. A row written before this change must not
+    // start throwing on read.
+    const release = makeRelease({
+      profile_key: 'government_public_sector',
+      waived_categories: ['accessibility'],
+    });
+    const out = await evaluateRelease({ releaseId: 'release-1', models: makeModels({ release }) });
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.gate.waived).toContain('accessibility');
   });
 });

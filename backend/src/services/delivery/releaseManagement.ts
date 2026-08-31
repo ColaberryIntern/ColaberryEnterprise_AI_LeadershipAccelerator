@@ -27,6 +27,7 @@ export type ReleaseRefusalReason =
   | 'no_profile_on_project'
   | 'profile_unresolvable'
   | 'unknown_check'
+  | 'waiver_needs_reason'
   | 'not_ready'
   | 'already_approved';
 
@@ -143,6 +144,76 @@ export async function recordReleaseCheck(input: {
   return { ok: true, checkCount: results.length };
 }
 
+/**
+ * A recorded waiver.
+ *
+ * The reason travels WITH the waived check rather than in a parallel array, because two
+ * arrays that must stay aligned eventually do not. Scenario D exists to catch exactly the
+ * failure this shape prevents: the gate stopping for a reason nobody can see afterwards.
+ */
+export interface ReleaseWaiver {
+  check: string;
+  reason: string;
+  waivedByIdentityId: string | null;
+  waivedAt: string;
+}
+
+/** The gate takes check names; the record keeps the justification. */
+function waivedCheckNames(release: any): string[] {
+  return ((release.waived_categories ?? []) as ReleaseWaiver[]).map((w) =>
+    typeof w === 'string' ? w : w.check,
+  );
+}
+
+/**
+ * Waive one mandatory check on a release.
+ *
+ * **A waiver without a reason is refused.** A gate that stops blocking is a governance
+ * event, and one recorded with no justification is indistinguishable afterwards from the
+ * gate simply not having applied - which is the failure mode scenario D is written to
+ * detect. Requiring the reason at the only moment anybody knows it is cheaper than
+ * reconstructing it later, when nobody does.
+ */
+export async function waiveReleaseCheck(input: {
+  releaseId: string;
+  check: string;
+  reason: string;
+  actorIdentityId?: string | null;
+  models: any;
+}): Promise<{ ok: true; waived: ReleaseWaiver[] } | ReleaseRefusal> {
+  if (!isReleaseCheck(input.check)) {
+    return { ok: false, reason: 'unknown_check', message: `'${input.check}' is not a known release check.` };
+  }
+  if (!input.reason || !input.reason.trim()) {
+    return {
+      ok: false,
+      reason: 'waiver_needs_reason',
+      message: 'A waiver must record why the check was waived.',
+    };
+  }
+
+  const release = await input.models.DeliveryRelease.findOne({ where: { id: input.releaseId } });
+  if (!release) return { ok: false, reason: 'not_ready', message: 'No such release.' };
+
+  // Replaces any prior waiver of the same check, for the same reason recordReleaseCheck
+  // replaces a prior result: one current answer per check.
+  const existing = ((release.waived_categories ?? []) as ReleaseWaiver[]).filter(
+    (w) => (typeof w === 'string' ? w : w.check) !== input.check,
+  );
+  const waived: ReleaseWaiver[] = [
+    ...existing,
+    {
+      check: input.check,
+      reason: input.reason.trim(),
+      waivedByIdentityId: input.actorIdentityId ?? null,
+      waivedAt: new Date().toISOString(),
+    },
+  ];
+
+  await release.update({ waived_categories: waived });
+  return { ok: true, waived };
+}
+
 /** Ask the gate about a release, without changing anything. */
 export async function evaluateRelease(input: {
   releaseId: string;
@@ -154,7 +225,7 @@ export async function evaluateRelease(input: {
   const gate = evaluateReleaseGate({
     profileKey: release.profile_key,
     results: (release.check_results ?? []) as ReleaseCheckResult[],
-    waivedCategories: release.waived_categories ?? [],
+    waivedCategories: waivedCheckNames(release),
     // Deliberately the STORED approver, not the caller. Evaluating with the requester's
     // id would make the gate's approver_missing rule unreachable — every evaluation would
     // appear to have an approver simply because somebody asked.
@@ -189,7 +260,7 @@ export async function approveRelease(input: {
     const gate = evaluateReleaseGate({
       profileKey: release.profile_key,
       results: (release.check_results ?? []) as ReleaseCheckResult[],
-      waivedCategories: release.waived_categories ?? [],
+      waivedCategories: waivedCheckNames(release),
       approvedByIdentityId: release.approved_by_identity_id,
       goalsScores: release.goals_scores as never,
     });
@@ -199,7 +270,7 @@ export async function approveRelease(input: {
   const gate = evaluateReleaseGate({
     profileKey: release.profile_key,
     results: (release.check_results ?? []) as ReleaseCheckResult[],
-    waivedCategories: release.waived_categories ?? [],
+    waivedCategories: waivedCheckNames(release),
     approvedByIdentityId: input.approverIdentityId,
     goalsScores: release.goals_scores as never,
   });

@@ -3,6 +3,16 @@ import { requireAdmin } from '../middlewares/authMiddleware';
 import { assignBuilderToProject } from '../services/delivery/builderAssignment';
 import { evaluateStoryGate, recordEvidence, upsertStory } from '../services/delivery/storyEvidence';
 import { mentorQueueFor } from '../services/delivery/mentorState';
+import {
+  approveRelease,
+  createReleaseCandidate,
+  evaluateRelease,
+  recordReleaseCheck,
+  waiveReleaseCheck,
+} from '../services/delivery/releaseManagement';
+import { linkStudentProject, linkedStudentProjects } from '../services/delivery/projectSourceLink';
+import { candidatesForProject, intakeSignal } from '../services/delivery/signalIntake';
+import { claimFromEvidence, ledgerFor } from '../services/delivery/experienceClaims';
 
 /**
  * deliveryAdminRoutes — the operator side of the delivery OS. One action, to begin with.
@@ -276,6 +286,299 @@ router.get(
       }));
       res.status(500).json({ error: 'Could not build the mentor queue.' });
     }
+  },
+);
+
+/**
+ * The release surface (Gates 13 + 14).
+ *
+ * `releaseManagement` had no HTTP surface, so scenario D - *government profile, missing
+ * accessibility evidence, release blocked* - had nothing to drive. A script calling the
+ * service directly would have looked like an executed scenario while testing the same
+ * thing the unit tests already do.
+ *
+ * Every refusal here is an ordinary answer with a status code, never a thrown error: a
+ * blocked release is the gate working.
+ */
+const models = () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return require('../models');
+};
+
+const actorOf = (req: Request) =>
+  (req as unknown as { user?: { platform_identity_id?: string; id?: string } }).user
+    ?.platform_identity_id ??
+  (req as unknown as { user?: { id?: string } }).user?.id ??
+  null;
+
+const releaseError = (res: Response, event: string, err: unknown, context: object) => {
+  console.error(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'error', service: 'delivery-admin',
+    event, outcome: 'failure',
+    error_class: (err as Error)?.constructor?.name ?? 'Error', context,
+  }));
+  res.status(500).json({ error: 'The release operation could not be completed.' });
+};
+
+/** POST /api/refactored/admin/projects/:projectId/releases - cut a candidate. */
+router.post(
+  '/api/refactored/admin/projects/:projectId/releases',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    const version = typeof req.body?.version === 'string' ? req.body.version : '';
+    if (!projectId || !version) {
+      res.status(400).json({ error: 'projectId and version are required.' });
+      return;
+    }
+    try {
+      const out = await createReleaseCandidate({
+        projectId, version,
+        candidateSha: req.body?.candidateSha ?? null,
+        actorIdentityId: actorOf(req),
+        models: models(),
+      });
+      if (!out.ok) {
+        res.status(422).json({ error: out.message, reason: out.reason, issues: out.issues });
+        return;
+      }
+      res.status(201).json(out);
+    } catch (err) { releaseError(res, 'release_create_failed', err, { projectId }); }
+  },
+);
+
+/** POST /api/refactored/admin/releases/:releaseId/checks - record one check result. */
+router.post(
+  '/api/refactored/admin/releases/:releaseId/checks',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const releaseId = typeof req.params?.releaseId === 'string' ? req.params.releaseId : '';
+    const { check, outcome } = req.body ?? {};
+    if (!releaseId || !check || !outcome) {
+      res.status(400).json({ error: 'check and outcome are required.' });
+      return;
+    }
+    try {
+      const out = await recordReleaseCheck({
+        releaseId, check, outcome, detail: req.body?.detail ?? null, models: models(),
+      });
+      if (!out.ok) { res.status(422).json({ error: out.message, reason: out.reason }); return; }
+      res.status(201).json(out);
+    } catch (err) { releaseError(res, 'release_check_failed', err, { releaseId }); }
+  },
+);
+
+/**
+ * POST /api/refactored/admin/releases/:releaseId/waivers
+ *
+ * **422 without a reason.** A waiver is a governance event; one recorded with no
+ * justification is indistinguishable afterwards from the gate never having applied.
+ */
+router.post(
+  '/api/refactored/admin/releases/:releaseId/waivers',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const releaseId = typeof req.params?.releaseId === 'string' ? req.params.releaseId : '';
+    const { check, reason } = req.body ?? {};
+    if (!releaseId || !check) {
+      res.status(400).json({ error: 'check is required.' });
+      return;
+    }
+    try {
+      const out = await waiveReleaseCheck({
+        releaseId, check, reason: typeof reason === 'string' ? reason : '',
+        actorIdentityId: actorOf(req), models: models(),
+      });
+      if (!out.ok) { res.status(422).json({ error: out.message, reason: out.reason }); return; }
+      res.status(201).json(out);
+    } catch (err) { releaseError(res, 'release_waiver_failed', err, { releaseId }); }
+  },
+);
+
+/** GET /api/refactored/admin/releases/:releaseId/gate - 200 either way. */
+router.get(
+  '/api/refactored/admin/releases/:releaseId/gate',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const releaseId = typeof req.params?.releaseId === 'string' ? req.params.releaseId : '';
+    try {
+      const out = await evaluateRelease({ releaseId, models: models() });
+      if (!out.ok) { res.status(404).json({ error: out.message, reason: out.reason }); return; }
+      res.json(out.gate);
+    } catch (err) { releaseError(res, 'release_gate_failed', err, { releaseId }); }
+  },
+);
+
+/** POST /api/refactored/admin/releases/:releaseId/approve - 409 when the gate refuses. */
+router.post(
+  '/api/refactored/admin/releases/:releaseId/approve',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const releaseId = typeof req.params?.releaseId === 'string' ? req.params.releaseId : '';
+    const approver = actorOf(req);
+    if (!approver) {
+      // A release is approved by a person, never by a pipeline. No identity, no approval.
+      res.status(401).json({ error: 'An approving identity is required.' });
+      return;
+    }
+    try {
+      const out = await approveRelease({ releaseId, approverIdentityId: approver, models: models() });
+      if (!out.ok) {
+        // 409: the request was well-formed and the state of the world refused it.
+        res.status(409).json({ error: out.message, reason: out.reason, gate: out.gate });
+        return;
+      }
+      res.json(out.gate);
+    } catch (err) { releaseError(res, 'release_approve_failed', err, { releaseId }); }
+  },
+);
+
+/**
+ * POST /api/refactored/admin/projects/:projectId/source-links
+ *
+ * Attach an existing student Project to a delivery project (scenario E).
+ *
+ * **Writes nothing to the student project.** Master plan §24 makes student Project
+ * regression a stop condition, and the service is built so it cannot: the link lives
+ * entirely in its own table. 422 without a reason, for the same argument as a waiver.
+ */
+router.post(
+  '/api/refactored/admin/projects/:projectId/source-links',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    const studentProjectId =
+      typeof req.body?.studentProjectId === 'string' ? req.body.studentProjectId : '';
+    if (!projectId || !studentProjectId) {
+      res.status(400).json({ error: 'projectId and studentProjectId are required.' });
+      return;
+    }
+    try {
+      const out = await linkStudentProject({
+        deliveryProjectId: projectId,
+        studentProjectId,
+        reason: typeof req.body?.reason === 'string' ? req.body.reason : '',
+        actorIdentityId: actorOf(req),
+        models: models(),
+      });
+      if (!out.ok) { res.status(422).json({ error: out.message, reason: out.reason }); return; }
+      // 200 on a replay so a caller can tell it did not create a second link.
+      res.status(out.created ? 201 : 200).json(out);
+    } catch (err) { releaseError(res, 'source_link_failed', err, { projectId }); }
+  },
+);
+
+/** GET /api/refactored/admin/projects/:projectId/source-links */
+router.get(
+  '/api/refactored/admin/projects/:projectId/source-links',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    try {
+      res.json({ links: await linkedStudentProjects({ deliveryProjectId: projectId, models: models() }) });
+    } catch (err) { releaseError(res, 'source_links_read_failed', err, { projectId }); }
+  },
+);
+
+/**
+ * POST /api/refactored/admin/projects/:projectId/signals
+ *
+ * Gate 14 Operate: a production signal proposes a candidate and **changes nothing**.
+ *
+ * 201 with a candidate, or 422 with the refusals verbatim. The refusal that matters most
+ * is `no_observation`: a conclusion drawn from telemetry that was never observed is a
+ * fabrication, and it is the kind that reads as a real finding.
+ */
+router.post(
+  '/api/refactored/admin/projects/:projectId/signals',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    const { kind, signal, summary, evidence } = req.body ?? {};
+    if (!projectId || !kind || !signal || !summary || !evidence) {
+      res.status(400).json({ error: 'kind, signal, summary and evidence are required.' });
+      return;
+    }
+    try {
+      const out = await intakeSignal({
+        projectId, kind, signal, summary, evidence,
+        aboutMissingTelemetry: req.body?.aboutMissingTelemetry === true,
+        actorIdentityId: actorOf(req),
+        models: models(),
+      });
+      if (!out.ok) {
+        res.status(out.reason === 'no_such_project' ? 404 : 422)
+          .json({ error: out.message, reason: out.reason, refusals: out.refusals });
+        return;
+      }
+      res.status(201).json(out);
+    } catch (err) { releaseError(res, 'signal_intake_failed', err, { projectId }); }
+  },
+);
+
+/** GET /api/refactored/admin/projects/:projectId/signals */
+router.get(
+  '/api/refactored/admin/projects/:projectId/signals',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    try {
+      res.json({ candidates: await candidatesForProject({ projectId, models: models() }) });
+    } catch (err) { releaseError(res, 'signal_read_failed', err, { projectId }); }
+  },
+);
+
+/**
+ * POST /api/refactored/admin/builders/:builderIdentityId/claims
+ *
+ * Gate 11's Experience Ledger. Earn one claim from one recorded piece of evidence.
+ *
+ * **`builderDidTheWork` must be an explicit boolean.** `evaluateClaim` rejects a `false`
+ * but an omitted value passes its check, so silence would become credit - which is the
+ * attendance-only credit §Gate 11 forbids. 422 rather than a default.
+ *
+ * The request names WHICH evidence backs the claim. It does not get to say what that
+ * evidence showed; type and outcome are read from the row.
+ */
+router.post(
+  '/api/refactored/admin/builders/:builderIdentityId/claims',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const builderIdentityId =
+      typeof req.params?.builderIdentityId === 'string' ? req.params.builderIdentityId : '';
+    const { claimType, evidenceId, builderDidTheWork } = req.body ?? {};
+    if (!builderIdentityId || !claimType || !evidenceId) {
+      res.status(400).json({ error: 'claimType and evidenceId are required.' });
+      return;
+    }
+    try {
+      const out = await claimFromEvidence({
+        builderIdentityId, claimType, evidenceId,
+        builderDidTheWork,
+        humanConfirmed: req.body?.humanConfirmed === true,
+        attestedByIdentityId: actorOf(req),
+        models: models(),
+      });
+      if (!out.ok) {
+        res.status(out.reason === 'no_such_evidence' ? 404 : 422)
+          .json({ error: out.message, reason: out.reason, rejections: out.rejections });
+        return;
+      }
+      res.status(out.created ? 201 : 200).json(out);
+    } catch (err) { releaseError(res, 'claim_failed', err, { builderIdentityId }); }
+  },
+);
+
+/** GET /api/refactored/admin/builders/:builderIdentityId/ledger */
+router.get(
+  '/api/refactored/admin/builders/:builderIdentityId/ledger',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const builderIdentityId =
+      typeof req.params?.builderIdentityId === 'string' ? req.params.builderIdentityId : '';
+    try {
+      res.json(await ledgerFor({ builderIdentityId, models: models() }));
+    } catch (err) { releaseError(res, 'ledger_read_failed', err, { builderIdentityId }); }
   },
 );
 
