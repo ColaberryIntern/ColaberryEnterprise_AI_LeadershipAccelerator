@@ -51,6 +51,10 @@ export interface CompilerInputs {
     name?: string | null;
     descriptor?: string | null;
     what_it_does?: string | null;
+    problem?: string | null;
+    stage?: string | null;
+    industry?: string | null;
+    organization?: string | null;
     repo_url?: string | null;
     demo_url?: string | null;
     hours_reclaimed?: number | null;
@@ -211,6 +215,10 @@ export function compileCapstoneRecord(inputs: CompilerInputs): CapstoneRecord {
     system: {
       project_name: clean(inputs.project?.name),
       what_it_does: clean(inputs.project?.what_it_does),
+      problem: clean(inputs.project?.problem),
+      stage: clean(inputs.project?.stage),
+      industry: clean(inputs.project?.industry),
+      organization: clean(inputs.project?.organization),
       descriptor: clean(inputs.project?.descriptor),
       architecture_mermaid: clean(inputs.project?.architecture_mermaid),
       hours_reclaimed:
