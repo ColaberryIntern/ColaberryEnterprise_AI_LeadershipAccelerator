@@ -18,6 +18,13 @@ import type { DeliveryStoryContract } from '../services/delivery/deliveryStoryCo
  * contract is well-formed. Postgres would only be able to enforce presence, which is the
  * least interesting of that function's rules.
  *
+ * ## Builder attribution arrived late, and its absence was invisible
+ *
+ * Gate 11 wants three per-builder story counts, and this table identified no builder -
+ * only `created_by_identity_id`, which is who *filed* the story. Nothing failed as a
+ * result; the mentor exceptions simply could not be computed, and would have read as
+ * "this builder has no problems" had anyone defaulted them.
+ *
  * The promoted columns are the ones something queries or filters by: `title`, `status`,
  * `risk_level`. `is_ui_story` is promoted too because the quality gate reads it to decide
  * whether browser, visual and accessibility evidence are required — a field that changes
@@ -32,6 +39,10 @@ export interface DeliveryStoryAttributes {
   status: string;
   risk_level: string | null;
   is_ui_story: boolean;
+  /** The builder currently carrying the story. Null while unassigned. */
+  assigned_to_identity_id: string | null;
+  /** How many times the story has come back for rework. */
+  rework_count: number;
   contract: DeliveryStoryContract;
   created_by_identity_id: string | null;
   created_at: Date;
@@ -46,6 +57,8 @@ class DeliveryStory extends Model<DeliveryStoryAttributes> implements DeliverySt
   declare status: string;
   declare risk_level: string | null;
   declare is_ui_story: boolean;
+  declare assigned_to_identity_id: string | null;
+  declare rework_count: number;
   declare contract: DeliveryStoryContract;
   declare created_by_identity_id: string | null;
   declare created_at: Date;
@@ -63,6 +76,11 @@ DeliveryStory.init(
     // Read by the quality gate to decide whether browser, visual and a11y evidence are
     // required. Promoted out of the blob because it changes what is REQUIRED.
     is_ui_story: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Gate 11 counts stories per builder. The table identified no builder at all until
+    // this landed - created_by_identity_id is who FILED the story, not who is building it.
+    assigned_to_identity_id: { type: DataTypes.UUID, allowNull: true },
+    // A count, not a flag: 'came back twice' and 'came back once' are different signals.
+    rework_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     contract: { type: DataTypes.JSONB, allowNull: false },
     created_by_identity_id: { type: DataTypes.UUID, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
