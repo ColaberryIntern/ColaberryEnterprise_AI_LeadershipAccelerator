@@ -335,6 +335,14 @@ function timelineHtml(spec: KitSpec): string {
  *   DO:   — set the environment: run it, click it, open it, put it on screen
  *   NOTE: — commentary: why this matters, what to watch for, when to move on
  *
+ * Plus the four arrival-screen categories (Ali, 2026-08-31). The "1st
+ * paragraph" has to land the instant the slide changes, and he reads its parts
+ * separately rather than as one block, so each gets its own tag and colour:
+ *   SITUATION: — where we are in the story; what just happened
+ *   ROOM:      — the environment: what is on screen, what to have ready
+ *   MOOD:      — the energy to set before speaking
+ *   OPEN:      — the opening comments, i.e. the first words out of your mouth
+ *
  * Ali, 2026-08-27, after presenting from the un-split version: "I don't know
  * if I'm supposed to read any of it and it is really hard to follow. Trying to
  * read it when the new slide comes on and trying not to take a long pause is
@@ -347,7 +355,7 @@ function timelineHtml(spec: KitSpec): string {
  */
 export function splitScript(script: string | undefined, body: string | undefined): { say: string; setup: string } {
   const raw = (script || '').split('\n').map((l) => l.trim()).filter(Boolean);
-  const tagged = raw.filter((l) => /^(SAY|DO|NOTE):/i.test(l));
+  const tagged = raw.filter((l) => /^(SAY|DO|NOTE|SITUATION|ROOM|MOOD|OPEN):/i.test(l));
   if (!tagged.length) {
     // Untagged: the script is all direction, the body is what gets spoken.
     return { say: body || '', setup: (script ? 'NOTE: ' + script : '') + (body ? '\nSAY: ' + body : '') };

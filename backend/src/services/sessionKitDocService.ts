@@ -141,6 +141,24 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
   /* NOTE — commentary and pacing. Deliberately the quietest of the three. */
   .ln-note{background:rgba(148,163,184,.08);border-left-color:#64748b;color:#b6c0cd}
   .ln-note .ln-tag{color:#94a3b8}
+  /* The four ARRIVAL categories (Ali, 2026-08-31). These only ever appear on
+     the set-up screen, which is why OPEN can safely share SAY's gold: the two
+     never sit on the same screen, and both mean "these are words you speak",
+     so the gold always carries the same meaning wherever it appears. */
+  /* SITUATION — where we are in the story; what just happened. */
+  .ln-situation{background:rgba(167,139,250,.10);border-left-color:#a78bfa;color:#ddd2fe}
+  .ln-situation .ln-tag{color:#a78bfa}
+  /* ROOM — the environment: what is on screen, what to have ready. Shares the
+     DO family deliberately: both are things your hands arrange, not say. */
+  .ln-room{background:rgba(56,189,248,.10);border-left-color:#38bdf8;color:#bae6fd}
+  .ln-room .ln-tag{color:#38bdf8}
+  /* MOOD — the energy to set before you speak. Its own colour because it is
+     the one line that is neither an action nor a sentence. */
+  .ln-mood{background:rgba(52,211,153,.10);border-left-color:#34d399;color:#bbf7e0}
+  .ln-mood .ln-tag{color:#34d399}
+  /* OPEN — the opening comments: the first words out of your mouth. */
+  .ln-open{background:rgba(251,191,36,.10);border-left-color:#fbbf24;color:#fde9b8}
+  .ln-open .ln-tag{color:#fbbf24}
   /* The prompt brief keeps its own colour, so "there is something to run on
      this step" can never blend into the commentary sitting next to it. */
   .ln-run{background:rgba(244,63,94,.10);border-left-color:#f43f5e;color:#fecdd3;
@@ -195,7 +213,9 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
     var out = [], buf = [], role = dflt;
     function flush(){
       if (!buf.length) return;
-      var label = { say: 'Say this', do: 'Do this', note: 'Context', run: 'To run' }[role] || 'Context';
+      var label = { say: 'Say this', do: 'Do this', note: 'Context', run: 'To run',
+        situation: 'Where we are', room: 'On screen', mood: 'Set the tone',
+        open: 'Open with' }[role] || 'Context';
       out.push('<span class="ln ln-' + role + '"><span class="ln-tag">' + label + '</span>'
         + esc(buf.join('\\n')) + '</span>');
       buf = [];
@@ -203,7 +223,7 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
     lines.forEach(function(raw){
       var l = raw.trim();
       if (!l) return;
-      var m = /^(SAY|DO|NOTE):\\s*/i.exec(l);
+      var m = /^(SAY|DO|NOTE|SITUATION|ROOM|MOOD|OPEN):\\s*/i.exec(l);
       var isRun = /^[▶○📖]/.test(l);
       if (m) { flush(); role = m[1].toLowerCase(); buf.push(l.slice(m[0].length)); }
       else if (isRun) { flush(); role = 'run'; buf.push(l); }
@@ -244,7 +264,14 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
           tipEl.classList.toggle('empty', !tip);
         }
       } else {
-        var pre = d.presenter_preface || '';
+        // A Present tab opened before the two-screen split shipped broadcasts
+        // presenter_tip and no presenter_preface at all, and this screen then
+        // showed "No set-up notes for this slide" — the set-up paragraph read
+        // as DELETED rather than as a stale tab (Ali, 2026-08-31). That tab's
+        // presenter_tip IS the authored script, which is exactly the set-up
+        // paragraph this screen wants, so fall back to it instead of going
+        // blank. A current tab never reaches the fallback.
+        var pre = d.presenter_preface || d.presenter_tip || '';
         if (pre !== lastPre) {
           lastPre = pre;
           // Nothing here is spoken; untagged text is context by default.
