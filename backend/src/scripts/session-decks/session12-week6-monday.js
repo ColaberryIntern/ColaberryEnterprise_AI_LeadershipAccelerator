@@ -230,30 +230,35 @@ const teach = [
     ].join('\n'),
   },
   {
-    segment: 'architecture', eyebrow: '🚪 Upgrade 3 of 4 — they stay on their floor', title: 'Roots: the client declares the territory. Enforcing it is entirely your job.',
-    body: 'The client tells your server which directories it is allowed to work in. That declaration is information, not a fence — nothing stops your server from reading whatever it likes, and the protocol will not protect you. You write the control, and there is exactly one way to write it correctly: resolve the real path FIRST, then compare. Check the raw string and a dot-dot in the middle walks straight out, and so does a symlink pointing anywhere it likes. Resolve first, compare second. That is the whole control, and the order is the entire lesson.',
+    segment: 'architecture', eyebrow: '🚪 Upgrade 3 of 4 — they stay on their floor', title: 'Keep the server inside the folders it was approved for',
+    body: 'The client tells your server which folders it may use. An approved folder is called a ROOT. Here is the part people miss: saying it out loud does not lock anything. Nothing physically stops the server from reading elsewhere, and MCP will not stop it either — the client names the boundary, and your code is the only thing that enforces it. So before opening any file, your server has to work out where the requested path REALLY ends up, and confirm that destination is still inside an approved folder. Anything outside gets refused and written to the log.',
     bullets: [
-      'roots/list is a DECLARATION, not enforcement',
-      'A raw prefix check is defeated by dot-dot and by symlinks',
-      '✅ Resolve the real path, THEN compare — order is the control',
-      'Deny loudly, return an error, and log every attempt',
+      'ROOT = a folder the client approved, plus everything safely inside it',
+      'Naming a root blocks nothing. Your code is the lock.',
+      'A path can lie: ../ climbs out, and a symlink points out',
+      '✅ Work out the REAL destination first, then check it is inside a root',
+      'Refuse it, return a clear error, and log the attempt',
     ],
     definitions: [
-      { term: 'Roots', meaning: 'The directories the client declares as the server’s allowed territory. The protocol declares; your code enforces.' },
-      { term: 'Path traversal', meaning: 'Using dot-dot segments or a symlink to escape a directory that a naive string check believed you were inside.' },
+      { term: 'Root', meaning: 'A folder the client approved for this server to use, plus everything safely inside it.' },
+      { term: 'Path traversal', meaning: 'Using ../ to climb out of an approved folder. Each ../ means "go up one level", so enough of them escape the folder entirely.' },
+      { term: 'Symlink', meaning: 'A shortcut that sits inside the approved folder but actually points at a file somewhere outside it.' },
     ],
-    diagram: `flowchart LR
-  C["💻 Client declares<br/>/work/project"] --> S["🖥️ Server"]
-  R["📥 Request:<br/>…/../../.ssh/id_rsa"] --> RES["🧭 RESOLVE<br/>the real path"]
-  RES --> CMP["⚖️ THEN compare<br/>to the roots"]
-  CMP --> D["🚫 Denied<br/>+ logged"]`,
+    diagram: `flowchart TD
+  C["💻 Client: you may use<br/>/work/project"] --> S["🖥️ Your server"]
+  R["📥 Asks for<br/>/work/project/reports/<br/>../../../.ssh/id_rsa"] --> RES["🧭 Where does this<br/>REALLY end up?<br/>/home/user/.ssh/id_rsa"]
+  RES --> CMP["⚖️ Is that inside<br/>/work/project?"]
+  CMP --> D["🚫 No — refuse it<br/>and log it"]`,
     script: [
-      'SITUATION: Upgrade 3 of 4, and the security control of the week. The autopsy in the next segment shows it failing.',
-      'ROOM: Diagram up. Point at the RESOLVE box, then the COMPARE box, in that order.',
-      'MOOD: Firm. This is the one with a right answer.',
-      'OPEN: "The client tells your server which directories it may work in. That declaration is information, not a fence."',
-      'DO: Make the room say "resolve first, compare second" out loud, once, together. It feels silly. Do it anyway.',
-      'NOTE: Tell them this exact control returns in Week 10 as a policy enforcement point — you are planting it now.',
+      'SITUATION: Upgrade 3 of 4, the security control of the week. This is the slide most likely to lose people in jargon, so lead with the analogy and reach the vocabulary second.',
+      'ROOM: Diagram up. Walk it top to bottom: what the client approved, what was asked for, where it REALLY goes, refused.',
+      'MOOD: Plain and unhurried. No security vocabulary until after the badge story.',
+      'OPEN: "The client hands your server a badge and says: you work on the second floor only. That sentence does not lock the other floors."',
+      'DO: Say the analogy FIRST, then name the words — root, traversal, symlink. Never the other way round.',
+      'SAY: A path can lie about where it ends up. Three dot-dots in the middle climb straight out of your folder, and a shortcut can sit inside the folder pointing anywhere on the machine.',
+      'DO: Make the room say "where does it REALLY end up" out loud, once, together.',
+      'NOTE: Do not oversell it as the only correct way. Resolve-then-compare is the core rule; real systems also handle files that do not exist yet, writes, links that change between the check and the open, and OS path quirks. Say that in one sentence if anyone asks - it buys you credibility with the engineers in the room.',
+      'NOTE: This control returns in Week 10 as a policy enforcement point. You are planting it now.',
     ].join('\n'),
   },
   {
