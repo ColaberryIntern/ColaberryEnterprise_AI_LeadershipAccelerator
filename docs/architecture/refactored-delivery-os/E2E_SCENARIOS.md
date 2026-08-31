@@ -149,8 +149,8 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 | # | Scenario | Components built & unit-tested | E2E executed |
 |---|---|---|---|
 | A | Intern sandbox | ✅ Gates 7, 8, 9, 11 | ✅ **YES — 2026-08-31, 20/20 PARTIAL** (no agent-run leg) |
-| B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ⚠️ **PARTIAL — 2026-08-29, projection half passed; acceptance half has no writer** |
-| C | Multi-project builder | ✅ Gates 2, 11, 12 | ✅ **YES — 2026-08-30, passed** (mentor-exception half still unwired) |
+| B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ✅ **YES — 2026-08-31, 22/22, BOTH halves** |
+| C | Multi-project builder | ✅ Gates 2, 11, 12 | ✅ **YES — 2026-08-31, 18/18, mentor half included** |
 | D | Government | ✅ Gates 5, 9, 13, 14 | ✅ **YES — 2026-08-31, 28/28 passed** |
 | E | Existing student Project | ✅ Gate 1 | ✅ **YES — 2026-08-31, 12/12 passed** |
 | F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ✅ **YES — 2026-08-28, passed** |
@@ -442,3 +442,74 @@ Neither was a code defect; both were names invented rather than read:
 - A `docker cp` into an existing `/app/e2e` left a stale copy in place, so a corrected
   script produced a byte-identical failure. The identical output was the tell — a real fix
   that changes nothing at all is a signal that the fix never ran.
+
+
+---
+
+## ALL SEVEN SCENARIOS EXECUTED AND PASSING — 2026-08-31
+
+```
+  [A] SCENARIO A PASSED (PARTIAL)     no agent-run leg, by design
+  [B] SCENARIO B PASSED (both halves)
+  [C] SCENARIO C PASSED
+  [D] SCENARIO D PASSED
+  [E] SCENARIO E PASSED
+  [F] SCENARIO F PASSED
+  [G] SCENARIO G PASSED
+```
+
+Run in sequence against `accelerator_dev1`. This is the first time master plan §8's full
+set has been executed.
+
+### B's acceptance half — the client does not describe what they were shown
+
+`clientAcceptanceService.ts` was pure logic imported by exactly one file, its own test, so
+nothing ever wrote a `delivery_client_acceptances` row.
+
+`promised_acceptance`, `preview_ref` and `evidence_summary` are now assembled **server-side**
+from the release or story being accepted, and there is no request parameter for them. The
+scenario proves it by sending deliberately false values — `promisedAcceptance: ['I was
+promised a pony']` — and asserting they do not land. The acceptor comes from the session,
+not a body field.
+
+A waiver travels **into** the snapshot: a client accepting a release with a waived check
+has that on the record they signed, not only on the release row where it can be read
+separately later.
+
+### C's mentor half — and a gap the spec assumed away
+
+C's stated observable is *"the fourth concurrent assignment is refused ... **and** a
+`builder_overloaded` mentor exception appears"*. Those are two different notions of
+overload:
+
+| | counts | against |
+|---|---|---|
+| `assessOverload` | active **projects** | `max_parallel_projects` |
+| `builder_overloaded` | concurrent **stories** | `maxConcurrentStories` |
+
+**A builder at their project cap raises no mentor exception at all.** The causal link the
+spec implies does not exist in the code. Rather than work around it, the scenario asserts
+both halves — that project cap raises nothing, and that six in-flight stories do — so the
+gap is pinned as a test instead of assumed away.
+
+### What re-running found, twice
+
+The `req.user` → `req.admin` fix had a second consequence that only running could show.
+Scenario C's admin token carried the subject `'e2e-c-admin'`, and once assignment actually
+recorded the actor, every insert into a UUID column failed: **ten assertions went from
+passing to 500.** The route now drops a malformed actor and logs it as a
+`ContractViolation` — an empty audit field is a better outcome than a refused assignment,
+but it must not go back to being invisible.
+
+Verified afterwards in the live database: **4 of 5 memberships now carry a granter**, the
+single null being a row written before the fix.
+
+One more test defect, mine: B's snapshot assertion compared `JSON.stringify` output, and
+Postgres returns JSONB with keys alphabetised, so it reported `{check,detail,outcome}`
+against `{check,outcome,detail}` as a mismatch. The data was right and the assertion was
+wrong. Compared field by field now.
+
+### Still not covered by anything
+
+- **A's agent-run leg** — needs `ExecutionProvider` actually executing. A remains PARTIAL
+  and says so in its own output.

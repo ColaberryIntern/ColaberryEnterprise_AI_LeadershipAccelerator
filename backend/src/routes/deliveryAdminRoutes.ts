@@ -321,17 +321,42 @@ type ActorBearing = {
   user?: { platform_identity_id?: string; sub?: string; id?: string };
 };
 
+/**
+ * Every actor column in this schema is a UUID. A token whose subject is not one - a
+ * legacy admin login, a hand-made token - would make the INSERT fail and turn an
+ * assignment into a 500, which is a worse outcome than the audit field being empty.
+ *
+ * Found by scenario C immediately after the req.user fix landed: its admin token carried
+ * the subject 'e2e-c-admin', and every assignment started returning 500 where it had
+ * previously written a silent null.
+ *
+ * So a malformed actor is dropped, but LOUDLY - the whole point of the fix was that a
+ * missing actor should stop being invisible.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const actorOf = (req: Request): string | null => {
   const r = req as unknown as ActorBearing;
-  return (
+  const candidate =
     r.admin?.platform_identity_id ??
     r.admin?.sub ??
     r.admin?.id ??
     r.user?.platform_identity_id ??
     r.user?.sub ??
     r.user?.id ??
-    null
-  );
+    null;
+
+  if (!candidate) return null;
+  if (!UUID_RE.test(candidate)) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'delivery-admin',
+      event: 'actor_identity_not_uuid', outcome: 'partial',
+      error_class: 'ContractViolation',
+      context: { path: req.path },
+    }));
+    return null;
+  }
+  return candidate;
 };
 
 const releaseError = (res: Response, event: string, err: unknown, context: object) => {
