@@ -110,7 +110,7 @@ async function main() {
   console.log(`[A] intern ${intern.id} on project ${project.id}`);
 
   const adminToken = jwt.sign(
-    { id: mentor.id, platform_identity_id: mentor.id, email: mentorEmail, role: 'super_admin' },
+    { id: mentor.id, sub: mentor.id, platform_identity_id: mentor.id, email: mentorEmail, role: 'super_admin' },
     env.jwtSecret,
     { expiresIn: 900 },
   );

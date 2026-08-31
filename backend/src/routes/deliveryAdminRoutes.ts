@@ -63,11 +63,9 @@ router.post(
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const models = require('../models');
 
-      const actorIdentityId =
-        (req as unknown as { user?: { platform_identity_id?: string; id?: string } }).user
-          ?.platform_identity_id ??
-        (req as unknown as { user?: { id?: string } }).user?.id ??
-        null;
+      // Was reading req.user, which requireAdmin never sets - see actorOf below. This
+      // route had been recording a null granted_by_identity_id since it shipped.
+      const actorIdentityId = actorOf(req);
 
       const outcome = await assignBuilderToProject({
         projectId,
@@ -305,11 +303,36 @@ const models = () => {
   return require('../models');
 };
 
-const actorOf = (req: Request) =>
-  (req as unknown as { user?: { platform_identity_id?: string; id?: string } }).user
-    ?.platform_identity_id ??
-  (req as unknown as { user?: { id?: string } }).user?.id ??
-  null;
+/**
+ * Who is acting.
+ *
+ * **`requireAdmin` populates `req.admin`, not `req.user`.** Reading `req.user` returned
+ * `undefined` on every admin route, which E2E scenario D caught: approval 401'd because
+ * there was no approving identity, and the pre-existing assignment route had been
+ * recording a null `granted_by_identity_id` since it shipped. Nothing failed - a nullable
+ * column accepted the null every time.
+ *
+ * `sub` is the identity on a real admin token (`AuthPayload`); `platform_identity_id` is
+ * present on tokens that carry one. Both are checked, and `req.user` is still consulted
+ * last so this keeps working if a route is ever mounted behind a different guard.
+ */
+type ActorBearing = {
+  admin?: { platform_identity_id?: string; sub?: string; id?: string };
+  user?: { platform_identity_id?: string; sub?: string; id?: string };
+};
+
+const actorOf = (req: Request): string | null => {
+  const r = req as unknown as ActorBearing;
+  return (
+    r.admin?.platform_identity_id ??
+    r.admin?.sub ??
+    r.admin?.id ??
+    r.user?.platform_identity_id ??
+    r.user?.sub ??
+    r.user?.id ??
+    null
+  );
+};
 
 const releaseError = (res: Response, event: string, err: unknown, context: object) => {
   console.error(JSON.stringify({

@@ -112,7 +112,7 @@ async function main() {
   const adminToken = jwt.sign(
     {
       id: approver.id,
-      platform_identity_id: approver.id,
+      sub: approver.id, platform_identity_id: approver.id,
       email, role: 'super_admin',
     },
     env.jwtSecret,
