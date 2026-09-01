@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, September 1, 2026 at 9:22 AM</div>
-    <div><span class="sid">CC-20260901-k4vq</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Tuesday, September 1, 2026 at 9:59 AM</div>
+    <div><span class="sid">CC-20260901-k4vq</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -87,6 +87,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Read back immediately after the write on `accelerator-db` /</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Also confirmed the prod `.env` sets **neither** `ALI_GMAIL` nor</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Deploy to production and verify the mailbox is actually unreachable from every sender</h2>
+          <span class="badge">2026-09-01</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two-stage rollout, because the senders live in two different places.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**By the running image and by resolved recipients, never by exit code.**</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The recreate ran clean this time, with **none** of the</span></div>
           
         </div>
       </article>
