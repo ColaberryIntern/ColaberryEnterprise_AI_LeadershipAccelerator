@@ -309,12 +309,13 @@ export const WEEK6_PACK: WeekPack = {
       /* =================== deconstruct · three autopsies ================== */
       {
         segment: 'deconstruct', eyebrow: '🔬 Autopsy one', title: 'The server that worked in staging and died at instance number two',
-        body: 'Here is a real shape of failure worth knowing by heart. A team shipped a StreamableHTTP server that stored each session’s context in an in-memory map keyed by session id. Perfect in staging, which ran one container. In production they scaled to three replicas behind a round-robin load balancer, and a client would initialise on replica A, then send its next request to replica B, which had never heard of that session and returned an error. Intermittent, impossible to reproduce on a laptop, and caused entirely by one architectural assumption colliding with one scaling decision. No individual request handler was wrong.',
+        body: 'A team shipped a StreamableHTTP server that stored each session’s context in an in-memory map keyed by session id. Perfect in staging, which ran one container. In production they scaled to three replicas, and the load balancer was on its default setting — round robin on every request — so a client would initialise on replica A and send its next request to replica B, which had never heard of that session. Now, the standard production answer to this is session affinity: the balancer picks an instance on a user’s FIRST request and then pins that user there. That is what a production balancer should be doing, and it genuinely fixes this. It also quietly makes every session depend on one instance staying alive.',
         bullets: [
           'initialize lands on replica A → session stored in A s memory only',
-          'The next request round-robins to replica B → B has never heard of it',
-          'Fails roughly two times in three with three replicas — it looks random',
-          'Root cause: an in-memory map, not a bug in any handler',
+          'Default round robin sends the next request to B → B has never heard of it',
+          'The production fix IS sticky sessions — pin the user after request one',
+          'But affinity ends when the instance does: failure, scale-in, every deploy',
+          'Stateless needs no affinity — any instance can serve any request',
         ],
         code: {
           kind: 'review',
@@ -594,23 +595,23 @@ export const WEEK6_PACK: WeekPack = {
           'Whichever the tutorial I followed used',
         ],
         answer: 2,
-        reveal: 'StreamableHTTP, stateless. STDIO cannot serve a second user at all, and in-memory state is what strands a request on the wrong replica. The fourth option is the honest one for most people right now — and that is exactly why the written rationale is graded.',
+        reveal: 'StreamableHTTP, stateless. STDIO cannot serve a second user at all. Stateful CAN be made to work — you turn on session affinity so each user is pinned to one instance — but you have then promised that a user keeps the same instance, and you break that promise on every rolling deploy. The fourth option is the honest one for most people right now, which is exactly why the written rationale is graded.',
         eyebrow: '🔌 The real decision', title: 'You are the architect. Choose the transport.',
         presenterTip: 'Full-screen theater moment — lock the votes, show the spread, then reveal. Ask anyone who picked the last option to say it out loud without embarrassment; naming the default is the first step to replacing it. This is the slide people quote back to you in Week 11.',
       },
       {
         segment: 'deconstruct', kind: 'poll',
-        q: 'Your server works perfectly for one user. In production with three replicas it fails about two times in three with "no valid session ID". What do you check FIRST?',
+        q: 'Your server works perfectly for one user. In production with three replicas it fails about two times in three with "no valid session ID". What is actually wrong?',
         options: [
-          'The load balancer configuration',
-          'Whether session state lives in one process memory',
-          'The client version',
+          'The load balancer hardware is faulty',
+          'The server keeps sessions in one process memory AND nothing pins a user to that instance',
+          'The client version is out of date',
           'Network latency between replicas',
         ],
         answer: 1,
-        reveal: 'In-memory session state. The two-in-three failure rate is the tell — with three replicas, round-robin lands you on the wrong one about two thirds of the time. The load balancer is behaving perfectly; the assumption underneath it is the bug.',
+        reveal: 'Two things at once, which is why it is worth stopping on. The server assumed a single instance, AND the balancer was left on plain round robin, so nothing kept a user on the replica holding their session. Turning on session affinity fixes it today. It also means the session dies whenever that instance does — a crash, a scale-in, or your next rolling deploy.',
         eyebrow: '🩺 Diagnose it', title: 'Intermittent, unreproducible, and two-in-three',
-        presenterTip: 'Give them the failure RATE and let someone in the room work out why two in three is meaningful. When somebody gets there out loud, stop and let them explain it — a peer explaining this lands harder than you explaining it.',
+        presenterTip: 'Give them the failure RATE first and let someone work out why two-in-three is meaningful. When somebody says "sticky sessions", AGREE — that is the correct production answer and they are right. Then ask the question that lands the lesson: what happens to every pinned session during your next rolling deploy? That is why stateless wins, not because affinity is wrong.',
       },
       {
         segment: 'deconstruct', kind: 'trivia',
