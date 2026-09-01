@@ -77,7 +77,7 @@ module.exports = {
     /* --------------------------------------------------- business problem -- */
     'bullets:business-problem-0': L(
       'SITUATION: Segment opener. You are turning from "what we are doing" to "why anyone should care".',
-      'ROOM: Bullets on screen. This is the LinkedIn clip — stay on business stakes, not syntax.',
+      'ROOM: Bullets on screen. This is the segment that gets clipped for social — stay on business stakes, not syntax.',
       'MOOD: Level and serious. No jargon in this segment at all.',
       'OPEN: "Prototype integrations break in production. That sentence is boring until it is your Tuesday."',
       'NOTE: Fifteen minutes for this whole segment. Nothing technical belongs here.',
