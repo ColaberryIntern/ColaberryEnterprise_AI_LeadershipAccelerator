@@ -42,9 +42,11 @@ CRITICAL FORMATTING RULES:
     {
       delay_days: 5,
       channel: 'email' as const,
-      subject: 'How a 200-person company deployed AI in 11 days',
+      subject: 'How one company went from a bottleneck to a working AI system',
       body_template: '',
-      ai_instructions: `Write a storytelling email about a case study. A 200-person company deployed an AI system in 11 days through the pilot program. The system automated their core operational bottleneck, saving 70% of the time their team spent on the process. That translated to $180K in annual savings. Walk through the timeline: Day 1-3 scoping, Day 4-10 build, Day 11 live in production. The key insight is that the system was built on their infrastructure, with their data, solving their specific problem. Not a generic demo. After the first system proved its value, they continued building. We trained their team to work alongside AI systems and helped them identify the next set of processes to automate. That is the model: start with one system, prove the value, then keep building and improving. We stay on as a long-term partner so the company can keep pace with how fast AI is moving. CTA: Book a 30-minute call at https://enterprise.colaberry.ai/pilot/zero-risk
+      ai_instructions: `Write a storytelling email about how a pilot engagement runs. A company brought us one operational bottleneck and left with a working AI system running in production. Walk through the shape of it: a short scoping phase, a focused build, and the system live in production at the end of it — measured in weeks, not quarters.
+
+DO NOT STATE ANY SPECIFIC FIGURE. No headcounts, no day counts, no percentages, no dollar amounts, no timelines with numbers in them. If a number would make the story stronger, leave it out and describe the change qualitatively instead. Every figure this business publishes has to trace to something a reader could check, and this email has nothing behind it yet. The key insight is that the system was built on their infrastructure, with their data, solving their specific problem. Not a generic demo. After the first system proved its value, they continued building. We trained their team to work alongside AI systems and helped them identify the next set of processes to automate. That is the model: start with one system, prove the value, then keep building and improving. We stay on as a long-term partner so the company can keep pace with how fast AI is moving. CTA: Book a 30-minute call at https://enterprise.colaberry.ai/pilot/zero-risk
 
 CRITICAL FORMATTING RULES:
 - Do NOT include ANY sign-off. The signature block is appended automatically.
@@ -92,7 +94,7 @@ Key context:
 - Founding rate locks in first year pricing
 - Target: CEOs, Founders, Presidents, Owners at companies with 51-500 employees
 - Industries: Logistics, Transportation, Professional Services, Staffing
-- Case study: 200-person company, 11-day deploy, 70% time savings, $180K annual savings
+- Case study figures: NONE ARE APPROVED FOR USE. Do not state a headcount, a day count, a percentage or a dollar amount for any past engagement. Describe outcomes qualitatively until a figure exists that a reader could check.
 
 Tone: Direct and confident. You are offering something genuinely valuable with zero risk. No hype, no buzzwords. Just the facts about what you build and how it works.
 
