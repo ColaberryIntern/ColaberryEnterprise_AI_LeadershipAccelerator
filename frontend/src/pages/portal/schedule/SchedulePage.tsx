@@ -44,6 +44,8 @@ type SchedEvent = {
   href?: string;
   external?: boolean;
   sub: string;    // session_type or 'Open House'
+  /** This learner has registered on Eventbrite (public events only). */
+  registered?: boolean;
 };
 type SchedMap = Record<string, SchedEvent[]>;
 type Mode = 'month' | 'week' | 'agenda';
@@ -76,6 +78,16 @@ function hourOf(t: string | null | undefined, from?: Date): number {
 }
 
 const KIND_CLASS: Record<EvKind, string> = { class: 'learning', event: 'event' };
+
+/**
+ * Colour token for one calendar item (pure). A public event the learner has
+ * registered for gets its own `registered` treatment (leaf) so their own
+ * commitments stand out from the ~46 events everyone can see; everything else
+ * falls back to its kind.
+ */
+export function itemClass(ev: { kind: EvKind; registered?: boolean }): string {
+  return ev.registered ? 'registered' : KIND_CLASS[ev.kind];
+}
 
 /** A human label for a points-ledger event, from its type/metadata. */
 function labelForPointsEvent(e: PointsEvent): string {
@@ -128,7 +140,10 @@ function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstCl
       id: e.id, kind: 'event', title: e.title,
       time: fmtCentralTime(e.starts_at), hour: cp.h, state: 'up',
       href: e.registration_url || undefined, external: true,
-      sub: /open house/i.test(e.title) ? 'Open House' : 'Event',
+      // Registered events read as "Registered" rather than the generic kind, so
+      // a learner can pick their own commitments out of a busy month at a glance.
+      sub: e.is_registered ? 'Registered' : (/open house/i.test(e.title) ? 'Open House' : 'Event'),
+      registered: e.is_registered,
     });
   }
   // Cohort kickoff: the countdown's "next class". Surface it on the calendar
@@ -306,7 +321,7 @@ const SchedulePage: React.FC = () => {
       const evs = sched[dkey(d)] || [];
       const wk = weekNumFor(d);
       const dots = evs.slice(0, 3).map((ev) => renderItem(
-        ev, `mdot ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`,
+        ev, `mdot ${itemClass(ev)}${ev.state === 'done' ? ' done' : ''}`,
         <>
           <b>{ev.title}</b>
           {ev.time ? <span className="mp">{ev.time}</span> : null}
@@ -372,7 +387,7 @@ const SchedulePage: React.FC = () => {
                 return (
                   <div key={i} className={`tg-cell${isToday(d) ? ' today' : ''}`}>
                     {items.map((ev) => renderItem(
-                      ev, `tg-ev ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`,
+                      ev, `tg-ev ${itemClass(ev)}${ev.state === 'done' ? ' done' : ''}`,
                       <>
                         <b>{ev.title}</b>
                         <span className="tgp">{ev.time || ev.sub}{ev.time ? ' · ' + ev.sub : ''}</span>
@@ -434,7 +449,7 @@ const SchedulePage: React.FC = () => {
                   <span className="qbody">
                     <span className="qtitle">{ev.title}</span>
                     <span className="qmeta">
-                      <span className={`chip ${KIND_CLASS[ev.kind]}`}><span className="sw" />{ev.kind === 'class' ? 'Class' : 'Event'}</span>
+                      <span className={`chip ${itemClass(ev)}`}><span className="sw" />{ev.registered ? 'Registered' : ev.kind === 'class' ? 'Class' : 'Event'}</span>
                       {ev.time ? <span className="ptbadge">{ev.time}</span> : null}
                       {' · '}{ev.sub}{ev.state === 'live' ? ' · live now' : ''}
                     </span>
@@ -534,6 +549,7 @@ const SchedulePage: React.FC = () => {
         <div className="legend">
           <span><span className="chip learning"><span className="sw" style={{ background: 'var(--dv-learning)' }} />Class session</span></span>
           <span><span className="chip event"><span className="sw" />Program event</span></span>
+          <span><span className="chip registered"><span className="sw" />You are registered</span></span>
           <span style={{ marginLeft: 8, display: 'inline-flex', gap: 6, alignItems: 'center' }}><CheckIcon /> done</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><LiveIcon /> live</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><TodoIcon /> upcoming</span>

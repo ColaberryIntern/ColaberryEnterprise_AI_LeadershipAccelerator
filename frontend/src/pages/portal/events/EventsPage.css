@@ -94,6 +94,22 @@
 }
 .evt-root .evt-ellipsis{color:var(--n400)}
 
+/* ===== registered / signup tags ===== */
+.evt-root .evt-meta{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px}
+.evt-root .evt-tag{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11.5px;font-weight:700;letter-spacing:.02em;
+  padding:3px 9px;border-radius:var(--r-pill);line-height:1.3
+}
+.evt-root .evt-tag svg{width:12px;height:12px;flex:none}
+.evt-root .evt-tag.registered{background:rgba(91,166,60,.16);color:var(--leaf-text)}
+.evt-root .evt-tag.count{background:var(--surface-sunken);color:var(--text-muted)}
+
+/* A registered card gets a leaf edge so it is findable while scanning, without
+   changing its position in the list. */
+.evt-root .evt-card.is-registered{border-color:rgba(91,166,60,.55);box-shadow:var(--shadow-md),inset 3px 0 0 var(--leaf-action)}
+.evt-root .evt-card.is-registered:hover{border-color:var(--leaf-action)}
+
 .evt-root .evt-foot{padding:13px 17px 16px;margin-top:auto}
 .evt-root .evt-btn{
   display:inline-flex;align-items:center;gap:7px;

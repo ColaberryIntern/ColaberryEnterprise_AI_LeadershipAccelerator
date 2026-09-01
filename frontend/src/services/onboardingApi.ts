@@ -49,6 +49,13 @@ export interface OpenHouseView {
   meeting_link: string | null;
   /** Eventbrite promo image; null on the Postgres fallback, so always guard. */
   image_url: string | null;
+  /**
+   * Distinct registrants from the CCPP attendee mirror. A REAL count or null —
+   * null means "not known" and must render as no badge, never as 0.
+   */
+  signup_count: number | null;
+  /** Whether the signed-in learner has registered. Per-viewer. */
+  is_registered: boolean;
 }
 export interface FirstClassView {
   start_date: string;

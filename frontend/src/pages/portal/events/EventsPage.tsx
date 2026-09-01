@@ -76,9 +76,15 @@ const EventCard: React.FC<{ ev: OpenHouseView }> = ({ ev }) => {
   const [imgBroken, setImgBroken] = useState(false);
   const blurb = truncateBlurb(ev.description);
   const showImage = Boolean(ev.image_url) && !imgBroken;
+  // Badge only a real, positive count. `null` means the count is unknown (the
+  // Postgres fallback has no attendee mirror) and 0 is true but reads as a
+  // discouraging "nobody is coming" on the 40-odd events that are simply new —
+  // the legacy training site badged only events that had signups, and this
+  // matches it. Never render a fabricated number here.
+  const showSignups = typeof ev.signup_count === 'number' && ev.signup_count > 0;
 
   return (
-    <article className="evt-card">
+    <article className={ev.is_registered ? 'evt-card is-registered' : 'evt-card'}>
       <div className="evt-thumb">
         {showImage ? (
           <img
@@ -99,6 +105,23 @@ const EventCard: React.FC<{ ev: OpenHouseView }> = ({ ev }) => {
       <div className="evt-body">
         <p className="evt-when">{formatEventWhen(ev.starts_at, ev.ends_at)}</p>
         <h3 className="evt-title">{ev.title}</h3>
+        {(ev.is_registered || showSignups) && (
+          <p className="evt-meta">
+            {ev.is_registered && (
+              <span className="evt-tag registered">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                You are registered
+              </span>
+            )}
+            {showSignups && (
+              <span className="evt-tag count">
+                {ev.signup_count === 1 ? '1 person signed up' : `${ev.signup_count} signed up`}
+              </span>
+            )}
+          </p>
+        )}
         {blurb.text && (
           <p className="evt-blurb">
             {blurb.text}
