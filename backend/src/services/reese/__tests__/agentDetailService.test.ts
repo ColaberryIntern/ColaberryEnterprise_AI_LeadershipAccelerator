@@ -25,6 +25,8 @@ jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent
 jest.mock('../../agentPersonaVersionHistoryService', () => ({ getPersonaVersionHistory: jest.fn() }));
 jest.mock('../../trustMetricsService', () => ({ agentCostRows: jest.fn() }));
 jest.mock('../../agentAuthorizationService', () => ({ getAgentAuthorizationSummary: jest.fn() }));
+// AI Workforce Management, Checkpoint E — the generic GOALS dimension score.
+jest.mock('../../agentGoalsDimensionsService', () => ({ computeAgentGoalsDimensions: jest.fn() }));
 
 import { Op } from 'sequelize';
 import AiAgent from '../../../models/AiAgent';
@@ -39,6 +41,7 @@ import { countOpenTicketsForAgent, getLastTicketActivityForAgent } from '../../w
 import { getPersonaVersionHistory } from '../../agentPersonaVersionHistoryService';
 import { agentCostRows } from '../../trustMetricsService';
 import { getAgentAuthorizationSummary } from '../../agentAuthorizationService';
+import { computeAgentGoalsDimensions } from '../../agentGoalsDimensionsService';
 import { getAgentDetail } from '../agentDetailService';
 
 const mockAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
@@ -56,6 +59,7 @@ const mockLastActivity = getLastTicketActivityForAgent as unknown as jest.Mock;
 const mockPersonaHistory = getPersonaVersionHistory as unknown as jest.Mock;
 const mockCostRows = agentCostRows as unknown as jest.Mock;
 const mockAuthSummary = getAgentAuthorizationSummary as unknown as jest.Mock;
+const mockGoalsDimensions = computeAgentGoalsDimensions as unknown as jest.Mock;
 
 const reeseAgent = {
   id: 'agent-1', agent_name: 'Reese', agent_type: 'ai_staff_mentor', category: 'student_success',
@@ -78,6 +82,7 @@ beforeEach(() => {
   mockPersonaHistory.mockResolvedValue([]);
   mockCostRows.mockResolvedValue([]);
   mockAuthSummary.mockResolvedValue({ window_days: 30, total: 0, allow: 0, approval: 0, block: 0, enforced_count: 0 });
+  mockGoalsDimensions.mockResolvedValue({ goals: [], goalsOverall: 0 });
 });
 
 describe('getAgentDetail', () => {
@@ -605,6 +610,19 @@ describe('getAgentDetail', () => {
         const result = await getAgentDetail('agent-1');
 
         expect(result!.reports_to!.immediate_agent).toBeNull();
+      });
+    });
+
+    describe('goals (Checkpoint E — Trust Before Intelligence Workspace)', () => {
+      it('happy path: real goals/goals_overall from computeAgentGoalsDimensions are passed through unchanged', async () => {
+        const realGoals = [{ key: 'governance', label: 'Governance', score: 5, source: 'fixed', evidence: 'Tier write_with_audit.' }];
+        mockGoalsDimensions.mockResolvedValue({ goals: realGoals, goalsOverall: 4.2 });
+
+        const result = await getAgentDetail('agent-1');
+
+        expect(mockGoalsDimensions).toHaveBeenCalledWith(reeseAgent);
+        expect(result!.goals).toEqual(realGoals);
+        expect(result!.goals_overall).toBe(4.2);
       });
     });
   });
