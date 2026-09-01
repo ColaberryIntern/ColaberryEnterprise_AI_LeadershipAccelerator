@@ -89,7 +89,13 @@ async function auditSession(row, verbose) {
 
     if (s.prompt) {
       const body = s.prompt.prompt || '';
-      if (/TERMINAL/i.test(s.prompt.pasteWhere || '') || SHELL.test(body)) {
+      // A 'review' block renders as "REVIEW TOGETHER — do not paste", so shell
+      // inside it is not a violation: it is how we teach CLI syntax without
+      // anyone typing it. Week 8 needs this — the `claude -p` invocation IS
+      // that week's subject matter. A paste target of TERMINAL is always a
+      // violation regardless of kind, because that asks a student to type.
+      const isReview = s.prompt.kind === 'review';
+      if (/TERMINAL/i.test(s.prompt.pasteWhere || '') || (!isReview && SHELL.test(body))) {
         fail.terminal.push(`${label} — ${(s.title || '').slice(0, 50)}`);
       }
     }

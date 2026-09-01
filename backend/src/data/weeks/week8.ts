@@ -256,13 +256,12 @@ export const WEEK8_PACK: WeekPack = {
           'A routine is just this command on a schedule: cron, CI, or a queue worker',
         ],
         code: {
-          kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — one scoped headless run, with a receipt',
-          code: '# Runs to completion with no approvals, then prints a JSON receipt.\nclaude -p "Add a one-line JSDoc comment to every exported function in src/utils.ts" \\\n  --permission-mode acceptEdits \\\n  --allowedTools "Read" "Edit" \\\n  --output-format json \\\n  --max-turns 10',
-          expectedResult: 'A JSON object, not a conversation. Look for is_error, result, num_turns, and total_cost_usd.',
-          stopCondition: 'You have a JSON receipt on screen and can point at the field a program would branch on (is_error).',
-          rescue: 'Hanging with no output? It is almost always waiting on a permission it was never granted — narrow the task or widen --allowedTools by one specific tool, never by removing the flag.',
+          kind: 'review',
+          pasteWhere: 'Claude Code',
+          label: 'Read together — the anatomy of one scoped headless run',
+          code: '# This is the shape of every unattended run tonight. Read it, do not type it.\n\nclaude -p "Add a one-line JSDoc comment to every exported function in src/utils.ts" \\\n  --permission-mode acceptEdits \\\n  --allowedTools "Read" "Edit" \\\n  --output-format json \\\n  --max-turns 10\n\n# -p                 no conversation. It runs to completion and exits.\n# --permission-mode   nobody is here to approve anything, so say so up front.\n# --allowedTools      THE leash. Read and Edit only - it cannot run commands.\n# --output-format     json, because a program has to read this, not a person.\n# --max-turns         the stop. Without it, "keep trying" has no upper bound.',
+          expectedResult: 'Point at --allowedTools and at --max-turns. Those two are the difference between automation and an unattended process with your credentials.',
+          stopCondition: 'You can say what each of the five flags is protecting you from.',
         },
         diagram: `flowchart LR
   T["⏰ A trigger<br/>cron · CI · queue"] --> H["🌙 claude -p<br/>no human present"]
@@ -370,21 +369,21 @@ export const WEEK8_PACK: WeekPack = {
       /* ========================== micro-build ============================= */
       {
         segment: 'micro-build', eyebrow: '📁 Set the stage', title: 'Open YOUR capstone repo — everything tonight lands in the project you are actually building',
-        body: 'This is not a sandbox exercise. Open the repository your build plan lives in, the one with your own tasks in it, because the automation you write in the next thirty minutes is automation you will still be using in Week 12. Create the two folders that hold it. These are terminal commands, not a Claude Code prompt — that distinction matters all night, and every code block tonight tells you which one it is on the chip at the top.',
+        body: 'This is not a sandbox exercise. Open the repository your build plan lives in, the one with your own tasks in it, because the automation you write in the next thirty minutes is automation you will still be using in Week 12. Every block tonight is a Claude Code prompt — you will never type a shell command yourself. Where a step needs a terminal, you direct Claude Code to drive it, and the chip at the top of each block tells you whether it is one to run or one to read together.',
         bullets: [
           'Use YOUR capstone repo, not a scratch folder — this is real infrastructure',
           '.claude/commands holds the verbs, .claude/hooks holds the guardrails',
-          'These are TERMINAL commands; the paste target is on every block tonight',
+          'Every block is a prompt. Claude Code drives the terminal, not you.',
           'If your project is not a git repo yet, fix that now — Thursday assumes it is',
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — from inside your capstone repo',
-          code: '# 1. confirm you are in the right place — this must print YOUR project\npwd\ngit remote -v\n\n# 2. create the automation layer\nmkdir -p .claude/commands .claude/hooks\n\n# 3. confirm\nls -la .claude',
-          expectedResult: 'pwd prints your capstone project, git remote shows your GitHub URL, and ls shows commands/ and hooks/.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — confirm the repo, then create the automation layer',
+          code: 'Set up the automation layer for this project, and confirm we are in the right place first.\n\n1. Print the repository root and the git remote, and tell me plainly whether this is my capstone project. If there is no git remote at all, STOP and tell me — I need to fix that before anything else tonight.\n2. Create .claude/commands/ and .claude/hooks/ at the repository root.\n3. List .claude/ back to me so I can see both folders exist.\n\nDo not create any command or hook files yet — just the folders.',
+          expectedResult: 'Your capstone repo root and GitHub remote confirmed out loud, and .claude/commands + .claude/hooks listed back.',
           stopCondition: 'Everyone is inside their OWN repo with .claude/commands and .claude/hooks existing. Nobody proceeds from Downloads.',
-          rescue: 'git remote prints nothing? You are in a folder that is not a repo yet, or not the project you think. Fix which folder you are in before anything else tonight.',
+          rescue: 'If it reports no git remote, you are in a folder that is not a repo yet, or not the project you think. Fix which folder Claude Code is open in before anything else tonight.',
         },
         diagram: `flowchart LR
   R[("📁 Your capstone repo")] --> M["⌨️ mkdir .claude/<br/>commands + hooks"]
@@ -478,12 +477,12 @@ export const WEEK8_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — your first unattended run, on your own project',
-          code: '# Replace the prompt with one small, reversible task from YOUR build plan.\nclaude -p "Add a one-line comment above every exported function in <one file> explaining what it does. Change nothing else." \\\n  --permission-mode acceptEdits \\\n  --allowedTools "Read" "Edit" \\\n  --output-format json \\\n  --max-turns 10 \\\n  | jq "{ok: (.is_error|not), turns: .num_turns, cost: .total_cost_usd, result}"',
-          expectedResult: 'A four-field summary: ok true, a turn count, a cost, and a one-line result — and a git diff showing formatted comments you never asked to be formatted.',
-          stopCondition: 'You have run git diff and seen a change that a machine made, on your project, with nobody watching.',
-          rescue: 'No jq installed? Drop the pipe and read the raw JSON — the fields are all there, it is only less pretty.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — compose and fire MY first unattended run',
+          code: 'I want to fire my first unattended headless run against this project, and I want to see the command before it runs.\n\nThe task, in one line: [WRITE YOURS — one small, reversible change from your build plan].\n\n1. Write the exact `claude -p` command for that task. Scope it: acceptEdits, allowedTools limited to Read and Edit only, JSON output, and a max-turns cap.\n2. Show me the command and explain each flag in one line before you run anything. I want to see the leash before you let it off.\n3. Run it.\n4. Summarise the JSON receipt as four fields: ok, turns, cost, result.\n5. Then show me `git diff` and tell me if it changed ANYTHING beyond what I asked for.\n\nDo not commit. I want to look at the diff myself.',
+          expectedResult: 'The command explained flag by flag, a four-field receipt, and a git diff — often showing formatting you never asked for.',
+          stopCondition: 'You have seen a diff that a machine made, on your project, with nobody watching.',
+          rescue: 'If it just does the task directly instead of composing a headless command, stop it and re-paste. Watching the CLI get assembled IS tonight’s lesson.',
         },
         diagram: `flowchart LR
   P["📋 A task from<br/>your build plan"] --> H["🌙 claude -p<br/>scoped + capped"]
@@ -666,11 +665,11 @@ export const WEEK8_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — the five-point check, from inside your repo',
-          code: '# 1 + 2: is this on GitHub, and are Actions on?\ngit remote -v\n#    then open the repo in a browser -> Actions tab -> must not say "disabled"\n\n# 3: Monday work survived\nls .claude/commands .claude/hooks\n\n# 4: a test command that RUNS (it may fail — it must not be missing)\nnpm test        # or: pytest / make test / whatever this project uses\n\n# 5: say your ceremony out loud before you touch anything else',
-          expectedResult: 'A GitHub remote, an enabled Actions tab, both .claude folders, and a test command that produces output rather than "command not found".',
-          stopCondition: 'All five green. Nobody starts CP1 red — the hook in CP2 has nothing to enforce without a working test command.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — run tonight’s five-point readiness check',
+          code: 'Run a readiness check on this project and report each item as pass or fail. Do not fix anything yet — I want the list first.\n\n1. Is there a GitHub remote? Print it.\n2. Do .claude/commands/ and .claude/hooks/ exist from Monday?\n3. What is the test command for this project, and does it actually RUN? It is allowed to fail — it is not allowed to be missing. Show me the output either way.\n4. Is there anything in .gitignore that would stop .claude/ being committed?\n\nThen give me a single line: READY or NOT READY, and if not ready, which item to fix first.\n\nI will check the Actions tab in the browser myself — tell me the repo URL to open.',
+          expectedResult: 'Four items reported pass/fail, a repo URL to check Actions on, and a one-line READY / NOT READY verdict.',
+          stopCondition: 'All five green, Actions tab included. Nobody starts CP1 red — the hook in CP2 has nothing to enforce without a working test command.',
           rescue: 'No tests at all? Ask Claude Code for one trivial passing test for the most boring function in the project. It exists so the guard has something to check; it does not have to be meaningful yet.',
         },
         diagram: `flowchart LR
@@ -866,12 +865,12 @@ export const WEEK8_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — the unattended run, on your own repo',
-          code: '# Replace the prompt with a real, small, reversible task from YOUR build plan.\nclaude -p "Find any function in this project over 100 lines, split it into smaller functions, keep the tests green, and commit the change." \\\n  --permission-mode acceptEdits \\\n  --allowedTools "Read" "Edit" "Bash(npm test:*)" "Bash(git add:*)" "Bash(git commit:*)" \\\n  --output-format json \\\n  --max-turns 25 \\\n  | jq "{ok: (.is_error|not), turns: .num_turns, cost: .total_cost_usd, result}"',
-          expectedResult: 'A JSON summary with ok true, a turn count, a cost, and a result line — plus a git log entry it made without you.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — compose and fire the real unattended run',
+          code: 'Now the real one. Compose and run a headless job against this project that is allowed to COMMIT.\n\nThe task, in one line: [WRITE YOURS — real, small, reversible, from your build plan].\n\n1. Write the exact `claude -p` command. The tool leash must be narrow and explicit: Read, Edit, and only the specific Bash commands this task needs — the test runner, git add, git commit. Nothing wider.\n2. Show me the command and justify every entry in --allowedTools before running. If you cannot justify one, take it out.\n3. Set a max-turns cap and tell me why you chose that number.\n4. Run it.\n5. Report: ok, turns, cost, result. Then show me `git log -1` and the diff of what it committed.\n\nIf it stalls waiting on a permission, tell me WHICH tool it wanted. Do not widen the leash yourself, and never suggest --dangerously-skip-permissions.',
+          expectedResult: 'A justified tool leash, a JSON receipt, and a git log entry for a commit you did not type — with the tests still green.',
           stopCondition: 'git log shows a commit you did not type, and the tests are green.',
-          rescue: 'It stalled asking for something? A tool it needed is not in --allowedTools. Add that one specific tool. Never reach for --dangerously-skip-permissions to make a stall go away — that is how Monday story starts.',
+          rescue: 'It stalled asking for something? A tool it needed is not in --allowedTools. Add that ONE specific tool. Never reach for --dangerously-skip-permissions to make a stall go away — that is how Monday’s story starts.',
         },
         diagram: `flowchart LR
   M["🎛️ acceptEdits<br/>chosen deliberately"] --> H["🌙 claude -p<br/>scoped + capped"]
@@ -972,13 +971,12 @@ export const WEEK8_PACK: WeekPack = {
           'Result: a broken change, pushed, logged as a success',
         ],
         code: {
-          kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'The anti-pattern — on a throwaway branch, and never for real',
-          code: '# THROWAWAY BRANCH ONLY. This is the shape of the failure, not a technique.\ngit checkout -b break-it-on-purpose\n\n# no scope, no verification, nobody watching\nclaude -p "Rename the main exported function in one file and update its callers." \\\n  --dangerously-skip-permissions \\\n  --max-turns 50\n\ngit push origin break-it-on-purpose   # ships whatever it produced, verified or not\n\n# now look at what actually landed\ngit log -1 --stat\nnpm test        # this is the part that never ran',
-          expectedResult: 'A pushed commit with a confident message, and a test suite that only now tells you it is red.',
-          stopCondition: 'You have seen a broken change land without a single error being raised.',
-          rescue: 'If your guard blocked it anyway — congratulations, your hook is stronger than the exercise. Note it, do not disable the hook to force the failure.',
+          kind: 'review',
+          pasteWhere: 'Claude Code',
+          label: 'The anti-pattern — read it, name what is missing, never run it',
+          code: '# THE SHAPE OF THE FAILURE. Nobody runs this. Read it and find the three gaps.\n\ngit checkout -b break-it-on-purpose\n\nclaude -p "Rename the main exported function in one file and update its callers." \\\n  --dangerously-skip-permissions \\\n  --max-turns 50\n\ngit push origin break-it-on-purpose\n\n# GAP 1 — no --allowedTools. Skipping permissions is not a scope. It is the\n#         absence of one. Anything the model can reach, it may use.\n# GAP 2 — nothing verifies. No test command anywhere in this run, so "done"\n#         means "the model stopped", not "it works".\n# GAP 3 — it pushes. An unverified change reaches a shared branch, with a\n#         confident commit message, and the suite only tells you later.\n#\n# --max-turns 50 is the only guardrail present, and it is the one that\n# matters least. It bounds the cost, not the blast radius.',
+          expectedResult: 'Three gaps named out loud by the room: no tool scope, no verification, and it ships. Point at each line.',
+          stopCondition: 'Somebody can say why --dangerously-skip-permissions is not the same thing as a scope.',
         },
         diagram: `flowchart LR
   T["📝 A plausible task"] --> R["☠️ skip-permissions<br/>no scope"]
@@ -999,11 +997,12 @@ export const WEEK8_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'The hardened routine — same task, three boundaries back in place',
-          code: '# back to a real branch, with the guardrails on\ngit checkout -b hardened-attempt\n\nclaude -p "Rename the main exported function in one file and update its callers." \\\n  --permission-mode acceptEdits \\\n  --allowedTools "Read" "Edit" "Bash(npm test:*)" "Bash(git add:*)" "Bash(git commit:*)" \\\n  --output-format json \\\n  --max-turns 25\n\n# git push is DENIED in .claude/settings.json, so YOU open the PR:\ngit push origin hardened-attempt    # you, deliberately, as a human\n# then the required "test" check decides whether it can merge at all',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — run the SAME task hardened, and compare',
+          code: 'Run the same task again, this time with the three boundaries back in place, so I can compare the two outcomes.\n\nThe task: rename the main exported function in one file and update its callers.\n\n1. Put us on a fresh branch called hardened-attempt.\n2. Compose the `claude -p` command with all three guardrails the anti-pattern was missing:\n   - an explicit --allowedTools leash: Read, Edit, the test runner, git add, git commit — and NOT git push\n   - the test command inside the run, so nothing counts as done until it is green\n   - a max-turns cap\n3. Show me the command and point out, line by line, which gap each flag closes.\n4. Run it, then report ok / turns / cost / result.\n5. Do NOT push. Tell me the command I would run to push it myself, and explain why pushing is deliberately mine to do and not yours.\n\nIf it refuses or stops, that is a success, not a failure. Show me the refusal.',
           expectedResult: 'Either a clean commit on green, or a refusal you can read — and in neither case does anything reach the default branch on its own.',
-          stopCondition: 'You have run the same task twice, once unguarded and once guarded, and can describe the difference in one sentence.',
+          stopCondition: 'You have seen the same task twice, once unguarded and once guarded, and can describe the difference in one sentence.',
+          rescue: 'If it pushes anyway, your .claude/settings.json is not denying push. That is the finding — write it down and fix it before you leave.',
         },
         diagram: `flowchart LR
   F1["☠️ No scope"] --> H1["🎛️ acceptEdits<br/>+ allow / deny"]
