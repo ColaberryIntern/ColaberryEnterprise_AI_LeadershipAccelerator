@@ -35,6 +35,35 @@ import { useScrollCondense } from '../../../hooks/useScrollCondense';
 type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean; newTab?: boolean; gate?: GatedFeatureKey };
 type NavGroup = { grp: string; items: NavItem[] };
 
+/**
+ * How many items each nav group shows before "More". The sidebar had grown to
+ * 12 destinations across three groups and read as a wall; two per group keeps
+ * the common paths one click away and the rest one click behind. Group item
+ * ORDER therefore carries meaning — the first two are the defaults.
+ */
+export const NAV_PRIMARY_COUNT = 2;
+
+/**
+ * Split a group into the items always shown and the ones behind "More" (pure).
+ *
+ * `activeTo` forces the group open when the current page lives in the overflow —
+ * otherwise a learner on Path or Portfolio sees no highlighted item anywhere in
+ * the sidebar and cannot tell where they are.
+ */
+export function splitNavGroup(
+  items: NavItem[],
+  expanded: boolean,
+  activeTo?: string,
+): { shown: NavItem[]; hidden: NavItem[]; activeIsHidden: boolean } {
+  if (items.length <= NAV_PRIMARY_COUNT) return { shown: items, hidden: [], activeIsHidden: false };
+  const primary = items.slice(0, NAV_PRIMARY_COUNT);
+  const overflow = items.slice(NAV_PRIMARY_COUNT);
+  const isActive = (n: NavItem) => !!n.to && !!activeTo && (activeTo === n.to || activeTo.startsWith(n.to + '/'));
+  const activeIsHidden = overflow.some(isActive);
+  const open = expanded || activeIsHidden;
+  return { shown: open ? items : primary, hidden: open ? [] : overflow, activeIsHidden };
+}
+
 export const NAV_GROUPS: NavGroup[] = [
   {
     grp: 'Your day',
@@ -42,11 +71,11 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Today', to: '/portal/today', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M3 12 12 4l9 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M5 10v10h14V10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       ) },
-      { label: 'Path', to: '/portal/path', icon: (
-        <svg viewBox="0 0 24 24" fill="none"><circle cx="5" cy="6" r="2.4" stroke="currentColor" strokeWidth="2" /><circle cx="19" cy="18" r="2.4" stroke="currentColor" strokeWidth="2" /><path d="M5 8.4c0 5 7 2 7 7s7 0 7 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-      ) },
       { label: 'Schedule', to: '/portal/schedule', icon: (
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+      ) },
+      { label: 'Path', to: '/portal/path', icon: (
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="5" cy="6" r="2.4" stroke="currentColor" strokeWidth="2" /><circle cx="19" cy="18" r="2.4" stroke="currentColor" strokeWidth="2" /><path d="M5 8.4c0 5 7 2 7 7s7 0 7 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },
       { label: 'Events', to: '/portal/events', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M12 12v8M4 8.5 12 13l8-4.5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
@@ -56,11 +85,13 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     grp: 'Build and learn',
     items: [
-      { label: 'Projects', to: '/portal/projects', gate: 'projects', icon: (
-        <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
-      ) },
+      // Order is meaningful: the first NAV_PRIMARY_COUNT items in each group are
+      // the ones shown before "More", so Classroom leads here by request.
       { label: 'Classroom', to: '/portal/classroom', gate: 'classroom', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M7 11v5c0 1 2 2 5 2s5-1 5-2v-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+      ) },
+      { label: 'Projects', to: '/portal/projects', gate: 'projects', icon: (
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
       ) },
       { label: 'Cert Prep', soon: true, icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M9 11l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -73,11 +104,11 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Community', to: '/portal/community', icon: (
         <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="2" /><path d="M3 19c0-3 3-5 6-5s6 2 6 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M16 7a3 3 0 0 1 0 6M18 19c0-2-1-3.5-2.5-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },
-      { label: 'People', to: '/portal/community/people', icon: (
-        <svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="17" cy="9" r="2.2" stroke="currentColor" strokeWidth="2" /><path d="M2.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15.5 14.2c2.4.3 4 2.1 4 4.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-      ) },
       { label: 'Rooms', to: '/portal/rooms', icon: (
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M17 9l4-2v10l-4-2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+      ) },
+      { label: 'People', to: '/portal/community/people', icon: (
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="17" cy="9" r="2.2" stroke="currentColor" strokeWidth="2" /><path d="M2.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15.5 14.2c2.4.3 4 2.1 4 4.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },
       { label: 'Library', to: '/portal/library', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
@@ -199,6 +230,16 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   useEffect(() => {
     try { localStorage.setItem('te_nav_collapsed', navCollapsed ? '1' : '0'); } catch { /* ignore */ }
   }, [navCollapsed]);
+  // Per-group "More" expansion, keyed by group name and remembered across
+  // navigations so a learner who opens Belong once does not have to reopen it on
+  // every page. Storage is best-effort: a private window that throws on read
+  // falls back to all groups collapsed, which is the correct default anyway.
+  const [navExpanded, setNavExpanded] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('te_nav_expanded') || '{}') || {}; } catch { return {}; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('te_nav_expanded', JSON.stringify(navExpanded)); } catch { /* ignore */ }
+  }, [navExpanded]);
   // Right contacts rail collapse — mirrors navCollapsed. On narrow viewports the
   // rail auto-collapses (CSS) regardless of this flag; this drives the manual
   // toggle + persistence at full width.
@@ -435,10 +476,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
                 <span className="te-cd class" title="Next class">{cdInner}</span>
               );
             })()}
-            <span className="te-cd event" title="Next event">
+            {/* Links to the Events page — the chip named an event with no way
+                to reach it or sign up. Matches the Next class chip's behaviour. */}
+            <Link className="te-cd event" title="Next event — see all events" to="/portal/events">
               <span className="ic"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
               <span className="tx"><span className="lbl">Next event</span><span className="when mono">{ohCd ? `${ohCd.d}d ${ohCd.h}h` : '—'}</span></span>
-            </span>
+            </Link>
           </div>
           <MessagesButton onOpen={openChatTarget} />
           <NotificationBell />
@@ -483,10 +526,17 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
 
       {/* ── nav ── */}
       <nav className="te-nav">
-        {groups.map((group) => (
+        {groups.map((group) => {
+          // When the rail is collapsed to icons the rows are tiny and the "More"
+          // control is hidden by CSS, so force every item visible — otherwise the
+          // overflow items would be unreachable in that mode.
+          const { shown, hidden, activeIsHidden } = splitNavGroup(
+            group.items, !!navExpanded[group.grp] || navCollapsed, active,
+          );
+          return (
           <React.Fragment key={group.grp}>
             <div className="grp">{group.grp}</div>
-            {group.items.map((n) => {
+            {shown.map((n) => {
               const isActive = !!n.to && (active === n.to || active.startsWith(n.to + '/'));
               const inner = (
                 <>
@@ -510,8 +560,28 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
               if (n.newTab) return <a key={n.label} className="te-navbtn" href={n.to!} target="_blank" rel="noopener noreferrer">{inner}</a>;
               return <Link key={n.label} className="te-navbtn" to={n.to!}>{inner}</Link>;
             })}
+            {/* Only offered when collapsing actually hides something. When the
+                active page sits in the overflow the group is force-opened, so
+                the control reads "Show less" rather than lying about a count. */}
+            {(hidden.length > 0 || (group.items.length > NAV_PRIMARY_COUNT && !activeIsHidden)) && (
+              <button
+                type="button"
+                className="te-navmore"
+                aria-expanded={hidden.length === 0}
+                onClick={() => setNavExpanded((m) => ({ ...m, [group.grp]: !m[group.grp] }))}
+              >
+                <span className="ic" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d={hidden.length > 0 ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'}
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="lb">{hidden.length > 0 ? `${hidden.length} more` : 'Show less'}</span>
+              </button>
+            )}
           </React.Fragment>
-        ))}
+          );
+        })}
 
         <div className="te-presence">
           <div className="h"><span className="pdot" /> {cohortName}</div>
