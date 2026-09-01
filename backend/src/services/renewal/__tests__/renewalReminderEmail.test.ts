@@ -205,11 +205,27 @@ describe('the link', () => {
 });
 
 describe('what the copy must not promise', () => {
-  test('never says the membership renews or will be charged automatically', () => {
-    const m = r();
-    expect(m.text).toContain('Nothing bills automatically');
-    expect(m.text).not.toMatch(/will (be )?(automatically )?(charged|renew)/i);
+  /**
+   * SCOPED 2026-09-01, not deleted. This asserted that the mail never promises
+   * automatic billing, which was right while nothing billed automatically.
+   * On 2026-09-01, 20 members were moved onto standing PaySimple schedules and
+   * auto-pay went from 1 member to 21, so for those members the promise is
+   * simply true.
+   *
+   * The protection still matters for everyone else and is what this now pins:
+   * a member with NO schedule must never be told their membership renews on its
+   * own, because it does not, and they would lapse waiting for a charge that
+   * never comes.
+   */
+  test('never promises automatic billing to a member who has no schedule', () => {
+    const m = r({ autopay: false } as never);
+    expect(m.text).not.toMatch(/renews on its own/i);
     expect(m.text).not.toMatch(/auto-?renew/i);
+  });
+
+  test('does promise it to a member who DOES have a schedule, because it is true', () => {
+    const m = r({ autopay: true } as never);
+    expect(m.text).toMatch(/renews on its own/i);
   });
 
   test('never promises a coverage end date, because paying early moves the anchor', () => {
@@ -219,8 +235,30 @@ describe('what the copy must not promise', () => {
     expect(r().text).not.toMatch(/covers you/i);
   });
 
-  test('tells the student that doing nothing costs nothing', () => {
-    expect(r().text).toContain('do nothing and no payment will be taken');
+  /**
+   * REVERSED 2026-09-01, deliberately, and this is the substantive change.
+   *
+   * Telling a member that inaction is free made leaving the default: silence is
+   * the easiest thing a busy person does, so staying became the effortful
+   * choice. The July cohort started 13 July and should have been on a third
+   * payment by 1 September; 21 members had paid exactly once.
+   *
+   * It is also now FALSE for the 21 on schedules, where doing nothing means
+   * being charged.
+   *
+   * Cancelling is still offered in every branch. What changed is that it is
+   * something a member says, not something that happens to them by inaction.
+   */
+  test('never offers inaction as the way to leave', () => {
+    for (const autopay of [true, false]) {
+      expect(r({ autopay } as never).text).not.toContain('do nothing and no payment will be taken');
+    }
+  });
+
+  test('still tells every member how to stop, so this is a changed default and not a trap', () => {
+    for (const autopay of [true, false]) {
+      expect(r({ autopay } as never).text).toMatch(/reply and tell me/i);
+    }
   });
 });
 

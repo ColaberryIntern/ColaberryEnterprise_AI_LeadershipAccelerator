@@ -114,6 +114,15 @@ export interface RenewalSubscriptionRow {
   /** The postponed-cohort-move gate (Enrollment.access_starts_at). A date in
    *  the future means this person's programme has not started yet. */
   access_starts_at?: Date | string | null;
+  /**
+   * The PaySimple recurring schedule, when this member is on auto-pay.
+   *
+   * It changes what the email is FOR. With a schedule the money moves on its
+   * own and the note is a heads-up; without one it is a request, and the
+   * member has to act or nothing happens. Sending the request wording to
+   * someone already on auto-pay would ask them to pay a second time.
+   */
+  paysimple_schedule_id?: string | null;
   /** The per-student notification kill switch. See
    *  services/notifications/enrollmentNotificationSuppression.ts. */
   notifications_paused_at?: Date | string | null;
@@ -148,6 +157,8 @@ export interface DueReminder {
    *  the period ends today, 1 means tomorrow. This is what the copy speaks
    *  from, so the email can never claim "tomorrow" on the day itself. */
   day_delta: number;
+  /** True when a PaySimple schedule will collect this automatically. */
+  autopay: boolean;
 }
 
 export interface SkippedSubscription {
@@ -362,6 +373,7 @@ export function selectRenewalReminders(
         // Negative: this is how the template knows the date has passed and must
         // not speak as though the renewal is still ahead.
         day_delta: -sinceEnd,
+        autopay: Boolean(row.paysimple_schedule_id),
         kind: lapseKind,
       });
       continue;
@@ -389,6 +401,7 @@ export function selectRenewalReminders(
       period_end: new Date(endMs).toISOString(),
       days_until: Math.round(daysUntil * 100) / 100,
       day_delta: dayDelta,
+      autopay: Boolean(row.paysimple_schedule_id),
       kind,
     });
   }

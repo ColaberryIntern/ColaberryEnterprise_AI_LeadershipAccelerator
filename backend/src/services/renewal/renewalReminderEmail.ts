@@ -57,6 +57,15 @@ export interface RenewalReminderEmailInput {
   amount_cents: number;
   /** Account credit being applied to this checkout, in cents. 0 when none. */
   applied_credit_cents?: number;
+  /**
+   * True when a PaySimple schedule collects this automatically.
+   *
+   * Changes what the mail IS. On auto-pay it is a heads-up that money is about
+   * to move and there is nothing to do; otherwise it is a request that only
+   * works if the member acts. Telling an auto-pay member to go and pay would
+   * invite a second payment for the same period.
+   */
+  autopay?: boolean;
   /** The hosted checkout URL the student clicks. */
   payment_link: string;
   /** Whole Central calendar days to the renewal date: 0 is today, 1 tomorrow.
@@ -177,13 +186,33 @@ export function renderRenewalReminderEmail(
 
   // Nothing has been cut off, and saying so plainly is the difference between a
   // note someone acts on and one they brace against.
+  // WHAT THIS SENTENCE USED TO SAY, AND WHY IT CHANGED.
+  //
+  // For an unscheduled member it read 'Nothing bills automatically, so this
+  // payment has to come from you.' That was true, and it taught every reader
+  // that lapsing was simply a matter of not clicking. Members who intended to
+  // stay just stopped: 21 of them had paid exactly once since July.
+  //
+  // On auto-pay the honest sentence is the opposite, and it still has to be
+  // said plainly. Money is about to leave their account on a known date and
+  // they are entitled to hear that before it happens rather than after.
+  const autopay = input.autopay === true;
   const reassurance = lapsed
     ? 'Nothing has changed on your account and your access is exactly as it was. This is not a warning.'
-    : 'Nothing bills automatically, so this payment has to come from you.';
+    : autopay
+      ? 'This renews on its own using the card already on file, so there is nothing for you to do.'
+      : 'Your place carries on as long as the payment goes through.';
 
+  // The old non-lapsed closer offered 'do nothing and no payment will be taken'
+  // as the way out. Silence is the easiest thing a busy person does, which made
+  // leaving the default and staying the effortful choice. Cancelling is still
+  // available and always will be, but it is now something a member SAYS rather
+  // than something that happens to them by inaction.
   const closer = lapsed
     ? 'If you would rather stop here, reply with the word "cancel" and I will take care of it. If something went wrong at the payment page, reply and tell me what you saw and I will fix it.'
-    : 'If you would rather stop here, do nothing and no payment will be taken. If any of the above looks wrong, reply to this and I will sort it out.';
+    : autopay
+      ? 'If you need to change the card, pause, or stop before then, reply and tell me and I will take care of it.'
+      : 'If anything above looks wrong, or you want to change or stop your membership, reply and tell me and I will sort it out.';
 
   const text = `${name},
 
