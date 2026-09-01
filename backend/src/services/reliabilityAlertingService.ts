@@ -14,6 +14,27 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { sendAlertEmail } from './emailService';
 
+// Event types that are written ONLY when something fails: there is no success
+// counterpart row for them, so they cannot form a meaningful rate. Counting them
+// makes the "AI failure rate" climb with traffic volume no matter how healthy the
+// AI pipeline actually is. These are auth/security telemetry that happens to share
+// the ai_events table with real AI pipeline events.
+//
+// This is not hypothetical. On 2026-09-01 this alert paged at "94% AI event failure
+// rate" while the real model-call failure rate over the same 24h was 0% (854 calls,
+// zero failures). The entire signal was two abandoned admin browser tabs re-polling
+// once a minute with an expired JWT, writing one admin_auth_failed row each time.
+//
+// MAINTENANCE RULE: if you add an event_type that is only ever logged on failure,
+// add it here too, or it will silently poison this alert.
+export const FAILURE_ONLY_EVENT_TYPES = [
+  'admin_auth_failed',
+  'participant_auth_failed',
+  'sales_or_admin_auth_failed',
+  'delivery_client_auth_failed',
+  'delivery_client_link_no_membership',
+];
+
 const WINDOW_MINUTES = 15;
 const MIN_SAMPLE_SIZE = 20; // below this, a single-digit failure count would swing the % wildly — skip alerting, not enough signal
 const ERROR_RATE_THRESHOLD_PCT = 25;
@@ -38,8 +59,9 @@ async function computeRollingErrorRate(): Promise<{ total: number; failures: num
        COUNT(*)::int AS total,
        COUNT(*) FILTER (WHERE outcome = 'failure')::int AS failures
      FROM ai_events
-     WHERE created_at >= NOW() - INTERVAL '${WINDOW_MINUTES} minutes'`,
-    { type: QueryTypes.SELECT }
+     WHERE created_at >= NOW() - INTERVAL '${WINDOW_MINUTES} minutes'
+       AND event_type NOT IN (:failureOnlyEventTypes)`,
+    { type: QueryTypes.SELECT, replacements: { failureOnlyEventTypes: FAILURE_ONLY_EVENT_TYPES } }
   )) as Array<{ total: number; failures: number }>;
   const r = rows[0] || { total: 0, failures: 0 };
   const errorRatePct = r.total > 0 ? Math.round((r.failures / r.total) * 100) : 0;
@@ -81,7 +103,7 @@ export async function runReliabilityAlertCheck(): Promise<ReliabilityCheckResult
       type: 'reliability_error_rate',
       severity: 8,
       title: `Reliability Alert: ${errorRatePct}% AI event failure rate (last ${WINDOW_MINUTES}m)`,
-      description: `${failures} of ${total} ai_events rows failed in the last ${WINDOW_MINUTES} minutes (threshold: ${ERROR_RATE_THRESHOLD_PCT}%).`,
+      description: `${failures} of ${total} AI pipeline events failed in the last ${WINDOW_MINUTES} minutes (threshold: ${ERROR_RATE_THRESHOLD_PCT}%). Auth/security telemetry is excluded from this rate.`,
       impact_area: 'AI Reliability',
       source_type: 'ReliabilityAlertingService',
       urgency: 'high',
