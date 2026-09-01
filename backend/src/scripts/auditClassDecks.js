@@ -61,6 +61,27 @@ const BOILERPLATE = [
 // source, and "node" appears in prose. A review block full of JS is not a
 // shell block, and flagging it would make this tool noise.
 const SHELL = /(^|\n)\s*(npm |npx |mkdir |cd |sudo |curl |chmod |git |ls -la|touch |pwd\b)/;
+
+/**
+ * Bootstrap steps are the ONLY legitimate terminal blocks in the program:
+ * getting Claude Code onto the machine in the first place. They cannot become
+ * prompts, because the student does not have Claude Code yet — that is the
+ * entire point of the step. Everything after bootstrap is a prompt.
+ *
+ * Two narrow carve-outs, deliberately specific rather than heuristic:
+ *   • Week 1's "Get Claude Code running" install slide, by exact title.
+ *   • Orientation's `setup` segment, which IS first-time environment setup —
+ *     that session exists to get people tooled up before Week 1.
+ *
+ * If either of these ever widens, the no-terminal rule has been eroded rather
+ * than applied. A new terminal block elsewhere will still fail the audit.
+ */
+const BOOTSTRAP_TITLES = ['Get Claude Code running'];
+
+function isBootstrapSlide(slide, sessionTitle) {
+  if (BOOTSTRAP_TITLES.some((t) => (slide.title || '').includes(t))) return true;
+  return /orientation/i.test(sessionTitle || '') && slide.segmentId === 'setup';
+}
 const TAGS = /^(SAY|DO|NOTE|SITUATION|ROOM|MOOD|OPEN):/;
 const ARRIVAL_CATS = ['SITUATION', 'ROOM', 'MOOD', 'OPEN'];
 
@@ -99,7 +120,8 @@ async function auditSession(row, verbose) {
       // that week's subject matter. A paste target of TERMINAL is always a
       // violation regardless of kind, because that asks a student to type.
       const isReview = s.prompt.kind === 'review';
-      if (/TERMINAL/i.test(s.prompt.pasteWhere || '') || (!isReview && SHELL.test(body))) {
+      if (!isBootstrapSlide(s, row.title)
+        && (/TERMINAL/i.test(s.prompt.pasteWhere || '') || (!isReview && SHELL.test(body)))) {
         fail.terminal.push(`${label} — ${(s.title || '').slice(0, 50)}`);
       }
     }

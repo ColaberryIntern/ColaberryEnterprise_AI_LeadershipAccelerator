@@ -708,9 +708,12 @@ export const WEEK2_PACK: WeekPack = {
         body: 'Commit .claude/skills/ and project-blueprint/ together. Anyone who pulls your repo — a mentor, a teammate, future you — gets the architecture, the justified stack, the Week-1 plan, and the visual mockup, generated from one paragraph you wrote an hour ago.',
         code: {
           kind: 'paste',
-          label: 'Commit the blueprint',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          code: 'git add .claude/skills project-blueprint\ngit commit -m "feat(blueprint): system-architect, tech-stack-recommender, mvp-scoper"',
+          label: 'Claude Code prompt — commit the blueprint',
+          pasteWhere: 'Claude Code',
+          code: 'Commit tonight’s blueprint work.\n\n1. Show me what is currently unstaged, so I can see exactly what is about to be committed.\n2. Stage .claude/skills/ and project-blueprint/ — those two only. Do not sweep up anything else.\n3. Commit with the message: feat(blueprint): system-architect, tech-stack-recommender, mvp-scoper\n4. Show me the commit and the files it contains.\n\nDo not push.',
+          expectedResult: 'A commit containing exactly your three skills and your blueprint folder — nothing else swept in.',
+          stopCondition: 'You have seen the file list in the commit and it is what you expected.',
+          rescue: 'If it wants to commit other files too, tell it to stage only those two paths. A commit that quietly includes half your machine is how the next person stops trusting your history.',
         },
         diagram: `flowchart LR
   SA["🏗️ system-architect"] --> BP["📦 Your Blueprint"]
@@ -744,9 +747,12 @@ export const WEEK2_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          label: 'Run this now — commit tonight’s blueprint',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          code: 'git status\n\ngit add .claude/skills project-blueprint\n\ngit commit -m "feat(blueprint): system-architect, tech-stack-recommender, mvp-scoper"\n\ngit log --oneline -5',
+          label: 'Claude Code prompt — commit tonight’s blueprint, step by step',
+          pasteWhere: 'Claude Code',
+          code: 'Walk me through committing tonight’s work, showing me each step as you go. I want to see the four moves, not just the result.\n\n1. Show me what has changed and what is untracked.\n2. Stage .claude/skills/ and project-blueprint/ — those two paths only.\n3. Commit with the message: feat(blueprint): system-architect, tech-stack-recommender, mvp-scoper\n4. Show me the last five commits so I can see mine at the top.\n\nDo not push, and do not stage anything I did not name.',
+          expectedResult: 'Four steps shown in order, ending with your commit at the top of the log — the first real entry in your capstone’s paper trail.',
+          stopCondition: 'You can see your own commit in the log output.',
+          rescue: 'Nothing to commit? You are probably in the wrong folder. Ask it to print the repository root and check it is your project.',
         },
         diagram: `flowchart LR
   S["🔍 git status<br/>what changed?"] --> Ad["➕ git add<br/>stage it"]
