@@ -1,4 +1,5 @@
 import { getActiveDirectiveTexts } from '../managerDirectiveService';
+import { getApprovedMemoryTexts } from '../agentMemoryProposalService';
 
 /**
  * agentManagerConversationPrompt — the system prompt for a manager talking
@@ -16,6 +17,10 @@ import { getActiveDirectiveTexts } from '../managerDirectiveService';
  * the manager is talking to the SAME identity everyone else talks to, not a
  * separate manager-only persona. An agent with no system_prompt configured
  * yet still gets a real, honest, minimal frame (never a fabricated persona).
+ *
+ * AI Workforce Management, Checkpoint E (2026-08-31) — approved
+ * AgentMemoryProposal rows are injected here too, same pattern as
+ * directives (getApprovedMemoryTexts, real, fail-safe, queried fresh).
  */
 export async function buildAgentManagerConversationSystemPrompt(
   agentId: string,
@@ -36,6 +41,12 @@ export async function buildAgentManagerConversationSystemPrompt(
         'they can only narrow what you do, never grant you anything beyond what you already have):\n' +
         lines,
     );
+  }
+
+  const memories = await getApprovedMemoryTexts(agentId);
+  if (memories.length) {
+    const memoryLines = memories.map((m) => `- ${m}`).join('\n');
+    parts.push('\nAPPROVED MEMORY (facts a manager has reviewed and approved about this context):\n' + memoryLines);
   }
 
   parts.push(
