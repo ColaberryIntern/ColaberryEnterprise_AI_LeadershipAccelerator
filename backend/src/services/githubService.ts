@@ -104,11 +104,25 @@ export async function getRepoStatus(enrollmentId: string): Promise<any> {
 // File Tree Sync (Artifact V2)
 // ---------------------------------------------------------------------------
 
-export async function syncFileTree(enrollmentId: string): Promise<{
+/**
+ * Refresh the stored file tree for a student's repository.
+ *
+ * `connectionId` is optional and additive. Without it this resolves the enrollment's
+ * connection with `findOne`, which is what every existing caller expects. A few
+ * enrollments have MORE THAN ONE connection row, though, and `findOne` picks between them
+ * by whatever order Postgres returns — so a sweep that only ever passes an enrollment id
+ * refreshes one repository and leaves the other permanently stale. Pass `connectionId` to
+ * refresh a specific one.
+ */
+export async function syncFileTree(enrollmentId: string, connectionId?: string): Promise<{
   fileCount: number;
   language: string | null;
 }> {
-  const connection = await getConnection(enrollmentId);
+  const connection = connectionId
+    // Scoped to the enrollment as well as the id, so a caller cannot refresh another
+    // student's connection by passing an id that does not belong to them.
+    ? await GitHubConnection.findOne({ where: { id: connectionId, enrollment_id: enrollmentId } })
+    : await getConnection(enrollmentId);
   if (!connection || !connection.repo_owner || !connection.repo_name) {
     throw new Error('No GitHub repository connected');
   }
