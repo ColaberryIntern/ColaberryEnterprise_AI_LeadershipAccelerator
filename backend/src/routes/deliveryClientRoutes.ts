@@ -10,6 +10,7 @@ import {
   toClientShape,
   toClientShapes,
 } from '../modules/delivery/clientVisibility';
+import { toClientRelease } from '../modules/delivery/clientReleaseProjection';
 import { recordClientAcceptance } from '../services/delivery/clientAcceptance';
 
 /**
@@ -144,6 +145,7 @@ router.get(
         DeliveryProject,
         DeliveryDecision,
         DeliveryChangeRequest,
+        DeliveryRelease,
         DeliveryEngagement,
         Brand,
       } = require('../models');
@@ -161,9 +163,15 @@ router.get(
 
       // Decisions and change requests are scoped by project id, which the guard above has
       // already confirmed belongs to this session.
-      const [decisionRows, changeRows] = await Promise.all([
+      const [decisionRows, changeRows, releaseRows] = await Promise.all([
         DeliveryDecision.findAll({ where: { delivery_project_id: projectId } }),
         DeliveryChangeRequest.findAll({ where: { delivery_project_id: projectId } }),
+        // Only releases that reached the client. A candidate still being argued about
+        // internally is not something the client was given, and listing one would invite
+        // them to ask about work that has not been offered to them yet.
+        DeliveryRelease.findAll({
+          where: { delivery_project_id: projectId, status: ['approved', 'released'] },
+        }),
       ]);
 
       // The engagement the project belongs to. Fetched by the project's OWN
@@ -194,6 +202,11 @@ router.get(
         // decisions stay internal; `requires_client_approval` is the line.
         decisions: toClientShapes('decision', decisionRows.map(plain)),
         changeRequests: toClientShapes('change_request', changeRows.map(plain)),
+        // Mapped BEFORE projecting: the allowlist names `name`, `released_at` and
+        // `evidence_summary`, and none of them are columns. Projecting the row directly
+        // yields { id, status } and drops the rest in silence - see
+        // clientReleaseProjection.ts for why that is a mapper and not a rename.
+        releases: toClientShapes('release', releaseRows.map((r: any) => toClientRelease(plain(r)))),
       };
 
       if (!assertNoForbiddenFields(payload, 'client_project_detail', res)) return;

@@ -232,10 +232,20 @@ export const CLIENT_FIELD_ALLOWLIST: Record<ClientObjectKind, readonly string[]>
     // `affected_nodes`, and every *_identity_id - who decided is internal.
   ],
   design: ['id', 'title', 'summary', 'preview_ref', 'status', 'updated_at'],
-  release: ['id', 'name', 'status', 'released_at', 'summary', 'evidence_summary'],
+  // `summary` was here and nothing supplies it - `delivery_releases` has no such column,
+  // so it silently vanished on every projection. Removed rather than left as a field that
+  // is always absent, which reads to a caller like data that happens to be missing.
+  //
+  // `name`, `released_at` and `evidence_summary` are NOT columns either: the table has
+  // `version`, `approved_at`, `check_results` and `waived_categories`. `toClientRelease`
+  // maps them, deliberately, so the client contract keeps the client's vocabulary instead
+  // of inheriting ours. See clientReleaseProjection.ts.
+  release: ['id', 'name', 'status', 'released_at', 'evidence_summary'],
   // A summary, never the rows: a client is owed the conclusion and the shape of the
   // proof, not our CI output.
-  evidence_summary: ['dimension', 'outcome', 'checked_at'],
+  // `reason` carries a WAIVER's justification. A waived check is not a passed one, and the
+  // reason is the only thing that makes the difference reviewable by the person signing.
+  evidence_summary: ['dimension', 'outcome', 'checked_at', 'reason'],
   change_request: ['id', 'title', 'description', 'status', 'requested_at', 'impact_summary'],
   // `scope` and `accepted_by_name` were named here and DO NOT EXIST; the real columns
   // are `scope_kind` and `accepted_by_identity_id`. The identity id is NOT projected -
