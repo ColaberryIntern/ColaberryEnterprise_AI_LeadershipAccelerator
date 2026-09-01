@@ -137,6 +137,16 @@ const DETAIL: AgentDetail = {
     last_error_at: null,
     last_activity_at: '2026-08-24T10:00:00Z',
   },
+  // AI Workforce Management, Checkpoint E (2026-09-01) — Reese's real GOALS
+  // shape: a real permission tier, real activity-derived scores.
+  goals: [
+    { key: 'governance', label: 'Governance', score: 5, source: 'fixed', evidence: 'Tier suggest_only, scoped to proposed_agent_actions.' },
+    { key: 'observability', label: 'Observability', score: 4, source: 'live', evidence: '8/10 of the last 10 logged actions carry a trace_id.' },
+    { key: 'availability', label: 'Availability', score: 5, source: 'live', evidence: 'Enabled · trigger event_driven.' },
+    { key: 'lexicon', label: 'Lexicon', score: 4, source: 'fixed', evidence: 'Domain category: "student_success".' },
+    { key: 'solid', label: 'Solid', score: 5, source: 'live', evidence: '0/10 of the last 10 logged actions failed.' },
+  ],
+  goals_overall: 4.6,
 };
 
 let container: HTMLDivElement;
@@ -356,6 +366,35 @@ describe('AgentDetailPage — title prefers identity.display_name over raw agent
   });
 });
 
+// AI Workforce Management, Checkpoint E (2026-09-01) — "GOALS score"
+// section: the live GOALS dimension score, generalized beyond the
+// synthetic 12-agent Workforce OS roster it was previously trapped in.
+describe('AgentDetailPage — "GOALS score" section', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('renders the real overall score and each real dimension with its own evidence', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL);
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('GOALS score');
+    expect(container.textContent).toContain('4.6');
+    expect(container.textContent).toContain('Governance 5/5');
+    expect(container.textContent).toContain('Tier suggest_only, scoped to proposed_agent_actions.');
+    expect(container.textContent).toContain('Solid 5/5');
+  });
+});
+
 // Org-chart hierarchy build (2026-08-19) — "Reports to" section: this agent's
 // real accountability chain, reused from AgentDetailResult.reports_to rather
 // than re-derived client-side.
@@ -373,12 +412,17 @@ describe('AgentDetailPage — "Reports to" section', () => {
   });
 
   it('renders the real trail and the resolved human name/email when the chain resolves', async () => {
+    // AI Workforce Management, Checkpoint F (2026-09-01) — the trail now
+    // renders as clean parsed chip labels (real data, better surfaced) rather
+    // than the raw "name (agent) -> [suffix]" string, per DOMAIN_REUSE_MAP.md's
+    // "surface it more prominently" verdict for this checkpoint.
     getAgentDetail.mockResolvedValue(DETAIL);
 
     await renderAgentPage();
 
     expect(container.textContent).toContain('Reports to');
-    expect(container.textContent).toContain('workforce_intelligence_engine (agent) -> [human]');
+    expect(container.textContent).toContain('Reese');
+    expect(container.textContent).toContain('workforce_intelligence_engine');
     expect(container.textContent).toContain('Kes');
     expect(container.textContent).toContain('kesetebirhan@gmail.com');
   });
@@ -399,7 +443,23 @@ describe('AgentDetailPage — "Reports to" section', () => {
 
     await renderAgentPage();
 
-    expect(container.textContent).toContain('does not currently resolve to a real human');
+    // Checkpoint F (2026-09-01) — the dangling case now gets its own specific,
+    // more honest message ("the configured next report-to target no longer
+    // exists") instead of the old one-size-fits-all "does not currently
+    // resolve" line, since the real failure reason is known here.
+    expect(container.textContent).toContain('This chain is broken');
+    expect(container.textContent).toContain('no longer exists');
+  });
+
+  it('boundary: the chain trail terminates unset (reports to an agent with no further chain configured) -> its own specific honest message', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      reports_to: { trail: ['Reese (agent)', 'LeadershipAgent (agent) -> [unset]'], resolved_human: null, immediate_agent: { id: 'agent-la', name: 'LeadershipAgent' } },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('no further reports-to configured');
   });
 
   // 2026-08-23 — "I'd like to have a link to the agent they report to" (Ali,
@@ -412,6 +472,16 @@ describe('AgentDetailPage — "Reports to" section', () => {
     const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent === 'workforce_intelligence_engine');
     expect(link).toBeDefined();
     expect(link!.getAttribute('href')).toBe('/admin/agents/agent-wie');
+  });
+
+  it('Checkpoint F: a real "View in Org Chart" link always points to the real org-chart page, regardless of chain state', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL);
+
+    await renderAgentPage();
+
+    const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent?.includes('View in Org Chart'));
+    expect(link).toBeDefined();
+    expect(link!.getAttribute('href')).toBe('/admin/workforce');
   });
 
   it('boundary: immediate_agent is null (reports directly to a human) -> no "Reports directly to" link rendered, only the existing chain text', async () => {

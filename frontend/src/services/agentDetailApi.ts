@@ -148,6 +148,23 @@ export interface AgentDetailAuthorizationSummary {
   enforced_count: number;
 }
 
+/** AI Workforce Management, Checkpoint E (Trust Before Intelligence
+ * Workspace, 2026-09-01) — the live GOALS dimension score (governance/
+ * observability/availability/lexicon/solid), computed generically for any
+ * real agent by agentGoalsDimensionsService.ts. `source: 'live'` means
+ * computed fresh from this agent's own real activity on every call;
+ * `source: 'fixed'` means structurally guaranteed (a real permission tier
+ * or a real persisted category), not dynamically re-measured. `evidence`
+ * is always the real, specific reason behind the score — never a bare
+ * number with no explanation. */
+export interface AgentDetailGoalsDimension {
+  key: 'governance' | 'observability' | 'availability' | 'lexicon' | 'solid';
+  label: string;
+  score: number;
+  source: 'live' | 'fixed';
+  evidence: string;
+}
+
 export interface AgentDetail {
   agent: {
     id: string;
@@ -181,6 +198,8 @@ export interface AgentDetail {
   capabilities: AgentDetailCapabilities;
   reports_to: AgentDetailReportsTo | null;
   trust_contract: AgentDetailTrustContract;
+  goals: AgentDetailGoalsDimension[];
+  goals_overall: number;
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
