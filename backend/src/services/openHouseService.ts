@@ -64,10 +64,14 @@ export async function getOnboardingSchedule(enrollmentId: string): Promise<Onboa
   const next = await getNextPublicEvent();
   let myRsvp = next ? await hasAwarded(enrollmentId, `open_house_rsvp:${next.id}`) : false;
   // Also honor an existing Eventbrite/CCPP registration — if their email already
-  // signed up for the Open House, treat them as RSVP'd so we stop asking.
-  if (!myRsvp && enrollment) {
+  // signed up for THIS event, treat them as RSVP'd so we stop asking.
+  // `next.id` is passed explicitly: this call used to rely on the callee's
+  // default event id, so it asked about a long-completed Open House instead of
+  // the event on screen. Guarded on `next` — with no upcoming event there is
+  // nothing to have registered for.
+  if (!myRsvp && next && enrollment) {
     const email = (enrollment as any).email as string | undefined;
-    if (email && await isEmailRegisteredForOpenHouse(email)) myRsvp = true;
+    if (email && await isEmailRegisteredForOpenHouse(email, next.id)) myRsvp = true;
   }
 
   let firstClass: FirstClassView | null = null;
