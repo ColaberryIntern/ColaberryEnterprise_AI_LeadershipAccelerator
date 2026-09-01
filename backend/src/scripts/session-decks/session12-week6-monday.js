@@ -267,7 +267,7 @@ const teach = [
     bullets: [
       'STDIO — local subprocess, one user, one machine',
       'StreamableHTTP — over the network, many callers, many replicas',
-      'In-memory state = a silent promise of exactly one instance',
+      'In-memory state = you now need session affinity, and it breaks on deploys',
       'The graded artifact is the RATIONALE, not the choice',
     ],
     definitions: [
@@ -290,12 +290,13 @@ const teach = [
   /* ================= DECONSTRUCT — two autopsies ==================== */
   {
     segment: 'deconstruct', eyebrow: '🔬 Autopsy one', title: 'It worked perfectly in staging and died at instance number two',
-    body: 'A team shipped an MCP server behind a load balancer with three replicas. It had passed every test, because every test ran against one instance. In production it failed about two times in three with "no valid session ID", intermittently and unreproducibly, and they spent two days on the load balancer. The load balancer was behaving perfectly. Session state lived in one process’s memory, so round-robin across three replicas found the right one about a third of the time — and the failure rate was telling them the answer the whole time, if anyone had read it as arithmetic.',
+    body: 'A team shipped an MCP server behind a load balancer with three replicas. Every test had passed, because every test ran against one instance. In production it failed about two times in three with "no valid session ID". Two things were true at once: the server kept sessions in one process’s memory, and the balancer was on plain round robin, so nothing kept a user on the replica that held their session. The standard production fix is session affinity — pin each user to one instance after their first request. It works. And it means the session dies the moment that instance does.',
     bullets: [
       'Every test passed — every test ran against one instance',
       'Two in three is not random. It is 3 replicas, 1 correct.',
-      'The infrastructure was fine. The assumption underneath it was the bug.',
-      'A stateless server would not have had this failure to find',
+      'Sticky sessions ARE the right production fix for a stateful service',
+      'But affinity ends with the instance: crash, scale-in, every rolling deploy',
+      'Stateless never needs affinity — any instance serves any request',
     ],
     diagram: `flowchart LR
   R["📨 Request"] --> LB["⚖️ Load balancer"]
@@ -309,6 +310,8 @@ const teach = [
       'OPEN: "It passed every test. Every test ran against one instance."',
       'DO: Give them the failure RATE before the cause and WAIT. Somebody will get to "two thirds means three replicas" out loud.',
       'NOTE: When they do, STOP and let them explain it to the room. A peer landing this is worth three of you landing it.',
+      'NOTE: Expect an engineer to say "sticky sessions". They are RIGHT — that is what a production balancer should do, and it is the standard fix. Agree out loud, do not brush past it.',
+      'SAY: Affinity fixes it today. It also means the session dies whenever that instance does — a crash, a scale-in, or your next rolling deploy. That is the argument for stateless.',
     ].join('\n'),
   },
   {
@@ -564,18 +567,23 @@ const interactions = [
     q: 'Your server will be called by forty colleagues across three offices, and it will run on more than one machine. Transport and state model?',
     options: ['STDIO, in-memory state', 'StreamableHTTP, stateful in memory', 'StreamableHTTP, stateless', 'Whichever the tutorial I followed used'],
     answer: 2,
-    reveal: 'StreamableHTTP, stateless. STDIO cannot serve a second user at all, and in-memory state is what strands a request on the wrong replica. The fourth option is the honest answer for most people right now — and that is exactly why the written rationale is what gets graded.',
+    reveal: 'StreamableHTTP, stateless. STDIO cannot serve a second user at all. Stateful CAN be made to work — turn on session affinity and each user is pinned to one instance — but you have then promised a user keeps the same instance, and you break that promise on every rolling deploy. The fourth option is the honest answer for most people right now, which is exactly why the written rationale is what gets graded.',
     eyebrow: '🔌 The real decision', title: 'You are the architect. Choose the transport.',
     presenterTip: 'MOVED EARLIER ON PURPOSE — this is the best moment of the night and it used to sit at minute 95, where it kept getting cut. Full-screen theater: lock the votes, show the spread, then reveal. Ask anyone who picked the last option to say it out loud without embarrassment; naming the default is the first step to replacing it.',
   },
   {
     segment: 'deconstruct', kind: 'poll',
-    q: 'Your server works perfectly for one user. In production with three replicas it fails about two times in three with "no valid session ID". What do you check FIRST?',
-    options: ['The load balancer configuration', 'Whether session state lives in one process memory', 'The client version', 'Network latency between replicas'],
+    q: 'Your server works perfectly for one user. In production with three replicas it fails about two times in three with "no valid session ID". What is actually wrong?',
+    options: [
+      'The load balancer hardware is faulty',
+      'Sessions live in one process memory AND nothing pins a user to that instance',
+      'The client version is out of date',
+      'Network latency between replicas',
+    ],
     answer: 1,
-    reveal: 'In-memory session state. The two-in-three failure rate is the tell — with three replicas, round-robin lands you on the wrong one about two thirds of the time. The load balancer is behaving perfectly; the assumption underneath it is the bug.',
+    reveal: 'Two things at once. The server assumed a single instance, AND the balancer was left on plain round robin, so nothing kept a user on the replica holding their session. Session affinity fixes it today — and means the session dies whenever that instance does: a crash, a scale-in, or your next rolling deploy.',
     eyebrow: '🩺 Diagnose it', title: 'Intermittent, unreproducible, and two-in-three',
-    presenterTip: 'Give them the failure RATE and let somebody in the room work out why two in three is meaningful. When they get there out loud, STOP and let them explain it — a peer landing this beats you landing it.',
+    presenterTip: 'Give them the failure RATE first and let somebody work out why two-in-three matters. When someone says "sticky sessions", AGREE — that is the correct production answer and they are right. Then ask the question that lands the lesson: what happens to every pinned session during your next rolling deploy? Stateless wins because affinity is fragile, not because affinity is wrong.',
   },
   {
     segment: 'micro-build', kind: 'poll',
