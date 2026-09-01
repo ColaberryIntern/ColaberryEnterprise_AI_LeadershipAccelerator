@@ -214,7 +214,7 @@ async function release(r: DueReminder, err: unknown): Promise<void> {
 export async function loadActiveSubscriptions(): Promise<RenewalSubscriptionRow[]> {
   return (await sequelize.query(
     `SELECT s.id, s.enrollment_id, s.plan, s.status, s.amount_cents,
-            s.current_period_end, s.canceled_at,
+            s.current_period_end, s.canceled_at, s.paysimple_schedule_id,
             e.email, e.full_name,
             e.status AS enrollment_status,
             e.access_starts_at,
@@ -437,6 +437,7 @@ export async function runRenewalReminders(opts: RenewalRunOptions = {}): Promise
         applied_credit_cents: checkout.applied_credit_cents,
         payment_link: checkout.payment_link,
         day_delta: reminder.day_delta,
+        autopay: reminder.autopay,
       });
 
       // Style gate before anything is sent or even shown as final copy. A
