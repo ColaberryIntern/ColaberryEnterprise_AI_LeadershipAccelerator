@@ -56,7 +56,11 @@ const BOILERPLATE = [
 ];
 
 /** Shell verbs at the start of a line inside a code block. */
-const SHELL = /(^|\n)\s*(npm |npx |mkdir |cd |sudo |node |curl |chmod |export |git |ls -la|pwd)/;
+// Shell verbs anchored to the start of a line. Deliberately excludes `export `
+// and `node `: TypeScript uses `export` on nearly every line of exported
+// source, and "node" appears in prose. A review block full of JS is not a
+// shell block, and flagging it would make this tool noise.
+const SHELL = /(^|\n)\s*(npm |npx |mkdir |cd |sudo |curl |chmod |git |ls -la|touch |pwd\b)/;
 const TAGS = /^(SAY|DO|NOTE|SITUATION|ROOM|MOOD|OPEN):/;
 const ARRIVAL_CATS = ['SITUATION', 'ROOM', 'MOOD', 'OPEN'];
 
