@@ -85,9 +85,15 @@ export default function CaseStudyMetricsPanel({
             </table>
           </div>
 
+          {/* EVERY metric, not the first three. The cap was arbitrary — three
+              is not a property of anything — and on a record with four metrics it
+              silently withheld editorial control of the fourth, with nothing on
+              screen to say so. Keeping the instrument and dropping the cap is the
+              narrow fix; the measured-figures panel below governs a different
+              population (the case_study_metrics table) and does not replace this. */}
           <h3 className="h6">Human editorial copy</h3>
           <div className="row g-3">
-            {metrics.slice(0, 3).map((metric, index) => (
+            {metrics.map((metric, index) => (
               <div className="col-lg-4" key={`override-${metric.path}`}>
                 <CaseStudyOverrideField
                   label={`Displayed value — ${metric.label || metric.key || metric.path}`}
