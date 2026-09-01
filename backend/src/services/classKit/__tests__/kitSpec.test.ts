@@ -323,9 +323,15 @@ describe('buildKitSpec — KitConfig wiring', () => {
     // Regression: teachToSlides used to map only {label, code}, silently
     // dropping pasteWhere/kind — so shell commands rendered as "PASTE INTO
     // Claude Code" and read-along code claimed to be pasteable.
+    //
+    // Fixture is Week 1 rather than Week 3 (2026-09-01). Every deck is now
+    // prompt-only except the bootstrap step — installing Claude Code, which
+    // cannot be a Claude Code prompt because the student does not have it yet.
+    // That leaves Week 1 as the only week with a genuine non-default paste
+    // target, which is exactly what this test needs to prove is carried through.
     const spec = buildKitSpec(await inputFor({
-      id: 's-wk3-mon-meta', session_number: 4, title: 'Week 3: Something',
-      session_date: '2026-08-10', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+      id: 's-wk1-mon-meta', session_number: 2, title: 'Week 1 · Architecture Day — Claude Code Foundations + Workspace',
+      session_date: '2026-07-27', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
     }));
     const withPrompts = spec.slides.filter((s) => s.kind === 'teach' && s.prompt);
     expect(withPrompts.length).toBeGreaterThan(0);
@@ -386,9 +392,13 @@ describe('buildKitSpec — KitConfig wiring', () => {
   it('renders the enriched full-screen diagram layer: title, key points, brand, run-location', async () => {
     // The zoomed diagram is what the room (and the class recording) sees while
     // the instructor talks over it, so it has to carry more than the picture.
+    // Week 1 for the same reason as the Build Bay metadata test above: since
+    // every deck went prompt-only, the bootstrap install step is the only
+    // authored paste target that is not the default, so it is the only fixture
+    // that can prove the zoom layer honours the AUTHORED target.
     const spec = buildKitSpec(await inputFor({
-      id: 's-wk3-mon-zoom', session_number: 4, title: 'Week 3: Something',
-      session_date: '2026-08-10', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+      id: 's-wk1-mon-zoom', session_number: 2, title: 'Week 1 · Architecture Day — Claude Code Foundations + Workspace',
+      session_date: '2026-07-27', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
     }));
     const html = renderKitHtml(spec, { live: { enabled: false } });
     expect(html).toContain('kdiag-hd-title');   // slide title in the zoom layer
