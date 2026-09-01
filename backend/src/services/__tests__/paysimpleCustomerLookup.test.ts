@@ -35,7 +35,11 @@ describe('findCustomerByEmail — unfiltered-search contamination guard', () => 
   let fetchMock: jest.Mock;
 
   const mockOnce = (payload: unknown) => {
-    fetchMock.mockImplementationOnce(async () => ({ ok: true, json: async () => payload }) as any);
+    // `text` as well as `json`: apiRequest reads the body as text so an empty 2xx
+    // is not a JSON parse error. A double without it is not a Response.
+    fetchMock.mockImplementationOnce(async () => ({
+      ok: true, json: async () => payload, text: async () => JSON.stringify(payload),
+    }) as any);
   };
 
   beforeEach(() => {
@@ -87,11 +91,13 @@ describe('findOrCreateCustomer — must create rather than reuse a stranger', ()
     calls = [];
     (global as any).fetch = jest.fn(async (url: string, opts: any) => {
       calls.push({ url, method: opts.method, body: opts.body ? JSON.parse(opts.body) : undefined });
-      if (opts.method === 'GET') return { ok: true, json: async () => UNFILTERED_PAGE } as any;
-      return {
-        ok: true,
-        json: async () => ({ Response: { Id: 43540425, FirstName: 'Shefat', LastName: 'Rahman', Email: 'shefatrahman03@gmail.com', Company: 'Colaberry' } }),
-      } as any;
+      // `text` as well as `json` on both branches: apiRequest reads the body as
+      // text so an empty 2xx is not a JSON parse error.
+      if (opts.method === 'GET') {
+        return { ok: true, json: async () => UNFILTERED_PAGE, text: async () => JSON.stringify(UNFILTERED_PAGE) } as any;
+      }
+      const created = { Response: { Id: 43540425, FirstName: 'Shefat', LastName: 'Rahman', Email: 'shefatrahman03@gmail.com', Company: 'Colaberry' } };
+      return { ok: true, json: async () => created, text: async () => JSON.stringify(created) } as any;
     });
   });
 
