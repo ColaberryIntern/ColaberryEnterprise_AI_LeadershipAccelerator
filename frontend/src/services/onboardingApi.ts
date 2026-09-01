@@ -36,14 +36,19 @@ function readCachedFiveBand(): boolean {
 let fiveBandUi: boolean = readCachedFiveBand();
 export function isFiveBandUiEnabled(): boolean { return fiveBandUi; }
 
+// Mirrors backend/src/services/openHouseTypes.ts — keep the two in sync.
+// Dates arrive as ISO strings over JSON, not Date objects.
 export interface OpenHouseView {
   id: string;
   title: string;
   description: string | null;
   starts_at: string;
+  ends_at: string | null;
   timezone: string;
   registration_url: string | null;
   meeting_link: string | null;
+  /** Eventbrite promo image; null on the Postgres fallback, so always guard. */
+  image_url: string | null;
 }
 export interface FirstClassView {
   start_date: string;

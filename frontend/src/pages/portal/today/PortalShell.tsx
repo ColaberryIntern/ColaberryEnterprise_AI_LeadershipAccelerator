@@ -48,6 +48,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Schedule', to: '/portal/schedule', icon: (
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },
+      { label: 'Events', to: '/portal/events', icon: (
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M12 12v8M4 8.5 12 13l8-4.5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+      ) },
     ],
   },
   {

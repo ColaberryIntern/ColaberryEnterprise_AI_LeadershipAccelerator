@@ -23,6 +23,7 @@ const TodayShell = lazy(() => import('../pages/portal/today/TodayShell'));
 const SettingsPage = lazy(() => import('../pages/portal/settings/SettingsPage'));
 const PathPage = lazy(() => import('../pages/portal/path/PathPage'));
 const SchedulePage = lazy(() => import('../pages/portal/schedule/SchedulePage'));
+const EventsPage = lazy(() => import('../pages/portal/events/EventsPage'));
 const PointsPage = lazy(() => import('../pages/portal/points/PointsPage'));
 const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'));
 const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
@@ -61,6 +62,9 @@ const portalRoutes = (
       <Route path="/portal/settings" element={<SettingsPage />} />
       <Route path="/portal/path" element={<PathPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />
+      {/* Public event list (CCPP Registration-labelled events). Ungated like
+          Schedule — these are open-to-the-community events, not paid content. */}
+      <Route path="/portal/events" element={<EventsPage />} />
       <Route path="/portal/points" element={<PointsPage />} />
       <Route path="/portal/projects" element={<PageGate feature="projects"><ProjectsPage /></PageGate>} />
       {/* Living Career Portfolio — the private Career Studio. Gated like its

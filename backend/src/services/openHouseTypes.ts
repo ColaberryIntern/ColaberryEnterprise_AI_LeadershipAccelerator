@@ -13,9 +13,17 @@ export interface OpenHouseView {
   title: string;
   description: string | null;
   starts_at: Date;
+  /** End of the event, when CCPP knows it. Lets the Events page show a range. */
+  ends_at: Date | null;
   timezone: string;
   registration_url: string | null;
   meeting_link: string | null;
+  /**
+   * Eventbrite promo image (CCPP `EventBrite_Events.Logo_url`), an absolute
+   * img.evbuc.com URL. Null on the Postgres fallback, which has no image
+   * column — every consumer must degrade gracefully rather than assume one.
+   */
+  image_url: string | null;
 }
 
 export interface FirstClassView {
