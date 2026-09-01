@@ -68,7 +68,7 @@ export interface NarrativeResult {
   /** The prose, or null. Null is a legitimate, common outcome. */
   narrative: string | null;
   /** Why there is none, for the log and for the learner. Never shown as page copy. */
-  reason?: 'insufficient_evidence' | 'unavailable' | 'malformed';
+  reason?: 'insufficient_evidence' | 'unavailable' | 'malformed' | 'editorialised';
 }
 
 /**
@@ -113,19 +113,80 @@ export function buildEvidenceBlock(input: NarrativeInput): string {
 }
 
 const SYSTEM_PROMPT = [
-  'You write two short paragraphs for a software engineer\'s portfolio page, read by a',
-  'recruiter or hiring manager.',
+  'You write a short factual summary for an engineer\'s portfolio page, read by a',
+  'recruiter. The reader can already see the languages, the repository, and the list of',
+  'what was built, elsewhere on the same page.',
   '',
-  'RULES, all absolute:',
+  'ABSOLUTE RULES:',
   '- Use ONLY the evidence given. Never add a technology, employer, metric, duration or',
-  '  achievement that is not stated there. If the evidence is thin, write less.',
-  '- Never claim skill level. Say what they built, not that they are proficient, expert,',
-  '  senior or experienced.',
-  '- No headings, no bullet points, no markdown, no links.',
-  '- Two paragraphs maximum. Plain, factual, specific. No superlatives, no filler',
-  '  openers like "passionate" or "results-driven".',
-  '- Write in the third person, using their name once at most.',
+  '  achievement that is not stated there.',
+  '- NEVER JUDGE THE WORK. The evidence comes from a file listing, which cannot show',
+  '  whether anything is any good. Banned: comprehensive, robust, thorough, extensive,',
+  '  sophisticated, elegant, seamless, cutting-edge, meticulous, rigorous, methodical,',
+  '  passionate, dedicated, impressive, excellent, and phrases like "a commitment to',
+  '  quality", "showcasing", "highlighting a", "demonstrating a".',
+  '- NEVER claim skill level: not proficient, experienced, senior, skilled or expert.',
+  '- Do NOT restate the language list or file counts. They are already on the page.',
+  '  "utilizing TypeScript, JavaScript and HTML across multiple files" is exactly the',
+  '  padding to avoid.',
+  '- Say what the system DOES and who it is FOR. Concrete nouns and verbs.',
+  '- At most two short paragraphs, fewer if the evidence is thin. Writing less is always',
+  '  better than padding.',
+  '- No headings, bullets, markdown or links. Third person, name used once at most.',
 ].join('\n');
+
+/**
+ * Words a file listing cannot earn.
+ *
+ * The first real generation produced "a comprehensive test suite" and "a commitment to
+ * quality" from evidence that said only "committed a test suite". The prompt forbade
+ * claiming SKILL LEVEL, and the model found the gap: it judged the WORK instead. Whether
+ * a suite is comprehensive is precisely what a path listing cannot show.
+ *
+ * Enforced here rather than trusted to the prompt, for the same reason the markup rule
+ * is. Rejection is safe: the fallback is no narrative, and an absent paragraph is honest
+ * where a flattering one is a claim the student has to defend in a room.
+ */
+const UNEARNABLE = [
+  'comprehensive', 'robust', 'thorough', 'extensive', 'sophisticated', 'elegant',
+  'seamless', 'cutting-edge', 'state-of-the-art', 'best-in-class', 'meticulous',
+  'rigorous', 'methodical', 'passionate', 'dedicated', 'impressive', 'excellent',
+  'outstanding', 'proficient', 'expert', 'skilled', 'experienced', 'senior',
+  'commitment to quality', 'showcasing', 'highlighting a', 'demonstrating a',
+];
+
+/**
+ * ONE bounded repair, for the one failure the prompt cannot stop.
+ *
+ * Measured against four real student repos with the tightened prompt: THREE of four were
+ * rejected, every one of them on the single word "comprehensive" — despite the prompt
+ * banning it by name. The model reaches for it reflexively, and asking harder does not
+ * work.
+ *
+ * A 75% rejection rate is not a working feature, so the evaluative adjective is stripped
+ * where it modifies a noun the evidence already supports: "a comprehensive test suite"
+ * becomes "a test suite", which is exactly what the evidence says. The claim survives; the
+ * judgement does not.
+ *
+ * THIS IS THE ONLY REPAIR PERMITTED, and it is deliberately narrow. Markup is still
+ * rejected outright, and any OTHER unearnable word is still rejected outright, because
+ * stripping in general would mean publishing prose reshaped by code that nobody read. This
+ * one is safe because deleting an adjective cannot introduce a claim — it can only remove
+ * one.
+ */
+const STRIPPABLE = ['comprehensive', 'robust', 'thorough', 'extensive'];
+
+function stripEvaluativeAdjectives(text: string): string {
+  let out = text;
+  for (const word of STRIPPABLE) {
+    // "a comprehensive test suite" -> "a test suite". Also handles "an", and a bare
+    // leading adjective. Case-insensitive, and the article is preserved as written.
+    out = out.replace(new RegExp(`\\b(a|an|the)\\s+${word}\\s+`, 'gi'), '$1 ');
+    out = out.replace(new RegExp(`\\b${word}\\s+`, 'gi'), '');
+  }
+  // Collapse any double space the removal left behind.
+  return out.replace(/[ \t]{2,}/g, ' ').trim();
+}
 
 /**
  * Strip anything the shape rules forbid, and reject rather than repair a bad output.
@@ -143,7 +204,16 @@ export function validateNarrative(raw: unknown): NarrativeResult {
   if (/^#|^\s*[-*]\s|\[.+?\]\(.+?\)|https?:\/\//m.test(text)) {
     return { narrative: null, reason: 'malformed' };
   }
-  return { narrative: text };
+  // A judgement the evidence cannot support is worse than markup: markup looks broken to
+  // a reader, an unearned superlative looks true.
+  // Repair the narrow case first, then judge what remains. A word that survives the
+  // strip, or any other unearnable word, still rejects the whole output.
+  const repaired = stripEvaluativeAdjectives(text);
+  const lower = repaired.toLowerCase();
+  if (UNEARNABLE.some((w) => lower.includes(w))) {
+    return { narrative: null, reason: 'editorialised' };
+  }
+  return { narrative: repaired };
 }
 
 /**
