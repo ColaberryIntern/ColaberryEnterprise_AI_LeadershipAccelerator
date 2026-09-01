@@ -72,7 +72,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - mirror live (374 todos, 8 projects, sync running every 2 min)',
     html: HTML,
     text: TEXT,

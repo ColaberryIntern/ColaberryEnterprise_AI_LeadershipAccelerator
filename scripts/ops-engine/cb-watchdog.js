@@ -275,7 +275,7 @@ For a specific @CB silent issue:
   const r = await transport.sendMail({
     from: '"CB Watchdog" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     subject: `[CB Watchdog] ${overall} - ${log.mentionsFound || 0} mentions / ${log.tickCount || 0} ticks / ${audit.ok ? audit.activeCount : '?'} projects`,
     text, html,
     headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },

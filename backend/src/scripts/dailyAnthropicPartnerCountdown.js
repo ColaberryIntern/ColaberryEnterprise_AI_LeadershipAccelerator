@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Anthropic Partner Network countdown report.
-// - Daily mode (default): emails Ali (+ CC alimuwwakkil@gmail.com + ram@colaberry.com)
+// - Daily mode (default): emails Ali (+ CC ram@colaberry.com)
 //   AND posts a comment to the persistent Message Board thread so every project
 //   participant gets it via Basecamp at the same time the email fires.
 // - --no-email: skip email (used for manual MB-only catch-up runs).
@@ -234,7 +234,7 @@ Auto-fires daily until ${totalGoal}/${totalGoal} reached, then shuts off. Weekly
     const r = await transport.sendMail({
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: 'ali@colaberry.com',
-      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
+      cc: ['ram@colaberry.com'],
       subject: `[Daily Report] 🚀 Anthropic Partner Network: ${pctComplete}% (${totalCompleted}/${totalGoal})${deadlinePassed ? '' : ` · ${daysLeft} days left`}`,
       text,
       html,

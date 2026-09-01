@@ -20,7 +20,6 @@ const HTML_BODY = `<div style="font-family:arial,sans-serif;font-size:14px;color
 
 const RECIPIENTS = [
   'ali@colaberry.com',
-  'alimuwwakkil@gmail.com',
   'ali_muwwakkil@hotmail.com',
 ];
 

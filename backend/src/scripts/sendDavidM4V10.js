@@ -152,7 +152,7 @@ ${SIG_TEXT}`;
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'dlahme@colaberry.com',
     cc: ['ram@colaberry.com'],
-    bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Re: Open for Advertising - RE Magazine - M4 V10 (cutoff fixed, full ad visible, 3 edits applied)',
     html: BODY_HTML,

@@ -57,7 +57,7 @@ PS - going to add a "enroll 2SV before Day 1" item to the onboarding checklist s
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'kesetebirhan@gmail.com',
-    bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Re: Resetting Colaberry email',
     text, html: HTML,

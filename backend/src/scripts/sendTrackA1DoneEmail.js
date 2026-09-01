@@ -108,7 +108,6 @@ Colaberry Inc.`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Track A1] Done - VIP inbox watcher live. Test by having a VIP email you.',
     text: strip(text),
     html: strip(html),
