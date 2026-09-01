@@ -1,13 +1,19 @@
 /**
  * repoTreeRateLimit — pacing and back-off for the repo sweep.
  *
- * Written against a real failure. The first production sweep selected 25 connections and
- * every one returned `GitHub API error: 403` in about 28ms, while a single sync run
- * straight afterwards succeeded. The batch cap was never the missing piece: it bounds how
- * many requests a run makes, not how fast it makes them.
+ * Written against two real production failures, one after the other.
  *
- * The test that matters most is the one separating throttling from a broken repo. Treat a
- * 404 as throttling and one student's deleted repository halts everyone else's refresh.
+ * The first sweep fired ~50 requests inside a second and GitHub 403'd all 25 connections,
+ * while a single sync straight afterwards succeeded. That produced the pacing.
+ *
+ * The second sweep then synced 21 connections and stopped on three consecutive 403s from
+ * `ColaberryIntern/AI_Pathway`, `AcceleratorTesting` and `OpportunityPulse` -- internal
+ * repositories that 403 PERMANENTLY. Treating those as throttling was self-starving: they
+ * have never synced, so they sort first on every sweep, and backing off on them would
+ * block every real student behind them forever. That produced the reclassification below.
+ *
+ * The test that matters most is `does NOT let three permanently-forbidden repos starve
+ * the queue`.
  */
 import {
   DEFAULT_DELAY_MS, MAX_CONSECUTIVE_RATE_LIMITED,
@@ -15,10 +21,6 @@ import {
 } from '../repoTreeRateLimit';
 
 describe('isRateLimited', () => {
-  it('recognises the exact error the production sweep produced', () => {
-    expect(isRateLimited('GitHub API error: 403')).toBe(true);
-  });
-
   it('recognises 429 and the wording GitHub uses', () => {
     for (const m of [
       'GitHub tree API error: 429',
@@ -31,9 +33,21 @@ describe('isRateLimited', () => {
     }
   });
 
+  it('does NOT treat a bare 403 as throttling', () => {
+    // GitHub overloads 403: rate limiting, and plain permission denial on a private repo
+    // the caller cannot read. Production settled which is which. A rate limit applies to
+    // the CALLER, and the caller had just made 21 successful calls in the same sweep.
+    expect(isRateLimited('GitHub API error: 403')).toBe(false);
+    expect(isRateLimited('GitHub tree API error: 403')).toBe(false);
+  });
+
+  it('still catches a 403 that says it is a rate limit', () => {
+    expect(isRateLimited('GitHub API error: 403 - API rate limit exceeded')).toBe(true);
+    expect(isRateLimited('403: You have exceeded a secondary rate limit')).toBe(true);
+  });
+
   it('does NOT treat a broken repository as throttling', () => {
-    // The distinction the sweep turns on. A 404 on one student's deleted or renamed repo
-    // says nothing about the next student, and must not stop the run.
+    // A 404 on one student's deleted or renamed repo says nothing about the next student.
     for (const m of [
       'GitHub API error: 404',
       'GitHub API error: 401',
@@ -46,9 +60,8 @@ describe('isRateLimited', () => {
   });
 
   it('does not match a status code embedded in a larger number', () => {
-    // A file count or repository id containing 403 is not a rate limit.
-    expect(isRateLimited('synced 4030 files')).toBe(false);
-    expect(isRateLimited('repo id 1403299')).toBe(false);
+    expect(isRateLimited('synced 4290 files')).toBe(false);
+    expect(isRateLimited('repo id 1429299')).toBe(false);
   });
 
   it('does not throw on junk', () => {
@@ -72,7 +85,6 @@ describe('shouldBackOff', () => {
 
 describe('delayBefore', () => {
   it('does not delay the first connection', () => {
-    // A sweep of one connection should cost nothing.
     expect(delayBefore(0)).toBe(0);
   });
 
@@ -87,48 +99,51 @@ describe('delayBefore', () => {
 
   it('honours an override, and treats a nonsense delay as none', () => {
     expect(delayBefore(3, 250)).toBe(250);
-    for (const bad of [0, -100, NaN, Infinity, undefined as any]) {
-      expect(delayBefore(3, bad)).toBe(bad === undefined ? DEFAULT_DELAY_MS : 0);
+    for (const bad of [0, -100, NaN, Infinity]) {
+      expect(delayBefore(3, bad)).toBe(0);
     }
+    expect(delayBefore(3, undefined)).toBe(DEFAULT_DELAY_MS);
   });
 });
 
-describe('the run this was written for', () => {
-  it('would have stopped after 3 connections instead of burning all 25', () => {
-    // Replay: 25 selected, every one 403. With back-off the sweep yields early rather
-    // than deepening the block and stamping nothing useful.
-    let consecutive = 0;
-    let attempted = 0;
-    for (let i = 0; i < 25; i += 1) {
-      attempted += 1;
-      consecutive = isRateLimited('GitHub API error: 403') ? consecutive + 1 : 0;
-      if (shouldBackOff(consecutive)) break;
-    }
-    expect(attempted).toBe(MAX_CONSECUTIVE_RATE_LIMITED);
+/** Replays a sweep's error sequence and reports how many connections it reached. */
+const reached = (errors: string[]): number => {
+  let consecutive = 0;
+  let attempted = 0;
+  for (const e of errors) {
+    attempted += 1;
+    consecutive = isRateLimited(e) ? consecutive + 1 : 0;
+    if (shouldBackOff(consecutive)) break;
+  }
+  return attempted;
+};
+
+describe('the runs this was written for', () => {
+  it('yields early on genuine, explicit throttling', () => {
+    expect(reached(Array(25).fill('API rate limit exceeded'))).toBe(MAX_CONSECUTIVE_RATE_LIMITED);
+  });
+
+  it('does NOT let three permanently-forbidden repos starve the queue', () => {
+    // The self-starving bug, and the reason a bare 403 was reclassified. Those repos have
+    // never synced, so they sort FIRST on every sweep and fail forever. Backing off on
+    // them would block every real student behind them, on every run, silently.
+    expect(reached(Array(25).fill('GitHub API error: 403'))).toBe(25);
   });
 
   it('keeps going when failures are unrelated to throttling', () => {
-    // 25 connections where every repo 404s is a bad day, not a blocked client. The sweep
-    // should still visit all of them.
-    let consecutive = 0;
-    let attempted = 0;
-    for (let i = 0; i < 25; i += 1) {
-      attempted += 1;
-      consecutive = isRateLimited('GitHub API error: 404') ? consecutive + 1 : 0;
-      if (shouldBackOff(consecutive)) break;
-    }
-    expect(attempted).toBe(25);
+    expect(reached(Array(25).fill('GitHub API error: 404'))).toBe(25);
   });
 
-  it('resets the streak on a success, so isolated 403s do not accumulate', () => {
-    const outcomes = ['403', 'ok', '403', '403', 'ok', '403'];
-    let consecutive = 0;
-    let backedOff = false;
-    for (const o of outcomes) {
-      if (o === 'ok') consecutive = 0;
-      else consecutive = isRateLimited('GitHub API error: ' + o) ? consecutive + 1 : 0;
-      if (shouldBackOff(consecutive)) { backedOff = true; break; }
-    }
-    expect(backedOff).toBe(false);
+  it('replays the real second sweep: 3 dead repos, then the students behind them', () => {
+    // 8 due: the three ColaberryIntern repos first because they have never synced, then
+    // five real students. All eight must be reached.
+    expect(reached([...Array(3).fill('GitHub API error: 403'), ...Array(5).fill('')])).toBe(8);
+  });
+
+  it('resets the streak on a success, so isolated throttling does not accumulate', () => {
+    expect(reached([
+      'API rate limit exceeded', '', 'API rate limit exceeded',
+      'API rate limit exceeded', '', 'API rate limit exceeded',
+    ])).toBe(6);
   });
 });

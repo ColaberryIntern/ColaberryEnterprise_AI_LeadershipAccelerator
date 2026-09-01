@@ -34,21 +34,43 @@ export const DEFAULT_DELAY_MS = 1500;
 
 /**
  * Does this error mean GitHub is throttling us, rather than something being wrong with
- * the repository?
+ * this particular repository?
  *
- * The distinction decides whether the sweep keeps going. A 404 on one student's deleted
- * repo says nothing about the next student and must not stop the run. A 403 or 429 says
- * the next request will fail too.
+ * The distinction decides whether the sweep keeps going. A failure specific to one repo
+ * says nothing about the next student and must not stop the run.
  *
- * `githubService` throws plain `Error`s whose message carries the status
- * (`GitHub API error: 403`), so matching the message is what is available. The status is
- * matched with a boundary so a repository id or byte count that happens to contain 403
- * cannot be mistaken for one.
+ * ## A BARE 403 IS NOT THROTTLING
+ *
+ * GitHub overloads 403 for two unrelated things: rate limiting, and plain permission
+ * denial on a private repository the caller cannot read. This originally counted any 403
+ * as throttling, and the second production sweep proved that wrong within minutes:
+ * 21 connections synced fine, then three consecutive 403s tripped the back-off and the
+ * sweep stopped. Those three were `ColaberryIntern/AI_Pathway`, `AcceleratorTesting` and
+ * `OpportunityPulse` -- internal repositories that 403 permanently, not a throttled
+ * client. Rate limits apply to the caller, and the caller had just made 21 successful
+ * calls.
+ *
+ * That combination was self-starving. Those connections have never synced, so they sort
+ * FIRST on every sweep; they fail permanently; and back-off then stopped the run before
+ * it reached any real student behind them. Permanent poison at the head of the queue
+ * would have blocked the backlog forever, on a schedule, silently.
+ *
+ * So throttling now requires an EXPLICIT signal: a 429, or GitHub's own rate-limit
+ * wording. A bare 403 is treated as a problem with that one repository -- logged, counted
+ * as a failure, and stepped over.
+ *
+ * The trade is deliberate and lopsided. A false back-off starves every student behind the
+ * bad connection, on every run. A missed back-off costs at most one paced sweep of
+ * pointless calls, and pacing already prevents the burst that caused the original
+ * incident. `githubService` surfaces only the status and not the response body, so this
+ * is the strongest inference available without changing that shared service.
+ *
+ * Statuses are matched on a word boundary, so a file count of 4030 is not a rate limit.
  */
 export function isRateLimited(message: unknown): boolean {
   if (typeof message !== 'string' || !message) return false;
-  if (/\b(?:rate limit|secondary rate|abuse detection|too many requests)\b/i.test(message)) return true;
-  return /\b(?:403|429)\b/.test(message);
+  if (/(?:rate.?limit|secondary rate|abuse detection|too many requests)/i.test(message)) return true;
+  return /\b429\b/.test(message);
 }
 
 /** Has the sweep seen enough consecutive throttling to stop for this run? */
