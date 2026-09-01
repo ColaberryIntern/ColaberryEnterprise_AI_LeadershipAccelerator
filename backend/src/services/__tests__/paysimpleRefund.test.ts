@@ -11,7 +11,11 @@ describe('paysimpleService payment reversal endpoints', () => {
     calls.length = 0;
     (global as any).fetch = jest.fn(async (url: string, opts: any) => {
       calls.push({ url, method: opts.method });
-      return { ok: true, json: async () => ({ Response: { Id: 1 } }) } as any;
+      // `text` as well as `json`: apiRequest reads the body as text so an empty
+      // 2xx (PaySimple's suspend endpoint) is not a JSON parse error. A double
+      // without it is not a Response.
+      const payload = { Response: { Id: 1 } };
+      return { ok: true, json: async () => payload, text: async () => JSON.stringify(payload) } as any;
     });
   });
 

@@ -36,7 +36,11 @@ const PAYSIMPLE_TIMEOUT_MS = 30_000;
 
 export type PaySimpleErrorClass =
   | 'TimeoutError' | 'RateLimitError' | 'AuthError'
-  | 'UpstreamUnavailable' | 'ValidationError' | 'UpstreamError';
+  | 'UpstreamUnavailable' | 'ValidationError' | 'UpstreamError'
+  // A 2xx whose body is not the JSON we were promised. Distinct from
+  // UpstreamError (which is the gateway reporting its own failure): here the
+  // call succeeded and the contract did not hold, so retrying will not help.
+  | 'ContractViolation';
 
 /** A stable error_class beats a bare Error: "PaySimple API error" in a log tells
  *  you nothing about whether to retry, re-auth, or fix the payload. */
@@ -100,7 +104,39 @@ export async function apiRequest<T>(
     );
   }
 
-  const data: any = await response.json();
+  // A successful call does not have to return a body. PaySimple's
+  // /recurringpayment/{id}/suspend answers 200 with an EMPTY body, and
+  // `response.json()` on that throws "Unexpected end of JSON input".
+  //
+  // That threw AFTER the gateway had already done the work, so the caller saw a
+  // failure for an action that succeeded. In suspendScheduleForSubscription the
+  // throw landed between the suspend and the UPDATE that clears
+  // paysimple_schedule_id, leaving the schedule suspended at PaySimple while our
+  // book still showed it live — and logging `schedule_suspend_failed`, which
+  // tells an operator to go and fix something that is not broken.
+  //
+  // Found 2026-09-01 suspending Victor Chukwukere's schedule 4511896 on a
+  // deferral: the gateway returned Suspended, our code returned
+  // { suspended: false }.
+  const raw = await response.text();
+  // Widened deliberately. Every caller that reads a body calls an endpoint that
+  // returns one; the endpoints that return nothing (suspend) are called for their
+  // effect and their result is discarded. Making the signature `T | null` would
+  // push a null check onto ~40 call sites to describe a case none of them meet.
+  if (!raw.trim()) return null as unknown as T;
+
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch (err: any) {
+    // A non-empty body we cannot parse is a real contract violation, unlike an
+    // empty one. Say which, and include what arrived.
+    throw new PaySimpleError(
+      `PaySimple ${method} ${path} returned unparseable body: ${raw.slice(0, 200)}`,
+      'ContractViolation',
+      response.status,
+    );
+  }
   return data.Response ?? data.data ?? data;
 }
 
