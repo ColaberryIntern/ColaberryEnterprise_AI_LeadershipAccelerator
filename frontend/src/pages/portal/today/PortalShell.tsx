@@ -403,6 +403,9 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   // lives in ./pointsHud as a pure function so it can be tested; see the header
   // comment there for the defect it exists to prevent.
   const hud = hudView(points, displayTotal);
+  // `schedule` is null both while loading AND when there is genuinely nothing
+  // scheduled; the chips must not render an em dash for the first case.
+  const scheduleKnown = schedule !== null;
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const nextLiveSessionTargetMs = (() => {
@@ -464,7 +467,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
               const cdInner = (
                 <>
                   <span className="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M7 11v4c0 1 2 2 5 2s5-1 5-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
-                  <span className="tx"><span className="lbl">Next class</span><span className="when mono">{fcCd ? `${fcCd.d}d ${fcCd.h}h` : '—'}</span></span>
+                  <span className="tx"><span className="lbl">Next class</span><span className="when mono">{scheduleKnown ? (fcCd ? `${fcCd.d}d ${fcCd.h}h` : '—') : <i className="te-hud-skel cd" aria-hidden="true" />}</span></span>
                 </>
               );
               // Clickable straight into the class's room when one exists (real
@@ -480,7 +483,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
                 to reach it or sign up. Matches the Next class chip's behaviour. */}
             <Link className="te-cd event" title="Next event — see all events" to="/portal/events">
               <span className="ic"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
-              <span className="tx"><span className="lbl">Next event</span><span className="when mono">{ohCd ? `${ohCd.d}d ${ohCd.h}h` : '—'}</span></span>
+              <span className="tx"><span className="lbl">Next event</span><span className="when mono">{scheduleKnown ? (ohCd ? `${ohCd.d}d ${ohCd.h}h` : '—') : <i className="te-hud-skel cd" aria-hidden="true" />}</span></span>
             </Link>
           </div>
           <MessagesButton onOpen={openChatTarget} />
