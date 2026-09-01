@@ -32,6 +32,7 @@ import {
   CapstoneRecord,
   RecordArtifact,
   RecordCapability,
+  RecordSkill,
   RecordCompetency,
   RecordPost,
 } from './capstoneRecordContract';
@@ -75,6 +76,10 @@ export interface CompilerInputs {
    * Already MERGED by the caller. The compiler does not ratchet, because ratcheting
    * needs prior state and this function must stay pure.
    */
+  /** Already inferred by the caller. The compiler does not infer, it renders. */
+  skills?: Array<{ skill_id?: string | null; label?: string | null; basis?: string[] }>;
+  /** Already generated AND approved by the caller. Never generated here. */
+  narrative?: string | null;
   capabilities?: Array<{
     id?: string | null;
     label?: string | null;
@@ -172,6 +177,26 @@ function compileCapabilities(rows: CompilerInputs['capabilities']): RecordCapabi
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/**
+ * Skills, rendered not inferred.
+ *
+ * A skill without a basis is dropped rather than shown bare: the basis IS the claim's
+ * defence, and a bare skill name on a portfolio is exactly the unsourceable assertion this
+ * record exists to avoid.
+ */
+function compileSkills(rows: CompilerInputs['skills']): RecordSkill[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter((s) => s && typeof s === 'object' && clean(s.skill_id)
+      && Array.isArray(s.basis) && s.basis.filter((b) => clean(b)).length > 0)
+    .map((s) => ({
+      skill_id: clean(s.skill_id)!,
+      label: clean(s.label) ?? clean(s.skill_id)!,
+      basis: s.basis!.map((b) => clean(b)).filter((b): b is string => !!b),
+    }))
+    .sort((a, b) => b.basis.length - a.basis.length || a.label.localeCompare(b.label));
+}
+
 function compilePosts(rows: CompilerInputs['posts']): RecordPost[] {
   return rows
     .filter((p) => p.shared === true && typeof p.week === 'number' && clean(p.headline))
@@ -229,6 +254,9 @@ export function compileCapstoneRecord(inputs: CompilerInputs): CapstoneRecord {
     // Omitted entirely when empty, so a student with no connected repo gets no heading
     // rather than an empty one. An empty band reads as failure; an absent band reads as
     // "not this part of the story".
+    ...(compileSkills(inputs.skills).length ? { skills: compileSkills(inputs.skills) } : {}),
+    // Only ever what the caller supplied. The compiler never calls a model.
+    ...(clean(inputs.narrative) ? { narrative: clean(inputs.narrative) } : {}),
     ...(compileCapabilities(inputs.capabilities).length
       ? { capabilities: compileCapabilities(inputs.capabilities) }
       : {}),
