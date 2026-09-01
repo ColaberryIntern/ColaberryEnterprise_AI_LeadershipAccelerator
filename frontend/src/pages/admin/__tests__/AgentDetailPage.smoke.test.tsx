@@ -137,6 +137,16 @@ const DETAIL: AgentDetail = {
     last_error_at: null,
     last_activity_at: '2026-08-24T10:00:00Z',
   },
+  // AI Workforce Management, Checkpoint E (2026-09-01) — Reese's real GOALS
+  // shape: a real permission tier, real activity-derived scores.
+  goals: [
+    { key: 'governance', label: 'Governance', score: 5, source: 'fixed', evidence: 'Tier suggest_only, scoped to proposed_agent_actions.' },
+    { key: 'observability', label: 'Observability', score: 4, source: 'live', evidence: '8/10 of the last 10 logged actions carry a trace_id.' },
+    { key: 'availability', label: 'Availability', score: 5, source: 'live', evidence: 'Enabled · trigger event_driven.' },
+    { key: 'lexicon', label: 'Lexicon', score: 4, source: 'fixed', evidence: 'Domain category: "student_success".' },
+    { key: 'solid', label: 'Solid', score: 5, source: 'live', evidence: '0/10 of the last 10 logged actions failed.' },
+  ],
+  goals_overall: 4.6,
 };
 
 let container: HTMLDivElement;
@@ -353,6 +363,35 @@ describe('AgentDetailPage — title prefers identity.display_name over raw agent
     await renderAgentPage();
 
     expect(container.textContent).toContain('Reese');
+  });
+});
+
+// AI Workforce Management, Checkpoint E (2026-09-01) — "GOALS score"
+// section: the live GOALS dimension score, generalized beyond the
+// synthetic 12-agent Workforce OS roster it was previously trapped in.
+describe('AgentDetailPage — "GOALS score" section', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it('renders the real overall score and each real dimension with its own evidence', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL);
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('GOALS score');
+    expect(container.textContent).toContain('4.6');
+    expect(container.textContent).toContain('Governance 5/5');
+    expect(container.textContent).toContain('Tier suggest_only, scoped to proposed_agent_actions.');
+    expect(container.textContent).toContain('Solid 5/5');
   });
 });
 

@@ -6,6 +6,7 @@ import AgentToolsCapabilitiesCard from './AgentToolsCapabilitiesCard';
 import AgentTicketActivityTable from './AgentTicketActivityTable';
 import AgentScheduledTasksCard from './AgentScheduledTasksCard';
 import AgentTrustSummaryCard from './AgentTrustSummaryCard';
+import AgentGoalsScoreCard from './AgentGoalsScoreCard';
 import AgentReportsToCard from './AgentReportsToCard';
 import { getTicketTypeLabel, getTicketTypeTone } from '../../utils/ticketTypeMeta';
 
@@ -22,6 +23,7 @@ export default function AgentOverviewTab({ detail }: Props) {
   const {
     agent, identity, tickets, ticket_breakdown, related_tasks,
     persona_version_history, cost_summary, authorization_summary, capabilities, trust_contract,
+    goals, goals_overall,
   } = detail;
 
   return (
@@ -139,6 +141,8 @@ export default function AgentOverviewTab({ detail }: Props) {
         authorizationSummary={authorization_summary}
         versionHistory={persona_version_history}
       />
+
+      <AgentGoalsScoreCard goals={goals} goalsOverall={goals_overall} />
 
       <SectionCard title="System prompt" icon="chat-3-line" subtitle="The real, current text sent to the model for every conversation this agent has.">
         {agent.system_prompt ? (
