@@ -388,12 +388,12 @@ export const WEEK6_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — launch your Week 5 server under the Inspector',
-          code: '# 1. from inside your Week 5 MCP server folder\nnpm install\n\n# 2. launch YOUR server under the MCP Inspector\nnpx @modelcontextprotocol/inspector node build/server.js\n\n# 3. in the browser window that opens:\n#    Connect  ->  Tools  ->  pick any tool  ->  Run\n#    you must get a real result back before you go on',
-          expectedResult: 'A browser window opens, the connection goes green, tools/list shows your Week 5 tools, and one tool call returns a real result.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — get the Inspector running against MY server',
+          code: 'Get the MCP Inspector running against the MCP server in this project, so I can call my tools by hand and watch protocol traffic live.\n\n1. First work out how this server actually builds and starts. Tell me the build output path you found and how you found it, before you run anything.\n2. Install dependencies if they are missing, build the server, then launch it under the MCP Inspector.\n3. Run these steps yourself in this project — do not print commands for me to copy and paste.\n4. When it is up, tell me the URL to open, and name which of my existing tools to call first as a smoke test.\n5. If the connection fails, read the actual startup error and fix the cause. Do not re-run the same command hoping for a different result.\n\nStop when I can call one of my own tools in the Inspector and get a real result back.',
+          expectedResult: 'Claude Code names your build path, starts the Inspector, and hands you a URL. The connection goes green, your Week 5 tools are listed, and one tool call returns a real result.',
           stopCondition: 'One of your own tools round-trips in the Inspector. That is the floor for the whole night.',
-          rescue: 'Nothing loads? Check that you are in the server folder and that your build output path matches the one in the command. If the connection drops immediately, run your server on its own first and read the startup error.',
+          rescue: 'If it stalls, tell it to run your server on its own first and read the startup error out loud to you — the cause is almost always a wrong build path or a missing build step, and it can find both faster than you can.',
         },
         diagram: `flowchart LR
   T["⌨️ Your terminal"] --> INS["🔍 MCP Inspector"]
@@ -735,21 +735,22 @@ export const WEEK6_PACK: WeekPack = {
       /* ========================== guided build ============================ */
       {
         segment: 'guided-build', eyebrow: '0️⃣ CP0 · Baseline', title: 'Never build on an unverified base',
-        body: 'Before anything changes, establish a known-good floor you can diff against for the rest of the night. Launch your Week 5 server under the Inspector in your terminal, confirm three things — it initialises, your tool list comes back populated, and one tool call round-trips a real result — and then leave the Inspector open. You will be watching notifications arrive in it for the next ninety minutes. If it does not connect, that is tonight’s first task and every later checkpoint depends on it.',
+        body: 'Before anything changes, establish a known-good floor you can diff against for the rest of the night. You are not going to set this up by hand — you direct Claude Code to work out how your server builds, bring it up under the Inspector, and prove three things: it initialises, your tool list comes back populated, and one tool call round-trips a real result. Then leave the Inspector open. You will be watching notifications arrive in it for the next ninety minutes. If it does not connect, that is tonight’s first task and every later checkpoint depends on it.',
         bullets: [
           'Green means: initialises · tools listed · one tool round-trips',
+          'Let Claude Code find your build path — do not guess it',
           'Leave the Inspector open — it is your window into everything tonight',
           'A verified baseline is what makes every later change diffable',
           'Not connecting? That is your only task until it does',
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — bring up the baseline',
-          code: '# from inside your MCP server folder\nnpm install\nnpm run build          # if your project has a build step\n\n# launch your server under the Inspector and LEAVE IT OPEN\nnpx @modelcontextprotocol/inspector node build/server.js\n\n# in the browser: Connect -> Tools -> run one tool -> confirm a real result',
-          expectedResult: 'A green connection, your Week 5 tools listed, and one real result back from a tool call.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — bring up tonight’s baseline',
+          code: 'Bring up the MCP server in this project under the MCP Inspector so I have a verified baseline before we change anything tonight.\n\n1. Work out how this server builds and starts. Tell me the build output path you found and how you found it, before running anything.\n2. Install dependencies if they are missing, run the build if there is one, then launch the server under the MCP Inspector.\n3. Run these steps yourself in this project — do not print commands for me to copy and paste.\n4. Give me the Inspector URL, and name one existing tool to call as a smoke test.\n5. If it fails to connect, read the actual startup error and fix that. Do not re-run the same command hoping for a different result.\n\nStop when I can list my tools and get a real result back from one of them.',
+          expectedResult: 'Claude Code names your build path, brings the server up, and hands you an Inspector URL. Green connection, tools listed, one real result back.',
           stopCondition: 'One of your own tools answers in the Inspector. Nobody moves past this.',
-          rescue: 'Connection drops instantly? Run the server on its own in the terminal first and read the startup error — it is nearly always a build path or a missing environment variable, not MCP.',
+          rescue: 'Tell it to start the server on its own first and read the startup error out loud to you — it is nearly always a build path or a missing environment variable, not MCP.',
         },
         diagram: `flowchart LR
   T["⌨️ Terminal"] --> I["🔍 Inspector"]
@@ -888,6 +889,7 @@ export const WEEK6_PACK: WeekPack = {
         bullets: [
           'Build what YOUR record says — and reconcile if the code disagrees',
           'Stateless means no in-memory session map to strand a request',
+          'Stateful is buildable too — but it commits you to session affinity',
           'STDIO is a perfectly good answer for a genuinely single-user tool',
           'The record and the code must match before you leave tonight',
         ],
