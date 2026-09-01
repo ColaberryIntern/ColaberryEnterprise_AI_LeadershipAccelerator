@@ -48,6 +48,9 @@ import TodayNextStepBanner from './TodayNextStepBanner';
 import TodayNextStepCondensed from './TodayNextStepCondensed';
 
 const TodayShell: React.FC = () => {
+  // False until the first loadAll() settles. Gates every derived number in the
+  // command band so a cold load shows placeholders rather than confident zeros.
+  const [hydrated, setHydrated] = useState(false);
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [profile, setProfile] = useState<OnboardingProfileView | null>(null);
@@ -106,6 +109,14 @@ const TodayShell: React.FC = () => {
     }
     if (st.status === 'fulfilled') setStreak(st.value);
     if (cp.status === 'fulfilled') setCapeProfile(cp.value);
+    // Every value below is derived from state that starts null, and the render
+    // treats null as ZERO rather than UNKNOWN — so before this resolves the
+    // command band confidently claims "0 points", "Apprentice", "1/3 setup" and
+    // "you're all caught up", then flips to the truth a few seconds later.
+    // `hydrated` lets those spots render a skeleton instead of a wrong number.
+    // Set after ALL settle (never in a per-promise branch) so the band changes
+    // once, rather than twitching as each request lands.
+    setHydrated(true);
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -260,7 +271,7 @@ const TodayShell: React.FC = () => {
 
   return (
     <PortalShell
-      todayBadge={setupRemaining}
+      todayBadge={hydrated ? setupRemaining : 0}
       condensedSlot={<TodayNextStepCondensed nextStep={nextStep} onScrollTo={scrollToAnchor} />}
     >
       {(condensed) => (
@@ -273,34 +284,72 @@ const TodayShell: React.FC = () => {
         <div className="te-band">
           <div>
             <div className="crumb">◆ {schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
-            <h2>{firstName ? `Welcome back, ${firstName} 👋` : 'Welcome back 👋'}</h2>
-            <TodayNextStepBanner
-              nextStep={nextStep}
-              total={total}
-              onScrollTo={scrollToAnchor}
-            />
-          </div>
-          <div className="te-cluster">
-            <div className="te-ringwrap lf">
-              <div className="te-ring" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b><span>pts</span></div></div>
-              <div className="cap">{lvl.name}</div>
-            </div>
-            {setupRemaining > 0 && (
-              <div className="te-ringwrap">
-                <div className="te-ring" style={{ '--p': setupPct, '--c': 'var(--berry)' } as React.CSSProperties}><div className="v"><b>{setupDone}/{steps.length}</b><span>setup</span></div></div>
-                <div className="cap">Setup</div>
+            <h2>
+              {hydrated
+                ? (firstName ? `Welcome back, ${firstName} 👋` : 'Welcome back 👋')
+                : <><span className="te-skel te-skel-name" />&nbsp;</>}
+            </h2>
+            {/* The next-step line is the worst offender: pre-load it reads
+                "0 points — you're all caught up in Classroom!", which is both
+                wrong and demoralising for someone with 678 points. */}
+            {hydrated ? (
+              <TodayNextStepBanner
+                nextStep={nextStep}
+                total={total}
+                onScrollTo={scrollToAnchor}
+              />
+            ) : (
+              <div className="te-skel-lines" aria-hidden="true">
+                <span className="te-skel te-skel-line" />
+                <span className="te-skel te-skel-line short" />
               </div>
             )}
-            <div className="te-ringwrap">
-              <div className="te-ring" style={{ '--p': Math.max(2, readiness), '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>{readiness}</b><span>/100</span></div></div>
-              <div className="cap">Readiness</div>
-            </div>
+          </div>
+          <div className="te-cluster">
+            {/* Rings render as empty dials until the real figures land. The
+                SETUP ring is omitted entirely rather than skeletoned, because
+                whether it appears at all depends on setupRemaining — guessing
+                would make the row reflow when the answer arrives. */}
+            {hydrated ? (
+              <>
+                <div className="te-ringwrap lf">
+                  <div className="te-ring" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b><span>pts</span></div></div>
+                  <div className="cap">{lvl.name}</div>
+                </div>
+                {setupRemaining > 0 && (
+                  <div className="te-ringwrap">
+                    <div className="te-ring" style={{ '--p': setupPct, '--c': 'var(--berry)' } as React.CSSProperties}><div className="v"><b>{setupDone}/{steps.length}</b><span>setup</span></div></div>
+                    <div className="cap">Setup</div>
+                  </div>
+                )}
+                <div className="te-ringwrap">
+                  <div className="te-ring" style={{ '--p': Math.max(2, readiness), '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>{readiness}</b><span>/100</span></div></div>
+                  <div className="cap">Readiness</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="te-ringwrap lf" aria-hidden="true">
+                  <div className="te-ring te-ring-skel"><div className="v"><span className="te-skel te-skel-num" /></div></div>
+                  <div className="cap"><span className="te-skel te-skel-cap" /></div>
+                </div>
+                <div className="te-ringwrap" aria-hidden="true">
+                  <div className="te-ring te-ring-skel"><div className="v"><span className="te-skel te-skel-num" /></div></div>
+                  <div className="cap"><span className="te-skel te-skel-cap" /></div>
+                </div>
+              </>
+            )}
             <div className="te-metacol">
               <span className="lab">Next tier</span>
-              <span className="big">{lvl.next ? lvl.next.name : 'Max level'}</span>
-              <span className="to">{lvl.next ? `${lvl.next.min - total} pts to go` : 'Top tier reached'}</span>
-              <button className="te-bandflame" type="button" onClick={doClaimStreak} disabled={claimedToday || busy}>
-                🔥 {streakCount}-day streak · {claimedToday ? 'claimed' : `claim${streak ? ` +${streak.next_points}` : ''}`}
+              {/* Tier and streak both come from the same fetch; pre-load they
+                  read "Builder / 150 pts to go / 0-day streak" for someone who
+                  is actually mid-tier with a live streak. */}
+              <span className="big">{hydrated ? (lvl.next ? lvl.next.name : 'Max level') : <span className="te-skel te-skel-tier" />}</span>
+              <span className="to">{hydrated ? (lvl.next ? `${lvl.next.min - total} pts to go` : 'Top tier reached') : <span className="te-skel te-skel-sub" />}</span>
+              <button className="te-bandflame" type="button" onClick={doClaimStreak} disabled={!hydrated || claimedToday || busy}>
+                {hydrated
+                  ? <>🔥 {streakCount}-day streak · {claimedToday ? 'claimed' : `claim${streak ? ` +${streak.next_points}` : ''}`}</>
+                  : <span className="te-skel te-skel-streak" />}
               </button>
               <OpenOnPhone />
             </div>
@@ -367,7 +416,7 @@ const TodayShell: React.FC = () => {
           {/* skills chart replaces the old permanent "Get set up" checklist — the
               checklist now lives behind a small completion prompt (shown only
               while steps remain) that opens it in a modal. */}
-          {setupRemaining > 0 && (
+          {hydrated && setupRemaining > 0 && (
             <button type="button" className="te-setup-prompt" onClick={() => setShowSetupModal(true)}>
               <span className="ic">✦</span>
               <span className="t">{setupDone} of {steps.length} set up · finish for +{steps.filter((s) => !s.done).reduce((sum, s) => sum + s.pts, 0)} pts</span>
