@@ -226,7 +226,16 @@ function report(r) {
   console.log(`Auditing ${rows.length} session(s) against the class-deck contract\n`);
   let bad = 0;
   let warned = 0;
+  let skipped = 0;
   for (const row of rows) {
+    // A cancelled session is never taught, so its deck cannot violate anything.
+    // Week 7's Monday was cancelled for Labor Day and deliberately left as
+    // authored; failing on it would be noise that trains people to ignore this.
+    if (row.status === 'cancelled' && !only) {
+      console.log(`[skip] ${row.session_date}  cancelled — not taught  ${row.title.slice(0, 52)}`);
+      skipped += 1;
+      continue;
+    }
     const r = await auditSession(row, !!only);
     report(r);
     if (r.failCount) bad += 1;
@@ -234,7 +243,10 @@ function report(r) {
   }
 
   console.log('');
-  console.log(`${rows.length} sessions · ${bad} with failures · ${warned} clean but untagged`);
+  console.log(
+    `${rows.length} sessions · ${bad} with failures · ${warned} clean but untagged`
+    + (skipped ? ` · ${skipped} cancelled` : ''),
+  );
   if (bad) {
     console.log('\nFailures are contract violations: a terminal block, a slide with');
     console.log('placeholder or missing commentary, or the two presenter screens');
