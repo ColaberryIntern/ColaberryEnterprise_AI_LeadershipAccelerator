@@ -127,3 +127,45 @@ describe('validateNarrative — reject, never repair', () => {
     expect(validateNarrative(text).narrative).toBe(text);
   });
 });
+
+describe('editorialising — one bounded repair, everything else rejected', () => {
+  it('strips the reflexive adjective and keeps the claim', () => {
+    // Measured: 3 of 4 real generations were rejected on "comprehensive" alone, despite
+    // the prompt banning it by name. Deleting the adjective cannot introduce a claim, it
+    // can only remove one, which is why this single repair is safe.
+    expect(validateNarrative('He built a comprehensive test suite.').narrative)
+      .toBe('He built a test suite.');
+    expect(validateNarrative('It has an extensive evaluation harness.').narrative)
+      .toBe('It has an evaluation harness.');
+    expect(validateNarrative('Robust logging was added.').narrative)
+      .toBe('logging was added.');
+  });
+
+  it('rejects any OTHER unearnable word rather than stripping it', () => {
+    // A general strip would mean publishing prose reshaped by code nobody read.
+    for (const bad of [
+      'The work shows a commitment to quality.',
+      'A meticulous approach to testing.',
+      'He is a proficient engineer.',
+      'Showcasing his ability to ship.',
+      'An elegant solution to intake.',
+    ]) {
+      expect(validateNarrative(bad)).toEqual({ narrative: null, reason: 'editorialised' });
+    }
+  });
+
+  it('still rejects markup, before any repair is attempted', () => {
+    expect(validateNarrative('# A comprehensive heading').reason).toBe('malformed');
+  });
+
+  it('leaves prose that earned its words untouched', () => {
+    const text = 'Quincy built CoreOps for the Oklahoma Turnpike Authority. '
+      + 'The system includes an MCP server and a prompt library.';
+    expect(validateNarrative(text).narrative).toBe(text);
+  });
+
+  it('does not leave double spaces behind', () => {
+    expect(validateNarrative('He built a comprehensive suite.').narrative)
+      .not.toMatch(/ {2}/);
+  });
+});
