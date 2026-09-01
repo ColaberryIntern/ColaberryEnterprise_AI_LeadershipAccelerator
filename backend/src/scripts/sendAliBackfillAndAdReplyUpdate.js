@@ -178,7 +178,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Claude Code (on behalf of Ali)" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     replyTo: 'claude-code@reply.colaberry.ai',
     subject: `[Backfill done] ${totalPosted} comments on 18 sales-rep tickets + 7-concept ad reply to David+Ram`,
     text, html,

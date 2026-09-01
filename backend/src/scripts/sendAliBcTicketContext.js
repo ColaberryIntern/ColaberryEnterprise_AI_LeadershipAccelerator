@@ -191,7 +191,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: REPORT_TICKET,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: `Ali - BC ticket source for "${todo.title.slice(0, 60)}" (read with v2 demo)`,
     html: teaserHtml,
     text: teaserText,

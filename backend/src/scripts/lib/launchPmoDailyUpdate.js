@@ -716,7 +716,7 @@ Launch PMO for AI Systems Architect Accelerator`);
     auth: { user: process.env.MANDRILL_USERNAME || 'ali@colaberry.com', pass: process.env.MANDRILL_API_KEY },
   });
   const to = recipients?.to || 'ali@colaberry.com';
-  const cc = recipients?.cc !== undefined ? recipients.cc : ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
+  const cc = recipients?.cc !== undefined ? recipients.cc : ['ram@colaberry.com'];
   const r = await transport.sendMail({
     from: '"CB System" <ali@colaberry.com>',
     to,

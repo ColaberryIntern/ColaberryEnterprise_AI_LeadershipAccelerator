@@ -118,7 +118,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Ali - Cory delivery diagnosis: a Gmail filter is hiding every briefing (60-sec fix)',
     text, html: HTML,

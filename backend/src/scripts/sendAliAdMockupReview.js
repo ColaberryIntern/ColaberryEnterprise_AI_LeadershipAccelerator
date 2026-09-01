@@ -103,7 +103,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Claude Code (on behalf of Ali)" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     replyTo: 'claude-code@reply.colaberry.ai',
     subject: '[For your review - DO NOT FWD YET] 5 half-page horizontal co-op ad mockups (red accent, per David)',
     text, html: HTML,

@@ -160,7 +160,6 @@ Pattern I sweep at ${new Date().toISOString()} &middot; v6 plan: <a href="https:
     const r = await transport.sendMail({
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: 'ali@colaberry.com',
-      cc: 'alimuwwakkil@gmail.com',
       subject: `[Decisions Report] 📌 ${decisions.length} decisions owed - ${dateStr}`,
       text: textBody,
       html,

@@ -242,7 +242,7 @@ ShipCES daily report &middot; ${todos.length} tasks &middot; v2 cost $${totalCos
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: `Ali - ShipCES daily report (${todos.length} tasks, top 5 with full context + prompts)`,
     html,
     text,

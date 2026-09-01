@@ -409,7 +409,7 @@ Colaberry Inc.`;
     ticketId: TRACKING_TODO,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: 'Gov-bid sprint v2 LIVE - 4 interns assigned, 4 BC lists built from real per-RFP requirements',
     html,

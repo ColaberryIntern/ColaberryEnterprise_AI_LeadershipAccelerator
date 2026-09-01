@@ -169,7 +169,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - /admin/ops is now YOUR queue (293 todos, 21 projects, Run-in-Claude-Code prompts on 225 of them)',
     html: HTML,
     text: TEXT,

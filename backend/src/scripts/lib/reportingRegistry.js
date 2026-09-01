@@ -15,7 +15,7 @@
 // crontab updated to `0 13-20 * * 1-5 runReportingAuditAndSend.js` so
 // the orchestrator fires hourly and self-filters by sendHourUTC.
 
-const STANDARD_RECIPIENTS = { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'] };
+const STANDARD_RECIPIENTS = { to: 'ali@colaberry.com', cc: ['ram@colaberry.com'] };
 
 const REPORTS = [
   // ---- Project dashboards (daily Mon-Fri) ----
@@ -77,7 +77,7 @@ const REPORTS = [
     args: ['--only=ShipCES', '--cc-add=karun@colaberry.com', '--with-contextual'],
     projectId: 47126345,
     needsOpenai: true,
-    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com', 'karun@colaberry.com'] },
+    recipients: { to: 'ali@colaberry.com', cc: ['ram@colaberry.com', 'karun@colaberry.com'] },
     cbRunnerState: 'tmp/cb-ai-runner-state-47126345.json',
     skipFlag: '--skip-clients',
     cadence: 'daily',
@@ -117,7 +117,7 @@ const REPORTS = [
     args: [],
     projectId: 7463955,
     needsOpenai: true,
-    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com'] },
+    recipients: { to: 'ali@colaberry.com', cc: [] },
     cbRunnerState: null,
     skipFlag: '--skip-ali-personal',
     cadence: 'daily',
@@ -171,7 +171,7 @@ const REPORTS = [
     args: [],
     projectId: null, // CCPP-based
     needsOpenai: false,
-    recipients: { to: 'ali@colaberry.com', cc: ['alimuwwakkil@gmail.com'] },
+    recipients: { to: 'ali@colaberry.com', cc: [] },
     cbRunnerState: 'tmp/ops-engine/interview-prep-nudge-state.json',
     skipFlag: '--skip-interview-nudges',
     cadence: 'daily',

@@ -126,7 +126,6 @@ Colaberry Inc.`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Twilio] Auth works, SMS blocked - need toll-free verification (~10 min in console)',
     text: stripEmDashes(text),
     html: stripEmDashes(html),
