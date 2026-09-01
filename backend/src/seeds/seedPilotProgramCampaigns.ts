@@ -315,6 +315,28 @@ Rules:
 
 // ─── Seed Function ──────────────────────────────────────────────────────────
 
+/**
+ * Keep an EXISTING campaign`s AI instructions in step with this file.
+ *
+ * `findOrCreate` puts `ai_system_prompt` in `defaults`, which applies only when
+ * the row is created. Every campaign here already exists in production, so an
+ * edit to a prompt in this file reached nothing: the sequences updated (they use
+ * findOne + update) while the prompt the model actually receives did not.
+ *
+ * That was not theoretical. Four unverified client figures were removed from
+ * this file and from the sequence steps, and stayed live in the campaign prompt
+ * because of this gap — so the model kept being handed the numbers the copy had
+ * stopped stating.
+ *
+ * Only the prompt is synced. Name, status, targeting and schedule are operational
+ * settings a human may have tuned in the admin UI, and a seed that overwrote those
+ * on every boot would undo their work.
+ */
+async function syncCampaignPrompt(campaign: any, prompt: string): Promise<void> {
+  if (!campaign || campaign.ai_system_prompt === prompt) return;
+  await campaign.update({ ai_system_prompt: prompt });
+  console.log(`[Seed] Synced AI prompt for campaign: ${campaign.name}`);
+}
 export async function seedPilotProgramCampaigns(): Promise<void> {
   const admin = await AdminUser.findOne();
   const createdBy = admin?.id || null;
@@ -409,6 +431,7 @@ export async function seedPilotProgramCampaigns(): Promise<void> {
     } as any,
   });
   console.log(`[Seed] Campaign A (Zero Risk). ID: ${campaignA.id}`);
+  await syncCampaignPrompt(campaignA, ZERO_RISK_SYSTEM_PROMPT);
 
   // ── Campaign B: AI Team Replacement ────────────────────────────────────
   const [campaignB] = await Campaign.findOrCreate({
@@ -449,6 +472,7 @@ export async function seedPilotProgramCampaigns(): Promise<void> {
     } as any,
   });
   console.log(`[Seed] Campaign B (AI Team Replacement). ID: ${campaignB.id}`);
+  await syncCampaignPrompt(campaignB, COST_REPLACEMENT_SYSTEM_PROMPT);
 
   // ── Campaign C: Exclusive Build Program ────────────────────────────────
   const [campaignC] = await Campaign.findOrCreate({
@@ -489,6 +513,7 @@ export async function seedPilotProgramCampaigns(): Promise<void> {
     } as any,
   });
   console.log(`[Seed] Campaign C (Exclusive Build). ID: ${campaignC.id}`);
+  await syncCampaignPrompt(campaignC, EXCLUSIVE_BUILD_SYSTEM_PROMPT);
 
   // ── Landing Pages ─────────────────────────────────────────────────────
   await LandingPage.findOrCreate({
