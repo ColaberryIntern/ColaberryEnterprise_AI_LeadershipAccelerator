@@ -278,16 +278,40 @@ export async function getRegisteredEventIds(email: string, eventIds: string[]): 
   let pool: sql.ConnectionPool | null = null;
   try {
     pool = await connectCcpp();
-    const req = pool.request().input('email', sql.VarChar, e);
+    const req = pool
+      .request()
+      .input('email', sql.VarChar, e)
+      // The SAME address in the shape CCPP's ingestion actually stores. See below.
+      .input('emailWrapped', sql.VarChar, `'${e}',`);
     // Bind each id as its own parameter — never interpolate ids into the text.
     const params = eventIds.map((id, i) => {
       req.input(`id${i}`, sql.VarChar, String(id));
       return `@id${i}`;
     });
+    // WHY TWO EMAIL FORMS. 26,177 of 99,338 rows in EventBrite_EventAttendees
+    // store the address with its delimiters baked in — literally
+    // `'someone@example.com',`, a fragment of a VALUES list written verbatim.
+    // Measured 2026-09-01, and it is not historical: 0.1% of 2024 rows, 69% of
+    // 2025, and **100% of 2026** — including every one of the 46 registrations
+    // for currently-upcoming events.
+    //
+    // An exact match on the clean form therefore returns nothing for anyone who
+    // signed up recently, so "You are registered" never appears and the page
+    // looks broken while the code is correct.
+    //
+    // Matching the corrupt shape EXACTLY rather than stripping quotes and commas
+    // generally: the corruption is perfectly uniform (two shapes across the whole
+    // table, nothing else), an exact comparison keeps the index usable, and it
+    // cannot mangle a legitimate address the way a blanket REPLACE could.
+    // `TRIM(chars FROM ...)` would be tidier but needs SQL Server 2022; this is 2017.
+    //
+    // THIS IS A DEFENSIVE READ, NOT A FIX. The ingestion still writes corrupt
+    // rows and should be repaired upstream in CCPP; until then this recovers
+    // both the 26k historical registrations and every new one.
     const res = await req.query<{ EventId: string }>(`
       SELECT DISTINCT EventId
       FROM EventBrite_EventAttendees
-      WHERE LOWER(Email) = @email
+      WHERE (LOWER(Email) = @email OR LOWER(Email) = @emailWrapped)
         AND EventId IN (${params.join(',')})
     `);
     return new Set(res.recordset.map((r) => String(r.EventId)));
