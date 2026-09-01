@@ -138,9 +138,18 @@ const TodayShell: React.FC = () => {
 
   // The real registration lives on Eventbrite; RSVP here records it + awards
   // points, then sends the student to Eventbrite to secure their seat.
-  const EVENTBRITE_OPEN_HOUSE_URL = 'https://www.eventbrite.com/e/colaberry-ai-systems-architect-accelerator-open-house-tickets-1992498063344';
+  //
+  // The destination is THIS event's own `registration_url` (CCPP
+  // `EventBrite_Events.URL`), never a constant. It used to open a hardcoded link
+  // to the Jul 16 2026 Open House, so the card correctly named the upcoming
+  // event and then sent everyone to a completed one. Every upcoming event in
+  // CCPP carries its own URL, so there is nothing to fall back to — and sending
+  // someone to the wrong event is worse than sending them nowhere.
   const doRsvp = async () => {
     if (!oh || busy) return;
+    // Captured before the awaits: `oh` can be replaced by loadAll() below, and
+    // this must be the event the student actually clicked on.
+    const registrationUrl = oh.registration_url;
     setBusy(true);
     try {
       const r = await rsvpOpenHouse(oh.id);
@@ -148,7 +157,9 @@ const TodayShell: React.FC = () => {
       emitPointsEarned(r.awarded ? (r.points ?? 0) : 0);
       flash(r.awarded ? `RSVP confirmed — +${r.points} points` : 'You are already RSVP\'d');
     } catch { flash('Could not RSVP right now'); } finally { setBusy(false); }
-    window.open(EVENTBRITE_OPEN_HOUSE_URL, '_blank', 'noopener');
+    // Still opened when the points call failed — securing the Eventbrite seat is
+    // the part that actually matters to the student.
+    if (registrationUrl) window.open(registrationUrl, '_blank', 'noopener');
   };
 
   // Resume / LinkedIn are BOTH uploads. LinkedIn can't be scraped from a link,
