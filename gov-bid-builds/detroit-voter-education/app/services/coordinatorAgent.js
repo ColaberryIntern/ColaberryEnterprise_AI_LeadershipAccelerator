@@ -35,8 +35,9 @@ async function submitForReview(subjectId, summaryText, authoredBy) {
     throw Object.assign(new Error('authoredBy must be a non-empty string'), { code: 'INVALID_AUTHORED_BY' });
   }
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const existing = await client.query(
@@ -105,10 +106,10 @@ async function submitForReview(subjectId, summaryText, authoredBy) {
       meetsSla: latency.meetsSla,
     };
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK');
     throw err;
   } finally {
-    client.release();
+    client?.release();
   }
 }
 
@@ -144,8 +145,9 @@ async function reviewSummary(subjectId, decision, adminId, notes) {
     throw Object.assign(new Error('notes are required when rejecting a summary'), { code: 'REJECTION_REQUIRES_NOTES' });
   }
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const existing = await client.query(
@@ -226,10 +228,10 @@ async function reviewSummary(subjectId, decision, adminId, notes) {
 
     return { ...row, publishLatencyMs: publishLatency?.latencyMs ?? null, meetsPublishSla: publishLatency?.meetsSla ?? null };
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK');
     throw err;
   } finally {
-    client.release();
+    client?.release();
   }
 }
 
@@ -248,14 +250,26 @@ async function getPublishedSummary(subjectId) {
   return result.rows[0] || null;
 }
 
-async function listPublishedSummaries() {
+// STORY-007: optional city filter, resolved client-side from the resident's
+// ZIP via GET /api/jurisdictions/:zipCode (STORY-006). Omitted entirely ->
+// unfiltered, same behavior every caller had before this story (no breaking
+// change). A subject with city IS NULL always shows -- city-wide/unset, not
+// hidden by a missing value.
+async function listPublishedSummaries(city) {
+  const params = [];
+  let cityFilter = '';
+  if (city) {
+    params.push(city);
+    cityFilter = `AND (o.city = $${params.length} OR o.city IS NULL)`;
+  }
   const result = await pool.query(
     `SELECT s.subject_id, s.summary_text, s.issues_covered, s.coverage_pct, s.published_at,
-            o.name, o.office, o.jurisdiction
+            o.name, o.office, o.jurisdiction, o.city
      FROM summaries s
      JOIN officeholders_candidates o ON o.id = s.subject_id
-     WHERE s.status = 'published'
+     WHERE s.status = 'published' ${cityFilter}
      ORDER BY s.published_at DESC`,
+    params,
   );
   return result.rows;
 }

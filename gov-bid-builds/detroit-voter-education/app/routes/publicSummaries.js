@@ -10,9 +10,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // coordinatorAgent's getPublishedSummary/listPublishedSummaries, so a summary
 // still in pending_review/rejected can never be reached through here.
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
+  // STORY-007: ?city= is optional and resolved client-side from the
+  // resident's ZIP (GET /api/jurisdictions/:zipCode) -- never trust-boundary
+  // input used for anything but an equality filter, no injection surface.
+  const city = typeof req.query.city === 'string' && req.query.city.trim() ? req.query.city.trim() : undefined;
   try {
-    const rows = await listPublishedSummaries();
+    const rows = await listPublishedSummaries(city);
     return res.json(rows);
   } catch (err) {
     console.error(JSON.stringify({

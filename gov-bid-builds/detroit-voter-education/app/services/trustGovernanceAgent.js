@@ -84,8 +84,9 @@ function computeBiasScore(summaryText) {
 // logs it. Does NOT gate the review/publish workflow itself (STORY-011/012 own
 // that) -- this is a parallel governance signal for admin visibility.
 async function evaluateSummary(subjectId) {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const result = await client.query(
@@ -174,10 +175,10 @@ async function evaluateSummary(subjectId) {
       evaluatedAt: inserted.rows[0].evaluated_at,
     };
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK');
     throw err;
   } finally {
-    client.release();
+    client?.release();
   }
 }
 

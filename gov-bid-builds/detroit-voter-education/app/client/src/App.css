@@ -448,6 +448,41 @@ button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
 .anomalies-dashboard__severity--high { background: #fee2e2; color: #991b1b; }
 .anomalies-dashboard__severity--medium { background: #fef9c3; color: #854d0e; }
 
+/* Admin nav: reuses only already-verified-passing colors from elsewhere in
+   this stylesheet. The active link uses the same #003366/white pair as
+   button[type="submit"] (already contrast-verified), so it doesn't need a
+   fresh WCAG check. */
+.admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.admin-nav__link {
+  display: inline-block;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #003366;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.admin-nav__link:hover { background: #f0f4f8; }
+.admin-nav__link[aria-current="page"] {
+  background: #003366;
+  border-color: #003366;
+  color: #fff;
+}
+/* Distinguishes the one link that leaves admin tooling and goes back to
+   the resident-facing page, rather than switching between dashboards. */
+.admin-nav__link--resident {
+  border-style: dashed;
+  margin-right: 0.5rem;
+  padding-right: 0.85rem;
+}
+
 /* STORY-029: reuses only already-verified-passing colors from elsewhere in
    this stylesheet (#fff, #555, #003366, #94a3b8, #64748b). */
 .governance-score-dashboard {

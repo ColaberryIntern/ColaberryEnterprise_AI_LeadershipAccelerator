@@ -11,11 +11,15 @@ const { runFullDemoPipeline } = require('../app/services/demoPipeline');
 // resolve nowhere real) attached to fictional subjects -- structurally the
 // same shape a real provenance trail would use, so the frontend/API path is
 // exercised honestly, without claiming to cite real public records.
+// STORY-007: city is real (both subjects genuinely represent Detroit races
+// -- City Council and Mayor), separate from `jurisdiction` above which is a
+// human-readable label, not a structured match key. See schema.sql.
 const DEMO_SUBJECTS = [
   {
     name: 'Morgan Reyes',
     office: 'City Council Member, District 3 (Fictional Demo Seat)',
     jurisdiction: 'Demo District 3',
+    city: 'Detroit',
     issuePositions: {
       Housing: {
         text: 'Supports expanding the affordable-housing tax credit program and streamlining permit review for multi-family construction.',
@@ -35,6 +39,7 @@ const DEMO_SUBJECTS = [
     name: 'Casey Whitfield',
     office: 'Candidate, Fictional Demo Mayoral Race',
     jurisdiction: 'Demo City-Wide',
+    city: 'Detroit',
     issuePositions: {
       Housing: {
         text: 'Proposes a first-time homebuyer assistance fund and a moratorium on demolition of habitable vacant housing stock.',
@@ -84,10 +89,10 @@ async function seed() {
 
   for (const subject of DEMO_SUBJECTS) {
     const inserted = await pool.query(
-      `INSERT INTO officeholders_candidates (name, office, jurisdiction, issue_positions)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO officeholders_candidates (name, office, jurisdiction, city, issue_positions)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [subject.name, subject.office, subject.jurisdiction, JSON.stringify(subject.issuePositions)],
+      [subject.name, subject.office, subject.jurisdiction, subject.city ?? null, JSON.stringify(subject.issuePositions)],
     );
     const subjectId = inserted.rows[0].id;
     const selectedIssues = Object.keys(subject.issuePositions);

@@ -89,6 +89,16 @@ CREATE TABLE IF NOT EXISTS officeholders_candidates (
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- STORY-007: `jurisdiction` above is a human-readable office label ("Demo
+-- District 3"), never structured to match anything the jurisdictions table
+-- resolves from a ZIP (city/county/state/congressional_district) -- nothing
+-- in this app ever called STORY-006's resolver from the resident-facing ZIP
+-- flow, so "jurisdiction-specific" filtering never existed. `city` is a real,
+-- separate field that DOES match jurisdictions.city, so a resolved ZIP can
+-- actually filter subjects. NULL means city-wide/unset -- always shown,
+-- never hidden by a missing value.
+ALTER TABLE officeholders_candidates ADD COLUMN IF NOT EXISTS city TEXT;
+
 CREATE TABLE IF NOT EXISTS summaries (
   id              SERIAL PRIMARY KEY,
   subject_id      INTEGER NOT NULL UNIQUE REFERENCES officeholders_candidates(id),

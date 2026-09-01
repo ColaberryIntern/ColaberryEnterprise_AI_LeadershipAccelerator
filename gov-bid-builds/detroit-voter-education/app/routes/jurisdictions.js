@@ -12,8 +12,9 @@ router.get('/:zipCode', async (req, res) => {
     return res.status(400).json({ error: 'ZIP code must be 5 digits' });
   }
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     // Return cached result if still fresh
     const cached = await client.query(
       `SELECT city, county, state_name, state_abbr, congressional_district, resolved_at
@@ -86,7 +87,7 @@ router.get('/:zipCode', async (req, res) => {
       source: resolved.source,
     });
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (client) await client.query('ROLLBACK').catch(() => {});
 
     if (err.code === 'ZIP_NOT_FOUND') {
       return res.status(404).json({ error: 'ZIP code not found' });
@@ -103,7 +104,7 @@ router.get('/:zipCode', async (req, res) => {
     }));
     return res.status(500).json({ error: 'Failed to resolve jurisdiction' });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 

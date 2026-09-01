@@ -7,7 +7,7 @@ import UpdatesBanner from './UpdatesBanner';
 // public summaries API (`/api/public/summaries`) -- this is the minimal
 // frontend flow needed to actually see a published summary, without which
 // ProvenanceTrail would have nothing to mount inside.
-export default function SummaryList({ sessionId }) {
+export default function SummaryList({ sessionId, city }) {
   const [status, setStatus] = useState('loading'); // loading | loaded | error
   const [summaries, setSummaries] = useState([]);
   const [subscribed, setSubscribed] = useState(new Set());
@@ -16,10 +16,17 @@ export default function SummaryList({ sessionId }) {
 
   useEffect(() => {
     let cancelled = false;
+    setStatus('loading');
     (async () => {
       try {
+        // STORY-007: city comes from App.jsx, resolved by UserInputForm from
+        // the resident's ZIP. Omitted (null, before a ZIP is resolved) ->
+        // unfiltered, same as this component's behavior before this story.
+        const summariesUrl = city
+          ? `/api/public/summaries?city=${encodeURIComponent(city)}`
+          : '/api/public/summaries';
         const [summariesRes, subsRes] = await Promise.all([
-          fetch('/api/public/summaries'),
+          fetch(summariesUrl),
           fetch(`/api/subscriptions/${sessionId}`),
         ]);
         if (!summariesRes.ok) throw new Error('Failed to load summaries');
@@ -35,7 +42,7 @@ export default function SummaryList({ sessionId }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [sessionId]);
+  }, [sessionId, city]);
 
   const handleToggleSubscribe = async (subjectId) => {
     setBusySubjectId(subjectId);

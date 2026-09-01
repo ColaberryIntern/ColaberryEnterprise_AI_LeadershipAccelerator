@@ -19,8 +19,9 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: `Type must be one of: ${VALID_TYPES.join(', ')}` });
   }
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const result = await client.query(
@@ -54,7 +55,7 @@ router.post('/', async (req, res) => {
       message: 'Thank you — your feedback has been recorded.',
     });
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK');
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(),
       level: 'error',
@@ -65,7 +66,7 @@ router.post('/', async (req, res) => {
     }));
     return res.status(500).json({ error: 'Failed to submit feedback' });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 

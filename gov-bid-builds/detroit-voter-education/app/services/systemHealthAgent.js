@@ -23,13 +23,20 @@ async function checkDatabase() {
 // pipeline. Counts recently-logged failure/denial actions as a rough
 // error-rate proxy.
 async function countRecentErrors() {
-  const result = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM audit_log
-     WHERE (action LIKE '%_FAILED' OR action LIKE '%_DENIED')
-       AND created_at > NOW() - ($1 || ' minutes')::interval`,
-    [RECENT_ERROR_WINDOW_MINUTES],
-  );
-  return result.rows[0].n;
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM audit_log
+       WHERE (action LIKE '%_FAILED' OR action LIKE '%_DENIED')
+         AND created_at > NOW() - ($1 || ' minutes')::interval`,
+      [RECENT_ERROR_WINDOW_MINUTES],
+    );
+    return result.rows[0].n;
+  } catch {
+    // Same failure mode as checkDatabase(): if the DB is unreachable, the
+    // health check's job is to report that -- not to itself 500 and hide
+    // it. -1 is a sentinel distinct from a real "0 errors" count.
+    return -1;
+  }
 }
 
 // Pure -- derives an overall status from already-computed signals, kept

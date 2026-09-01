@@ -27,8 +27,9 @@ function validatePosition(position) {
 async function refreshSourceData(subjectId, issue, newPosition) {
   validatePosition(newPosition);
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const subjectResult = await client.query(
@@ -129,10 +130,10 @@ async function refreshSourceData(subjectId, issue, newPosition) {
       notifiedCount,
     };
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK');
     throw err;
   } finally {
-    client.release();
+    client?.release();
   }
 }
 

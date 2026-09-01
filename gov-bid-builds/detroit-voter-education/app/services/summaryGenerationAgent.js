@@ -50,8 +50,9 @@ async function generateSummary(subjectId, selectedIssues) {
   const sourceData = await retrieveSourceData(subjectId);
   const coverage = computeCoverage(selectedIssues, sourceData);
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     if (!coverage.meetsThreshold) {
@@ -119,10 +120,10 @@ async function generateSummary(subjectId, selectedIssues) {
       coveredIssues: coverage.coveredIssues,
     };
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK');
     throw err;
   } finally {
-    client.release();
+    client?.release();
   }
 }
 

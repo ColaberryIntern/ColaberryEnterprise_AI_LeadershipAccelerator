@@ -29,8 +29,9 @@ async function handleMessage(ws, wss, msg) {
   const encZip = encrypt(zipCode);
   const encIssues = encrypt(JSON.stringify(issues));
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     await client.query(
@@ -70,7 +71,7 @@ async function handleMessage(ws, wss, msg) {
       outcome: 'success',
     }));
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK');
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(),
       level: 'error',
@@ -81,7 +82,7 @@ async function handleMessage(ws, wss, msg) {
     }));
     ws.send(JSON.stringify({ type: 'ERROR', error: 'Failed to save preferences' }));
   } finally {
-    client.release();
+    client?.release();
   }
 }
 

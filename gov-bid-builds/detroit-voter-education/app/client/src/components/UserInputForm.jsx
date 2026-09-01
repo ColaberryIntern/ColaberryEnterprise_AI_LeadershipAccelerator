@@ -17,15 +17,42 @@ function getWsUrl() {
   return `${proto}//${host}`;
 }
 
-export default function UserInputForm() {
+export default function UserInputForm({ onJurisdictionResolved }) {
   const [zipCode, setZipCode] = useState('');
   const [selectedIssues, setSelectedIssues] = useState([]);
   const [wsStatus, setWsStatus] = useState('disconnected');
   const [savedData, setSavedData] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  // STORY-007: separate from savedData/errorMsg (WS-driven preference save)
+  // -- this is an independent HTTP call to STORY-006's jurisdiction API,
+  // triggered by the same successful save but not part of that protocol.
+  const [jurisdiction, setJurisdiction] = useState(null);
+  const [jurisdictionStatus, setJurisdictionStatus] = useState('idle'); // idle | loading | loaded | error
 
   const wsRef = useRef(null);
   const sessionIdRef = useRef(crypto.randomUUID());
+
+  // STORY-007: resolves the ZIP just saved into a real jurisdiction (city/
+  // county/state/congressional district) via STORY-006's API, and surfaces
+  // it both locally (resident sees where they were resolved to) and to the
+  // parent (SummaryList filters by it). A failed lookup degrades to
+  // unfiltered summaries -- same behavior as before this story -- rather
+  // than breaking the page.
+  async function resolveJurisdiction(zip) {
+    setJurisdictionStatus('loading');
+    try {
+      const res = await fetch(`/api/jurisdictions/${zip}`);
+      if (!res.ok) throw new Error('Jurisdiction lookup failed');
+      const data = await res.json();
+      setJurisdiction(data);
+      setJurisdictionStatus('loaded');
+      onJurisdictionResolved?.(data.local?.city ?? null);
+    } catch {
+      setJurisdiction(null);
+      setJurisdictionStatus('error');
+      onJurisdictionResolved?.(null);
+    }
+  }
 
   useEffect(() => {
     setWsStatus('connecting');
@@ -42,6 +69,7 @@ export default function UserInputForm() {
         setSavedData({ zipCode: msg.zipCode, issues: msg.issues, timestamp: msg.timestamp });
         setWsStatus('saved');
         setErrorMsg('');
+        resolveJurisdiction(msg.zipCode);
       }
       if (msg.type === 'ERROR') {
         setErrorMsg(msg.error);
@@ -137,6 +165,17 @@ export default function UserInputForm() {
             Stored securely with encryption. Audit log updated at{' '}
             {new Date(savedData.timestamp).toLocaleTimeString()}.
           </small>
+        </div>
+      )}
+
+      {jurisdictionStatus === 'loading' && <p className="hint">Resolving your jurisdiction…</p>}
+      {jurisdictionStatus === 'error' && (
+        <p className="hint">Couldn't resolve your jurisdiction — showing all officials and candidates.</p>
+      )}
+      {jurisdictionStatus === 'loaded' && jurisdiction && (
+        <div className="confirmation" role="status">
+          <strong>Your jurisdiction:</strong> {jurisdiction.local?.city}, {jurisdiction.local?.county},{' '}
+          {jurisdiction.state?.abbreviation} · Congressional District {jurisdiction.federal?.congressionalDistrict}
         </div>
       )}
     </section>
