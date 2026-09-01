@@ -479,12 +479,12 @@ export const WEEK10_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — run the scratch evaluator',
-          code: '# from your project folder\nnpx tsx governance_scratch.ts\n\n# expected: TWO decisions printed, and BOTH of them say deny\n# the second one should say "fail-closed default" — that is not a bug',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — run the scratch evaluator and read the verdicts',
+          code: 'Run governance_scratch.ts in this project and show me its output.\n\n1. Work out the easiest way to run a TypeScript file in THIS project — whatever runner it already uses. Do not install anything new.\n2. Run it and print both decisions exactly as they come out.\n3. Then tell me, for each decision, which rule produced it.\n\nI am expecting BOTH decisions to be deny, and the second one to cite a fail-closed default. If the second one allows, stop and tell me — that means the default is not fail-closed and that is the finding.',
           expectedResult: 'Two printed decisions. Both deny. The second one names the fail-closed default as its rule.',
           stopCondition: 'You have seen a harmless read get denied and you understand why that is correct.',
-          rescue: 'npx tsx not found? Tell Claude Code: "run governance_scratch.ts however is easiest in this project" and let it choose the runner.',
+          rescue: 'If it cannot find a TypeScript runner, tell it to run the file however is easiest in this project and let it choose — the runner is not the lesson.',
         },
         diagram: `flowchart LR
   R1["🗑️ bot · user.delete<br/>· prod"] --> D1["🚫 deny<br/>rule fired"]
@@ -702,12 +702,12 @@ export const WEEK10_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — create the module (pick your OS)',
-          code: '# macOS / Linux\nmkdir -p governance\ntouch governance/types.ts governance/policy.ts governance/risk.ts\ntouch governance/evaluator.ts governance/gate.ts governance/hitl.ts governance/audit.ts\n\n# Windows PowerShell\nNew-Item -ItemType Directory -Force governance\n"types","policy","risk","evaluator","gate","hitl","audit" | ForEach-Object { New-Item -ItemType File "governance/$_.ts" }\n\n# both — you should see seven files\nls governance',
-          expectedResult: 'Seven empty files in a governance/ folder.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — scaffold the governance module',
+          code: 'Scaffold the governance module in this project.\n\n1. Confirm the repository root first and tell me where you are creating this, before you create anything.\n2. Create a governance/ folder at the project root with seven empty TypeScript files: types, policy, risk, evaluator, gate, hitl, audit.\n3. List them back to me so I can see all seven.\n\nCreate them empty — do not write any implementation yet. We are building each one deliberately in the next steps, and I want to write the policy myself.',
+          expectedResult: 'Seven empty files in a governance/ folder at your project root, listed back to you.',
           stopCondition: 'Everyone can see seven files listed. This is the last purely mechanical step tonight.',
-          rescue: 'On Windows and the quotes are fighting you? Just create the folder and let Claude Code create the files in the next step.',
+          rescue: 'If it starts filling the files in, stop it and re-paste — empty is the point. The whole lesson is that YOU decide what the policy says.',
         },
         diagram: `flowchart LR
   APP["⚙️ Your system"] --> G["🚪 governedExecute<br/>the ONE door"]

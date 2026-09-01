@@ -686,7 +686,7 @@ export const WEEK7_PACK: WeekPack = {
       /* ========================== guided build ============================ */
       {
         segment: 'guided-build', eyebrow: '0️⃣ CP0', title: 'Scaffold the folder — and make it a repository asset, not a personal preference',
-        body: 'Project-level agents live in .claude/agents/ at the root of your repository, which means they get committed and every teammate who clones the repo inherits the whole team automatically. That is why we choose project scope over user scope: a team that lives in your home directory helps exactly one person and disappears when you change machines. Create the folder in your terminal, then confirm Claude Code sees it.',
+        body: 'Project-level agents live in .claude/agents/ at the root of your repository, which means they get committed and every teammate who clones the repo inherits the whole team automatically. That is why we choose project scope over user scope: a team that lives in your home directory helps exactly one person and disappears when you change machines. Have Claude Code create it, and make it confirm you are in the right repository — that is the part people get wrong, not the folder itself.',
         bullets: [
           'Project scope = .claude/agents/ = committed and shared',
           'User scope = ~/.claude/agents/ = personal, invisible to your team',
@@ -695,12 +695,12 @@ export const WEEK7_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — create the home for your team',
-          code: '# from the root of YOUR capstone project\nmkdir -p .claude/agents\nls -la .claude/agents',
-          expectedResult: 'An empty .claude/agents directory listed back to you, inside your own project.',
-          stopCondition: 'The folder exists and you are in the right repository — check the path, not just the output.',
-          rescue: 'Created it in the wrong place? Run pwd first. This must be your capstone project root, the same folder Claude Code is open in.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — create the home for your team',
+          code: 'Set up the home for this project’s subagent team.\n\n1. First confirm where we are. Print the repository root and the current git remote, and tell me whether this is my capstone project rather than some other folder. If you are not confident, stop and ask me before creating anything.\n2. Create .claude/agents/ at the REPOSITORY ROOT — project scope, not ~/.claude/agents. Explain in one line why project scope is the right choice here.\n3. Confirm the folder exists and show me it is empty.\n4. Tell me whether this path is already covered by .gitignore. This folder is meant to be committed, so if it would be ignored, say so now.\n\nDo not create any agent files yet.',
+          expectedResult: 'The repo root confirmed out loud, an empty .claude/agents/ inside YOUR project, and a clear answer on whether git will track it.',
+          stopCondition: 'The folder exists at the repository root and you have seen the path printed back — check the path, not just the success message.',
+          rescue: 'If it created the folder somewhere else, tell it to print the repo root first and try again. This must be your capstone project root, the same folder Claude Code is open in.',
         },
         diagram: `flowchart LR
   M["⌨️ mkdir -p<br/>.claude/agents"] --> A["💻 /agents in<br/>Claude Code"]

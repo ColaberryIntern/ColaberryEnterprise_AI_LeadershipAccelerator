@@ -472,12 +472,12 @@ export const WEEK9_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — force the timeout, then restore it',
-          code: '# run just the reliability tests with an impossible deadline\nRELIABILITY_TIMEOUT_MS=1 npm test -- reliability\n\n# Windows PowerShell\n$env:RELIABILITY_TIMEOUT_MS=1; npm test -- reliability\n\n# then restore the real deadline and confirm green again\nunset RELIABILITY_TIMEOUT_MS && npm test -- reliability',
-          expectedResult: 'A failing-on-purpose run naming TimeoutError, then a clean run once the deadline is restored.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — force MY timeout to fire, then restore it',
+          code: 'I want to watch my own timeout actually fire, rather than trust that it works.\n\n1. Find the timeout in this project and tell me the environment variable or constant that controls it, and which test suite exercises it. Do not guess — show me where you found it.\n2. Run that suite with the deadline set to something impossible, so the timeout is guaranteed to trigger.\n3. Show me the failure output and name the error class it produced. I am expecting MY TimeoutError by name, not a generic failure.\n4. Restore the real deadline and re-run to confirm the suite is green again. Leave my project exactly as you found it.\n\nIf it hangs instead of failing, that is the interesting result — tell me so rather than waiting it out.',
+          expectedResult: 'A failing-on-purpose run naming YOUR TimeoutError, then a clean run once the deadline is restored — and your project back the way it started.',
           stopCondition: 'You have personally watched your own TimeoutError print. Not read about it — watched it.',
-          rescue: 'No TimeoutError, just a hang? The abort signal is not reaching the underlying call. Tell Claude Code exactly that and let it fix the wiring.',
+          rescue: 'It hangs instead of naming a TimeoutError? The abort signal is not reaching the underlying call. Tell Claude Code exactly that and let it fix the wiring.',
         },
         diagram: `flowchart LR
   S["⚙️ Timeout = 1ms"] --> R["▶️ Run the tests"]
@@ -991,12 +991,12 @@ export const WEEK9_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — count the attempts an uncapped retry makes',
-          code: '# run the chaos suite with the cap disabled and a hard 5-second stop\nRELIABILITY_MAX_ATTEMPTS=0 CHAOS_STOP_AFTER_MS=5000 npm test -- chaos\n\n# Windows PowerShell\n$env:RELIABILITY_MAX_ATTEMPTS=0; $env:CHAOS_STOP_AFTER_MS=5000; npm test -- chaos\n\n# read the "retry" log lines and count them, then do the math out loud:\n#   attempts in 5s  ->  x 720  =  attempts in 6 hours\n#   x your input tokens per call  x the per-million rate for your model',
-          expectedResult: 'A count of attempts in five seconds, and a defensible overnight dollar figure you worked out yourself.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — put a dollar figure on my missing cap',
+          code: 'I want a real number for what an uncapped retry would cost me overnight.\n\n1. Find the retry logic in this project and tell me whether the attempt cap is configurable or hardcoded, and where.\n2. Run the chaos suite with the cap disabled and a HARD five-second stop, so it cannot run away on my machine.\n3. Count the retry attempts that happened in those five seconds and print the count.\n4. Then do the arithmetic with me, showing each step: attempts in 5s, times 720, gives attempts in six hours. Multiply by my input tokens per call and the current per-million rate for the model this project uses.\n5. Tell me the rate you used and where it came from. Do NOT use a rate from memory — if you cannot confirm the current price, say so and ask me.\n\nRestore the cap when you are done.',
+          expectedResult: 'A count of attempts in five seconds, and a defensible overnight dollar figure with every step of the arithmetic shown.',
           stopCondition: 'You have a number. Say it out loud — that is what the missing cap costs.',
-          rescue: 'No cap flag in your code? Then the cap is hardcoded, which is fine — reason about it instead: 5 seconds of tight-loop retries, extrapolated, gets you the same number.',
+          rescue: 'Cap hardcoded rather than configurable? That is fine — have it reason about the number instead: five seconds of tight-loop retries, extrapolated, gets you the same figure.',
         },
         diagram: `flowchart LR
   U["♾️ Uncapped retry<br/>5 seconds"] --> N["🔢 Count the<br/>attempts"]
