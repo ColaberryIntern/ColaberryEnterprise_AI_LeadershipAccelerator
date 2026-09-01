@@ -73,15 +73,39 @@ async function checkDuplicateActive(): Promise<Finding | null> {
  * Before the post-lapse work, a member who missed their date heard nothing ever
  * again. Three real members were in that state on 2026-08-23 and were found by
  * accident. If this ever returns rows again, the follow-up path has broken.
+ *
+ * ── WHY AUTO-PAY MEMBERS ARE EXCLUDED ──────────────────────────────────────
+ *
+ * This check reads "period end is in the past" as "nobody is collecting", which
+ * was true while every term was a manual checkout. It stopped being true on
+ * 2026-09-01, when 20 members were migrated onto standing PaySimple schedules.
+ *
+ * Those members were promised automatic billing would start at their NEXT cycle,
+ * not the one already collected by hand, so a member whose period ended 30 Aug
+ * has a schedule that first fires 30 Sep. For a whole month they sit here looking
+ * lapsed while a schedule is quietly holding them. Four real members were in
+ * exactly that state the day the migration ran.
+ *
+ * Flagging them would be worse than noise: the stated action is "confirm these
+ * members were mailed", which invites chasing someone for money a schedule is
+ * about to take, and that is how a member gets charged twice for one month.
+ *
+ * A schedule is therefore treated as the follow-up. If the schedule itself is
+ * wrong, that is checkSchedulesMatchBook's job, not this one.
  */
-async function checkLapsedWithoutFollowup(): Promise<Finding | null> {
-  const rows = await sequelize.query<{ full_name: string; email: string; was_due: string; days: string }>(
-    `SELECT DISTINCT ON (s.enrollment_id)
+/**
+ * Exported so the auto-pay exclusion is a testable contract rather than a line
+ * anyone can delete while the suite stays green. Removing the
+ * `paysimple_schedule_id IS NULL` predicate resumes chasing members whose
+ * schedule is about to collect, which is a money bug, not a noisy email.
+ */
+export const LAPSED_WITHOUT_FOLLOWUP_SQL = `SELECT DISTINCT ON (s.enrollment_id)
             e.full_name, e.email, s.current_period_end::date::text AS was_due,
             (CURRENT_DATE - s.current_period_end::date)::text AS days
        FROM subscriptions s JOIN enrollments e ON e.id = s.enrollment_id
       WHERE s.status = 'active' AND s.plan <> 'comp'
         AND s.current_period_end < now()
+        AND s.paysimple_schedule_id IS NULL
         AND NOT EXISTS (
               SELECT 1 FROM subscription_renewal_reminders r
                WHERE r.subscription_id = s.id
@@ -93,7 +117,11 @@ async function checkLapsedWithoutFollowup(): Promise<Finding | null> {
                WHERE s2.enrollment_id = s.enrollment_id
                  AND s2.status = 'active'
                  AND s2.current_period_end > s.current_period_end)
-      ORDER BY s.enrollment_id, s.current_period_end DESC`,
+      ORDER BY s.enrollment_id, s.current_period_end DESC`;
+
+async function checkLapsedWithoutFollowup(): Promise<Finding | null> {
+  const rows = await sequelize.query<{ full_name: string; email: string; was_due: string; days: string }>(
+    LAPSED_WITHOUT_FOLLOWUP_SQL,
     { type: QueryTypes.SELECT },
   );
   if (!rows.length) return null;
@@ -113,8 +141,13 @@ async function checkLapsedWithoutFollowup(): Promise<Finding | null> {
 /**
  * The renewal reminder job has gone quiet.
  *
- * It is the only thing collecting money while billing is manual. It shipped dark
- * once already and nobody noticed for weeks, so silence here is worth an email.
+ * It shipped dark once already and nobody noticed for weeks, so silence here is
+ * worth an email.
+ *
+ * It used to be the ONLY thing collecting money. Since 2026-09-01 it is not:
+ * 21 members are on standing schedules that collect without it. That lowers the
+ * blast radius of this job dying but does not remove it, because 10 members still
+ * have no schedule and this job is the only thing that asks them to pay.
  */
 async function checkReminderJobAlive(): Promise<Finding | null> {
   const [row] = await sequelize.query<{ last_sent: string | null; hours: string | null }>(
@@ -229,12 +262,18 @@ export interface Milestone {
 export const MILESTONES: Milestone[] = [
   { on: '2026-08-31', what: 'The August renewal wave completes',
     why: '15 members were due 23-31 Aug on manual links. This is the first real read on how many pay without being chased.' },
+  { on: '2026-09-04', what: 'THE FIRST AUTOMATIC CHARGE IN THIS PLATFORM\'S HISTORY',
+    why: 'Two schedules fire today, $199 each. Nothing has ever taken money here without a member clicking a link, so this is the '
+      + 'day that assumption stops holding. Confirm both charges settled, the periods advanced, and that neither member was ALSO '
+      + 'sent a payment link for the same month.' },
   { on: '2026-09-13', what: 'The September wave completes',
-    why: 'The remaining monthly members renew 3-13 Sep. Two clean cycles means manual collection is holding.' },
-  { on: '2026-09-23', what: 'First automatic charges would land',
-    why: 'If the migration ran, this is the first day money moves without anyone clicking. Confirm the periods actually advanced.' },
+    why: 'The remaining monthly members renew 3-13 Sep. The 35 without a schedule still pay by hand, so this reads whether manual '
+      + 'collection is holding for the population auto-pay has not reached.' },
+  { on: '2026-09-30', what: 'The August cohort\'s first automatic charge',
+    why: 'Members whose period ended 30-31 Aug were promised auto-pay would start at their NEXT cycle, so their schedules first fire '
+      + 'today rather than a month ago. If these do not land, the migration honoured the promise but not the collection.' },
   { on: '2026-12-12', what: 'Elizabeth Nzau schedule 4504746 fires',
-    why: 'The first PaySimple schedule this platform ever created. Nothing has ever charged automatically before this date.' },
+    why: 'The first schedule this platform ever created, and the only one that predates the 2026-09-01 migration.' },
 ];
 
 export function milestonesFor(todayIso: string): Milestone[] {

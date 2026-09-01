@@ -1,5 +1,15 @@
 # Recurring Billing Exposure
 
+> ## ⚠️ STATUS: PARTIALLY RESOLVED — this is a historical measurement
+>
+> **This document describes the platform as it stood on 2026-08-15 and is kept as the record of how the problem was found and sized. Do not read it as current state.**
+>
+> On **2026-09-01**, 20 members were migrated onto standing PaySimple schedules, taking auto-pay from 1 member to **21 of 31 paying members, or 78% of monthly payers ($4,179 per cycle)**. The first automatic charge in this platform's history lands **2026-09-04**.
+>
+> **The central claim below — "The platform has no recurring billing" — is no longer true.** Two billing models are now live at once. What remains true is that the *checkout path* still creates no schedule, so every new member starts out manual and the backfill refills.
+>
+> **For current state, read [`BILLING_MODEL.md`](BILLING_MODEL.md).** Come back here for the original numbers, the method, and the reasoning that justified the migration.
+
 **Measured:** 2026-08-15 (prod DB + live PaySimple API, read-only)
 **Session:** CC-20260814-r7k2
 **Method:** direct queries against the production Postgres in `accelerator-backend`, and GET-only calls to `https://api.paysimple.com` using the production credentials. Nothing was written to either system.
