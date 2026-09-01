@@ -11,6 +11,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getRecentPresenceEvents, PresenceEvent, formatDisplayName } from './sessionPresenceService';
+import type { KitSlide } from './classKit/kitSpec';
 
 export type PulseState = 'here' | 'building' | 'stuck' | 'finished';
 const VALID_STATES: PulseState[] = ['here', 'building', 'stuck', 'finished'];
@@ -278,8 +279,86 @@ export interface PresenterNotes {
  * token or an admin JWT at the route, never by requireParticipant, since this
  * is the one place presenter_tip is ever read back out.
  */
+/**
+ * The instructor's phone must not depend on how old the Present tab is.
+ *
+ * A deck is a static snapshot taken when Present is pressed, and it broadcasts
+ * whatever fields it was built with. A tab opened before the two-screen split
+ * shipped sends only `presenter_tip`, so the arrival screen showed "No set-up
+ * notes for this slide" and the paragraph read as deleted (Ali, 2026-08-31).
+ * Falling back to `presenter_tip` fixed the blank but then put the SAME text on
+ * both screens, which was the next thing he hit.
+ *
+ * So the phone rebuilds the slide from the session's own KitSpec and splits it
+ * here, server-side. The broadcast is then only used for WHERE the instructor
+ * is (slide index, zoom state, live poll) — never for what the slide says. Any
+ * tab, any age, gets the current content and two disjoint screens.
+ *
+ * Cached briefly because this endpoint is polled every ~2.5s and buildSessionKit
+ * renders a QR and hits the DB; without it a single open phone would rebuild the
+ * whole deck twenty-four times a minute.
+ */
+const SPEC_TTL_MS = 30_000;
+const specCache = new Map<string, { at: number; slides: KitSlide[] }>();
+
+async function slidesForSession(sessionId: string): Promise<KitSlide[] | null> {
+  const hit = specCache.get(sessionId);
+  const now = Date.now();
+  if (hit && now - hit.at < SPEC_TTL_MS) return hit.slides;
+  // Required lazily on purpose. buildSessionKit reaches the Sequelize models,
+  // and importing those at module load pulls a live `sequelize` into every
+  // consumer of this file — which breaks the unit tests that mock the DB
+  // (Cohort.init on an undefined connection). Nothing above this line needs
+  // them, so the deck builder stays out of the module graph until a presenter
+  // phone actually asks for notes.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { buildSessionKit } = require('./sessionKitService');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { getKitConfig } = require('./sessionKitConfigService');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { buildKitSpec } = require('./classKit/kitSpecDaySlides');
+  const kit = await buildSessionKit(sessionId);
+  if (!kit) return null;
+  const config = await getKitConfig(sessionId);
+  const spec = buildKitSpec({
+    session: kit.session,
+    cohortName: kit.cohort_name,
+    checkinUrl: kit.checkin_url,
+    qrSvg: kit.qr_svg,
+    meetLink: kit.meeting_link,
+    config,
+  });
+  specCache.set(sessionId, { at: now, slides: spec.slides });
+  return spec.slides;
+}
+
 export async function getPresenterNotes(sessionId: string): Promise<PresenterNotes> {
   const bc = await getBroadcast(sessionId);
+
+  // Derive the two screens from the CURRENT spec, located by slide index (the
+  // broadcast's own position). Index, not slide_id: ids are not unique — the
+  // cover and the cold-open segment slide are both 'cold-open-0'.
+  let derivedPreface = '';
+  let derivedSay = '';
+  try {
+    if (bc && typeof bc.slide_index === 'number') {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+      const { splitScript, promptBrief } = require('./classKit/kitHtml');
+      const slides = await slidesForSession(sessionId);
+      const s = slides?.[bc.slide_index];
+      // Only trust the lookup when it is the same slide the deck is on, so a
+      // deck whose slide list has since changed falls back rather than showing
+      // notes for the wrong slide.
+      if (s && (!bc.title || s.title === bc.title)) {
+        const split = splitScript(s.presenterTip, s.body);
+        derivedPreface = [promptBrief(s), split.setup].filter(Boolean).join('\n');
+        derivedSay = split.say;
+      }
+    }
+  } catch {
+    // Never let the phone go blank because the spec failed to build — fall
+    // through to whatever the deck broadcast.
+  }
 
   // The live tally, when a question is the thing on screen. Same shape and
   // same source as getLiveState's poll block, minus correctResponders — the
@@ -296,8 +375,8 @@ export async function getPresenterNotes(sessionId: string): Promise<PresenterNot
   return {
     title: bc?.title || '',
     segment_label: bc?.segment_label || '',
-    presenter_tip: bc?.presenter_tip || '',
-    presenter_preface: bc?.presenter_preface || '',
+    presenter_tip: derivedSay || bc?.presenter_tip || '',
+    presenter_preface: derivedPreface || bc?.presenter_preface || '',
     next_title: bc?.next_title || '',
     diagram_fullscreen: !!bc?.diagram_fullscreen,
     poll,

@@ -175,6 +175,45 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
 
   const inventory = mergeInventory(stored, observedWithSample);
 
+  // ── skills, inferred from what was committed ─────────────────────────────
+  //
+  // Inferred here, in the shell, for the same reason the ratchet is here: the compiler is
+  // pure and must not read a file tree. The tree is already in hand from the capability
+  // read above, so this costs no extra I/O.
+  let skills: any[] = [];
+  try {
+    const { readRepoSignals } = await import('../sbp/repoSignals');
+    const { inferSkills } = await import('../sbp/skillInference');
+    const { default: GitHubConnection } = await import('../../models/GitHubConnection');
+    const conn: any = await GitHubConnection.findOne({ where: { enrollment_id: project.enrollment_id } });
+    const tree = conn?.file_tree_json?.tree;
+    if (Array.isArray(tree)) {
+      const signals = readRepoSignals(tree);
+      skills = inferSkills({
+        signals,
+        capabilities: inventory.entries,
+        paths: tree
+          .filter((e: any) => e && typeof e.path === 'string')
+          .map((e: any) => String(e.path).toLowerCase()),
+      });
+    }
+  } catch (err: any) {
+    // A skill band that cannot be built is a shorter page, never a failed compile.
+    console.warn('[capstone] skill inference unavailable:', err?.message);
+  }
+
+  // ── narrative: CARRIED FORWARD, never regenerated here ───────────────────
+  //
+  // The narrative a mentor approved is the narrative that publishes. Regenerating on every
+  // compile would silently replace approved prose with prose nobody has read — the exact
+  // failure the review gate exists to prevent. A new one is produced only when the learner
+  // asks for review, and only a reviewer's approval makes it live.
+  const narrative: string | null =
+    typeof priorRecord?.content_json?.narrative === 'string'
+      ? priorRecord.content_json.narrative
+      : null;
+
+
   const inputs: CompilerInputs = {
     enrollment: {
       full_name: enrollment?.full_name ?? null,
@@ -218,6 +257,8 @@ export async function gatherInputs(projectId: string): Promise<GatheredInputs | 
     competencies: [],
     // Labels come from the capability definitions, not from the repo: the reader
     // observes paths, and a human-readable name is not something a file tree carries.
+    skills,
+    narrative,
     capabilities: inventory.entries.map((e) => ({
       id: e.id,
       label: capabilityById(e.id)?.label ?? e.id,

@@ -10,6 +10,7 @@ import { decideForLearner, RULESET_VERSION } from './decideForLearner';
 import { safeConsent } from './contactPolicy';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { resolveAllForCandidate } from '../content/resolveContentAssets';
+import { isFreePreviewTier } from '../../access/contentEntitlement';
 import type { Candidate, ContactPolicyInput, GovernorContext } from './types';
 
 /**
@@ -190,9 +191,34 @@ async function runOne(
   // A gap does NOT drop the decision. It records with the reason named, which
   // is what lets the shadow review say "these N have no asset behind them"
   // rather than quietly showing fewer rows.
+  // EPIC 7 — THE LOCKED-LESSON GATE.
+  //
+  // `isFreePreviewTier` is the SAME function the portal gates on
+  // (`timelineService.ts:231`), so what the Governor may recommend and what the
+  // learner can actually open cannot drift apart. Asking a second source, or
+  // re-deriving the rule here, is how those two ends disagree.
+  //
+  // Measured before this landed: 12 free-preview learners were being sent a
+  // week-9 lesson that would have shown them a paywall. Nothing had sent, but it
+  // was one flag away.
+  //
+  // KNOWN RESIDUAL, stated because the safe-sounding version would be false:
+  // `isFreePreviewTier` swallows its own errors and returns `false` — meaning
+  // FULL ACCESS — so a lookup failure widens the pool rather than narrowing it.
+  // That is the wrong direction here, and this call site cannot tell an error
+  // apart from a genuine full-access answer.
+  //
+  // Not "fixed" by re-deriving the rule locally: a second copy of the gate is
+  // exactly the drift this epic exists to remove, and a wrong copy would be
+  // worse than a rare permissive failure. The right fix is a variant of
+  // isFreePreviewTier that surfaces its error, which belongs with that function
+  // rather than here. Recorded rather than papered over.
+  const tier = (await isFreePreviewTier(enrollmentId)) ? 'free_preview' : 'full_access';
+
   const { assets: resolvedAssets, gaps: assetGaps } = await resolveAllForCandidate(
     decision.required_assets,
     ctx.asOf,
+    tier,
   );
 
   // EPIC 6 T005. The winning candidate's campaign_key -> a real campaign id.

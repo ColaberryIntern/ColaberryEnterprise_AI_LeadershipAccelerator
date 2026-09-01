@@ -177,6 +177,24 @@ function applyKitConfig(slides: KitSlide[], config: KitConfig): KitSlide[] {
   if (!config.buildBayDetail) {
     out = out.map((s) => (s.prompt ? { ...s, prompt: { ...s.prompt, expectedResult: undefined, stopCondition: undefined } } : s));
   }
+  // Per-slide presenter commentary, applied LAST so it wins over whatever the
+  // generator produced — including the hardcoded tips on segment openers,
+  // story beats, question slides, the break and the trailer, which no other
+  // part of KitConfig can reach. Runs here rather than in each generator
+  // because slide ids are stable, so one pass covers every slide kind.
+  const notes = config.slideNotes;
+  if (notes) {
+    out = out.map((s) => {
+      // `kind:id` first, then bare `id`. Slide ids are NOT unique on their own
+      // — the deck's cover and the cold-open segment slide are both index 0 of
+      // the 'cold-open' segment, so both are 'cold-open-0'. Keying on kind as
+      // well makes every slide individually addressable without renumbering
+      // ids, which must not change: the live poll key IS the slide id, so
+      // renumbering would orphan votes mid-class.
+      const note = notes[`${s.kind}:${s.id}`] ?? notes[s.id];
+      return typeof note === 'string' && note.trim() ? { ...s, presenterTip: note } : s;
+    });
+  }
   return out;
 }
 

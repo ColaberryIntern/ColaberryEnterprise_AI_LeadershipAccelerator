@@ -430,7 +430,7 @@ If any pick wrong, reply with swap.`;
     ticketId: tracking.id,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: 'Gov Contracts intern sprint - Monday kickoff, 4 interns x 2 proposals (matrix attached)',
     html,

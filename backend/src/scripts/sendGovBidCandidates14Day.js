@@ -163,7 +163,7 @@ ${SIG_TEXT}`;
     ticketId: TRACKING_TODO,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: 'Gov-bid sprint candidates - 10 with >=14 day runway, pick 8',
     html: HTML,

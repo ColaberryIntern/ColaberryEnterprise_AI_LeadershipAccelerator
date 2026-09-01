@@ -28,14 +28,22 @@ async function connectCcpp(): Promise<sql.ConnectionPool> {
 }
 
 /**
- * True if this email already registered for the Open House on Eventbrite —
- * read from the CCPP `EventBrite_EventAttendees` mirror. Lets the portal stop
- * asking someone to RSVP for an event they've already signed up for. Fails
- * SOFT (returns false) when CCPP is unreachable, so it never blocks the schedule.
+ * True if this email registered for THIS event on Eventbrite — read from the
+ * CCPP `EventBrite_EventAttendees` mirror. Lets the portal stop asking someone
+ * to RSVP for an event they have already signed up for. Fails SOFT (returns
+ * false) when CCPP is unreachable, so it never blocks the schedule.
+ *
+ * `eventId` is REQUIRED and deliberately has no default. It used to default to
+ * OPEN_HOUSE_EVENT_ID, and the one caller relied on that default — so the portal
+ * answered "has this person registered for the July 16 2026 Open House?" while
+ * displaying whatever the next event actually was. All 209 registrants of that
+ * completed event were reported as already RSVP'd for every later event, and
+ * nobody who registered for the real next event was ever detected. A default
+ * here is a correctness trap; make callers name the event.
  */
 export async function isEmailRegisteredForOpenHouse(
   email: string,
-  eventId: string = OPEN_HOUSE_EVENT_ID,
+  eventId: string,
 ): Promise<boolean> {
   const e = (email || '').trim().toLowerCase();
   if (!e) return false;

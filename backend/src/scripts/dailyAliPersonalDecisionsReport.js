@@ -19,7 +19,7 @@ const ALI_PERSONAL = 7463955;
 const ALI = 17454835;
 const CB = 37708014;
 const RECIPIENT = 'ali@colaberry.com';
-const BASE_CC = ['alimuwwakkil@gmail.com'];
+const BASE_CC = [];
 const TEST = process.argv.includes('--test');
 const DRY = process.argv.includes('--dry');
 const CC_ADD = (process.argv.find((a) => a.startsWith('--cc-add='))?.slice('--cc-add='.length) || '')

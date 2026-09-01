@@ -39,6 +39,9 @@
 .sch-root .chip.internship{background:rgba(91,166,60,.16);color:var(--leaf-text)} .sch-root .chip.internship .sw{background:var(--dv-internship)}
 .sch-root .chip.cert{background:rgba(232,146,12,.16);color:var(--amber-deep)} .sch-root .chip.cert .sw{background:var(--dv-cert)}
 .sch-root .chip.event{background:rgba(54,120,149,.14);color:var(--berry)} .sch-root .chip.event .sw{background:var(--dv-event)}
+/* An event THIS learner registered for — leaf, so their own commitments stand
+   out from the many program events everyone can see. */
+.sch-root .chip.registered{background:rgba(91,166,60,.16);color:var(--leaf-text)} .sch-root .chip.registered .sw{background:var(--leaf-action)}
 
 /* ===== Today button (self-contained ghost/sm) ===== */
 .sch-root .sch-btn{border:none;border-radius:var(--r-pill);font-family:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
@@ -69,6 +72,7 @@
 .sch-root .tg-ev.internship{border-color:var(--amber);background:rgba(232,146,12,.1)}
 .sch-root .tg-ev.cert{border-color:var(--dv-cert2);background:rgba(46,106,134,.1)}
 .sch-root .tg-ev.event{border-color:var(--dv-event);background:rgba(54,120,149,.08)}
+.sch-root .tg-ev.registered{border-color:var(--leaf-action);background:rgba(91,166,60,.10)}
 .sch-root .tg-ev.done{opacity:.6} .sch-root .tg-ev.done b{text-decoration:line-through}
 .sch-root .tg-ev.locked{opacity:.5;background:var(--surface-sunken);border-color:var(--border-default)}
 .sch-root .tg-ev .tgp{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--leaf-text)}
@@ -111,7 +115,7 @@
 .sch-root .mcell .dn .wkn{font-size:10px;color:var(--text-muted);font-weight:700}
 .sch-root .mdot{display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-size:11px;padding:4px 7px;border-radius:6px;cursor:pointer;border-left:3px solid;line-height:1.25;background:var(--surface-sunken)}
 .sch-root .mdot b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;font-weight:700;color:var(--text-strong);font-size:11px}
-.sch-root .mdot.learning{border-color:var(--dv-learning)} .sch-root .mdot.project{border-color:var(--dv-project2)} .sch-root .mdot.internship{border-color:var(--dv-internship)} .sch-root .mdot.cert{border-color:var(--dv-cert)} .sch-root .mdot.event{border-color:var(--dv-event)}
+.sch-root .mdot.learning{border-color:var(--dv-learning)} .sch-root .mdot.project{border-color:var(--dv-project2)} .sch-root .mdot.internship{border-color:var(--dv-internship)} .sch-root .mdot.cert{border-color:var(--dv-cert)} .sch-root .mdot.event{border-color:var(--dv-event)} .sch-root .mdot.registered{border-color:var(--leaf-action);background:rgba(91,166,60,.14)}
 .sch-root .mdot.done{opacity:.6} .sch-root .mdot.done b{text-decoration:line-through} .sch-root .mdot.lock{opacity:.5}
 .sch-root .mdot .mp{font-family:var(--mono);font-size:9px;color:var(--leaf-text);font-weight:700}
 .sch-root .mmore{font-size:10px;color:var(--text-muted)}

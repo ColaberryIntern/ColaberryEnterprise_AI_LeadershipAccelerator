@@ -394,12 +394,12 @@ export const WEEK12_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — tag the freeze',
-          code: '# 1. confirm you are on the exact commit that just ran green\ngit status --short          # must be EMPTY. If it is not, you are not frozen.\n\n# 2. tag it\ngit tag -a expo-freeze -m "Capstone frozen for the Architect Expo"\ngit push origin expo-freeze\n\n# 3. prove the tag is what you think it is\ngit show --stat expo-freeze | head -20',
-          expectedResult: 'An empty git status, a tag pushed, and the tagged commit showing the files you expect.',
-          stopCondition: 'git status is empty AND the tag is pushed. A dirty tree means the thing you demo is not the thing you tagged.',
-          rescue: 'Dirty tree? Do NOT commit blindly to clear it. Look at what changed — if it is a stray edit from tonight, revert it and re-run end to end before tagging.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — freeze the capstone and prove the freeze',
+          code: 'Freeze this project for the Architect Expo.\n\n1. First check whether my working tree is clean. If it is NOT clean, STOP and show me exactly what changed. Do not commit anything to tidy it up — I need to decide, because a dirty tree means the thing I demo is not the thing I tagged.\n2. Once it is clean, create an annotated tag called expo-freeze with the message "Capstone frozen for the Architect Expo", and push the tag.\n3. Then prove the tag is what I think it is: show me the commit it points at and the files it contains.\n4. Tell me the exact tag name and commit SHA to write down.\n\nDo not amend, rebase, or force-push anything.',
+          expectedResult: 'A clean tree confirmed out loud, a pushed tag, and the tagged commit showing the files you expect — plus a SHA to write down.',
+          stopCondition: 'The tree was clean AND the tag is pushed. A dirty tree means the thing you demo is not the thing you tagged.',
+          rescue: 'If it reports a dirty tree, do NOT let it commit to clear it. Look at what changed yourself — if it is a stray edit from tonight, revert it and re-run end to end before tagging.',
         },
         diagram: `flowchart LR
   GRN["✅ Green run,<br/>lights on"] --> TAG["🏷️ git tag<br/>expo-freeze"]
@@ -679,10 +679,10 @@ export const WEEK12_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — check out the freeze and confirm it is green TONIGHT',
-          code: '# 1. go to the exact system you are about to demo\ngit checkout expo-freeze\ngit status --short          # must be EMPTY\n\n# 2. run it once, lights on, before anyone is watching\n# (substitute YOUR one command — the one from Monday)\n<your single end-to-end command, with governance and observability enabled>\n\n# 3. confirm the two things that make it a defence\n# one correlation id across the run, and at least one expected denial',
-          expectedResult: 'A green end-to-end run, at the tag, tonight — plus a fresh correlation ID and a denial line you can point at during the demo.',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — prove the freeze is green TONIGHT',
+          code: 'I am demoing this system shortly and I need to prove it works AT THE TAG, tonight.\n\n1. Check out the expo-freeze tag and confirm the working tree is clean. Tell me if it is not — do not fix it.\n2. Work out the single end-to-end command that runs this system with governance and observability enabled. Tell me what you found and why you believe that is the right one, before running it.\n3. Run it once, now, and show me the output.\n4. Then confirm the two things that make this a defence rather than a demo: ONE correlation id threaded across the whole run, and at least one expected denial. Quote both back to me with the exact lines I can point at on stage.\n\nIf it fails, do not fix it. Tell me what failed and which error class, and leave it alone — I need to decide.',
+          expectedResult: 'A green end-to-end run, at the tag, tonight — plus a fresh correlation ID and a denial line quoted back to you for the demo.',
           stopCondition: 'It ran green AT THE TAG tonight. A run that was green on Monday is not evidence about tonight.',
           rescue: 'Broken at the tag but working on your branch? You are demoing the tag. Do not re-tag under time pressure — present from the recording and say honestly that the live run is failing and why.',
         },
@@ -885,12 +885,13 @@ export const WEEK12_PACK: WeekPack = {
         ],
         code: {
           kind: 'paste',
-          pasteWhere: 'your TERMINAL (not Claude Code)',
-          label: 'Terminal — the two lines you run on stage, in this order',
-          code: '# 1. the failing step, and its error class — say what you find OUT LOUD\nexport CID=<the correlation id from the failing run>\ncat logs/capstone.jsonl | jq -c \'select(.correlation_id==env.CID and .outcome=="failure") | [.service,.event,.error_class]\'\n\n# 2. the reliability layer doing exactly what you designed it to do\ncat logs/capstone.jsonl | jq -c \'select(.correlation_id==env.CID) | select(.event=="retry" or .event=="breaker_open" or .event=="dead_letter") | [.event,.service,.context]\'',
-          expectedResult: 'The exact failing service and its error class, then the retry, breaker, or dead-letter lines showing containment.',
+          pasteWhere: 'Claude Code',
+          ccMode: 'on stage — say what you find OUT LOUD',
+          label: 'Claude Code prompt — trace the failure live, in front of the panel',
+          code: 'My live demo just failed. Trace it from my logs while I talk the panel through it.\n\nThe correlation id from the failing run is: [PASTE IT HERE]\n\n1. In my structured log, find every line for that correlation id where the outcome was a failure. Show me the service, the event and the error class — nothing else.\n2. Then show me every retry, circuit-breaker and dead-letter line for that same correlation id, so I can point at the reliability layer doing what I designed it to do.\n3. Give me one sentence I can say out loud naming the seam that broke and the layer that contained it.\n\nDo not attempt to fix anything. I am presenting, not debugging.',
+          expectedResult: 'The exact failing service and its error class, then the retry, breaker, or dead-letter lines showing containment — plus one sentence you can say.',
           stopCondition: 'You can name the seam that broke and show the layer that caught it. Then switch to the recording.',
-          rescue: 'No lines come back? The run may have died before emitting. Say that out loud — "it failed before the trace was written, which is itself a gap I would fix" — and go straight to the recording. An honest gap named on stage costs far less than silent hunting.',
+          rescue: 'Nothing comes back? The run may have died before emitting. Say that out loud — "it failed before the trace was written, which is itself a gap I would fix" — and go straight to the recording. An honest gap named on stage costs far less than silent hunting.',
         },
         diagram: `flowchart LR
   ID["🧵 Correlation id"] --> SEAM["📍 The exact seam"]

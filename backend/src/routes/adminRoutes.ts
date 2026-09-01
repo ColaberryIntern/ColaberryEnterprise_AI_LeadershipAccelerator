@@ -88,6 +88,8 @@ import agentManagerConversationRoutes from './admin/agentManagerConversationRout
 import agentGoalRoutes from './admin/agentGoalRoutes';
 import agentOneOnOneRoutes from './admin/agentOneOnOneRoutes';
 import agentReportSubscriptionRoutes from './admin/agentReportSubscriptionRoutes';
+import agentMemoryProposalRoutes from './admin/agentMemoryProposalRoutes';
+import agentExplainabilityRoutes from './admin/agentExplainabilityRoutes';
 import generatorRoutes from './admin/generatorRoutes';
 import autonomousIngestRoutes from './admin/autonomousRoutes';
 import automatedReportsRoutes from './admin/automatedReportsRoutes';
@@ -241,6 +243,8 @@ router.use(agentManagerConversationRoutes);
 router.use(agentGoalRoutes);
 router.use(agentOneOnOneRoutes);
 router.use(agentReportSubscriptionRoutes);
+router.use(agentMemoryProposalRoutes);
+router.use(agentExplainabilityRoutes);
 router.use(generatorRoutes);
 router.use(autonomousIngestRoutes);
 router.use(automatedReportsRoutes);

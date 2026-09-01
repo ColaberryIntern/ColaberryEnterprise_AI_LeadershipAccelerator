@@ -50,7 +50,7 @@ const argFix = process.argv.find((a) => a.startsWith('--fixture='));
 const RECIPIENTS = argTo ? argTo.slice('--to='.length).split(',').map((s) => s.trim()).filter(Boolean)
   : ['ali@colaberry.com'];
 const CC = argCc ? argCc.slice('--cc='.length).split(',').map((s) => s.trim()).filter(Boolean)
-  : ['alimuwwakkil@gmail.com', 'ram@colaberry.com'];
+  : ['ram@colaberry.com'];
 const FIXTURE = argFix ? argFix.slice('--fixture='.length) : null;
 
 const VIEW_QUERY = `

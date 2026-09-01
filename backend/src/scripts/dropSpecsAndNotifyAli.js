@@ -179,7 +179,7 @@ Colaberry Inc.`;
     ticketId: TRACKING_TODO,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: 'Gov-bid sprint v2 COMPLETE setup - 4 proposals + 4 builds + 4 specs (Monday kickoff)',
     html, text,

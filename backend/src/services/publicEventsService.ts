@@ -66,6 +66,10 @@ interface CcppEventRow {
   URL: string | null;
   StartDate: Date;
   EndDate: Date | null;
+  /** Eventbrite promo image. Absent on rows CCPP synced before the column existed. */
+  Logo_url?: string | null;
+  /** DISTINCT registrant count from the attendee mirror; absent on fallback rows. */
+  SignupCount?: number | null;
 }
 
 let cache: { at: number; events: OpenHouseView[] } | null = null;
@@ -104,9 +108,22 @@ export function ccppRowToView(r: CcppEventRow): OpenHouseView {
     description: r.Description ?? null,
     // CCPP times are Central wall-clock read as UTC — correct them to the true instant.
     starts_at: centralWallClockToInstant(new Date(r.StartDate)),
+    // Same correction for the end, which is nullable in CCPP.
+    ends_at: r.EndDate ? centralWallClockToInstant(new Date(r.EndDate)) : null,
     timezone: EVENT_TZ,
     registration_url: r.URL ?? null,
     meeting_link: null,
+    // Blank strings exist in CCPP alongside NULLs; normalise both to null so the
+    // UI's "has an image" check is a single truthiness test.
+    image_url: r.Logo_url ? String(r.Logo_url).trim() || null : null,
+    // A real count or null — never a fabricated zero. `null` means "not known"
+    // and renders as no badge; 0 means "genuinely nobody yet".
+    signup_count: typeof r.SignupCount === 'number' && Number.isFinite(r.SignupCount)
+      ? r.SignupCount
+      : null,
+    // Per-viewer; the shared cache cannot hold it. annotateRegistration()
+    // overwrites this per request. Defaulting false keeps the contract total.
+    is_registered: false,
   };
 }
 
@@ -133,7 +150,14 @@ async function fetchFromCcpp(): Promise<OpenHouseView[]> {
       .input('lim', sql.Int, FETCH_LIMIT)
       .input('group', sql.NVarChar, PUBLIC_EVENT_GROUP)
       .query<CcppEventRow>(`
-        SELECT TOP (@lim) e.EventId, e.Name, e.Description, e.URL, e.StartDate, e.EndDate
+        SELECT TOP (@lim) e.EventId, e.Name, e.Description, e.URL, e.StartDate, e.EndDate, e.Logo_url,
+          -- DISTINCT email, not row count: one Eventbrite order writes several
+          -- attendee rows, and the legacy training site badges the people number
+          -- (14 for an event holding 30 rows). Correlated subquery rather than a
+          -- LEFT JOIN + GROUP BY so it cannot multiply the TOP (@lim) row budget.
+          (SELECT COUNT(DISTINCT a2.Email)
+             FROM EventBrite_EventAttendees a2
+            WHERE a2.EventId = e.EventId) AS SignupCount
         FROM EventBrite_Events e
         WHERE e.Status = 'live'
           AND e.StartDate > GETUTCDATE()
@@ -171,9 +195,17 @@ async function fetchFromPostgres(): Promise<OpenHouseView[]> {
     title: e.title,
     description: e.description,
     starts_at: e.starts_at,
+    // The seeded Postgres table carries neither an end time nor an image, so the
+    // Events page renders these rows text-only rather than breaking.
+    ends_at: null,
     timezone: e.timezone,
     registration_url: e.registration_url,
     meeting_link: e.meeting_link,
+    image_url: null,
+    // Not known on this path — the seeded table has no attendee mirror. null
+    // (no badge), never 0, which would assert nobody has registered.
+    signup_count: null,
+    is_registered: false,
   }));
 }
 
@@ -226,6 +258,85 @@ export async function getUpcomingPublicEvents(days = 30, nowMs: number = Date.no
 export async function isKnownPublicEvent(id: string): Promise<boolean> {
   const events = await loadUpcoming();
   return events.some((e) => e.id === id);
+}
+
+/**
+ * Which of `eventIds` this email has registered for, from the CCPP
+ * `EventBrite_EventAttendees` mirror (the same source
+ * `openHouseOnboardingService.isEmailRegisteredForOpenHouse` reads, generalised
+ * to many events in one round trip).
+ *
+ * Deliberately NOT cached: `cache` is shared across every viewer, and folding a
+ * per-person answer into it would leak one learner's registrations to the next
+ * request. Fails SOFT (empty set) so a CCPP blip degrades to "nothing marked
+ * registered" rather than breaking the calendar.
+ */
+export async function getRegisteredEventIds(email: string, eventIds: string[]): Promise<Set<string>> {
+  const e = (email || '').trim().toLowerCase();
+  if (!e || eventIds.length === 0) return new Set();
+
+  let pool: sql.ConnectionPool | null = null;
+  try {
+    pool = await connectCcpp();
+    const req = pool
+      .request()
+      .input('email', sql.VarChar, e)
+      // The SAME address in the shape CCPP's ingestion actually stores. See below.
+      .input('emailWrapped', sql.VarChar, `'${e}',`);
+    // Bind each id as its own parameter — never interpolate ids into the text.
+    const params = eventIds.map((id, i) => {
+      req.input(`id${i}`, sql.VarChar, String(id));
+      return `@id${i}`;
+    });
+    // WHY TWO EMAIL FORMS. 26,177 of 99,338 rows in EventBrite_EventAttendees
+    // store the address with its delimiters baked in — literally
+    // `'someone@example.com',`, a fragment of a VALUES list written verbatim.
+    // Measured 2026-09-01, and it is not historical: 0.1% of 2024 rows, 69% of
+    // 2025, and **100% of 2026** — including every one of the 46 registrations
+    // for currently-upcoming events.
+    //
+    // An exact match on the clean form therefore returns nothing for anyone who
+    // signed up recently, so "You are registered" never appears and the page
+    // looks broken while the code is correct.
+    //
+    // Matching the corrupt shape EXACTLY rather than stripping quotes and commas
+    // generally: the corruption is perfectly uniform (two shapes across the whole
+    // table, nothing else), an exact comparison keeps the index usable, and it
+    // cannot mangle a legitimate address the way a blanket REPLACE could.
+    // `TRIM(chars FROM ...)` would be tidier but needs SQL Server 2022; this is 2017.
+    //
+    // THIS IS A DEFENSIVE READ, NOT A FIX. The ingestion still writes corrupt
+    // rows and should be repaired upstream in CCPP; until then this recovers
+    // both the 26k historical registrations and every new one.
+    const res = await req.query<{ EventId: string }>(`
+      SELECT DISTINCT EventId
+      FROM EventBrite_EventAttendees
+      WHERE (LOWER(Email) = @email OR LOWER(Email) = @emailWrapped)
+        AND EventId IN (${params.join(',')})
+    `);
+    return new Set(res.recordset.map((r) => String(r.EventId)));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'event_registration_lookup_failed', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, events: eventIds.length },
+    }));
+    return new Set();
+  } finally {
+    if (pool) { try { await pool.close(); } catch { /* ignore */ } }
+  }
+}
+
+/**
+ * Return a copy of `events` with `is_registered` set for this viewer. Copies
+ * rather than mutating because the objects belong to the shared cache — writing
+ * to them in place would publish one learner's registrations to everyone else.
+ */
+export async function annotateRegistration(events: OpenHouseView[], email: string | null | undefined): Promise<OpenHouseView[]> {
+  if (!email || events.length === 0) return events.map((e) => ({ ...e, is_registered: false }));
+  const mine = await getRegisteredEventIds(email, events.map((e) => e.id));
+  return events.map((e) => ({ ...e, is_registered: mine.has(e.id) }));
 }
 
 /** Test-only: clear the in-memory cache between cases. */

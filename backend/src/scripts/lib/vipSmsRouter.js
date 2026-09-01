@@ -2,7 +2,7 @@
 //
 // Given an inbound email payload, decide if the sender is a VIP and (if so):
 //   1. Summarize the email with gpt-4o-mini into a tight "sender + ask" line
-//   2. Send a VIP-marked email via Mandrill to alimuwwakkil@gmail.com
+//   2. Send a VIP-marked email via Mandrill to ali@colaberry.com
 //      Gmail's mobile push notification IS the alert. Preview shows
 //      "VIP <name>: <summary>" on Ali's lock screen.
 //   3. Log to communication_logs for cap tracking + audit
@@ -175,7 +175,7 @@ async function summarizeEmail({ senderName, subject, body }) {
 // =============================================================================
 // Main entry: route an inbound email
 // =============================================================================
-const ALI_GMAIL = process.env.ALI_GMAIL || 'alimuwwakkil@gmail.com';
+const ALI_ALERT_TO = process.env.VIP_ALERT_TO || 'ali@colaberry.com';
 
 async function routeInboundEmail({ senderEmail, senderName, subject, body, gmailMessageUrl }) {
   const mode = readMode();
@@ -184,7 +184,7 @@ async function routeInboundEmail({ senderEmail, senderName, subject, body, gmail
     return { vip: false, mode, fired: false, reason: 'sender not in VIP list' };
   }
   if (!canSendSms()) {
-    logVipAlert({ to: ALI_GMAIL, body: '[cap reached - logged only]', status: 'deferred-cap', metadata: { vip_id: vip.id, sender_email: senderEmail, subject, mode } });
+    logVipAlert({ to: ALI_ALERT_TO, body: '[cap reached - logged only]', status: 'deferred-cap', metadata: { vip_id: vip.id, sender_email: senderEmail, subject, mode } });
     return { vip: true, mode, fired: false, reason: 'daily alert cap reached (7/24h)' };
   }
   const displayName = vip.displayName || senderName || senderEmail;
@@ -199,7 +199,7 @@ async function routeInboundEmail({ senderEmail, senderName, subject, body, gmail
   if (mode === 'live') {
     try {
       const sent = await sendVipAlertEmail({
-        to: ALI_GMAIL,
+        to: ALI_ALERT_TO,
         vipName: displayName,
         summary,
         originalSender: senderEmail,
@@ -214,7 +214,7 @@ async function routeInboundEmail({ senderEmail, senderName, subject, body, gmail
     }
   }
   logVipAlert({
-    to: ALI_GMAIL,
+    to: ALI_ALERT_TO,
     body: `VIP ${displayName}: ${summary}`,
     status, providerMessageId, error,
     metadata: { vip_id: vip.id, sender_email: senderEmail, sender_name: displayName, subject, mode },

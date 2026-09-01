@@ -27,8 +27,16 @@
  * scheduler stays deterministic.
  */
 
-/** The only fields selection needs. Deliberately not the whole model. */
+/**
+ * The only fields selection needs. Deliberately not the whole model.
+ *
+ * Keyed on the CONNECTION, not the enrollment. A few enrollments have more than one
+ * connected repository, and sweeping per enrollment refreshed one of them and left the
+ * other permanently stale — `getConnection` is a `findOne` and picks between them by
+ * whatever order Postgres returns.
+ */
 export interface RefreshCandidate {
+  connectionId: string;
   enrollmentId: string;
   lastSyncAt: Date | null;
 }
@@ -58,7 +66,7 @@ export function selectStale(
   candidates: RefreshCandidate[],
   now: Date,
   opts: SelectOptions,
-): string[] {
+): RefreshCandidate[] {
   if (!Array.isArray(candidates)) return [];
   const limit = Number.isFinite(opts.limit) && opts.limit > 0 ? Math.floor(opts.limit) : 0;
   if (limit === 0) return [];
@@ -67,6 +75,7 @@ export function selectStale(
 
   const due = candidates.filter((c) => {
     if (!c || typeof c.enrollmentId !== 'string' || !c.enrollmentId) return false;
+    if (typeof c.connectionId !== 'string' || !c.connectionId) return false;
     if (c.lastSyncAt === null || c.lastSyncAt === undefined) return true;
     const t = c.lastSyncAt instanceof Date ? c.lastSyncAt.getTime() : NaN;
     // An unparseable timestamp is treated as never-synced: acting on it re-reads a repo
@@ -81,9 +90,9 @@ export function selectStale(
     const aNever = !Number.isFinite(at);
     const bNever = !Number.isFinite(bt);
     if (aNever !== bNever) return aNever ? -1 : 1;   // never-synced first
-    if (aNever && bNever) return a.enrollmentId.localeCompare(b.enrollmentId); // stable
+    if (aNever && bNever) return a.connectionId.localeCompare(b.connectionId); // stable
     return at - bt;                                   // then oldest first
   });
 
-  return due.slice(0, limit).map((c) => c.enrollmentId);
+  return due.slice(0, limit);
 }

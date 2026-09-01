@@ -125,21 +125,40 @@ export interface CaseStudy {
   detail: string;
 }
 
+/**
+ * THE FIGURES WERE REMOVED ON PURPOSE — DO NOT PUT THEM BACK.
+ *
+ * These entries previously carried seven specific numbers: annual savings, a
+ * vehicle count, a deploy time, a throughput, an accuracy percentage, a member
+ * count and a call-volume reduction. Nothing backed any of them. They travelled
+ * as prose in a generated comment, which is exactly why the publish gate that
+ * governs figures on Case Studies never saw them.
+ *
+ * The rule the business now holds itself to: a published figure has to trace to
+ * something a reader could check. `case_study_metrics` is where a checkable
+ * figure lives, and none of these had one. If any of these engagements gets a
+ * measured metric, the number can come back — sourced from the record rather
+ * than from this array.
+ *
+ * A second reason, already noted at the call site below: quoting branded dollar
+ * amounts and vehicle counts fingerprints the company and gets the comment
+ * moderated as self-promotion. Removing them serves both concerns at once.
+ */
 const CASE_STUDIES: CaseStudy[] = [
   {
     name: 'Logistics route planning',
-    stat: '$1.2M annual savings',
-    detail: '200+ vehicles, deployed in 11 days',
+    stat: 'Route planning automated',
+    detail: 'Fleet-scale operation, built on the client\'s own data',
   },
   {
     name: 'Invoice processing',
-    stat: '200 invoices in 4 minutes',
-    detail: '97% accuracy',
+    stat: 'Invoice handling automated end to end',
+    detail: 'Batch processing, with people reviewing the exceptions',
   },
   {
     name: 'Storm response',
-    stat: '42,000 members served',
-    detail: '60% fewer inbound calls',
+    stat: 'Member communications automated during outages',
+    detail: 'Built for a co-op, on their own systems',
   },
 ];
 
@@ -293,7 +312,7 @@ export function getSystemPrompt(category: string): string {
   const ctaLevel = config ? config.ctaLevel : 'minimal';
 
   // Only expose case studies to the LLM in HIRING-category replies. In any other category,
-  // referencing the specific dollar amounts / vehicle counts / accuracy stats fingerprints
+  // referencing specific dollar amounts, unit counts or accuracy stats fingerprints
   // the company and gets the comment moderated as self-promotion.
   const caseStudyBlock = category === 'hiring'
     ? CASE_STUDIES.map((cs) => `  - ${cs.name}: ${cs.stat} (${cs.detail})`).join('\n')
@@ -307,7 +326,7 @@ export function getSystemPrompt(category: string): string {
       ctaInstruction = `CTA Level: MINIMAL — PURE HELP ONLY, NO PROMOTION, NO CASE STUDIES
 - This is a community help/intro post. Answer the question and stop.
 - Do NOT mention "my team", "we", "I've built", or anything that hints at services you offer.
-- Do NOT cite the company case studies (no "$1.2M", no "200 vehicles", no "200 invoices in 4 minutes", no "97% accuracy"). These numbers are a fingerprint that reads as self-promotion.
+- Do NOT cite company case-study figures of any kind: no dollar amounts, no unit or fleet counts, no throughput or accuracy percentages, no deploy times. Such numbers fingerprint the company and read as self-promotion. (The figures are deliberately not repeated here - naming a forbidden number is how it gets echoed back.)
 - Do NOT add a "DM me" CTA. Do NOT say "feel free to reach out", "reach out to me directly", "happy to share more" — same intent, same flag.
 - Do NOT include any URLs or links.
 - The sign-off "- Ali Muwwakkil" is the only identification. People who want to find you can click your profile.
@@ -317,7 +336,7 @@ export function getSystemPrompt(category: string): string {
       ctaInstruction = `CTA Level: SUBTLE — TECHNICAL HELP ONLY, NO PROMOTION, NO CASE STUDIES
 - This is a dev-help / technical question. Provide a thorough, useful technical answer.
 - Do NOT mention "my team specializes in...", "we build...", "DM me", or any team/service framing.
-- Do NOT cite the company case studies (no "$1.2M annual savings", no "200 vehicles", no "200 invoices in 4 minutes", no "97% accuracy", no specific dollar amounts or stats from our case study list). These numbers are a fingerprint that ties back to our company and reads as self-promotion in a help context.
+- Do NOT cite company case-study figures of any kind: no dollar amounts, no unit or fleet counts, no throughput or accuracy percentages, no deploy times. Such numbers fingerprint the company and read as self-promotion. (The figures are deliberately not repeated here - naming a forbidden number is how it gets echoed back.)
 - Do NOT say "feel free to reach out to me", "reach out to me directly", "happy to chat", "happy to share more". Same intent as "DM me", same flag.
 - A self-promotional line at the end will get the comment moderated as self-promotion. Verified — happened multiple times.
 - Just answer the question well using general knowledge / abstract examples (NOT branded numbers), sign off "- Ali Muwwakkil", and stop.
@@ -329,7 +348,7 @@ export function getSystemPrompt(category: string): string {
 - This is a leads-help post. Provide genuine advice based on your experience.
 - You may share a brief first-person experience ("I've worked on a similar workflow and one thing that helped was...") — keep it as personal experience, not a team pitch.
 - Do NOT use "my team specializes in" or pitch services. Do NOT include "DM me" or "reach out to me" CTAs. Do NOT include URLs.
-- Do NOT cite the company case studies (no "$1.2M", no "200 vehicles", no "200 invoices in 4 minutes", no "97% accuracy"). These numbers fingerprint the company and read as self-promotion.
+- Do NOT cite company case-study figures of any kind: no dollar amounts, no unit or fleet counts, no throughput or accuracy percentages, no deploy times. Such numbers fingerprint the company and read as self-promotion. (The figures are deliberately not repeated here - naming a forbidden number is how it gets echoed back.)
 - End with "- Ali Muwwakkil" sign-off only.`;
       break;
     case 'direct':

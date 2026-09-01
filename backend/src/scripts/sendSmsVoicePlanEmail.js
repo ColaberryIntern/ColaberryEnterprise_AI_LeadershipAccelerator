@@ -110,7 +110,6 @@ Colaberry Inc.`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Plan] SMS + Voice alerting - VIP-list SMS + Critical-alert Voice with Q&A',
     text: stripEmDashes(text),
     html: stripEmDashes(html),

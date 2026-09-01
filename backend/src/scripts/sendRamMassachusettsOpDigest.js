@@ -46,7 +46,7 @@ const BC_TICKET_ID = 9959008215;
 
 // Recipients
 const TO = 'ram@colaberry.com';
-const CC = ['ali@colaberry.com', 'alimuwwakkil@gmail.com'];
+const CC = ['ali@colaberry.com'];
 
 // ============================================================================
 // Opportunity Pulse fetch

@@ -214,6 +214,26 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
     </div>
   );
 
+  /**
+   * LAPSED: the row still says `active` but its period has already ended.
+   *
+   * There was no branch for this, so a member in this state saw the ACTIVE
+   * screen with an 'Access through' date already in the past, and Cancel as
+   * their only action. They could not pay. Meanwhile the renewal reminder cron
+   * correctly treats them as lapsed and mails them, so the two halves of the
+   * product disagreed about the same row and the member was caught between
+   * them: chased for money, with no way to hand it over.
+   *
+   * Found 2026-08-31 when a member wrote in twice to say the renewal option did
+   * not exist. It did not. 19 members were in this state at the time.
+   */
+  const lapsed = Boolean(
+    sub &&
+    sub.status === 'active' &&
+    sub.current_period_end &&
+    new Date(sub.current_period_end).getTime() < Date.now(),
+  );
+
   return (
     <section className="te-card set-section">
       <h3>Subscription &amp; billing</h3>
@@ -240,7 +260,7 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       )}
 
       {/* ── ACTIVE: the manage-your-subscription screen ── */}
-      {sub && sub.status === 'active' && !waiting && (
+      {sub && sub.status === 'active' && !lapsed && !waiting && (
         <div className="set-sub-manage">
           <div className="set-sub-head">
             <div>
@@ -264,6 +284,22 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
           {!showCancel
             ? <button className="te-btn ghost sm" onClick={() => setShowCancel(true)}>Cancel subscription</button>
             : cancelFlow}
+        </div>
+      )}
+
+      {/* ── LAPSED: period ended but never cancelled. Offer the way back. ── */}
+      {sub && lapsed && !waiting && (
+        <div className="set-sub-manage">
+          <div className="set-sub-head">
+            <div>
+              <span className="set-sub-badge canceled">Lapsed</span>
+              <div className="set-sub-plan">{planCfg?.label || sub.plan} plan</div>
+              <div className="set-sub-sub">Your membership ended on <b>{fmtDate(sub.current_period_end)}</b>. Renew below to pick up where you left off.</div>
+            </div>
+          </div>
+          {showPlans ? renderPlans(false) : (
+            <button className="te-btn cherry sm" onClick={() => setShowPlans(true)}>Renew membership</button>
+          )}
         </div>
       )}
 

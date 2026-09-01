@@ -26,6 +26,7 @@ interface AssetRow {
   url: string;
   topic_tags: string[];
   journey_stage_tags: ExplorerStageTag[];
+  audience_tags: string[];
   priority: number;
   published_at: Date | null;
 }
@@ -105,6 +106,28 @@ const BUCKET_PRIORITY: Record<string, number> = {
   advance: 30,
 };
 
+/**
+ * Who can actually OPEN this card.
+ *
+ * Mirrors the portal's own gate exactly — `timelineService.ts:231`:
+ *
+ *     const cards = isFreeTier ? allCards.filter((c) => c.week === 0) : allCards;
+ *
+ * A free-preview learner sees **week 0 and nothing else**. Note what that means
+ * for an undated card: `null !== 0`, so a card with no week is LOCKED for them,
+ * not portable. That is the opposite of what `journey_stage_tags` calls
+ * `evergreen`, and the two must not be confused — one describes where content
+ * sits in the journey, this describes who may open it.
+ *
+ * MEASURED 2026-09-01: of 585 synced cards only **23** are week 0, while 152 of
+ * 153 learners are free tier. Recommending anything else sends 96% of the
+ * audience to a paywall.
+ */
+export function audienceTagsForWeek(week: number | null | undefined): string[] {
+  // Everyone can open week 0; only full-access learners can open the rest.
+  return week === 0 ? ['free_preview', 'full_access'] : ['full_access'];
+}
+
 /** The registry priority for a card, from its bucket. */
 export function priorityForBucket(bucket: string | null | undefined): number {
   if (!bucket) return 50;
@@ -169,6 +192,7 @@ function toAssetRow(row: CardRow): AssetRow {
     url: `/portal/runtime/${row.id}`,
     topic_tags: topicTags(row),
     journey_stage_tags: [stageTagForWeek(row.week)],
+    audience_tags: audienceTagsForWeek(row.week),
     priority: priorityForBucket(row.bucket),
     published_at: row.release_date,
   };
@@ -196,11 +220,11 @@ function toAssetRow(row: CardRow): AssetRow {
 const UPSERT_SQL = `
   INSERT INTO explorer_content_assets
     (asset_type, source_system, source_id, title, summary, url,
-     topic_tags, journey_stage_tags, priority, published_at,
+     topic_tags, journey_stage_tags, audience_tags, priority, published_at,
      allowed_channels, active, synced_at, created_at, updated_at)
   VALUES
     ('LESSON', :source_system, :source_id, :title, :summary, :url,
-     CAST(:topic_tags AS text[]), CAST(:journey_stage_tags AS text[]), :priority, :published_at,
+     CAST(:topic_tags AS text[]), CAST(:journey_stage_tags AS text[]), CAST(:audience_tags AS text[]), :priority, :published_at,
      ARRAY['email']::text[], true, now(), now(), now())
   ON CONFLICT (source_system, source_id) WHERE source_id IS NOT NULL
   DO UPDATE SET title              = EXCLUDED.title,
@@ -208,6 +232,7 @@ const UPSERT_SQL = `
                 url                = EXCLUDED.url,
                 topic_tags         = EXCLUDED.topic_tags,
                 journey_stage_tags = EXCLUDED.journey_stage_tags,
+                audience_tags      = EXCLUDED.audience_tags,
                 priority           = EXCLUDED.priority,
                 published_at       = EXCLUDED.published_at,
                 active             = true,
@@ -252,6 +277,7 @@ export async function syncTimelineCards(): Promise<SyncResult> {
         url: row.url,
         topic_tags: pgArray(row.topic_tags),
         journey_stage_tags: pgArray(row.journey_stage_tags),
+        audience_tags: pgArray(row.audience_tags),
         priority: row.priority,
         published_at: row.published_at,
       },

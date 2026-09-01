@@ -4,6 +4,7 @@ import {
 import { Enrollment, Cohort, OpenHouseEvent } from '../../models';
 import { award, hasAwarded } from '../pointsService';
 import { getNextPublicEvent, isKnownPublicEvent } from '../publicEventsService';
+import { isEmailRegisteredForOpenHouse } from '../openHouseOnboardingService';
 
 jest.mock('../../models', () => ({
   Enrollment: { findByPk: jest.fn() },
@@ -14,6 +15,12 @@ jest.mock('../pointsService', () => ({ award: jest.fn(), hasAwarded: jest.fn() }
 jest.mock('../publicEventsService', () => ({
   getNextPublicEvent: jest.fn(),
   isKnownPublicEvent: jest.fn(),
+}));
+// Previously unmocked. Every existing fixture happened to have no `email`, so
+// the CCPP-registration branch short-circuited and was never exercised — which
+// is exactly how the wrong-event bug shipped unnoticed.
+jest.mock('../openHouseOnboardingService', () => ({
+  isEmailRegisteredForOpenHouse: jest.fn(),
 }));
 
 const NOW = new Date('2026-07-01T12:00:00Z');
@@ -86,6 +93,78 @@ describe('openHouseService', () => {
       expect(sched.first_class!.source).toBe('my_cohort');
       expect(sched.next_open_house).toBeNull();
       expect(Cohort.findAll).not.toHaveBeenCalled();
+    });
+
+    // The RSVP prompt read "stuck on an old event": the registration check relied
+    // on the callee's default event id, so it asked about the completed July 16
+    // 2026 Open House while the banner displayed whatever was actually next. All
+    // 209 of that event's registrants were reported as already RSVP'd for every
+    // later event, and anyone who registered for the real next event was missed.
+    describe('CCPP registration is checked against the CURRENT event', () => {
+      const withEmail = (email: string) => ({
+        email, get: (k: string) => (k === 'cohort' ? null : undefined),
+      });
+
+      beforeEach(() => {
+        (Cohort.findAll as jest.Mock).mockResolvedValue([]);
+        (hasAwarded as jest.Mock).mockResolvedValue(false);
+      });
+
+      it('passes the id of the event actually being shown, not a hardcoded default', async () => {
+        (Enrollment.findByPk as jest.Mock).mockResolvedValue(withEmail('a@b.com'));
+        (getNextPublicEvent as jest.Mock).mockResolvedValue(ohView('ev-current'));
+        (isEmailRegisteredForOpenHouse as jest.Mock).mockResolvedValue(false);
+
+        await getOnboardingSchedule('enr-3');
+
+        expect(isEmailRegisteredForOpenHouse).toHaveBeenCalledWith('a@b.com', 'ev-current');
+        // The completed Open House that used to be the implicit default.
+        expect(isEmailRegisteredForOpenHouse).not.toHaveBeenCalledWith('a@b.com', '1992498063344');
+      });
+
+      it('marks RSVP when they registered for the current event', async () => {
+        (Enrollment.findByPk as jest.Mock).mockResolvedValue(withEmail('a@b.com'));
+        (getNextPublicEvent as jest.Mock).mockResolvedValue(ohView('ev-current'));
+        (isEmailRegisteredForOpenHouse as jest.Mock).mockResolvedValue(true);
+
+        expect((await getOnboardingSchedule('enr-3')).my_rsvp).toBe(true);
+      });
+
+      it('keeps asking when they have not registered for the current event', async () => {
+        (Enrollment.findByPk as jest.Mock).mockResolvedValue(withEmail('a@b.com'));
+        (getNextPublicEvent as jest.Mock).mockResolvedValue(ohView('ev-current'));
+        (isEmailRegisteredForOpenHouse as jest.Mock).mockResolvedValue(false);
+
+        expect((await getOnboardingSchedule('enr-3')).my_rsvp).toBe(false);
+      });
+
+      it('does not query CCPP at all when there is no upcoming event', async () => {
+        (Enrollment.findByPk as jest.Mock).mockResolvedValue(withEmail('a@b.com'));
+        (getNextPublicEvent as jest.Mock).mockResolvedValue(null);
+
+        const sched = await getOnboardingSchedule('enr-3');
+
+        expect(isEmailRegisteredForOpenHouse).not.toHaveBeenCalled();
+        expect(sched.my_rsvp).toBe(false);
+      });
+
+      it('skips the lookup when the enrollment has no email', async () => {
+        (Enrollment.findByPk as jest.Mock).mockResolvedValue({ get: () => null });
+        (getNextPublicEvent as jest.Mock).mockResolvedValue(ohView('ev-current'));
+
+        await getOnboardingSchedule('enr-3');
+
+        expect(isEmailRegisteredForOpenHouse).not.toHaveBeenCalled();
+      });
+
+      it('does not re-query when the points ledger already shows an RSVP', async () => {
+        (Enrollment.findByPk as jest.Mock).mockResolvedValue(withEmail('a@b.com'));
+        (getNextPublicEvent as jest.Mock).mockResolvedValue(ohView('ev-current'));
+        (hasAwarded as jest.Mock).mockResolvedValue(true);
+
+        expect((await getOnboardingSchedule('enr-3')).my_rsvp).toBe(true);
+        expect(isEmailRegisteredForOpenHouse).not.toHaveBeenCalled();
+      });
     });
   });
 

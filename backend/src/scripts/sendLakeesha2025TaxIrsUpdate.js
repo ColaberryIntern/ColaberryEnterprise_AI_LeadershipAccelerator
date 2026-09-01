@@ -92,7 +92,7 @@ ${SIG_TEXT}`;
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'keesha@lvbrownecpa.com',
     cc: ['info@lvbrownecpa.com'],
-    bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Re: 2025 tax return - IRS update + IP PIN + please mail the signed return',
     html: HTML,

@@ -450,7 +450,7 @@ ${interactionBlock}
   try {
     await sendEmail({
       to: 'ali@colaberry.com',
-      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com', DHEE_EMAIL],
+      cc: ['ram@colaberry.com', DHEE_EMAIL],
       subject: `[Intern Nudges]${previewMode ? ' [PREVIEW]' : ''} ${allSent.BLACK.length} BLACK${exitedToday.length ? ` (${exitedToday.length} auto-exited)` : ''}, ${allSent.RED.length} RED, ${allSent.ORANGE.length} ORANGE, ${allSent.YELLOW.length} YELLOW, ${(allSent.NEW || []).length} NEW`,
       html: stripEmDashes(html),
       text: stripEmDashes(text),

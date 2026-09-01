@@ -2,17 +2,22 @@
  * buildAgentManagerConversationSystemPrompt — AI Workforce Management,
  * Checkpoint C. Pins the honest-empty-persona fallback (never fabricates a
  * persona for an agent with no configured system_prompt) and real directive
- * injection.
+ * injection. Checkpoint E adds real approved-memory injection, on the same
+ * pattern.
  */
 jest.mock('../../managerDirectiveService', () => ({ getActiveDirectiveTexts: jest.fn() }));
+jest.mock('../../agentMemoryProposalService', () => ({ getApprovedMemoryTexts: jest.fn() }));
 
 import { getActiveDirectiveTexts } from '../../managerDirectiveService';
+import { getApprovedMemoryTexts } from '../../agentMemoryProposalService';
 import { buildAgentManagerConversationSystemPrompt } from '../agentManagerConversationPrompt';
 
 const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
+const mockApprovedMemory = getApprovedMemoryTexts as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockApprovedMemory.mockResolvedValue([]);
 });
 
 describe('buildAgentManagerConversationSystemPrompt', () => {
@@ -59,5 +64,27 @@ describe('buildAgentManagerConversationSystemPrompt', () => {
 
     expect(prompt.toLowerCase()).toContain('manager');
     expect(prompt.toLowerCase()).toContain('never pretend to be human');
+  });
+});
+
+describe('buildAgentManagerConversationSystemPrompt — approved memory injection (Checkpoint E, 2026-08-31)', () => {
+  it('happy path: real approved memory is injected, proving approval state is actually read by this runtime path', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+    mockApprovedMemory.mockResolvedValue(['This student prefers async follow-ups over live calls.']);
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(mockApprovedMemory).toHaveBeenCalledWith('agent-1');
+    expect(prompt).toContain('APPROVED MEMORY');
+    expect(prompt).toContain('This student prefers async follow-ups over live calls.');
+  });
+
+  it('boundary: zero approved memories means no memory block, no crash', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+    mockApprovedMemory.mockResolvedValue([]);
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(prompt).not.toContain('APPROVED MEMORY');
   });
 });

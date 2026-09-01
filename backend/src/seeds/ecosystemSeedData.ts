@@ -159,20 +159,32 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
       {
         slug: 'cpn',
         name: 'Career Pathways Network',
-        default_public_url: 'https://cpn.org',
+        default_public_url: 'https://opportunitylift.org',
         default_theme_key: 'cpn',
         domains: [
-          { hostname: 'cpn.org', purpose: 'web', is_primary: true },
-          { hostname: 'cpn.org', purpose: 'email', is_primary: true },
-          { hostname: 'links.cpn.org', purpose: 'tracking', is_primary: true },
+          // CPN'S DOMAIN IS opportunitylift.org, NOT cpn.org.
+          //
+          // These originally read `cpn.org`, which the nonprofit does not own - it
+          // resolves to a different Cloudflare account entirely. That was not a cosmetic
+          // error: SPF and DKIM can only be published for a domain you control, so mail
+          // sent as `@cpn.org` could never have authenticated, and `links.cpn.org` pointed
+          // tracked links at someone else's host.
+          //
+          // Registered and brought under CPN's own Cloudflare account 2026-08-31, kept
+          // separate from both Colaberry's and AI Flotation's because the nonprofit's
+          // independence is a donor and grant commitment rather than a preference.
+          { hostname: 'opportunitylift.org', purpose: 'web', is_primary: true },
+          { hostname: 'www.opportunitylift.org', purpose: 'web', is_primary: false },
+          { hostname: 'opportunitylift.org', purpose: 'email', is_primary: true },
+          { hostname: 'links.opportunitylift.org', purpose: 'tracking', is_primary: true },
         ],
         sender_profiles: [
           {
             name: 'CPN Scholar Communications',
             from_name: 'Career Pathways Network',
-            from_email: 'scholars@cpn.org',
-            reply_to_email: 'scholars@cpn.org',
-            sending_hostname: 'cpn.org',
+            from_email: 'scholars@opportunitylift.org',
+            reply_to_email: 'scholars@opportunitylift.org',
+            sending_hostname: 'opportunitylift.org',
             provider_subaccount: 'cpn',
             is_default: true,
           },

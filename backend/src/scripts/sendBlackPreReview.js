@@ -160,7 +160,6 @@ ${lastBlock}   CLI: ${cli}\n`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: `[Action Required] BLACK pre-review - ${black.length} interns ready for exit decision`,
     text: stripEmDashes(text),
     html: stripEmDashes(html),
