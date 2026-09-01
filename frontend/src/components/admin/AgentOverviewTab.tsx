@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { AgentDetail } from '../../services/agentDetailApi';
 import { SectionCard, StatCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
@@ -7,6 +6,7 @@ import AgentToolsCapabilitiesCard from './AgentToolsCapabilitiesCard';
 import AgentTicketActivityTable from './AgentTicketActivityTable';
 import AgentScheduledTasksCard from './AgentScheduledTasksCard';
 import AgentTrustSummaryCard from './AgentTrustSummaryCard';
+import AgentReportsToCard from './AgentReportsToCard';
 import { getTicketTypeLabel, getTicketTypeTone } from '../../utils/ticketTypeMeta';
 
 // AI Workforce Management, Checkpoint B — the Overview tab. Everything that
@@ -150,42 +150,7 @@ export default function AgentOverviewTab({ detail }: Props) {
         )}
       </SectionCard>
 
-      <SectionCard
-        title="Reports to"
-        icon="git-branch-line"
-        subtitle="This agent's real accountability chain — AI Leadership if direct, or through one or more AI Leadership agents to a real human (org-chart hierarchy)."
-      >
-        {detail.reports_to ? (
-          <>
-            {detail.reports_to.immediate_agent && (
-              <p className="mb-2">
-                Reports directly to{' '}
-                <Link to={`/admin/agents/${detail.reports_to.immediate_agent.id}`}>
-                  <strong>{detail.reports_to.immediate_agent.name}</strong>
-                </Link>
-                {' '}(AI Leadership) — open its own detail page for its tools, chain, and tickets.
-              </p>
-            )}
-            <ol className="mb-3" style={{ paddingLeft: '1.1rem' }}>
-              {detail.reports_to.trail.map((hop, i) => (
-                <li key={i} className="mb-1"><code>{hop}</code></li>
-              ))}
-            </ol>
-            {detail.reports_to.resolved_human ? (
-              <p className="mb-0">
-                Ultimately accountable to <strong>{detail.reports_to.resolved_human.name}</strong>
-                {' '}({detail.reports_to.resolved_human.email}).
-              </p>
-            ) : (
-              <p className="text-muted mb-0">
-                <i className="ri-error-warning-line" aria-hidden="true" /> This chain does not currently resolve to a real human — disclosed honestly rather than guessed.
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="text-muted mb-0">No reports-to chain configured for this agent.</p>
-        )}
-      </SectionCard>
+      <AgentReportsToCard reportsTo={detail.reports_to} />
 
       <AgentToolsCapabilitiesCard byTool={capabilities.by_tool} />
 

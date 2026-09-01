@@ -373,12 +373,17 @@ describe('AgentDetailPage — "Reports to" section', () => {
   });
 
   it('renders the real trail and the resolved human name/email when the chain resolves', async () => {
+    // AI Workforce Management, Checkpoint F (2026-09-01) — the trail now
+    // renders as clean parsed chip labels (real data, better surfaced) rather
+    // than the raw "name (agent) -> [suffix]" string, per DOMAIN_REUSE_MAP.md's
+    // "surface it more prominently" verdict for this checkpoint.
     getAgentDetail.mockResolvedValue(DETAIL);
 
     await renderAgentPage();
 
     expect(container.textContent).toContain('Reports to');
-    expect(container.textContent).toContain('workforce_intelligence_engine (agent) -> [human]');
+    expect(container.textContent).toContain('Reese');
+    expect(container.textContent).toContain('workforce_intelligence_engine');
     expect(container.textContent).toContain('Kes');
     expect(container.textContent).toContain('kesetebirhan@gmail.com');
   });
@@ -399,7 +404,23 @@ describe('AgentDetailPage — "Reports to" section', () => {
 
     await renderAgentPage();
 
-    expect(container.textContent).toContain('does not currently resolve to a real human');
+    // Checkpoint F (2026-09-01) — the dangling case now gets its own specific,
+    // more honest message ("the configured next report-to target no longer
+    // exists") instead of the old one-size-fits-all "does not currently
+    // resolve" line, since the real failure reason is known here.
+    expect(container.textContent).toContain('This chain is broken');
+    expect(container.textContent).toContain('no longer exists');
+  });
+
+  it('boundary: the chain trail terminates unset (reports to an agent with no further chain configured) -> its own specific honest message', async () => {
+    getAgentDetail.mockResolvedValue({
+      ...DETAIL,
+      reports_to: { trail: ['Reese (agent)', 'LeadershipAgent (agent) -> [unset]'], resolved_human: null, immediate_agent: { id: 'agent-la', name: 'LeadershipAgent' } },
+    });
+
+    await renderAgentPage();
+
+    expect(container.textContent).toContain('no further reports-to configured');
   });
 
   // 2026-08-23 — "I'd like to have a link to the agent they report to" (Ali,
@@ -412,6 +433,16 @@ describe('AgentDetailPage — "Reports to" section', () => {
     const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent === 'workforce_intelligence_engine');
     expect(link).toBeDefined();
     expect(link!.getAttribute('href')).toBe('/admin/agents/agent-wie');
+  });
+
+  it('Checkpoint F: a real "View in Org Chart" link always points to the real org-chart page, regardless of chain state', async () => {
+    getAgentDetail.mockResolvedValue(DETAIL);
+
+    await renderAgentPage();
+
+    const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent?.includes('View in Org Chart'));
+    expect(link).toBeDefined();
+    expect(link!.getAttribute('href')).toBe('/admin/workforce');
   });
 
   it('boundary: immediate_agent is null (reports directly to a human) -> no "Reports directly to" link rendered, only the existing chain text', async () => {
