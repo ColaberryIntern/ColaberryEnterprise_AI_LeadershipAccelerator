@@ -105,8 +105,12 @@ export async function refreshStaleRepoTrees(opts?: {
   const candidates: RefreshCandidate[] = rows
     // A connection with no owner/name cannot be synced; selecting it would burn a slot
     // in the capped batch on a call that must fail.
-    .filter((r) => r?.enrollment_id && r?.repo_owner && r?.repo_name)
-    .map((r) => ({ enrollmentId: String(r.enrollment_id), lastSyncAt: r.last_sync_at ?? null }));
+    .filter((r) => r?.id && r?.enrollment_id && r?.repo_owner && r?.repo_name)
+    .map((r) => ({
+      connectionId: String(r.id),
+      enrollmentId: String(r.enrollment_id),
+      lastSyncAt: r.last_sync_at ?? null,
+    }));
 
   const due = selectStale(candidates, new Date(), { maxAgeHours, limit });
   if (due.length === 0) {
@@ -119,7 +123,7 @@ export async function refreshStaleRepoTrees(opts?: {
   let consecutiveRateLimited = 0;
 
   for (let i = 0; i < due.length; i += 1) {
-    const enrollmentId = due[i];
+    const { connectionId, enrollmentId } = due[i];
 
     // Pacing, not politeness. The first production sweep fired ~50 requests inside a
     // second and GitHub 403'd all 25 connections; a single sync straight afterwards
@@ -130,11 +134,14 @@ export async function refreshStaleRepoTrees(opts?: {
     summary.attempted += 1;
     const startedAt = Date.now();
     try {
-      const { fileCount } = await syncFileTree(enrollmentId);
+      // The connection id, not just the enrollment: an enrollment with two repositories
+      // would otherwise refresh whichever one `findOne` happened to return, forever.
+      const { fileCount } = await syncFileTree(enrollmentId, connectionId);
       summary.succeeded += 1;
       consecutiveRateLimited = 0;
       log('repo_tree_refreshed', 'success', {
-        enrollment_id: enrollmentId, file_count: fileCount, duration_ms: Date.now() - startedAt,
+        enrollment_id: enrollmentId, connection_id: connectionId,
+        file_count: fileCount, duration_ms: Date.now() - startedAt,
       });
 
       // Separate try: a refreshed tree is worth keeping even if the recompile fails.
@@ -151,7 +158,8 @@ export async function refreshStaleRepoTrees(opts?: {
       consecutiveRateLimited = throttled ? consecutiveRateLimited + 1 : 0;
 
       log('repo_tree_refresh_failed', 'failure', {
-        enrollment_id: enrollmentId, error_class: err?.name ?? 'Error', error: err?.message,
+        enrollment_id: enrollmentId, connection_id: connectionId,
+        error_class: err?.name ?? 'Error', error: err?.message,
         rate_limited: throttled, duration_ms: Date.now() - startedAt,
       });
 
