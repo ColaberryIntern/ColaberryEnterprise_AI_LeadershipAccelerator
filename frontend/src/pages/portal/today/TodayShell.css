@@ -146,6 +146,18 @@
 .te-navbtn .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .te-navbtn .badge{margin-left:auto;font-size:12px;background:var(--cherry);color:#fff;border-radius:var(--r-pill);padding:1px 9px;font-weight:700}
 .te-navbtn.is-soon{opacity:.6}
+/* "N more" / "Show less" — deliberately quieter than a real destination so it
+   reads as a control, not a page. Inherits .te-navbtn's geometry. */
+.te-navmore{display:flex;align-items:center;gap:13px;padding:8px 14px;border-radius:var(--r-pill);border:none;background:none;
+  color:var(--muted);font-size:13.5px;font-weight:600;cursor:pointer;text-align:left;width:100%;font-family:inherit;
+  transition:background .16s,color .16s}
+.te-navmore:hover{background:var(--sunken);color:var(--strong)}
+.te-navmore:focus-visible{outline:2px solid var(--cherry);outline-offset:-2px}
+.te-navmore .ic{width:20px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.te-navmore .ic svg{width:16px;height:16px}
+.te-navmore .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Rail collapsed to icons: the control has no icon worth showing on its own. */
+.te-shell.collapsed .te-navmore{display:none}
 .te-navbtn.is-soon:hover{opacity:1;background:var(--sunken)}
 .te-navbtn .te-soon{margin-left:auto;font-size:10px;letter-spacing:.04em;text-transform:uppercase;background:var(--sunken);
   color:var(--muted);border:1px solid var(--border-sub);border-radius:var(--r-pill);padding:1px 8px;font-weight:700}

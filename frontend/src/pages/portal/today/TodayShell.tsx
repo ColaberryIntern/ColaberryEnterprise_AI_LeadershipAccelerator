@@ -19,6 +19,7 @@ import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi'
 import { runtimeApi } from '../runtime/runtimeApi';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayFeedV2 from './TodayFeedV2';
+import UpcomingEventsStrip from './UpcomingEventsStrip';
 import TodayPlan from './TodayPlan';
 import { useTodayPlanGate } from './useTodayPlanGate';
 import type { Category } from './todayCategoryFilter';
@@ -399,6 +400,10 @@ const TodayShell: React.FC = () => {
               />
             </div>
           )}
+
+          {/* Upcoming public events, above the timeline. Self-rendering: shows
+              nothing when there are no events or CCPP is unreachable. */}
+          <UpcomingEventsStrip />
 
           {/* ── aggregated timeline — the big feed pulling from every page ──
               id is the "See your timeline" scroll target above. */}

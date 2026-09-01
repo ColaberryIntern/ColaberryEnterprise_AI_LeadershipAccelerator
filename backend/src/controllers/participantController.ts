@@ -18,7 +18,8 @@ import { z } from 'zod';
 import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
 import { isFreePreviewTier, resolveContentPageAccess } from '../services/access/contentEntitlement';
-import { getUpcomingPublicEvents } from '../services/publicEventsService';
+import { getUpcomingPublicEvents, annotateRegistration } from '../services/publicEventsService';
+import { Enrollment } from '../models';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
 import { submitReferrals } from '../services/friendReferralService';
 import { getCheckinInfo } from '../services/sessionKitService';
@@ -200,7 +201,11 @@ export async function handleGetPublicEvents(req: Request, res: Response, next: N
   try {
     const raw = parseInt(String(req.query.days ?? ''), 10);
     const days = Number.isFinite(raw) ? Math.min(90, Math.max(1, raw)) : 30;
-    const events = await getUpcomingPublicEvents(days);
+    const shared = await getUpcomingPublicEvents(days);
+    // `shared` comes from the cross-viewer cache; is_registered is per person,
+    // so it is layered on here rather than baked into the cached objects.
+    const enrollment = await Enrollment.findByPk(req.participant!.sub);
+    const events = await annotateRegistration(shared, (enrollment as any)?.email ?? null);
     res.json({ events, window_days: days });
   } catch (err) { next(err); }
 }

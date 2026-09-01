@@ -9,6 +9,7 @@ import type { OpenHouseView } from '../../../../services/onboardingApi';
 const ev = (id: string, title: string, starts: string): OpenHouseView => ({
   id, title, description: null, starts_at: starts, ends_at: null,
   timezone: 'America/Chicago', registration_url: null, meeting_link: null, image_url: null,
+  signup_count: null, is_registered: false,
 });
 
 describe('formatEventWhen', () => {
