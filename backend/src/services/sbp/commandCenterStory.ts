@@ -889,6 +889,33 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
       + `Command Center"\` (a \`Story: ${COMMAND_CENTER_STORY_ID}\` line in the body works too) — then push.`,
     ),
   );
+  // ── CHECKING THE FILE, WHICH IS THE HALF STUDENTS ASK ABOUT ──────────────
+  //
+  // Requested by Swati on 2026-09-02: the prompt said plenty about what a tick
+  // MEANS and how to reconcile an existing entry, and nothing about how to look
+  // at the file or confirm the platform read it. A student who cannot check has
+  // only one move when a story does not verify, which is to tick more lines.
+  //
+  // Both commands are read-only on purpose. The failure this prevents is a
+  // student 'fixing' a file that was already correct because they had no way to
+  // see it.
+  lines.push(
+    bullet(
+      '**To read the file back before you commit**, open `.colaberry/progress.json` in the '
+      + 'editor, or run `cat .colaberry/progress.json`. It is a plain JSON file in your repo and '
+      + 'nothing else writes to it, so what you see there is exactly what the platform will read. '
+      + 'If it will not open, or the editor reports a syntax error, fix the JSON first: a file '
+      + 'that cannot be parsed counts as no claims at all rather than as an error.',
+    ),
+  );
+  lines.push(
+    bullet(
+      '**To check what the platform currently sees**, look at the story on the portal. It shows '
+      + 'each criterion with a tick or a blank, and that view is built from the last push it read. '
+      + 'If the portal and your file disagree, the push has not landed yet: press "Sync from '
+      + 'GitHub" and look again before changing anything in the file.',
+    ),
+  );
   lines.push(
     bullet(
       'Then tell me to watch the portal. If Step 1 worked, the criteria tick themselves within about '
