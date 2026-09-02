@@ -61,3 +61,63 @@ apps/refactored-public/legacy-capture/pages/contact-us.html:generic-api-key:195
 # 7200 is stable; if an entry is ever inserted above it the finding returns and
 # gets re-reviewed, which is the correct failure mode.
 PROGRESS.md:curl-auth-header:7200
+
+# ==========================================================================
+# 2026-09-02 triage of the full-history sweep (CC-20260901-r3k7)
+#
+# The sweep had NEVER passed since it was introduced around 2026-08-26. A
+# required check that is permanently red teaches everyone to ignore it, which
+# is exactly what happened: 32 findings sat untriaged for a week.
+#
+# All 32 were classified. They are only FOUR distinct secrets. The entries
+# below silence the ones that are provably dead or were never real. The seven
+# findings for the Opportunity Pulse password are DELIBERATELY NOT LISTED, so
+# the sweep stays red until that credential is rotated.
+# ==========================================================================
+# --------------------------------------------------------------------------
+# 1. Test fixtures. Never real credentials.
+#
+# Values invented for tests. manifestValidator.secrets.test.ts is the sharpest
+# case: its job is to prove secret DETECTION works, so it has to contain
+# realistic-looking fakes or it would not be testing anything.
+# --------------------------------------------------------------------------
+c21cd66e78aa1def22cd42fe4b9ac687978f30ec:backend/src/__tests__/services/sponsorAuditService.test.ts:generic-api-key:39
+c21cd66e78aa1def22cd42fe4b9ac687978f30ec:backend/src/__tests__/services/sponsorAuthService.test.ts:generic-api-key:54
+c21cd66e78aa1def22cd42fe4b9ac687978f30ec:backend/src/__tests__/services/sponsorAuthService.test.ts:generic-api-key:55
+1cd0a65ca27b94c5942b82a4f21ae88e638f73a9:backend/src/__tests__/services/sponsorAuthService.test.ts:generic-api-key:53
+1cd0a65ca27b94c5942b82a4f21ae88e638f73a9:backend/src/__tests__/services/sponsorAuthService.test.ts:generic-api-key:54
+1cd0a65ca27b94c5942b82a4f21ae88e638f73a9:backend/src/__tests__/routes/sponsorMagicLinkFlow.e2e.test.ts:generic-api-key:250
+1cd0a65ca27b94c5942b82a4f21ae88e638f73a9:backend/src/__tests__/routes/sponsorMagicLinkFlow.e2e.test.ts:generic-api-key:311
+2b5ce0128a82a8a35f8e083796acc5c5332b1474:backend/src/__tests__/services/sponsorAuditService.test.ts:generic-api-key:39
+8d6fa2c99312078a618124d64f79f0546aea6229:backend/src/services/inboxCase/__tests__/promptSafety.test.ts:generic-api-key:77
+61b6e4073acff4496431e699c079c1d72d5b65ed:backend/src/services/__tests__/githubTokenCrypto.test.ts:generic-api-key:5
+fb796c0205d4586dfecf96480a3488396e8549e3:backend/src/intelligence/systemStateEngine/telemetry/__tests__/manifestValidator.secrets.test.ts:github-oauth:73
+fb796c0205d4586dfecf96480a3488396e8549e3:backend/src/intelligence/systemStateEngine/telemetry/__tests__/manifestValidator.secrets.test.ts:github-pat:64
+713790cf29b6abd558098f29448412d9d398966d:backend/src/intelligence/systemStateEngine/telemetry/__tests__/manifestValidator.secrets.test.ts:github-oauth:73
+713790cf29b6abd558098f29448412d9d398966d:backend/src/intelligence/systemStateEngine/telemetry/__tests__/manifestValidator.secrets.test.ts:github-pat:64
+# --------------------------------------------------------------------------
+# 2. A JWT signing key that has since been rotated.
+#
+# verifyInboxCosDigestFlow.js carried a production JWT_SECRET. Confirmed on
+# 2026-09-02 by comparing SHA-256 of the committed value against the running
+# backend's JWT_SECRET: they DO NOT match, so this key signs nothing today.
+# Kept as a record rather than pretending it was never real.
+# --------------------------------------------------------------------------
+fb796c0205d4586dfecf96480a3488396e8549e3:backend/src/scripts/verifyInboxCosDigestFlow.js:generic-api-key:11
+17b3ad6d77514de1c828349017abd9e5b5d75d15:backend/src/scripts/verifyInboxCosDigestFlow.js:generic-api-key:11
+# --------------------------------------------------------------------------
+# 3. Expired single-use portal tokens.
+#
+# A magic link pasted into PROGRESS.md for a colleague, and a test account's
+# sign-in link in an onboarding doc. Both were looked up in every token table
+# on 2026-09-02 and are present in none, so neither can be redeemed.
+# --------------------------------------------------------------------------
+9aaa85219fe1e037ce3d2a7fc45cc79bf15885ce:PROGRESS.md:curl-auth-header:7126
+fb796c0205d4586dfecf96480a3488396e8549e3:PROGRESS.md:generic-api-key:5744
+fb796c0205d4586dfecf96480a3488396e8549e3:PROGRESS.md:curl-auth-header:6521
+a09771e936f64e4d68ebe6d376dda7ec1018f06a:PROGRESS.md:curl-auth-header:6321
+1cd204e3372e5e136936a093649bc604d580be50:PROGRESS.md:generic-api-key:5565
+fb796c0205d4586dfecf96480a3488396e8549e3:docs/TEST_ACCOUNT_ONBOARDING_2026-05-20.html:generic-api-key:87
+fb796c0205d4586dfecf96480a3488396e8549e3:docs/TEST_ACCOUNT_ONBOARDING_2026-05-20.html:generic-api-key:218
+d53d326e2f51364ca2e7e6b45600ff81c71144a0:docs/TEST_ACCOUNT_ONBOARDING_2026-05-20.html:generic-api-key:87
+d53d326e2f51364ca2e7e6b45600ff81c71144a0:docs/TEST_ACCOUNT_ONBOARDING_2026-05-20.html:generic-api-key:218
