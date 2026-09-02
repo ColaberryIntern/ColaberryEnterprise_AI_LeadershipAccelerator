@@ -1,6 +1,17 @@
 import React from 'react';
 import CondensedHeaderCard, { CondensedTone } from '../today/CondensedHeaderCard';
 import { StudentProject, ProjectTask, ProjectList } from './projectsStore';
+// The full-variant card below reuses the Classroom's `.tl-nextweek` markup, and
+// every rule for it is scoped `.tl-de <selector>` inside timeline.css. Wrapping
+// the markup in `.tl-de` is necessary but NOT sufficient: `/portal/projects` is
+// its own lazy route chunk (routes/portalRoutes.tsx) and nothing else in this
+// chunk pulls timeline.css in, so on a cold load of the Projects tab the card
+// rendered with no stylesheet at all — centred text, a bare UA `Open` button, an
+// invisible progress bar. It only looked right if you happened to visit the
+// Classroom first, which is why it survived review. Importing the stylesheet in
+// the component that needs it is the same fix CardComments.tsx and
+// ReflectionReview.tsx already carry; webpack dedupes, so it costs nothing.
+import '../../../components/timeline/timeline.css';
 
 type Props = {
   primary: StudentProject | null;
