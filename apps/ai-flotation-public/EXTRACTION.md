@@ -30,7 +30,7 @@ No dependency on `apps/*`, `frontend/*` or `backend/*`. Enforced by
 
 | Endpoint | Use |
 |---|---|
-| `POST /api/ingest?source=ai-flotation&entry=<entry>` | lead capture |
+| `POST /api/leads/ingest?source=ai-flotation&entry=<entry>` | lead capture |
 | `POST /api/t/event` | pageview, cta_click, form_start, form_submit |
 | `POST /api/t/identify` | signed `jx` cross-domain journey token |
 

@@ -206,6 +206,10 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
         default_theme_key: 'ai-flotation',
         domains: [
           { hostname: 'aiflotation.com', purpose: 'web', is_primary: true },
+          // The www host is served and must resolve to the same brand. Without a row
+          // here a visitor arriving on www resolves to no tenant, and the lead their
+          // form submits is attributed to nothing.
+          { hostname: 'www.aiflotation.com', purpose: 'web', is_primary: false },
           { hostname: 'aiflotation.com', purpose: 'email', is_primary: true },
           { hostname: 'links.aiflotation.com', purpose: 'tracking', is_primary: true },
         ],

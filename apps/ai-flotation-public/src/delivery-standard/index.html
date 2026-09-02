@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Delivery standard &mdash; AI Flotation</title>
+    <meta name="description" content="Approvals, evidence, release gates, client visibility, and where human authority sits." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="/assets/site.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="7" r="4" fill="#b4813a"></circle>
+            <path d="M2 15h20" stroke="#16304f" stroke-width="2"></path>
+          </svg>
+          AI Flotation
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav" aria-label="Main">
+          <a href="/what-we-build/">What We Build</a>
+          <a href="/approach/">How It Works</a>
+          <a href="/delivery-standard/" aria-current="page">Delivery Standard</a>
+          <a href="/results/">Results</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/client/projects">Client Login</a>
+          <a class="btn btn-primary" href="/start/">Start a Project</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Delivery standard</p>
+          <h1 style="margin-top:.7rem">What we hold ourselves to, and how you check it.</h1>
+          <p class="sub" style="margin-top:1rem">This is the page we would want to read if we were buying. Every commitment on it is enforced by the system rather than promised by a person.</p>
+        </div>
+      </section>
+      <section class="band alt">
+        <div class="wrap">
+          <h2>Five commitments</h2>
+          <dl class="defs measure">
+            <div>
+              <dt>Ready and authorised are different states</dt>
+              <dd>A finished build is not a release. Releases are approved by a named person and
+              recorded with the time and the identity. There is no path that authorises a release
+              without one.</dd>
+            </div>
+            <div>
+              <dt>A waived check is never shown as a passed one</dt>
+              <dd>Requirements can be waived when the reason is good &mdash; an internal tool
+              behind single sign-on may not need a public accessibility audit. The waiver is
+              recorded with its written justification and shown to you as
+              <span class="pill waived">Waived</span>, beside the reason. The failure we engineer
+              against is not a gate that fails to block; it is a gate that stops blocking for a
+              reason nobody can find afterwards.</dd>
+            </div>
+            <div>
+              <dt>Unknown is a state, not a zero</dt>
+              <dd>If an outcome was never measured, your room says
+              <span class="pill unknown">Unknown</span>. A dashboard that renders green because no
+              data arrived is the specific failure worth designing against.</dd>
+            </div>
+            <div>
+              <dt>Your room shows your engagement, and nothing else</dt>
+              <dd>Builder notes, agent working files, internal economics, credentials and
+              engineering logs are not hidden from your screen &mdash; they are never sent to it.
+              The server assembles a client view from a list of permitted fields, so a new
+              internal field is invisible to you by default rather than by vigilance.</dd>
+            </div>
+            <div>
+              <dt>Decisions carry their reasoning</dt>
+              <dd>Every decision records what was asked, what was recommended, what was chosen and
+              why. A decision with a status and no statement of what was decided is not a record;
+              it is a receipt.</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <h2>How you check any of this</h2>
+          <p class="measure" style="color:var(--muted)">
+            You get a login. The room shows the decisions waiting on you, the designs, the
+            previews, the change requests and their impact, the releases with their evidence, and
+            the documents published to you. Where a section has nothing in it, it says what has to
+            happen before it does &mdash; it is never filled with something plausible.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="/start/">Start a project</a>
+            <a class="btn btn-ghost" href="{{brand.platformApiBase}}/client/projects">Client login</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Company</p>
+            <a href="/about/">About</a>
+            <a href="/delivery-standard/">Delivery standard</a>
+            <a href="/results/">Results</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Work</p>
+            <a href="/what-we-build/">What we build</a>
+            <a href="/approach/">How it works</a>
+            <a href="/start/">Start a project</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Clients</p>
+            <a href="{{brand.platformApiBase}}/client/projects">Client login</a>
+            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>
+          </div>
+        </div>
+        <p class="fine">AI Flotation &middot; {{brand.publicUrl}}</p>
+      </div>
+    </footer>
+
+    <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+  </body>
+</html>

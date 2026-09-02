@@ -3,115 +3,184 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AI Flotation</title>
-    <style>
-      :root { color-scheme: light dark; --accent: #12324f; --bg: #ffffff; --fg: #16181d; --muted: #5b6270; --line: #e3e6ec; }
-      @media (prefers-color-scheme: dark) {
-        :root { --bg: #101216; --fg: #eef1f6; --muted: #9aa3b2; --line: #262a33; }
-      }
-      * { box-sizing: border-box; }
-      body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-      main { max-width: 46rem; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
-      h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.15; margin: 0 0 .5rem; letter-spacing: -0.02em; }
-      p.tagline { color: var(--muted); font-size: 1.1rem; margin: 0 0 2.5rem; }
-      .banner { border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); padding: .85rem 1rem; border-radius: 0 6px 6px 0; font-size: .92rem; color: var(--muted); margin-bottom: 2.5rem; }
-      form { border: 1px solid var(--line); border-radius: 10px; padding: 1.5rem; }
-      form h2 { margin: 0 0 1.25rem; font-size: 1.15rem; }
-      label { display: block; font-size: .85rem; font-weight: 600; margin: 1rem 0 .35rem; }
-      input, textarea { width: 100%; padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; }
-      .consent { display: flex; gap: .6rem; align-items: flex-start; margin-top: 1.25rem; font-size: .88rem; color: var(--muted); }
-      .consent input { width: auto; margin-top: .3rem; }
-      button { margin-top: 1.5rem; width: 100%; padding: .8rem 1rem; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
-      button:disabled { opacity: .55; cursor: progress; }
-      #status { margin-top: 1rem; font-size: .9rem; min-height: 1.4rem; }
-      #status[data-state="ok"] { color: var(--accent); }
-      #status[data-state="error"] { color: #b3261e; }
-      footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
-    </style>
+    <title>AI Flotation — the work your business runs on, surfaced and governed</title>
+    <meta name="description" content="AI Flotation turns a costly manual workflow into an operating system you can see: decisions on the record, evidence before release, and a person holding every gate." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="/assets/site.css" />
   </head>
   <body>
-    <main>
-      <h1>AI Flotation</h1>
-      <p class="tagline">Show us your workflow. We build the system that runs it.</p>
+    <a class="skip" href="#main">Skip to content</a>
 
-      <div class="banner">
-        Skeleton application. It exists to prove domain resolution, visitor tracking,
-        entry-point attribution, lead ingest and tenant context end to end &mdash; not to be
-        the finished site.
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="7" r="4" fill="#b4813a"></circle>
+            <path d="M2 15h20" stroke="#16304f" stroke-width="2"></path>
+            <circle cx="6" cy="19.5" r="2" fill="#16304f" opacity=".35"></circle>
+            <circle cx="17" cy="20" r="1.5" fill="#16304f" opacity=".25"></circle>
+          </svg>
+          AI Flotation
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav" aria-label="Main">
+          <a href="/what-we-build/">What We Build</a>
+          <a href="/approach/">How It Works</a>
+          <a href="/delivery-standard/">Delivery Standard</a>
+          <a href="/results/">Results</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/client/projects">Client Login</a>
+          <a class="btn btn-primary" href="/start/">Start a Project</a>
+        </nav>
       </div>
+    </header>
 
-      <form id="intake" data-form="workflow_intake">
-        <h2>Show us your workflow</h2>
-        <label for="name">Full name</label>
-        <input id="name" name="name" type="text" required />
-        <label for="email">Work email</label>
-        <input id="email" name="email" type="email" required />
-        <label for="company">Company</label>
-        <input id="company" name="company" type="text" required />
-        <label for="role">Role</label>
-        <input id="role" name="role" type="text" required />
-        <label for="message">What workflow is costing you time?</label>
-        <textarea id="message" name="message" rows="4" required></textarea>
-        <div class="consent">
-          <input id="consent" name="consent_contact" type="checkbox" />
-          <label for="consent" style="margin:0;font-weight:400">
-            I agree to be contacted by AI Flotation about this enquiry.
-          </label>
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Controlled lift</p>
+          <h1 style="margin-top:.7rem">The work your business runs on is invisible. We surface it, then govern it.</h1>
+          <p class="sub" style="margin-top:1rem">
+            AI Flotation turns a costly manual workflow into an operating system you can see:
+            every decision on the record, evidence before anything ships, and a person holding
+            every gate.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="/start/" data-cta="Start a project">Start a project</a>
+            <a class="btn btn-ghost" href="/approach/">How it works</a>
+          </div>
+
+          <div class="column" role="img" aria-label="Above the waterline: decisions on the record, evidence per release, a named approver, and gates that can refuse. Below the waterline: spreadsheets rebuilt each morning, tribal knowledge, undocumented exceptions, and manual handoffs nobody measures.">
+            <div class="stratum up">
+              <span class="tag">Surfaced</span>
+              <span>Decisions on the record &middot; evidence for every release &middot; a named approver</span>
+            </div>
+            <div class="stratum up">
+              <span class="tag">Governed</span>
+              <span>Gates that can refuse. Ready and authorised are not the same thing.</span>
+            </div>
+            <div class="waterline"></div>
+            <div class="stratum down">
+              <span class="tag">Today</span>
+              <span>Spreadsheets rebuilt every morning &middot; tribal knowledge &middot; undocumented exceptions</span>
+            </div>
+            <div class="stratum down">
+              <span class="tag">Unseen</span>
+              <span>Manual handoffs nobody measures, and no record of why anything was decided</span>
+            </div>
+          </div>
         </div>
-        <button type="submit" data-cta="Show us your workflow">Show us your workflow</button>
-        <div id="status" role="status" aria-live="polite"></div>
-      </form>
+      </section>
 
-      <footer>
-        Source <code>ai-flotation</code> &middot; entry <code>workflow_intake</code> &middot;
-        brand <code>ai-flotation</code>. Tenant is resolved server-side and is never
-        sent by this page.
-      </footer>
+      <section class="band alt">
+        <div class="wrap">
+          <p class="eyebrow quiet">What we build</p>
+          <h2>Organised by outcome, not by feature</h2>
+          <div class="grid">
+            <div class="tile">
+              <h3>Reduce operational drag</h3>
+              <p>The recurring manual work that never makes it onto a roadmap because it is nobody's project and everybody's morning.</p>
+            </div>
+            <div class="tile">
+              <h3>Make decisions visible</h3>
+              <p>What was decided, by whom, and the reasoning behind it &mdash; on the record rather than in somebody's inbox.</p>
+            </div>
+            <div class="tile">
+              <h3>Automate controlled work</h3>
+              <p>Agents do the building. Authority stays with people, and the boundary is enforced in the system rather than agreed in a meeting.</p>
+            </div>
+            <div class="tile">
+              <h3>Prove quality before release</h3>
+              <p>Evidence gates that can say no. A waived check is never presented as a passed one.</p>
+            </div>
+          </div>
+          <p style="margin-top:.4rem"><a href="/what-we-build/">See what we build &rarr;</a></p>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="eyebrow quiet">How it works</p>
+          <h2>Six stages, in this order</h2>
+          <p class="measure" style="color:var(--muted)">
+            The order is the product. Each stage produces something the next one needs, and
+            nothing skips ahead because a build happened to finish.
+          </p>
+          <div class="steps">
+            <div class="step"><div class="n">01</div><div class="l">Discover</div><div class="d">What the work actually is, before anyone proposes a system</div></div>
+            <div class="step"><div class="n">02</div><div class="l">Design</div><div class="d">What it will do and how it behaves, agreed in writing</div></div>
+            <div class="step"><div class="n">03</div><div class="l">Build</div><div class="d">Against a contract, not a conversation</div></div>
+            <div class="step"><div class="n">04</div><div class="l">Prove</div><div class="d">Evidence recorded per requirement, not asserted</div></div>
+            <div class="step"><div class="n">05</div><div class="l">Release</div><div class="d">A named person authorises. Never a pipeline</div></div>
+            <div class="step"><div class="n">06</div><div class="l">Operate</div><div class="d">Production signals propose changes; they never make them</div></div>
+          </div>
+          <p style="margin-top:.4rem"><a href="/approach/">Read the lifecycle in full &rarr;</a></p>
+        </div>
+      </section>
+
+      <section class="band alt">
+        <div class="wrap">
+          <p class="eyebrow quiet">Delivery standard</p>
+          <h2>You can watch it happen</h2>
+          <p class="measure" style="color:var(--muted)">
+            Clients get their own room in the system. Not a status email &mdash; the actual record:
+            what was decided, what shipped, and the evidence behind it, including the checks that
+            were waived and why.
+          </p>
+          <div class="note" style="max-width:52rem">
+            <b>A worked example.</b> A release ships with six checks passed and one waived.
+            The room shows <span class="pill pass">Passed</span> for the six, and
+            <span class="pill waived">Waived</span> for the seventh with the written reason
+            beside it. It is never rendered as a pass. If nothing measured an outcome, the room
+            says <span class="pill unknown">Unknown</span> rather than showing a zero.
+          </div>
+          <p style="margin-top:.4rem"><a href="/delivery-standard/">What we hold ourselves to &rarr;</a></p>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap" style="align-items:flex-start">
+          <h2>Show us the workflow that is costing you.</h2>
+          <p class="measure" style="color:var(--muted)">
+            The first conversation is about the work, not about AI. If there is no system worth
+            building, we will tell you that.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="/start/" data-cta="Start a project (footer)">Start a project</a>
+          </div>
+        </div>
+      </section>
     </main>
 
+    <footer class="site">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Company</p>
+            <a href="/about/">About</a>
+            <a href="/delivery-standard/">Delivery standard</a>
+            <a href="/results/">Results</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Work</p>
+            <a href="/what-we-build/">What we build</a>
+            <a href="/approach/">How it works</a>
+            <a href="/start/">Start a project</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Clients</p>
+            <a href="{{brand.platformApiBase}}/client/projects">Client login</a>
+            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>
+          </div>
+        </div>
+        <p class="fine">
+          AI Flotation &middot; {{brand.publicUrl}}
+        </p>
+      </div>
+    </footer>
+
     <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
-    <script>
-      (function () {
-        var API = '{{brand.platformApiBase}}';
-        var form = document.getElementById('intake');
-        var status = document.getElementById('status');
-
-        form.addEventListener('submit', function (event) {
-          event.preventDefault();
-          var button = form.querySelector('button');
-          button.disabled = true;
-          status.textContent = 'Sending...';
-          status.removeAttribute('data-state');
-
-          var payload = {};
-          new FormData(form).forEach(function (value, key) { payload[key] = value; });
-          payload.consent_contact = form.querySelector('#consent').checked;
-          // Attribution the server cannot infer from the request alone.
-          payload.page_url = window.location.href;
-          try {
-            payload.visitor_fingerprint = localStorage.getItem('rfx_fp') || undefined;
-          } catch (e) { /* blocked storage: ingest still works, just unlinked */ }
-
-          fetch(API + '/api/leads/ingest?source={{brand.sourceSlug}}&entry=workflow_intake', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          })
-            .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, body: b }; }); })
-            .then(function (result) {
-              if (!result.ok) throw new Error(result.body && result.body.error ? result.body.error : 'Submission failed');
-              if (window.rfxTrack) window.rfxTrack('form_submit', { form: 'workflow_intake' });
-              status.textContent = 'Thank you. We have your details.';
-              status.setAttribute('data-state', 'ok');
-              form.reset();
-            })
-            .catch(function (err) {
-              status.textContent = err.message || 'Something went wrong.';
-              status.setAttribute('data-state', 'error');
-            })
-            .finally(function () { button.disabled = false; });
-        });
-      })();
-    </script>
   </body>
 </html>
