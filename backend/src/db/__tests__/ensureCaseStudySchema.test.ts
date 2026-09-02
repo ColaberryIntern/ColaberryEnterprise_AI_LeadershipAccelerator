@@ -81,6 +81,14 @@ describe('ensureCaseStudySchema — statement contract', () => {
       if (created) targets.push(created[1]);
       const indexed = flat(stmt).match(/\sON\s+(\w+)\s*\(/i);
       if (indexed) targets.push(indexed[1]);
+      // ALTER is its own shape and must be CHECKED, not merely tolerated. A
+      // column added to a CREATE TABLE never reaches a database that already has
+      // the table, so this module also carries explicit ADD COLUMN statements —
+      // and an ALTER the extractor cannot read is an ALTER whose target nothing
+      // verifies, which is the one statement type that could silently touch a
+      // table outside this namespace.
+      const altered = flat(stmt).match(/ALTER TABLE\s+(\w+)/i);
+      if (altered) targets.push(altered[1]);
     }
     expect(targets.length).toBe(CASE_STUDY_STATEMENTS.length);
     for (const t of targets) expect(t).toMatch(/^case_stud(y|ies)/);
