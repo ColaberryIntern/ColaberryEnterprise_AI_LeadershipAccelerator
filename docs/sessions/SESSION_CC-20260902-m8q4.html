@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260902-m8q4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, September 2, 2026 at 3:55 PM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">3 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Verified the live site in a real browser, and found the primary call to action unreadable**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`apps/ai-flotation-public/src/assets/site.css` — `.nav a` no longer paints buttons (`:not(.btn)`), and the dark block gives `.btn-primary` a label colour that follows its fill.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">measured in the browser, before and after. Before: `&quot;Start a Project&quot;` computed to `rgb(95, 107, 125)` on `rgb(22, 48, 79)` — **2.48:1**, against a 4.5:1 AA floor. After: white on navy, and the rebuilt `home-mobile.png` opened and confirmed by eye rather than inferred from the passing run. 69 checks pass in `verifyAiFlotationPublic.js`, `validate-app-boundaries.js` clean, 18 tests across 3 suites (`appInternalLinks`, `nginxDefaultServer`, `ecosystemSeedData`).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the cause is CSS specificity, not a colour choice.** `.nav a` is `(0,1,1)`; `.btn-primary` is `(0,1,0)`. The nav rule won, so the muted grey painted both masthead buttons and the site&#39;s primary CTA shipped looking like a disabled control. The dark theme carried a second, independent instance of the same failure: dark inverts `--navy` to a pale `#9dbbd8` while the button label stayed hardcoded `#fff` — **2.0:1**, and that one affected *every* primary button on the site, hero included, not just the two in the masthead. Fixed at the source rather than with another specificity override, which would have had to be repeated in the dark block.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Taught the harness to catch it, and proved the assertion actually fires**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`scripts/verifyAiFlotationPublic.js` — every `.btn` on every page, in both viewports, is now measured for contrast against its own painted background (walking up the tree for a transparent button) and must clear 4.5:1.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">run against the **pre-fix** `dist/` first, where it failed 14 times with `&quot;Start a Project&quot; at 2.48:1`; then rebuilt and re-run, where it passes. The BREAK was observed before the HARDEN was trusted.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">two things were wrong with the assertion before it was usable, and both are the kind that make a test worse than none. It first reported `[object Object]`, naming neither the button nor the ratio. Then it failed on *every* run even when correct, because this file&#39;s `check()` compares with `===` and two empty arrays are never equal — so the finding is joined to a string. A test that fails green-or-red identically is not a gate. Both causes are commented at the call site.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Confirmed #2018 and #2024 are live, which the tab that shipped them never got to record**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing — verification only, against production.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">all seven pages 200 on `aiflotation.com` and on `www.`; `/assets/site.css` byte-identical to `origin/main` (10,970 bytes, `diff` clean), which is what proves the running nginx image contains #2024 rather than merely that a deploy ran; the brand font computed as applied on all seven; no horizontal overflow at 360×800; the mobile nav resolving to seven stacked rows, confirming #2024&#39;s fix is the one in production; `/start/` posting to `/api/leads/ingest?source=ai-flotation&amp;entry=workflow_intake`; zero console errors and zero failed subresources. 47 assertions, no failures. The intake form was never submitted — a real POST would write a lead attributed to `ai-flotation` and corrupt the attribution the site exists to produce.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PRs [#2018](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/2018) and [#2024](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/2024) shipped under `CC-20260823-r4k9` and are recorded here rather than in that session&#39;s log, since a session may only write entries carrying its own ID. That tab died before writing them up; this is not a second claim on its work.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260902-m8q4.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
