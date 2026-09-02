@@ -225,14 +225,14 @@ describe('Case Study models — DDL parity', () => {
     }
   });
 
-  it('each table contributes at least one column, and the DDL total is still 158', () => {
+  it('each table contributes at least one column, and the DDL total is still 159', () => {
     // A table parsed as zero columns would make its per-table parity test pass
     // vacuously — "nothing to check" must never read as "everything is fine".
     const empty = CASE_STUDY_TABLES.filter((t) => columnsOf(t).length === 0);
     expect(empty).toEqual([]);
 
     // Canary, not decoration: when this number moves, ten models need revisiting.
-    expect(CASE_STUDY_REQUIRED_COLUMNS).toHaveLength(158);
+    expect(CASE_STUDY_REQUIRED_COLUMNS).toHaveLength(159);
   });
 
   it.each([...CASE_STUDY_TABLES])(

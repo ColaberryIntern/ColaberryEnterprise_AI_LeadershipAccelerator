@@ -477,6 +477,16 @@ export interface CaseStudyRepositoryRef {
   readonly defaultBranch?: string;
   readonly lastSeenSha?: string;
   readonly lastSyncedAt?: IsoDateTime;
+  /**
+   * Path prefixes this Case Study is about, when it is about PART of the
+   * repository rather than all of it.
+   *
+   * ABSENT means the whole repository, and absent is the default. The field is
+   * omitted entirely rather than emitted as `[]` so an unscoped repository
+   * serialises exactly as it did before scoping existed and every already
+   * published snapshot keeps its content hash.
+   */
+  readonly pathScope?: readonly string[];
 }
 
 /** Normalised, slug-shaped facets. One vocabulary for filters, cards and SEO. */

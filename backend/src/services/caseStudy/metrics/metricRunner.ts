@@ -1,4 +1,5 @@
 import { analyzeRepositories } from '../caseStudyRepoAnalyzer';
+import { analyzerInputsFor } from '../caseStudyAnalyzerInputs';
 import { readCommitDate } from '../caseStudyRepoReader';
 import type { RepoAnalysisIssue } from '../caseStudyRepoReader';
 import { listRepositories } from '../caseStudyRepoCollection';
@@ -90,12 +91,12 @@ export async function runMetric(input: RunMetricInput): Promise<MetricRunOutcome
   }
 
   const analysis = await analyzeRepositories(
-    attached.map((repo) => ({
-      owner: repo.repoOwner,
-      repo: repo.repoName,
-      correlationId,
-      ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
-    })),
+    // The SAME mapping the sync uses, including the path scope. A metric measured
+    // over the whole repository while the story is scoped to one directory is the
+    // defect this shares a function with the sync to prevent.
+    analyzerInputsFor(attached, {
+      correlationId, ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
+    }),
     { correlationId }
   );
 

@@ -4,8 +4,9 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import { CASE_STUDY_SURFACE_KEYS } from '../../types/caseStudy';
 import {
   CASE_STUDY_REPO_ROLES, attachRepository, isCaseStudyRepoError, listRepositories,
-  removeRepository, setRepositoryRole,
+  removeRepository, setRepositoryRole, setRepositoryPathScope,
 } from '../../services/caseStudy/caseStudyRepoCollection';
+import { MAX_SCOPE_PREFIXES } from '../../services/caseStudy/repoPathScope';
 import {
   archiveCaseStudy, createCaseStudyFromProject, createCaseStudyFromRepoCollection,
   getCaseStudy, isCaseStudyAdminError, listCaseStudies, updateCaseStudy,
@@ -120,6 +121,13 @@ const updateBody = z.object({
   builderNamingConsent: z.boolean().optional(),
 }).refine((p) => Object.keys(p).length > 0, { message: 'supply at least one field to change' });
 
+/**
+ * Path prefixes, bounded on both axes and trimmed at the edge. `[]` is
+ * deliberately ACCEPTED rather than rejected as empty: on a PATCH it is how an
+ * admin clears a scope and returns the repository to describing all of itself.
+ */
+const pathScope = z.array(z.string().trim().min(1).max(500)).max(MAX_SCOPE_PREFIXES);
+
 const attachBody = z.object({
   reference: z.string().trim().min(1).max(500),
   role: z.enum(CASE_STUDY_REPO_ROLES).optional(),
@@ -127,8 +135,22 @@ const attachBody = z.object({
   allowPublicRepoLink: z.boolean().optional(),
   projectId: uuid.nullable().optional(),
   githubConnectionId: uuid.nullable().optional(),
+  pathScope: pathScope.optional(),
 });
-const repoRoleBody = z.object({ role: z.enum(CASE_STUDY_REPO_ROLES) });
+
+/**
+ * A PATCH may carry the role, the scope, or both — but not neither. The
+ * `.refine` is the load-bearing line: without it an empty body is a valid
+ * request that silently changes nothing and answers 200, which reads to an
+ * admin as "saved".
+ */
+const repoPatchBody = z.object({
+  role: z.enum(CASE_STUDY_REPO_ROLES).optional(),
+  pathScope: pathScope.optional(),
+}).refine(
+  (b) => b.role !== undefined || b.pathScope !== undefined,
+  { message: 'provide role, pathScope, or both' },
+);
 const TRIGGERS = ['manual', 'webhook', 'reconciliation', 'project_update'] as const;
 const syncBody = z.object({ trigger: z.enum(TRIGGERS).optional() });
 const syncRunsQuery = z.object({ limit: count.min(1).max(100).optional(), offset: count.min(0).optional() });
@@ -287,16 +309,31 @@ router.post('/api/admin/case-studies/:id/repositories', requireAdmin, (req: Requ
   }));
 });
 
-/** Update a repo source — its role in the story (§10.2's role vocabulary). */
+/**
+ * Update a repo source — its role in the story (§10.2's role vocabulary), the
+ * part of it this Case Study is about, or both.
+ *
+ * Applied in that order when both are sent, because `setRepositoryRole` may
+ * DEMOTE another repository to keep the single-primary invariant, and the record
+ * returned should be the one that reflects every change the caller asked for.
+ */
 router.patch('/api/admin/case-studies/:id/repositories/:repositoryId', requireAdmin, (req: Request, res: Response) => {
   const params = parse(repoParams, req.params, res);
   if (!params) return;
-  const body = parse(repoRoleBody, req.body, res);
+  const body = parse(repoPatchBody, req.body, res);
   if (!body) return;
-  void run(res, () => setRepositoryRole({
-    caseStudyId: params.id, repositoryId: params.repositoryId, role: body.role,
-    correlationId: correlationOf(req),
-  }));
+  void run(res, async () => {
+    const correlationId = correlationOf(req);
+    const target = { caseStudyId: params.id, repositoryId: params.repositoryId, correlationId };
+    let record = body.role !== undefined
+      ? await setRepositoryRole({ ...target, role: body.role })
+      : null;
+    if (body.pathScope !== undefined) {
+      record = await setRepositoryPathScope({ ...target, pathScope: body.pathScope });
+    }
+    // `record` cannot be null: the schema's refine guarantees one branch ran.
+    return record as NonNullable<typeof record>;
+  });
 });
 
 /** Detach a repo source. Idempotent: removing one already gone is `removed: false`. */

@@ -53,6 +53,7 @@ import { deriveContentFacts } from './repoDependencySignatures';
 // Spec §8 precedence (.yml > .yaml > .json) is the reader's, not ours — importing it
 // here keeps one implementation rather than two that can disagree about which file wins.
 import { pickManifestFilename } from './caseStudyManifestReader';
+import { scopeTree } from './repoPathScope';
 import {
   readMetadata, readCommitHead, readLanguages, readTree, readSelectedFiles,
   classifyThrown, isCaseStudyRepoAnalysisError, CaseStudyRepoAnalysisError,
@@ -149,6 +150,11 @@ export interface AnalyzeRepositoryInput {
   /** Injected in tests. Production omits it and the client uses global fetch. */
   readonly fetchImpl?: typeof fetch;
   readonly persistedTree?: PersistedRepoTree | null;
+  /**
+   * Path prefixes this Case Study is about. Empty or absent means the whole
+   * repository, which is the old behaviour and stays the default.
+   */
+  readonly pathScope?: readonly string[];
 }
 
 export interface RepoSetAnalysis {
@@ -313,10 +319,23 @@ export async function analyzeRepository(input: AnalyzeRepositoryInput): Promise<
     }
     : await readTree(owner, repo, metadata.defaultBranch, opts, issues);
 
-  const selected = selectHighValueFiles(tree.paths, tree.sizes);
+  // SCOPE FIRST, then derive. Everything below reads `scoped.tree`, so a Case
+  // Study about one corner of a monorepo no longer inherits the whole
+  // repository's stack, tests and documents. With no scope this is the identity.
+  const scoped = scopeTree(tree, input.pathScope ?? []);
+  if (scoped.scope.length > 0 && scoped.scopedPaths === 0) {
+    // A scope matching nothing is a typo, not an empty feature. Saying so beats
+    // reporting a repository that appears to contain no code.
+    issues.push({
+      error_class: 'Unknown',
+      message: `path scope matched 0 of ${scoped.totalPaths} paths`,
+    });
+  }
+
+  const selected = selectHighValueFiles(scoped.tree.paths, scoped.tree.sizes);
   const files = await readSelectedFiles(owner, repo, selected, opts, issues);
 
-  const pathFacts = derivePathFacts(tree.paths);
+  const pathFacts = derivePathFacts(scoped.tree.paths);
   const contentFacts = files.size ? deriveContentFacts(files) : emptyContentFacts();
   for (const path of contentFacts.malformedManifests) {
     // Spec §29 + T006: a broken manifest is a classified issue, never a crash —
@@ -335,14 +354,18 @@ export async function analyzeRepository(input: AnalyzeRepositoryInput): Promise<
       latestCommitAt: head?.committedAt ?? null,
     },
     derived: mergeRepoFacts(pathFacts, contentFacts, {
-      apiLanguages: languageBytes.map((entry) => entry.name),
+      // The languages API answers for the WHOLE repository and cannot be
+      // scoped, so a scoped analysis must not blend it in — doing so would put
+      // the monorepo's Flask and PowerShell into the stack of a TypeScript
+      // feature. Scoped, the language list comes from the scoped paths alone.
+      apiLanguages: scoped.scope.length > 0 ? [] : languageBytes.map((entry) => entry.name),
       homepage: metadata.homepage,
     }),
     documents: buildDocuments(selected, files),
     manifestFile: buildManifestFile(selected, files),
     filesRead: [...files.keys()].sort(),
     fileCount: pathFacts.scannedPathCount,
-    treeTruncated: tree.truncated,
+    treeTruncated: scoped.tree.truncated,
     treeSource: tree.source,
     accessStatus: accessStatusFor(issues),
   };

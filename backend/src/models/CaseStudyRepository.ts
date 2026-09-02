@@ -35,6 +35,13 @@ export interface CaseStudyRepositoryAttributes {
   /** connected | read_only | unavailable | deleted | rate_limited | unknown */
   access_status?: string;
   allow_public_repo_link?: boolean;
+  /**
+   * Path prefixes this Case Study is about, or empty for the whole repository.
+   *
+   * A monorepo holds many features. Without this, a Case Study about one of
+   * them inherits the whole repository's stack, tests and creation date.
+   */
+  path_scope?: string[];
   metadata?: Record<string, any>;
   created_at?: Date;
   updated_at?: Date;
@@ -58,6 +65,7 @@ class CaseStudyRepository
   declare last_synced_at: Date | null;
   declare access_status: string;
   declare allow_public_repo_link: boolean;
+  declare path_scope: string[];
   declare metadata: Record<string, any>;
   declare created_at: Date;
   declare updated_at: Date;
@@ -79,6 +87,7 @@ CaseStudyRepository.init(
     last_synced_at: { type: DataTypes.DATE, allowNull: true },
     access_status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'unknown' },
     allow_public_repo_link: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    path_scope: { type: DataTypes.ARRAY(DataTypes.TEXT), allowNull: false, defaultValue: [] },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
   },
   {

@@ -82,6 +82,7 @@ import { z } from 'zod';
 import { ensureTraceId } from '../../utils/requestContext';
 import { listRepositories } from './caseStudyRepoCollection';
 import { analyzeRepositories } from './caseStudyRepoAnalyzer';
+import { analyzerInputsFor } from './caseStudyAnalyzerInputs';
 import type { AnalyzeRepositoryInput, CaseStudyRepoFacts } from './caseStudyRepoAnalyzer';
 import { repoLogIdentity, opaqueRepoRef } from './caseStudyRepoReader';
 import { PARSEABLE_MANIFEST_FILENAME, pickManifestFilename, readCaseStudyManifest } from './caseStudyManifestReader';
@@ -237,9 +238,12 @@ export async function syncCaseStudy(input: SyncCaseStudyInput): Promise<CaseStud
       /* 1 ─ repositories, analysed by the module that owns that ------------- */
       const records = await listRepositories({ caseStudyId, correlationId });
       const byKey = new Map(records.map((r) => [repoKey(r.repoOwner, r.repoName), r]));
-      const inputs: AnalyzeRepositoryInput[] = records.map((r) => ({
-        owner: r.repoOwner, repo: r.repoName, correlationId, fetchImpl: input.fetchImpl,
-      }));
+      // Shared with the metric runner. `pathScope` travels with the record and is
+      // what makes a monorepo yield an honest Case Study: without it every fact
+      // below describes the whole repository, not the part this story is about.
+      const inputs: AnalyzeRepositoryInput[] = analyzerInputsFor(records, {
+        correlationId, ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
+      });
       const analysis = await analyzeRepositories(inputs, { correlationId });
 
       for (const failure of analysis.failures.slice(0, MAX_RECORDED_REPO_ERRORS)) {

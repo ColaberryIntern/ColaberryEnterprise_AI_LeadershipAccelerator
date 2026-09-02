@@ -132,10 +132,16 @@ export const CASE_STUDY_STATEMENTS: string[] = [
      last_synced_at TIMESTAMPTZ,
      access_status VARCHAR(20) NOT NULL DEFAULT 'unknown',
      allow_public_repo_link BOOLEAN NOT NULL DEFAULT false,
+     path_scope TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  // A COLUMN DOES NOT SELF-HEAL. CREATE TABLE IF NOT EXISTS is a no-op on a
+  // table that already exists, so a new column needs this explicit ALTER as
+  // well - otherwise the parity assert reports it missing on every boot while
+  // the code silently drops writes to it. The header of this module says so.
+  `ALTER TABLE case_study_repositories ADD COLUMN IF NOT EXISTS path_scope TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]`,
   `CREATE INDEX IF NOT EXISTS idx_cs_repositories_collection ON case_study_repositories (collection_id)`,
   `CREATE INDEX IF NOT EXISTS idx_cs_repositories_owner_name ON case_study_repositories (repo_owner, repo_name)`,
   // Case-insensitive dedupe inside one collection: Owner/Repo and owner/repo are
