@@ -59,6 +59,8 @@ export interface NarrativeInput {
     what_it_does?: string | null;
     organization?: string | null;
     industry?: string | null;
+    /** Raw requirements document. Extracted, never sent whole. */
+    requirements_document?: string | null;
   } | null;
   skills: InferredSkill[];
   signals: RepoSignals | null;
@@ -96,6 +98,8 @@ export function buildEvidenceBlock(input: NarrativeInput): string {
   if (p?.industry) lines.push(`Sector: ${p.industry}`);
   if (p?.problem) lines.push(`Problem it addresses: ${p.problem}`);
   if (p?.what_it_does) lines.push(`What it does: ${p.what_it_does}`);
+  const purpose = extractStatedPurpose(p?.requirements_document);
+  if (purpose) lines.push(`Stated purpose, from their own requirements document: ${purpose}`);
 
   const s = input.signals;
   if (s?.languages?.length) {
@@ -110,6 +114,54 @@ export function buildEvidenceBlock(input: NarrativeInput): string {
     lines.push(`${skill.label} — evidenced by: ${skill.basis.join('; ')}`);
   }
   return lines.join('\n');
+}
+
+/**
+ * The stated purpose, lifted from the project's requirements document.
+ *
+ * WHY THIS EXISTS. Narratives were describing WHAT was built and never WHY, because the
+ * evidence block read three summary columns -- `primary_business_problem`,
+ * `automation_goal`, `selected_use_case` -- that the intake flow does not populate. The
+ * real context sits in `requirements_document`, which for a completed project runs to a
+ * quarter of a megabyte. Ali: "every project starts with what they want + 7 questions +
+ * us creating the requirements document." He was right; the narrative simply never read
+ * it, so it inferred purpose from the project's NAME instead.
+ *
+ * TWO REASONS THIS IS AN EXTRACT AND NOT THE DOCUMENT.
+ *
+ *   1. 255KB does not fit a prompt, and the purpose is stated in the opening chapter
+ *      anyway. Everything after it is implementation guidance.
+ *   2. The document is GENERATED MARKETING PROSE. It says "comprehensive software
+ *      solution" and "cutting-edge technology" about work that has not been assessed.
+ *      Feeding it in whole invites the model to echo exactly the vocabulary
+ *      `validateNarrative` rejects, so the boilerplate is dropped and the prompt is told
+ *      explicitly not to reproduce its language.
+ */
+export function extractStatedPurpose(doc: unknown): string | null {
+  if (typeof doc !== 'string' || !doc.trim()) return null;
+
+  const lines = doc.split('\n');
+  const kept: string[] = [];
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    // Headings, metadata and the generator's own chapter-purpose boilerplate carry no
+    // information about the project. They are template, not content.
+    if (line.startsWith('#')) continue;
+    if (line.startsWith('>')) continue;
+    if (line.startsWith('---')) continue;
+    if (/^\*\*(Version|Date|Status|Chapter)/i.test(line)) continue;
+    if (/chapter purpose/i.test(line)) continue;
+    if (line.length < 40) continue;   // list fragments and stray labels
+
+    kept.push(line);
+    // Two substantial paragraphs is the vision. Past that it becomes a roadmap.
+    if (kept.join(' ').length > 900) break;
+  }
+
+  const text = kept.join(' ').replace(/\s+/g, ' ').trim();
+  return text.length >= 80 ? text.slice(0, 1000) : null;
 }
 
 const SYSTEM_PROMPT = [
@@ -130,6 +182,10 @@ const SYSTEM_PROMPT = [
   '  "utilizing TypeScript, JavaScript and HTML across multiple files" is exactly the',
   '  padding to avoid.',
   '- Say what the system DOES and who it is FOR. Concrete nouns and verbs.',
+  '- The stated purpose is quoted from the project\'s own requirements document, which is',
+  '  generated marketing prose. Take the FACTS from it -- the problem, the users, what the',
+  '  system does -- and NEVER reproduce its language. It will say things like',
+  '  "comprehensive solution" and "cutting-edge technology"; those are not observations.',
   '- At most two short paragraphs, fewer if the evidence is thin. Writing less is always',
   '  better than padding.',
   '- No headings, bullets, markdown or links. Third person, name used once at most.',

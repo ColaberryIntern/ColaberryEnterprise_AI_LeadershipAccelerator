@@ -10,6 +10,7 @@ import {
   hasEnoughToSay,
   buildEvidenceBlock,
   validateNarrative,
+  extractStatedPurpose,
   type NarrativeInput,
 } from '../portfolioNarrativeService';
 
@@ -167,5 +168,63 @@ describe('editorialising — one bounded repair, everything else rejected', () =
   it('does not leave double spaces behind', () => {
     expect(validateNarrative('He built a comprehensive suite.').narrative)
       .not.toMatch(/ {2}/);
+  });
+});
+
+describe('extractStatedPurpose — the WHY, from their own requirements document', () => {
+  // A real document's opening, boilerplate and all.
+  const DOC = [
+    '# Autonomous Freight — Build Guide',
+    '',
+    '**Version:** v1  ',
+    '**Date:** 2026-04-13  ',
+    '**Status:** Final  ',
+    '',
+    '---',
+    '',
+    '# Chapter 1: Executive Summary',
+    '',
+    '> **Chapter purpose**: This chapter provides the design intent and implementation',
+    '',
+    '## Vision & Strategy',
+    '',
+    'The vision of this project is to create a software solution that addresses the',
+    'fragmented workflow challenges faced by freight brokers.',
+    '',
+    '### Objectives',
+    '1. **Automating Operations**',
+  ].join('\n');
+
+  it('lifts the vision and drops the template', () => {
+    const out = extractStatedPurpose(DOC)!;
+    expect(out).toContain('freight brokers');
+    expect(out).not.toContain('Chapter 1');
+    expect(out).not.toContain('Chapter purpose');
+    expect(out).not.toContain('Version:');
+    expect(out).not.toContain('#');
+  });
+
+  it('caps its length — 255KB cannot reach a prompt', () => {
+    const huge = 'This project exists to solve a real and specific operational problem. '.repeat(500);
+    expect(extractStatedPurpose(huge)!.length).toBeLessThanOrEqual(1000);
+  });
+
+  it('returns null rather than a fragment when there is nothing to lift', () => {
+    for (const bad of [null, undefined, 42, '', '   ', '# Only a heading', '> just a quote']) {
+      expect(extractStatedPurpose(bad as any)).toBeNull();
+    }
+  });
+
+  it('reaches the evidence block, labelled as their own words', () => {
+    const block = buildEvidenceBlock(input({
+      project: { name: 'Autonomous Freight', requirements_document: DOC },
+    }));
+    expect(block).toContain('Stated purpose, from their own requirements document:');
+    expect(block).toContain('freight brokers');
+  });
+
+  it('is absent from the evidence block when no document exists', () => {
+    expect(buildEvidenceBlock(input({ project: { name: 'CoreOps' } })))
+      .not.toContain('Stated purpose');
   });
 });
