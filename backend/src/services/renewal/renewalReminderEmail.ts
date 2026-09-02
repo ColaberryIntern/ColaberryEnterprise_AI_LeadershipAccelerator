@@ -11,24 +11,34 @@
  * and nothing else - what ends, when it ends, what the next term costs, and the
  * link that pays it.
  *
- * Two things this copy deliberately does NOT say:
+ * TWO POPULATIONS, TWO DIFFERENT EMAILS (see docs/BILLING_MODEL.md).
  *
- *  - It never says the membership "renews" or "will be charged". Nothing
- *    charges automatically on this platform. Implying otherwise would set up a
- *    student to do nothing and then be surprised, which is the exact failure
- *    the reminder exists to prevent.
- *  - It never promises a coverage end date. activateByRef anchors the new
- *    period on PAYMENT time, not on the old period end, so a student who pays
- *    three days early gets a period that starts three days early. Printing
- *    "covers you through September 18" would be wrong for everyone who acts on
- *    the email before the last day.
+ * This file once opened by saying the copy must never claim the membership
+ * "renews" or "will be charged", because nothing on this platform charged
+ * automatically. That stopped being true on 2026-09-01, when members were
+ * migrated onto standing PaySimple schedules. Both models are now live at once
+ * and `input.autopay` decides which email this is:
+ *
+ *  - ON A SCHEDULE: a heads-up. It says the membership renews on its own and
+ *    there is nothing to do, and it carries NO payment link, NO pay button and
+ *    NO "payment is due" subject. Every one of those invites a member to pay
+ *    for a period PaySimple is about to collect, which is a double charge.
+ *  - NO SCHEDULE: a request, with the link. The original warning still applies
+ *    here in full: tell an unscheduled member their membership renews itself
+ *    and they will do nothing and lapse waiting for a charge that never comes.
+ *
+ * One thing this copy still never says, on either branch: it never promises a
+ * coverage end date. activateByRef anchors the new period on PAYMENT time, not
+ * on the old period end, so a student who pays three days early gets a period
+ * that starts three days early. Printing "covers you through September 18"
+ * would be wrong for everyone who acts on the email before the last day.
  */
 
 import type { ReminderKind } from './renewalReminderSelection';
 
 export const SUPPORT_REPLY_TO = 'ali@colaberry.com';
 
-const SIG_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-left: 3px solid #1a365d; padding-left: 14px; margin-top: 24px;">
+export const SIG_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-left: 3px solid #1a365d; padding-left: 14px; margin-top: 24px;">
   <tr><td>
     <div style="font-weight: 700; font-size: 16px; color: #1a365d;">Ali Muwwakkil</div>
     <div style="color: #2b6cb0; font-weight: 600;">Managing Director / AI Systems Architect</div>
@@ -38,7 +48,7 @@ const SIG_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-
   </td></tr>
 </table>`;
 
-const SIG_TEXT = `Ali Muwwakkil
+export const SIG_TEXT = `Ali Muwwakkil
 Managing Director / AI Systems Architect
 Colaberry Inc.
 
