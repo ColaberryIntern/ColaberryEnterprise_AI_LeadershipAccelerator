@@ -212,7 +212,10 @@ describe('publicEventsService', () => {
     it('keeps the live-status and forward-window guards', async () => {
       const q = await runAndGetSql();
       expect(q).toMatch(/e\.Status = 'live'/);
-      expect(q).toMatch(/e\.StartDate > GETUTCDATE\(\)/);
+      // Forward-window guard still present — but compared in CENTRAL, not raw
+      // UTC. This assertion originally pinned `> GETUTCDATE()`, which was the
+      // defect itself: see the Central-frame describe block below.
+      expect(q).toMatch(/e\.StartDate > CAST\(GETUTCDATE\(\) AT TIME ZONE/);
     });
 
     it('selects the promo image column the Events page renders', async () => {
@@ -308,5 +311,47 @@ describe('publicEventsService', () => {
       __resetPublicEventsCache();
       expect(await getUpcomingPublicEvents(30)).toEqual([]);
     });
+  });
+});
+
+/**
+ * The upcoming-window filter must compare like with like.
+ *
+ * CCPP stores StartDate as CENTRAL wall-clock; the filter compared it against
+ * GETUTCDATE(). Every event therefore disappeared from the Events page, the
+ * calendar and the "Next event" chip five hours (six in winter) before it
+ * started. Observed on production 2026-09-02: the 10:00 AM CDT session was gone
+ * from the portal at 05:00 AM CDT with registration still open.
+ */
+describe('upcoming window is evaluated in Central, the frame CCPP stores', () => {
+  const sqlText = async (): Promise<string> => {
+    sqlMock.__request.query.mockResolvedValue({ recordset: [] });
+    await getUpcomingPublicEvents(30);
+    return String(sqlMock.__request.query.mock.calls[0][0]);
+  };
+
+  it('does not compare a Central-stored StartDate against raw UTC now', () => {
+    // The exact shape of the original defect.
+    return sqlText().then((q) => {
+      expect(q).not.toMatch(/e\.StartDate\s*>\s*GETUTCDATE\(\)/);
+    });
+  });
+
+  it('converts now into Central before comparing', async () => {
+    const q = await sqlText();
+    expect(q).toMatch(/AT TIME ZONE 'UTC'\s+AT TIME ZONE 'Central Standard Time'/);
+  });
+
+  it('applies the same frame to BOTH ends of the window', async () => {
+    // Fixing only the lower bound would leave the 180-day horizon skewed.
+    const q = await sqlText();
+    expect((q.match(/AT TIME ZONE 'Central Standard Time'/g) || []).length).toBe(2);
+    expect(q).toMatch(/DATEADD\(day, @days, CAST\(GETUTCDATE\(\) AT TIME ZONE/);
+  });
+
+  it('still bounds the window at both ends', async () => {
+    const q = await sqlText();
+    expect(q).toMatch(/e\.StartDate\s*>/);
+    expect(q).toMatch(/e\.StartDate\s*<=\s*DATEADD\(day, @days/);
   });
 });

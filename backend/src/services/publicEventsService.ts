@@ -95,6 +95,31 @@ async function connectCcpp(): Promise<sql.ConnectionPool> {
 
 const EVENT_TZ = 'America/Chicago';
 
+/**
+ * "Now", expressed in the SAME frame `EventBrite_Events.StartDate` is stored in.
+ *
+ * CCPP stores StartDate as CENTRAL wall-clock (10:00 for a 10:00 AM Central
+ * event) — the very thing `ccppRowToView` corrects with centralWallClockToInstant
+ * when it reads a row. The upcoming-window filter, however, compared that
+ * Central value against `GETUTCDATE()`, mixing two frames: an event dropped out
+ * of the feed as soon as UTC-now passed its Central start, i.e. FIVE HOURS (six
+ * in winter) before it actually began.
+ *
+ * Observed on production 2026-09-02: the 10:00 AM CDT AI Strategy session
+ * vanished from the Events page, the calendar and the "Next event" chip at
+ * 05:00 AM CDT, while registration was still open.
+ *
+ * `AT TIME ZONE` rather than `GETDATE()`: the CCPP host happens to run Central
+ * today, so GETDATE() would also work, but it would break silently if that host
+ * were ever moved. This states the intent, and the Windows zone id handles
+ * CST/CDT automatically. Verified available on CCPP's SQL Server 2017 (the
+ * feature needs 2016+).
+ *
+ * Static SQL, no user input — safe to interpolate.
+ */
+const CCPP_NOW_CENTRAL =
+  "CAST(GETUTCDATE() AT TIME ZONE 'UTC' AT TIME ZONE 'Central Standard Time' AS datetime)";
+
 // CCPP stores `EventBrite_Events` datetimes as CENTRAL wall-clock, but the mssql
 // driver reads them as UTC (so 6:30 PM Central arrives as 18:30Z). Re-interpreting
 // the naive wall-clock as America/Chicago (centralWallClockToInstant, imported
@@ -160,8 +185,8 @@ async function fetchFromCcpp(): Promise<OpenHouseView[]> {
             WHERE a2.EventId = e.EventId) AS SignupCount
         FROM EventBrite_Events e
         WHERE e.Status = 'live'
-          AND e.StartDate > GETUTCDATE()
-          AND e.StartDate <= DATEADD(day, @days, GETUTCDATE())
+          AND e.StartDate > ${CCPP_NOW_CENTRAL}
+          AND e.StartDate <= DATEADD(day, @days, ${CCPP_NOW_CENTRAL})
           AND (
             EXISTS (
               SELECT 1
