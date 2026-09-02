@@ -83,6 +83,14 @@ export interface ApolloContact {
   sanitized_phone?: string;
   industry?: string;
   estimated_num_employees?: number;
+  /**
+   * What /v1/contacts/search ACTUALLY returns: the list ids a contact belongs
+   * to, not their names. Verified against the live API 2026-08-24 after the
+   * first production import landed 337 leads with no list attribution at all.
+   * The name-bearing fields below are kept because other Apollo endpoints do
+   * return them, and reading whichever is present costs nothing.
+   */
+  label_ids?: string[];
   contact_label_names?: string[];
   label_names?: string[];
 }
@@ -93,8 +101,21 @@ function firstPhone(c: ApolloContact): string | null {
   return p?.sanitized_number || p?.raw_number || null;
 }
 
-function listNames(c: ApolloContact): string[] {
-  return (c.contact_label_names || c.label_names || []).filter(Boolean);
+/**
+ * The Apollo list names a contact belongs to.
+ *
+ * The contacts endpoint returns `label_ids`, so names are resolved through the
+ * id -> name map the caller fetched from /v1/labels. An id with no known name
+ * falls back to the id itself: a raw id in the field is ugly but traceable,
+ * and silently dropping it is what caused the original bug.
+ */
+function listNames(c: ApolloContact, labelNames?: ReadonlyMap<string, string>): string[] {
+  const byName = (c.contact_label_names || c.label_names || []).filter(Boolean);
+  if (byName.length) return byName;
+
+  const ids = (c.label_ids || []).filter(Boolean);
+  if (!ids.length) return [];
+  return ids.map((id) => labelNames?.get(id) ?? id);
 }
 
 /**
@@ -110,14 +131,15 @@ function listNames(c: ApolloContact): string[] {
  */
 export function mapContactToLead(
   c: ApolloContact,
-  importedOn: string
+  importedOn: string,
+  labelNames?: ReadonlyMap<string, string>
 ): Record<string, unknown> | null {
   const email = c.email?.trim().toLowerCase();
   if (!email || !email.includes('@')) return null;
 
   const name =
     c.name?.trim() || [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || email;
-  const lists = listNames(c);
+  const lists = listNames(c, labelNames);
 
   return {
     name,
@@ -168,6 +190,17 @@ export async function importApolloContacts(
     errors: [],
   };
 
+  // Fetch the id -> name map once per run so every contact's list membership
+  // can be resolved. A failure here must not abort the import: leads landing
+  // with a raw id beats leads not landing.
+  let labelNames: ReadonlyMap<string, string> | undefined;
+  try {
+    const lists = await listApolloLists();
+    labelNames = new Map(lists.map((l) => [l.id, l.name]));
+  } catch {
+    labelNames = undefined;
+  }
+
   let page = Math.max(1, options.startPage ?? 1);
 
   while (result.scanned < limit) {
@@ -189,7 +222,7 @@ export async function importApolloContacts(
 
     for (const contact of contacts) {
       result.scanned++;
-      const mapped = mapContactToLead(contact, importedOn);
+      const mapped = mapContactToLead(contact, importedOn, labelNames);
       if (!mapped) {
         result.skippedNoEmail++;
         continue;
