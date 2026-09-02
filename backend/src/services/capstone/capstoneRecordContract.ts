@@ -134,6 +134,25 @@ export interface RecordCapability {
   on_sample?: boolean;
 }
 
+/**
+ * Band 3c — the ten architecture skills, INFERRED FROM COMMITTED CODE.
+ *
+ * Replaces a band fed from `student_architecture_skill`, whose 8,895 rows platform-wide
+ * are all `source = 'timeline'` — curriculum opened, counted once per band. That rendered
+ * as "Verified by Colaberry - 240 pieces of evidence" and meant attendance.
+ *
+ * `basis` is the whole point. A skill listed without the checkable reason it is listed is
+ * a claim the student cannot source when a recruiter asks, and one unsourceable claim
+ * discredits the rest of the page. There is deliberately NO score and NO level: the file
+ * tree shows what was built, never how well.
+ */
+export interface RecordSkill {
+  skill_id: string;
+  label: string;
+  /** Never empty. A skill with no basis is not emitted. */
+  basis: string[];
+}
+
 /** Band 4 — their own words, in week order. */
 export interface RecordPost {
   week: number;
@@ -155,6 +174,16 @@ export interface CapstoneRecord {
    * student with no connected repo simply has no band rather than an empty heading.
    */
   capabilities?: RecordCapability[];
+  /** Inferred from committed code. Absent when the repo evidences nothing. */
+  skills?: RecordSkill[];
+  /**
+   * Generated prose, FROZEN AT APPROVAL.
+   *
+   * The compiler invents nothing; this is the one field a model wrote. It is safe only
+   * because it is treated exactly like a learner-authored headline — a mentor reads this
+   * exact sentence before it publishes, and it is never regenerated live underneath them.
+   */
+  narrative?: string | null;
   posts: RecordPost[];
   /**
    * The bookend. Week 1's Roll Call asks what they want AI to take off their

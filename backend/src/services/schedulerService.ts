@@ -1714,6 +1714,23 @@ export function startScheduler(): void {
     });
   });
 
+  // AI Workforce Management, Checkpoint D — AgentReportSubscription
+  // dispatch. A single 15-minute tick checks every enabled subscription's
+  // OWN local hour (via its real timezone) against its configured delivery
+  // hour, rather than one cron job per timezone — real per-subscriber
+  // timezone-safety without N schedules. The DB-unique-constrained insert
+  // inside dispatchDueReportRuns() is the actual idempotency guard: a tick
+  // that fires more than once inside the same delivery hour (or a retried
+  // tick) cannot send the same period twice.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('AgentReportSubscriptionDispatch', async () => {
+      const { dispatchDueReportRuns } = await import('./agentReportRunService');
+      await dispatchDueReportRuns();
+    }).catch((err) => {
+      console.error('[Scheduler] Agent report subscription dispatch error:', err);
+    });
+  });
+
   // Explorer Growth OS — nightly profile recompute (EPIC 3 T006).
   //
   // RECOMPUTES ONLY. It scores and classifies; it decides nothing and sends
@@ -2104,10 +2121,24 @@ export function startScheduler(): void {
     console.log('[Scheduler] PaySimpleWebhookHealth scheduled (*/15 * * * *)');
   }
 
-  // Renewal reminders, daily at 9am Central. Nothing on this platform charges a
-  // subscriber when their period ends, so this mails them a checkout link before
-  // it does (docs/RECURRING_BILLING_EXPOSURE.md). 9am CT because it is a message
-  // about somebody's money and it should land in their working day, not overnight.
+  // Renewal reminders, daily at 9am Central. 9am CT because it is a message about
+  // somebody's money and it should land in their working day, not overnight.
+  //
+  // The job is now TWO messages, not one, because the platform stopped being all
+  // manual on 2026-09-01 (docs/BILLING_MODEL.md, and the original exposure audit
+  // at docs/RECURRING_BILLING_EXPOSURE.md for how it got here):
+  //
+  //   - no schedule (10 members): nothing collects when the period ends, so this
+  //     mails a checkout link and the member has to act or the term lapses.
+  //   - on a schedule (21 members): PaySimple collects on its own, so the same job
+  //     sends a heads-up instead. It must NOT send them a payment link; paying a
+  //     link a schedule is about to collect is how a member gets billed twice.
+  //
+  // Those are HEADCOUNTS, deduped by enrollment. A manual renewal leaves two rows
+  // active, so counting rows here reads high and misfiles auto-pay members as
+  // manual (the stale row has no schedule id on it).
+  //
+  // The branch is `DueReminder.autopay`, set from paysimple_schedule_id.
   //
   // Ships dark. RENEWAL_REMINDERS_ENABLED=true is the switch, and turning it on
   // starts mailing real paying customers, so it is deliberately not a default.
@@ -2123,6 +2154,32 @@ export function startScheduler(): void {
       });
     }, { timezone: 'America/Chicago' });
     console.log('[Scheduler] RenewalReminders scheduled (0 9 * * * America/Chicago)');
+
+    // Auto-pay disclosure, 08:30 CT, half an hour ahead of the reminders.
+    //
+    // A member who is about to be charged automatically must have been TOLD they
+    // are on automatic billing, and the reminder is not that telling: it fires 7
+    // days out, so anyone whose 7-day mark has already passed would learn it from
+    // the charge itself. On 2026-09-01 that was 20 members, four of them holding
+    // an older reminder that said the opposite.
+    //
+    // Ordering is deliberate. Running first means a member who gains a schedule
+    // and is also due a reminder the same morning hears the disclosure first,
+    // rather than a renewal note about billing they did not know was automatic.
+    //
+    // Once per member for ever, enforced by the SELECT excluding anyone who has
+    // been sent this kind at any period_end, not just the current one. It shares
+    // the reminder feature flag because both mail the same paying customers.
+    cron.schedule('30 8 * * *', () => {
+      instrumentCronJob('AutopayDisclosure', async () => {
+        const { runAutopayNotices } = await import('./renewal/autopayNotice');
+        const r = await runAutopayNotices({ send: true });
+        console.log(`[Scheduler] AutopayDisclosure: considered=${r.considered} sent=${r.sent} skipped=${r.skipped.length} failed=${r.failed}`);
+      }).catch((err) => {
+        console.error('[Scheduler] Autopay disclosure error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] AutopayDisclosure scheduled (30 8 * * * America/Chicago)');
   }
 
   // Billing watch, daily at 8am Central, an hour before the renewal reminders so a

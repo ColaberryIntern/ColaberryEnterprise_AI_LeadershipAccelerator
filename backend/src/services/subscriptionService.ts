@@ -17,9 +17,22 @@ import type { SubscriptionPlan } from '../models/Subscription';
  * V1 flow (per the "one-time now, auto-renew later" decision): a plan checkout is
  * a PaySimple one-time hosted payment (card or bank). On the payment webhook the
  * subscription activates, the student converts Explorer → paying member (which
- * drops the Week-0 gate + demo mode), and `current_period_end` is set. Renewal is
- * a fresh checkout until PaySimple recurring is enabled; the schema already
- * carries the period so that upgrade is additive.
+ * drops the Week-0 gate + demo mode), and `current_period_end` is set.
+ *
+ * ── RENEWAL, AND THE GAP THIS FILE STILL HAS (see docs/BILLING_MODEL.md) ────
+ *
+ * "auto-renew later" arrived on 2026-09-01, but NOT here. 21 existing members were
+ * moved onto standing PaySimple schedules by scripts/migrateSubscriptionsToSchedules.js,
+ * a one-off backfill run by hand.
+ *
+ * THIS file — the checkout every NEW member goes through — still creates only a
+ * one-time payment and no schedule. So every new paying member starts life in the
+ * manual population and has to be migrated by hand later, which means the backfill
+ * is not a one-off: it refills. Closing that means creating the schedule at first
+ * payment, in this service, and it has not been done.
+ *
+ * Anything reading this table must therefore branch on `paysimple_schedule_id`
+ * rather than assuming a single billing model. Both are live at once.
  *
  * Idempotency: the PaySimple `external_id` (SUB-<enrollment>-<ts>) is the unique
  * `payment_ref`; activation is a no-op once the row is already active, so a

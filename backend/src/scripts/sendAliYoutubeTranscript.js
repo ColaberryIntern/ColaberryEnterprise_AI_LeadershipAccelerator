@@ -69,7 +69,7 @@ ${data.paragraphs.map((p) => `[${fmtT(p.t)}] ${p.text}`).join('\n\n')}
   const r = await transport.sendMail({
     from: '"Claude Code (on behalf of Ali)" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     replyTo: 'claude-code@reply.colaberry.ai',
     subject: `[YouTube transcript] ${data.title}`,
     text, html,

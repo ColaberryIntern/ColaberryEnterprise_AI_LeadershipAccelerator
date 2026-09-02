@@ -59,9 +59,12 @@ export const DEFERRED_RULES: ReadonlyArray<{ id: string; rule: string; reason: s
   { id: 'O7b', rule: 'NEEDS_SUPPORT entry: open inbox case', reason: 'no inbox_cases source query in the reader', target: 'EPIC 4' },
   { id: 'O7c', rule: 'NEEDS_SUPPORT entry: reply NEEDS_HELP', reason: 'interaction_outcomes maps only clicked/replied/bounced', target: 'EPIC 4' },
   { id: 'O8', rule: 'NEEDS_SUPPORT exit', reason: 'same sources as O7b/O7c', target: 'EPIC 4' },
-  { id: 'O9/O10', rule: 'EVENT_READY entry/exit', reason: 'no event-calendar input', target: 'EPIC 7' },
-  { id: 'O12', rule: 'EVENT_REGISTERED exit: event ends', reason: 'needs event.ends_at', target: 'EPIC 7' },
-  { id: 'O15/O16', rule: 'EVENT_NO_SHOW entry/exit', reason: 'plan §8.3 line 789 states the repo has no no-show record', target: 'EPIC 7' },
+  // O9/O10 IMPLEMENTED in EPIC 7 — live event state from CCPP, not the empty
+  // student_points_events signal path. Removed from this list rather than left
+  // stale: a deferred-rules registry nobody trusts is worse than none.
+  { id: 'O12', rule: 'EVENT_REGISTERED exit: event ends', reason: 'the overlay is derived fresh from upcoming events each run, so it lapses when the event stops being upcoming — an explicit ends_at exit would be a second mechanism for the same thing', target: 'closed' },
+  { id: 'O15/O16', rule: 'EVENT_NO_SHOW entry/exit', reason: 'BLOCKED, not deferred. Eventbrite records attendance via barcode.checked_in, which fires when a ticket is scanned AT A DOOR. All 549 events in the last 90 days are Online_event=True and zero check-ins have been possible since 2022, so nobody can be marked attended and therefore nobody can be a no-show. Would require Zoom attendance, not Eventbrite.', target: 'blocked: needs a Zoom integration' },
+  { id: 'O13/O14', rule: 'EVENT_ATTENDED entry/exit', reason: 'IMPLEMENTED but currently inert: it reads the event_attended signal, whose source (student_points_events rows typed open_house_attended%) has zero rows today. A live-session check-in flow would feed it. Distinct from Eventbrite, which cannot supply attendance for online events at all.', target: 'unfed, not blocked' },
   { id: 'O18', rule: 'INTERNSHIP_READY exit: applied / 60d', reason: 'no application flow; 60d needs a per-overlay entry timestamp the TEXT[] column cannot hold', target: 'EPIC 5/7' },
   { id: 'O19/O20', rule: 'SUBSCRIPTION_READY entry/exit', reason: '"no cohort fit" is undefined in §8 — a spec gap, not a data gap', target: 'EPIC 4' },
   { id: 'O22', rule: 'REFERRAL_READY exit: 90d', reason: 'needs a per-overlay entry timestamp', target: 'EPIC 4' },
@@ -77,6 +80,15 @@ export interface ClassifyInput {
   entitlement: { hasFullCurriculumAccess: boolean; hasActiveNonCompSubscription: boolean };
   /** The Explorer's enrollment creation date, for the 72h clock (P1/P3/P5). */
   enrollment: { createdAt: Date };
+  /**
+   * Live event state, fetched by the caller — never looked up here, because this
+   * function is pure. EPIC 7.
+   *
+   * Optional so every existing caller and test keeps working; absent means "no
+   * event evidence", which is also what a CCPP outage means, so the two degrade
+   * identically rather than one inventing an overlay.
+   */
+  eventState?: { registeredUpcomingCount: number; upcomingEventCount: number };
   asOf: Date;
 }
 
@@ -238,16 +250,66 @@ function deriveOverlays(input: ClassifyInput): ExplorerOverlay[] {
   // conditions have no reader source (O7b/O7c, deferred).
   if (occurrences(readout, 'email_hard_bounce') >= 1) out.push('NEEDS_SUPPORT');
 
-  // O11 — EVENT_REGISTERED. Its exit needs event.ends_at (O12, deferred), so
-  // this holds while the signal is the learner's most recent event evidence.
+  // O9/O10/O11 — EVENT_READY and EVENT_REGISTERED, from LIVE event state.
+  //
+  // EPIC 3 derived these from `event_registered` / `event_attended` signals,
+  // which the reader maps from `student_points_events` rows typed
+  // `open_house_rsvp%` / `open_house_attended%`. Measured on production: that
+  // table has ZERO such rows, so neither overlay could ever fire for anyone.
+  // The signal path was complete and carried no water.
+  //
+  // The real record is CCPP `EventBrite_EventAttendees` — 4,455 signups in 90
+  // days — read by `explorerEventStateService` and passed in, so this function
+  // stays pure.
+  // TWO SOURCES, DELIBERATELY OR'D — they cover different event systems:
+  //   - `event_registered` signal: internal open-house RSVPs recorded in
+  //     student_points_events. Zero rows today, so inert but not wrong.
+  //   - live event state: CCPP's Eventbrite record, 4,455 signups in 90 days.
+  // A learner registered in EITHER is registered. An earlier draft replaced the
+  // signal rather than OR-ing it, which would have dropped internal RSVPs the
+  // moment anything fed them.
+  //
+  // The signal's original semantic is preserved: registration counts while it is
+  // the learner's most recent event evidence (more recent than any attendance).
   const registeredAge = daysSince(readout, 'event_registered', asOf);
-  const attendedAge = daysSince(readout, 'event_attended', asOf);
-  if (registeredAge < attendedAge) out.push('EVENT_REGISTERED');
+  const signalSaysRegistered = registeredAge < daysSince(readout, 'event_attended', asOf);
 
-  // O13/O14 — EVENT_ATTENDED, expiring 30d after the attendance itself. The
-  // clock runs off the signal's own timestamp, not overlay-entry time, which is
-  // why this one survives fresh derivation while O18/O20/O22 do not.
+  const ev = input.eventState;
+  const liveSaysRegistered = !!ev && ev.registeredUpcomingCount > 0;
+
+  if (signalSaysRegistered || liveSaysRegistered) {
+    out.push('EVENT_REGISTERED');
+  } else if (ev && ev.upcomingEventCount > 0) {
+    // O9 — EVENT_READY: something is on and they have not signed up. Never
+    // emitted alongside EVENT_REGISTERED — a learner who has registered does not
+    // need prompting to register, and firing both would let two priority tiers
+    // compete for the same person on the same day.
+    out.push('EVENT_READY');
+  }
+
+  // O13/O14 — EVENT_ATTENDED, from the `event_attended` SIGNAL, expiring 30d
+  // after the attendance itself.
+  //
+  // KEPT DELIBERATELY, and an earlier draft of EPIC 7 wrongly removed it. Its
+  // source is `student_points_events` rows typed `open_house_attended%` — NOT
+  // Eventbrite — so a live-session check-in flow could legitimately feed it. It
+  // has zero rows today, which makes it inert rather than wrong, and deleting a
+  // correct-but-unfed path buys no safety while losing the capability.
+  const attendedAge = daysSince(readout, 'event_attended', asOf);
   if (attendedAge <= 30) out.push('EVENT_ATTENDED');
+
+  // O15/O16 — EVENT_NO_SHOW is NOT DERIVED, and that is measured, not deferred.
+  //
+  // No-show is registered-minus-attended, and the registration side now comes
+  // from Eventbrite while attendance does not exist there at all: `barcode.checked_in`
+  // fires only when a ticket is scanned AT A DOOR, all 549 events in the last 90
+  // days are `Online_event = True`, and zero check-ins have been possible since
+  // 2022. Subtracting one source from another that does not cover the same events
+  // would be arithmetic on incomparable things.
+  //
+  // Inferring it from "registered but no engagement afterwards" would invent a
+  // fact about a real person and act on it: someone who did attend would receive
+  // "sorry we missed you".
 
   // O17 — INTERNSHIP_READY: affinity >= 0.5 AND E >= 50.
   if (affinityOf(affinities, 'ai_internship') >= 0.5 && scores.e >= 50) {

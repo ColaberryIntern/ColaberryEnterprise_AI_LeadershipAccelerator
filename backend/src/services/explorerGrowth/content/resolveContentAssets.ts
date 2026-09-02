@@ -33,6 +33,22 @@ export interface ResolvedAsset {
  * purpose has no content behind it", the other means "nothing matched THIS
  * learner". Collapsing them is how a resolver bug gets filed as a content gap.
  */
+/**
+ * Which tier the learner is on. NOT optional, and NOT defaulted.
+ *
+ * EPIC 5 shipped this resolver with no entitlement filter at all, and the
+ * Governor duly selected week-9 lessons for 12 free-preview learners who would
+ * have hit a paywall. Nothing sent, so nobody received it — but it was one flag
+ * away.
+ *
+ * A default would have hidden that. `free_preview` as a default silently
+ * narrows for full-access learners; `full_access` as a default silently leaks
+ * locked content, which is the bug being fixed. So the caller must say, and
+ * `runGovernor` resolves it per learner from `isFreePreviewTier` — the same
+ * function the portal itself gates on.
+ */
+export type AudienceTier = 'free_preview' | 'full_access';
+
 export type ResolvedAssets =
   | { resolved: true; assets: ResolvedAsset[] }
   | { resolved: false; reason: string };
@@ -61,6 +77,7 @@ const RESOLVE_SQL = `
      AND (starts_at IS NULL OR starts_at <= :as_of)
      AND (expires_at IS NULL OR expires_at > :as_of)
      AND 'email' = ANY(allowed_channels)
+     AND :tier = ANY(audience_tags)
      AND (:stage_tags IS NULL OR journey_stage_tags && CAST(:stage_tags AS text[]))
    ORDER BY CASE WHEN CAST(:affinity_tags AS text[]) = '{}'::text[] THEN 0
                  WHEN affinity_tags && CAST(:affinity_tags AS text[]) THEN 0
@@ -85,6 +102,7 @@ function pgArray(values: readonly string[]): string {
 export async function resolveContentAssets(
   query: ContentAssetQuery,
   asOf: Date,
+  tier: AudienceTier,
 ): Promise<ResolvedAssets> {
   const spec = PURPOSE_SPECS[query.asset_type];
 
@@ -109,6 +127,11 @@ export async function resolveContentAssets(
       //    it would return zero assets for all 153 learners — every one of whom
       //    has an empty list — and look exactly like a content shortage.
       affinity_tags: pgArray(query.affinity_tags ?? []),
+      // THE LOCKED-LESSON GATE. Mirrors the portal's own rule
+      // (`timelineService.ts:231` — free tier sees week 0 only), applied HERE at
+      // the point of selection rather than in a wrapper, because a wrapper can
+      // be bypassed by the next caller and this cannot.
+      tier,
       max_rows: supported.limit,
     },
   });
@@ -137,12 +160,13 @@ export async function resolveContentAssets(
 export async function resolveAllForCandidate(
   queries: ContentAssetQuery[],
   asOf: Date,
+  tier: AudienceTier,
 ): Promise<{ assets: ResolvedAsset[]; gaps: string[] }> {
   const assets: ResolvedAsset[] = [];
   const gaps: string[] = [];
 
   for (const q of queries) {
-    const result = await resolveContentAssets(q, asOf);
+    const result = await resolveContentAssets(q, asOf, tier);
     if (result.resolved) assets.push(...result.assets);
     else gaps.push(result.reason);
   }

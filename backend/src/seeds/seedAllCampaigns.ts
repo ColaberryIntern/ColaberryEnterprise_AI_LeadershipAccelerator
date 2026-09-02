@@ -7,6 +7,7 @@ import { seedColdOutboundPhases } from './seedColdOutboundPhases';
 import { seedOfferCampaigns } from './seedOfferCampaigns';
 import { seedPilotProgramCampaigns } from './seedPilotProgramCampaigns';
 import { seedOpenHouseCampaigns } from './seedOpenHouseCampaigns';
+import { seedExplorerGrowthCampaigns } from './explorerGrowth/seedExplorerGrowthCampaigns';
 
 /**
  * Idempotent seed for all core campaigns.
@@ -183,6 +184,22 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
     } catch (err: any) {
       console.warn('[Seed] Open House campaigns seed skipped:', err?.message);
     }
+  }
+
+  // Explorer Growth OS campaign library (EPIC 6).
+  //
+  // Its own try/catch, like every sibling above: this runs on the boot path and
+  // one bad definition must not cost the other 36 campaigns.
+  //
+  // Ships INERT on every axis - draft, approval draft, test mode on - but the
+  // property that actually stops a send is that its SEQUENCES are created with
+  // is_active: false. sequenceService throws on an inactive sequence before any
+  // ScheduledEmail row exists, and that is the only gate a campaign-level
+  // setting cannot be talked out of.
+  try {
+    await seedExplorerGrowthCampaigns();
+  } catch (err: any) {
+    console.warn('[Seed] Explorer Growth campaigns seed skipped:', err?.message);
   }
 
   console.log('[Seed] All core campaigns seeded.');

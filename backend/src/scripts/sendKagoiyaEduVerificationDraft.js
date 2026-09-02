@@ -201,7 +201,7 @@ Colaberry Inc.`;
   const sent = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: '[Edu Verification DRAFT] Ignesias Kagoiya — HireRight AT-060426-2C5H3 — needs your review',
     html: HTML,

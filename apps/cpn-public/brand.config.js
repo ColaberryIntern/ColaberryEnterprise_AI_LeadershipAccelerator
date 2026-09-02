@@ -10,8 +10,8 @@ module.exports = {
   appSlug: 'cpn-public',
   sourceSlug: 'cpn',
   brandSlug: 'cpn',
-  publicUrl: 'https://cpn.org',
-  supportEmail: 'scholars@cpn.org',
+  publicUrl: 'https://opportunitylift.org',
+  supportEmail: 'scholars@opportunitylift.org',
   // Points at the shared platform backend. During migration this is the existing
   // Enterprise origin; it moves to a neutral tracking host without an app code change.
   platformApiBase: process.env.PLATFORM_API_BASE || 'https://enterprise.colaberry.ai',

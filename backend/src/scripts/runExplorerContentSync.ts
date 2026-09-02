@@ -91,9 +91,13 @@ export async function buildGapReport(asOf: Date): Promise<PurposeReport[]> {
     }
     const byState: PurposeReport['byState'] = [];
     for (const row of states) {
+      // Reported for the FREE-PREVIEW tier, because that is what 152 of 153
+      // learners are. A report against full access would look far healthier
+      // than the system actually is for almost everyone using it.
       const result = await resolveContentAssets(
         { asset_type: purpose, affinity_tags: [], state: row.primary_state },
         asOf,
+        'free_preview',
       );
       byState.push({
         state: row.primary_state,

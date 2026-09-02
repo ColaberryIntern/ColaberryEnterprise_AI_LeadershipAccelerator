@@ -1,5 +1,6 @@
 import * as sql from 'mssql';
 import { env } from '../config/env';
+import { cleanEventbriteValue } from '../utils/eventbriteSanitize';
 import { ingestOpenHouseBatch, OhParticipant, IngestSummary } from './openHouseIngestService';
 
 /**
@@ -32,9 +33,29 @@ export async function pullRecentOpenHouseRegistrants(days: number = DEFAULT_WIND
       WHERE e.Name LIKE '%open house%'
         AND a.Email IS NOT NULL AND LTRIM(RTRIM(a.Email)) <> ''
         AND a.CreatedDate >= DATEADD(day, -@days, GETDATE())`);
+    // CLEAN BEFORE USE. CCPP stores these values with their delimiters baked in —
+    // the email literally reads `'someone@example.com',`. This function WRITES
+    // leads, so an uncleaned value does not merely fail to match: it persists an
+    // unusable address that every future send bounces off, and deduplicates as a
+    // different person from the same learner's clean record.
+    //
+    // 255 such leads reached production before this was fixed, all source
+    // `open_house`. `.trim().toLowerCase()` did not strip them, and the
+    // `.includes('@')` guard passed them straight through — `'a@b.com',` does
+    // contain an '@'.
+    //
+    // Uses the shared `cleanEventbriteValue` rather than a local strip: this is
+    // the THIRD reader of this column, and the first two disagreed with each
+    // other until they were pointed at one implementation.
     return result.recordset
-      .map((row: any) => ({ email: String(row.email || '').trim().toLowerCase(), name: (row.name || '').trim(), registered: true }))
-      .filter((p) => p.email.includes('@'));
+      .map((row: any) => ({
+        email: cleanEventbriteValue(row.email).toLowerCase(),
+        name: cleanEventbriteValue(row.name),
+        registered: true,
+      }))
+      // A bare '@' check let the wrapped form through. Require something either
+      // side of it, and no stray delimiter left over.
+      .filter((p) => /^[^\s'",]+@[^\s'",]+\.[^\s'",]+$/.test(p.email));
   } finally {
     await pool.close();
   }

@@ -104,7 +104,6 @@ Colaberry Inc.`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Track A1] Corrected - router now uses your existing inbox_vips',
     text: stripEmDashes(text),
     html: stripEmDashes(html),

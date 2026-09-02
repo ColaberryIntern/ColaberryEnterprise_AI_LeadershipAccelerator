@@ -430,6 +430,8 @@ import DeliveryClientSigninToken from './DeliveryClientSigninToken';
 import DeliveryCapacityOverride from './DeliveryCapacityOverride';
 import DeliveryStory from './DeliveryStory';
 import DeliveryRelease from './DeliveryRelease';
+import DeliverySignalCandidate from './DeliverySignalCandidate';
+import DeliveryExperienceClaim from './DeliveryExperienceClaim';
 import DeliveryContract from './DeliveryContract';
 import DeliveryDecision from './DeliveryDecision';
 import DeliveryEvent from './DeliveryEvent';
@@ -1558,6 +1560,8 @@ export {
   DeliveryCapacityOverride,
   DeliveryStory,
   DeliveryRelease,
+  DeliverySignalCandidate,
+  DeliveryExperienceClaim,
   DeliveryContract,
   DeliveryDecision,
   DeliveryEvent,

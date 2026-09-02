@@ -1,0 +1,49 @@
+/* Upcoming events strip on Today. Sits above the timeline feed and borrows the
+   surrounding shell's tokens (--surface, --border, --muted, --strong, --cherry,
+   --leaf-action) rather than redeclaring a palette, so it follows the theme. */
+.te-events-strip{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:16px 18px 8px;
+  margin-bottom:18px
+}
+.te-events-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.te-events-head .h{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)
+}
+.te-events-head .h svg{width:16px;height:16px;flex:none}
+.te-events-all{
+  font-size:13px;font-weight:700;color:var(--cherry, #FB2832);text-decoration:none;white-space:nowrap
+}
+.te-events-all:hover{text-decoration:underline}
+
+.te-events-list{list-style:none;margin:0;padding:0}
+.te-events-list li{border-top:1px solid var(--border)}
+.te-events-list li:first-child{border-top:none}
+
+.te-events-item{
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  padding:10px 2px;text-decoration:none;color:inherit;
+  transition:opacity .15s
+}
+.te-events-item:hover{opacity:.72}
+.te-events-item .ev-when{
+  font-size:12.5px;font-weight:700;color:var(--cherry, #FB2832);
+  flex:none;min-width:15.5rem
+}
+.te-events-item .ev-title{
+  font-size:14px;font-weight:600;color:var(--strong);
+  flex:1 1 12rem;min-width:0
+}
+.te-events-item .ev-tag{
+  flex:none;font-size:11px;font-weight:800;letter-spacing:.02em;
+  padding:2px 8px;border-radius:999px;
+  background:rgba(91,166,60,.16);color:#468A2E
+}
+
+/* Narrow: let the date sit on its own line instead of squeezing the title. */
+@media (max-width:640px){
+  .te-events-item .ev-when{min-width:100%}
+}

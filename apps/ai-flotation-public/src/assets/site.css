@@ -1,0 +1,261 @@
+/*
+ * AI Flotation — public site.
+ *
+ * Froth flotation is a separation process: you make the valuable mineral rise and let the
+ * waste sink. That is the product almost exactly, so the identity is built on material
+ * surfacing — brass as the thing that rises, navy as the depth it comes out of, and a
+ * waterline that separates proven from unproven.
+ *
+ * Deliberately absent: gradients, particle fields, neon circuitry, robot imagery.
+ *
+ * Dependency-free by design. No framework, no build step beyond token substitution. This
+ * file is copied verbatim by packages/app-build (only .html is transformed), which is why
+ * it carries no {{brand.*}} tokens.
+ */
+
+:root {
+  --ink: #101a2b;
+  --navy: #16304f;
+  --brass: #b4813a;
+
+  --surface: #ffffff;
+  --surface-alt: #f4f6f8;
+  --surface-sunk: #e9edf2;
+  --line: #dde2e9;
+  --line-firm: #c3cbd6;
+  --muted: #5f6b7d;
+
+  --good: #2f7d5b;
+  --warn: #a3661f;
+  --bad: #a33a34;
+
+  --display: 'Archivo', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --body: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --wrap: 68rem;
+}
+
+/* The viewer's OS preference is honoured. Every colour below comes from a token so the
+   dark set is a complete swap rather than a partial one. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e7ecf3;
+    --navy: #9dbbd8;
+    --brass: #d8a75a;
+
+    --surface: #141c27;
+    --surface-alt: #19222f;
+    --surface-sunk: #1f2a38;
+    --line: #2a3746;
+    --line-firm: #3a4a5d;
+    --muted: #94a2b5;
+
+    --good: #5fb98d;
+    --warn: #d69b4e;
+    --bad: #e08b85;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 1.25rem; }
+.measure { max-width: 62ch; }
+
+h1, h2, h3, h4 {
+  font-family: var(--display);
+  text-wrap: balance;
+  margin: 0;
+  line-height: 1.15;
+  color: var(--ink);
+}
+h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; letter-spacing: -.035em; }
+h2 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 700; letter-spacing: -.025em; }
+h3 { font-size: 1.12rem; font-weight: 600; letter-spacing: -.01em; }
+h4 { font-size: .95rem; font-weight: 600; }
+p { margin: 0; }
+
+a { color: var(--navy); }
+a:hover { color: var(--brass); }
+
+:focus-visible {
+  outline: 3px solid var(--brass);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.skip {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--navy); color: #fff; padding: .6rem 1rem; z-index: 20;
+}
+.skip:focus { left: 0; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: .69rem;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+.eyebrow.quiet { color: var(--muted); }
+
+/* ---------- header ---------- */
+.masthead { border-bottom: 1px solid var(--line); background: var(--surface); }
+.masthead .bar {
+  display: flex; align-items: center; gap: 1.35rem;
+  padding: 1rem 0; flex-wrap: wrap;
+}
+.logo {
+  font-family: var(--display); font-weight: 700; font-size: 1.05rem;
+  letter-spacing: -.03em; color: var(--ink); text-decoration: none;
+  display: flex; align-items: center; gap: .55rem;
+}
+.logo:hover { color: var(--ink); }
+.logo svg { flex: none; }
+.nav { display: flex; align-items: center; gap: 1.35rem; flex-wrap: wrap; }
+.nav a { font-size: .86rem; color: var(--muted); text-decoration: none; }
+.nav a:hover, .nav a[aria-current="page"] { color: var(--brass); }
+.spacer { flex: 1 1 auto; }
+
+.btn {
+  font-family: var(--body); font-size: .86rem; font-weight: 600;
+  padding: .5rem 1.05rem; border-radius: 3px; text-decoration: none;
+  display: inline-block; border: 1px solid transparent; cursor: pointer;
+}
+.btn-primary { background: var(--navy); color: #fff; }
+.btn-primary:hover { background: var(--ink); color: #fff; }
+.btn-ghost { border-color: var(--line-firm); color: var(--ink); }
+.btn-ghost:hover { border-color: var(--brass); color: var(--brass); }
+
+/* ---------- sections ---------- */
+main { display: block; }
+.band { padding: 3.5rem 0; border-bottom: 1px solid var(--line); }
+.band.alt { background: var(--surface-alt); }
+.band > .wrap { display: flex; flex-direction: column; gap: 1.4rem; }
+
+.hero { padding: 4.5rem 0 4rem; }
+/* Sized to sit under the flotation column below it. At 20ch the headline wrapped to
+   three lines and left a ragged gap beside a full-width figure, which reads as
+   unfinished rather than deliberate. */
+.hero h1 { max-width: 26ch; }
+.hero .sub { color: var(--muted); font-size: 1.08rem; max-width: 62ch; }
+.cta-row { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: .5rem; }
+
+/* The flotation column. The one figure on the site, and it carries the argument:
+   what rises is visible and governed; what stays below is where the cost hides. */
+.column { border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin-top: 1rem; }
+.stratum { padding: .9rem 1.15rem; display: flex; gap: 1rem; align-items: baseline; font-size: .89rem; flex-wrap: wrap; }
+.stratum .tag {
+  font-family: var(--mono); font-size: .66rem; letter-spacing: .12em;
+  text-transform: uppercase; flex: none; min-width: 7.5rem;
+}
+.stratum.up { background: color-mix(in srgb, var(--brass) 11%, var(--surface)); }
+.stratum.up .tag { color: var(--brass); }
+.stratum.down { background: var(--surface-alt); color: var(--muted); }
+.stratum.down .tag { color: var(--muted); }
+.waterline { height: 0; border-top: 2px solid var(--brass); }
+
+/* ---------- grids ---------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1.2rem 1.3rem; }
+.band.alt .tile { background: var(--surface); }
+.tile h3 { margin-bottom: .4rem; }
+.tile p { font-size: .89rem; color: var(--muted); }
+
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.step { padding: 1rem 1.1rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); }
+.step .n { font-family: var(--mono); font-size: .66rem; letter-spacing: .1em; color: var(--brass); }
+.step .l { font-family: var(--display); font-weight: 600; font-size: .96rem; margin-top: .15rem; }
+.step .d { font-size: .82rem; color: var(--muted); margin-top: .3rem; }
+
+.note {
+  font-family: var(--mono); font-size: .8rem; line-height: 1.6; color: var(--muted);
+  background: var(--surface-alt); border: 1px solid var(--line);
+  border-left: 3px solid var(--brass); border-radius: 3px; padding: .95rem 1.15rem;
+}
+.note b { color: var(--ink); font-weight: 500; }
+
+ul.list { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: .55rem; }
+ul.list li::marker { color: var(--brass); }
+
+dl.defs { margin: 0; display: flex; flex-direction: column; gap: 1.1rem; }
+dl.defs dt { font-family: var(--display); font-weight: 600; font-size: 1rem; }
+dl.defs dd { margin: .25rem 0 0; color: var(--muted); font-size: .92rem; }
+
+.pill {
+  display: inline-block; font-family: var(--mono); font-size: .65rem;
+  letter-spacing: .07em; text-transform: uppercase; padding: .18rem .5rem;
+  border-radius: 2px; white-space: nowrap;
+}
+.pill.pass { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+.pill.waived { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.pill.unknown { background: color-mix(in srgb, var(--muted) 15%, transparent); color: var(--muted); }
+
+.empty {
+  border: 1px dashed var(--line-firm); border-radius: 4px;
+  padding: 2.5rem 1.5rem; text-align: center; background: var(--surface-alt);
+}
+.empty h3 { margin-bottom: .5rem; }
+.empty p { color: var(--muted); font-size: .92rem; max-width: 48ch; margin: 0 auto; }
+
+/* ---------- form ---------- */
+form.intake { border: 1px solid var(--line); border-radius: 4px; padding: 1.6rem; background: var(--surface); max-width: 40rem; }
+form.intake label { display: block; font-size: .82rem; font-weight: 600; margin: 1.1rem 0 .35rem; }
+form.intake input, form.intake textarea {
+  width: 100%; padding: .65rem .75rem; border: 1px solid var(--line-firm);
+  border-radius: 3px; background: var(--surface); color: var(--ink);
+  font-family: inherit; font-size: 1rem;
+}
+form.intake input:focus-visible, form.intake textarea:focus-visible { border-color: var(--brass); }
+.consent { display: flex; gap: .65rem; align-items: flex-start; margin-top: 1.3rem; font-size: .88rem; color: var(--muted); }
+.consent input { width: auto; margin-top: .35rem; }
+.consent label { margin: 0; font-weight: 400; font-size: .88rem; }
+form.intake button { margin-top: 1.5rem; width: 100%; padding: .85rem 1rem; border: 0; border-radius: 3px; background: var(--navy); color: #fff; font-family: inherit; font-size: 1rem; font-weight: 600; cursor: pointer; }
+form.intake button:hover { background: var(--ink); }
+form.intake button:disabled { opacity: .55; cursor: progress; }
+#status { margin-top: 1rem; font-size: .92rem; min-height: 1.5rem; }
+#status[data-state="ok"] { color: var(--good); }
+#status[data-state="error"] { color: var(--bad); }
+
+/* ---------- footer ---------- */
+footer.site { padding: 2.5rem 0 3.5rem; background: var(--surface-alt); border-top: 1px solid var(--line); }
+footer.site .cols { display: flex; gap: 2.5rem; flex-wrap: wrap; justify-content: space-between; }
+footer.site a { color: var(--muted); text-decoration: none; font-size: .86rem; display: block; margin-bottom: .4rem; }
+footer.site a:hover { color: var(--brass); }
+footer.site .fine { font-size: .78rem; color: var(--muted); margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+
+/* The header, small.
+   Left to wrap, seven nav items produced four ragged rows before any content - the
+   sort of thing a DOM assertion passes and a person immediately reads as broken. A
+   stacked list costs vertical space and is unambiguous, keyboard-navigable, and needs
+   no JavaScript, which a dependency-free site cannot spend. */
+@media (max-width: 860px) {
+  .masthead .bar { flex-direction: column; align-items: stretch; gap: 0; padding-bottom: .75rem; }
+  .masthead .logo { padding-bottom: .75rem; }
+  .spacer { display: none; }
+  .nav { flex-direction: column; align-items: stretch; gap: 0; }
+  .nav a { padding: .65rem 0; border-top: 1px solid var(--line); }
+  .nav a.btn { text-align: center; border-top: none; margin-top: .75rem; }
+  .nav a.btn-ghost { margin-top: 1rem; }
+}
+
+@media (max-width: 640px) {
+  .band { padding: 2.5rem 0; }
+  .hero { padding: 2.5rem 0 2.5rem; }
+  .stratum .tag { min-width: 0; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}

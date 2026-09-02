@@ -217,7 +217,7 @@ support@colaberry.com  |  972-992-1024`;
     from: '"Ali Muwwakkil - Colaberry" <ali@colaberry.com>',
     to: 'documentation@hireright.com',
     cc: ['admissions@colaberry.com'],
-    bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    bcc: ['ali@colaberry.com'],
     replyTo: 'support@colaberry.com',
     subject: 'Re: Education Verification Request - Request ID: AT-060426-2C5H3',
     html: REPLY_HTML,

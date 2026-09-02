@@ -1,5 +1,6 @@
 import { getLearnerContextBlock } from '../learnerContextService';
 import { getActiveDirectiveTexts } from '../managerDirectiveService';
+import { getApprovedMemoryTexts } from '../agentMemoryProposalService';
 
 /**
  * Reese Phase 3 (Agent Blueprint) — the persona-block + learner-context
@@ -27,6 +28,13 @@ import { getActiveDirectiveTexts } from '../managerDirectiveService';
  * a ManagerDirective change autonomy_level, tools_granted, or bypass
  * agentAuthorizationService — that is the actual, mechanically-enforced
  * "restrict-only" boundary, not a check on what the directive's text says.
+ *
+ * AI Workforce Management, Checkpoint E (2026-08-31) — approved
+ * AgentMemoryProposal rows are injected here too, on the same `agentId`
+ * trigger, via getApprovedMemoryTexts(). This is the actual proof that
+ * memory-approval state is read by the runtime, not a dead flag like
+ * OpenclawLearning.applied: a proposal reaches this prompt if and only if
+ * its status is 'approved', queried fresh on every call.
  */
 export interface BuildAgentSystemPromptOptions {
   /** Lowercased, used only in the learner-context-failure log line's `service` field. */
@@ -53,6 +61,11 @@ function buildDirectiveBlock(directives: string[]): string {
   );
 }
 
+function buildMemoryBlock(memories: string[]): string {
+  const lines = memories.map((m) => `- ${m}`).join('\n');
+  return '\nAPPROVED MEMORY (facts a manager has reviewed and approved about this context):\n' + lines;
+}
+
 /**
  * Builds an agent's full system prompt for a conversation with one enrollment.
  * Never throws — a learner-context failure degrades gracefully to the persona block
@@ -72,6 +85,9 @@ export async function buildAgentSystemPrompt(
   if (options?.agentId) {
     const directives = await getActiveDirectiveTexts(options.agentId);
     if (directives.length) parts.push(buildDirectiveBlock(directives));
+
+    const memories = await getApprovedMemoryTexts(options.agentId);
+    if (memories.length) parts.push(buildMemoryBlock(memories));
   }
 
   let learnerBlock = '';

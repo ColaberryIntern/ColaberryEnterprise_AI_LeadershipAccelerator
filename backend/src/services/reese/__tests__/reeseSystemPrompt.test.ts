@@ -11,15 +11,20 @@ jest.mock('../reeseIdentitySeed', () => ({
 jest.mock('../../managerDirectiveService', () => ({
   getActiveDirectiveTexts: jest.fn(),
 }));
+jest.mock('../../agentMemoryProposalService', () => ({
+  getApprovedMemoryTexts: jest.fn(),
+}));
 
 import { getLearnerContextBlock } from '../../learnerContextService';
 import { getReeseAgentId } from '../reeseIdentitySeed';
 import { getActiveDirectiveTexts } from '../../managerDirectiveService';
+import { getApprovedMemoryTexts } from '../../agentMemoryProposalService';
 import { buildReeseSystemPrompt } from '../reeseSystemPrompt';
 
 const mockLearnerContext = getLearnerContextBlock as unknown as jest.Mock;
 const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
 const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
+const mockApprovedMemory = getApprovedMemoryTexts as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -28,6 +33,7 @@ beforeEach(() => {
   // (agentId resolved, zero active directives) rather than the degraded one.
   mockGetReeseAgentId.mockResolvedValue('reese-agent-id');
   mockActiveDirectives.mockResolvedValue([]);
+  mockApprovedMemory.mockResolvedValue([]);
 });
 
 describe('buildReeseSystemPrompt', () => {

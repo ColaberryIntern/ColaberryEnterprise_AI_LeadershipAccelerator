@@ -320,13 +320,13 @@ ${renderInline('GREEN', green)}
     const r = await transport.sendMail({
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: 'ali@colaberry.com',
-      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
+      cc: ['ram@colaberry.com'],
       subject, text, html,
       headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': totals.black > 0 ? 'high' : 'normal', 'X-Priority': totals.black > 0 ? '1' : '3' },
     });
     console.log('[intern-report] email sent:', r.messageId);
     messageIds.push(r.messageId);
-    recipientsSent.push('ali@colaberry.com', 'alimuwwakkil@gmail.com');
+    recipientsSent.push('ali@colaberry.com');
   }
 
   if (!NO_MB && !DRY) {

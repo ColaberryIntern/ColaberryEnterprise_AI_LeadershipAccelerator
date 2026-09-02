@@ -4,6 +4,7 @@ import { isExplorerFeatureEnabled } from '../../config/explorerGrowthFlags';
 import { readLearnerSignals } from './explorerSignalReader';
 import { scoreLearner } from './explorerScoringService';
 import { classify } from './explorerStateMachine';
+import { getExplorerEventState } from './explorerEventStateService';
 import { hasFullCurriculumAccess } from '../access/contentEntitlement';
 import { isStaffEnrollment } from '../access/staffAccess';
 import { Cohort, Enrollment } from '../../models';
@@ -163,8 +164,14 @@ export async function recomputeExplorerProfile(
   const readout = await readLearnerSignals(enrollmentId, { asOf });
   const scores = scoreLearner(readout);
   const entitlement = await resolveEntitlement(enrollmentId);
+  // EPIC 7 — live event state, fetched HERE so `classify` stays pure. Keyed on
+  // the learner's email because that is what the Eventbrite registration record
+  // carries; it fails soft to "nothing known" so a CCPP blip cannot invent or
+  // remove an overlay.
+  const eventState = await getExplorerEventState((profile as any).email_normalized ?? null);
 
   const result = classify({
+    eventState,
     previousProfile: {
       primary_state: profile.primary_state,
       state_entered_at: profile.state_entered_at,

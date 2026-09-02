@@ -97,7 +97,6 @@ Colaberry Inc.`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Status] Client projects daily reports live - 3 emails shipped',
     text: stripEmDashes(text),
     html: stripEmDashes(html),

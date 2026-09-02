@@ -297,22 +297,22 @@ export const WEEK3_MONDAY: TeachSlide[] = [
   /* ===================== micro-build · hands on Python ==================== */
   {
     segment: 'micro-build', eyebrow: '📁 Where things live', title: 'One folder, one key, one command — set this up before you write anything',
-    body: 'Two things have to be true before any of tonight works. First, you need a folder to build in: use the project folder Claude Code is already open in, and everything tonight lands inside it. Second, you need an API key from the Anthropic Console, set as an environment variable in the SAME terminal you will run Python from. These commands go in your terminal, not into Claude Code — that distinction matters more than it looks, and the next slide is entirely about why.',
+    body: 'Two things have to be true before any of tonight works. First, you need a folder to build in: use the project folder Claude Code is already open in, and everything tonight lands inside it. Second, you need an API key from the Anthropic Console. The key goes in a .env file that you edit yourself — never into a prompt, never echoed onto a screen other people can see. Claude Code sets up everything around the key: the SDK, the file, the gitignore entry, and a check that it loads.',
     bullets: [
       'Work inside the project folder Claude Code already has open — not Downloads',
       'console.anthropic.com → API keys → Create key → copy it once (it is shown once)',
-      'Set ANTHROPIC_API_KEY in the terminal you will run Python from',
-      'Same window, same session: a new terminal tab does NOT have it until you set it again',
-      'Verify with the echo line before you go on — blank output means it is not set',
+      'The key goes in .env, which YOU edit. Never paste a key into a prompt.',
+      '.env must be gitignored before the key goes in it — that order matters',
+      'A .env survives closing the window. An exported variable does not.',
     ],
     code: {
       kind: 'paste',
-      pasteWhere: 'your TERMINAL (not Claude Code)',
-      label: 'Terminal — install the SDK, set the key, verify it',
-      code: '# 1. from inside your project folder\npip install anthropic\n\n# 2. set the key — macOS / Linux\nexport ANTHROPIC_API_KEY=sk-ant-...\n\n# 2. set the key — Windows PowerShell\n$env:ANTHROPIC_API_KEY="sk-ant-..."\n\n# 3. VERIFY — this must print your key, not a blank line\necho $ANTHROPIC_API_KEY        # macOS / Linux\necho $env:ANTHROPIC_API_KEY    # Windows PowerShell',
-      expectedResult: 'Step 3 prints your key back. A blank line means it never got set — fix it here, before you write any Python.',
-      stopCondition: 'Everyone has a non-blank echo. This is the one checkpoint tonight that blocks everything after it.',
-      rescue: 'Blank echo? You are almost certainly in a different terminal window than the one you set it in. Set it again in THIS window.',
+      pasteWhere: 'Claude Code',
+      label: 'Claude Code prompt — set up everything AROUND the key',
+      code: 'Set up this project to call the Anthropic API. Do everything except the key itself — I will put that in by hand.\n\n1. Confirm the repository root and tell me where you are working.\n2. Install the anthropic SDK, using whatever Python environment this project already uses. Tell me which one you used.\n3. Add .env to .gitignore FIRST, and show me the line. Do this before the file exists — a key that gets committed is a key you have to rotate.\n4. Create a .env file with the single line: ANTHROPIC_API_KEY=\n   Leave the value EMPTY. Do not ask me for my key, and do not put a key anywhere.\n5. Make sure the project loads .env (python-dotenv or equivalent).\n6. Write me a tiny check that prints only whether the key is present and how many characters it is — never the key itself.\n\nThen tell me exactly which file to open to paste my key into.',
+      expectedResult: 'The SDK installed, .env gitignored BEFORE it exists, an empty .env, and a check that reports present/absent without ever printing the key.',
+      stopCondition: 'You have pasted your key into .env yourself, and the check says it is loaded. Nobody has seen anybody else’s key.',
+      rescue: 'Check says missing after you edited the file? You may have saved a .env.txt, or edited one in a different folder. Ask Claude Code to print the absolute path of the .env it is reading.',
     },
     diagram: `flowchart LR
   CON["🎛️ Console —<br/>create key (shown once)"] --> T["⌨️ YOUR terminal —<br/>export ANTHROPIC_API_KEY"]

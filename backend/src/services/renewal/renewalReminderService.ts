@@ -214,7 +214,7 @@ async function release(r: DueReminder, err: unknown): Promise<void> {
 export async function loadActiveSubscriptions(): Promise<RenewalSubscriptionRow[]> {
   return (await sequelize.query(
     `SELECT s.id, s.enrollment_id, s.plan, s.status, s.amount_cents,
-            s.current_period_end, s.canceled_at,
+            s.current_period_end, s.canceled_at, s.paysimple_schedule_id,
             e.email, e.full_name,
             e.status AS enrollment_status,
             e.access_starts_at,
@@ -286,7 +286,7 @@ export async function resolveCheckout(r: DueReminder, priorRows: LedgerRow[]): P
 
 // ------------------------------------------------------------------- the transport
 
-function buildTransport(): nodemailer.Transporter {
+export function buildTransport(): nodemailer.Transporter {
   if (!env.mandrillApiKey) {
     throw Object.assign(new Error('MANDRILL_API_KEY is not set. Refusing to attempt a send.'), { error_class: 'ConfigError' });
   }
@@ -307,7 +307,7 @@ function buildTransport(): nodemailer.Transporter {
  * stops a dev container mailing a real customer. Returns null when a guard
  * blocked the message, which the caller treats as "not sent" and releases.
  */
-async function guardedSend(
+export async function guardedSend(
   transport: nodemailer.Transporter,
   options: nodemailer.SendMailOptions,
 ): Promise<{ messageId: string | null } | null> {
@@ -437,6 +437,7 @@ export async function runRenewalReminders(opts: RenewalRunOptions = {}): Promise
         applied_credit_cents: checkout.applied_credit_cents,
         payment_link: checkout.payment_link,
         day_delta: reminder.day_delta,
+        autopay: reminder.autopay,
       });
 
       // Style gate before anything is sent or even shown as final copy. A

@@ -10,6 +10,8 @@ import {
   toClientShape,
   toClientShapes,
 } from '../modules/delivery/clientVisibility';
+import { toClientRelease } from '../modules/delivery/clientReleaseProjection';
+import { recordClientAcceptance } from '../services/delivery/clientAcceptance';
 
 /**
  * deliveryClientRoutes — the read surface an external client reviewer actually sees.
@@ -143,6 +145,7 @@ router.get(
         DeliveryProject,
         DeliveryDecision,
         DeliveryChangeRequest,
+        DeliveryRelease,
         DeliveryEngagement,
         Brand,
       } = require('../models');
@@ -160,9 +163,15 @@ router.get(
 
       // Decisions and change requests are scoped by project id, which the guard above has
       // already confirmed belongs to this session.
-      const [decisionRows, changeRows] = await Promise.all([
+      const [decisionRows, changeRows, releaseRows] = await Promise.all([
         DeliveryDecision.findAll({ where: { delivery_project_id: projectId } }),
         DeliveryChangeRequest.findAll({ where: { delivery_project_id: projectId } }),
+        // Only releases that reached the client. A candidate still being argued about
+        // internally is not something the client was given, and listing one would invite
+        // them to ask about work that has not been offered to them yet.
+        DeliveryRelease.findAll({
+          where: { delivery_project_id: projectId, status: ['approved', 'released'] },
+        }),
       ]);
 
       // The engagement the project belongs to. Fetched by the project's OWN
@@ -193,6 +202,11 @@ router.get(
         // decisions stay internal; `requires_client_approval` is the line.
         decisions: toClientShapes('decision', decisionRows.map(plain)),
         changeRequests: toClientShapes('change_request', changeRows.map(plain)),
+        // Mapped BEFORE projecting: the allowlist names `name`, `released_at` and
+        // `evidence_summary`, and none of them are columns. Projecting the row directly
+        // yields { id, status } and drops the rest in silence - see
+        // clientReleaseProjection.ts for why that is a mapper and not a rename.
+        releases: toClientShapes('release', releaseRows.map((r: any) => toClientRelease(plain(r)))),
       };
 
       if (!assertNoForbiddenFields(payload, 'client_project_detail', res)) return;
@@ -209,6 +223,63 @@ router.get(
         }),
       );
       res.status(500).json({ error: 'Unable to load this project right now.' });
+    }
+  },
+);
+
+/**
+ * POST /api/refactored/client/projects/:projectId/acceptances
+ *
+ * The client's sign-off. Scenario B's second half: this is what writes the
+ * `delivery_client_acceptances` row whose snapshots must match what the client saw.
+ *
+ * **The request carries the decision, never the evidence.** `promised_acceptance`,
+ * `preview_ref` and `evidence_summary` are assembled server-side from the release or story
+ * being accepted. A body field for them would let the signer describe what they were
+ * shown, which is the one thing this record exists to establish independently.
+ *
+ * The acceptor is the SESSION identity, not a body field, for the same reason: an
+ * acceptance naming somebody who did not sign it is worse than no acceptance.
+ */
+router.post(
+  '/api/refactored/client/projects/:projectId/acceptances',
+  requireDeliveryClient,
+  requireDeliveryProjectAccess('projectId'),
+  async (req: DeliveryClientRequest, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const { scopeKind, releaseId, storyId, status, comments, exceptions } = req.body ?? {};
+    if (!scopeKind || !status) {
+      res.status(400).json({ error: 'scopeKind and status are required.' });
+      return;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const models = require('../models');
+      const out = await recordClientAcceptance({
+        projectId,
+        scopeKind,
+        releaseId: typeof releaseId === 'string' ? releaseId : null,
+        storyId: typeof storyId === 'string' ? storyId : null,
+        status,
+        // From the token. There is no body field for this.
+        acceptedByIdentityId: req.deliveryClient?.sub ?? null,
+        comments: typeof comments === 'string' ? comments : null,
+        exceptions: Array.isArray(exceptions) ? exceptions : null,
+        models,
+      });
+      if (!out.ok) {
+        res.status(out.reason === 'no_such_scope' ? 404 : 422)
+          .json({ error: out.message, reason: out.reason, issues: out.issues });
+        return;
+      }
+      res.status(201).json(out);
+    } catch (err) {
+      console.error(JSON.stringify({
+        level: 'error', service: 'delivery-client-api',
+        event: 'client_acceptance_failed', outcome: 'failure',
+        error_class: (err as Error)?.constructor?.name ?? 'Error',
+      }));
+      res.status(500).json({ error: 'Unable to record your decision right now.' });
     }
   },
 );

@@ -31,7 +31,8 @@ export interface DeliveryReleaseAttributes {
   profile_key: string;
   candidate_sha: string | null;
   check_results: unknown[];
-  waived_categories: string[];
+  /** ReleaseWaiver rows: the check, and WHY it was waived. See releaseManagement.ts. */
+  waived_categories: unknown[];
   goals_scores: Record<string, unknown> | null;
   approved_by_identity_id: string | null;
   approved_at: Date | null;
@@ -48,7 +49,7 @@ class DeliveryRelease extends Model<DeliveryReleaseAttributes> implements Delive
   declare profile_key: string;
   declare candidate_sha: string | null;
   declare check_results: unknown[];
-  declare waived_categories: string[];
+  declare waived_categories: unknown[];
   declare goals_scores: Record<string, unknown> | null;
   declare approved_by_identity_id: string | null;
   declare approved_at: Date | null;

@@ -6,7 +6,7 @@ jest.mock('mssql', () => {
     request: jest.fn(() => request),
     close: jest.fn().mockResolvedValue(undefined),
   };
-  return { __esModule: true, ConnectionPool: jest.fn(() => pool), NVarChar: 'NVarChar', Int: 'Int', __pool: pool, __request: request };
+  return { __esModule: true, ConnectionPool: jest.fn(() => pool), NVarChar: 'NVarChar', VarChar: 'VarChar', Int: 'Int', __pool: pool, __request: request };
 });
 jest.mock('../../config/env', () => ({
   env: { mssqlHost: 'h', mssqlPort: 1433, mssqlUser: 'u', mssqlPass: 'p', mssqlDatabase: 'CCPP' },
@@ -16,6 +16,7 @@ jest.mock('../../models', () => ({ OpenHouseEvent: { findAll: jest.fn() } }));
 import {
   ccppRowToView, centralWallClockToInstant, withinDays, getNextPublicEvent,
   getUpcomingPublicEvents, isKnownPublicEvent, __resetPublicEventsCache,
+  PUBLIC_EVENT_GROUP, annotateRegistration,
 } from '../publicEventsService';
 import { OpenHouseEvent } from '../../models';
 
@@ -44,9 +45,13 @@ describe('publicEventsService', () => {
         title: 'Colaberry Accelerator Open House',
         description: 'd',
         starts_at: new Date('2026-07-16T23:30:00Z'),
+        ends_at: new Date('2026-07-16T23:30:00Z'),
         timezone: 'America/Chicago',
         registration_url: 'https://ev/123',
         meeting_link: null,
+        image_url: null,
+        signup_count: null,
+        is_registered: false,
       });
     });
 
@@ -55,6 +60,42 @@ describe('publicEventsService', () => {
       expect(v.id).toBe('9');
       expect(v.description).toBeNull();
       expect(v.registration_url).toBeNull();
+    });
+
+    it('passes a real signup count through, and treats a missing one as unknown', () => {
+      const base = ccppRow('7', 'X', '2026-09-01T10:00:00Z');
+      expect(ccppRowToView({ ...base, SignupCount: 14 }).signup_count).toBe(14);
+      // 0 is a REAL answer ("nobody yet") and must survive as 0, not become null.
+      expect(ccppRowToView({ ...base, SignupCount: 0 }).signup_count).toBe(0);
+      // Absent / null / non-numeric mean "not known" — null, never a fabricated 0.
+      expect(ccppRowToView(base).signup_count).toBeNull();
+      expect(ccppRowToView({ ...base, SignupCount: null }).signup_count).toBeNull();
+      expect(ccppRowToView({ ...base, SignupCount: NaN }).signup_count).toBeNull();
+    });
+
+    it('defaults is_registered false — it is per-viewer, never from the shared cache', () => {
+      expect(ccppRowToView(ccppRow('7', 'X', '2026-09-01T10:00:00Z')).is_registered).toBe(false);
+    });
+
+    it('carries the Eventbrite promo image through as image_url', () => {
+      const url = 'https://img.evbuc.com/x?s=abc';
+      const v = ccppRowToView({ ...ccppRow('7', 'AI Internship Presentation Event', '2026-09-01T10:00:00Z'), Logo_url: url });
+      expect(v.image_url).toBe(url);
+    });
+
+    it('normalises a missing, null or blank Logo_url to null', () => {
+      const base = ccppRow('7', 'X', '2026-09-01T10:00:00Z');
+      // CCPP holds all three shapes; the UI does one truthiness check, so they
+      // must collapse to null rather than reaching it as '' or undefined.
+      expect(ccppRowToView(base).image_url).toBeNull();
+      expect(ccppRowToView({ ...base, Logo_url: null }).image_url).toBeNull();
+      expect(ccppRowToView({ ...base, Logo_url: '   ' }).image_url).toBeNull();
+    });
+
+    it('corrects ends_at as Central-as-UTC too, and leaves a null EndDate null', () => {
+      const withEnd = ccppRowToView({ ...ccppRow('7', 'X', '2026-07-16T18:30:00Z'), EndDate: new Date('2026-07-16T20:00:00Z') });
+      expect(withEnd.ends_at).toEqual(new Date('2026-07-17T01:00:00Z'));
+      expect(ccppRowToView({ ...ccppRow('7', 'X', '2026-07-16T18:30:00Z'), EndDate: null }).ends_at).toBeNull();
     });
   });
 
@@ -131,6 +172,126 @@ describe('publicEventsService', () => {
     });
   });
 
+  // The portal's visibility rule lives entirely in this SQL, so assert the SQL —
+  // a recordset-only test passes just as happily against a WHERE that hides
+  // everything. Regression guard for the AI-track events (AI Internship
+  // Presentation et al.) that the old name-only allowlist silently dropped.
+  describe('visibility rule: the CCPP Registration label', () => {
+    const runAndGetSql = async (): Promise<string> => {
+      sqlMock.__request.query.mockResolvedValue({ recordset: [] });
+      await getUpcomingPublicEvents(30);
+      return String(sqlMock.__request.query.mock.calls[0][0]);
+    };
+
+    it('selects events carrying the Registration event-group label', async () => {
+      const q = await runAndGetSql();
+      expect(q).toMatch(/EventBrite_EventAccess/);
+      expect(q).toMatch(/EventBrite_EventGroups/);
+      expect(q).toMatch(/a\.IsActive\s*=\s*1/);
+      expect(q).toMatch(/g\.GroupName\s*=\s*@group/);
+      // Bound as a parameter, never interpolated into the statement text.
+      expect(sqlMock.__request.input).toHaveBeenCalledWith('group', 'NVarChar', PUBLIC_EVENT_GROUP);
+      expect(PUBLIC_EVENT_GROUP).toBe('Registration');
+      expect(q).not.toContain(`'${PUBLIC_EVENT_GROUP}'`);
+    });
+
+    it('matches the label with EXISTS so multi-group events are not duplicated', async () => {
+      const q = await runAndGetSql();
+      expect(q).toMatch(/EXISTS\s*\(/);
+      // A top-level join onto EventBrite_EventAccess would emit one row per
+      // active group and eat the TOP (@lim) budget with duplicates.
+      expect(q).not.toMatch(/FROM\s+EventBrite_Events\s+e\s+INNER\s+JOIN\s+EventBrite_EventAccess/i);
+    });
+
+    it("still OR's the deprecated name fallback for occurrences CCPP left unlabelled", async () => {
+      const q = await runAndGetSql();
+      expect(q).toMatch(/OR\s+e\.Name LIKE '%Open House%'/);
+      expect(q).toMatch(/e\.Name LIKE '%Financial Literacy%'/);
+    });
+
+    it('keeps the live-status and forward-window guards', async () => {
+      const q = await runAndGetSql();
+      expect(q).toMatch(/e\.Status = 'live'/);
+      // Forward-window guard still present — but compared in CENTRAL, not raw
+      // UTC. This assertion originally pinned `> GETUTCDATE()`, which was the
+      // defect itself: see the Central-frame describe block below.
+      expect(q).toMatch(/e\.StartDate > CAST\(GETUTCDATE\(\) AT TIME ZONE/);
+    });
+
+    it('selects the promo image column the Events page renders', async () => {
+      // Without Logo_url in the SELECT the page silently falls back to lettered
+      // tiles for every card, which looks intentional rather than broken.
+      const q = await runAndGetSql();
+      expect(q).toMatch(/e\.Logo_url/);
+    });
+
+    it('counts signups by DISTINCT email, not attendee rows', async () => {
+      // One Eventbrite order writes several attendee rows. The legacy training
+      // site badges 14 for an event holding 30 rows, and that is the number
+      // learners recognise — COUNT(*) would show 30 and read as inflated.
+      const q = await runAndGetSql();
+      expect(q).toMatch(/COUNT\(DISTINCT a2\.Email\)/);
+      expect(q).toMatch(/EventBrite_EventAttendees/);
+      // A correlated subquery, not a second top-level join, or the attendee rows
+      // would multiply events and eat the TOP (@lim) budget.
+      expect(q).not.toMatch(/FROM\s+EventBrite_Events\s+e\s+LEFT\s+JOIN\s+EventBrite_EventAttendees/i);
+    });
+  });
+
+  // is_registered is per-person while the event list is a shared cross-viewer
+  // cache. These tests exist mainly to keep those two facts from ever merging.
+  describe('annotateRegistration (per-viewer)', () => {
+    const view = (id: string): any => ({
+      id, title: 'X', description: null, starts_at: new Date('2026-09-08T15:00:00Z'),
+      ends_at: null, timezone: 'America/Chicago', registration_url: null,
+      meeting_link: null, image_url: null, signup_count: null, is_registered: false,
+    });
+
+    it('marks only the events this email registered for', async () => {
+      sqlMock.__request.query.mockResolvedValue({ recordset: [{ EventId: '2' }] });
+      const out = await annotateRegistration([view('1'), view('2'), view('3')], 'a@b.com');
+      expect(out.map((e) => e.is_registered)).toEqual([false, true, false]);
+    });
+
+    it('never mutates the caller\'s objects — they belong to the shared cache', async () => {
+      // Mutating in place would publish one learner's registrations to every
+      // other viewer served from the same cached array.
+      sqlMock.__request.query.mockResolvedValue({ recordset: [{ EventId: '1' }] });
+      const shared = [view('1')];
+      const out = await annotateRegistration(shared, 'a@b.com');
+      expect(out[0].is_registered).toBe(true);
+      expect(shared[0].is_registered).toBe(false);
+      expect(out[0]).not.toBe(shared[0]);
+    });
+
+    it('marks nothing, and issues no query, without an email', async () => {
+      const out = await annotateRegistration([view('1')], null);
+      expect(out[0].is_registered).toBe(false);
+      expect(sqlMock.__request.query).not.toHaveBeenCalled();
+    });
+
+    it('binds event ids as parameters rather than interpolating them', async () => {
+      sqlMock.__request.query.mockResolvedValue({ recordset: [] });
+      await annotateRegistration([view('1'), view('2')], 'a@b.com');
+      const q = String(sqlMock.__request.query.mock.calls[0][0]);
+      expect(q).toMatch(/EventId IN \(@id0,@id1\)/);
+      expect(sqlMock.__request.input).toHaveBeenCalledWith('id0', 'VarChar', '1');
+      expect(sqlMock.__request.input).toHaveBeenCalledWith('email', 'VarChar', 'a@b.com');
+    });
+
+    it('lower-cases the email so casing cannot hide a registration', async () => {
+      sqlMock.__request.query.mockResolvedValue({ recordset: [] });
+      await annotateRegistration([view('1')], '  Ali@Colaberry.COM ');
+      expect(sqlMock.__request.input).toHaveBeenCalledWith('email', 'VarChar', 'ali@colaberry.com');
+    });
+
+    it('fails SOFT when CCPP is down — nothing marked, calendar still renders', async () => {
+      sqlMock.__request.query.mockRejectedValue(new Error('ECONNREFUSED'));
+      const out = await annotateRegistration([view('1')], 'a@b.com');
+      expect(out[0].is_registered).toBe(false);
+    });
+  });
+
   describe('failure path: CCPP unavailable', () => {
     it('falls back to the Postgres open_house_events table', async () => {
       sqlMock.__request.query.mockRejectedValue(new Error('ECONNREFUSED'));
@@ -150,5 +311,47 @@ describe('publicEventsService', () => {
       __resetPublicEventsCache();
       expect(await getUpcomingPublicEvents(30)).toEqual([]);
     });
+  });
+});
+
+/**
+ * The upcoming-window filter must compare like with like.
+ *
+ * CCPP stores StartDate as CENTRAL wall-clock; the filter compared it against
+ * GETUTCDATE(). Every event therefore disappeared from the Events page, the
+ * calendar and the "Next event" chip five hours (six in winter) before it
+ * started. Observed on production 2026-09-02: the 10:00 AM CDT session was gone
+ * from the portal at 05:00 AM CDT with registration still open.
+ */
+describe('upcoming window is evaluated in Central, the frame CCPP stores', () => {
+  const sqlText = async (): Promise<string> => {
+    sqlMock.__request.query.mockResolvedValue({ recordset: [] });
+    await getUpcomingPublicEvents(30);
+    return String(sqlMock.__request.query.mock.calls[0][0]);
+  };
+
+  it('does not compare a Central-stored StartDate against raw UTC now', () => {
+    // The exact shape of the original defect.
+    return sqlText().then((q) => {
+      expect(q).not.toMatch(/e\.StartDate\s*>\s*GETUTCDATE\(\)/);
+    });
+  });
+
+  it('converts now into Central before comparing', async () => {
+    const q = await sqlText();
+    expect(q).toMatch(/AT TIME ZONE 'UTC'\s+AT TIME ZONE 'Central Standard Time'/);
+  });
+
+  it('applies the same frame to BOTH ends of the window', async () => {
+    // Fixing only the lower bound would leave the 180-day horizon skewed.
+    const q = await sqlText();
+    expect((q.match(/AT TIME ZONE 'Central Standard Time'/g) || []).length).toBe(2);
+    expect(q).toMatch(/DATEADD\(day, @days, CAST\(GETUTCDATE\(\) AT TIME ZONE/);
+  });
+
+  it('still bounds the window at both ends', async () => {
+    const q = await sqlText();
+    expect(q).toMatch(/e\.StartDate\s*>/);
+    expect(q).toMatch(/e\.StartDate\s*<=\s*DATEADD\(day, @days/);
   });
 });

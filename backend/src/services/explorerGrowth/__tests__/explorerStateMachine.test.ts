@@ -403,3 +403,57 @@ describe('purity and state_entered_at', () => {
     expect(r.state_entered_at.getTime()).toBe(NOW.getTime());
   });
 });
+
+// ---------------------------------------------------------------------------
+// EPIC 7 — event overlays from live event state
+//
+// EPIC 3 derived these from `event_registered` / `event_attended` signals whose
+// source table (`student_points_events`, rows typed `open_house_rsvp%`) has ZERO
+// rows on production — complete plumbing carrying no water. They now come from
+// CCPP's live registration record, passed in so `classify` stays pure.
+// ---------------------------------------------------------------------------
+
+describe('event overlays', () => {
+  const withEvents = (registeredUpcomingCount: number, upcomingEventCount: number) =>
+    classify(input({ eventState: { registeredUpcomingCount, upcomingEventCount } } as any));
+
+  it('marks a registered learner EVENT_REGISTERED', () => {
+    expect(withEvents(1, 2).overlays).toContain('EVENT_REGISTERED');
+  });
+
+  it('marks an unregistered learner EVENT_READY when something is upcoming', () => {
+    expect(withEvents(0, 2).overlays).toContain('EVENT_READY');
+  });
+
+  it('never emits both — two tiers would compete for the same person', () => {
+    for (const reg of [0, 1, 5]) {
+      const o = withEvents(reg, 5).overlays;
+      expect(o.includes('EVENT_READY') && o.includes('EVENT_REGISTERED')).toBe(false);
+    }
+  });
+
+  it('emits neither when nothing is upcoming', () => {
+    const o = withEvents(0, 0).overlays;
+    expect(o).not.toContain('EVENT_READY');
+    expect(o).not.toContain('EVENT_REGISTERED');
+  });
+
+  it('emits neither when event state is absent — an outage invents nothing', () => {
+    // getExplorerEventState fails soft to "nothing known", and absent must mean
+    // the same as a CCPP blip: no claim either way.
+    const o = classify(input({})).overlays;
+    expect(o).not.toContain('EVENT_READY');
+    expect(o).not.toContain('EVENT_REGISTERED');
+  });
+
+  it('NEVER emits EVENT_ATTENDED or EVENT_NO_SHOW, whatever the input', () => {
+    // Attendance is unknowable: all 549 recent events are online, and
+    // `barcode.checked_in` fires only at a physical door. Claiming a no-show
+    // would tell someone who attended that we missed them.
+    for (const [reg, up] of [[0, 0], [0, 3], [3, 3]]) {
+      const o = withEvents(reg, up).overlays;
+      expect(o).not.toContain('EVENT_ATTENDED');
+      expect(o).not.toContain('EVENT_NO_SHOW');
+    }
+  });
+});

@@ -8,6 +8,7 @@ import {
   handleSetPortfolioPageVisibility,
   handleRequestPortfolioPageReview,
 } from '../controllers/careerPortfolioPageController';
+import { handleListPostConsent, handleSetPostConsent } from '../controllers/postConsentController';
 
 /**
  * Living Career Portfolio — the private Career Studio at /portal/portfolio.
@@ -82,6 +83,24 @@ router.post(
   requireParticipant,
   requireContentEntitlement('portfolio'),
   handleRequestPortfolioPageReview,
+);
+
+// ── Per-post consent to appear on a public page ────────────────────────────
+// The read path has always filtered on `shared_to_portfolio`; nothing could set it, so
+// every post was structurally unable to reach a portfolio. Setting it recompiles the
+// record in the same request, so revoking actually removes the post from the live page.
+router.get(
+  '/api/portal/career/post-consent',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleListPostConsent,
+);
+
+router.put(
+  '/api/portal/career/post-consent/:postId',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleSetPostConsent,
 );
 
 export default router;

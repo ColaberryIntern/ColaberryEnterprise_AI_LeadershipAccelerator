@@ -14,6 +14,7 @@ import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolve
 import { getPersonaVersionHistory, type PersonaVersionHistoryRow } from '../agentPersonaVersionHistoryService';
 import { agentCostRows } from '../trustMetricsService';
 import { getAgentAuthorizationSummary, type AgentAuthorizationSummary } from '../agentAuthorizationService';
+import { computeAgentGoalsDimensions, type AgentGoalsDimension } from '../agentGoalsDimensionsService';
 
 // Agent Detail — the transparency page Ali asked for: real identity, real
 // system prompt, real tools, live status, real linked ticket activity. Written
@@ -199,6 +200,20 @@ export interface AgentDetailResult {
      * `null` only when the agent genuinely has zero ticket history either. */
     last_activity_at: Date | null;
   };
+  /** AI Workforce Management, Checkpoint E (Trust Before Intelligence
+   * Workspace) — the live GOALS dimension score (governance/observability/
+   * availability/lexicon/solid), generically computed for ANY real agent
+   * via agentGoalsDimensionsService.ts. This is a parallel, additive
+   * implementation of the same real scoring pattern
+   * trustMetricsService.ts's roster-keyed getAgentDetail(slug) already
+   * proved for the 12 Workforce OS agents — reusing the pattern, not the
+   * synthetic roster rows, per TARGET_ARCHITECTURE.md's own guiding
+   * constraint. Never fabricated: governance/lexicon are structurally
+   * 'fixed' (real permission tier / real AiAgent.category), observability/
+   * availability/solid are 'live' (computed fresh from this agent's own
+   * AiAgentActivityLog rows on every call). */
+  goals: AgentGoalsDimension[];
+  goals_overall: number;
 }
 
 const MAX_TICKETS = 50;
@@ -348,10 +363,11 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // `adminUser.id` like the tickets queries above), since ai_events and the
   // new history table are keyed on the real AiAgent row regardless of
   // whether it has a linked staff identity.
-  const [personaVersionHistory, costRows, authorizationSummary] = await Promise.all([
+  const [personaVersionHistory, costRows, authorizationSummary, goalsResult] = await Promise.all([
     getPersonaVersionHistory(agent.id),
     agentCostRows(30, agent.id),
     getAgentAuthorizationSummary(agent.id, agent.agent_name, 30),
+    computeAgentGoalsDimensions(agent),
   ]);
   const costSummary = costRows[0] ? { cost_usd: costRows[0].costUsd, runs: costRows[0].runs } : null;
 
@@ -426,5 +442,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       last_error_at: agent.last_error_at ?? null,
       last_activity_at: lastActivityAt,
     },
+    goals: goalsResult.goals,
+    goals_overall: goalsResult.goalsOverall,
   };
 }

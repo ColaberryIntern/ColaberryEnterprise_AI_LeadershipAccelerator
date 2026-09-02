@@ -18,10 +18,7 @@ const MUTED = 'var(--text-muted)';
 const LINE = 'var(--border-subtle)';
 
 interface Capability {
-  name: string;
-  evidence_level: 'colaberry_verified' | 'delivery_verified';
-  evidence_count: number;
-  last_demonstrated_at: string | null;
+  name: string; count: number; proven?: boolean; on_sample?: boolean;
 }
 interface RecordLink { slug: string; title: string; published_at: string | null }
 interface ProjectItem {
@@ -43,12 +40,6 @@ interface Portfolio {
   private_repository_count: number;
   generated_at: string;
 }
-
-/** Delivery-verified outranks Colaberry-verified: it means it survived real use. */
-const LEVEL_LABEL: Record<Capability['evidence_level'], string> = {
-  delivery_verified: 'Verified in delivery',
-  colaberry_verified: 'Verified by Colaberry',
-};
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section style={{ marginTop: 40 }}>
@@ -98,8 +89,13 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
         )}
       </header>
 
+      {/* PROVEN BY COMMITTED FILES, not by curriculum consumption.
+          This band previously read "Verified by Colaberry - N pieces of evidence" from the
+          assessment tables. Every one of those 8,895 rows is source='timeline' -- content
+          opened, one row per band -- so the number meant attendance and the label claimed
+          proof. On a page built for recruiters that was the most damaging line here. */}
       {capabilities.length > 0 && (
-        <Section title={`What they can prove (${capabilities.length})`}>
+        <Section title={`Proven in their repo (${capabilities.length})`}>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {capabilities.map((c) => (
               <li
@@ -109,50 +105,19 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
                   padding: '10px 0', borderBottom: `1px solid ${LINE}`, flexWrap: 'wrap',
                 }}
               >
-                <span style={{ color: INK, fontWeight: 600 }}>{c.name}</span>
+                <span style={{ color: INK, fontWeight: 600 }}>
+                  {c.name}
+                  {c.on_sample && (
+                    <span style={{ color: MUTED, fontWeight: 500 }}> · built on the sample</span>
+                  )}
+                </span>
                 <span style={{ color: MUTED, fontSize: 13 }}>
-                  {LEVEL_LABEL[c.evidence_level]}
-                  {' · '}
-                  {c.evidence_count} piece{c.evidence_count === 1 ? '' : 's'} of evidence
+                  {c.count > 1 && <>{c.count} committed</>}
+                  {c.proven && <>{c.count > 1 ? ' · ' : ''}demonstrated</>}
                 </span>
               </li>
             ))}
           </ul>
-        </Section>
-      )}
-
-      {/* THE SYSTEM, not a link to a document about it. A reader wants the problem it
-          solves, the code, and something running -- in that order. */}
-      {projects.length > 0 && (
-        <Section title={`What they built (${projects.length})`}>
-          {projects.map((p, i) => (
-            <article key={`${p.title}-${i}`} style={{ padding: '14px 0', borderBottom: `1px solid ${LINE}` }}>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: INK, margin: 0 }}>{p.title}</h3>
-              {(p.stage || p.industry || p.organization) && (
-                <div style={{ fontSize: 13, color: MUTED, marginTop: 3 }}>
-                  {[p.stage, p.industry, p.organization].filter(Boolean).join(' · ')}
-                </div>
-              )}
-              {p.problem && (
-                <p style={{ margin: '10px 0 0', color: BODY }}>{p.problem}</p>
-              )}
-              {p.automation_goal && (
-                <p style={{ margin: '6px 0 0', color: MUTED, fontSize: 14 }}>{p.automation_goal}</p>
-              )}
-              {(p.repo_url || p.demo_url) && (
-                <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-                  {p.demo_url && (
-                    <a href={p.demo_url} target="_blank" rel="noopener noreferrer"
-                       style={{ color: ACCENT, fontWeight: 600, textDecoration: 'none' }}>See it running</a>
-                  )}
-                  {p.repo_url && (
-                    <a href={p.repo_url} target="_blank" rel="noopener noreferrer"
-                       style={{ color: ACCENT, fontWeight: 600, textDecoration: 'none' }}>The code</a>
-                  )}
-                </div>
-              )}
-            </article>
-          ))}
         </Section>
       )}
 

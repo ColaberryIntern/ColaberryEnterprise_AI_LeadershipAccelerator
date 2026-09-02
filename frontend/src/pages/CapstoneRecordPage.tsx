@@ -38,6 +38,7 @@ interface RecordArtifact {
 }
 interface RecordPost { week: number; ritual: string; headline: string; body: string | null }
 interface RecordCompetency { domain: string; label: string; evidence_count: number }
+interface RecordSkill { skill_id: string; label: string; basis: string[] }
 interface RecordCapability {
   id: string; label: string; count: number; proven?: boolean; on_sample?: boolean;
 }
@@ -57,6 +58,9 @@ interface CapstoneRecord {
   competencies: RecordCompetency[];
   /** Optional: absent for records compiled before this band, and for no connected repo. */
   capabilities?: RecordCapability[];
+  skills?: RecordSkill[];
+  /** Generated prose, frozen at approval. Absent until a reviewer has approved one. */
+  narrative?: string | null;
   posts: RecordPost[];
   bookend: { opening: string | null; closing: string | null };
 }
@@ -136,6 +140,7 @@ function CapstoneRecordPage() {
 
   const { identity, system, artifacts, competencies, posts, bookend } = record;
   const capabilities = record.capabilities ?? [];
+  const skills = record.skills ?? [];
   const weeks = Array.from(new Set(artifacts.map((a) => a.week))).sort((x, y) => x - y);
 
   return (
@@ -309,6 +314,24 @@ function CapstoneRecordPage() {
 
       {/* What they built in their own repo. Separate from "What they can prove":
           competencies are assessed, these are committed files. */}
+      {/* Every skill shows WHY it is listed. A bare skill name is the unsourceable claim
+          this record exists to avoid -- the basis is what a student points at when a
+          recruiter asks, and what replaced "240 pieces of evidence". */}
+      {skills.length > 0 && (
+        <Section title="What the code shows they can do">
+          <div style={{ display: 'grid', gap: 14 }}>
+            {skills.map((s) => (
+              <div key={s.skill_id}>
+                <div style={{ color: INK, fontWeight: 700, fontSize: 15.5 }}>{s.label}</div>
+                <ul style={{ margin: '4px 0 0', paddingLeft: 18, color: MUTED, fontSize: 14 }}>
+                  {s.basis.map((b2, i) => <li key={i} style={{ margin: '2px 0' }}>{b2}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {/* Their words */}
       {posts.length > 0 && (
         <Section title="In their words">

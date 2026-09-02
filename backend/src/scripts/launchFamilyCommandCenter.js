@@ -255,7 +255,7 @@ Open the HTML briefing for the full layout, Creed's graduation photos, costs, an
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
     cc: ['addie.m.mack@gmail.com'],
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: '[TEST] Family Command Center — Tue Jun 9 briefing',
     html: emailHtml,

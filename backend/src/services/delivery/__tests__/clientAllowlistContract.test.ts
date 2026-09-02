@@ -34,8 +34,20 @@ import DeliveryClientAcceptance from '../../../models/DeliveryClientAcceptance';
  * have agreed with it. These assertions read the model definitions, so they fail when the
  * schema and the projection disagree, whichever one moved.
  *
- * Kinds with no backing model yet (`design`, `release`, `evidence_summary`, `document`)
- * are deliberately not asserted here — see the final test, which keeps that list honest.
+ * Kinds with no backing model (`design`, `evidence_summary`, `document`) are deliberately
+ * not asserted here — see the final test, which keeps that list honest.
+ *
+ * `release` stays on that list for a DIFFERENT reason, and the distinction matters.
+ * `delivery_releases` now exists, but the allowlist names `name`, `released_at` and
+ * `evidence_summary` while the table has `version`, `approved_at` and `check_results` —
+ * on purpose, because the allowlist carries the CLIENT's vocabulary and the columns carry
+ * ours. Asserting it against the model here would demand they match and force our words
+ * onto the client surface.
+ *
+ * It is pinned instead against `toClientRelease`, the mapper between them, in
+ * `clientReleaseProjection.test.ts`. Until that test existed nothing checked it at all,
+ * and four of the six fields were not produced by anything — a release would have reached
+ * a client with no name and no date, silently.
  */
 
 const MODEL_BY_KIND = {

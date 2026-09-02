@@ -15,11 +15,15 @@ RUN npm run build:frontend
 # tokens.
 COPY packages/ ./packages/
 COPY apps/refactored-public/ ./apps/refactored-public/
-RUN node apps/refactored-public/build.js
+COPY apps/ai-flotation-public/ ./apps/ai-flotation-public/
+COPY apps/cpn-public/ ./apps/cpn-public/
+RUN node apps/refactored-public/build.js  && node apps/ai-flotation-public/build.js  && node apps/cpn-public/build.js
 
 FROM nginx:alpine
 COPY --from=builder /app/frontend/build /usr/share/nginx/html
-COPY --from=builder /app/apps/refactored-public/dist /usr/share/nginx/refactored
+COPY --from=builder /app/apps/refactored-public/dist   /usr/share/nginx/refactored
+COPY --from=builder /app/apps/ai-flotation-public/dist /usr/share/nginx/aiflotation
+COPY --from=builder /app/apps/cpn-public/dist          /usr/share/nginx/opportunitylift
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 # Two server blocks on their own hostnames; nginx loads every *.conf in conf.d.
 #
@@ -30,6 +34,8 @@ COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 # mistake at cutover.
 COPY nginx/refactored-preview.conf /etc/nginx/conf.d/refactored-preview.conf
 COPY nginx/refactored.conf         /etc/nginx/conf.d/refactored.conf
+COPY nginx/aiflotation.conf        /etc/nginx/conf.d/aiflotation.conf
+COPY nginx/opportunitylift.conf    /etc/nginx/conf.d/opportunitylift.conf
 # Included by nginx.conf at server level and re-included in every location that
 # declares its own add_header (nginx does not inherit add_header into those).
 COPY nginx/security-headers.conf /etc/nginx/security-headers.conf

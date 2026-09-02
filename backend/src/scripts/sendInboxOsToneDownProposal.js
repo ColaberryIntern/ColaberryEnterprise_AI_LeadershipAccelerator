@@ -270,7 +270,7 @@ ${SIG_TEXT}`;
     ticketId,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: `Inbox OS tone-down v2 for your approval - cut from ${TOTAL_CUR}/wk to ${TOTAL_PROP}/wk (~${Math.round((TOTAL_PROP / TOTAL_CUR) * 100)}%)`,
     html: HTML,

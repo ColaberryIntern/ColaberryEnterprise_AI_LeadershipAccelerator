@@ -75,7 +75,7 @@ const CANARIES = {
 async function main() {
   const { sequelize } = require(path.join(BACKEND_DIST, 'config/database'));
   const { QueryTypes } = require('sequelize');
-  const { DeliveryProject, DeliveryProjectMember, PlatformIdentity } = require(path.join(BACKEND_DIST, 'models'));
+  const { DeliveryProject, DeliveryProjectMember, PlatformIdentity, DeliveryRelease, DeliveryClientAcceptance } = require(path.join(BACKEND_DIST, 'models'));
   const { findForbiddenFields, CLIENT_FIELD_ALLOWLIST } = require(path.join(BACKEND_DIST, 'modules/delivery/clientVisibility'));
   const {
     CLIENT_TOKEN_AUDIENCE, CLIENT_TOKEN_TTL_SECONDS, CLIENT_TOKEN_TYPE,
@@ -150,8 +150,90 @@ async function main() {
   });
   console.log('[B] canaries removed');
 
-  console.log(`\n[B] ${failures === 0 ? 'SCENARIO B (projection half) PASSED' : `FAILED (${failures})`}`);
-  console.log('[B] NOT covered: the delivery_client_acceptances half — nothing writes acceptances yet.');
+  // --- THE ACCEPTANCE HALF -------------------------------------------------------------
+  //
+  // B's full observable is a delivery_client_acceptances row whose promised_acceptance,
+  // preview_ref and evidence_summary match WHAT THE CLIENT SAW. Nothing wrote acceptances
+  // until clientAcceptance.ts, so this half has never run before.
+  //
+  // The property under test is that the CLIENT does not get to say what they were shown.
+  await project.update({ delivery_profile_key: 'commercial_standard' });
+  await DeliveryClientAcceptance.destroy({ where: { delivery_project_id: project.id } });
+  await DeliveryRelease.destroy({ where: { delivery_project_id: project.id } });
+
+  const release = await DeliveryRelease.create({
+    delivery_project_id: project.id,
+    version: `9.9.9-e2e-${Date.now()}`,
+    status: 'approved',
+    profile_key: 'commercial_standard',
+    candidate_sha: 'deadbeef',
+    check_results: [{ check: 'tests', outcome: 'pass', detail: null }],
+    waived_categories: [
+      { check: 'accessibility', reason: 'Client accepted a documented WCAG exception.',
+        waivedByIdentityId: null, waivedAt: new Date().toISOString() },
+    ],
+  });
+
+  const acceptUrl = `${BASE_URL}/api/refactored/client/projects/${project.id}/acceptances`;
+  const postAccept = async (body) => {
+    const r = await fetch(acceptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    return { status: r.status, body: await r.json().catch(() => ({})) };
+  };
+
+  // A client cannot describe what they were shown. These fields are ignored - there is no
+  // parameter for them - and the snapshot is built from the release.
+  const accepted = await postAccept({
+    scopeKind: 'release',
+    releaseId: release.id,
+    status: 'accepted',
+    comments: 'Looks right to us.',
+    promisedAcceptance: ['I was promised a pony'],
+    evidenceSummary: ['everything was perfect'],
+  });
+  check('the client can record an acceptance', accepted.status, 201);
+
+  const row = await DeliveryClientAcceptance.findOne({
+    where: { delivery_project_id: project.id },
+  });
+  check('an acceptance row exists', row != null, true);
+  // THE observable.
+  // Compared field by field, not by JSON.stringify: Postgres returns JSONB with its keys
+  // alphabetised, so a string comparison fails on identical data. The first version of this
+  // assertion did exactly that and reported a defect that was not there.
+  check('the snapshot has exactly the release checks', (row.promised_acceptance || []).length, 1);
+  check('  the check name is from the release', row.promised_acceptance[0].check, 'tests');
+  check('  and its outcome', row.promised_acceptance[0].outcome, 'pass');
+  check('  the invented promise from the client did not land', JSON.stringify(row.promised_acceptance).includes('pony'), false);
+  check('  the invented evidence from the client did not land', JSON.stringify(row.evidence_summary).includes('perfect'), false);
+  check('  preview_ref pins the candidate sha', row.preview_ref, 'sha:deadbeef');
+  // A waiver the client signed over must be on the record they signed.
+  check('  the WAIVER travelled into the snapshot', JSON.stringify(row.evidence_summary).includes('WCAG'), true);
+  // The acceptor is the session, not a body field.
+  check('  the acceptor is the session identity', row.accepted_by_identity_id, identity.id);
+  check('  and it is timestamped', row.accepted_at != null, true);
+
+  // Idempotent: a second click is not a second acceptance.
+  const again = await postAccept({ scopeKind: 'release', releaseId: release.id, status: 'accepted' });
+  check('a second click records no second acceptance', again.status, 201);
+  const count = await DeliveryClientAcceptance.count({ where: { delivery_project_id: project.id } });
+  check('  still exactly one acceptance row', count, 1);
+
+  // An acceptance against a release that does not exist is a signature on nothing.
+  const bogus = await postAccept({
+    scopeKind: 'release', releaseId: '00000000-0000-4000-8000-000000000000', status: 'accepted',
+  });
+  check('an acceptance against an unknown release is refused', bogus.status, 404);
+
+  await DeliveryClientAcceptance.destroy({ where: { delivery_project_id: project.id } });
+  await DeliveryRelease.destroy({ where: { delivery_project_id: project.id } });
+  await project.update({ delivery_profile_key: null });
+
+  console.log(`
+[B] ${failures === 0 ? 'SCENARIO B PASSED (both halves)' : `SCENARIO B FAILED (${failures})`}`);
   process.exit(failures === 0 ? 0 : 1);
 }
 

@@ -176,11 +176,41 @@ describe('ensureRefactoredDeliverySchema — ESC-1 organization relaxation', () 
     );
   });
 
-  it('touches no other existing table, and adds no NOT NULL to an existing column', async () => {
+  /**
+   * Broadened from `/^ALTER TABLE organizations /` when Gate 11 added two columns to
+   * `delivery_stories`. The original form was written when ESC-1 was the only ALTER in the
+   * module, and it encoded that fact rather than the rule behind it.
+   *
+   * The rule is: **this module must not reach into tables it does not own.** `organizations`
+   * is the one sanctioned exception. Altering a table the module creates itself is ordinary
+   * additive schema work and always will be - a table cannot gain a column any other way
+   * once it has shipped, because CREATE TABLE IF NOT EXISTS is a no-op on an existing one.
+   *
+   * Derived from the CREATE statements in the same run rather than a hand-kept list, so a
+   * new table is covered the moment it is added and an ALTER against an unrelated table
+   * still fails.
+   */
+  it('touches no table it does not own, and adds no NOT NULL to an existing column', async () => {
     await ensureRefactoredDeliverySchema();
-    const alters = statementsFrom(mockQuery.mock.calls).filter((s) => /^ALTER TABLE/.test(s));
+    const stmts = statementsFrom(mockQuery.mock.calls);
 
-    alters.forEach((s) => expect(s).toMatch(/^ALTER TABLE organizations /));
+    const created = new Set(
+      stmts
+        .map((s) => /^CREATE TABLE IF NOT EXISTS (\w+)/.exec(s)?.[1])
+        .filter((t): t is string => Boolean(t)),
+    );
+    // Without this the set could be empty and every assertion below would pass vacuously.
+    expect(created.size).toBeGreaterThan(10);
+
+    const alters = stmts.filter((s) => /^ALTER TABLE/.test(s));
+    alters.forEach((s) => {
+      const table = /^ALTER TABLE (\w+)/.exec(s)?.[1] ?? '';
+      const owned = table === 'organizations' || created.has(table);
+      expect({ statement: s, ownsThisTable: owned }).toEqual({ statement: s, ownsThisTable: true });
+    });
+
+    // Unchanged and still the important half: adding NOT NULL to a column that already has
+    // rows fails on any row holding a null, which would take the boot down with it.
     alters.forEach((s) => expect(s).not.toMatch(/SET NOT NULL/));
   });
 

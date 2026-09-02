@@ -80,6 +80,29 @@ interface ClientChangeRequest {
   impact_summary?: string;
 }
 
+/**
+ * One line of evidence behind a release.
+ *
+ * `outcome` has THREE meaningful values, not two. A check can be waived rather than run,
+ * and the waiver carries the reason it was acceptable. Rendering a waiver as a pass would
+ * let someone accept a release that looks complete and never had the check.
+ */
+interface ClientEvidenceLine {
+  dimension: string;
+  outcome: 'pass' | 'fail' | 'not_run' | 'waived';
+  checked_at?: string | null;
+  /** Present only on a waiver. */
+  reason?: string;
+}
+
+interface ClientRelease {
+  id: string;
+  name?: string;
+  status?: string;
+  released_at?: string | null;
+  evidence_summary?: ClientEvidenceLine[];
+}
+
 interface ClientEngagement {
   id: string;
   name?: string;
@@ -105,6 +128,10 @@ interface ProjectDetail {
   project: ClientProject;
   decisions: ClientDecision[];
   changeRequests: ClientChangeRequest[];
+  // Only releases that actually reached the client. The server filters to approved and
+  // released; a candidate still being argued about internally is not something they were
+  // given.
+  releases: ClientRelease[];
 }
 
 type ClientSection = DeliverySection & { pending?: boolean; awaiting?: string };
@@ -139,8 +166,6 @@ const SECTIONS: readonly ClientSection[] = [
     key: 'releases',
     label: 'Releases',
     purpose: 'What shipped, when, and what evidence supported it.',
-    pending: true,
-    awaiting: 'the first release ships',
   },
   {
     key: 'results',
@@ -194,6 +219,42 @@ function StatusBadge({ status }: { status?: string }): React.ReactElement | null
 }
 
 /** The honest empty state for a section whose data has no writer yet. */
+/**
+ * One evidence line, with WAIVED as a first-class outcome.
+ *
+ * A waiver is not a pass and must never render as one. It gets its own colour, its own
+ * word, and the reason it was acceptable printed next to it — the reason is the only thing
+ * that lets the person signing judge whether they agree.
+ */
+function EvidenceLine({ line }: { line: ClientEvidenceLine }): React.ReactElement {
+  const TONE: Record<string, string> = {
+    pass: 'text-bg-success',
+    fail: 'text-bg-danger',
+    not_run: 'text-bg-secondary',
+    waived: 'text-bg-warning',
+  };
+  const WORD: Record<string, string> = {
+    pass: 'Passed',
+    fail: 'Failed',
+    not_run: 'Not run',
+    waived: 'Waived',
+  };
+  const readable = line.dimension.replace(/_/g, ' ');
+  return (
+    <li className="mb-1">
+      <span className={`badge ${TONE[line.outcome] ?? 'text-bg-secondary'} me-2`}>
+        {WORD[line.outcome] ?? line.outcome}
+      </span>
+      <span className="small text-capitalize">{readable}</span>
+      {line.outcome === 'waived' && (
+        <div className="small text-muted ms-1 mt-1">
+          {line.reason ?? 'No reason was recorded for this waiver.'}
+        </div>
+      )}
+    </li>
+  );
+}
+
 function NotYet({ awaiting }: { awaiting?: string }): React.ReactElement {
   return (
     <Panel>
@@ -357,6 +418,9 @@ const ClientPortal: React.FC = () => {
 
   const active: ClientSection = SECTIONS.find((s) => s.key === activeKey) ?? SECTIONS[0];
   const { brand, engagement, project, decisions, changeRequests } = detail;
+  // Defaulted rather than assumed: a client on an older backend gets a payload without
+  // this key, and the section should be empty rather than throw.
+  const releases = detail.releases ?? [];
 
   return (
     <div className="min-vh-100 bg-light py-3 px-2 px-lg-3">
@@ -448,6 +512,71 @@ const ClientPortal: React.FC = () => {
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          ))}
+
+        {active.key === 'releases' &&
+          (releases.length === 0 ? (
+            <Panel>
+              <p className="text-muted small mb-0">
+                Nothing has been released to you yet. Releases appear here once they are
+                approved, with the evidence behind them.
+              </p>
+            </Panel>
+          ) : (
+            <Panel>
+              <div className="table-responsive">
+                <table className="table table-hover mb-0 align-middle">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Release</th>
+                      <th>Released</th>
+                      <th>Evidence</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {releases.map((r) => {
+                      const lines = r.evidence_summary ?? [];
+                      const waived = lines.filter((l) => l.outcome === 'waived').length;
+                      return (
+                        <tr key={r.id}>
+                          <td className="fw-medium">{r.name ?? 'Unnamed release'}</td>
+                          <td className="small text-muted">
+                            {r.released_at ? new Date(r.released_at).toLocaleDateString() : '—'}
+                          </td>
+                          <td>
+                            {lines.length === 0 ? (
+                              <span className="small text-muted">No evidence recorded.</span>
+                            ) : (
+                              <>
+                                <ul className="list-unstyled mb-0">
+                                  {lines.map((l) => (
+                                    <EvidenceLine key={`${r.id}-${l.dimension}`} line={l} />
+                                  ))}
+                                </ul>
+                                {waived > 0 && (
+                                  // Said once, plainly, above the detail. Someone scanning the
+                                  // table should not have to read every badge to notice that
+                                  // this release shipped without a required check.
+                                  <div className="small text-warning-emphasis mt-2">
+                                    {waived === 1
+                                      ? '1 required check was waived on this release.'
+                                      : `${waived} required checks were waived on this release.`}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </td>
+                          <td>
+                            <StatusBadge status={r.status} />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

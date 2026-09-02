@@ -2,6 +2,16 @@ import Lead from '../models/Lead';
 import { V1LeadInput } from '../schemas/v1LeadSchema';
 import { calculateLeadScore } from './leadService';
 
+// Lazy import (the convention ghlService itself uses for aiEventService): a
+// top-level import pulls settingsService -> SystemSetting -> config/database and
+// constructs Sequelize at module load, which breaks any consumer that does not
+// have a DATABASE_URL - including this service's own unit tests.
+async function pushLeadToGhl(lead: unknown): Promise<void> {
+  const { syncNewLeadToGhl } = await import('./ghlService');
+  await syncNewLeadToGhl(lead as never);
+}
+
+
 export interface ExternalLeadResult {
   id: number;
   created_at: Date;
@@ -138,6 +148,14 @@ export async function ingestExternalLead(payload: V1LeadInput, correlation_id?: 
     });
 
     log('info', 'lead_created', 'success', { correlation_id, lead_id: lead.id, source: payload.source });
+    // Same gap as the open-house path: this service was added after GHL
+    // auto-sync was wired into the other call sites and never picked it up, so
+    // training.colaberry.com signups never reached the CRM. Fire-and-forget;
+    // ghlAccountRouting withholds the push until that sub-account has a key.
+    pushLeadToGhl(lead).catch((e: any) =>
+      console.error('[v1LeadIngest] GHL sync error:', e?.message)
+    );
+
     return { id: lead.id, created_at: lead.created_at, was_duplicate: false };
   } catch (err) {
     log('error', 'lead_create_failed', 'failure', {

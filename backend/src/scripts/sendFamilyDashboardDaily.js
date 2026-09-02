@@ -117,8 +117,8 @@ async function run() {
     : {
         to: 'ali@colaberry.com',
         cc: ['addie.m.mack@gmail.com'],
-        bcc: ['alimuwwakkil@gmail.com'],
-        bcSummary: `<p>Daily Family Dashboard for ${today}. Recipients: Ali (To), Addie (Cc), alimuwwakkil@gmail.com (Bcc).</p>`,
+        bcc: [],
+        bcSummary: `<p>Daily Family Dashboard for ${today}. Recipients: Ali (To), Addie (Cc).</p>`,
       };
 
   const r = await sendWithBcAttach({

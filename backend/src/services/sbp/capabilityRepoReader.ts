@@ -145,20 +145,38 @@ export function observeCapabilities(enrollmentId: string, tree: TreeEntry[]): In
 }
 
 /**
- * Read one student's repo tree and observe their capabilities.
+ * Read a student's repositories and observe their capabilities across ALL of them.
  *
- * Degrades to an empty observation rather than throwing: a student with no
- * connection, or a connection whose tree has never been fetched, has nothing to
- * observe — which is a fact, not an error. The merge in `capabilityInventory`
- * ratchets, so an empty observation can never take away something already seen.
+ * ## Why all, and not one
+ *
+ * A few enrollments have more than one `github_connections` row, and `getConnection`
+ * is a `findOne` with no ordering — so which repository got read was decided by whatever
+ * order Postgres happened to return. Quincy Nkwain Ninying has `qninying/ambit` at 134
+ * files and `qninying/ai-operations-center` at 329, and he could be scored off either.
+ * Reading one arbitrarily is not a smaller answer, it is a RANDOM one.
+ *
+ * Merging is also the honest reading of the evidence: a student who built their skills in
+ * one repository and their MCP server in another has built both. `mergeInventory`
+ * ratchets, so combining observations can only ever add.
+ *
+ * Degrades to an empty observation rather than throwing: a student with no connection, or
+ * whose trees have never been fetched, has nothing to observe — a fact, not an error.
  */
 export async function readCapabilitiesFromRepo(enrollmentId: string): Promise<Inventory> {
   try {
     const { default: GitHubConnection } = await import('../../models/GitHubConnection');
-    const conn: any = await GitHubConnection.findOne({ where: { enrollment_id: enrollmentId } });
-    const tree: TreeEntry[] = conn?.file_tree_json?.tree;
-    if (!Array.isArray(tree) || tree.length === 0) return { enrollmentId, entries: [] };
-    return observeCapabilities(enrollmentId, tree);
+    const { mergeInventory } = await import('./capabilityInventory');
+
+    const conns: any[] = await GitHubConnection.findAll({ where: { enrollment_id: enrollmentId } });
+
+    let merged: Inventory | null = null;
+    for (const conn of conns) {
+      const tree: TreeEntry[] = conn?.file_tree_json?.tree;
+      if (!Array.isArray(tree) || tree.length === 0) continue;
+      merged = mergeInventory(merged, observeCapabilities(enrollmentId, tree));
+    }
+
+    return merged ?? { enrollmentId, entries: [] };
   } catch (err: any) {
     console.warn('[capability] repo tree unreadable:', err?.message);
     return { enrollmentId, entries: [] };

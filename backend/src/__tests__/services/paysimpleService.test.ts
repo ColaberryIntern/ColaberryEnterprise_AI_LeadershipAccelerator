@@ -52,6 +52,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: mockCustomer }),
+        text: () => Promise.resolve(JSON.stringify({ Response: mockCustomer })),
       });
 
       const result = await createCustomer({
@@ -79,6 +80,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: { Id: 1, FirstName: 'Cher', LastName: '-' } }),
+        text: () => Promise.resolve(JSON.stringify({ Response: { Id: 1, FirstName: 'Cher', LastName: '-' } })),
       });
 
       await createCustomer({ fullName: 'Cher', email: 'cher@example.com', company: 'Solo' });
@@ -111,6 +113,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: [customer] }),
+        text: () => Promise.resolve(JSON.stringify({ Response: [customer] })),
       });
 
       const result = await findCustomerByEmail('john@smith.com');
@@ -121,6 +124,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: [] }),
+        text: () => Promise.resolve(JSON.stringify({ Response: [] })),
       });
 
       const result = await findCustomerByEmail('nobody@example.com');
@@ -141,6 +145,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: [existing] }),
+        text: () => Promise.resolve(JSON.stringify({ Response: [existing] })),
       });
 
       const result = await findOrCreateCustomer({
@@ -159,10 +164,12 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: [] }),
+        text: () => Promise.resolve(JSON.stringify({ Response: [] })),
       });
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: newCustomer }),
+        text: () => Promise.resolve(JSON.stringify({ Response: newCustomer })),
       });
 
       const result = await findOrCreateCustomer({
@@ -186,6 +193,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ data: mockLink }),
+        text: () => Promise.resolve(JSON.stringify({ data: mockLink })),
       });
 
       const result = await createPaymentLink({
@@ -218,6 +226,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ data: mockLink }),
+        text: () => Promise.resolve(JSON.stringify({ data: mockLink })),
       });
 
       await createPaymentLink({
@@ -240,6 +249,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ data: mockLink }),
+        text: () => Promise.resolve(JSON.stringify({ data: mockLink })),
       });
 
       await createPaymentLink({
@@ -262,6 +272,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
+        text: () => Promise.resolve(JSON.stringify({})),
       });
 
       await deletePaymentLink('link_abc123');
@@ -282,6 +293,7 @@ describe('PaySimple Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ Response: [] }),
+        text: () => Promise.resolve(JSON.stringify({ Response: [] })),
       });
 
       // 2. createCustomer
@@ -290,6 +302,9 @@ describe('PaySimple Service', () => {
         json: () => Promise.resolve({
           Response: { Id: 100, FirstName: 'Test', LastName: 'User', Email: 'test@co.com', Company: 'TestCo' },
         }),
+        text: () => Promise.resolve(JSON.stringify({
+          Response: { Id: 100, FirstName: 'Test', LastName: 'User', Email: 'test@co.com', Company: 'TestCo' },
+        })),
       });
 
       // 3. createPaymentLink
@@ -298,6 +313,9 @@ describe('PaySimple Service', () => {
         json: () => Promise.resolve({
           data: { id: 'link_xyz', payment_link: 'https://colaberry.mypaysimple.com/s/pay/abc' },
         }),
+        text: () => Promise.resolve(JSON.stringify({
+          data: { id: 'link_xyz', payment_link: 'https://colaberry.mypaysimple.com/s/pay/abc' },
+        })),
       });
 
       const result = await createEnrollmentInvoice({

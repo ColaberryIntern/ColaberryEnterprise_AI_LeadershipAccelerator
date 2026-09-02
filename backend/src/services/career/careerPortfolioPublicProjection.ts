@@ -54,7 +54,6 @@
  * no failure mode left that reaches the caller.
  */
 
-import { isVerifiedLevel, type CareerVerifiedLevel } from './careerEvidenceAdapters';
 
 // ── The public shapes. This is the entire contract. ────────────────────────
 
@@ -66,12 +65,31 @@ export interface PublicIdentity {
   linkedin_url: string | null;
 }
 
+/**
+ * A capability, PROVEN BY COMMITTED FILES.
+ *
+ * WHAT THIS REPLACED, AND WHY IT HAD TO GO. This band was previously fed from
+ * `student_architecture_skill`, and rendered as "Verified by Colaberry - 240 pieces of
+ * evidence". Audited 2026-08-31: **every one of the platform's 8,895 evidence rows across
+ * 73 learners has `source = 'timeline'`** - curriculum content opened - and a single item
+ * writes one row PER BAND, so the counts multiply. `proficiency` is a constant 60.00 and
+ * `confidence` a constant 1.000. That is attendance data wearing the language of
+ * assessment, and publishing it to a recruiter as proof was the most damaging claim on
+ * the page.
+ *
+ * The repo file tree is the only stream a student demonstrably earned, so it is the only
+ * one this band now carries. There is no `evidence_count` here on purpose: a number that
+ * cannot be defended should not be printed next to someone's name.
+ */
 export interface PublicCapability {
+  /** The capability's own label, e.g. "Agent Skills". */
   name: string;
-  /** No `'none'`, no `'resume'`. An unverified claim has no shape to occupy. */
-  evidence_level: CareerVerifiedLevel;
-  evidence_count: number;
-  last_demonstrated_at: string | null;
+  /** Distinct immediate children for a collection; 1 for a single artefact. */
+  count: number;
+  /** A service whose run was evidenced. Emitted only when true - absence is not denial. */
+  proven?: boolean;
+  /** Built against the provided sample rather than their own system. */
+  on_sample?: boolean;
 }
 
 export interface PublicRecord {
@@ -188,6 +206,8 @@ export interface ProjectPortfolioInput {
   profile: unknown;
   /** Rows from `projects`. Learner-authored, so the caller passes the APPROVED set. */
   projects?: unknown;
+  /** Repo-observed capabilities, already merged by the caller. */
+  capabilities?: unknown;
   /** Already-PUBLISHED capstone records. An unpublished record is not passed in. */
   records: unknown;
   generatedAt: string;
@@ -206,18 +226,17 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     linkedin_url: httpUrl(id.linkedin_url),
   };
 
-  const rawCaps: any[] = Array.isArray(profile.capabilities) ? profile.capabilities : [];
+  // Fed from the REPO, not from the assessment tables. See PublicCapability above.
+  const rawCaps: any[] = Array.isArray(input.capabilities) ? input.capabilities : [];
   const capabilities: PublicCapability[] = rawCaps
-    .filter((c) => c && typeof c === 'object' && isVerifiedLevel(c.evidence_level))
-    // A verified level with nothing behind it would be a contradiction; drop it rather
-    // than print "verified - 0 pieces of evidence" on a page meant to persuade.
-    .filter((c) => count(c.evidence_count) > 0)
+    .filter((c) => c && typeof c === 'object' && c.present === true && str(c.label ?? c.id))
     .map((c) => ({
-      name: str(c.name) ?? str(c.skill_id) ?? 'Capability',
-      evidence_level: c.evidence_level as CareerVerifiedLevel,
-      evidence_count: count(c.evidence_count),
-      last_demonstrated_at: str(c.last_demonstrated_at),
-    }));
+      name: str(c.label) ?? str(c.id)!,
+      count: typeof c.count === 'number' && c.count > 0 ? Math.floor(c.count) : 1,
+      ...(c.proven === true ? { proven: true } : {}),
+      ...(c.onSample === true ? { on_sample: true } : {}),
+    }))
+    .sort((a, b2) => a.name.localeCompare(b2.name));
 
   const rawProjects: any[] = Array.isArray(input.projects) ? input.projects : [];
   const projects: PublicProject[] = rawProjects

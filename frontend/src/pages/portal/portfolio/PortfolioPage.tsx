@@ -9,6 +9,7 @@ import CapabilityList from './CapabilityList';
 import BuildsSection from './BuildsSection';
 import PublishingPanel from './PublishingPanel';
 import PortfolioAddressPanel from './PortfolioAddressPanel';
+import PostConsentPanel from './PostConsentPanel';
 import './PortfolioPage.css';
 
 /**
@@ -177,6 +178,7 @@ const PortfolioPage: React.FC = () => {
         {tab === 'publishing' && (
           <>
             <PortfolioAddressPanel />
+            <PostConsentPanel />
             <PublishingPanel />
           </>
         )}

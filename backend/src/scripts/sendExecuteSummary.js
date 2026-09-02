@@ -164,7 +164,6 @@ async function bcPost(url, body) {
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Execution Pass] 5 deliverables shipped under working assumptions',
     text: textClean,
     html: htmlClean,

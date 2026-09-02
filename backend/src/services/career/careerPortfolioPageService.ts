@@ -261,11 +261,31 @@ async function buildPortfolio(
   // because the live text is exactly what they are being asked to approve.
   const projects = approvedProjects ?? await readLiveProjects(enrollmentId, now);
 
+  // Repo-proven capability. Read LIVE and never frozen: the system observes it, the
+  // learner does not author it, so the same rule as the CAPE band applies -- live where
+  // the system is the author.
+  let capabilities: unknown[] = [];
+  try {
+    const { readCapabilitiesFromRepo } = await import('../sbp/capabilityRepoReader');
+    const inv = await readCapabilitiesFromRepo(enrollmentId);
+    capabilities = inv.entries.filter((e: any) => e.present);
+    const { capabilityById } = await import('../sbp/capabilityInventory');
+    capabilities = capabilities.map((e: any) => ({ ...e, label: capabilityById(e.id)?.label ?? e.id }));
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_capabilities_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
   return projectPublicPortfolio({
     // On an unapproved page `approvedIdentity` is null, so the reviewer sees the LIVE
     // headline -- which is the text they are being asked to approve.
     profile: withApprovedIdentity(profile, approvedIdentity),
     projects,
+    capabilities,
     records,
     generatedAt: now.toISOString(),
   });

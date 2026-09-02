@@ -1,6 +1,6 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
-import { ExplorerJourneyProfile, ExplorerJourneyDecision } from '../../../models';
+import { ExplorerJourneyProfile, ExplorerJourneyDecision, Campaign } from '../../../models';
 import { env } from '../../../config/env';
 import { isExplorerFeatureEnabled } from '../../../config/explorerGrowthFlags';
 import { readLearnerSignals } from '../explorerSignalReader';
@@ -10,6 +10,7 @@ import { decideForLearner, RULESET_VERSION } from './decideForLearner';
 import { safeConsent } from './contactPolicy';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { resolveAllForCandidate } from '../content/resolveContentAssets';
+import { isFreePreviewTier } from '../../access/contentEntitlement';
 import type { Candidate, ContactPolicyInput, GovernorContext } from './types';
 
 /**
@@ -74,10 +75,37 @@ async function contactHistory(
 }
 
 /** One learner: gather context, decide, persist. */
+/**
+ * campaign_key -> campaign id, loaded ONCE per batch.
+ *
+ * EPIC 6 T005. `runGovernor.ts:198` has said since EPIC 4 that
+ * `selected_campaign_id` stays null "until EPIC 6 resolves a real campaign";
+ * this is that.
+ *
+ * HOISTED DELIBERATELY. Eight campaigns against 143 learners is one query, not
+ * 143 round trips on the nightly run.
+ *
+ * RESOLVED BY `settings.campaign_key`, NEVER BY NAME. `campaigns` has no key
+ * column and names are human-editable labels — someone renaming a campaign in
+ * Admin must not orphan it from the Governor, and the symptom would be
+ * `selected_campaign_id` going quietly null, which reads as "the Governor
+ * declined to pick one" rather than as a broken join.
+ */
+async function loadCampaignKeyMap(): Promise<Map<string, string>> {
+  const rows = await Campaign.findAll({ attributes: ['id', 'settings'] });
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    const key = ((r.get('settings') as Record<string, any>) ?? {}).campaign_key;
+    if (typeof key === 'string' && key) map.set(key, r.get('id') as string);
+  }
+  return map;
+}
+
 async function runOne(
   profile: any,
   asOf: Date,
   dryRun: boolean,
+  campaignsByKey: Map<string, string>,
 ): Promise<'decided' | 'waited'> {
   const enrollmentId = profile.enrollment_id as string;
 
@@ -163,10 +191,50 @@ async function runOne(
   // A gap does NOT drop the decision. It records with the reason named, which
   // is what lets the shadow review say "these N have no asset behind them"
   // rather than quietly showing fewer rows.
+  // EPIC 7 — THE LOCKED-LESSON GATE.
+  //
+  // `isFreePreviewTier` is the SAME function the portal gates on
+  // (`timelineService.ts:231`), so what the Governor may recommend and what the
+  // learner can actually open cannot drift apart. Asking a second source, or
+  // re-deriving the rule here, is how those two ends disagree.
+  //
+  // Measured before this landed: 12 free-preview learners were being sent a
+  // week-9 lesson that would have shown them a paywall. Nothing had sent, but it
+  // was one flag away.
+  //
+  // KNOWN RESIDUAL, stated because the safe-sounding version would be false:
+  // `isFreePreviewTier` swallows its own errors and returns `false` — meaning
+  // FULL ACCESS — so a lookup failure widens the pool rather than narrowing it.
+  // That is the wrong direction here, and this call site cannot tell an error
+  // apart from a genuine full-access answer.
+  //
+  // Not "fixed" by re-deriving the rule locally: a second copy of the gate is
+  // exactly the drift this epic exists to remove, and a wrong copy would be
+  // worse than a rare permissive failure. The right fix is a variant of
+  // isFreePreviewTier that surfaces its error, which belongs with that function
+  // rather than here. Recorded rather than papered over.
+  const tier = (await isFreePreviewTier(enrollmentId)) ? 'free_preview' : 'full_access';
+
   const { assets: resolvedAssets, gaps: assetGaps } = await resolveAllForCandidate(
     decision.required_assets,
     ctx.asOf,
+    tier,
   );
+
+  // EPIC 6 T005. The winning candidate's campaign_key -> a real campaign id.
+  //
+  // A MISSING CAMPAIGN LEAVES THE ID NULL AND NAMES THE GAP. It never falls back
+  // to another campaign: the eight keys mean eight different messages, and
+  // substituting one for another would send a dormant learner an enrollment offer
+  // while every count still looked healthy. Same discipline as the content
+  // resolver, which refuses by name rather than picking something else.
+  const campaignId = decision.campaign_key
+    ? (campaignsByKey.get(decision.campaign_key) ?? null)
+    : null;
+  const campaignGap =
+    decision.campaign_key && !campaignId
+      ? `no campaign for key: ${decision.campaign_key}`
+      : null;
 
   if (!dryRun) {
     const existing = await ExplorerJourneyDecision.findOne({
@@ -190,6 +258,8 @@ async function runOne(
       channel: decision.channel,
       candidate_actions: decision.candidate_actions as any,
       suppressed_actions: decision.suppressed_actions as any,
+      // Null until EPIC 6; a real id from here on, or null WITH a named gap.
+      selected_campaign_id: campaignId,
       // Until EPIC 5 NOTHING anywhere assigned this column, and all 153 rows
       // read `[]` - every decision naming an asset type with no asset behind it.
       selected_content_assets: resolvedAssets as any,
@@ -203,6 +273,7 @@ async function runOne(
         // Named, not counted. "3 gaps" tells a reviewer nothing about WHICH
         // purpose has no content behind it.
         assetGaps.length ? `asset gaps: ${assetGaps.join(', ')}` : null,
+        campaignGap,
       ]
         .filter(Boolean)
         .join(' | '),
@@ -227,6 +298,8 @@ export async function runGovernorBatch(
   options: { asOf?: Date; dryRun?: boolean; limit?: number } = {},
 ): Promise<GovernorRunResult> {
   const asOf = options.asOf ?? new Date();
+  // One query for all eight, before the loop. EPIC 6 T005.
+  const campaignsByKey = await loadCampaignKeyMap();
   const profiles = await ExplorerJourneyProfile.findAll({
     ...(options.limit ? { limit: options.limit } : {}),
   });
@@ -242,7 +315,7 @@ export async function runGovernorBatch(
   for (const p of profiles) {
     const id = (p as any).enrollment_id as string;
     try {
-      const outcome = await runOne(p, asOf, options.dryRun === true);
+      const outcome = await runOne(p, asOf, options.dryRun === true, campaignsByKey);
       if (outcome === 'decided') out.decided += 1;
       else out.waited += 1;
     } catch (err: any) {

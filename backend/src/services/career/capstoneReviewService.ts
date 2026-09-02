@@ -111,6 +111,25 @@ export async function requestCapstoneReview(enrollmentId: string) {
   if (!record) throw fail(404, 'You do not have a capstone record yet', 'NotFoundError');
   if (record.status === 'published') throw fail(409, 'Your record is already published', 'AlreadyPublished');
 
+  // ── the narrative is written HERE, and nowhere else ──────────────────────
+  //
+  // Asking for review is the only moment a model writes prose for this record. That is
+  // deliberate: it puts the generated text in front of the reviewer who is about to
+  // approve it, so a human reads the exact sentence that will publish. Generating at
+  // compile time instead would let approved prose be silently replaced by prose nobody
+  // has read, which is the failure the whole review gate exists to prevent.
+  //
+  // Best-effort throughout. A model that is slow or unavailable must never block a
+  // learner from asking for review, so every failure leaves the record exactly as it was.
+  await writeNarrativeForReview(enrollmentId, record).catch((e: any) => {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'narrative_generation_skipped', outcome: 'partial',
+      error_class: e?.error_class || e?.name || 'Error',
+      context: { enrollment_id: enrollmentId, message: e?.message },
+    }));
+  });
+
   /**
    * findOne + create, NOT findOrCreate.
    *
@@ -287,4 +306,86 @@ export async function getRecordForReview(recordId: string, reviewer: ReviewerIde
     // that will actually go live, not a fresh render that may already have moved on.
     content: row?.content_json ?? null,
   };
+}
+
+/**
+ * Generate the narrative and store it on the record, ready for a reviewer to read.
+ *
+ * Stored directly rather than via `compileAndStore`, because the compiler carries the
+ * narrative FORWARD from the prior record and never generates one. Writing it here and
+ * letting the next compile carry it is what makes "approved prose stays approved" hold.
+ *
+ * Returns without writing when there is not enough evidence to say anything, which is the
+ * common case and an honest one — a paragraph that says nothing is worse than silence.
+ */
+async function writeNarrativeForReview(enrollmentId: string, record: any): Promise<void> {
+  const content = record?.content_json;
+  if (!content) return;
+
+  const { readRepoSignals } = await import('../sbp/repoSignals');
+  const { inferSkills } = await import('../sbp/skillInference');
+  const { generateNarrative } = await import('./portfolioNarrativeService');
+  const { default: GitHubConnection } = await import('../../models/GitHubConnection');
+
+  const conn: any = await GitHubConnection.findOne({ where: { enrollment_id: enrollmentId } });
+  const tree = conn?.file_tree_json?.tree;
+  const signals = Array.isArray(tree) ? readRepoSignals(tree) : null;
+
+  const skills = Array.isArray(content.skills) && content.skills.length
+    ? content.skills
+    : inferSkills({
+      signals: signals ?? { languages: [], structure: [], file_count: 0,
+        practices: { containerised: false, tested: false, documented: false,
+          continuous_integration: false, typed: false, full_stack: false } },
+      paths: Array.isArray(tree)
+        ? tree.filter((e: any) => e && typeof e.path === 'string').map((e: any) => String(e.path).toLowerCase())
+        : [],
+    });
+
+  const result = await generateNarrative({
+    full_name: content?.identity?.full_name ?? 'This engineer',
+    project: {
+      name: content?.system?.project_name ?? null,
+      // The requirements document is where the intake actually lands, and it is the only
+      // source that says WHY the system exists. Fetched here rather than carried on the
+      // record, because it runs to a quarter of a megabyte and is extracted, never stored.
+      requirements_document: await readRequirementsDocument(enrollmentId),
+      problem: content?.system?.problem ?? null,
+      what_it_does: content?.system?.what_it_does ?? null,
+      organization: content?.system?.organization ?? null,
+      industry: content?.system?.industry ?? null,
+    },
+    skills,
+    signals,
+  });
+
+  if (!result.narrative) return;
+
+  await record.update({
+    content_json: { ...content, narrative: result.narrative },
+    updated_at: new Date(),
+  });
+}
+
+/**
+ * The project's requirements document, for the narrative's evidence block only.
+ *
+ * Never stored on the record and never published: `extractStatedPurpose` lifts the vision
+ * paragraphs and the rest is discarded. Returns null on any failure, which degrades the
+ * narrative to what-was-built rather than failing the review request.
+ */
+async function readRequirementsDocument(enrollmentId: string): Promise<string | null> {
+  try {
+    const { sequelize } = await import('../../config/database');
+    const [rows] = await sequelize.query(
+      `SELECT requirements_document FROM projects
+        WHERE enrollment_id = $1 AND archived_at IS NULL AND requirements_document IS NOT NULL
+        ORDER BY length(requirements_document) DESC LIMIT 1`,
+      { bind: [enrollmentId] },
+    );
+    const doc = (rows as any[])[0]?.requirements_document;
+    return typeof doc === 'string' ? doc : null;
+  } catch {
+    return null;
+  }
 }

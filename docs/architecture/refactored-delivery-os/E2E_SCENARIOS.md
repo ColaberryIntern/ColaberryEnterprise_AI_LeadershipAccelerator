@@ -148,13 +148,13 @@ automatically. It requires a real signal to arrive, which requires a deployment.
 
 | # | Scenario | Components built & unit-tested | E2E executed |
 |---|---|---|---|
-| A | Intern sandbox | ✅ Gates 7, 8, 9, 11 | ⛔ no |
-| B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ⚠️ **PARTIAL — 2026-08-29, projection half passed; acceptance half has no writer** |
-| C | Multi-project builder | ✅ Gates 2, 11, 12 | ✅ **YES — 2026-08-30, passed** (mentor-exception half still unwired) |
-| D | Government | ✅ Gates 5, 9, 13, 14 | ⛔ no |
-| E | Existing student Project | ✅ Gate 1 | ⛔ no |
+| A | Intern sandbox | ✅ Gates 7, 8, 9, 11 | ✅ **YES — 2026-08-31, 20/20 PARTIAL** (no agent-run leg) |
+| B | AI Flotation client | ✅ Gates 1, 6, 8, 9, 10 | ✅ **YES — 2026-08-31, 22/22, BOTH halves** |
+| C | Multi-project builder | ✅ Gates 2, 11, 12 | ✅ **YES — 2026-08-31, 18/18, mentor half included** |
+| D | Government | ✅ Gates 5, 9, 13, 14 | ✅ **YES — 2026-08-31, 28/28 passed** |
+| E | Existing student Project | ✅ Gate 1 | ✅ **YES — 2026-08-31, 12/12 passed** |
 | F | Cross-tenant attack | ✅ Gates 1, 2, 10 | ✅ **YES — 2026-08-28, passed** |
-| G | Production feedback | ✅ Gate 14 | ⛔ no |
+| G | Production feedback | ✅ Gate 14 | ✅ **YES — 2026-08-31, 14/14 passed** |
 
 ## Scenario C — executed 2026-08-30, PASSED
 
@@ -331,3 +331,185 @@ Items 1–6 are engineering. Item 7 is a decision only Ali can make.
 
 So the remaining six scenarios are blocked on **being written**, not on anything missing.
 F is done. A–E and G are the work.
+
+
+---
+
+## A, D, E and G — written AND EXECUTED 2026-08-31
+
+Deployed to dev and run against `accelerator_dev1`. **74 assertions, all passing.**
+Results and what running them found are at the end of this section.
+
+Writing them was mostly not a test-writing exercise. Each of the four needed a production
+path that did not exist:
+
+| # | Script | What had to be built first |
+|---|---|---|
+| A | `scenarioA-experienceLedger.js` | `delivery_experience_claims` + `experienceClaims.ts` + 2 endpoints. `evaluateClaim` had no table, so no claim could ever be earned. |
+| D | `scenarioD-governmentRelease.js` | 5 release endpoints and `waiveReleaseCheck`. Nothing could record a waiver. |
+| E | `scenarioE-studentProjectIntact.js` | `projectSourceLink.ts` + 2 endpoints. `DeliveryProjectSourceLink` had a model and a table and **no service or route at all**. |
+| G | `scenarioG-productionFeedback.js` | `delivery_signal_candidates` + `signalIntake.ts` + 2 endpoints. `operateSignals.ts` was pure with nowhere to write, so no signal could arrive. |
+
+### What each one is actually careful about
+
+**D** asserts the *control* as well as the failure: after recording every mandatory check
+except accessibility, the only remaining check blocker must be accessibility. Without that,
+"not ready" could mean anything at all was missing and the test would pass even if the gate
+had stopped looking. It also asserts that a recorded `not_run` does not satisfy the gate —
+recording a check without measuring it is the cheapest way to quiet one — and that the
+waiver is **still on the record after approval**, since folding it away at that point would
+leave a finished record claiming a clean government release that never had an a11y run.
+
+**E** compares `row_to_json` of the whole student row as a string, not a field-by-field
+check of the columns the script thinks matter. `updated_at` is inside that JSON, so a bare
+touch — the most likely regression and the easiest to miss — fails. It uses the **oldest
+existing** student project rather than one it created, because a row with no enrollment and
+no progression is a weak subject for a §24 non-regression claim.
+
+**G** tests an absence, so it snapshots counts of every table a signal could plausibly have
+written to plus the project row itself, before and after. A script asserting only "a
+candidate exists" would pass just as happily on a system that also silently opened a story.
+
+**A** is marked **PARTIAL by design**: it covers story → evidence → earned claim traceable
+to a real `delivery_evidence` row, and every refusal path. It does **not** cover the
+`-> Claude Code ->` leg — the evidence is recorded through the evidence endpoint, not
+produced by an autonomous agent run, and nothing in the script proves an agent executed
+anything.
+
+### Two rules that came out of writing these
+
+**The caller never describes its own evidence.** `claimFromEvidence` reads `evidence_type`
+and `outcome` from the row and has no parameter for them. A caller that can describe its
+own evidence can substantiate anything, and the ledger would record claims about a world it
+was told existed.
+
+**Silence is not an attestation.** `evaluateClaim` rejects `builderDidTheWork: false`, but
+the field is optional on `ClaimCandidate`, so *omitting* it passes. That is credit for
+attendance arriving through the one door the pure rule leaves open, so the service requires
+an explicit boolean and the column is `NOT NULL`.
+
+### Still not covered by anything
+
+- **A's agent-run leg.** Needs `ExecutionProvider` actually executing.
+- **B's acceptance half.** `delivery_client_acceptances` still has no writer.
+- **C's mentor-exception half.** Now unblocked — Gate 11 is wired as of PR #1949 — but the
+  scenario has not been extended to assert it.
+
+
+### Executed 2026-08-31 against dev — 74 assertions, all passing
+
+```
+  [D] SCENARIO D PASSED                28/28
+  [E] SCENARIO E PASSED                12/12
+  [G] SCENARIO G PASSED                14/14
+  [A] SCENARIO A PASSED (PARTIAL)      20/20
+```
+
+**Scenario A remains PARTIAL by design.** Every assertion passes, but the `-> Claude Code ->`
+leg is not covered: evidence is recorded through the evidence endpoint, not produced by an
+autonomous agent run. The script says so in its own output so a passing run cannot be
+misread as a complete one.
+
+### Running them found a real bug that 20 unit tests could not
+
+Scenario D failed 6 of 28 on the first run. One root cause: **`requireAdmin` populates
+`req.admin`, and every actor lookup on these routes read `req.user`.** Release approval
+returned 401 because there was no approving identity.
+
+The interesting part is what that exposed. `assignBuilderToProject` — shipped, merged,
+covered by the scenario C run recorded above — had the *identical* expression and had been
+passing `actorIdentityId: null` since it shipped. Nothing failed:
+`granted_by_identity_id` is nullable, so every assignment silently recorded no granter.
+Scenario C passed against it because C never asserted who granted.
+
+**That is the argument for E2E scenarios in a single bug.** Twenty unit tests covered the
+assignment service and every one of them supplied the actor directly as a parameter, so
+none of them could see that the route never supplied one. The seam between the middleware
+and the handler is exactly what unit tests cannot reach, and exactly what an E2E run does.
+
+`AuthPayload` carries `sub`, not `id`. `actorOf` now checks `platform_identity_id`, then
+`sub`, then `id`, on `req.admin` and then `req.user`.
+
+### Two more fixture errors, caught by running
+
+Neither was a code defect; both were names invented rather than read:
+
+- Scenario A's story contract used `businessOutcome` / `acceptanceCriteria` / `requirements`
+  and `riskLevel: 'low'`. The real fields are `fulfills` and `acceptance`, `riskLevel` is
+  **required**, and risk levels are `R0`–`R5`. The endpoint refused it 422, correctly. The
+  script now prints the validator's issues on failure so the next drift is diagnosable from
+  the run output.
+- A `docker cp` into an existing `/app/e2e` left a stale copy in place, so a corrected
+  script produced a byte-identical failure. The identical output was the tell — a real fix
+  that changes nothing at all is a signal that the fix never ran.
+
+
+---
+
+## ALL SEVEN SCENARIOS EXECUTED AND PASSING — 2026-08-31
+
+```
+  [A] SCENARIO A PASSED (PARTIAL)     no agent-run leg, by design
+  [B] SCENARIO B PASSED (both halves)
+  [C] SCENARIO C PASSED
+  [D] SCENARIO D PASSED
+  [E] SCENARIO E PASSED
+  [F] SCENARIO F PASSED
+  [G] SCENARIO G PASSED
+```
+
+Run in sequence against `accelerator_dev1`. This is the first time master plan §8's full
+set has been executed.
+
+### B's acceptance half — the client does not describe what they were shown
+
+`clientAcceptanceService.ts` was pure logic imported by exactly one file, its own test, so
+nothing ever wrote a `delivery_client_acceptances` row.
+
+`promised_acceptance`, `preview_ref` and `evidence_summary` are now assembled **server-side**
+from the release or story being accepted, and there is no request parameter for them. The
+scenario proves it by sending deliberately false values — `promisedAcceptance: ['I was
+promised a pony']` — and asserting they do not land. The acceptor comes from the session,
+not a body field.
+
+A waiver travels **into** the snapshot: a client accepting a release with a waived check
+has that on the record they signed, not only on the release row where it can be read
+separately later.
+
+### C's mentor half — and a gap the spec assumed away
+
+C's stated observable is *"the fourth concurrent assignment is refused ... **and** a
+`builder_overloaded` mentor exception appears"*. Those are two different notions of
+overload:
+
+| | counts | against |
+|---|---|---|
+| `assessOverload` | active **projects** | `max_parallel_projects` |
+| `builder_overloaded` | concurrent **stories** | `maxConcurrentStories` |
+
+**A builder at their project cap raises no mentor exception at all.** The causal link the
+spec implies does not exist in the code. Rather than work around it, the scenario asserts
+both halves — that project cap raises nothing, and that six in-flight stories do — so the
+gap is pinned as a test instead of assumed away.
+
+### What re-running found, twice
+
+The `req.user` → `req.admin` fix had a second consequence that only running could show.
+Scenario C's admin token carried the subject `'e2e-c-admin'`, and once assignment actually
+recorded the actor, every insert into a UUID column failed: **ten assertions went from
+passing to 500.** The route now drops a malformed actor and logs it as a
+`ContractViolation` — an empty audit field is a better outcome than a refused assignment,
+but it must not go back to being invisible.
+
+Verified afterwards in the live database: **4 of 5 memberships now carry a granter**, the
+single null being a row written before the fix.
+
+One more test defect, mine: B's snapshot assertion compared `JSON.stringify` output, and
+Postgres returns JSONB with keys alphabetised, so it reported `{check,detail,outcome}`
+against `{check,outcome,detail}` as a mismatch. The data was right and the assertion was
+wrong. Compared field by field now.
+
+### Still not covered by anything
+
+- **A's agent-run leg** — needs `ExecutionProvider` actually executing. A remains PARTIAL
+  and says so in its own output.
