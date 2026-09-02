@@ -23,9 +23,27 @@ import * as path from 'path';
  * rather than asserted here.
  */
 
+const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'publicEventsService.ts'), 'utf8');
 /** Comments stripped — assertions about the QUERY must not match the prose explaining it. */
-const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const CODE = strip(SRC);
+
+/**
+ * The SECOND reader of the same corrupt column.
+ *
+ * `openHouseOnboardingService.isEmailRegisteredForOpenHouse` backs the Today
+ * "RSVP for the next event" banner. It was left on an exact match when
+ * `publicEventsService` gained the defence, so production disagreed with
+ * itself: the Events page marked a viewer registered while the banner kept
+ * asking them to RSVP for the same event.
+ *
+ * Verified against a real registration on production 2026-09-02 —
+ * `annotateRegistration` returned the event as registered, while
+ * `isEmailRegisteredForOpenHouse` returned false for the same address and
+ * event, with the attendee row demonstrably present.
+ */
+const ONB = strip(fs.readFileSync(path.join(__dirname, '..', 'openHouseOnboardingService.ts'), 'utf8'));
 
 describe('the scan is not blind', () => {
   it('stripped comments but left the query behind', () => {
@@ -103,5 +121,55 @@ describe('a CCPP outage degrades honestly', () => {
     );
     expect(lookup).toContain('return new Set()');
     expect(lookup).toContain('event_registration_lookup_failed');
+  });
+});
+
+describe('the RSVP banner reads the column the same way', () => {
+  const lookup = ONB.slice(
+    ONB.indexOf('export async function isEmailRegisteredForOpenHouse'),
+    ONB.indexOf('export async function syncOpenHouseExplorers'),
+  );
+
+  it('found the function to scan', () => {
+    expect(lookup.length).toBeGreaterThan(200);
+    expect(lookup).toContain('FROM EventBrite_EventAttendees');
+  });
+
+  it('matches the clean form', () => {
+    expect(lookup).toContain('LOWER(Email) = @email');
+  });
+
+  it('ALSO matches the corrupted form — the whole point of this file', () => {
+    // Without this, the banner answers "not registered" for 100% of 2026
+    // registrations while the Events page says the opposite.
+    expect(lookup).toMatch(/OR LOWER\(Email\) = @emailWrapped/);
+  });
+
+  it('builds the wrapped form identically to the other reader', () => {
+    // Two readers of one corrupt column must agree on the corruption's shape,
+    // or they drift apart again exactly as they did before.
+    expect(lookup).toContain("`'${e}',`");
+    expect(ONB).toContain("input('emailWrapped', sql.VarChar");
+  });
+
+  it('still scopes to a single event', () => {
+    // The widened email predicate must not accidentally widen the event scope;
+    // this is the same function that once answered for a hardcoded event.
+    expect(lookup).toContain('EventId = @eventId');
+  });
+
+  it('keeps the OR inside parentheses, so the event filter still binds', () => {
+    // `A AND B OR C` would match ANY event for the wrapped form — reporting a
+    // learner as registered for something they never signed up for.
+    expect(lookup).toMatch(/AND \(LOWER\(Email\) = @email OR LOWER\(Email\) = @emailWrapped\)/);
+  });
+
+  it('does not strip characters generically', () => {
+    expect(lookup).not.toContain('REPLACE(Email');
+    expect(lookup).not.toContain('Email LIKE');
+  });
+
+  it('still fails soft — a CCPP outage must not block the schedule', () => {
+    expect(lookup).toContain('return false');
   });
 });
