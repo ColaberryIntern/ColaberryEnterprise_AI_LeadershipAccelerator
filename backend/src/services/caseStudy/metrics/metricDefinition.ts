@@ -1,5 +1,6 @@
 import type { CaseStudyMetricType } from '../../../types/caseStudy';
 import type { CaseStudyRepoFacts } from '../caseStudyRepoAnalyzer';
+import type { MetricLearnerSystem } from './learnerSystemsSource';
 
 /**
  * A metric definition is CODE, not a row an operator types.
@@ -68,6 +69,15 @@ export interface MetricRepoInput {
 }
 
 export interface MetricRunContext {
+  /**
+   * Learner-built systems, for PLATFORM-derived definitions.
+   *
+   * Empty for a repository-derived metric, which must not read it. Carries an
+   * opaque ref and a file count per system and nothing else — no owner, no
+   * repository name, no learner — so a definition can count systems and cannot
+   * become a claim about a person by a later edit.
+   */
+  readonly learnerSystems: readonly MetricLearnerSystem[];
   readonly caseStudyId: string;
   readonly correlationId: string;
   /** Successfully analysed repositories only. */
@@ -91,6 +101,8 @@ export interface MetricRunContext {
   readonly pinnedCommitSha: string | null;
   readonly pinnedCommitAt: string | null;
 }
+
+export type { MetricLearnerSystem } from './learnerSystemsSource';
 
 export interface MetricComputation {
   /**

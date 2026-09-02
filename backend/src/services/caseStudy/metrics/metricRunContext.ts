@@ -1,6 +1,6 @@
 import { opaqueRepoRef } from '../caseStudyRepoReader';
 import type { CaseStudyRepoFacts } from '../caseStudyRepoAnalyzer';
-import type { MetricRepoInput, MetricRunContext } from './metricDefinition';
+import type { MetricLearnerSystem, MetricRepoInput, MetricRunContext } from './metricDefinition';
 
 /**
  * Turning a set of repository analyses plus an approved snapshot's pinned shas
@@ -66,6 +66,8 @@ export interface AssembleInput {
   readonly needs: readonly PinnedCommitNeed[];
   /** sha ⇒ committer date, for the needs whose `knownDate` was null. */
   readonly fetchedDates: Readonly<Record<string, string | null>>;
+  /** Platform-derived input. Empty unless a platform definition is being run. */
+  readonly learnerSystems?: readonly MetricLearnerSystem[];
 }
 
 /**
@@ -104,5 +106,6 @@ export function assembleMetricRunContext(input: AssembleInput): MetricRunContext
     unreadableRepoCount: input.unreadableRepoCount,
     pinnedCommitSha: latest?.sha ?? null,
     pinnedCommitAt: latest?.at ?? null,
+    learnerSystems: input.learnerSystems ?? [],
   };
 }

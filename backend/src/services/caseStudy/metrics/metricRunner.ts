@@ -6,6 +6,7 @@ import { resolveApprovedSnapshot } from '../caseStudyPublicationStore';
 import { ensureTraceId } from '../../../utils/requestContext';
 import { findMetricDefinition } from './metricDefinitions';
 import { assembleMetricRunContext, pinnedCommitNeeds } from './metricRunContext';
+import { loadLearnerSystems } from './learnerSystemsSource';
 import { writeMetricRun } from './metricRunStore';
 import type { MetricWriteOutcome } from './metricRunStore';
 
@@ -118,6 +119,12 @@ export async function runMetric(input: RunMetricInput): Promise<MetricRunOutcome
     );
   }
 
+  // Loaded ONLY for a platform definition. A repository metric never touches
+  // learner data, and the cheapest way to guarantee that is not to fetch it.
+  const learnerSystems = definition.verificationMethod === 'platform'
+    ? await loadLearnerSystems()
+    : [];
+
   const context = assembleMetricRunContext({
     caseStudyId: input.caseStudyId,
     correlationId,
@@ -125,6 +132,7 @@ export async function runMetric(input: RunMetricInput): Promise<MetricRunOutcome
     unreadableRepoCount: analysis.failures.length,
     needs,
     fetchedDates,
+    learnerSystems,
   });
 
   const computation = definition.compute(context);

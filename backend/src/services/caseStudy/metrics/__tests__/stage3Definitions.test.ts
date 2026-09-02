@@ -186,10 +186,13 @@ describe('automated_test_files', () => {
 });
 
 describe('the registry', () => {
-  it('carries all three definitions with unique keys', () => {
+  it('carries every definition, with unique keys', () => {
     const keys = METRIC_DEFINITIONS.map((d) => d.key);
+    // Exact and ordered: this catches an accidental removal as well as an
+    // addition, and an addition SHOULD land here so the count below stays honest.
     expect(keys).toEqual([
       'delivery_elapsed_days', 'production_systems_declared', 'automated_test_files',
+      'systems_built_by_learners',
     ]);
     expect(new Set(keys).size).toBe(keys.length);
   });
@@ -237,6 +240,6 @@ describe('THE STAGE 3 CLAIM: a new metric is a definition, not a feature', () =>
     // The definition dropdown is populated from METRIC_DEFINITION_KEYS via the
     // definitions endpoint, so both new metrics are runnable in the admin panel
     // without a line of frontend work.
-    expect(METRIC_DEFINITIONS.map((d) => d.key)).toHaveLength(3);
+    expect(METRIC_DEFINITIONS.map((d) => d.key)).toHaveLength(4);
   });
 });

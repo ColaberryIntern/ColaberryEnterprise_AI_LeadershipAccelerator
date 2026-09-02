@@ -1,6 +1,7 @@
 import { automatedTestFiles } from './automatedTestFiles';
 import { deliveryElapsedDays } from './deliveryElapsedDays';
 import { productionSystemsDeclared } from './productionSystemsDeclared';
+import { systemsBuiltByLearners } from './systemsBuiltByLearners';
 import type { MetricDefinition } from './metricDefinition';
 
 /**
@@ -22,6 +23,7 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
   deliveryElapsedDays,
   productionSystemsDeclared,
   automatedTestFiles,
+  systemsBuiltByLearners,
 ];
 
 /** The definition for a key, or null. Keys are stable and equal `metric_key`. */
