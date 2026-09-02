@@ -41,6 +41,7 @@ const archiveCaseStudy = jest.fn();
 const listRepositories = jest.fn();
 const attachRepository = jest.fn();
 const setRepositoryRole = jest.fn();
+const setRepositoryPathScope = jest.fn();
 const removeRepository = jest.fn();
 const syncCaseStudy = jest.fn();
 const listSyncRuns = jest.fn();
@@ -53,7 +54,7 @@ const unpublishCaseStudy = jest.fn();
 const ALL_SERVICE_MOCKS = [
   listCaseStudies, getCaseStudy, createCaseStudyFromProject, createCaseStudyFromRepoCollection,
   updateCaseStudy, archiveCaseStudy, listRepositories, attachRepository, setRepositoryRole,
-  removeRepository, syncCaseStudy, listSyncRuns, applyHumanOverride, approveSnapshot,
+  removeRepository, setRepositoryPathScope, syncCaseStudy, listSyncRuns, applyHumanOverride, approveSnapshot,
   previewSurfaceProjection, publishCaseStudy, unpublishCaseStudy,
 ];
 
@@ -65,6 +66,7 @@ jest.mock('../../../services/caseStudy/caseStudyRepoCollection', () => ({
   listRepositories: (...a: unknown[]) => listRepositories(...a),
   removeRepository: (...a: unknown[]) => removeRepository(...a),
   setRepositoryRole: (...a: unknown[]) => setRepositoryRole(...a),
+  setRepositoryPathScope: (...a: unknown[]) => setRepositoryPathScope(...a),
   isCaseStudyRepoError: () => false,
 }));
 jest.mock('../../../services/caseStudy/caseStudyAdminService', () => ({

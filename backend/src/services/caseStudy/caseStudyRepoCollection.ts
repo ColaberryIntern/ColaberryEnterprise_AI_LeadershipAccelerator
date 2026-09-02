@@ -47,35 +47,29 @@ import type { Transaction } from 'sequelize';
 import { sequelize } from '../../config/database';
 import CaseStudyRepoCollectionModel from '../../models/CaseStudyRepoCollection';
 import CaseStudyRepositoryModel from '../../models/CaseStudyRepository';
-import type { CaseStudyRepositoryAttributes } from '../../models/CaseStudyRepository';
+import {
+  ACCESS_STATUSES, CASE_STUDY_REPO_ROLES, REPO_VISIBILITIES, asRole, oneOf, sortRecords, toRecord,
+} from './caseStudyRepoRecord';
+import type { CaseStudyRepositoryRecord, RepoRow } from './caseStudyRepoRecord';
+import { MAX_SCOPE_PREFIXES, normaliseScope } from './repoPathScope';
+import { CaseStudyRepoError } from './caseStudyRepoErrors';
 import { parseRepoReference, sameRepo } from '../sbp/repoConnect/repoReference';
 import { isRepoConnectError } from '../sbp/repoConnect/connectErrors';
 import { ensureTraceId } from '../../utils/requestContext';
-import type {
-  CaseStudyRepoRole, CaseStudyRepoVisibility, CaseStudyRepoAccessStatus, CaseStudyRepositoryRef,
-} from '../../types/caseStudy';
+import type { CaseStudyRepoRole, CaseStudyRepoVisibility } from '../../types/caseStudy';
+
+/*
+ * Re-exported, not redefined. Routes and services have imported these from this
+ * module since T004; the row mapping moved to `caseStudyRepoRecord.ts` when this
+ * file reached the 500-line ceiling, and callers should not have to care which
+ * half of the split they came from.
+ */
+export { CASE_STUDY_REPO_ROLES, ACCESS_STATUSES, REPO_VISIBILITIES } from './caseStudyRepoRecord';
+export type { CaseStudyRepositoryRecord } from './caseStudyRepoRecord';
+export { CaseStudyRepoError, isCaseStudyRepoError } from './caseStudyRepoErrors';
+export type { CaseStudyRepoErrorClass } from './caseStudyRepoErrors';
 
 /* ─────────────────────────────────────────────────────────── vocabulary ──── */
-
-/**
- * Runtime mirror of `CaseStudyRepoRole` (spec §10.2). It lives here rather than
- * in `types/caseStudy.ts` because that file is a leaf type module that imports
- * nothing; the assignment below is a compile-time proof that the two lists stay
- * identical — add a role to the union without adding it here and tsc fails.
- */
-export const CASE_STUDY_REPO_ROLES = [
-  'primary', 'frontend', 'backend', 'agents', 'data', 'infra', 'docs', 'evals', 'demo', 'other',
-] as const;
-const REPO_VISIBILITIES = ['public', 'private', 'unknown'] as const;
-
-// Both directions, checked by tsc rather than by memory: the `_SUBSET` line
-// proves list ⊆ union, the `_TOTAL` line proves union ⊆ list. Add a role to the
-// union without adding it here (or vice versa) and the build fails.
-const ROLE_SUBSET: readonly CaseStudyRepoRole[] = CASE_STUDY_REPO_ROLES;
-const ROLE_TOTAL: readonly (typeof CASE_STUDY_REPO_ROLES)[number][] = ROLE_SUBSET;
-const VIS_SUBSET: readonly CaseStudyRepoVisibility[] = REPO_VISIBILITIES;
-const VIS_TOTAL: readonly (typeof REPO_VISIBILITIES)[number][] = VIS_SUBSET;
-void ROLE_TOTAL; void VIS_TOTAL;
 
 /**
  * Spec §37: "bound repo count per collection … suggested max 20 repos per Case
@@ -86,46 +80,7 @@ export const MAX_REPOS_PER_CASE_STUDY = 20;
 
 /* ──────────────────────────────────────────────────────────── error type ──── */
 
-export type CaseStudyRepoErrorClass =
-  /** The pasted text is not a GitHub repo reference. Re-raised from the parser. */
-  | 'InvalidRepoReference'
-  /** The call itself was malformed — bad uuid, unknown role, missing field. */
-  | 'CaseStudyRepoValidationError'
-  /** The collection already holds `MAX_REPOS_PER_CASE_STUDY` repositories. */
-  | 'RepoCollectionFull'
-  /** No such repository in THIS Case Study's collection. */
-  | 'CaseStudyRepoNotFound';
-
-const HTTP_STATUS: Record<CaseStudyRepoErrorClass, number> = {
-  InvalidRepoReference: 400, CaseStudyRepoValidationError: 400,
-  RepoCollectionFull: 409, CaseStudyRepoNotFound: 404,
-};
-
-export class CaseStudyRepoError extends Error {
-  public readonly error_class: CaseStudyRepoErrorClass;
-  public readonly http_status: number;
-  public readonly details: Record<string, unknown>;
-
-  constructor(error_class: CaseStudyRepoErrorClass, message: string, details: Record<string, unknown> = {}) {
-    super(message);
-    this.name = 'CaseStudyRepoError';
-    this.error_class = error_class;
-    this.http_status = HTTP_STATUS[error_class];
-    this.details = details;
-  }
-}
-
-export function isCaseStudyRepoError(err: unknown): err is CaseStudyRepoError {
-  return err instanceof CaseStudyRepoError;
-}
-
 /* ───────────────────────────────────────────────────────────── contracts ──── */
-
-/** A repository row as this service returns it. `CaseStudyRepositoryRef` (T003) plus its id. */
-export interface CaseStudyRepositoryRecord extends CaseStudyRepositoryRef {
-  readonly id: string;
-  readonly collectionId: string;
-}
 
 export interface AttachRepositoryInput {
   caseStudyId: string;
@@ -141,6 +96,11 @@ export interface AttachRepositoryInput {
    * `case_study_repositories`; no connection row is read, created or claimed.
    */
   githubConnectionId?: string | null;
+  /**
+   * Path prefixes this Case Study is about. Omitted or empty means the whole
+   * repository, which is the pre-scoping behaviour and stays the default.
+   */
+  pathScope?: string[];
   correlationId?: string;
 }
 
@@ -158,15 +118,31 @@ const uuid = z.uuid();
 const correlation = z.string().min(1).max(200).optional();
 const roleSchema = z.enum(CASE_STUDY_REPO_ROLES);
 
+/**
+ * A scope prefix is bounded on BOTH axes. Length, because it is stored in a
+ * TEXT[] an admin types into; count, because each prefix widens the claim. The
+ * array itself is capped rather than left open: an unbounded list on a public
+ * write path is a payload, not a setting.
+ */
+const scopeSchema = z.array(z.string().min(1).max(500)).max(MAX_SCOPE_PREFIXES).optional();
+
 const attachSchema = z.object({
   caseStudyId: uuid, reference: z.string().min(1).max(500),
   role: roleSchema.optional(), visibility: z.enum(REPO_VISIBILITIES).optional(),
   allowPublicRepoLink: z.boolean().optional(), projectId: uuid.nullable().optional(),
-  githubConnectionId: uuid.nullable().optional(), correlationId: correlation,
+  githubConnectionId: uuid.nullable().optional(), pathScope: scopeSchema,
+  correlationId: correlation,
 });
 const removeSchema = z.object({ caseStudyId: uuid, repositoryId: uuid, correlationId: correlation });
 const setRoleSchema = z.object({
   caseStudyId: uuid, repositoryId: uuid, role: roleSchema, correlationId: correlation,
+});
+const setScopeSchema = z.object({
+  caseStudyId: uuid, repositoryId: uuid,
+  // NOT optional here: this endpoint's whole job is to state the scope, and an
+  // absent field would be indistinguishable from "clear it". `[]` clears it.
+  pathScope: z.array(z.string().min(1).max(500)).max(MAX_SCOPE_PREFIXES),
+  correlationId: correlation,
 });
 const listSchema = z.object({ caseStudyId: uuid, correlationId: correlation });
 
@@ -194,51 +170,6 @@ function log(event: string, outcome: Outcome, correlationId: string, ctx: Record
     outcome,
     ...ctx,
   }));
-}
-
-const ACCESS_STATUSES = ['connected', 'read_only', 'unavailable', 'deleted', 'rate_limited', 'unknown'];
-
-/**
- * Fail closed: a stored value the union does not know becomes the safe default.
- * These columns are plain VARCHARs, so a hand-edited row must degrade to
- * `other` / `unknown` rather than escape into a typed field as garbage.
- */
-function oneOf<T extends string>(allowed: readonly string[], value: unknown, fallback: T): T {
-  return allowed.includes(String(value)) ? (value as T) : fallback;
-}
-const asRole = (v: unknown): CaseStudyRepoRole => oneOf(CASE_STUDY_REPO_ROLES, v, 'other');
-
-type RepoRow = CaseStudyRepositoryAttributes & { id: string };
-
-function toRecord(row: RepoRow): CaseStudyRepositoryRecord {
-  return {
-    id: row.id,
-    collectionId: row.collection_id,
-    repoOwner: row.repo_owner,
-    repoName: row.repo_name,
-    repoUrl: row.repo_url,
-    role: asRole(row.role),
-    visibility: oneOf<CaseStudyRepoVisibility>(REPO_VISIBILITIES, row.visibility, 'unknown'),
-    accessStatus: oneOf<CaseStudyRepoAccessStatus>(ACCESS_STATUSES, row.access_status, 'unknown'),
-    allowPublicRepoLink: row.allow_public_repo_link === true,
-    defaultBranch: row.default_branch ?? undefined,
-    lastSeenSha: row.last_seen_sha ?? undefined,
-    lastSyncedAt: row.last_synced_at ? new Date(row.last_synced_at).toISOString() : undefined,
-  };
-}
-
-/**
- * Sorted in memory, not by SQL: bounded at 20 rows the cost is nil, and the order
- * is then identical on every database and collation — which is what makes the
- * admin list and the published snapshot agree.
- */
-function sortRecords(rows: CaseStudyRepositoryRecord[]): CaseStudyRepositoryRecord[] {
-  return [...rows].sort((a, b) => {
-    if (a.role === 'primary' && b.role !== 'primary') return -1;
-    if (b.role === 'primary' && a.role !== 'primary') return 1;
-    const owner = a.repoOwner.toLowerCase().localeCompare(b.repoOwner.toLowerCase());
-    return owner !== 0 ? owner : a.repoName.toLowerCase().localeCompare(b.repoName.toLowerCase());
-  });
 }
 
 async function loadRows(collectionId: string, transaction?: Transaction): Promise<RepoRow[]> {
@@ -364,6 +295,7 @@ export async function attachRepository(input: AttachRepositoryInput): Promise<At
         allow_public_repo_link: data.allowPublicRepoLink === true,
         project_id: data.projectId ?? null,
         github_connection_id: data.githubConnectionId ?? null,
+        path_scope: normaliseScope(data.pathScope ?? []),
         metadata: {},
       }, { transaction }) as unknown as RepoRow;
     } catch (err) {
@@ -494,4 +426,62 @@ export async function listRepositories(
     case_study_id: data.caseStudyId, collection_id: collectionId, repo_count: records.length,
   });
   return records;
+}
+
+/**
+ * Set (or clear) the part of a repository a Case Study is about.
+ *
+ * SEPARATE FROM ATTACH ON PURPOSE. The scope is the one field an admin gets
+ * wrong on the first try — it is a path typed from memory, and the analyzer only
+ * reveals whether it matched anything after a sync has run. If the only way to
+ * set it were `attachRepository`, correcting a typo would mean detaching and
+ * re-attaching, which discards `last_seen_sha`, `last_synced_at` and the
+ * repository's id — and every snapshot that cites that id.
+ *
+ * `[]` CLEARS the scope and returns the repository to describing the whole
+ * repository. That is a real operation, not a degenerate one: it is how an admin
+ * undoes a scope that turned out to be wrong.
+ *
+ * NOT REVALIDATED AGAINST THE REPOSITORY HERE. Whether a prefix matches any real
+ * path is a question only the analyzer can answer, and answering it here would
+ * mean a GitHub call inside an admin write. The analyzer raises
+ * `path scope matched 0 of N paths` on the next sync instead — visible, and on
+ * the surface that actually looked.
+ */
+export async function setRepositoryPathScope(
+  input: { caseStudyId: string; repositoryId: string; pathScope: string[]; correlationId?: string },
+): Promise<CaseStudyRepositoryRecord> {
+  const data = validate(setScopeSchema, input, 'setRepositoryPathScope input');
+  const correlationId = ensureTraceId(data.correlationId);
+  const pathScope = normaliseScope(data.pathScope);
+
+  const collectionId = await findCollectionId(data.caseStudyId);
+  const rows = collectionId ? await loadRows(collectionId) : [];
+  const target = rows.find((r) => r.id === data.repositoryId);
+  if (!collectionId || !target) {
+    log('case_study.repo_scope_set', 'failure', correlationId, {
+      case_study_id: data.caseStudyId, repository_id: data.repositoryId,
+      error_class: 'CaseStudyRepoNotFound',
+    });
+    throw new CaseStudyRepoError(
+      'CaseStudyRepoNotFound',
+      'That repository is not attached to this Case Study.',
+      { case_study_id: data.caseStudyId, repository_id: data.repositoryId },
+    );
+  }
+
+  await CaseStudyRepositoryModel.update(
+    { path_scope: pathScope },
+    { where: { id: target.id, collection_id: collectionId } },
+  );
+
+  // The prefixes themselves are logged: they are paths inside a repository the
+  // admin already holds, never a token and never a secret, and a scope that
+  // silently matched nothing is unreadable without them.
+  log('case_study.repo_scope_set', 'success', correlationId, {
+    case_study_id: data.caseStudyId, collection_id: collectionId, repository_id: target.id,
+    repo_owner: target.repo_owner, repo_name: target.repo_name,
+    prefix_count: pathScope.length, path_scope: pathScope, cleared: pathScope.length === 0,
+  });
+  return toRecord({ ...target, path_scope: pathScope });
 }

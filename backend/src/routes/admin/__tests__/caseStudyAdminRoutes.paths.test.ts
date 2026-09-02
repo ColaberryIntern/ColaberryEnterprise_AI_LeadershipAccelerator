@@ -39,6 +39,7 @@ jest.mock('../../../services/caseStudy/caseStudyRepoCollection', () => ({
   listRepositories: jest.fn(),
   removeRepository: jest.fn(),
   setRepositoryRole: jest.fn(),
+  setRepositoryPathScope: jest.fn(),
   isCaseStudyRepoError: jest.fn(() => false),
 }));
 jest.mock('../../../services/caseStudy/caseStudyAdminService', () => ({
