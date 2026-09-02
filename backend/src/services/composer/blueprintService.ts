@@ -4,6 +4,7 @@
  * (validation + evidence + DNA + journey + recommendations). Nothing here talks
  * to the Timeline — publishing lives in publishService.
  */
+import { Op } from 'sequelize';
 import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { CurriculumPlan, ComposerScope, PlanCard } from './types';
 import { generateCurriculum, scaffoldPlan, BlueprintInput } from './composerAi';
@@ -40,11 +41,32 @@ export function assessPlan(bp: CurriculumBlueprint, plan: CurriculumPlan, aiConf
   return { validation, evidence, journey, dna, recommendations, dependencies };
 }
 
+/**
+ * The sentinel that asks for blueprints belonging to NO course.
+ *
+ * A course id is a uuid, so this cannot collide with one.
+ */
+export const UNASSIGNED_PROGRAM = 'unassigned';
+
 export async function listBlueprints(programId?: string | null) {
   // Scoped to a course (program) when provided — the Composer works one course at
   // a time. Ordered by week so the dropdown reads Wk 1 -> Wk N.
+  //
+  // ── WHY 'unassigned' IS ITS OWN CASE ──────────────────────────────────────
+  //
+  // Creating in the Composer without a course selected stores program_id NULL,
+  // and until now nothing could ASK for those rows: passing no program returned
+  // every blueprint in the system, so an unowned one was invisible among the
+  // owned ones rather than listed as needing a home. Two of twenty were sitting
+  // like that on 2026-09-02, one of them still called 'New curriculum'.
+  //
+  // Swati chose to keep creation free and make the orphans visible instead of
+  // blocking the create button, so this is the query that makes them findable.
+  // `where.program_id = null` would compare against NULL with `=` and match
+  // nothing, which is why this is an explicit IS NULL.
   const where: Record<string, any> = {};
-  if (programId) where.program_id = programId;
+  if (programId === UNASSIGNED_PROGRAM) where.program_id = { [Op.is]: null };
+  else if (programId) where.program_id = programId;
   const rows = await CurriculumBlueprint.findAll({ where, order: [['week', 'ASC'], ['updated_at', 'DESC']] });
   return rows.map((r) => r.toJSON());
 }
