@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How it works &mdash; AI Flotation</title>
+    <meta name="description" content="Discover, Design, Build, Prove, Release, Operate. The order is the product." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="/assets/site.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="7" r="4" fill="#b4813a"></circle>
+            <path d="M2 15h20" stroke="#16304f" stroke-width="2"></path>
+          </svg>
+          AI Flotation
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav" aria-label="Main">
+          <a href="/what-we-build/">What We Build</a>
+          <a href="/approach/" aria-current="page">How It Works</a>
+          <a href="/delivery-standard/">Delivery Standard</a>
+          <a href="/results/">Results</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/client/projects">Client Login</a>
+          <a class="btn btn-primary" href="/start/">Start a Project</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">How it works</p>
+          <h1 style="margin-top:.7rem">Six stages. The order is the product.</h1>
+          <p class="sub" style="margin-top:1rem">Each stage produces something the next one needs. Nothing skips ahead because a build happened to finish.</p>
+        </div>
+      </section>
+      <section class="band alt">
+        <div class="wrap">
+          <div class="steps">
+            <div class="step"><div class="n">01</div><div class="l">Discover</div><div class="d">What the work actually is</div></div>
+            <div class="step"><div class="n">02</div><div class="l">Design</div><div class="d">What it will do, agreed</div></div>
+            <div class="step"><div class="n">03</div><div class="l">Build</div><div class="d">Against a contract</div></div>
+            <div class="step"><div class="n">04</div><div class="l">Prove</div><div class="d">Evidence, not assertion</div></div>
+            <div class="step"><div class="n">05</div><div class="l">Release</div><div class="d">A person authorises</div></div>
+            <div class="step"><div class="n">06</div><div class="l">Operate</div><div class="d">Signals propose, never act</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <dl class="defs measure">
+            <div>
+              <dt>01 &middot; Discover</dt>
+              <dd>We watch the workflow as it is, including the exceptions people have stopped
+              mentioning because they became normal. The output is a description you recognise. If
+              you do not recognise it, we have not finished.</dd>
+            </div>
+            <div>
+              <dt>02 &middot; Design</dt>
+              <dd>Requirements and acceptance criteria, plus the decisions that shape them. Each
+              decision records the question, the options, the recommendation and the reasoning, so
+              a choice made in week two is still legible in month six.</dd>
+            </div>
+            <div>
+              <dt>03 &middot; Build</dt>
+              <dd>Agents build against the contract from stage two, inside declared limits. Every
+              run is recorded: what it touched, what it produced, and under whose authority.</dd>
+            </div>
+            <div>
+              <dt>04 &middot; Prove</dt>
+              <dd>Evidence is recorded against the requirement it proves. A check that was not run
+              is recorded as not run. It never quietly becomes a pass.</dd>
+            </div>
+            <div>
+              <dt>05 &middot; Release</dt>
+              <dd>The gate assembles what is required for this kind of project and refuses until
+              it is satisfied. A regulated project carries the full set; an internal tool carries
+              less. Requirements can be waived &mdash; on the record, with a written reason, and
+              shown to you as waived rather than passed.</dd>
+            </div>
+            <div>
+              <dt>06 &middot; Operate</dt>
+              <dd>Once live, the system watches itself: errors, latency, cost, usage, data
+              quality. A signal can <em>propose</em> a defect, an optimisation or a new
+              requirement. It cannot make one. A system that changes production in response to its
+              own telemetry has nobody to ask when the telemetry is wrong.</dd>
+            </div>
+          </dl>
+          <p class="note measure" style="margin-top:1.6rem">
+            <b>Where this differs from most AI delivery.</b> The gates are real code that returns
+            a refusal, not a policy in a document. That is also why they occasionally stop us.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Company</p>
+            <a href="/about/">About</a>
+            <a href="/delivery-standard/">Delivery standard</a>
+            <a href="/results/">Results</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Work</p>
+            <a href="/what-we-build/">What we build</a>
+            <a href="/approach/">How it works</a>
+            <a href="/start/">Start a project</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Clients</p>
+            <a href="{{brand.platformApiBase}}/client/projects">Client login</a>
+            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>
+          </div>
+        </div>
+        <p class="fine">AI Flotation &middot; {{brand.publicUrl}}</p>
+      </div>
+    </footer>
+
+    <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+  </body>
+</html>

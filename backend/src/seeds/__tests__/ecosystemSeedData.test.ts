@@ -96,9 +96,19 @@ describe('www and apex are declared together', () => {
   it.each([
     ['refactored.ai', 'www.refactored.ai'],
     ['colaberry.ai', 'www.colaberry.ai'],
+    ['aiflotation.com', 'www.aiflotation.com'],
   ])('%s and %s are both declared for web', (apex, www) => {
     expect(webHosts).toContain(apex);
     expect(webHosts).toContain(www);
+  });
+
+  it('www.aiflotation.com belongs to the ai-flotation brand and is not primary', () => {
+    // The apex was seeded and www was not, so a visitor arriving on www resolved to no
+    // tenant at all and the lead their form submitted was attributed to nothing.
+    const row = allDomains.find((d) => d.hostname === 'www.aiflotation.com' && d.purpose === 'web');
+    expect(row).toBeDefined();
+    expect(row!.brand).toBe('ai-flotation');
+    expect(row!.is_primary).toBe(false);
   });
 
   it('www.refactored.ai belongs to the refactored brand, not to Colaberry', () => {

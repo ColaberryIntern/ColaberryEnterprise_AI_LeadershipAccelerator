@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Start a project — AI Flotation</title>
+    <meta name="description" content="Tell us about the workflow that is costing you time. The first conversation is about the work, not about AI." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="/assets/site.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="7" r="4" fill="#b4813a"></circle>
+            <path d="M2 15h20" stroke="#16304f" stroke-width="2"></path>
+          </svg>
+          AI Flotation
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav" aria-label="Main">
+          <a href="/what-we-build/">What We Build</a>
+          <a href="/approach/">How It Works</a>
+          <a href="/delivery-standard/">Delivery Standard</a>
+          <a href="/results/">Results</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/client/projects">Client Login</a>
+          <a class="btn btn-primary" href="/start/" aria-current="page">Start a Project</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Start a project</p>
+          <h1 style="margin-top:.7rem">Show us the workflow that is costing you.</h1>
+          <p class="sub" style="margin-top:1rem">
+            Tell us what the work is and where it hurts. We will read it and come back to you
+            about the work itself &mdash; not with a deck.
+          </p>
+        </div>
+      </section>
+
+      <section class="band" style="border-top:1px solid var(--line)">
+        <div class="wrap">
+          <form class="intake" id="intake" data-form="workflow_intake" novalidate>
+            <h2 style="font-size:1.2rem">Tell us about the work</h2>
+
+            <label for="name">Your name</label>
+            <input id="name" name="name" type="text" autocomplete="name" required />
+
+            <label for="email">Work email</label>
+            <input id="email" name="email" type="email" autocomplete="email" required />
+
+            <label for="company">Company</label>
+            <input id="company" name="company" type="text" autocomplete="organization" required />
+
+            <label for="role">Your role</label>
+            <input id="role" name="role" type="text" autocomplete="organization-title" required />
+
+            <label for="message">What workflow is costing you time?</label>
+            <textarea id="message" name="message" rows="5" required></textarea>
+
+            <div class="consent">
+              <input id="consent" name="consent_contact" type="checkbox" />
+              <label for="consent">I agree to be contacted by AI Flotation about this enquiry.</label>
+            </div>
+
+            <button type="submit" data-cta="Send this to AI Flotation">Send this to AI Flotation</button>
+            <div id="status" role="status" aria-live="polite"></div>
+          </form>
+
+          <p class="note" style="max-width:40rem;margin-top:1.5rem">
+            <b>What happens next.</b> Your details reach the team that reads them. We do not send
+            an automated confirmation, so nothing will land in your inbox from this form &mdash;
+            saying otherwise would be a promise the system does not currently keep.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Company</p>
+            <a href="/about/">About</a>
+            <a href="/delivery-standard/">Delivery standard</a>
+            <a href="/results/">Results</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Work</p>
+            <a href="/what-we-build/">What we build</a>
+            <a href="/approach/">How it works</a>
+            <a href="/start/">Start a project</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Clients</p>
+            <a href="{{brand.platformApiBase}}/client/projects">Client login</a>
+            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>
+          </div>
+        </div>
+        <p class="fine">AI Flotation &middot; {{brand.publicUrl}}</p>
+      </div>
+    </footer>
+
+    <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+    <script>
+      /*
+       * The intake contract is UNCHANGED from the skeleton app: same entry
+       * (`workflow_intake`), same field names, same endpoint, same tracking events. Only the
+       * framing around it moved. Changing any of those would silently break attribution,
+       * because the server matches on the entry and source slugs.
+       */
+      (function () {
+        var API = '{{brand.platformApiBase}}';
+        var form = document.getElementById('intake');
+        var status = document.getElementById('status');
+        var button = form.querySelector('button');
+        var sending = false;
+
+        if (window.rfxTrack) window.rfxTrack('form_start', { form: 'workflow_intake' });
+
+        function fail(message) {
+          status.textContent = message;
+          status.setAttribute('data-state', 'error');
+        }
+
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          // Double-submit guard. `disabled` alone loses the race if a submit is already in
+          // flight when a second one fires, so the flag is authoritative.
+          if (sending) return;
+
+          // Validated here rather than relying on the browser, so the message lands in the
+          // same live region as every other outcome and a screen reader hears one voice.
+          if (!form.checkValidity()) {
+            var firstInvalid = form.querySelector(':invalid');
+            fail('Please complete every field with a valid work email.');
+            if (firstInvalid && firstInvalid.focus) firstInvalid.focus();
+            return;
+          }
+
+          sending = true;
+          button.disabled = true;
+          status.textContent = 'Sending…';
+          status.removeAttribute('data-state');
+
+          var payload = {};
+          new FormData(form).forEach(function (value, key) { payload[key] = value; });
+          payload.consent_contact = form.querySelector('#consent').checked;
+          // Attribution the server cannot infer from the request alone.
+          payload.page_url = window.location.href;
+          try {
+            payload.visitor_fingerprint = localStorage.getItem('rfx_fp') || undefined;
+          } catch (e) { /* blocked storage: ingest still works, just unlinked */ }
+
+          fetch(API + '/api/leads/ingest?source={{brand.sourceSlug}}&entry=workflow_intake', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+            .then(function (res) {
+              return res.json()
+                .catch(function () { return {}; })
+                .then(function (b) { return { ok: res.ok, body: b }; });
+            })
+            .then(function (result) {
+              if (!result.ok) {
+                throw new Error(result.body && result.body.error ? result.body.error : 'We could not send that just now.');
+              }
+              if (window.rfxTrack) window.rfxTrack('form_submit', { form: 'workflow_intake' });
+              // Deliberately promises no email: outbound sending is not enabled for this
+              // brand, and a confirmation nobody receives is worse than none offered.
+              status.textContent = 'Thank you — we have your details and the team will be in touch.';
+              status.setAttribute('data-state', 'ok');
+              form.reset();
+            })
+            .catch(function (err) {
+              // Recoverable by design: the button comes back and the answers are still in
+              // the fields, because retyping five fields after a network blip is the point
+              // at which somebody gives up.
+              fail((err && err.message ? err.message : 'Something went wrong.') + ' Your answers are still here — please try again.');
+            })
+            .finally(function () {
+              sending = false;
+              button.disabled = false;
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>
