@@ -286,7 +286,7 @@ export async function resolveCheckout(r: DueReminder, priorRows: LedgerRow[]): P
 
 // ------------------------------------------------------------------- the transport
 
-function buildTransport(): nodemailer.Transporter {
+export function buildTransport(): nodemailer.Transporter {
   if (!env.mandrillApiKey) {
     throw Object.assign(new Error('MANDRILL_API_KEY is not set. Refusing to attempt a send.'), { error_class: 'ConfigError' });
   }
@@ -307,7 +307,7 @@ function buildTransport(): nodemailer.Transporter {
  * stops a dev container mailing a real customer. Returns null when a guard
  * blocked the message, which the caller treats as "not sent" and releases.
  */
-async function guardedSend(
+export async function guardedSend(
   transport: nodemailer.Transporter,
   options: nodemailer.SendMailOptions,
 ): Promise<{ messageId: string | null } | null> {

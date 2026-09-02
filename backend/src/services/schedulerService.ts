@@ -2154,6 +2154,32 @@ export function startScheduler(): void {
       });
     }, { timezone: 'America/Chicago' });
     console.log('[Scheduler] RenewalReminders scheduled (0 9 * * * America/Chicago)');
+
+    // Auto-pay disclosure, 08:30 CT, half an hour ahead of the reminders.
+    //
+    // A member who is about to be charged automatically must have been TOLD they
+    // are on automatic billing, and the reminder is not that telling: it fires 7
+    // days out, so anyone whose 7-day mark has already passed would learn it from
+    // the charge itself. On 2026-09-01 that was 20 members, four of them holding
+    // an older reminder that said the opposite.
+    //
+    // Ordering is deliberate. Running first means a member who gains a schedule
+    // and is also due a reminder the same morning hears the disclosure first,
+    // rather than a renewal note about billing they did not know was automatic.
+    //
+    // Once per member for ever, enforced by the SELECT excluding anyone who has
+    // been sent this kind at any period_end, not just the current one. It shares
+    // the reminder feature flag because both mail the same paying customers.
+    cron.schedule('30 8 * * *', () => {
+      instrumentCronJob('AutopayDisclosure', async () => {
+        const { runAutopayNotices } = await import('./renewal/autopayNotice');
+        const r = await runAutopayNotices({ send: true });
+        console.log(`[Scheduler] AutopayDisclosure: considered=${r.considered} sent=${r.sent} skipped=${r.skipped.length} failed=${r.failed}`);
+      }).catch((err) => {
+        console.error('[Scheduler] Autopay disclosure error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] AutopayDisclosure scheduled (30 8 * * * America/Chicago)');
   }
 
   // Billing watch, daily at 8am Central, an hour before the renewal reminders so a
