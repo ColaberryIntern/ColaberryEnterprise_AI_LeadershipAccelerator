@@ -145,8 +145,11 @@ main { display: block; }
 .band > .wrap { display: flex; flex-direction: column; gap: 1.4rem; }
 
 .hero { padding: 4.5rem 0 4rem; }
-.hero h1 { max-width: 20ch; }
-.hero .sub { color: var(--muted); font-size: 1.08rem; max-width: 56ch; }
+/* Sized to sit under the flotation column below it. At 20ch the headline wrapped to
+   three lines and left a ragged gap beside a full-width figure, which reads as
+   unfinished rather than deliberate. */
+.hero h1 { max-width: 26ch; }
+.hero .sub { color: var(--muted); font-size: 1.08rem; max-width: 62ch; }
 .cta-row { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: .5rem; }
 
 /* The flotation column. The one figure on the site, and it carries the argument:
@@ -232,9 +235,24 @@ footer.site a { color: var(--muted); text-decoration: none; font-size: .86rem; d
 footer.site a:hover { color: var(--brass); }
 footer.site .fine { font-size: .78rem; color: var(--muted); margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
 
+/* The header, small.
+   Left to wrap, seven nav items produced four ragged rows before any content - the
+   sort of thing a DOM assertion passes and a person immediately reads as broken. A
+   stacked list costs vertical space and is unambiguous, keyboard-navigable, and needs
+   no JavaScript, which a dependency-free site cannot spend. */
+@media (max-width: 860px) {
+  .masthead .bar { flex-direction: column; align-items: stretch; gap: 0; padding-bottom: .75rem; }
+  .masthead .logo { padding-bottom: .75rem; }
+  .spacer { display: none; }
+  .nav { flex-direction: column; align-items: stretch; gap: 0; }
+  .nav a { padding: .65rem 0; border-top: 1px solid var(--line); }
+  .nav a.btn { text-align: center; border-top: none; margin-top: .75rem; }
+  .nav a.btn-ghost { margin-top: 1rem; }
+}
+
 @media (max-width: 640px) {
   .band { padding: 2.5rem 0; }
-  .hero { padding: 3rem 0 2.5rem; }
+  .hero { padding: 2.5rem 0 2.5rem; }
   .stratum .tag { min-width: 0; width: 100%; }
 }
 
