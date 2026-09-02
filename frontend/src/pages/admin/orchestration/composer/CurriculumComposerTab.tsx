@@ -20,6 +20,21 @@ const BUCKETS: Array<[string, string]> = [
 const csv = (v?: string[] | null) => (v || []).join(', ');
 const parseCsv = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
+/**
+ * The course picker's entry for blueprints that belong to no course.
+ *
+ * Creating without a course selected stores program_id NULL, and those items were
+ * previously unreachable: the list either scoped to one course or returned
+ * everything, so an unowned blueprint hid among the owned ones. Two of twenty were
+ * in that state on 2026-09-02, one still titled 'New curriculum' from an abandoned
+ * create in July.
+ *
+ * Per Swati's call on 2026-09-02, creation stays free and the orphans are made
+ * visible instead. Picking this entry lists them so they can be adopted into a
+ * course. The value matches UNASSIGNED_PROGRAM in blueprintService.
+ */
+const UNASSIGNED = 'unassigned';
+
 const CurriculumComposerTab: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string>('');
@@ -47,7 +62,10 @@ const CurriculumComposerTab: React.FC = () => {
   // Returns true if it found live cards. Falls back to the draft plan otherwise.
   const syncCanvasToLive = async (bp: Blueprint | null, draft: Plan | null): Promise<void> => {
     setDirty(false);
-    if (!bp || !courseId || bp.week == null) { setPlan(draft); setLive(false); setLiveOrig(null); return; }
+    // UNASSIGNED is a filter, not a course, so there is no published Timeline to
+    // mirror. Asking for one would 404 into the catch below and quietly show the
+    // draft anyway; skipping is the same outcome without the failed request.
+    if (!bp || !courseId || courseId === UNASSIGNED || bp.week == null) { setPlan(draft); setLive(false); setLiveOrig(null); return; }
     try {
       const board = await composerApi.timelineBoard(courseId);
       const livePlan = livePlanForWeek(board.cards || [], bp.week);
@@ -163,7 +181,7 @@ const CurriculumComposerTab: React.FC = () => {
   const newBlueprint = async () => {
     setBusy('new');
     try {
-      const bp = await composerApi.create({ title: 'New curriculum', week: 1, difficulty: 'core', scope: 'week', competencies: [], architect_domains: [], learning_objectives: [], program_id: courseId || null });
+      const bp = await composerApi.create({ title: 'New curriculum', week: 1, difficulty: 'core', scope: 'week', competencies: [], architect_domains: [], learning_objectives: [], program_id: courseId && courseId !== UNASSIGNED ? courseId : null });
       setList((l) => [bp, ...l]); setSel(bp); setPlan(null); setAssess(null);
     } catch { setError('Create failed.'); } finally { setBusy(''); }
   };
@@ -267,6 +285,7 @@ const CurriculumComposerTab: React.FC = () => {
           <select className="cc-in" style={{ width: 'auto', fontWeight: 600 }} value={courseId} onChange={(e) => setCourseId(e.target.value)} title="The Composer and Timeline are scoped to one course">
             {courses.length === 0 && <option value="">— loading —</option>}
             {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value={UNASSIGNED}>— no course (unassigned) —</option>
           </select>
           <Btn tone="ghost" disabled={busy === 'course'} onClick={addCourse}>＋ Course</Btn>
           <span style={{ width: 1, height: 22, background: 'var(--border-default, #E4E4E4)' }} />
@@ -293,6 +312,18 @@ const CurriculumComposerTab: React.FC = () => {
         <div className="cc-pane left">
           <h5><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4z" stroke="var(--berry)" strokeWidth="2" /><path d="M8 9h8M8 13h5" stroke="var(--berry)" strokeWidth="2" strokeLinecap="round" /></svg> Blueprint <span className="cc-chip grey" style={{ marginLeft: 'auto' }}>{sel.status}</span></h5>
           <div className="cc-field"><label>Title</label><input className="cc-in" value={sel.title} onChange={(e) => setField('title', e.target.value)} /></div>
+          {/* Course ownership, editable here so an unassigned blueprint can be
+              adopted rather than only observed. `updateBlueprint` already accepts
+              program_id, so this needed a control and not a new endpoint. The label
+              calls out an unowned item, because the failure was never that ownership
+              was missing, it was that nobody could see it was missing. */}
+          <div className="cc-field">
+            <label>Course{!sel.program_id && <span style={{ color: 'var(--berry)', fontWeight: 700 }}> · unassigned</span>}</label>
+            <select className="cc-in" value={sel.program_id || ''} onChange={(e) => setField('program_id', e.target.value || null)}>
+              <option value="">— no course —</option>
+              {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
           <div className="cc-field"><label>Purpose</label><textarea className="cc-in" style={{ minHeight: 46 }} value={sel.purpose || ''} onChange={(e) => setField('purpose', e.target.value)} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div className="cc-field"><label>Week</label><input className="cc-in" type="number" value={sel.week ?? ''} onChange={(e) => setField('week', e.target.value ? Number(e.target.value) : null)} /></div>
