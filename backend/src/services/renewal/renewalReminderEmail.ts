@@ -127,7 +127,7 @@ export function urgencyWord(dayDelta: number | undefined): 'today' | 'tomorrow' 
 }
 
 export function renewalSubject(
-  input: Pick<RenewalReminderEmailInput, 'plan' | 'period_end' | 'day_delta'>,
+  input: Pick<RenewalReminderEmailInput, 'plan' | 'period_end' | 'day_delta' | 'autopay'>,
 ): string {
   const ms = Date.parse(input.period_end);
   const short = Number.isFinite(ms)
@@ -141,6 +141,17 @@ export function renewalSubject(
     return 'Your Colaberry membership payment';
   }
   const word = urgencyWord(input.day_delta);
+  // On auto-pay "payment is due" is the wrong fact and it contradicts the body,
+  // which says there is nothing to do. The subject is read in the inbox list
+  // before the body is opened at all, so a member who only ever sees the subject
+  // would go and pay something a schedule is about to collect. Renewing is what
+  // is actually happening to them.
+  if (input.autopay === true) {
+    if (!short) return 'Your Colaberry membership renews automatically';
+    return word
+      ? `Your Colaberry membership renews ${word}, ${short}`
+      : `Your Colaberry membership renews ${short}`;
+  }
   if (!short) return 'Your Colaberry membership payment is due';
   return word
     ? `Your Colaberry membership payment is due ${word}, ${short}`
@@ -214,13 +225,26 @@ export function renderRenewalReminderEmail(
       ? 'If you need to change the card, pause, or stop before then, reply and tell me and I will take care of it.'
       : 'If anything above looks wrong, or you want to change or stop your membership, reply and tell me and I will sort it out.';
 
+  // ── WHY A SCHEDULED MEMBER GETS NO PAYMENT LINK ────────────────────────────
+  //
+  // The link used to be unconditional, and the sentence introducing it read
+  // "This link opens a checkout page for it." Combined with the auto-pay
+  // reassurance above, a scheduled member was told BOTH that there is nothing
+  // for them to do AND here is where to pay. A member who acts on the second
+  // half pays for a period PaySimple is about to collect anyway.
+  //
+  // That is the same double-charge this branch was introduced to prevent, so
+  // the link has to go with it. A lapsed member still gets one: their schedule,
+  // if any, is not collecting for the period that already ended.
+  const offerLink = !autopay || lapsed;
+
   const text = `${name},
 
 ${endsLine}${urgency ? ` ${urgency}` : ''} ${priceText}
 
-${reassurance} This link opens a checkout page for it:
+${reassurance}${offerLink ? ` This link opens a checkout page for it:
 
-${link}
+${link}` : ''}
 
 ${closer}
 
@@ -231,7 +255,7 @@ ${SIG_TEXT}
 <p>${esc(name)},</p>
 <p>${esc(endsLine)}${urgency ? ` <strong>${esc(urgency)}</strong>` : ''} ${esc(priceText)}</p>
 <p>${esc(reassurance)}</p>
-<p style="margin: 22px 0;"><a href="${esc(link)}" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 11px 22px; border-radius: 4px; text-decoration: none; font-weight: 600;">Pay ${esc(formatMoney(charge))} for ${lapsed ? 'a further' : 'the next'} ${esc(term)}</a></p>
+${offerLink ? `<p style="margin: 22px 0;"><a href="${esc(link)}" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 11px 22px; border-radius: 4px; text-decoration: none; font-weight: 600;">Pay ${esc(formatMoney(charge))} for ${lapsed ? 'a further' : 'the next'} ${esc(term)}</a></p>` : ''}
 <p>${esc(closer)}</p>
 ${SIG_HTML}
 </div>`;
