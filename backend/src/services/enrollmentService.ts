@@ -6,6 +6,16 @@ import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enroll
 import { pickBestEnrollment } from './participantService';
 import { redactForLogs } from '../utils/piiRedaction';
 
+// Lazy import (the convention ghlService itself uses for aiEventService): a
+// top-level import pulls settingsService -> SystemSetting -> config/database and
+// constructs Sequelize at module load, which breaks any consumer that does not
+// have a DATABASE_URL - including this service's own unit tests.
+async function pushLeadToGhl(lead: unknown): Promise<void> {
+  const { syncNewLeadToGhl } = await import('./ghlService');
+  await syncNewLeadToGhl(lead as never);
+}
+
+
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
   const cohort = await Cohort.findByPk(cohortId);
   if (!cohort) {
@@ -337,6 +347,19 @@ export async function createExplorerEnrollment(input: {
       } as any,
     });
     leadId = (lead as any)?.id ?? null;
+
+    // Push to GHL so admissions and Cora Voice can actually reach them. This
+    // path captured leads for months without ever calling the sync, which is
+    // why 490 open-house leads had no GHL contact (Kes, 2026-08-25).
+    // Fire-and-forget, matching every other sync call site: lead capture is
+    // already best-effort here and a CRM hiccup must not fail the signup.
+    // ghlAccountRouting withholds the push while the School of Data Analytics
+    // key is unprovisioned, so this cannot write to the wrong account.
+    if (lead) {
+      pushLeadToGhl(lead).catch((e: any) =>
+        console.error('[OpenHouse] GHL sync error:', e?.message)
+      );
+    }
   } catch (err: any) {
     console.error('[OpenHouse] Lead capture failed (non-fatal):', err.message);
   }
