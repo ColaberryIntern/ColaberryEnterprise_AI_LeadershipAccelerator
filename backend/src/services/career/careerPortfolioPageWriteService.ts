@@ -168,6 +168,30 @@ export async function requestPortfolioReview(enrollmentId: string): Promise<Port
   return (await readPage(enrollmentId))!;
 }
 
+/**
+ * The project rows to freeze, each carrying the hero image resolved from its own
+ * public repo.
+ *
+ * The GitHub lookups happen HERE, once, at approval - never on a public page view.
+ * A failure resolves to no hero rather than blocking the approval: a portfolio must
+ * not fail to publish because GitHub was rate limited.
+ */
+async function freezableProjects(enrollmentId: string): Promise<any[]> {
+  const rows = await readLiveProjects(enrollmentId);
+  try {
+    const { withHeroImages } = await import('./portfolioHeroImage');
+    return await withHeroImages(rows as any[]);
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'portfolio_hero_image_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+    return rows as any[];
+  }
+}
+
 export type PortfolioDecision = 'approved' | 'changes_requested';
 
 /**
@@ -210,10 +234,18 @@ export async function decidePortfolioReview(args: {
   // Everything LEARNER-AUTHORED is frozen at the moment of approval: the headline, the
   // avatar, and now the project text too. A learner must not be able to be approved and
   // then rewrite their business problem into something a reviewer never read.
+  // The employment history is learner-authored too -- it comes from a document they
+  // uploaded -- so it freezes here with everything else. Otherwise a learner could be
+  // approved and then swap in a resume claiming a job they never held.
+  const { readResumeHistory, EMPTY_RESUME_HISTORY } = await import('./resumeHistoryAdapter');
+  const history = await readResumeHistory(enrollmentId).catch(() => ({ ...EMPTY_RESUME_HISTORY }));
+
   const frozen = {
     title: profile?.identity?.title ?? null,
     avatar_data_url: profile?.identity?.avatar_data_url ?? null,
-    projects: await readLiveProjects(enrollmentId),
+    projects: await freezableProjects(enrollmentId),
+    experience: history.experience,
+    education: history.education,
   };
 
   await sequelize.query(

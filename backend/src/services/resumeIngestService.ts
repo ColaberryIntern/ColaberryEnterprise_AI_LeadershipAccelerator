@@ -3,6 +3,11 @@ import type { ProjectDnaInput } from './projectDnaService';
 import { hasReferral } from './friendReferralService';
 import type { RawSkillClaim } from './cape/capeResumeClaimExtraction';
 import { ARCHITECTURE_SKILL_IDS } from '../constants/architectureSkills';
+import type { ResumeExperience, ResumeEducation } from './resumeHistory';
+
+// Re-exported so existing importers of this service keep one obvious entry point.
+export type { ResumeExperience, ResumeEducation };
+export { normalizeExperience, normalizeEducation } from './resumeHistory';
 
 const EXTRACTION_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const MAX_SOURCE_CHARS = 8000;
@@ -36,6 +41,12 @@ export interface ResumeExtraction {
   // omits this entirely when the resume has no architecture-skill-relevant
   // content (see capeResumeClaimExtraction.ts for validation/scoring).
   skill_claims?: RawSkillClaim[];
+  // Resume-shaped history, for the public portfolio's Experience/Education
+  // sections. These ride in the existing `extracted` JSONB column, so they
+  // need no migration. Always read them through normalizeExperience() /
+  // normalizeEducation() -- never trust the raw model output.
+  experience?: ResumeExperience[];
+  education?: ResumeEducation[];
 }
 
 /** Flat profile fields the Settings form prefills from. */
@@ -76,7 +87,7 @@ export function buildResumeExtractionPrompt(sourceText: string): string {
     '"phone","location","linkedin_url","industry","role","seniority","years_experience",',
     '"goals"(one short sentence on their career/learning goal),"target_user","business_problem",',
     '"industry_track","ai_maturity_level"(0-5 integer),"skills"(string array of the top 6),',
-    '"skill_claims"(array, see below)}.',
+    '"skill_claims"(array, see below),"experience"(array, see below),"education"(array, see below)}.',
     'ALWAYS provide "title" (their last job title) and "industry" — if the industry is not stated,',
     'infer it from the company and role (e.g. a lending company → "Financial Services", a hospital → "Healthcare").',
     'Only omit a key when there is genuinely no basis to infer it. Do not invent specific facts (names, numbers).',
@@ -95,6 +106,19 @@ export function buildResumeExtractionPrompt(sourceText: string): string {
     '"ownership"(one of: built, owned, used, led),"scope"(one of: personal, team, production),',
     '"confidence"(0-1, how certain you are this evidence genuinely supports the skill_id)}.',
     'Be conservative: do not invent a skill_claim from a single vague keyword with no supporting context.',
+    '',
+    'For "experience": one object per role actually stated in the text, most recent FIRST, at most 8.',
+    'Each object: {"company","title","start"("YYYY" or "YYYY-MM", null if not stated),',
+    '"end"(same format, or null IF AND ONLY IF it is their current role),"location"(or null),',
+    '"summary"(<=180 chars, one factual line on what the role was),',
+    '"highlights"(at most 3 short strings, each <=140 chars, quoting only what the text states)}.',
+    'Copy company and title verbatim. Never invent a date, a title, or an employer that is not written',
+    'in the text, and never fill a gap by guessing -- omit the field instead. Omit "experience" entirely',
+    'if the text states no employment history.',
+    '',
+    'For "education": one object per credential stated, most recent FIRST, at most 5.',
+    'Each object: {"institution","credential"(e.g. "B.S.", "MBA", or null),"field"(or null),"year"(or null)}.',
+    'Omit "education" entirely if none is stated.',
     '',
     '--- BACKGROUND TEXT ---',
     text,
@@ -176,7 +200,7 @@ async function realExtract(sourceText: string): Promise<string> {
       { role: 'user', content: buildResumeExtractionPrompt(sourceText) },
     ],
     temperature: 0.1,
-    max_tokens: 800,
+    max_tokens: 2000,
   });
   return response.choices[0]?.message?.content || '';
 }
