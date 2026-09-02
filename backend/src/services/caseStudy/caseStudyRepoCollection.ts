@@ -172,11 +172,33 @@ function log(event: string, outcome: Outcome, correlationId: string, ctx: Record
   }));
 }
 
+/**
+ * Load the collection's rows as PLAIN OBJECTS, not Sequelize instances.
+ *
+ * `rows as unknown as RepoRow[]` was a cast, and the cast was a lie: a Sequelize
+ * instance exposes its columns through prototype GETTERS, so `row.repo_owner`
+ * reads correctly but `{ ...row }` copies `dataValues`, `_previousDataValues`
+ * and none of the columns. Every caller that spread a row therefore produced an
+ * object whose every field was `undefined` — and `toRecord` turned that into a
+ * record reading `undefined/undefined` with the fail-closed defaults for role and
+ * visibility, which looks like data rather than like an error.
+ *
+ * That is exactly what `setRepositoryRole` and `setRepositoryPathScope` returned
+ * to the admin UI. Calling `.get({ plain: true })` here makes the cast honest and
+ * fixes both at the source rather than at each call site, where the next one
+ * would reintroduce it.
+ */
 async function loadRows(collectionId: string, transaction?: Transaction): Promise<RepoRow[]> {
   const rows = await CaseStudyRepositoryModel.findAll({
     where: { collection_id: collectionId }, ...(transaction ? { transaction } : {}),
   });
-  return rows as unknown as RepoRow[];
+  return rows.map(plainRow);
+}
+
+/** A model instance, or something already plain, as a plain row. */
+function plainRow(row: unknown): RepoRow {
+  const maybe = row as { get?: (opts: { plain: boolean }) => unknown };
+  return (typeof maybe?.get === 'function' ? maybe.get({ plain: true }) : row) as RepoRow;
 }
 
 /**
@@ -284,7 +306,7 @@ export async function attachRepository(input: AttachRepositoryInput): Promise<At
 
     let created: RepoRow;
     try {
-      created = await CaseStudyRepositoryModel.create({
+      created = plainRow(await CaseStudyRepositoryModel.create({
         collection_id: collectionId,
         repo_owner: ref.owner,
         repo_name: ref.repo,
@@ -297,7 +319,7 @@ export async function attachRepository(input: AttachRepositoryInput): Promise<At
         github_connection_id: data.githubConnectionId ?? null,
         path_scope: normaliseScope(data.pathScope ?? []),
         metadata: {},
-      }, { transaction }) as unknown as RepoRow;
+      }, { transaction })) as unknown as RepoRow;
     } catch (err) {
       // The database's case-insensitive unique index
       // (`cs_repositories_unique_per_collection`) is the second half of the
