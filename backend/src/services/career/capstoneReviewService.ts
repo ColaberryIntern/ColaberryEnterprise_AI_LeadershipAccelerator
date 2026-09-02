@@ -346,6 +346,10 @@ async function writeNarrativeForReview(enrollmentId: string, record: any): Promi
     full_name: content?.identity?.full_name ?? 'This engineer',
     project: {
       name: content?.system?.project_name ?? null,
+      // The requirements document is where the intake actually lands, and it is the only
+      // source that says WHY the system exists. Fetched here rather than carried on the
+      // record, because it runs to a quarter of a megabyte and is extracted, never stored.
+      requirements_document: await readRequirementsDocument(enrollmentId),
       problem: content?.system?.problem ?? null,
       what_it_does: content?.system?.what_it_does ?? null,
       organization: content?.system?.organization ?? null,
@@ -361,4 +365,27 @@ async function writeNarrativeForReview(enrollmentId: string, record: any): Promi
     content_json: { ...content, narrative: result.narrative },
     updated_at: new Date(),
   });
+}
+
+/**
+ * The project's requirements document, for the narrative's evidence block only.
+ *
+ * Never stored on the record and never published: `extractStatedPurpose` lifts the vision
+ * paragraphs and the rest is discarded. Returns null on any failure, which degrades the
+ * narrative to what-was-built rather than failing the review request.
+ */
+async function readRequirementsDocument(enrollmentId: string): Promise<string | null> {
+  try {
+    const { sequelize } = await import('../../config/database');
+    const [rows] = await sequelize.query(
+      `SELECT requirements_document FROM projects
+        WHERE enrollment_id = $1 AND archived_at IS NULL AND requirements_document IS NOT NULL
+        ORDER BY length(requirements_document) DESC LIMIT 1`,
+      { bind: [enrollmentId] },
+    );
+    const doc = (rows as any[])[0]?.requirements_document;
+    return typeof doc === 'string' ? doc : null;
+  } catch {
+    return null;
+  }
 }
