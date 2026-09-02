@@ -92,6 +92,63 @@ describe('an auto-pay member is told, not asked', () => {
   });
 });
 
+describe('an auto-pay member is never handed a way to pay twice', () => {
+  /**
+   * THE TEST THAT SHOULD HAVE EXISTED FIRST.
+   *
+   * The original fix changed the reassurance sentence to "there is nothing for
+   * you to do" but left the payment link unconditional, so a scheduled member
+   * received both that sentence AND "This link opens a checkout page for it."
+   * A member acting on the second half pays for a period PaySimple is about to
+   * collect anyway.
+   *
+   * The suite went green because it asserted a MANUAL member keeps the link and
+   * never asserted a scheduled member does not get one. Absence of a thing has
+   * to be asserted explicitly; it is not implied by asserting its presence
+   * somewhere else.
+   */
+  it('gets no checkout URL', () => {
+    const e = renderRenewalReminderEmail(base({ autopay: true }));
+    expect(e.text).not.toContain('https://checkout.example.test/abc');
+    expect(e.html).not.toContain('https://checkout.example.test/abc');
+  });
+
+  it('is not invited to a checkout page in words either', () => {
+    const e = renderRenewalReminderEmail(base({ autopay: true }));
+    expect(e.text).not.toMatch(/opens a checkout page/i);
+    expect(e.html).not.toMatch(/opens a checkout page/i);
+  });
+
+  it('has no Pay button in the HTML', () => {
+    const e = renderRenewalReminderEmail(base({ autopay: true }));
+    expect(e.html).not.toMatch(/>Pay \$/);
+  });
+
+  it('is not told in the SUBJECT that a payment is due', () => {
+    // The subject is read in the inbox list before the body is opened. A member
+    // who only ever sees "payment is due tomorrow" may go and pay, which is the
+    // same double charge the body was fixed to prevent.
+    const e = renderRenewalReminderEmail(base({ autopay: true }));
+    expect(e.subject).not.toMatch(/payment is due/i);
+    expect(e.subject).toMatch(/renews/i);
+  });
+
+  it('leaves the manual subject alone, where a payment really is due', () => {
+    const e = renderRenewalReminderEmail(base({ autopay: false }));
+    expect(e.subject).toMatch(/payment is due/i);
+  });
+
+  it('still gets the lapsed link, because a lapsed period is not collected by a schedule', () => {
+    const e = renderRenewalReminderEmail(base({
+      autopay: true,
+      day_delta: -3,
+      kind: 'after_lapse_1d' as never,
+      period_end: new Date(Date.now() - 3 * 86400_000).toISOString(),
+    }));
+    expect(e.text).toContain('https://checkout.example.test/abc');
+  });
+});
+
 describe('a manual member still gets what they need', () => {
   it('keeps the payment link, which is the whole point of the mail', () => {
     const e = renderRenewalReminderEmail(base({ autopay: false }));
