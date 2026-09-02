@@ -55,6 +55,12 @@
     --warn: #d69b4e;
     --bad: #e08b85;
   }
+
+  /* Dark inverts --navy from a deep blue fill to a pale one (#9dbbd8), which turns the
+     hardcoded white button label into 2.0:1 - unreadable. The label has to follow the
+     fill, so it takes the surface colour here and lands at 8.6:1. Applies to the hover
+     state too, where the fill becomes --ink and is lighter still. */
+  .btn-primary, .btn-primary:hover { color: var(--surface); }
 }
 
 * { box-sizing: border-box; }
@@ -124,8 +130,15 @@ a:hover { color: var(--brass); }
 .logo:hover { color: var(--ink); }
 .logo svg { flex: none; }
 .nav { display: flex; align-items: center; gap: 1.35rem; flex-wrap: wrap; }
-.nav a { font-size: .86rem; color: var(--muted); text-decoration: none; }
-.nav a:hover, .nav a[aria-current="page"] { color: var(--brass); }
+/* :not(.btn) is load-bearing, not decoration. `.nav a` (0,1,1) outranks `.btn-primary`
+   (0,1,0), so without it the muted grey won and both masthead buttons were painted with
+   it - "Start a Project" came out #5f6b7d on the navy fill, 2.5:1, below the 4.5:1 AA
+   floor and reading as a disabled control on the primary call to action of the site.
+   Excluding buttons from the rule fixes it where it starts; the alternative, another
+   higher-specificity override, would have to be repeated in the dark block too. */
+.nav a:not(.btn) { font-size: .86rem; color: var(--muted); text-decoration: none; }
+.nav a:not(.btn):hover, .nav a[aria-current="page"]:not(.btn) { color: var(--brass); }
+.nav a.btn { font-size: .86rem; text-decoration: none; }
 .spacer { flex: 1 1 auto; }
 
 .btn {

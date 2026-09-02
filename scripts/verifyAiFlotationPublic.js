@@ -122,6 +122,40 @@ async function main() {
         document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
       check(`  ${urlPath} @${label} does not scroll sideways`, overflow, false);
 
+      // Every button on the page must be readable against its own fill. This exists
+      // because the masthead "Start a Project" shipped at 2.5:1 - `.nav a` (0,1,1) beat
+      // `.btn-primary` (0,1,0) and painted the label muted grey on navy. It passed every
+      // assertion in this file and looked disabled in the screenshot, so the assertion
+      // was the thing that was missing, not the looking.
+      const lowContrast = await page.evaluate(() => {
+        const lum = (c) => {
+          const [r, g, b] = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map((v) => {
+            const s = v / 255;
+            return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+          });
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        // Walks up for the painted background: a transparent button sits on its parent.
+        const bgOf = (el) => {
+          for (let n = el; n; n = n.parentElement) {
+            const bg = getComputedStyle(n).backgroundColor;
+            if (bg && !/rgba\(0, 0, 0, 0\)|transparent/.test(bg)) return bg;
+          }
+          return 'rgb(255, 255, 255)';
+        };
+        // Reported as strings, not objects: a failure has to name the button and the
+        // ratio in the log line itself, or whoever reads it still has to go looking.
+        return [...document.querySelectorAll('.btn')].map((el) => {
+          const cs = getComputedStyle(el);
+          const [a, b] = [lum(cs.color), lum(bgOf(el))].sort((x, y) => y - x);
+          const ratio = +((a + 0.05) / (b + 0.05)).toFixed(2);
+          return ratio < 4.5 ? `"${el.textContent.trim()}" at ${ratio}:1` : null;
+        }).filter(Boolean);
+      });
+      // Joined to a string on purpose: check() compares with ===, so two empty arrays
+      // are never equal and an array here would fail every run while reporting nothing.
+      check(`  ${urlPath} @${label} every button clears 4.5:1`, lowContrast.join('; '), '');
+
       const out = path.join(OUT, `${slug}-${label}.png`);
       await safeScreenshot(page, out, { fullPage: true, label: `${slug}-${label}` });
       shots.push({ file: path.basename(out), proves: `${urlPath} at ${viewport.width}x${viewport.height}` });
