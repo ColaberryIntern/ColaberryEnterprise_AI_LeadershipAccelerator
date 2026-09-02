@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-09-02T15:40:08.967Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "home-desktop.png",
+      "proves": "/ at 1440x900"
+    },
+    {
+      "file": "home-mobile.png",
+      "proves": "/ at 360x800"
+    },
+    {
+      "file": "what-we-build-desktop.png",
+      "proves": "/what-we-build/ at 1440x900"
+    },
+    {
+      "file": "what-we-build-mobile.png",
+      "proves": "/what-we-build/ at 360x800"
+    },
+    {
+      "file": "approach-desktop.png",
+      "proves": "/approach/ at 1440x900"
+    },
+    {
+      "file": "approach-mobile.png",
+      "proves": "/approach/ at 360x800"
+    },
+    {
+      "file": "delivery-standard-desktop.png",
+      "proves": "/delivery-standard/ at 1440x900"
+    },
+    {
+      "file": "delivery-standard-mobile.png",
+      "proves": "/delivery-standard/ at 360x800"
+    },
+    {
+      "file": "results-desktop.png",
+      "proves": "/results/ at 1440x900"
+    },
+    {
+      "file": "results-mobile.png",
+      "proves": "/results/ at 360x800"
+    },
+    {
+      "file": "about-desktop.png",
+      "proves": "/about/ at 1440x900"
+    },
+    {
+      "file": "about-mobile.png",
+      "proves": "/about/ at 360x800"
+    },
+    {
+      "file": "start-desktop.png",
+      "proves": "/start/ at 1440x900"
+    },
+    {
+      "file": "start-mobile.png",
+      "proves": "/start/ at 360x800"
+    },
+    {
+      "file": "start-success.png",
+      "proves": "intake success state, no email promised"
+    }
+  ]
+}
