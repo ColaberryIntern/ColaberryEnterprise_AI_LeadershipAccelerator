@@ -26,6 +26,17 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/opportunities', 'revenue'], ['/api/admin/leads', 'revenue'], ['/api/admin/funnel', 'revenue'],
   ['/api/admin/campaigns', 'campaigns'], ['/api/admin/communications', 'campaigns'],
   ['/api/admin/marketing', 'campaigns'], ['/api/admin/visitors', 'campaigns'],
+  // Explorer Growth OS Command Center (spec §27; §1381 assigns it
+  // `section: 'campaigns'` explicitly, so no new section key is needed).
+  //
+  // This row grants nobody new access, and that is not a reason to omit it. No
+  // scoped role holds 'campaigns' — the surface is owner + admin with or
+  // without this line. It earns its place because an UNMAPPED path is a latent
+  // 403: the day 'campaigns' is granted to a scoped role, an unclassified path
+  // would deny them with an error message nothing in the code explains.
+  // Classified paths fail predictably. The case-studies row below is the
+  // receipt for learning that the expensive way.
+  ['/api/admin/explorer-growth', 'campaigns'],
   ['/api/admin/sources', 'lead_ingestion'], ['/api/admin/ingest-logs', 'lead_ingestion'],
   ['/api/admin/routing-rules', 'lead_ingestion'], ['/api/admin/autonomous', 'lead_ingestion'],
   ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],

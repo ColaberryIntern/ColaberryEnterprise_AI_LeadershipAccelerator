@@ -3,9 +3,11 @@ import {
   fetchPortfolioPage,
   setPortfolioPageVisibility,
   requestPortfolioPageReview,
+  fetchMyPortfolioPreview,
   type PortfolioPageState,
   type PortfolioPageVisibility,
 } from '../../../services/careerApi';
+import PortfolioBody from '../../../components/portfolio/PortfolioBody';
 
 /**
  * PortfolioAddressPanel — the learner's controls for their person-level page at /u/:slug.
@@ -36,6 +38,10 @@ const PortfolioAddressPanel: React.FC = () => {
   const [page, setPage] = useState<PortfolioPageState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [preview, setPreview] = useState<any>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -139,6 +145,47 @@ const PortfolioAddressPanel: React.FC = () => {
       <p className="cp-fine">
         Default is “anyone with the link”, which search engines are told to ignore. Only you can change that.
       </p>
+
+      {/* SEE IT BEFORE ASKING SOMEONE TO APPROVE IT. Until now the page only became
+          openable once it was already live, so the button above asked a learner to
+          publish something they had never seen. Loaded on demand rather than with the
+          tab: most visits here are to change visibility, and this is the expensive read. */}
+      <h4 className="cp-sub">What your page looks like</h4>
+      <p className="cp-muted" style={{ marginTop: 0 }}>
+        Exactly what a reviewer and then a stranger will see. Nothing here is a mock-up —
+        it is the same page, rendered from the same data.
+      </p>
+      {!showPreview && (
+        <button
+          className="cp-btn"
+          disabled={previewBusy}
+          onClick={() => {
+            setShowPreview(true);
+            if (!preview && !previewBusy) {
+              setPreviewBusy(true);
+              setPreviewError(null);
+              fetchMyPortfolioPreview()
+                .then(setPreview)
+                .catch(() => setPreviewError('Could not load your preview just now.'))
+                .finally(() => setPreviewBusy(false));
+            }
+          }}
+        >
+          {previewBusy ? 'Loading…' : 'Preview my page'}
+        </button>
+      )}
+      {showPreview && (
+        <>
+          <button className="cp-btn" onClick={() => setShowPreview(false)}>Hide preview</button>
+          {previewBusy && <p className="cp-muted">Loading…</p>}
+          {previewError && <p className="cp-error">{previewError}</p>}
+          {preview && (
+            <div className="cp-portfolio-preview">
+              <PortfolioBody portfolio={preview} embedded />
+            </div>
+          )}
+        </>
+      )}
 
       {error && <p className="cp-error">{error}</p>}
     </section>

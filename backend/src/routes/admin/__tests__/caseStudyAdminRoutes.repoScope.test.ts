@@ -70,6 +70,10 @@ jest.mock('../../../services/caseStudy/caseStudyEvidenceSource', () => ({
 }));
 
 import caseStudyAdminRoutes from '../caseStudyAdminRoutes';
+// The CONSTANT, never a literal: a hardcoded 21 silently stopped being
+// over the bound the moment the bound moved, and the test then asserted
+// nothing while still passing.
+import { MAX_SCOPE_PREFIXES } from '../../../services/caseStudy/repoPathScope';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const REPO = '33333333-3333-4333-8333-333333333333';
@@ -137,7 +141,7 @@ describe('PATCH a repository source', () => {
 
   it('refuses more prefixes than the bound allows', async () => {
     const res = await request(app).patch(URL)
-      .send({ pathScope: Array.from({ length: 21 }, (_, i) => `dir${i}`) });
+      .send({ pathScope: Array.from({ length: MAX_SCOPE_PREFIXES + 1 }, (_, i) => `dir${i}`) });
     expect(res.status).toBe(400);
     expect(setRepositoryPathScope).not.toHaveBeenCalled();
   });

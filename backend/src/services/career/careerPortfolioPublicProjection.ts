@@ -13,10 +13,17 @@
  * month is not on it. An allow-list is right by default, because the field added next
  * month is absent until somebody adds it here on purpose.
  *
+ * `identity.email` USED TO BE REFUSED HERE, and came off that list deliberately on
+ * 2026-09-03, on Ali's explicit decision. The argument that moved it: this page exists so
+ * that a recruiter can act on it, an email address is the thing they act with, and the
+ * learner approves the page before it publishes. It is the ONE contact detail that
+ * crosses, and it crosses validated - see `emailOrNull` below. The phone number and the
+ * street address stay refused; neither is needed to offer somebody a job.
+ *
  * WHAT THE PRIVATE PROFILE CARRIES THAT MUST NEVER CROSS. `CareerProfileResponse` is
  * built for the learner's own eyes and holds, among other things:
  *
- *   identity.email                 personal contact detail
+ *   identity.phone                 a personal number, and not what a recruiter needs
  *   identity.resume.file_name      a filename is not neutral; people name these badly
  *   capability.bands               per-band scores. Publishing `judgment: 0.2` next to
  *                                  someone's name damages them; the portal shows it to
@@ -53,6 +60,16 @@
  * levels, non-http URLs, records that are not published. Not handled: nothing - there is
  * no failure mode left that reaches the caller.
  */
+import {
+  normalizeExperience, normalizeEducation,
+} from '../resumeHistory';
+import type { ResumeExperience, ResumeEducation } from '../resumeHistory';
+import { composeAbout, composeStats, type PortfolioStats } from './portfolioOverview';
+import {
+  normalizeCompetencies, normalizeEvidenceSources, composeFeatured, countCompetencyDomains,
+  type PublicCompetency, type PublicEvidenceSource, type PublicFeaturedProject,
+} from './portfolioEvidence';
+
 
 
 // ── The public shapes. This is the entire contract. ────────────────────────
@@ -63,6 +80,41 @@ export interface PublicIdentity {
   cohort_name: string | null;
   avatar_data_url: string | null;
   linkedin_url: string | null;
+  /** Published on purpose, and validated - see the note at the top of this file. */
+  email: string | null;
+  /** City / region as the resume stated it. NEVER a street address. */
+  location: string | null;
+  /** Derived from a repository we can see, never guessed from a name. */
+  github_url: string | null;
+}
+
+/**
+ * An address shaped like an address, or null.
+ *
+ * Deliberately narrower than RFC-complete: this value is rendered into a `mailto:` on a
+ * public page, so anything carrying whitespace, a comma, a quote or angle brackets is
+ * refused outright rather than escaped and hoped over.
+ */
+function emailOrNull(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  if (!t || t.length > 254) return null;
+  return /^[^\s<>,;:"'()[\]\\]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(t) ? t : null;
+}
+
+/**
+ * A city or region, or null.
+ *
+ * A street address is not wanted here and mostly announces itself by carrying a house
+ * number, so a leading digit is refused. Imperfect, and deliberately erring toward
+ * publishing nothing rather than publishing where somebody lives.
+ */
+function placeOrNull(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().replace(/\s+/g, ' ');
+  if (!t || t.length > 120) return null;
+  if (/^\d/.test(t)) return null;
+  return t;
 }
 
 /**
@@ -91,6 +143,23 @@ export interface PublicCapability {
   /** Built against the provided sample rather than their own system. */
   on_sample?: boolean;
 }
+
+/**
+ * A role from the learner's own resume.
+ *
+ * WHY EMPLOYMENT HISTORY IS ALLOWED TO CROSS, when `email` and `resume.file_name`
+ * are not. The refusals above are things the learner never chose to publish - a
+ * contact detail, an internal score, a filename they typed for themselves. An
+ * employment history is the opposite: it is the part of a resume whose whole
+ * purpose is to be read by a stranger deciding whether to hire, and the learner
+ * approves this page before it publishes. Without it the page reads as a bootcamp
+ * exercise rather than a professional's body of work.
+ *
+ * What still does NOT cross from the resume: the file, its name, the raw text, the
+ * phone number, the street address. Only these named fields do.
+ */
+export type PublicExperience = ResumeExperience;
+export type PublicEducation = ResumeEducation;
 
 export interface PublicRecord {
   slug: string;
@@ -128,6 +197,15 @@ export interface PublicProject {
   stage: string | null;
   repo_url: string | null;
   demo_url: string | null;
+  /**
+   * An image committed to the project's own PUBLIC repository, or null.
+   *
+   * Resolved at review time and frozen with the rest of the learner-authored text,
+   * so this is a plain URL by the time it reaches here. `httpUrl` still gates it:
+   * the freeze blob is data at rest and this is the last point before a stranger's
+   * browser is told to fetch it.
+   */
+  hero_image_url: string | null;
 }
 
 export interface PublicRepository {
@@ -137,6 +215,20 @@ export interface PublicRepository {
 
 export interface PublicPortfolio {
   identity: PublicIdentity;
+  /** Deterministically composed paragraphs. Empty when there is nothing to say. */
+  about: string[];
+  stats: PortfolioStats;
+  /** The capstone, stated in numbers taken from the repository itself. */
+  featured: PublicFeaturedProject | null;
+  /** Competency bands, from VALIDATED evidence only. Capped; see below. */
+  competencies: PublicCompetency[];
+  /** How many domains exist in total, so a capped list can still say so honestly. */
+  competency_domain_count: number;
+  /** The classes of evidence those bands are summed from. */
+  evidence_by_source: PublicEvidenceSource[];
+  /** Most recent FIRST. Empty when no resume was ever ingested. */
+  experience: PublicExperience[];
+  education: PublicEducation[];
   capabilities: PublicCapability[];
   projects: PublicProject[];
   records: PublicRecord[];
@@ -210,6 +302,31 @@ export interface ProjectPortfolioInput {
   capabilities?: unknown;
   /** Already-PUBLISHED capstone records. An unpublished record is not passed in. */
   records: unknown;
+  /** Files committed across the repositories the platform can see. */
+  filesCommitted?: number | null;
+  /**
+   * Rows in `evidence_records` - deliverables, commits, prompt labs, implementations and
+   * instructor reviews. NOT the discredited `student_skill_evidence` count; see
+   * portfolioOverview.ts for the audit that separates the two.
+   */
+  evidenceRecords?: number | null;
+  /** The capstone project's name and descriptor, for the About paragraph. */
+  projectName?: string | null;
+  projectDescriptor?: string | null;
+  /** `{domain, score}` rows summed from VALIDATED evidence_records only. */
+  competencies?: unknown;
+  /** `{source_type, count}` rows over the same validated set. */
+  evidenceBySource?: unknown;
+  /** Repository-derived counts for the featured project block. */
+  featuredRepoUrl?: string | null;
+  featuredTopLevelAreas?: number | null;
+  featuredLanguages?: number | null;
+  /**
+   * `OnboardingProfile.extracted` - raw LLM output from the resume ingest. Passed
+   * in raw ON PURPOSE: normalization is this module's job, so there is exactly one
+   * place that decides what a stranger may read.
+   */
+  resume?: unknown;
   generatedAt: string;
 }
 
@@ -224,6 +341,9 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     cohort_name: str(id.cohort_name),
     avatar_data_url: str(id.avatar_data_url),
     linkedin_url: httpUrl(id.linkedin_url),
+    email: emailOrNull(id.email),
+    location: placeOrNull(id.location),
+    github_url: null, // resolved below, once the repository list is known
   };
 
   // Fed from the REPO, not from the assessment tables. See PublicCapability above.
@@ -252,8 +372,14 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
       stage: str(p.project_stage),
       repo_url: httpUrl(p.github_repo_url),
       demo_url: httpUrl(p.portfolio_url),
+      hero_image_url: httpUrl(p.hero_image_url),
     }))
     .filter((p) => p.title !== '');
+
+  // The resume history. Raw model output in, capped and type-checked rows out.
+  const resume: any = (input.resume && typeof input.resume === 'object') ? input.resume : {};
+  const experience = normalizeExperience(resume.experience);
+  const education = normalizeEducation(resume.education);
 
   const rawRecords: any[] = Array.isArray(input.records) ? input.records : [];
   const records: PublicRecord[] = rawRecords
@@ -279,8 +405,51 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     repositories.push({ name: str(r.name) ?? 'repository', url });
   }
 
+  // The GitHub profile is derived from a repository we can actually see, so it is a fact
+  // rather than a guess at a username from somebody's name. First public repo wins, which
+  // keeps this deterministic.
+  const firstRepo = repositories[0]?.url;
+  if (firstRepo) {
+    const owner = /^https?:\/\/github\.com\/([A-Za-z0-9._-]+)(?:\/|$)/.exec(firstRepo);
+    if (owner) identity.github_url = `https://github.com/${owner[1]}`;
+  }
+
+  const overview = {
+    fullName: identity.full_name,
+    headline: identity.headline,
+    // The employer comes from the PUBLISHED experience, never from `identity.company`.
+    // That field is on the refusal list, and feeding it to the composer would have
+    // published it in prose - a leak the contract test caught on the first run.
+    company: null,
+    experience,
+    projectName: str(input.projectName),
+    projectDescriptor: str(input.projectDescriptor),
+    capabilityCount: capabilities.length,
+    filesCommitted: typeof input.filesCommitted === 'number' ? input.filesCommitted : null,
+    evidenceRecords: typeof input.evidenceRecords === 'number' ? input.evidenceRecords : null,
+  };
+
+  // Competencies are capped for readability, but the honest total travels with them so
+  // the page can say "12 of 19" rather than implying nineteen is all there is.
+  const competencies = normalizeCompetencies(input.competencies);
+
   return {
     identity,
+    about: composeAbout(overview),
+    stats: composeStats(overview),
+    featured: composeFeatured({
+      name: str(input.projectName),
+      repoUrl: input.featuredRepoUrl,
+      files: overview.filesCommitted,
+      topLevelAreas: input.featuredTopLevelAreas,
+      capabilities: capabilities.length,
+      languages: input.featuredLanguages,
+    }),
+    competencies,
+    competency_domain_count: countCompetencyDomains(input.competencies),
+    evidence_by_source: normalizeEvidenceSources(input.evidenceBySource),
+    experience,
+    education,
     capabilities,
     projects,
     records,

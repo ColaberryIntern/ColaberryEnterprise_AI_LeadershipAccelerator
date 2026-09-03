@@ -285,3 +285,16 @@
 .cp-post-x { margin: 4px 0 0; font-size: 13.5px; color: var(--text-muted);
              overflow: hidden; text-overflow: ellipsis; }
 .cp-post.is-shared .cp-post-title { color: var(--text-link); }
+
+/* The learner's preview of their own public portfolio, inside the Publishing tab.
+   Framed and inset so it reads as a window onto another page rather than as more of
+   this one -- the content inside is rendered by the same component the public page
+   uses, in its `embedded` mode. */
+.cp-portfolio-preview {
+  margin-top: 14px;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--surface-sunken, #f8fafc);
+  overflow-x: auto;
+}

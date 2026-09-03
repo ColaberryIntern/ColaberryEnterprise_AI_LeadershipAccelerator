@@ -36,6 +36,9 @@
 import { sequelize } from '../../config/database';
 import { getCareerProfile } from './careerProfileService';
 import { projectPublicPortfolio, type PublicPortfolio } from './careerPortfolioPublicProjection';
+import {
+  readResumeHistory, approvedResumeHistoryOf, EMPTY_RESUME_HISTORY, type ResumeHistory,
+} from './resumeHistoryAdapter';
 
 export type PortfolioPageStatus = 'draft' | 'published';
 export type PortfolioPageVisibility = 'private' | 'unlisted' | 'public';
@@ -199,6 +202,7 @@ export async function getPublicPortfolioBySlug(
       now,
       page.approved_identity,
       approvedProjectsOf(page.approved_identity),
+      approvedResumeHistoryOf(page.approved_identity),
     ),
     indexable: decision.indexable,
   };
@@ -214,6 +218,8 @@ async function buildPortfolio(
   approvedIdentity: unknown = null,
   /** null = read projects LIVE (reviewer preview); an array = the APPROVED set. */
   approvedProjects: unknown[] | null = null,
+  /** null = read the resume history LIVE (reviewer preview); a value = the APPROVED one. */
+  approvedResume: ResumeHistory | null = null,
 ): Promise<PublicPortfolio> {
   // A profile that fails to load is a shorter page, not a 500. The projection turns an
   // empty profile into an empty portfolio rather than throwing.
@@ -259,7 +265,23 @@ async function buildPortfolio(
   // live one -- otherwise a learner could be approved and then rewrite their business
   // problem into anything. The reviewer preview passes null and gets the live rows,
   // because the live text is exactly what they are being asked to approve.
-  const projects = approvedProjects ?? await readLiveProjects(enrollmentId, now);
+  let projects = approvedProjects ?? await readLiveProjects(enrollmentId, now);
+  // The reviewer previews LIVE, so the hero images resolve now - they are approving
+  // the exact images that `decidePortfolioReview` will then freeze. A published page
+  // never reaches this branch, so a stranger's page load makes no GitHub calls.
+  if (!approvedProjects) {
+    try {
+      const { withHeroImages } = await import('./portfolioHeroImage');
+      projects = await withHeroImages(projects as any[]);
+    } catch (err: any) {
+      console.warn(JSON.stringify({
+        timestamp: now.toISOString(), level: 'warn', service: 'backend',
+        event: 'portfolio_hero_image_unavailable', outcome: 'partial',
+        error_class: err?.error_class || err?.name || 'Error',
+        context: { enrollment_id: enrollmentId },
+      }));
+    }
+  }
 
   // Repo-proven capability. Read LIVE and never frozen: the system observes it, the
   // learner does not author it, so the same rule as the CAPE band applies -- live where
@@ -280,6 +302,128 @@ async function buildPortfolio(
     }));
   }
 
+  // The resume history. Frozen for a stranger, live for the reviewer who is being asked
+  // to approve it -- the same rule the project text follows above.
+  let resume: ResumeHistory = approvedResume ?? { ...EMPTY_RESUME_HISTORY };
+  if (!approvedResume) {
+    try {
+      resume = await readResumeHistory(enrollmentId);
+    } catch (err: any) {
+      console.warn(JSON.stringify({
+        timestamp: now.toISOString(), level: 'warn', service: 'backend',
+        event: 'public_portfolio_resume_unavailable', outcome: 'partial',
+        error_class: err?.error_class || err?.name || 'Error',
+        context: { enrollment_id: enrollmentId },
+      }));
+    }
+  }
+
+  // The overview counters. Read LIVE and never frozen, for the same reason the capability
+  // band is: the system observes them, the learner does not author them.
+  //
+  // `evidence_records` is NOT the discredited count. Audited against production on
+  // 2026-09-03: 546 rows across deliverable / github_commit / prompt_lab / implementation
+  // / instructor_review, with not one consumption event among them. Every row is something
+  // the learner did, which is what makes it printable beside their name. The count this
+  // page previously refused came from `student_skill_evidence`, where all 8,895 rows are
+  // `source='timeline'` - a different table meaning a different thing.
+  let evidenceRecords: number | null = null;
+  let filesCommitted: number | null = null;
+  try {
+    const [rows]: any = await sequelize.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM evidence_records WHERE enrollment_id = $1) AS evidence,
+         (SELECT COALESCE(SUM(file_count), 0)::int FROM github_connections
+           WHERE enrollment_id = $1) AS files`,
+      { bind: [enrollmentId] },
+    );
+    const counts = rows?.[0];
+    evidenceRecords = typeof counts?.evidence === 'number' && counts.evidence > 0
+      ? counts.evidence : null;
+    filesCommitted = typeof counts?.files === 'number' && counts.files > 0
+      ? counts.files : null;
+  } catch (err: any) {
+    // A missing counter drops its own tile. It never costs the reader the whole page.
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_counters_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
+  // The competency bands and the evidence behind them. VALIDATED rows only, and summed
+  // from each row's own `competency_weights`, so every score names its artefacts.
+  // `jsonb_array_elements` throws on a non-array, so the shape is checked in the WHERE
+  // rather than trusted -- one malformed row must not cost the whole page its bands.
+  let competencies: unknown[] = [];
+  let evidenceBySource: unknown[] = [];
+  try {
+    const [comp]: any = await sequelize.query(
+      `SELECT w->>'domain_id' AS domain, SUM((w->>'weight')::numeric)::int AS score
+         FROM evidence_records e, jsonb_array_elements(e.competency_weights) w
+        WHERE e.enrollment_id = $1
+          AND e.validated = true
+          AND jsonb_typeof(e.competency_weights) = 'array'
+        GROUP BY 1`,
+      { bind: [enrollmentId] },
+    );
+    competencies = Array.isArray(comp) ? comp : [];
+    const [src]: any = await sequelize.query(
+      `SELECT source_type, COUNT(*)::int AS count
+         FROM evidence_records
+        WHERE enrollment_id = $1 AND validated = true
+        GROUP BY 1`,
+      { bind: [enrollmentId] },
+    );
+    evidenceBySource = Array.isArray(src) ? src : [];
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_competencies_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
+  // Repository facts for the featured block. Distinct languages, and the number of
+  // top-level areas the work is organised across, counted from the stored file tree.
+  let featuredRepoUrl: string | null = null;
+  let featuredLanguages: number | null = null;
+  let featuredTopLevelAreas: number | null = null;
+  try {
+    const [conns]: any = await sequelize.query(
+      `SELECT repo_url, repo_language, file_tree_json
+         FROM github_connections WHERE enrollment_id = $1`,
+      { bind: [enrollmentId] },
+    );
+    const rows: any[] = Array.isArray(conns) ? conns : [];
+    featuredRepoUrl = rows.find((r) => typeof r?.repo_url === 'string')?.repo_url ?? null;
+    const langs = new Set(rows.map((r) => r?.repo_language).filter((l) => typeof l === 'string' && l));
+    featuredLanguages = langs.size || null;
+    const areas = new Set<string>();
+    for (const r of rows) {
+      const tree = r?.file_tree_json;
+      const paths: unknown[] = Array.isArray(tree) ? tree : (Array.isArray(tree?.paths) ? tree.paths : []);
+      for (const p of paths) {
+        const s = typeof p === 'string' ? p : (p as any)?.path;
+        if (typeof s !== 'string' || !s.includes('/')) continue;
+        areas.add(s.split('/')[0]);
+      }
+    }
+    featuredTopLevelAreas = areas.size || null;
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_repo_facts_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
+  // The About paragraph names the project the record is about, in the learner's own words.
+  const firstRecord: any = Array.isArray(records) ? (records as any[])[0] : null;
+
   return projectPublicPortfolio({
     // On an unapproved page `approvedIdentity` is null, so the reviewer sees the LIVE
     // headline -- which is the text they are being asked to approve.
@@ -287,6 +431,16 @@ async function buildPortfolio(
     projects,
     capabilities,
     records,
+    resume,
+    evidenceRecords,
+    filesCommitted,
+    projectName: firstRecord?.project_name ?? null,
+    projectDescriptor: firstRecord?.descriptor ?? null,
+    competencies,
+    evidenceBySource,
+    featuredRepoUrl,
+    featuredLanguages,
+    featuredTopLevelAreas,
     generatedAt: now.toISOString(),
   });
 }

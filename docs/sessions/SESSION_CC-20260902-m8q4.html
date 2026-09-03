@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, September 2, 2026 at 4:19 PM</div>
-    <div><span class="sid">CC-20260902-m8q4</span><span class="count">6 changes</span></div>
+    <div class="meta">Generated Thursday, September 3, 2026 at 5:57 AM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">15 changes</span></div>
   </header>
   <main>
     
@@ -147,6 +147,141 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">measured the element&#39;s box — **13×13px**, was rendering 44px square.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">`form.intake input` is (0,1,2) and `.consent input` is (0,1,1), so the consent checkbox inherited the text-field sizing and rendered as a large empty square next to its label. **Every assertion passed while it was broken** — same as the masthead button earlier today. It was caught by opening the mobile screenshot, which is the second time in one session that looking found what measuring did not.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**Content-addressed every built asset, so a deploy cannot be invisible again**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`packages/app-build/index.js` — a `fingerprintAssets` pass stamps every asset reference with a content hash (`/assets/site.css?v=ed056639`), rewriting to a fixed point so an imported file is stamped before its importer&#39;s own hash is final.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">13 tests across 3 suites pass, 5 of them new and covering the chain, idempotency, external URLs and the page-link exclusion. All three apps (`ai-flotation-public`, `cpn-public`, `refactored-public`) build. Boundaries clean. The 69-check site harness still passes with versioned URLs. Confirmed in the artifact: `href=&quot;/assets/site.css?v=ed056639&quot;`, `url(&#39;design/colors.css?v=351638dc&#39;)`, and `href=&quot;/about/&quot;` left alone.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the accessibility fix deployed earlier today was invisible in production.** The container served the corrected CSS and Cloudflare kept handing visitors the old copy — `cf-cache-status: HIT`, `Age: 1553`, `max-age=14400`. Every signal said the deploy worked: container running, file on disk correct, CI green, exit code 0. Only fetching the public URL disagreed. Page HTML is never edge-cached (`cf-cache-status: DYNAMIC`), so fresh HTML pointing at a never-before-seen URL is guaranteed to miss the cache. The subtle part is the chain — `index.html` → `site.css` → `design/colors.css`: if a token file changes and the stylesheet&#39;s URL does not move, the stale CSS is still served while everything looks correct. That case is the third test. Applies to all three apps rather than this one, because the failure is a property of the build, not of a brand.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>**Cleared the stray commit that was blocking production deploys**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in the repo — production host state only.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`cfe0d7be` preserved on branch `prod-local/session-10-progress` and confirmed still reachable by `git log` after the move; `main` fast-forwarded to `origin/main` (now `eb05587c`); untracked file count **18 before and 18 after**, so no other session&#39;s scratch work was disturbed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the prod checkout sat one commit ahead of `origin/main` — an Aug 24 commit touching only `PROGRESS.md`, never pushed. `deploy-prod.sh` refuses to build when `HEAD` is not `origin/main`, and it was right to: that check is what stops a box shipping code nobody reviewed. It would have blocked every future deploy from that host. Preserved rather than discarded, because it is not this session&#39;s commit to delete.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**One deploy carried the rebrand and the versioned URLs, and it was visible immediately**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in the repo — `bash scripts/deploy-prod.sh nginx` on the production host, at `1afde469`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**117 assertions against the live domain in a real browser, zero failures.** On every one of the seven pages: headings computed as **Space Grotesk**, body **Archivo**, `--accent` **#BA430E**, `--bg` **#F7F6F4**, the stylesheet URL content-addressed, no horizontal overflow at 360×800, and every button clearing 4.5:1. Zero console errors, zero failed subresources. `live-home-desktop.png` opened and looked at. The stamped URL `/assets/site.css?v=ed056639` was confirmed to serve CSS containing `Space Grotesk` and `:not(.btn)`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the deploy was deliberately held until #2033 merged.** Republishing the rebrand at the same `site.css` URL would have put it behind the same four-hour edge cache that hid this morning&#39;s fix. Landing the fingerprinting first meant the new HTML pointed at a URL that had never been cached, so the change was live on the first request instead of in four hours. This is the whole argument for the fingerprinting, tested in production the same day it was written.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>**Built the theme layer `brands.default_theme_key` had been waiting for**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`frontend/src/theme/deliveryBrandThemes.ts` (new registry), `DeliveryShell.tsx` (accepts `themeKey`, applies the tokens as custom properties and an accent hairline), `ClientPortal.tsx` (passes the key through), `clientVisibility.ts` (`default_theme_key` added to the client brand allowlist).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**773 tests across 36 suites pass** over `services/delivery` and `modules/delivery`, including the allowlist contract. Frontend `tsc --noEmit` clean. The parity test was **proved by breaking it**: changing `--accent` to `#BA430F` failed two assertions naming the token and both values, then was reverted.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the tokens are duplicated from `apps/ai-flotation-public/src/assets/design/colors.css` because `frontend/` importing from `apps/` is the exact edge `validate-app-boundaries.js` forbids — the alternative to duplication is a boundary violation, not a shared import. `deliveryBrandThemes.test.ts` parses both files and fails on any disagreement, so the copy cannot drift into a second, slightly different rust.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>**Established that there is no AI Flotation email to restyle**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing — investigation, and a decision not to build.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no flotation template anywhere under `backend/src/services/email*`; the design bundle&#39;s email is a React view inside the explorer app (`// Logos, Login, Email views`), not a droppable HTML file.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`/start/` explicitly promises the opposite — *&quot;We do not send an automated confirmation, so nothing will land in your inbox from this form — saying otherwise would be a promise the system does not currently keep.&quot;* Styling an email here would mean **creating an outbound send** and rewriting that copy, which is a product decision rather than a restyle. Put to Ali; he chose to leave it. The honest state is recorded rather than quietly closed as done.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>**Verified the themed client room on dev, with a control that proves the blast radius is one brand**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in the repo — dev deployed at `928d84d9`, and one `brand_id` moved and moved back.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**the same token and the same project, shot twice, with only `brand_id` changed between them.** Before (`refactored`): `--accent` empty, no hairline, brand name `rgba(33, 37, 41, 0.75)` — the neutral surface. After (`ai-flotation`): `--accent` **#BA430E**, hairline **rgb(186, 67, 14)**, brand name in the same rust. Both screenshots opened and compared; every other pixel is identical. The pale-rust active nav item appears in **both**, so it is pre-existing Bootstrap styling and not something this change introduced.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the `DB_NAME` trap was checked before and after the dev deploy. `.env` on that worktree carries **two** `DB_NAME` lines, `accelerator_prod` then `accelerator_dev1`; the last wins, and the container resolved to `/accelerator_dev1` both times. Worth knowing before someone reorders that file. Dev data was restored to `refactored` afterwards, so the box is as it was found.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>**Built lead-to-client conversion: organization → engagement → identity → project → membership**</h2>
+          <span class="badge">2026-09-03</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/delivery/leadConversionPlan.ts` (the decisions), `leadConversion.ts` (the writes), `__tests__/leadConversionPlan.test.ts` (18 tests).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**791 tests across 37 suites pass** over `services/delivery` and `modules/delivery`, 18 of them new. Backend typecheck is left to CI: the only TypeScript on this machine is the root-hoisted **4.9.5**, which cannot parse `@types/d3-dispatch` or `zod/v4` and so reports nothing useful about this file.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">it sends no email and never mutates the lead row. Telling the client is a separate outward-facing act that belongs to whoever decides the timing, and the lead stays the marketing record.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>**Gave the conversion an operator surface — dry run by default**</h2>
+          <span class="badge">2026-09-03</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/scripts/convertLeadToClient.ts`, `__tests__/convertLeadToClient.test.ts` (6 tests).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">6 tests pass, covering the dry-run default, exact-flag matching, and integer refusal. Importing the module does **not** open a database connection — `main()` sits behind `require.main === module`, which the test proves by running at all.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">it sends nothing to the client. After conversion they sign in with Google on the email the lead carried, because that address now has a delivery membership — the same path a real client uses, with no back door added.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>**Proved the conversion against production, without converting anything**</h2>
+          <span class="badge">2026-09-03</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing — `deploy-prod.sh backend` at the merged main, then two dry runs.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**both paths exercised on real production rows.** Lead 24880 previewed the whole chain (organization `Verification`, engagement `Verification - delivery`, project slug `verification-initial-build`, client resolved) and wrote nothing. Lead 24881 was **refused** with `lead_has_no_company`, which is the correct answer for a lead with no company. Then the important assertion: `organizations` where `lead_id in (24880, 24881)` = **0**, `delivery_engagements` with those `source_lead_id` = **0**, and `delivery_engagements` total still **0**. The dry run is dry.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">observed and not chased — `/api/health` returns `401 Authentication required` through the real hostname. Nothing in this session touched routes, and it has the shape of the known ordering bug where public routes are registered after `adminRoutes`. Flagged rather than fixed at 4am.</span></div>
           
         </div>
       </article>

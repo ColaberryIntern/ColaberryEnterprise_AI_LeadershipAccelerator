@@ -67,7 +67,6 @@ describe('careerPortfolioPublicProjection', () => {
   it('leaks nothing private, checked against the whole serialized payload', () => {
     const serialized = JSON.stringify(project());
     for (const sentinel of [
-      'SENTINEL_EMAIL',
       'SENTINEL_COMPANY',
       'SENTINEL_RESUME_FILENAME',
       'SENTINEL_SOURCE',
@@ -78,16 +77,60 @@ describe('careerPortfolioPublicProjection', () => {
     }
     // And the structural internals, by key name.
     for (const key of ['bands', 'confidence', 'proficiency', 'source_breakdown',
-      'readiness', 'blocking', 'email', 'resume', 'activity', 'commits_last_7d']) {
+      'readiness', 'blocking', 'phone', 'resume', 'activity', 'commits_last_7d']) {
       expect(serialized).not.toContain(`"${key}"`);
     }
+  });
+
+  /**
+   * `email` came OFF the refusal list on 2026-09-03, on Ali's explicit decision: this page
+   * exists so a recruiter can act on it, and an address is the thing they act with. It is
+   * asserted POSITIVELY here so the reversal is a stated intention rather than a hole, and
+   * the neighbouring refusals are re-asserted so widening one field did not widen others.
+   */
+  it('publishes the email address, and still refuses the phone and the resume file', () => {
+    const out = project({
+      identity: {
+        ...loadedProfile().identity,
+        email: 'someone@example.com',
+        phone: 'SENTINEL_PHONE',
+        location: 'Keller, Texas',
+      },
+    });
+    expect(out.identity.email).toBe('someone@example.com');
+    expect(out.identity.location).toBe('Keller, Texas');
+    const serialized = JSON.stringify(out);
+    expect(serialized).not.toContain('SENTINEL_PHONE');
+    expect(serialized).not.toContain('SENTINEL_RESUME_FILENAME');
+  });
+
+  it('refuses an address that is not shaped like one, rather than escaping it', () => {
+    const bad = (email: unknown) => project({
+      identity: { ...loadedProfile().identity, email },
+    }).identity.email;
+    expect(bad('not an email')).toBeNull();
+    expect(bad('a b@c.com')).toBeNull();
+    expect(bad('"><script>@x.com')).toBeNull();
+    expect(bad('nobody@localhost')).toBeNull();
+    expect(bad(42)).toBeNull();
+    expect(bad(null)).toBeNull();
+  });
+
+  it('refuses a location that looks like a street address', () => {
+    const loc = (location: unknown) => project({
+      identity: { ...loadedProfile().identity, location },
+    }).identity.location;
+    // A house number is the tell, and publishing where somebody lives is not the point.
+    expect(loc('4219 Club House Pl Irving, TX')).toBeNull();
+    expect(loc('Keller, Texas, United States')).toBe('Keller, Texas, United States');
   });
 
   it('publishes exactly the agreed top-level keys and no others', () => {
     // If someone adds a field to the payload, this fails until they consider it here.
     expect(Object.keys(project()).sort()).toEqual([
-      'capabilities', 'generated_at', 'identity', 'private_repository_count',
-      'projects', 'records', 'repositories',
+      'about', 'capabilities', 'competencies', 'competency_domain_count', 'education',
+      'evidence_by_source', 'experience', 'featured', 'generated_at', 'identity',
+      'private_repository_count', 'projects', 'records', 'repositories', 'stats',
     ]);
   });
 
@@ -246,6 +289,7 @@ describe('careerPortfolioPublicProjection', () => {
         stage: 'implementation',
         repo_url: 'https://github.com/x/y',
         demo_url: 'https://enterprise.colaberry.ai/',
+        hero_image_url: null,
       });
     });
 
@@ -277,6 +321,7 @@ describe('careerPortfolioPublicProjection', () => {
         .toEqual({
           title: 'PropertyPulse AI', organization: null, industry: null, problem: null,
           automation_goal: null, stage: 'discovery', repo_url: null, demo_url: null,
+          hero_image_url: null,
         });
     });
 
@@ -296,5 +341,78 @@ describe('careerPortfolioPublicProjection', () => {
   it('is pure: same input, same output, and no clock of its own', () => {
     expect(project()).toEqual(project());
     expect(project().generated_at).toBe(AT);
+  });
+
+  describe('the resume history crosses, but only the parts meant to be read', () => {
+    const withResume = (resume: any) =>
+      projectPublicPortfolio({ profile: loadedProfile(), records: [], resume, generatedAt: AT });
+
+    it('publishes a stated employment and education history', () => {
+      const out = withResume({
+        experience: [{
+          company: 'Acme Lending', title: 'Operations Manager',
+          start: '2019-03', end: null, summary: 'Ran the servicing desk.',
+        }],
+        education: [{ institution: 'UT Dallas', credential: 'B.S.', field: 'CS', year: '2016' }],
+      });
+      expect(out.experience).toHaveLength(1);
+      expect(out.experience[0].company).toBe('Acme Lending');
+      // null end is preserved as "current", not dropped and not turned into a string.
+      expect(out.experience[0].end).toBeNull();
+      expect(out.education[0].institution).toBe('UT Dallas');
+    });
+
+    it('normalizes on the way out, so raw model junk never reaches a reader', () => {
+      const out = withResume({
+        experience: [
+          { company: 'Acme', title: 'Analyst', start: 'Present', end: 'last year' },
+          { summary: 'no company and no title' },
+        ],
+        education: [{ credential: 'B.S.' }],
+      });
+      expect(out.experience).toHaveLength(1);
+      expect(out.experience[0].start).toBeNull();
+      expect(out.experience[0].end).toBeNull();
+      expect(out.education).toEqual([]);
+    });
+
+    it('is empty, not absent, when no resume was ever ingested', () => {
+      expect(project().experience).toEqual([]);
+      expect(project().education).toEqual([]);
+      expect(withResume(undefined).experience).toEqual([]);
+      expect(withResume('a resume').education).toEqual([]);
+    });
+
+    it('still refuses the parts of a resume that were never meant to be published', () => {
+      const serialized = JSON.stringify(withResume({
+        experience: [{ company: 'Acme', title: 'Analyst' }],
+        phone: 'SENTINEL_PHONE',
+        resume_text: 'SENTINEL_RESUME_TEXT',
+        file_name: 'SENTINEL_FILE_NAME',
+        location: 'SENTINEL_HOME_ADDRESS',
+      }));
+      for (const s2 of ['SENTINEL_PHONE', 'SENTINEL_RESUME_TEXT', 'SENTINEL_FILE_NAME',
+        'SENTINEL_HOME_ADDRESS']) {
+        expect(serialized).not.toContain(s2);
+      }
+    });
+  });
+
+  describe('the project hero image', () => {
+    const withHero = (hero: any) => projectPublicPortfolio({
+      profile: loadedProfile(), records: [], generatedAt: AT,
+      projects: [{ name: 'PropertyPulse AI', hero_image_url: hero }],
+    }).projects[0].hero_image_url;
+
+    it('carries an https image URL through', () => {
+      expect(withHero('https://raw.githubusercontent.com/o/r/HEAD/docs/shot.png'))
+        .toBe('https://raw.githubusercontent.com/o/r/HEAD/docs/shot.png');
+    });
+
+    it('refuses anything that is not an http(s) URL', () => {
+      expect(withHero('javascript:alert(1)')).toBeNull();
+      expect(withHero('data:image/png;base64,AAAA')).toBeNull();
+      expect(withHero(undefined)).toBeNull();
+    });
   });
 });
