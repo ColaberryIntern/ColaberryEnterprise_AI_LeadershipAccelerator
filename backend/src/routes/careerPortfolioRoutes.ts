@@ -7,6 +7,7 @@ import {
   handleGetPortfolioPage,
   handleSetPortfolioPageVisibility,
   handleRequestPortfolioPageReview,
+  handleGetMyPortfolioPreview,
 } from '../controllers/careerPortfolioPageController';
 import { handleListPostConsent, handleSetPostConsent } from '../controllers/postConsentController';
 
@@ -76,6 +77,16 @@ router.put(
   requireParticipant,
   requireContentEntitlement('portfolio'),
   handleSetPortfolioPageVisibility,
+);
+
+// The learner's own preview of that page: the SAME payload a stranger would get, so
+// nobody is asked to publish something they have never seen. `preview` is a static
+// segment with no dynamic sibling under this path, so it shadows nothing.
+router.get(
+  '/api/portal/career/portfolio-page/preview',
+  requireParticipant,
+  requireContentEntitlement('portfolio'),
+  handleGetMyPortfolioPreview,
 );
 
 router.post(
