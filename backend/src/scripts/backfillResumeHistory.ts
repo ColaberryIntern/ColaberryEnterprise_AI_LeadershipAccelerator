@@ -1,6 +1,8 @@
 import { OnboardingProfile } from '../models';
 import { buildResumeExtractionPrompt, parseExtractionJson } from '../services/resumeIngestService';
-import { normalizeExperience, normalizeEducation } from '../services/resumeHistory';
+import {
+  normalizeExperience, normalizeEducation, isExtractableResumeText,
+} from '../services/resumeHistory';
 
 /**
  * Backfill `experience[]` / `education[]` onto resumes ingested before the extractor
@@ -71,6 +73,7 @@ async function main(): Promise<void> {
   const candidates: Candidate[] = [];
   let skippedNoText = 0;
   let skippedAlreadyDone = 0;
+  let skippedNotAResume = 0;
 
   for (const row of rows) {
     const text = String(row.resume_text || '').trim();
@@ -83,6 +86,10 @@ async function main(): Promise<void> {
     // run cannot re-extract (and re-bill) every learner in the table.
     if (alreadyHas && !(FORCE && ONLY_ENROLLMENT)) { skippedAlreadyDone += 1; continue; }
     if (!text) { skippedNoText += 1; continue; }
+    // Every row this script was originally written for turned out to hold a FILENAME,
+    // not a resume, and extracting from those produced invented careers. Refused here
+    // rather than spending a token on them. See isExtractableResumeText().
+    if (!isExtractableResumeText(text)) { skippedNotAResume += 1; continue; }
     candidates.push({ row, text, extracted });
   }
 
@@ -96,6 +103,7 @@ async function main(): Promise<void> {
     will_process: work.length,
     skipped_already_backfilled: skippedAlreadyDone,
     skipped_no_resume_text: skippedNoText,
+    skipped_not_a_resume: skippedNotAResume,
   }, null, 2));
 
   if (!work.length) {

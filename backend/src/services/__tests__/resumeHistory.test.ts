@@ -1,4 +1,6 @@
-import { normalizeExperience, normalizeEducation } from '../resumeHistory';
+import {
+  normalizeExperience, normalizeEducation, isExtractableResumeText, MIN_RESUME_CHARS,
+} from '../resumeHistory';
 
 /**
  * These normalizers are the trust boundary between raw LLM output and a public page,
@@ -143,5 +145,59 @@ describe('normalizeEducation', () => {
   it('returns [] for every not-an-array input', () => {
     expect(normalizeEducation(null)).toEqual([]);
     expect(normalizeEducation('UTD')).toEqual([]);
+  });
+});
+
+/**
+ * The guard that stops a filename becoming a career.
+ *
+ * Every string below marked "production" was read out of `onboarding_profiles` on
+ * 2026-09-02. Asked to extract an employment history from them, gpt-4o-mini invented
+ * one -- and invented nearly the SAME one for three different students. These are
+ * regression cases, not hypotheticals.
+ */
+describe('isExtractableResumeText', () => {
+  const REAL_PLACEHOLDERS = [
+    '[Uploaded file: EMERALD A resume 2023.docx]',
+    '[Uploaded file: Resume James Brown Warikandwa.pdf]',
+    '[Uploaded file: Fechin Attuah Resume.pdf]',
+    '[Uploaded file: Newest resume 2025.pdf]',
+    '[Uploaded file: Cleveland_Sydnae_Resume_ContractAdmin_II.pdf.pdf]',
+    '[Uploaded file: Resume 30.0.docx]',
+    '[Uploaded file: Tom_Ogunmola_ServiceNow_BA_Resume.docx]',
+    '[Uploaded file: DataProResume_YolandaPrice (1).docx]',
+  ];
+
+  it('refuses every filename placeholder found in production', () => {
+    for (const p of REAL_PLACEHOLDERS) {
+      expect(isExtractableResumeText(p)).toBe(false);
+    }
+  });
+
+  it('refuses the placeholder whatever its casing or surrounding space', () => {
+    expect(isExtractableResumeText('  [uploaded file: cv.pdf]  ')).toBe(false);
+    expect(isExtractableResumeText('[UPLOADED FILE: CV.PDF]')).toBe(false);
+  });
+
+  it('refuses text too short to contain a career, and empty or absent text', () => {
+    expect(isExtractableResumeText('Data Scientist, 5 years')).toBe(false);
+    expect(isExtractableResumeText('')).toBe(false);
+    expect(isExtractableResumeText('   ')).toBe(false);
+    expect(isExtractableResumeText(null)).toBe(false);
+    expect(isExtractableResumeText(undefined)).toBe(false);
+    expect(isExtractableResumeText(12345)).toBe(false);
+  });
+
+  it('accepts text long enough to be a real resume', () => {
+    expect(isExtractableResumeText('x'.repeat(MIN_RESUME_CHARS))).toBe(true);
+    expect(isExtractableResumeText('x'.repeat(MIN_RESUME_CHARS - 1))).toBe(false);
+  });
+
+  it('does not refuse a real resume that merely mentions an uploaded file', () => {
+    // The refusal is anchored to the WHOLE string, so a resume containing that phrase
+    // in passing is still a resume.
+    const body = 'See [Uploaded file: portfolio.pdf] for samples. ' + 'Experience. '.repeat(30);
+    expect(body.length).toBeGreaterThan(MIN_RESUME_CHARS);
+    expect(isExtractableResumeText(body)).toBe(true);
   });
 });

@@ -42,6 +42,44 @@ export interface ResumeEducation {
 }
 
 /**
+ * The floor for believing a piece of text is a resume.
+ *
+ * A real resume carrying two jobs and two degrees runs to thousands of characters.
+ * 200 is far below any genuine one and far above every placeholder found in
+ * production, so it separates the two without being a judgement call.
+ */
+export const MIN_RESUME_CHARS = 200;
+
+/** The legacy upload path stored ONLY the filename, e.g. "[Uploaded file: cv.pdf]". */
+const FILENAME_PLACEHOLDER = /^\[uploaded file:[\s\S]*\]$/i;
+
+/**
+ * Can an employment history honestly be read out of this text?
+ *
+ * WHY THIS GUARD EXISTS. Verified against production on 2026-09-02: 14 onboarding
+ * profiles have a `resume_text` of 28-65 characters that is not a resume at all but a
+ * placeholder naming the uploaded file - `"[Uploaded file: EMERALD A resume 2023.docx]"`.
+ * Asked to extract an employment history from a FILENAME, gpt-4o-mini did not decline.
+ * It invented one, and invented nearly the same one every time: "Data Scientist at Tech
+ * Innovations Inc.", "M.S. Data Science, UC Berkeley". Three different students, three
+ * near-identical fabricated careers.
+ *
+ * "Never invent an employer that is not written in the text" is in the prompt already.
+ * The model ignored it, because a filename gives it nothing to be faithful to. A prompt
+ * instruction is not an enforcement mechanism, so this is the enforcement: if the source
+ * could not physically contain a career history, we do not accept one.
+ *
+ * This matters more than the other extracted fields. A wrong `industry` is a prefill the
+ * learner corrects in Settings; a fabricated job is published to a stranger as fact.
+ */
+export function isExtractableResumeText(text: unknown): boolean {
+  if (typeof text !== 'string') return false;
+  const t = text.trim();
+  if (!t || FILENAME_PLACEHOLDER.test(t)) return false;
+  return t.length >= MIN_RESUME_CHARS;
+}
+
+/**
  * Caps. A resume is a summary, and a portfolio is a shorter one; these also
  * bound what a hostile or hallucinating model can push onto a public page.
  */
