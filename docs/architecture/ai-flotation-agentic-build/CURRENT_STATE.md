@@ -136,7 +136,50 @@ Everything in §61 (notification philosophy), §77 (funnel events) and the entir
 experience assumes an inbound is noticed. Today it is not. This is live right now on
 aiflotation.com.
 
-**It is also the cheapest fix in the plan.** See RECOMMENDATION below.
+### The full diagnosis — it fails in two places, and one of them lies
+
+Traced 2026-09-03. `handleLeadIngest` delegates to `leadIngestionService.handleIngest`,
+whose **step 11** calls `routingEngineService.evaluateAndDispatch(lead, …)` — an async
+rules engine that does not block the response. Rules are **data** (`RoutingRule` rows),
+evaluated against facts including `source_slug`, and dispatched through
+`routingActionsService.runAction`.
+
+So the plumbing exists. It fails twice:
+
+**1. There are zero routing rules.** `select count(*) from routing_rules` on production
+returns **0**. The engine runs on every lead and finds nothing to match.
+
+**2. `notify_sales` is a stub that reports success.**
+
+```js
+const notifySales: ActionHandler = async (action, ctx) => {
+  // Stub: emit an Activity row; real email/slack wiring arrives with
+  // the sales notification service. Not blocking ingest.
+  await logActivity({ ... });
+  return { ok: true, detail: { channel: action.channel || 'email' } };
+};
+```
+
+It writes an Activity row and returns `ok: true`. **Even with a rule in place, the system
+would report a successful notification and send nothing.** `send_pdf` has the same shape.
+
+That second point is the serious one. A missing handler is an absence someone eventually
+notices; a handler that returns `ok` is a positive signal that is false, and it would be
+believed by any dashboard, test or operator reading routing outcomes.
+
+It is the same failure class this repo already legislates against elsewhere —
+`not_run != pass`, `waived != pass` — applied to a side effect instead of a check.
+
+### The fix has two parts
+
+1. **Implement `notify_sales` for real** — send through the existing shared path
+   (`SenderProfile` for brand-safe identity, `communicationSafetyService.evaluateSend()`,
+   `communicationLogService`), dedup on the lead so a retry cannot double-send, and
+   **return `ok: false` when it did not send** rather than logging an intent and claiming
+   success.
+2. **Seed a routing rule** matching `source_slug == 'ai-flotation'`.
+
+Neither is large. The first is what makes the second true.
 
 ---
 
