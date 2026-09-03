@@ -106,6 +106,32 @@ export function composeStats(input: OverviewInput, now: Date = new Date()): Port
   };
 }
 
+/**
+ * A descriptor short enough to be a sentence, or null.
+ *
+ * WHY THIS GUARD EXISTS. `capstone_records.content_json->system->descriptor` is not a
+ * one-line summary despite the name - it is the WHOLE deliverable document. Verified on
+ * production 2026-09-03, where this composer published its opening lines verbatim into
+ * the About block: "# Enterprise AI Strategy - Executive Deliverable
+
+**Organization:**
+ * ...". A reader would have seen literal hashes and asterisks on a public portfolio.
+ *
+ * So a descriptor is accepted ONLY if it looks like prose somebody wrote to be read in
+ * place: one line, no markdown syntax, and short. Anything else is dropped rather than
+ * truncated, because the first 200 characters of a document is still a document.
+ */
+function shortProse(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const t = v.trim();
+  if (!t || t.length > 240) return null;
+  // Any whitespace that is not a plain space means a line break or a tab, and
+  // that means a document rather than a sentence.
+  if (/[^\S ]/.test(t)) return null;
+  if (/^[#>*\-|]|[*_`#|]{2,}|\|\s*-{3,}/.test(t)) return null;
+  return t;
+}
+
 /** First name only, for the second sentence. Falls back to the whole name. */
 function firstName(fullName: string): string {
   const t = (fullName || '').trim();
@@ -151,7 +177,8 @@ export function composeAbout(input: OverviewInput): string[] {
 
   // Second paragraph: what a reader can verify, and the standing invariant of this page.
   const second: string[] = [];
-  if (input.projectDescriptor) second.push(input.projectDescriptor);
+  const descriptor = shortProse(input.projectDescriptor);
+  if (descriptor) second.push(descriptor);
   if (input.capabilityCount > 0) {
     second.push(
       `${input.capabilityCount} ${input.capabilityCount === 1 ? 'capability is' : 'capabilities are'} `
