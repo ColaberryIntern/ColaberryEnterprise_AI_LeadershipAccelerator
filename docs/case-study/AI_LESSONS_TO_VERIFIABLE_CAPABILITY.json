@@ -1,0 +1,199 @@
+{
+  "_README": [
+    "AUTHORING RECORD for the case study 'From AI Lessons to Verifiable AI Capability'.",
+    "",
+    "TARGET: the EXISTING record `ai-systems-architect-training-system` (id 268c5050-7f83-4b5d-ac39-cd44dbe433e2).",
+    "This is an in-place retitle and rewrite. The slug, live URL, publication row, 12 evidence",
+    "records, approved-metric history and 31 snapshots are preserved. No duplicate record is created",
+    "and the existing publication is not withdrawn.",
+    "",
+    "EVERY CLAIM BELOW NAMES ITS EVIDENCE. Where the platform cannot support a verb, the verb is not",
+    "used. Two claims were specifically checked and softened as a result, and both are recorded in",
+    "`_REJECTED_CLAIMS` at the foot of this file.",
+    "",
+    "NOT APPLIED YET. Applying this requires the path scope (30 paths, approved 2026-09-02) which in",
+    "turn requires MAX_SCOPE_PREFIXES=40 to reach production. Nothing here has been written to any",
+    "database."
+  ],
+
+  "identity": {
+    "slug": "ai-systems-architect-training-system",
+    "title": "From AI Lessons to Verifiable AI Capability",
+    "standfirst": "Traditional training records what a learner completed. This platform connects each lesson to work the learner builds, submits, and has verified as evidence against ten independently tracked competencies.",
+    "summary": "A learning system in which a lesson leads to an applied build, the build produces a submission, the submission becomes an append-only evidence record, and evidence recomputes ten competencies that a learner can carry into a portfolio page a mentor has approved.",
+    "organizationDisplayName": "Colaberry",
+    "organizationIdentityMode": "named",
+    "organizationNamingConsent": true,
+    "builderIdentityMode": "role_only",
+    "builderNamingConsent": false,
+    "builtByType": "colaberry_team",
+    "productionStatus": { "status": "shipped" },
+    "_NOTE_standfirst": [
+      "The proposed standfirst ended '...verify and carry into a living portfolio'. 'Carry into a",
+      "living portfolio' was CUT from the standfirst and moved into the summary and architecture,",
+      "because carrying work into a portfolio is not something the platform does for the learner:",
+      "it requires a mentor to approve the page and the learner to choose its audience. Leaving the",
+      "verb in the standfirst would have implied an automatic step that two human gates deliberately",
+      "prevent. Evidence: services/career/careerPortfolioPageService.ts."
+    ]
+  },
+
+  "taxonomy": {
+    "industry": "Workforce development",
+    "primaryCapability": "Verifiable capability development",
+    "capabilities": [
+      "Lesson-to-build activity mapping",
+      "Append-only skill evidence ledger",
+      "Competency recomputation from evidence",
+      "Mentor-gated portfolio publication"
+    ],
+    "stack": ["_DERIVED_FROM_PATH_SCOPED_SYNC — do not author by hand"],
+    "builtByType": "colaberry_team",
+    "deliverables": [
+      "A ten-competency model with independent per-skill state",
+      "An insert-only evidence ledger",
+      "A competency recompute that is idempotent by construction",
+      "A portfolio page behind two independent human gates"
+    ],
+    "projectStatus": "shipped"
+  },
+
+  "situation": {
+    "narrative": [
+      "Course completion is not capability. A learning record that says someone watched a module, attended a session or passed a quiz answers a question nobody outside the classroom is asking. A manager deciding whether a person can design a retrieval system, or an employer deciding whether to trust them with one, needs to see work rather than attendance.",
+      "AI-assisted work makes this harder rather than easier. When a model can produce a plausible answer to almost any exercise, the artefact alone stops being proof. A system that wants to make an honest claim about a learner has to keep track of what was generated, what the learner decided, what was actually submitted, and what has been checked — and it has to keep those four things separate.",
+      "The alternative most platforms reach for is a completion badge with better graphics. That records the same fact more attractively. What is needed instead is evidence a sceptical reader can inspect: which competency, backed by which piece of work, recorded when, and still standing now."
+    ],
+    "constraints": [
+      "A learner's project work is their own. The platform can hold evidence that work happened without taking custody of the work itself.",
+      "Evidence must not be quietly editable. A record that can be revised after the fact is a claim, not evidence.",
+      "Competency cannot be a single score. Ten different skills move at different rates and a single number hides which."
+    ],
+    "goals": [
+      "Connect a lesson to an applied build rather than to a quiz.",
+      "Capture evidence at the moment work is produced, as an append-only record.",
+      "Track competency per domain, recomputed from all evidence rather than incremented on completion.",
+      "Require a human to approve work before it becomes a public portfolio page."
+    ],
+    "verification": { "class": "verified", "method": "repo" }
+  },
+
+  "architecture": {
+    "narrative": [
+      "The chain is Lesson → Applied Build → Submission → Evidence → Competency → Portfolio, and it is worth being precise about which of those transitions are automatic and which are not.",
+      "A lesson is a curriculum record that carries a skill mapping, so the connection between what is taught and which of the ten competencies it develops is data rather than convention. The applied build is generated per learner from that lesson, and the submission is stored as its own record — the work product and the fact of submitting it are separate rows, which is what lets the platform hold evidence without holding a learner's project.",
+      "Evidence is where the design is strictest. The evidence ledger exposes no update and no delete function, deliberately, so the ledger stays a genuinely append-only record; every write is idempotency-keyed through findOrCreate. A record that can be revised after the fact is a claim rather than evidence, and the absence of those two functions is what makes that structural rather than a matter of policy.",
+      "Competency is a RECOMPUTE, not an increment. Each domain's confidence is recalculated from all of a learner's evidence, which makes the operation idempotent by construction — running it twice produces the same state. It is not an event fired the instant a submission lands, and the distinction matters: the profile reflects the whole evidence set at the time it was computed, not a running tally that could drift from its own inputs.",
+      "The portfolio step is not automatic at all, and that is the point. A page carries two independent gates: a status saying a human approved that the work is ready, and a visibility saying who the learner chose to show it to. Both must pass. Collapsing them into one column would make 'approved' and 'shared' the same act, and they are not — a mentor approves that the work is ready, the learner decides the audience."
+    ],
+    "diagramSource": "flowchart TD\n  L[Curriculum lesson<br/>carries a skill mapping] --> B[Applied build<br/>generated per learner]\n  B --> S[Submission<br/>stored as its own record]\n  S --> E[(Evidence ledger<br/>insert-only, idempotency-keyed)]\n  A[Assessment attempt] --> E\n  E --> C{Competency recompute<br/>full, idempotent}\n  C --> P1[Ten competencies<br/>each moving independently]\n  P1 --> G1[Mentor approves<br/>the work is ready]\n  G1 --> G2[Learner chooses<br/>the audience]\n  G2 --> PF[Portfolio page]\n  G1 -.->|both gates must pass| G2",
+    "_NOTE_diagram": [
+      "The two portfolio gates are drawn as separate nodes on purpose. A single 'publish' node would",
+      "imply one act where the code deliberately implements two."
+    ]
+  },
+
+  "measurement": {
+    "narrative": [
+      "The figures below are properties of the system, not outcomes for any learner. That distinction is the whole point of the case study and it would be self-defeating to blur it here.",
+      "What can be verified is structural: how many competencies the model defines, and how many independent human gates stand between finished work and a public page. Both are readable in the repository at a pinned commit, and neither depends on anyone's performance.",
+      "What is deliberately absent: no completion rate, no competency improvement, no placement or salary outcome, no time saved, no learner count, no employer acceptance. Those require measurements this platform has not taken and attribution it cannot currently support."
+    ],
+    "metrics": [
+      {
+        "key": "architecture_competencies_tracked",
+        "label": "AI architecture competencies, each verified separately",
+        "valueDisplay": "10 skills · verified, not self-reported",
+        "numericValue": 10,
+        "unit": "competencies",
+        "metricType": "scale",
+        "isHeadline": true,
+        "publishable": true,
+        "verification": { "class": "verified", "method": "repo" },
+        "measurement": {
+          "baseline": "A single overall progress score, which is what a completion-based record produces and what this model replaces.",
+          "sample": "Every enrolled learner, across a thirteen-week curriculum running from week 0 to week 12.",
+          "measured": "The count of independently tracked competency domains defined in the platform: LLM Core, Prompting, RAG, Vectors, Agents and MCP, Eval and Guardrails, System Design, Context Engineering, Governance, and Deploy and Ops.",
+          "methodology": "A learner skill profile is built from what they have completed in the platform, not from what they say they know. Each competency carries its own proficiency, confidence and evidence count and moves independently as work is finished, so the profile shows the verified portion against the unverified remainder rather than one blended score.",
+          "limitations": [
+            "This measures what a learner has demonstrated inside the platform. It is not a placement outcome and does not claim to be one — placement readiness scoring has not shipped.",
+            "A verified competency says the work was done, not that it was done excellently. There is no grading curve behind it.",
+            "Ten is the number of competencies the model defines. It is not a claim that any particular learner has verified all ten."
+          ]
+        },
+        "_EVIDENCE": "backend/src/constants/architectureSkills.ts — ARCHITECTURE_SKILL_IDS, exactly ten ids, matching the methodology text above one-for-one."
+      },
+      {
+        "key": "portfolio_publication_gates",
+        "label": "Independent human gates before work becomes public",
+        "valueDisplay": "2 gates · both must pass",
+        "numericValue": 2,
+        "unit": "gates",
+        "metricType": "quality",
+        "isHeadline": false,
+        "publishable": true,
+        "verification": { "class": "verified", "method": "repo" },
+        "measurement": {
+          "baseline": "One publish action, which is what a single status column produces.",
+          "sample": "Every learner portfolio page.",
+          "measured": "The count of independent conditions that must both pass before a portfolio page is publicly visible.",
+          "methodology": "Read directly from the portfolio page service, which holds status (draft or published — has a human approved this page) and visibility as separate columns and requires both. The module states why: collapsing them would make 'approved' and 'shared' the same act.",
+          "limitations": [
+            "This describes the gate, not how often it refuses. No rejection rate is recorded or claimed.",
+            "A gate ensures a human looked. It does not establish what standard they applied."
+          ]
+        },
+        "_EVIDENCE": "backend/src/services/career/careerPortfolioPageService.ts — module header, status and visibility columns."
+      }
+    ]
+  },
+
+  "roadmap": [
+    {
+      "label": "Thirteen-week curriculum with per-skill verification",
+      "status": "shipped",
+      "detail": "Weeks 0 to 12, ten independently tracked competencies, adaptive week assembly, live cohort sessions and community rooms.",
+      "verification": { "class": "verified", "method": "repo" }
+    },
+    {
+      "label": "Placement readiness scoring",
+      "status": "in_progress",
+      "detail": "The skill profile shows what a learner has verified. It does not yet say what that makes them ready for. The dashboard states this to the learner rather than implying a readiness it cannot support.",
+      "verification": { "class": "verified", "method": "repo" }
+    },
+    {
+      "label": "Event-driven competency update on submission",
+      "status": "not_pursued",
+      "detail": "Competency is a full recompute rather than an increment fired by a submission. The recompute is idempotent by construction, which is worth more than immediacy; making it event-driven would trade that away for a freshness nobody has asked for.",
+      "verification": { "class": "verified", "method": "repo" }
+    }
+  ],
+
+  "_WHAT_THIS_DOES_NOT_SHOW": [
+    "This case study verifies that the platform connects lessons to applied builds, submissions to an append-only evidence ledger, and evidence to ten independently recomputed competencies, with two human gates before any of it becomes public.",
+    "It does not show that any learner mastered the material, gained employment, or produced their work without AI assistance. It does not show how many learners have used the system, how many completed it, or what happened to them afterwards. Those are separate measurements with a separate attribution problem, and none of them are claimed here."
+  ],
+
+  "_REJECTED_CLAIMS": [
+    {
+      "proposed": "'...build, submit, verify and carry into a living portfolio' in the standfirst",
+      "rejected": "'carry into a living portfolio' cut from the standfirst",
+      "why": "Carrying work into a portfolio requires a mentor to approve the page and the learner to choose its audience. Keeping the verb in a list of things the platform does would imply an automatic step that two gates deliberately prevent."
+    },
+    {
+      "proposed": "Evidence captured 'at the moment work is produced' flows straight through to competency",
+      "rejected": "Softened: competency is described as a full recompute, explicitly not an event fired on submission",
+      "why": "recomputeForEnrollment recalculates from all evidence. Describing it as instantaneous would be a claim about a mechanism that does not exist, and the idempotence that makes it trustworthy is the more interesting fact anyway."
+    },
+    {
+      "proposed": "Percentage of relevant flows covered by tests",
+      "rejected": "Not included",
+      "why": "No committed coverage result supports a figure for this subsystem. A number would have to be produced specially for the case study, which is the definition of manufacturing a result."
+    },
+    {
+      "proposed": "The 181-day delivery elapsed time and 1,251 automated test files",
+      "rejected": "Not included, and the four pending metrics are left unpromoted",
+      "why": "Both are monorepo-wide figures attributed to one subsystem — the over-collection this path scope exists to fix. Ali's instruction is explicit: do not use them as public results."
+    }
+  ]
+}
