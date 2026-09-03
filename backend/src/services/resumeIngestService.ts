@@ -4,10 +4,11 @@ import { hasReferral } from './friendReferralService';
 import type { RawSkillClaim } from './cape/capeResumeClaimExtraction';
 import { ARCHITECTURE_SKILL_IDS } from '../constants/architectureSkills';
 import type { ResumeExperience, ResumeEducation } from './resumeHistory';
+import { isExtractableResumeText } from './resumeHistory';
 
 // Re-exported so existing importers of this service keep one obvious entry point.
 export type { ResumeExperience, ResumeEducation };
-export { normalizeExperience, normalizeEducation } from './resumeHistory';
+export { normalizeExperience, normalizeEducation, isExtractableResumeText } from './resumeHistory';
 
 const EXTRACTION_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const MAX_SOURCE_CHARS = 8000;
@@ -281,6 +282,15 @@ async function runExtraction(sourceText: string, deps: IngestDeps): Promise<{
       console.warn('[ResumeIngest] extraction failed (non-fatal):', err?.message);
     }
   }
+  // A history the source text could not physically contain is a fabrication, not an
+  // extraction. The other fields survive: a guessed `industry` is a prefill the learner
+  // corrects in Settings, while a guessed employer publishes to a stranger as fact.
+  // See isExtractableResumeText() for what production actually held in these rows.
+  if (extraction && !isExtractableResumeText(sourceText)) {
+    delete extraction.experience;
+    delete extraction.education;
+  }
+
   const { projectDna, variables } = mapExtractionToPrefill(extraction);
   const { profile, personalization } = mapExtractionToProfile(extraction);
   return { extraction, projectDna, variables, profile, personalization };
