@@ -13,6 +13,7 @@
  * below fail if either half of the two-layer dedupe — service check, database
  * constraint — is removed.
  */
+import { asInstance } from './sequelizeInstanceFake';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -47,8 +48,8 @@ class FakeRepoTable {
       allow_public_repo_link: false, metadata: {}, project_id: null, github_connection_id: null,
       default_branch: null, last_seen_sha: null, last_synced_at: null, ...values,
     };
-    this.rows.push(row);
-    return row;
+    this.rows.push(asInstance(row));
+    return this.rows[this.rows.length - 1];
   }
 
   async findAll(opts: any): Promise<FakeRow[]> {
