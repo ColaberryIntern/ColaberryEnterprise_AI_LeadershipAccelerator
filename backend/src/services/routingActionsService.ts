@@ -79,7 +79,14 @@ const notifySales: ActionHandler = async (action, ctx) => {
       email: ctx.lead.email,
       company: ctx.lead.company,
       phone: ctx.lead.phone,
-      title: ctx.lead.title,
+      // Labelled "Role" in the alert. Lead carries BOTH `role` and `title`, and the
+      // public form fills `role` while `title` stays empty - so reading only `title`
+      // printed "Role: not given" for a prospect who had given one. Same mismatch as the
+      // message field below, found in the same delivered email.
+      title: ctx.lead.title
+        || ctx.lead.role
+        || ctx.normalized?.title
+        || ctx.normalized?.role,
       // Falls back through the normalized payload because the ingest normalizer files
       // a form's free-text under `metadata.message` and leaves the lead column empty.
       // Proved in production on 2026-09-03: lead 24920 arrived with a written message and
