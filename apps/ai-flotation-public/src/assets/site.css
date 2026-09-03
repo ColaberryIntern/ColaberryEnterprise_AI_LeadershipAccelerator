@@ -232,6 +232,18 @@ main { display: block; }
 .tile h3 { margin-bottom: var(--space-1); }
 .tile p { font-size: var(--fs-body); color: var(--fg-muted); }
 
+/* Seven items in an auto-fit grid left one orphan on a second row, which reads as a
+   layout that ran out rather than a deliberate seventh thing. A stack is also the honest
+   shape for layers: one per row, in order. */
+.steps.stacked { grid-template-columns: 1fr; }
+.steps.stacked .step { border-right: none; display: flex; gap: var(--space-4); align-items: baseline; }
+.steps.stacked .step .n { flex: 0 0 2.5rem; }
+.steps.stacked .step .l { flex: 0 0 12rem; margin-top: 0; }
+.steps.stacked .step .d { margin-top: 0; }
+@media (max-width: 640px) {
+  .steps.stacked .step { display: block; }
+  .steps.stacked .step .l { margin-top: var(--space-1); }
+}
 .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); overflow: hidden; }
 .step { padding: var(--space-4); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg-elevated); }
 .step .n { font-family: var(--mono); font-size: var(--fs-caption); letter-spacing: .1em; color: var(--accent); }
