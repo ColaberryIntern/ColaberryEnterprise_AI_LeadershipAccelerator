@@ -56,7 +56,7 @@ function toView(row: AgentReportSubscription): AgentReportSubscriptionView {
     channel: row.channel,
     enabled: row.enabled,
     createdByEmail: row.created_by_email,
-    createdAt: row.created_at,
+    createdAt: row.createdAt,
   };
 }
 

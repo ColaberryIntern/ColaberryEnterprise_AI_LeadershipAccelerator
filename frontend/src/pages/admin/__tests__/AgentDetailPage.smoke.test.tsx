@@ -64,6 +64,36 @@ const { resetAgents, reactivateAgent } = require('../../../services/workforceOrg
   reactivateAgent: jest.Mock;
 };
 
+// At a Glance, Checkpoint F (2026-09-03) — "At a Glance" is now the
+// default tab, so every test in this file that mounts the page now also
+// mounts AgentAtAGlanceTab, which fetches the manager inbox (real, page-
+// level fetch, previously never triggered by Overview) plus its own 4
+// summary endpoints. None of these were ever mocked in this file before —
+// unmocked, they'd hit a real (nonexistent, in jsdom) network call, and
+// (confirmed live, the hard way) a bare `jest.fn()` with no resolved value
+// makes `await getManagerInboxItems(id)` resolve to `undefined`, which
+// `setInboxItems` then happily stores — `inboxItems.length` inside
+// AgentAtAGlanceTab crashes on the very next render. Every describe
+// block's own beforeEach already re-applies `getAgentDetail.mockResolvedValue`
+// after `jest.clearAllMocks()` (the established pattern in this file) —
+// these 5 new mocks follow the identical convention, applied per describe
+// block below, not once at module scope.
+jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
+jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest.fn() }));
+jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
+jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
+jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getManagerInboxItems } = require('../../../services/managerInboxApi') as { getManagerInboxItems: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { listDirectives } = require('../../../services/managerDirectiveApi') as { listDirectives: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { listReportSubscriptions } = require('../../../services/agentReportSubscriptionApi') as { listReportSubscriptions: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { listGoals } = require('../../../services/agentGoalApi') as { listGoals: jest.Mock };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { listOneOnOnes } = require('../../../services/agentOneOnOneApi') as { listOneOnOnes: jest.Mock };
+
 const DETAIL: AgentDetail = {
   agent: {
     id: 'agent-reese',
@@ -79,6 +109,10 @@ const DETAIL: AgentDetail = {
     // AI Workforce Reset, Phase C (2026-08-24) — honest null: this fixture
     // agent has never been through the reactivation flow.
     autonomy_level: null,
+    // Trust & Control slice 2 (2026-09-03).
+    department: null, module: null, source_file: null,
+    max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
+    autonomy_level_set_at: null,
   },
   identity: null,
   live_status: 'online',
@@ -137,11 +171,21 @@ const DETAIL: AgentDetail = {
     last_error_at: null,
     last_activity_at: '2026-08-24T10:00:00Z',
   },
+  goals: [],
+  goals_overall: 0,
 };
 
 let container: HTMLDivElement;
 let root: Root;
 
+// At a Glance, Checkpoint F (2026-09-03) — "Overview" is no longer the
+// default tab; its real content (identity, tools, reports-to, trust
+// contract, system prompt) moved into Command Center, unchanged. Every
+// test below that asserts on that content needs Command Center open first
+// — done once, here, so all 50+ call sites below get it for free instead
+// of touching each test individually. The one call site that predates this
+// helper (line ~31, a separate `renderPage()` using `renderToStaticMarkup`)
+// never fires `useEffect` at all, so it's unaffected by tab default.
 async function renderAgentPage() {
   await act(async () => {
     root.render(
@@ -153,11 +197,23 @@ async function renderAgentPage() {
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+  const commandTabButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Command Center');
+  if (commandTabButton) {
+    await act(async () => {
+      commandTabButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
 }
 
 describe('AgentDetailPage — Ticket activity table: colored status badges + CST timestamps', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -225,6 +281,11 @@ describe('AgentDetailPage — Ticket activity table: colored status badges + CST
 describe('AgentDetailPage — "last activity" indicator on the ticket-activity table', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -267,6 +328,11 @@ describe('AgentDetailPage — "last activity" indicator on the ticket-activity t
 describe('AgentDetailPage — "what this agent reads / produces" section', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -322,6 +388,11 @@ describe('AgentDetailPage — "what this agent reads / produces" section', () =>
 describe('AgentDetailPage — title prefers identity.display_name over raw agent_name', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -362,6 +433,11 @@ describe('AgentDetailPage — title prefers identity.display_name over raw agent
 describe('AgentDetailPage — "Reports to" section', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -431,6 +507,11 @@ describe('AgentDetailPage — "Reports to" section', () => {
 describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -494,6 +575,11 @@ describe('AgentDetailPage — "Tools & capabilities" per-tool drill-down', () =>
 describe('AgentDetailPage — "Scheduled tasks" section', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -559,6 +645,11 @@ describe('AgentDetailPage — "Scheduled tasks" section', () => {
 describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_breakdown summary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -620,6 +711,11 @@ describe('AgentDetailPage — "Ticket activity" table: Why column and ticket_bre
 describe('AgentDetailPage — "Trust evidence" section', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -714,6 +810,11 @@ describe('AgentDetailPage — "Deactivate" action', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     getAgentDetail.mockResolvedValue(DETAIL);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -789,6 +890,11 @@ describe('AgentDetailPage — "Deactivate" action', () => {
 describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -884,6 +990,11 @@ describe('AgentDetailPage — reactivation flow (deactivated agent)', () => {
 describe('AgentDetailPage — "Trust Contract" section', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getManagerInboxItems.mockResolvedValue([]);
+    listDirectives.mockResolvedValue([]);
+    listReportSubscriptions.mockResolvedValue([]);
+    listGoals.mockResolvedValue([]);
+    listOneOnOnes.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);

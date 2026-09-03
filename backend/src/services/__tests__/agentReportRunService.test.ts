@@ -19,9 +19,16 @@ jest.mock('../../models/AgentReportSubscription', () => ({
 }));
 
 const mockRunCreate = jest.fn();
+const mockRunFindAll = jest.fn();
 jest.mock('../../models/AgentReportRun', () => ({
   __esModule: true,
-  default: { create: (...a: any[]) => mockRunCreate(...a) },
+  default: { create: (...a: any[]) => mockRunCreate(...a), findAll: (...a: any[]) => mockRunFindAll(...a) },
+}));
+
+const mockAiAgentFindByPk = jest.fn();
+jest.mock('../../models/AiAgent', () => ({
+  __esModule: true,
+  default: { findByPk: (...a: any[]) => mockAiAgentFindByPk(...a) },
 }));
 
 const mockOrgMemberFindByPk = jest.fn();
@@ -41,7 +48,7 @@ jest.mock('../emailService', () => ({
 }));
 
 import { UniqueConstraintError } from 'sequelize';
-import { computeLocalHour, computePeriodKey, renderReportContent, dispatchDueReportRuns } from '../agentReportRunService';
+import { computeLocalHour, computePeriodKey, renderReportContent, dispatchDueReportRuns, listReportRunsForAgent } from '../agentReportRunService';
 
 const CHICAGO_MONDAY = new Date('2026-08-31T18:30:00Z'); // Chicago: Mon 2026-08-31, hour 13
 const CHICAGO_WED_SAME_WEEK = new Date('2026-09-02T15:00:00Z'); // Chicago: Wed 2026-09-02, hour 10
@@ -197,5 +204,101 @@ describe('dispatchDueReportRuns', () => {
 
     expect(mockOrgMemberFindByPk).not.toHaveBeenCalled();
     expect(mockSendRawEmail).toHaveBeenCalledWith(expect.objectContaining({ to: ['creator@colaberry.com'] }));
+  });
+});
+
+function fakeRun(overrides: Partial<{ id: string; subscription_id: string; period_key: string; generated_at: Date; delivered_at: Date | null; delivery_status: string; error_message: string | null }> = {}) {
+  return {
+    id: 'run-1', subscription_id: 'sub-1', period_key: '2026-09-01',
+    generated_at: new Date('2026-09-01T13:00:00Z'), delivered_at: new Date('2026-09-01T13:00:05Z'),
+    delivery_status: 'sent', error_message: null,
+    ...overrides,
+  };
+}
+
+describe('listReportRunsForAgent — delivery history (Checkpoint C, Reports slice)', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  it('boundary: a nonexistent agent returns null', async () => {
+    mockAiAgentFindByPk.mockResolvedValue(null);
+    const result = await listReportRunsForAgent('does-not-exist');
+    expect(result).toBeNull();
+    expect(mockSubFindAll).not.toHaveBeenCalled();
+  });
+
+  it('boundary: a real agent with zero subscriptions returns real zeros, never a fabricated rate', async () => {
+    mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1' });
+    mockSubFindAll.mockResolvedValue([]);
+
+    const result = await listReportRunsForAgent('agent-1');
+
+    expect(result).toEqual({ windowDays: 30, runs: [], sent: 0, failed: 0, pending: 0, successRatePct: null });
+    expect(mockRunFindAll).not.toHaveBeenCalled();
+  });
+
+  it('boundary: subscriptions exist but have never run — successRatePct is null, never a fabricated 100%', async () => {
+    mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1' });
+    mockSubFindAll.mockResolvedValue([{ id: 'sub-1' }]);
+    mockRunFindAll.mockResolvedValue([]);
+
+    const result = await listReportRunsForAgent('agent-1');
+
+    expect(result?.successRatePct).toBeNull();
+    expect(result?.sent).toBe(0);
+    expect(result?.failed).toBe(0);
+  });
+
+  it('honest math: successRatePct is sent/(sent+failed), pending rows counted separately and never folded into either side', async () => {
+    mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1' });
+    mockSubFindAll.mockResolvedValue([{ id: 'sub-1' }]);
+    mockRunFindAll.mockResolvedValue([
+      fakeRun({ id: 'r1', delivery_status: 'sent' }),
+      fakeRun({ id: 'r2', delivery_status: 'sent' }),
+      fakeRun({ id: 'r3', delivery_status: 'failed', error_message: 'Mandrill timeout' }),
+      fakeRun({ id: 'r4', delivery_status: 'pending', delivered_at: null }),
+    ]);
+
+    const result = await listReportRunsForAgent('agent-1');
+
+    expect(result?.sent).toBe(2);
+    expect(result?.failed).toBe(1);
+    expect(result?.pending).toBe(1);
+    expect(result?.successRatePct).toBeCloseTo(66.7, 1); // 2/3, not 2/4
+    expect(result?.runs).toHaveLength(4);
+  });
+
+  it('never counts a failed run as a success — a real regression this exact math is designed to prevent', async () => {
+    mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1' });
+    mockSubFindAll.mockResolvedValue([{ id: 'sub-1' }]);
+    mockRunFindAll.mockResolvedValue([
+      fakeRun({ id: 'r1', delivery_status: 'sent' }),
+      fakeRun({ id: 'r2', delivery_status: 'failed' }),
+    ]);
+
+    const result = await listReportRunsForAgent('agent-1');
+
+    expect(result?.successRatePct).toBe(50);
+  });
+
+  it('queries runs across every subscription this agent has, scoped to the real 30-day window', async () => {
+    mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1' });
+    mockSubFindAll.mockResolvedValue([{ id: 'sub-1' }, { id: 'sub-2' }]);
+    mockRunFindAll.mockResolvedValue([]);
+
+    await listReportRunsForAgent('agent-1');
+
+    const callArgs = mockRunFindAll.mock.calls[0][0];
+    expect(callArgs.where.subscription_id).toBeDefined();
+    expect(callArgs.where.generated_at).toBeDefined();
+  });
+
+  it('exposes the real error_message on a failed run — never hidden from the manager', async () => {
+    mockAiAgentFindByPk.mockResolvedValue({ id: 'agent-1' });
+    mockSubFindAll.mockResolvedValue([{ id: 'sub-1' }]);
+    mockRunFindAll.mockResolvedValue([fakeRun({ delivery_status: 'failed', error_message: 'Mandrill timeout' })]);
+
+    const result = await listReportRunsForAgent('agent-1');
+
+    expect(result?.runs[0].errorMessage).toBe('Mandrill timeout');
   });
 });
