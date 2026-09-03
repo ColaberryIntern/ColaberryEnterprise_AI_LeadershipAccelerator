@@ -1,6 +1,7 @@
 import React from 'react';
+import './portfolio.css';
 import {
-  ExperienceSection, EducationSection, SectionHead, BrandRule,
+  ExperienceSection, EducationSection, SectionHead, Rule,
   type ExperienceItem, type EducationItem,
 } from './PortfolioHistory';
 
@@ -13,41 +14,46 @@ import {
  * a reviewer would approve one rendering while a stranger read another. One component fed
  * by one projection means what the reviewer sees IS what publishes.
  *
- * WHY IT READS AS A RESUME. Ali, on the first cut: "make it look more like ... a Resume
- * with a hero image per project and an experience section that comes from their linkedin
- * resume." The section order below is the argument the page makes, and it is deliberate:
- * who they are, where they have worked, what they built, then the evidence for it. The old
- * order led with a capability list, which asked a recruiter to care about skills belonging
- * to someone they had not been introduced to yet.
+ * THE LAYOUT IS A PORT of the design Ali approved on 2026-09-02 - two columns, a sticky
+ * identity rail, a stat strip, and the employment history on a date rail. The section
+ * order is the argument the page makes: who they are, where they have worked, what they
+ * built, then the evidence for it.
+ *
+ * FIELDS THAT ARE NOT HERE YET RENDER NOTHING RATHER THAN A PLACEHOLDER. `about`, `stats`,
+ * `email`, `location` and `github_url` are optional because the public projection cannot
+ * emit them yet. Each block below is guarded, so when the projection starts sending them
+ * they appear with no change to this file - and until then the page is shorter, not
+ * broken. Nothing here invents a value to fill a slot.
  */
-// Design tokens, not hex literals: the tokens carry a [data-theme="dark"] variant and
-// this is a page a stranger opens on an unknown device.
-const INK = 'var(--text-strong)';
-const BODY = 'var(--text-body)';
-const ACCENT = 'var(--text-link)';
-const MUTED = 'var(--text-muted)';
-const SUBTLE = 'var(--text-subtle)';
-const LINE = 'var(--border-subtle)';
-const CARD = 'var(--surface-card)';
 
-interface Capability {
-  name: string; count: number; proven?: boolean; on_sample?: boolean;
-}
+interface Capability { name: string; count: number; proven?: boolean; on_sample?: boolean }
 interface RecordLink { slug: string; title: string; published_at: string | null }
+
 interface ProjectItem {
   title: string; organization: string | null; industry: string | null;
   problem: string | null; automation_goal: string | null; stage: string | null;
   repo_url: string | null; demo_url: string | null;
-  /** An image found in the project's own PUBLIC repo. Null when there is none. */
+  /** An image committed to the project's own PUBLIC repo. Null when there is none. */
   hero_image_url?: string | null;
 }
+
 interface Repository { name: string; url: string }
+
+interface PortfolioStats {
+  years_experience?: number | null;
+  files_committed?: number | null;
+  capabilities?: number | null;
+  evidence_records?: number | null;
+}
 
 interface Portfolio {
   identity: {
     full_name: string; headline: string | null; cohort_name: string | null;
     avatar_data_url: string | null; linkedin_url: string | null;
+    email?: string | null; location?: string | null; github_url?: string | null;
   };
+  about?: string[];
+  stats?: PortfolioStats;
   experience?: ExperienceItem[];
   education?: EducationItem[];
   capabilities: Capability[];
@@ -58,45 +64,37 @@ interface Portfolio {
   generated_at: string;
 }
 
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section style={{ marginTop: 44 }}>
-    <SectionHead>{title}</SectionHead>
-    <BrandRule />
-    {children}
-  </section>
-);
-
-/** Up to two initials from the project title, for the no-image case. */
-function monogram(title: string): string {
-  const words = title.split(/\s+/).filter(Boolean);
+/** Up to two initials, for an avatar or a project with no image. */
+function initials(text: string): string {
+  const words = (text || '').split(/\s+/).filter(Boolean);
   if (!words.length) return '#';
   return words.slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
+
+/** A bare hostname, so a long profile URL does not blow out the 296px rail. */
+function shortLink(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.hostname.replace(/^www\./, '') + u.pathname).replace(/\/$/, '');
+  } catch {
+    return url;
+  }
 }
 
 /**
  * The project's hero.
  *
  * An image is shown ONLY when the backend found one in the project's own PUBLIC repo.
- * When there is none this renders a typographic band rather than a broken frame or a
- * stock photo: an invented image would be the one thing on this page that is not the
- * person's own work. onError collapses to the same fallback, so a file deleted from the
- * repo after publication degrades honestly instead of showing a browser error glyph.
+ * With none, this renders a typographic tile rather than a broken frame or stock art: an
+ * invented image would be the one thing on this page that is not the person's own work.
+ * `onError` collapses to the same tile, so a file deleted after publication degrades
+ * honestly instead of showing a browser error glyph.
  */
-const ProjectHero: React.FC<{ title: string; src?: string | null }> = ({ title, src }) => {
+const Hero: React.FC<{ title: string; src?: string | null }> = ({ title, src }) => {
   const [failed, setFailed] = React.useState(false);
   const show = !!src && !failed;
   return (
-    <div
-      style={{
-        position: 'relative',
-        aspectRatio: '16 / 9',
-        width: '100%',
-        overflow: 'hidden',
-        borderRadius: '10px 10px 0 0',
-        background: show ? 'var(--surface-sunken)' : 'var(--surface-brand-subtle)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-    >
+    <div className="pf-hero">
       {show ? (
         <img
           src={src as string}
@@ -104,66 +102,23 @@ const ProjectHero: React.FC<{ title: string; src?: string | null }> = ({ title, 
           loading="lazy"
           referrerPolicy="no-referrer"
           onError={() => setFailed(true)}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
       ) : (
-        <span
-          aria-hidden="true"
-          style={{
-            fontSize: 40, fontWeight: 800, letterSpacing: '.04em',
-            color: 'var(--surface-brand)', opacity: 0.55,
-          }}
-        >
-          {monogram(title)}
-        </span>
+        <span className="pf-mono" aria-hidden="true">{initials(title)}</span>
       )}
     </div>
   );
 };
 
-const ProjectCard: React.FC<{ project: ProjectItem }> = ({ project: p }) => {
-  const meta = [p.organization, p.industry].filter(Boolean).join(' · ');
+const StatTile: React.FC<{ value: number | null | undefined; label: string }> = (
+  { value, label },
+) => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
   return (
-    <article
-      style={{
-        border: '1px solid ' + LINE,
-        borderRadius: 12,
-        background: CARD,
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <ProjectHero title={p.title} src={p.hero_image_url} />
-      <div style={{ padding: '16px 18px 18px' }}>
-        <h3 style={{ fontSize: 17, fontWeight: 700, color: INK, margin: 0, lineHeight: 1.3 }}>
-          {p.title}
-        </h3>
-        {meta && <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>{meta}</div>}
-        {p.problem && (
-          <p style={{ fontSize: 14.5, color: BODY, lineHeight: 1.6, margin: '10px 0 0' }}>{p.problem}</p>
-        )}
-        {p.automation_goal && (
-          <p style={{ fontSize: 14, color: BODY, lineHeight: 1.6, margin: '8px 0 0' }}>{p.automation_goal}</p>
-        )}
-        {(p.repo_url || p.demo_url) && (
-          <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap' }}>
-            {p.demo_url && (
-              <a href={p.demo_url} target="_blank" rel="noopener noreferrer"
-                 style={{ color: ACCENT, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
-                View it live
-              </a>
-            )}
-            {p.repo_url && (
-              <a href={p.repo_url} target="_blank" rel="noopener noreferrer"
-                 style={{ color: ACCENT, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
-                Read the code
-              </a>
-            )}
-          </div>
-        )}
-      </div>
-    </article>
+    <div className="pf-stat">
+      <b>{value}</b>
+      <span>{label}</span>
+    </div>
   );
 };
 
@@ -172,144 +127,211 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
   const projects = portfolio.projects || [];
   const experience = portfolio.experience || [];
   const education = portfolio.education || [];
+  const about = portfolio.about || [];
+  const stats = portfolio.stats || {};
+
+  const statTiles = [
+    { value: stats.years_experience, label: 'Years experience' },
+    { value: stats.files_committed, label: 'Files committed' },
+    { value: stats.capabilities, label: 'Capabilities' },
+    { value: stats.evidence_records, label: 'Evidence records' },
+  ].filter((t) => typeof t.value === 'number' && (t.value as number) > 0);
 
   const isEmpty = !capabilities.length && !records.length && !repositories.length
-    && !projects.length && !experience.length && !education.length;
+    && !projects.length && !experience.length && !education.length && !about.length;
 
   return (
-    <div style={{ maxWidth: 880, margin: '0 auto', padding: '48px 24px 72px', color: BODY }}>
-      <header style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        {identity.avatar_data_url && (
-          <img
-            src={identity.avatar_data_url}
-            alt=""
-            style={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-          />
-        )}
-        <div style={{ minWidth: 220, flex: 1 }}>
-          <h1 style={{ fontSize: 34, fontWeight: 800, color: INK, margin: 0, lineHeight: 1.15 }}>
-            {identity.full_name}
-          </h1>
-          {identity.headline && (
-            <div style={{ fontSize: 17, color: BODY, marginTop: 6 }}>{identity.headline}</div>
-          )}
-          <div style={{ display: 'flex', gap: 14, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            {identity.cohort_name && (
-              <span style={{ fontSize: 13, color: SUBTLE }}>{identity.cohort_name}</span>
+    <div className="pf">
+      <nav className="pf-nav">
+        <div className="pf-nav-in">
+          <span className="pf-brand">
+            <span className="pf-mark" aria-hidden="true">C</span>
+            Colaberry
+          </span>
+          <div className="pf-navlinks">
+            {(about.length > 0 || statTiles.length > 0) && (
+              <a className="pf-navlink" href="#overview">Overview</a>
             )}
-            {identity.linkedin_url && (
-              <a
-                href={identity.linkedin_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: ACCENT, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}
-              >
-                LinkedIn
-              </a>
-            )}
+            {experience.length > 0 && <a className="pf-navlink" href="#experience">Experience</a>}
+            {projects.length > 0 && <a className="pf-navlink" href="#projects">Projects</a>}
+            {capabilities.length > 0 && <a className="pf-navlink" href="#skills">Skills</a>}
           </div>
         </div>
-      </header>
+      </nav>
 
-      {/* Where they have worked, before what they built here. */}
-      <ExperienceSection items={experience} />
-
-      {projects.length > 0 && (
-        <Section title={projects.length === 1 ? 'Selected work' : 'Selected work (' + projects.length + ')'}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 20,
-            }}
-          >
-            {projects.map((p, i) => <ProjectCard key={p.title + i} project={p} />)}
+      <div className="pf-wrap">
+        <aside className="pf-rail">
+          <div className="pf-avatar">
+            {identity.avatar_data_url
+              ? <img src={identity.avatar_data_url} alt="" />
+              : <span aria-hidden="true">{initials(identity.full_name)}</span>}
           </div>
-        </Section>
-      )}
+          <h1 className="pf-name">{identity.full_name}</h1>
+          {identity.headline && <div className="pf-role">{identity.headline}</div>}
+          {identity.location && <div className="pf-loc">{identity.location}</div>}
+          {identity.cohort_name && <div className="pf-loc">{identity.cohort_name}</div>}
 
-      {/* PROVEN BY COMMITTED FILES, not by curriculum consumption.
-          This band previously read "Verified by Colaberry - N pieces of evidence" from the
-          assessment tables. Every one of those 8,895 rows is source='timeline' -- content
-          opened, one row per band -- so the number meant attendance and the label claimed
-          proof. On a page built for recruiters that was the most damaging line here. */}
-      {capabilities.length > 0 && (
-        <Section title={'Proven in their repo (' + capabilities.length + ')'}>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {capabilities.map((c) => (
-              <li
-                key={c.name}
-                style={{
-                  display: 'flex', justifyContent: 'space-between', gap: 12,
-                  padding: '10px 0', borderBottom: '1px solid ' + LINE, flexWrap: 'wrap',
-                }}
-              >
-                <span style={{ color: INK, fontWeight: 600 }}>
-                  {c.name}
-                  {c.on_sample && (
-                    <span style={{ color: MUTED, fontWeight: 500 }}> &middot; built on the sample</span>
-                  )}
-                </span>
-                <span style={{ color: MUTED, fontSize: 13 }}>
-                  {c.count > 1 && <>{c.count} committed</>}
-                  {c.proven && <>{c.count > 1 ? ' · ' : ''}demonstrated</>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-
-      {records.length > 0 && (
-        <Section title={'Written up (' + records.length + ')'}>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {records.map((r) => (
-              <li key={r.slug} style={{ padding: '10px 0', borderBottom: '1px solid ' + LINE }}>
-                {/* The record is where the depth lives; this page is the index. */}
-                <a href={'/p/' + r.slug} style={{ color: ACCENT, fontWeight: 600, textDecoration: 'none' }}>
-                  {r.title}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-
-      <EducationSection items={education} />
-
-      {(repositories.length > 0 || private_repository_count > 0) && (
-        <Section title="Code">
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {repositories.map((r) => (
-              <li key={r.url} style={{ padding: '8px 0' }}>
-                <a href={r.url} target="_blank" rel="noopener noreferrer"
-                   style={{ color: ACCENT, textDecoration: 'none' }}>{r.name}</a>
-              </li>
-            ))}
-          </ul>
-          {private_repository_count > 0 && (
-            // The honest statement -- there was more work behind this -- without the identity.
-            <p style={{ color: MUTED, fontSize: 13, margin: '8px 0 0' }}>
-              and {private_repository_count} private {private_repository_count === 1 ? 'repository' : 'repositories'}
-            </p>
+          {(identity.email || identity.linkedin_url || identity.github_url) && (
+            <>
+              <div className="pf-railhead">Contact</div>
+              <ul className="pf-contact">
+                {identity.email && (
+                  <li><a href={`mailto:${identity.email}`}>{identity.email}</a></li>
+                )}
+                {identity.linkedin_url && (
+                  <li>
+                    <a href={identity.linkedin_url} target="_blank" rel="noopener noreferrer">
+                      {shortLink(identity.linkedin_url)}
+                    </a>
+                  </li>
+                )}
+                {identity.github_url && (
+                  <li>
+                    <a href={identity.github_url} target="_blank" rel="noopener noreferrer">
+                      {shortLink(identity.github_url)}
+                    </a>
+                  </li>
+                )}
+              </ul>
+            </>
           )}
-        </Section>
-      )}
 
-      {/* An entirely empty portfolio is a real state and says so plainly, rather than
-          rendering a page of blank headings that reads as abandonment. */}
-      {isEmpty && (
-        <p style={{ color: MUTED, marginTop: 40 }}>
-          This portfolio does not have any published work yet.
-        </p>
-      )}
+          {/* PROVEN BY COMMITTED FILES, not by curriculum consumption. This band once read
+              "Verified by Colaberry - N pieces of evidence" from the assessment tables.
+              Every one of those 8,895 rows is source='timeline' - content opened, one row
+              per band - so the number meant attendance while the label claimed proof. On a
+              page built for recruiters that was the most damaging line here. */}
+          {capabilities.length > 0 && (
+            <>
+              <div className="pf-railhead">Proven in their repo</div>
+              <ul className="pf-proven">
+                {capabilities.map((c) => (
+                  <li key={c.name}>
+                    <span className="pf-tick" aria-hidden="true">&#10003;</span>
+                    <span>
+                      {c.name}
+                      {c.on_sample && (
+                        <span style={{ color: 'var(--pf-mut)' }}> &middot; on the sample</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </aside>
+
+        <main>
+          {(about.length > 0 || statTiles.length > 0) && (
+            <section id="overview">
+              {about.length > 0 && (
+                <div className="pf-card pf-about">
+                  <SectionHead badge="from their record and resume">About</SectionHead>
+                  <Rule />
+                  {about.map((p, i) => <p key={i}>{p}</p>)}
+                </div>
+              )}
+              {statTiles.length > 0 && (
+                <div className="pf-stats">
+                  {statTiles.map((t) => (
+                    <StatTile key={t.label} value={t.value} label={t.label} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          <ExperienceSection items={experience} badge="parsed from their resume" />
+
+          {projects.length > 0 && (
+            <section id="projects" className="pf-card">
+              <SectionHead>
+                {projects.length === 1 ? 'Selected work' : `Selected work (${projects.length})`}
+              </SectionHead>
+              <Rule />
+              <div className="pf-projects">
+                {projects.map((p, i) => {
+                  const meta = [p.organization, p.industry].filter(Boolean).join(' · ');
+                  return (
+                    <article className="pf-proj" key={`${p.title}${i}`}>
+                      <Hero title={p.title} src={p.hero_image_url} />
+                      <div className="pf-projbody">
+                        <h3 className="pf-projttl">{p.title}</h3>
+                        {meta && <div className="pf-projmeta">{meta}</div>}
+                        {p.problem && <p className="pf-projtext">{p.problem}</p>}
+                        {p.automation_goal && <p className="pf-projtext">{p.automation_goal}</p>}
+                        {(p.repo_url || p.demo_url) && (
+                          <div className="pf-projlinks">
+                            {p.demo_url && (
+                              <a href={p.demo_url} target="_blank" rel="noopener noreferrer">
+                                View it live
+                              </a>
+                            )}
+                            {p.repo_url && (
+                              <a href={p.repo_url} target="_blank" rel="noopener noreferrer">
+                                Read the code
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {records.length > 0 && (
+            <section id="skills" className="pf-card">
+              <SectionHead>
+                {records.length === 1 ? 'Written up' : `Written up (${records.length})`}
+              </SectionHead>
+              <Rule />
+              <ul className="pf-list">
+                {records.map((r) => (
+                  // The record is where the depth lives; this page is the index.
+                  <li key={r.slug}><a href={`/p/${r.slug}`}>{r.title}</a></li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <EducationSection items={education} />
+
+          {(repositories.length > 0 || private_repository_count > 0) && (
+            <section className="pf-card">
+              <SectionHead>Code</SectionHead>
+              <Rule />
+              <ul className="pf-list">
+                {repositories.map((r) => (
+                  <li key={r.url}>
+                    <a href={r.url} target="_blank" rel="noopener noreferrer">{r.name}</a>
+                  </li>
+                ))}
+              </ul>
+              {private_repository_count > 0 && (
+                // The honest statement -- there was more work behind this -- without the identity.
+                <p className="pf-projmeta" style={{ marginTop: 8 }}>
+                  and {private_repository_count} private{' '}
+                  {private_repository_count === 1 ? 'repository' : 'repositories'}
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* An entirely empty portfolio is a real state and says so plainly, rather than
+              rendering a page of blank headings that reads as abandonment. */}
+          {isEmpty && (
+            <div className="pf-card">
+              <p className="pf-empty">This portfolio does not have any published work yet.</p>
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* The one place the platform names itself, at the foot, after the work. */}
-      <footer style={{ marginTop: 56, paddingTop: 18, borderTop: '1px solid ' + LINE }}>
-        <span style={{ fontSize: 12, color: SUBTLE, letterSpacing: '.04em' }}>
-          Colaberry &middot; powered by Refactored.ai
-        </span>
-      </footer>
+      <footer className="pf-foot">Colaberry &middot; powered by Refactored.ai</footer>
     </div>
   );
 };
