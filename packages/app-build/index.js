@@ -11,9 +11,16 @@
  * What it does: copies `src/` to `dist/`, inlines the v2 tracker, and substitutes
  * `{{brand.*}}` tokens from the app's validated brand config.
  */
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { validateBrandConfig } = require('../brand-system');
+
+/** Anything with a scheme, a fragment, or a protocol-relative host is not ours to touch. */
+const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i;
+
+/** href="…", src="…", and CSS url(…) — the three ways this codebase references an asset. */
+const REFERENCE = /(href=["']|src=["']|url\(["']?)([^"')?#]+)(\?v=[0-9a-f]+)?/gi;
 
 const TRACKER_SOURCE = path.join(__dirname, '..', 'tracking-sdk', 'track-v2.js');
 
@@ -30,6 +37,68 @@ function copyTree(from, to, transform) {
       fs.copyFileSync(source, target);
     }
   }
+}
+
+/** Every file under `dir`, as dist-relative POSIX paths. */
+function walk(dir, base = dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full, base, out);
+    else out.push(path.relative(base, full).split(path.sep).join('/'));
+  }
+  return out;
+}
+
+/**
+ * Stamp every asset reference with a content hash: `/assets/site.css?v=1a2b3c4d`.
+ *
+ * WHY THIS EXISTS
+ *
+ * On 2026-09-02 an accessibility fix was deployed to production and stayed invisible.
+ * The container served the corrected CSS, but Cloudflare held the old copy at the edge
+ * (`cf-cache-status: HIT`, `max-age=14400`) and kept serving it to real visitors for
+ * hours. A deploy that cannot be seen is not a deploy, and "purge the cache by hand
+ * afterwards" is a step someone will forget on the deploy that matters most.
+ *
+ * The page HTML is never edge-cached (`cf-cache-status: DYNAMIC`), so fresh HTML pointing
+ * at a URL that has never existed before is guaranteed to miss the cache. Content
+ * addressing gets that for free: change the file, change the URL.
+ *
+ * Rewriting runs to a fixed point because assets reference each other - site.css imports
+ * design/colors.css, so colors.css must be stamped before site.css's own hash is final.
+ * Existing `?v=` stamps are matched and replaced rather than appended to, which is what
+ * makes re-running safe.
+ */
+function fingerprintAssets(distDir) {
+  const assets = walk(distDir).filter((f) => !f.endsWith('.html'));
+  const rewritable = walk(distDir).filter((f) => /\.(html|css)$/i.test(f));
+
+  for (let pass = 0; pass < 5; pass += 1) {
+    const hashes = new Map();
+    for (const asset of assets) {
+      const digest = crypto.createHash('sha256').update(fs.readFileSync(path.join(distDir, asset))).digest('hex');
+      hashes.set(asset, digest.slice(0, 8));
+    }
+
+    let changed = false;
+    for (const file of rewritable) {
+      const full = path.join(distDir, file);
+      const before = fs.readFileSync(full, 'utf8');
+      const after = before.replace(REFERENCE, (match, prefix, url) => {
+        if (EXTERNAL.test(url)) return match;
+        // Absolute URLs are dist-relative; everything else resolves against this file.
+        const resolved = url.startsWith('/')
+          ? url.slice(1)
+          : path.posix.normalize(path.posix.join(path.posix.dirname(file), url));
+        const hash = hashes.get(resolved);
+        if (!hash) return match; // a page link, or something that is not a built asset
+        return `${prefix}${url}?v=${hash}`;
+      });
+      if (after !== before) { fs.writeFileSync(full, after, 'utf8'); changed = true; }
+    }
+    if (!changed) return;
+  }
+  throw new Error('asset fingerprinting did not converge after 5 passes');
 }
 
 /**
@@ -65,8 +134,13 @@ function buildApp(options) {
   fs.mkdirSync(path.join(distDir, 'assets'), { recursive: true });
   fs.copyFileSync(TRACKER_SOURCE, path.join(distDir, 'assets', 'track-v2.js'));
 
+  // Last, so the tracker and every copied asset are on disk and hashable.
+  fingerprintAssets(distDir);
+
   console.log(`[${config.appSlug}] built to ${path.relative(process.cwd(), distDir)}`);
   return distDir;
 }
 
-module.exports = { buildApp };
+// fingerprintAssets is exported for its test: the dependency chain it has to get right
+// (html -> css -> imported css) is not observable from buildApp's return value.
+module.exports = { buildApp, fingerprintAssets };
