@@ -13,10 +13,17 @@
  * month is not on it. An allow-list is right by default, because the field added next
  * month is absent until somebody adds it here on purpose.
  *
+ * `identity.email` USED TO BE REFUSED HERE, and came off that list deliberately on
+ * 2026-09-03, on Ali's explicit decision. The argument that moved it: this page exists so
+ * that a recruiter can act on it, an email address is the thing they act with, and the
+ * learner approves the page before it publishes. It is the ONE contact detail that
+ * crosses, and it crosses validated - see `emailOrNull` below. The phone number and the
+ * street address stay refused; neither is needed to offer somebody a job.
+ *
  * WHAT THE PRIVATE PROFILE CARRIES THAT MUST NEVER CROSS. `CareerProfileResponse` is
  * built for the learner's own eyes and holds, among other things:
  *
- *   identity.email                 personal contact detail
+ *   identity.phone                 a personal number, and not what a recruiter needs
  *   identity.resume.file_name      a filename is not neutral; people name these badly
  *   capability.bands               per-band scores. Publishing `judgment: 0.2` next to
  *                                  someone's name damages them; the portal shows it to
@@ -57,6 +64,7 @@ import {
   normalizeExperience, normalizeEducation,
 } from '../resumeHistory';
 import type { ResumeExperience, ResumeEducation } from '../resumeHistory';
+import { composeAbout, composeStats, type PortfolioStats } from './portfolioOverview';
 
 
 
@@ -68,6 +76,41 @@ export interface PublicIdentity {
   cohort_name: string | null;
   avatar_data_url: string | null;
   linkedin_url: string | null;
+  /** Published on purpose, and validated - see the note at the top of this file. */
+  email: string | null;
+  /** City / region as the resume stated it. NEVER a street address. */
+  location: string | null;
+  /** Derived from a repository we can see, never guessed from a name. */
+  github_url: string | null;
+}
+
+/**
+ * An address shaped like an address, or null.
+ *
+ * Deliberately narrower than RFC-complete: this value is rendered into a `mailto:` on a
+ * public page, so anything carrying whitespace, a comma, a quote or angle brackets is
+ * refused outright rather than escaped and hoped over.
+ */
+function emailOrNull(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  if (!t || t.length > 254) return null;
+  return /^[^\s<>,;:"'()[\]\\]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(t) ? t : null;
+}
+
+/**
+ * A city or region, or null.
+ *
+ * A street address is not wanted here and mostly announces itself by carrying a house
+ * number, so a leading digit is refused. Imperfect, and deliberately erring toward
+ * publishing nothing rather than publishing where somebody lives.
+ */
+function placeOrNull(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().replace(/\s+/g, ' ');
+  if (!t || t.length > 120) return null;
+  if (/^\d/.test(t)) return null;
+  return t;
 }
 
 /**
@@ -168,6 +211,9 @@ export interface PublicRepository {
 
 export interface PublicPortfolio {
   identity: PublicIdentity;
+  /** Deterministically composed paragraphs. Empty when there is nothing to say. */
+  about: string[];
+  stats: PortfolioStats;
   /** Most recent FIRST. Empty when no resume was ever ingested. */
   experience: PublicExperience[];
   education: PublicEducation[];
@@ -244,6 +290,17 @@ export interface ProjectPortfolioInput {
   capabilities?: unknown;
   /** Already-PUBLISHED capstone records. An unpublished record is not passed in. */
   records: unknown;
+  /** Files committed across the repositories the platform can see. */
+  filesCommitted?: number | null;
+  /**
+   * Rows in `evidence_records` - deliverables, commits, prompt labs, implementations and
+   * instructor reviews. NOT the discredited `student_skill_evidence` count; see
+   * portfolioOverview.ts for the audit that separates the two.
+   */
+  evidenceRecords?: number | null;
+  /** The capstone project's name and descriptor, for the About paragraph. */
+  projectName?: string | null;
+  projectDescriptor?: string | null;
   /**
    * `OnboardingProfile.extracted` - raw LLM output from the resume ingest. Passed
    * in raw ON PURPOSE: normalization is this module's job, so there is exactly one
@@ -264,6 +321,9 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     cohort_name: str(id.cohort_name),
     avatar_data_url: str(id.avatar_data_url),
     linkedin_url: httpUrl(id.linkedin_url),
+    email: emailOrNull(id.email),
+    location: placeOrNull(id.location),
+    github_url: null, // resolved below, once the repository list is known
   };
 
   // Fed from the REPO, not from the assessment tables. See PublicCapability above.
@@ -325,8 +385,34 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     repositories.push({ name: str(r.name) ?? 'repository', url });
   }
 
+  // The GitHub profile is derived from a repository we can actually see, so it is a fact
+  // rather than a guess at a username from somebody's name. First public repo wins, which
+  // keeps this deterministic.
+  const firstRepo = repositories[0]?.url;
+  if (firstRepo) {
+    const owner = /^https?:\/\/github\.com\/([A-Za-z0-9._-]+)(?:\/|$)/.exec(firstRepo);
+    if (owner) identity.github_url = `https://github.com/${owner[1]}`;
+  }
+
+  const overview = {
+    fullName: identity.full_name,
+    headline: identity.headline,
+    // The employer comes from the PUBLISHED experience, never from `identity.company`.
+    // That field is on the refusal list, and feeding it to the composer would have
+    // published it in prose - a leak the contract test caught on the first run.
+    company: null,
+    experience,
+    projectName: str(input.projectName),
+    projectDescriptor: str(input.projectDescriptor),
+    capabilityCount: capabilities.length,
+    filesCommitted: typeof input.filesCommitted === 'number' ? input.filesCommitted : null,
+    evidenceRecords: typeof input.evidenceRecords === 'number' ? input.evidenceRecords : null,
+  };
+
   return {
     identity,
+    about: composeAbout(overview),
+    stats: composeStats(overview),
     experience,
     education,
     capabilities,
