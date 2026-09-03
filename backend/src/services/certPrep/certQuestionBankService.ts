@@ -205,6 +205,60 @@ export async function loadServedItems(
   return items;
 }
 
+/**
+ * Candidate question keys per domain, for form building.
+ *
+ * Returns only keys whose latest revision is approved and in window, whose
+ * identity is not retired, and whose provenance is Colaberry-authored — the same
+ * three filters the serving path applies, so a form can never be planned around an
+ * item that would then be refused at serve time.
+ */
+export async function listApprovedKeysByDomain(
+  blueprintVersion: string,
+  domainIds: string[],
+  now: Date = new Date(),
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (domainIds.length === 0) return out;
+
+  const revisions = await CertQuestionRevision.findAll({
+    where: {
+      blueprint_version: blueprintVersion,
+      domain_id: { [Op.in]: domainIds },
+      review_status: 'approved',
+    },
+  });
+  if (revisions.length === 0) return out;
+
+  const identities = await CertQuestion.findAll({
+    where: { question_key: { [Op.in]: Array.from(new Set(revisions.map((r) => r.question_key))) } },
+    attributes: ['question_key', 'provenance', 'is_retired'],
+  });
+  const servableIdentity = new Set(
+    identities.filter((q) => !q.is_retired && q.provenance === 'colaberry_authored').map((q) => q.question_key),
+  );
+
+  // Group by key so pickServableRevision decides which revision counts, then bucket
+  // the surviving keys by the domain that revision belongs to.
+  const byKey = new Map<string, CertQuestionRevision[]>();
+  for (const rev of revisions) {
+    if (!servableIdentity.has(rev.question_key)) continue;
+    const list = byKey.get(rev.question_key) ?? [];
+    list.push(rev);
+    byKey.set(rev.question_key, list);
+  }
+
+  for (const [key, list] of byKey) {
+    const picked = pickServableRevision(list, now);
+    if (!picked) continue;
+    const bucket = out.get(picked.domain_id) ?? [];
+    bucket.push(key);
+    out.set(picked.domain_id, bucket);
+  }
+  for (const [, keys] of out) keys.sort(); // deterministic before any shuffle
+  return out;
+}
+
 // ── authoring lifecycle ──────────────────────────────────────────────────────
 
 export interface DraftRevisionInput {
