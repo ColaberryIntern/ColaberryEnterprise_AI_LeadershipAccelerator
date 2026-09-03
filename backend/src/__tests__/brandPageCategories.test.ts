@@ -121,6 +121,15 @@ describe('brand page categories', () => {
     expect(categorizePagePath('/start', 'ai-flotation')).toBe('enroll');
   });
 
+  it('pricing and enroll both resolve, because the pattern needs the pair', () => {
+    // `evaluation_pattern` (strength 45) fires only when one session sees BOTH a
+    // pricing page and an enroll page. Asserting each alone would miss the case where
+    // one silently regresses and the pattern quietly stops firing — the pattern is the
+    // thing worth pinning, not either page on its own.
+    expect(categorizePagePath('/pricing', 'ai-flotation')).toBe('pricing');
+    expect(categorizePagePath('/start', 'ai-flotation')).toBe('enroll');
+  });
+
   it('the platform is untouched when no brand is supplied', () => {
     const unchanged: Array<[string, string]> = [
       ['/', 'homepage'],
