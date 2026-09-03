@@ -3,7 +3,7 @@
   "checkpoint": "A",
   "gate": 0,
   "gate_name": "Discovery + contracts",
-  "status": "in_progress",
+  "status": "awaiting_signoff",
   "feature_code_written": false,
   "session": "CC-20260902-m8q4",
   "date": "2026-09-03",
@@ -74,6 +74,17 @@
         "Gate 3"
       ],
       "note": "changes who owns the phone number and the consent record"
+    },
+    {
+      "id": "ESCALATION-3",
+      "subject": "repo connection cannot exist without an enrollment",
+      "boundary": "schema change on a live table with a non-null foreign key",
+      "detail": "GitHubConnection.enrollment_id is allowNull:false with an FK to enrollments, and project_id references the student projects table. A commercial client has neither, so a paid DeliveryProject cannot hold a repo connection.",
+      "recommendation": "make enrollment_id nullable and add delivery_project_id; the verification loop, token custody and revocation handling are already built and should not be duplicated",
+      "blocks": [
+        "Gate 9",
+        "Gate 15 delivery-ready gate"
+      ]
     }
   ],
   "reuse_summary": {
@@ -86,10 +97,6 @@
     "written": [
       "CURRENT_STATE.md",
       "REUSE_MAP.md",
-      "IMPLEMENTATION_STATUS.json",
-      "BASELINE_TEST_RESULTS.md"
-    ],
-    "outstanding": [
       "CUSTOMER_JOURNEY.md",
       "FREE_TO_PAID_CONTRACT.md",
       "AGENTIC_ENGINE_MAP.md",
@@ -101,8 +108,11 @@
       "VOICE_INTAKE_MAP.md",
       "CLIENT_VISIBILITY_MAP.md",
       "SECURITY_THREAT_MODEL.md",
-      "TEST_PLAN.md"
-    ]
+      "TEST_PLAN.md",
+      "BASELINE_TEST_RESULTS.md",
+      "IMPLEMENTATION_STATUS.json"
+    ],
+    "outstanding": []
   },
   "baseline_tests": {
     "command": "cd backend && npx jest -c jest.ci.config.ts",
@@ -119,6 +129,42 @@
     "failure_cause": "environmental - @anthropic-ai/sdk declared in backend/package.json but not installed in this worktree; the suite never executed, nothing asserted. CI installs it and passes.",
     "note": "the CI config is the gate; scoped local runs miss contract suites. Local tsc is unusable - the only resolvable TypeScript is the root-hoisted 4.9.5, which cannot parse @types/d3-dispatch or zod/v4"
   },
-  "gate_0_complete": false,
-  "next_action": "finish the 12 remaining Gate 0 artifacts; resolve ESCALATION-1 and ESCALATION-2; do not begin Gate 1 until Gate 0 is signed off"
+  "gate_0_complete": true,
+  "next_action": "Gate 0 artifacts complete. Resolve ESCALATION-1 (billing provider), ESCALATION-2 (voice agent ownership) and ESCALATION-3 (repo connection enrollment coupling). Recommended before Gate 1: fix the lead-ingest notification (DEFECT-1). Do not begin Gate 1 until signed off.",
+  "pricing_input": {
+    "supplied_by": "DRI (Ali), 2026-09-03",
+    "note": "recorded as business configuration; Claude did not choose these (plan section 25)",
+    "rejected": "launching with $4,900 as the lowest plan",
+    "tiers": [
+      {
+        "key": "founding",
+        "price_usd": 1995,
+        "scope": "one active build"
+      },
+      {
+        "key": "standard",
+        "price_usd": 2495,
+        "scope": "one active build"
+      },
+      {
+        "key": "accelerate",
+        "price_usd": 4995,
+        "scope": "higher capacity"
+      },
+      {
+        "key": "multi_project",
+        "price_usd": 8995,
+        "scope": "multi-project / high capacity, 8995+"
+      }
+    ],
+    "commercial_test": "does $2,495 of revenue cost $300-$800 to fulfil, or $2,000? The second means the model changes."
+  },
+  "new_requirement": {
+    "name": "Delivery Economics Engine",
+    "source": "DRI, 2026-09-03 - 'Don't guess the economics. Make Refactored measure them project by project.'",
+    "verdict": "EXTEND, not NEW",
+    "existing_foundation": "services/delivery/factoryEconomics.ts - pure, exports computeThroughputRatio, THROUGHPUT_RATIO_VALIDATION='unvalidated', PublicationRefusal, MIN_THROUGHPUT_FOR_INTERPRETATION",
+    "missing": "per-project and per-free-session cost CAPTURE (AI spend, voice minutes, UI generation, preview runtime, PM minutes, rework) - the maths exists, the ledger does not",
+    "constraint": "internal by default; must never enter the client-safe allowlist"
+  }
 }
