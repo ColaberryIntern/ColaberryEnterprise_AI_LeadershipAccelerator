@@ -1,6 +1,7 @@
-import { UniqueConstraintError } from 'sequelize';
+import { UniqueConstraintError, Op } from 'sequelize';
+import AiAgent from '../models/AiAgent';
 import AgentReportSubscription, { AgentReportCadence, AgentReportContentSection } from '../models/AgentReportSubscription';
-import AgentReportRun from '../models/AgentReportRun';
+import AgentReportRun, { AgentReportRunStatus } from '../models/AgentReportRun';
 import OrgMember from '../models/OrgMember';
 import { getAgentDetail } from './reese/agentDetailService';
 import { sendRawEmail } from './emailService';
@@ -215,4 +216,82 @@ export async function dispatchDueReportRuns(now: Date = new Date()): Promise<Dis
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Delivery history — AI Agent Dashboard redesign, Checkpoint C, Reports slice
+// (2026-09-02). Confirmed genuinely absent in the Checkpoint A integration
+// matrix: AgentReportRun and its DB-enforced idempotency have existed since
+// Checkpoint D, but nothing ever read the rows back. Two real risks flagged
+// at that same discovery are guarded against directly here: a naive
+// `sent / total` query would silently count a stuck `pending` row as a
+// success-adjacent non-failure (this reports `pending` as its own explicit
+// count, never folded into either side of the ratio), and `ratePct` is
+// `null` — not a fabricated 100% or 0% — whenever there is no real
+// sent-or-failed evidence to compute a rate from.
+// ---------------------------------------------------------------------------
+
+const HISTORY_WINDOW_DAYS = 30;
+
+export interface ReportRunView {
+  id: string;
+  subscriptionId: string;
+  periodKey: string;
+  generatedAt: Date;
+  deliveredAt: Date | null;
+  deliveryStatus: AgentReportRunStatus;
+  errorMessage: string | null;
+}
+
+export interface ReportRunHistoryView {
+  windowDays: number;
+  runs: ReportRunView[];
+  sent: number;
+  failed: number;
+  pending: number;
+  /** `sent / (sent + failed)` as a percentage rounded to 1 decimal place —
+   * `null`, never a fabricated number, when `sent + failed === 0`. */
+  successRatePct: number | null;
+}
+
+function toRunView(row: AgentReportRun): ReportRunView {
+  return {
+    id: row.id,
+    subscriptionId: row.subscription_id,
+    periodKey: row.period_key,
+    generatedAt: row.generated_at,
+    deliveredAt: row.delivered_at,
+    deliveryStatus: row.delivery_status,
+    errorMessage: row.error_message,
+  };
+}
+
+/** `null` return means the agent itself doesn't exist. A real agent with no
+ * subscriptions (or subscriptions that have never had a run yet) returns
+ * real empty/zero values, never an error and never a fabricated rate. */
+export async function listReportRunsForAgent(agentId: string): Promise<ReportRunHistoryView | null> {
+  const agent = await AiAgent.findByPk(agentId, { attributes: ['id'] });
+  if (!agent) return null;
+
+  const subscriptions = await AgentReportSubscription.findAll({ where: { agent_id: agentId }, attributes: ['id'] });
+  if (subscriptions.length === 0) {
+    return { windowDays: HISTORY_WINDOW_DAYS, runs: [], sent: 0, failed: 0, pending: 0, successRatePct: null };
+  }
+
+  const windowStart = new Date(Date.now() - HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const rows = await AgentReportRun.findAll({
+    where: {
+      subscription_id: { [Op.in]: subscriptions.map((s) => s.id) },
+      generated_at: { [Op.gte]: windowStart },
+    },
+    order: [['generated_at', 'DESC']],
+  });
+
+  const sent = rows.filter((r) => r.delivery_status === 'sent').length;
+  const failed = rows.filter((r) => r.delivery_status === 'failed').length;
+  const pending = rows.filter((r) => r.delivery_status === 'pending').length;
+  const denominator = sent + failed;
+  const successRatePct = denominator > 0 ? Math.round((sent / denominator) * 1000) / 10 : null;
+
+  return { windowDays: HISTORY_WINDOW_DAYS, runs: rows.map(toRunView), sent, failed, pending, successRatePct };
 }

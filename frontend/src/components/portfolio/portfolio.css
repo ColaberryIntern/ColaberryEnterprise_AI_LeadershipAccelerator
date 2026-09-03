@@ -1,0 +1,367 @@
+/*
+ * portfolio.css - the resume-format portfolio shell.
+ *
+ * WHY A STYLESHEET, when this component used inline styles. The design is a two-column
+ * grid with a sticky rail that collapses to one column on a phone, and a stat strip that
+ * goes 4-up then 2-up. Media queries, :hover and position:sticky cannot be expressed as
+ * React inline styles, so the layout has to live here.
+ *
+ * WHY ITS OWN PALETTE, when the app has design tokens. This page is a design Ali
+ * approved in indigo, and it is read by strangers on unknown devices. Both matter, so the
+ * approved palette is declared as scoped custom properties with a dark-mode counterpart:
+ * light renders exactly what was signed off, dark stays legible instead of inheriting a
+ * white card into a dark page. Nothing here leaks outside `.pf`.
+ */
+
+.pf {
+  --pf-a: #4f46e5;
+  --pf-a2: #7c3aed;
+  --pf-al: #eef2ff;
+  --pf-ink: #0f172a;
+  --pf-body: #475569;
+  --pf-mut: #94a3b8;
+  --pf-bd: #e2e8f0;
+  --pf-bg: #f6f7fb;
+  --pf-card: #ffffff;
+  --pf-good: #15803d;
+  --pf-goodbg: #dcfce7;
+  --pf-sh: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px rgba(15, 23, 42, .06);
+
+  background: var(--pf-bg);
+  color: var(--pf-body);
+  min-height: 100vh;
+}
+
+/* The same design, kept readable when the reader's device is in dark mode. The accent
+   lightens because indigo on near-black fails contrast at the original value. */
+[data-theme="dark"] .pf {
+  --pf-a: #a5b4fc;
+  --pf-a2: #c4b5fd;
+  --pf-al: #1e1b4b;
+  --pf-ink: #f1f5f9;
+  --pf-body: #cbd5e1;
+  --pf-mut: #94a3b8;
+  --pf-bd: #334155;
+  --pf-bg: #0b1120;
+  --pf-card: #111827;
+  --pf-good: #86efac;
+  --pf-goodbg: #14532d;
+  --pf-sh: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .45);
+}
+
+/* ── Nav ──────────────────────────────────────────────────────────────── */
+
+.pf-nav {
+  background: var(--pf-card);
+  border-bottom: 1px solid var(--pf-bd);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.pf-nav-in {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-height: 62px;
+  flex-wrap: wrap;
+}
+
+/* The Refactored.ai wordmark. It already contains the name, so nothing is set beside
+   it. Its blue reads on both the light and the dark ground, so no filter is applied -
+   inverting it would only break a brand asset that does not need help. */
+.pf-logo {
+  height: 28px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+}
+
+.pf-navlinks { display: flex; gap: 26px; margin-left: 8px; flex-wrap: wrap; }
+
+.pf-navlink {
+  font-size: 15px;
+  color: var(--pf-body);
+  text-decoration: none;
+  padding: 20px 0;
+  border-bottom: 2px solid transparent;
+}
+
+.pf-navlink:hover { color: var(--pf-a); }
+.pf-navlink[aria-current="true"] { color: var(--pf-a); border-bottom-color: var(--pf-a); font-weight: 600; }
+
+/* ── Shell ────────────────────────────────────────────────────────────── */
+
+.pf-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 24px 90px;
+  display: grid;
+  grid-template-columns: 296px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.pf-rail {
+  background: var(--pf-card);
+  border: 1px solid var(--pf-bd);
+  border-radius: 14px;
+  padding: 24px 22px;
+  position: sticky;
+  top: 84px;
+  box-shadow: var(--pf-sh);
+}
+
+.pf-card {
+  background: var(--pf-card);
+  border: 1px solid var(--pf-bd);
+  border-radius: 14px;
+  box-shadow: var(--pf-sh);
+  padding: 22px 24px;
+  margin-bottom: 20px;
+}
+
+/* ── Rail ─────────────────────────────────────────────────────────────── */
+
+.pf-avatar {
+  width: 118px;
+  height: 118px;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--pf-a), var(--pf-a2));
+  color: #fff;
+  font-size: 34px;
+  font-weight: 800;
+  overflow: hidden;
+}
+
+.pf-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.pf-name { font-size: 25px; font-weight: 800; color: var(--pf-ink); text-align: center; margin: 0; }
+.pf-role { font-size: 15px; font-weight: 700; color: var(--pf-a); text-align: center; margin: 6px 0 0; }
+.pf-loc  { font-size: 13px; color: var(--pf-mut); text-align: center; margin: 6px 0 0; }
+
+.pf-open {
+  display: block;
+  width: fit-content;
+  margin: 14px auto 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--pf-goodbg);
+  color: var(--pf-good);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pf-railhead {
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--pf-mut);
+  font-weight: 700;
+  margin: 24px 0 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--pf-bd);
+}
+
+.pf-contact { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.pf-contact a, .pf-contact span { font-size: 14px; color: var(--pf-a); text-decoration: none; word-break: break-word; }
+.pf-contact a:hover { text-decoration: underline; }
+
+.pf-proven { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pf-proven li { font-size: 14px; color: var(--pf-body); display: flex; gap: 9px; align-items: baseline; }
+.pf-proven .pf-tick { color: var(--pf-good); font-weight: 800; }
+
+/* ── Stats ────────────────────────────────────────────────────────────── */
+
+.pf-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--pf-bd);
+  border-radius: 14px;
+  background: var(--pf-card);
+  box-shadow: var(--pf-sh);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.pf-stat { padding: 18px 12px; text-align: center; border-right: 1px solid var(--pf-bd); }
+.pf-stat:last-child { border-right: none; }
+.pf-stat b { display: block; font-size: 28px; font-weight: 800; color: var(--pf-ink); line-height: 1.1; }
+.pf-stat span { display: block; margin-top: 6px; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--pf-mut); font-weight: 600; }
+
+/* ── Sections ─────────────────────────────────────────────────────────── */
+
+.pf-h2 {
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--pf-mut);
+  font-weight: 700;
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pf-badge {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pf-good);
+  background: var(--pf-goodbg);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.pf-rule { width: 34px; height: 3px; border-radius: 2px; background: var(--pf-a); margin: 0 0 16px; }
+
+.pf-about p { margin: 0 0 10px; font-size: 15px; line-height: 1.65; color: var(--pf-body); }
+.pf-about p:last-child { margin-bottom: 0; }
+
+/* A role: the date rail on the left, the job on the right. */
+.pf-job {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 18px;
+  padding: 0 0 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--pf-bd);
+}
+
+.pf-job:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.pf-when { font-size: 13px; color: var(--pf-body); }
+.pf-dur { display: block; font-size: 12px; color: var(--pf-mut); margin-top: 2px; }
+.pf-title { font-size: 16px; font-weight: 700; color: var(--pf-ink); }
+.pf-co { font-size: 14px; color: var(--pf-a); margin-top: 2px; }
+.pf-sum { font-size: 14px; line-height: 1.6; color: var(--pf-body); margin: 8px 0 0; }
+.pf-hl { margin: 8px 0 0; padding-left: 18px; color: var(--pf-body); }
+.pf-hl li { font-size: 14px; line-height: 1.6; }
+
+/* Projects */
+.pf-projects { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+
+.pf-proj {
+  border: 1px solid var(--pf-bd);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--pf-card);
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-hero {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--pf-al);
+  overflow: hidden;
+}
+
+.pf-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-mono { font-size: 38px; font-weight: 800; color: var(--pf-a); opacity: .5; }
+.pf-projbody { padding: 15px 17px 17px; }
+.pf-projttl { font-size: 16px; font-weight: 700; color: var(--pf-ink); margin: 0; line-height: 1.3; }
+.pf-projmeta { font-size: 12.5px; color: var(--pf-mut); margin-top: 4px; }
+.pf-projtext { font-size: 14px; line-height: 1.6; color: var(--pf-body); margin: 9px 0 0; }
+.pf-projlinks { display: flex; gap: 15px; margin-top: 12px; flex-wrap: wrap; }
+.pf-projlinks a { font-size: 14px; font-weight: 600; color: var(--pf-a); text-decoration: none; }
+.pf-projlinks a:hover { text-decoration: underline; }
+
+.pf-list { list-style: none; margin: 0; padding: 0; }
+.pf-list li { padding: 10px 0; border-bottom: 1px solid var(--pf-bd); font-size: 14.5px; }
+.pf-list li:last-child { border-bottom: none; }
+.pf-list a { color: var(--pf-a); font-weight: 600; text-decoration: none; }
+.pf-list a:hover { text-decoration: underline; }
+
+/* ── Featured project ─────────────────────────────────────────────────── */
+
+.pf-feat-name { font-size: 20px; font-weight: 800; color: var(--pf-ink); margin: 0; }
+.pf-feat-repo { font-size: 13px; color: var(--pf-a); margin-top: 4px; display: inline-block; text-decoration: none; word-break: break-all; }
+.pf-feat-repo:hover { text-decoration: underline; }
+
+.pf-feat-nums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 1px;
+  margin-top: 16px;
+  background: var(--pf-bd);
+  border: 1px solid var(--pf-bd);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pf-feat-num { background: var(--pf-card); padding: 14px 10px; text-align: center; }
+.pf-feat-num b { display: block; font-size: 22px; font-weight: 800; color: var(--pf-ink); }
+.pf-feat-num span { display: block; margin-top: 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--pf-mut); font-weight: 600; }
+
+/* ── Competency bars ──────────────────────────────────────────────────── */
+
+.pf-bar {
+  display: grid;
+  grid-template-columns: 190px 1fr 34px;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 0;
+}
+
+.pf-bar-label { font-size: 14px; color: var(--pf-body); }
+.pf-bar-track { background: var(--pf-al); border-radius: 999px; height: 9px; overflow: hidden; }
+.pf-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--pf-a), var(--pf-a2)); }
+.pf-bar-val { font-size: 13px; font-weight: 700; color: var(--pf-ink); text-align: right; }
+
+/* ── Evidence chips ───────────────────────────────────────────────────── */
+
+.pf-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.pf-chip {
+  border: 1px solid var(--pf-bd);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--pf-card);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pf-chip b { font-size: 18px; font-weight: 800; color: var(--pf-ink); }
+.pf-chip span { font-size: 13px; color: var(--pf-body); }
+
+.pf-note { font-size: 13px; color: var(--pf-mut); margin: 12px 0 0; }
+
+.pf-foot {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px 40px;
+  font-size: 12px;
+  color: var(--pf-mut);
+  letter-spacing: .04em;
+}
+
+.pf-empty { font-size: 15px; color: var(--pf-mut); }
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .pf-wrap { grid-template-columns: 1fr; }
+  .pf-rail { position: static; }
+}
+
+@media (max-width: 640px) {
+  .pf-stats { grid-template-columns: repeat(2, 1fr); }
+  /* The third and fourth tiles start a second row, so the top pair needs a divider. */
+  .pf-stat:nth-child(2) { border-right: none; }
+  .pf-stat:nth-child(1), .pf-stat:nth-child(2) { border-bottom: 1px solid var(--pf-bd); }
+  .pf-job { grid-template-columns: 1fr; gap: 4px; }
+  .pf-bar { grid-template-columns: 118px 1fr 30px; gap: 9px; }
+  .pf-nav-in { gap: 14px; min-height: 56px; }
+  .pf-navlink { padding: 10px 0; }
+}

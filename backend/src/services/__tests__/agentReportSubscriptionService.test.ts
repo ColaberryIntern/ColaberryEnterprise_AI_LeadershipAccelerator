@@ -55,7 +55,7 @@ function fakeRow(overrides: any = {}) {
     channel: 'email',
     enabled: true,
     created_by_email: 'manager@colaberry.com',
-    created_at: new Date(),
+    createdAt: new Date('2026-08-30T00:00:00.000Z'), // real Sequelize attribute name (timestamps:true + underscored:true) — see AgentReportSubscription.ts's own header comment for the bug this pins
     update: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -107,6 +107,16 @@ describe('createReportSubscription — honest timezone resolution', () => {
       AgentNotFoundError
     );
     expect(mockSubCreate).not.toHaveBeenCalled();
+  });
+
+  it('regression: the real createdAt timestamp reaches the view, never undefined — caught live during Checkpoint C\'s Reports tab verification (rendered as "unknown" in the UI)', async () => {
+    const realCreatedAt = new Date('2026-08-30T12:00:00.000Z');
+    mockSubCreate.mockResolvedValue(fakeRow({ createdAt: realCreatedAt }));
+
+    const result = await createReportSubscription('agent-1', null, 'manager@colaberry.com', ['cost'], 'daily', 8);
+
+    expect(result.createdAt).toEqual(realCreatedAt);
+    expect(result.createdAt).not.toBeUndefined();
   });
 });
 

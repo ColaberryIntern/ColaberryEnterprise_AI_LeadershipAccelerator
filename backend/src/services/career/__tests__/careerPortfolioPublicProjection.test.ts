@@ -67,7 +67,6 @@ describe('careerPortfolioPublicProjection', () => {
   it('leaks nothing private, checked against the whole serialized payload', () => {
     const serialized = JSON.stringify(project());
     for (const sentinel of [
-      'SENTINEL_EMAIL',
       'SENTINEL_COMPANY',
       'SENTINEL_RESUME_FILENAME',
       'SENTINEL_SOURCE',
@@ -78,16 +77,60 @@ describe('careerPortfolioPublicProjection', () => {
     }
     // And the structural internals, by key name.
     for (const key of ['bands', 'confidence', 'proficiency', 'source_breakdown',
-      'readiness', 'blocking', 'email', 'resume', 'activity', 'commits_last_7d']) {
+      'readiness', 'blocking', 'phone', 'resume', 'activity', 'commits_last_7d']) {
       expect(serialized).not.toContain(`"${key}"`);
     }
+  });
+
+  /**
+   * `email` came OFF the refusal list on 2026-09-03, on Ali's explicit decision: this page
+   * exists so a recruiter can act on it, and an address is the thing they act with. It is
+   * asserted POSITIVELY here so the reversal is a stated intention rather than a hole, and
+   * the neighbouring refusals are re-asserted so widening one field did not widen others.
+   */
+  it('publishes the email address, and still refuses the phone and the resume file', () => {
+    const out = project({
+      identity: {
+        ...loadedProfile().identity,
+        email: 'someone@example.com',
+        phone: 'SENTINEL_PHONE',
+        location: 'Keller, Texas',
+      },
+    });
+    expect(out.identity.email).toBe('someone@example.com');
+    expect(out.identity.location).toBe('Keller, Texas');
+    const serialized = JSON.stringify(out);
+    expect(serialized).not.toContain('SENTINEL_PHONE');
+    expect(serialized).not.toContain('SENTINEL_RESUME_FILENAME');
+  });
+
+  it('refuses an address that is not shaped like one, rather than escaping it', () => {
+    const bad = (email: unknown) => project({
+      identity: { ...loadedProfile().identity, email },
+    }).identity.email;
+    expect(bad('not an email')).toBeNull();
+    expect(bad('a b@c.com')).toBeNull();
+    expect(bad('"><script>@x.com')).toBeNull();
+    expect(bad('nobody@localhost')).toBeNull();
+    expect(bad(42)).toBeNull();
+    expect(bad(null)).toBeNull();
+  });
+
+  it('refuses a location that looks like a street address', () => {
+    const loc = (location: unknown) => project({
+      identity: { ...loadedProfile().identity, location },
+    }).identity.location;
+    // A house number is the tell, and publishing where somebody lives is not the point.
+    expect(loc('4219 Club House Pl Irving, TX')).toBeNull();
+    expect(loc('Keller, Texas, United States')).toBe('Keller, Texas, United States');
   });
 
   it('publishes exactly the agreed top-level keys and no others', () => {
     // If someone adds a field to the payload, this fails until they consider it here.
     expect(Object.keys(project()).sort()).toEqual([
-      'capabilities', 'education', 'experience', 'generated_at', 'identity',
-      'private_repository_count', 'projects', 'records', 'repositories',
+      'about', 'capabilities', 'competencies', 'competency_domain_count', 'education',
+      'evidence_by_source', 'experience', 'featured', 'generated_at', 'identity',
+      'private_repository_count', 'projects', 'records', 'repositories', 'stats',
     ]);
   });
 

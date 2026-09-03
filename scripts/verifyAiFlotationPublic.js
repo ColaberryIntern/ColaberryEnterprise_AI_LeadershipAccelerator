@@ -156,12 +156,62 @@ async function main() {
       // are never equal and an array here would fail every run while reporting nothing.
       check(`  ${urlPath} @${label} every button clears 4.5:1`, lowContrast.join('; '), '');
 
+      // Every custom property referenced must actually be defined.
+      //
+      // The rebrand renamed --muted to --fg-muted and left six inline `color:var(--muted)`
+      // references behind across four pages. An undefined custom property makes the whole
+      // declaration invalid, so the text silently fell back to the default colour - no
+      // error, no warning, and nothing else in this file noticed. The logo mark had the
+      // pre-rebrand hex baked into its SVG for the same reason: nothing checked.
+      if (label === 'desktop') {
+        const undefinedTokens = await page.evaluate(() => {
+          const referenced = new Set();
+          const collect = (text) => {
+            for (const m of (text || '').matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) referenced.add(m[1]);
+          };
+          for (const sheet of document.styleSheets) {
+            let rules;
+            try { rules = sheet.cssRules; } catch { continue; } // cross-origin font sheet
+            for (const rule of rules || []) collect(rule.cssText);
+          }
+          for (const el of document.querySelectorAll('[style]')) collect(el.getAttribute('style'));
+
+          const root = getComputedStyle(document.documentElement);
+          return [...referenced]
+            .filter((name) => !root.getPropertyValue(name).trim())
+            .sort();
+        });
+        check(`  ${urlPath} references no undefined design tokens`, undefinedTokens.join(', '), '');
+      }
+
       const out = path.join(OUT, `${slug}-${label}.png`);
       await safeScreenshot(page, out, { fullPage: true, label: `${slug}-${label}` });
       shots.push({ file: path.basename(out), proves: `${urlPath} at ${viewport.width}x${viewport.height}` });
 
       await context.close();
     }
+  }
+
+  // ---- the form still works with no JavaScript -------------------------------------
+  //
+  // The two-step behaviour is applied by script, so a visitor whose JavaScript never runs
+  // must see ONE form with every field visible - not a first step whose Continue button
+  // does nothing. Hiding step 2 in the stylesheet would produce exactly that dead end, and
+  // nothing else in this file would notice.
+  console.log('');
+  {
+    const context = await browser.newContext({ viewport: DESKTOP, javaScriptEnabled: false });
+    const page = await context.newPage();
+    await page.goto(base + '/start/', { waitUntil: 'domcontentloaded' });
+
+    check('with JS disabled, every field is visible', await page.isVisible('#email'), true);
+    check('  including the idea', await page.isVisible('#message'), true);
+    check('  and the submit button', await page.isVisible('form.intake button[type=submit]'), true);
+    // The homepage idea input is a plain GET form, so it survives too.
+    await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
+    check('  the homepage idea box still submits somewhere', await page.getAttribute('form.idea', 'action'), '/start/');
+
+    await context.close();
   }
 
   // ---- every internal link actually resolves --------------------------------------
@@ -208,20 +258,43 @@ async function main() {
     });
 
     const fill = async () => {
+      // Step 1 first: the submit button lives behind it now. A fill() that skipped this
+      // would fail the way the harness did the first time this shipped, which is the
+      // correct behaviour - the form genuinely is not submittable until the idea exists.
+      await page.fill('#message', 'Dispatchers rebuild the same load spreadsheet every morning.');
+      if (await page.isVisible('#to-step-2')) await page.click('#to-step-2');
       await page.fill('#name', 'Dana Whitfield');
       await page.fill('#email', 'dana@meridianfreight.com');
       await page.fill('#company', 'Meridian Freight');
       await page.fill('#role', 'VP Operations');
-      await page.fill('#message', 'Dispatchers rebuild the same load spreadsheet every morning.');
       await page.check('#consent');
     };
 
-    // 1. required fields
+    // 1. the idea gates the rest of the form
+    //
+    // This replaced "click submit on an empty form and expect a refusal". That assertion
+    // cannot be written any more, and its absence is the point: with no idea typed, the
+    // submit button is not on the page to click. The form is unsubmittable by structure
+    // rather than by a validation message.
     await page.goto(base + '/start/', { waitUntil: 'domcontentloaded' });
-    await page.click('form.intake button[type=submit]');
-    await page.waitForTimeout(150);
-    check('empty form is refused client-side', (await page.textContent('#status')).includes('complete every field'), true);
-    check('  and nothing was sent', captured, null);
+    check('step 2 is hidden until there is an idea', await page.isVisible('#email'), false);
+    await page.click('#to-step-2');
+    await page.waitForTimeout(100);
+    check('  an empty idea does not advance', await page.isVisible('#email'), false);
+    check('  and the field is marked invalid', await page.getAttribute('#message', 'aria-invalid'), 'true');
+    check('  nothing was sent', captured, null);
+
+    await page.fill('#message', 'Dispatchers rebuild the same spreadsheet every morning.');
+    await page.click('#to-step-2');
+    await page.waitForSelector('#email', { state: 'visible' });
+    check('  a written idea advances to step 2', await page.isVisible('#email'), true);
+    check('  and the idea is still there', (await page.inputValue('#message')).length > 10, true);
+
+    // 1b. the idea handed over from the homepage survives the click
+    await page.goto(`${base}/start/?idea=${encodeURIComponent('Route planning nobody can explain')}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(120);
+    check('an idea from the homepage is carried across', await page.inputValue('#message'), 'Route planning nobody can explain');
+    check('  and skips a step it has already answered', await page.isVisible('#email'), true);
 
     // 2. invalid email
     await fill();

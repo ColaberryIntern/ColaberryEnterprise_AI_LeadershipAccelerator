@@ -11,6 +11,7 @@ import {
   AgentNotFoundError,
   ReportSubscriptionNotFoundError,
 } from '../services/agentReportSubscriptionService';
+import { listReportRunsForAgent } from '../services/agentReportRunService';
 
 // AI Workforce Management, Checkpoint D — requireAgentManagerOrAdmin-gated
 // (route layer), same 500-on-unexpected-failure / never-a-raw-stack-trace
@@ -95,5 +96,28 @@ export async function handleUpdateReportSubscription(req: Request, res: Response
     }
     console.error('[AgentReportSubscription] Error:', err.message);
     res.status(500).json({ error: 'Failed to update report subscription' });
+  }
+}
+
+/** GET /api/admin/agents/:id/report-runs — real delivery history + an
+ * honestly-computed success rate. AI Agent Dashboard redesign, Checkpoint C,
+ * Reports slice (2026-09-02) — see agentReportRunService.ts's own header
+ * comment for why this endpoint didn't exist until now. */
+export async function handleListReportRuns(req: Request, res: Response) {
+  try {
+    const id = agentIdParam(req);
+    if (!id) {
+      res.status(400).json({ error: 'Agent id is required' });
+      return;
+    }
+    const history = await listReportRunsForAgent(id);
+    if (!history) {
+      res.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    res.json(history);
+  } catch (err: any) {
+    console.error('[AgentReportRun] Error:', err.message);
+    res.status(500).json({ error: 'Failed to load report delivery history' });
   }
 }

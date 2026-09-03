@@ -144,22 +144,34 @@ function App() {
                 Same no-leading-slash rule as the route above, for the same reason.
             */}
             <Route path="p/:slug" element={<CapstoneRecordPage />} />
-            {/*
-                portfolio/:slug is the PERSON; p/:slug is one project. Spelled out
-                rather than /u/, because /u/ and /p/ are one character apart carrying
-                the SAME slug, and Ali reached for the wrong one within a minute of it
-                shipping. A student sending a recruiter the wrong page would not find
-                out until the recruiter had already read it.
-
-                Ranked above /portfolio/share/:token by React Router's specificity
-                rules, since a static segment beats a dynamic one. `share` is also a
-                reserved slug, so nobody can mint an address that route would shadow.
-
-                Same no-leading-slash rule as the route above, for the same reason:
-                both are pages a stranger opens from a link a learner sent.
-            */}
-            <Route path="portfolio/:slug" element={<PublicPortfolioProfilePage />} />
           </Route>
+          {/*
+              portfolio/:slug is the PERSON; p/:slug is one project. Spelled out rather
+              than /u/, because /u/ and /p/ are one character apart carrying the SAME
+              slug, and Ali reached for the wrong one within a minute of it shipping. A
+              student sending a recruiter the wrong page would not find out until the
+              recruiter had already read it.
+
+              Ranked above /portfolio/share/:token by React Router's specificity rules,
+              since a static segment beats a dynamic one. `share` is also a reserved
+              slug, so nobody can mint an address that route would shadow.
+
+              IT LEFT PublicLayoutV2 ON 2026-09-03, on Ali's decision, and the reasoning
+              that put it there is worth answering rather than deleting:
+
+                - "V2 is the site's real header." True, but this page now carries the
+                  Refactored.ai wordmark and its own section nav. Nesting it produced
+                  TWO stacked sticky bars and two brands arguing on one page.
+                - "V1 fingerprints the hiring manager; V2 gates on consent." Standing
+                  outside BOTH layouts is strictly better on that reasoning, not worse:
+                  no tracker initialises here at all, consented or otherwise.
+                - "V1 mounts the Maya chat widget." Still true, and still avoided.
+
+              So this is the same argument reaching a further conclusion, not a reversal
+              of it. These pages are also headed for their own URL, and a page that
+              already renders standalone is the one that survives that move unchanged.
+          */}
+          <Route path="/portfolio/:slug" element={<PublicPortfolioProfilePage />} />
           {/*
               Client reviewer sign-in. Deliberately OUTSIDE both marketing layouts,
               for the same reasons that moved p/:slug out of the legacy block — and

@@ -7,6 +7,7 @@ import { redactForLogs } from '../utils/piiRedaction';
 import { formatCentralClock, sessionDayLabel } from './centralDate';
 import { isDev } from '../config/featureFlags';
 import { decideDevEmailRouting } from './devEmailGuard';
+import { buildLeadAlert, decideNotify, type AlertLead } from './leadAlertMessage';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -498,6 +499,79 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
   });
 
   console.log(`[Email] High-intent alert sent for: ${redactForLogs(data.name)} (score: ${data.score}) | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+}
+
+export interface NewLeadAlertResult {
+  sent: boolean;
+  /** Always present when `sent` is false. The caller reports this rather than "ok". */
+  reason?: string;
+  messageId?: string;
+  to?: string;
+}
+
+/**
+ * Tell a human that a lead arrived.
+ *
+ * Unlike every other sender in this file, this one **returns whether it sent**. That is
+ * the entire point of it existing: the routing action it replaces logged an intent and
+ * returned `ok: true`, so the system reported a successful notification while sending
+ * nothing, and any dashboard or operator reading that outcome believed it.
+ *
+ * It is an INTERNAL alert, so it deliberately does not run the lead-consent pipeline the
+ * marketing senders use. Suppressing "a prospect contacted you" because that prospect is
+ * unsubscribed from marketing would be the wrong gate on the wrong message.
+ *
+ * It never throws. Lead ingest must not fail because an alert could not go out — but the
+ * failure must be reported, not swallowed, which is what the reason string is for.
+ */
+export async function sendNewLeadAlert(params: {
+  lead: AlertLead;
+  /** Overrides the admin recipients, so a routing rule can direct its own alerts. */
+  recipients?: string | null;
+  convertUrl?: string;
+  alreadyNotified?: boolean;
+}): Promise<NewLeadAlertResult> {
+  let recipients = (params.recipients || '').trim();
+  if (!recipients) {
+    try {
+      recipients = await getAdminRecipients();
+    } catch {
+      // Falls through to the no-recipient decision below, which names the problem.
+      recipients = '';
+    }
+  }
+
+  const decision = decideNotify({
+    transporterConfigured: Boolean(transporter),
+    recipients,
+    alreadyNotified: Boolean(params.alreadyNotified),
+  });
+  if (!decision.send) return { sent: false, reason: decision.reason, to: decision.recipients || undefined };
+
+  const alert = buildLeadAlert(params.lead, { convertUrl: params.convertUrl });
+
+  try {
+    const r = await resolveEmailRecipient(decision.recipients, alert.subject);
+    const info = await guardedSendMail({
+      from: `"New Lead" <${env.emailFrom}>`,
+      replyTo: params.lead.email ? `"${params.lead.name || 'Lead'}" <${params.lead.email}>` : undefined,
+      to: r.to,
+      subject: r.subject,
+      html: alert.html,
+      text: alert.text,
+      headers: emailHeaders('new-lead-alert'),
+    });
+    console.log(`[Email] New lead alert sent for lead ${params.lead.id} | msgId: ${info.messageId}`);
+    return { sent: true, messageId: info.messageId, to: r.to };
+  } catch (err: any) {
+    // Reported, not swallowed. The caller turns this into ok:false.
+    console.error('[Email] New lead alert FAILED:', {
+      error_class: err?.name || 'UnknownError',
+      message: err?.message,
+      lead_id: params.lead.id,
+    });
+    return { sent: false, reason: `send_failed:${err?.name || 'UnknownError'}`, to: decision.recipients };
+  }
 }
 
 interface SponsorshipKitEmailData {
