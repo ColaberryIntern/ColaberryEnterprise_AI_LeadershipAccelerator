@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, September 2, 2026 at 10:14 PM</div>
-    <div><span class="sid">CC-20260902-m8q4</span><span class="count">12 changes</span></div>
+    <div class="meta">Generated Thursday, September 3, 2026 at 5:31 AM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">13 changes</span></div>
   </header>
   <main>
     
@@ -237,6 +237,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**the same token and the same project, shot twice, with only `brand_id` changed between them.** Before (`refactored`): `--accent` empty, no hairline, brand name `rgba(33, 37, 41, 0.75)` — the neutral surface. After (`ai-flotation`): `--accent` **#BA430E**, hairline **rgb(186, 67, 14)**, brand name in the same rust. Both screenshots opened and compared; every other pixel is identical. The pale-rust active nav item appears in **both**, so it is pre-existing Bootstrap styling and not something this change introduced.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">the `DB_NAME` trap was checked before and after the dev deploy. `.env` on that worktree carries **two** `DB_NAME` lines, `accelerator_prod` then `accelerator_dev1`; the last wins, and the container resolved to `/accelerator_dev1` both times. Worth knowing before someone reorders that file. Dev data was restored to `refactored` afterwards, so the box is as it was found.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>**Built lead-to-client conversion: organization → engagement → identity → project → membership**</h2>
+          <span class="badge">2026-09-03</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/delivery/leadConversionPlan.ts` (the decisions), `leadConversion.ts` (the writes), `__tests__/leadConversionPlan.test.ts` (18 tests).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**791 tests across 37 suites pass** over `services/delivery` and `modules/delivery`, 18 of them new. Backend typecheck is left to CI: the only TypeScript on this machine is the root-hoisted **4.9.5**, which cannot parse `@types/d3-dispatch` or `zod/v4` and so reports nothing useful about this file.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">it sends no email and never mutates the lead row. Telling the client is a separate outward-facing act that belongs to whoever decides the timing, and the lead stays the marketing record.</span></div>
           
         </div>
       </article>
