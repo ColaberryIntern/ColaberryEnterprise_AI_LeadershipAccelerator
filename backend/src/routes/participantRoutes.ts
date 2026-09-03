@@ -75,6 +75,7 @@ import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
+import certPrepRoutes from './certPrepRoutes';
 import sbpRoutes from './sbpRoutes';
 import workspaceRoutes from './workspaceRoutes';
 
@@ -425,6 +426,18 @@ router.use('/api/portal/projects', requireParticipant, requireContentEntitlement
 router.use(projectsPortalRoutes);
 // Student Build Pipeline: idea -> plan -> repo. Flag-gated on projectApiEnabled.
 router.use(sbpRoutes);
+
+// Cert Prep (Claude Certified Architect readiness). THREE independent gates, and
+// they are deliberately not redundant:
+//   1. requireContentEntitlement('cert-prep') — the paywall, inert unless
+//      CONTENT_PAGE_GATE_ENABLED=true, same as Classroom and Projects.
+//   2. env.certPrepEnabled inside the router — whether the feature exists at all
+//      (404 when off), so deploying these routes changes nothing until it is set.
+//   3. The Week 7 fence inside certAvailabilityService — WHO may use it, always
+//      on and never bypassed by either flag above.
+// A paying student in Week 3 passes 1 and 2 and is still refused by 3.
+router.use('/api/portal/cert-prep', requireParticipant, requireContentEntitlement('cert-prep'));
+router.use(certPrepRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);

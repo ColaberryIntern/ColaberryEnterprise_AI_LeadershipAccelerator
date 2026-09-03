@@ -155,6 +155,11 @@ export const env = {
   // Project backend v2 — persisted student-projects read API (P1). Default OFF;
   // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
   projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
+  // Cert Prep (Claude Certified Architect readiness). Default OFF: deploying the
+  // routes changes nothing until this is set, and the Week 7 fence inside the
+  // service is a SEPARATE, always-on control — this flag decides whether the
+  // feature exists at all, the fence decides who may use it once it does.
+  certPrepEnabled: process.env.CERT_PREP_ENABLED === 'true',
   // Student Build Pipeline. SEPARATE from projectApiEnabled deliberately: that
   // flag is already true in production and shared with projectsPortalRoutes, so
   // reusing it would make the new pipeline live the moment it deploys and give
