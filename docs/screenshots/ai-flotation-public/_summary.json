@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-03T20:39:01.573Z",
+  "generated_at": "2026-09-03T21:08:16.327Z",
   "max_safe_width": 1800,
   "safe_viewport": {
     "width": 1440,
@@ -32,12 +32,28 @@
       "proves": "/approach/ at 360x800"
     },
     {
+      "file": "trust-before-intelligence-desktop.png",
+      "proves": "/trust-before-intelligence/ at 1440x900"
+    },
+    {
+      "file": "trust-before-intelligence-mobile.png",
+      "proves": "/trust-before-intelligence/ at 360x800"
+    },
+    {
       "file": "delivery-standard-desktop.png",
       "proves": "/delivery-standard/ at 1440x900"
     },
     {
       "file": "delivery-standard-mobile.png",
       "proves": "/delivery-standard/ at 360x800"
+    },
+    {
+      "file": "pricing-desktop.png",
+      "proves": "/pricing/ at 1440x900"
+    },
+    {
+      "file": "pricing-mobile.png",
+      "proves": "/pricing/ at 360x800"
     },
     {
       "file": "results-desktop.png",
