@@ -22,6 +22,7 @@ const AdminCapeSettingsPage = lazy(() => import('../pages/admin/AdminCapeSetting
 const AdminFeedControlGovernancePage = lazy(() => import('../pages/admin/AdminFeedControlGovernancePage'));
 const AdminEventLedgerPage = lazy(() => import('../pages/admin/AdminEventLedgerPage'));
 const AdminCampaignsPage = lazy(() => import('../pages/admin/AdminCampaignsPage'));
+const ExplorerGrowthPage = lazy(() => import('../pages/admin/ExplorerGrowthPage'));
 const AdminCampaignDetailPage = lazy(() => import('../pages/admin/AdminCampaignDetailPage'));
 const AdminApolloPage = lazy(() => import('../pages/admin/AdminApolloPage'));
 const CampaignBuilderPage = lazy(() => import('../pages/admin/CampaignBuilderPage'));
@@ -118,6 +119,7 @@ const adminRoutes = (
         <Route path="/admin/funnel" element={<AdminFunnelPage />} />
         <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
         <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
+        <Route path="/admin/explorer-growth" element={<ExplorerGrowthPage />} />
         <Route path="/admin/campaigns/build-cold" element={<CampaignBuilderPage />} />
         <Route path="/admin/campaigns/:id" element={<AdminCampaignDetailPage />} />
         <Route path="/admin/apollo" element={<AdminApolloPage />} />
