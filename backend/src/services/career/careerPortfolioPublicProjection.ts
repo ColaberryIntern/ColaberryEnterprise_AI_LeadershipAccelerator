@@ -53,6 +53,11 @@
  * levels, non-http URLs, records that are not published. Not handled: nothing - there is
  * no failure mode left that reaches the caller.
  */
+import {
+  normalizeExperience, normalizeEducation,
+} from '../resumeHistory';
+import type { ResumeExperience, ResumeEducation } from '../resumeHistory';
+
 
 
 // ── The public shapes. This is the entire contract. ────────────────────────
@@ -92,6 +97,23 @@ export interface PublicCapability {
   on_sample?: boolean;
 }
 
+/**
+ * A role from the learner's own resume.
+ *
+ * WHY EMPLOYMENT HISTORY IS ALLOWED TO CROSS, when `email` and `resume.file_name`
+ * are not. The refusals above are things the learner never chose to publish - a
+ * contact detail, an internal score, a filename they typed for themselves. An
+ * employment history is the opposite: it is the part of a resume whose whole
+ * purpose is to be read by a stranger deciding whether to hire, and the learner
+ * approves this page before it publishes. Without it the page reads as a bootcamp
+ * exercise rather than a professional's body of work.
+ *
+ * What still does NOT cross from the resume: the file, its name, the raw text, the
+ * phone number, the street address. Only these named fields do.
+ */
+export type PublicExperience = ResumeExperience;
+export type PublicEducation = ResumeEducation;
+
 export interface PublicRecord {
   slug: string;
   title: string;
@@ -128,6 +150,15 @@ export interface PublicProject {
   stage: string | null;
   repo_url: string | null;
   demo_url: string | null;
+  /**
+   * An image committed to the project's own PUBLIC repository, or null.
+   *
+   * Resolved at review time and frozen with the rest of the learner-authored text,
+   * so this is a plain URL by the time it reaches here. `httpUrl` still gates it:
+   * the freeze blob is data at rest and this is the last point before a stranger's
+   * browser is told to fetch it.
+   */
+  hero_image_url: string | null;
 }
 
 export interface PublicRepository {
@@ -137,6 +168,9 @@ export interface PublicRepository {
 
 export interface PublicPortfolio {
   identity: PublicIdentity;
+  /** Most recent FIRST. Empty when no resume was ever ingested. */
+  experience: PublicExperience[];
+  education: PublicEducation[];
   capabilities: PublicCapability[];
   projects: PublicProject[];
   records: PublicRecord[];
@@ -210,6 +244,12 @@ export interface ProjectPortfolioInput {
   capabilities?: unknown;
   /** Already-PUBLISHED capstone records. An unpublished record is not passed in. */
   records: unknown;
+  /**
+   * `OnboardingProfile.extracted` - raw LLM output from the resume ingest. Passed
+   * in raw ON PURPOSE: normalization is this module's job, so there is exactly one
+   * place that decides what a stranger may read.
+   */
+  resume?: unknown;
   generatedAt: string;
 }
 
@@ -252,8 +292,14 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
       stage: str(p.project_stage),
       repo_url: httpUrl(p.github_repo_url),
       demo_url: httpUrl(p.portfolio_url),
+      hero_image_url: httpUrl(p.hero_image_url),
     }))
     .filter((p) => p.title !== '');
+
+  // The resume history. Raw model output in, capped and type-checked rows out.
+  const resume: any = (input.resume && typeof input.resume === 'object') ? input.resume : {};
+  const experience = normalizeExperience(resume.experience);
+  const education = normalizeEducation(resume.education);
 
   const rawRecords: any[] = Array.isArray(input.records) ? input.records : [];
   const records: PublicRecord[] = rawRecords
@@ -281,6 +327,8 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
 
   return {
     identity,
+    experience,
+    education,
     capabilities,
     projects,
     records,

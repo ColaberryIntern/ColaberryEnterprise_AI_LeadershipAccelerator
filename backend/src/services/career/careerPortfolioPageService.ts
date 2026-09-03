@@ -36,6 +36,9 @@
 import { sequelize } from '../../config/database';
 import { getCareerProfile } from './careerProfileService';
 import { projectPublicPortfolio, type PublicPortfolio } from './careerPortfolioPublicProjection';
+import {
+  readResumeHistory, approvedResumeHistoryOf, EMPTY_RESUME_HISTORY, type ResumeHistory,
+} from './resumeHistoryAdapter';
 
 export type PortfolioPageStatus = 'draft' | 'published';
 export type PortfolioPageVisibility = 'private' | 'unlisted' | 'public';
@@ -199,6 +202,7 @@ export async function getPublicPortfolioBySlug(
       now,
       page.approved_identity,
       approvedProjectsOf(page.approved_identity),
+      approvedResumeHistoryOf(page.approved_identity),
     ),
     indexable: decision.indexable,
   };
@@ -214,6 +218,8 @@ async function buildPortfolio(
   approvedIdentity: unknown = null,
   /** null = read projects LIVE (reviewer preview); an array = the APPROVED set. */
   approvedProjects: unknown[] | null = null,
+  /** null = read the resume history LIVE (reviewer preview); a value = the APPROVED one. */
+  approvedResume: ResumeHistory | null = null,
 ): Promise<PublicPortfolio> {
   // A profile that fails to load is a shorter page, not a 500. The projection turns an
   // empty profile into an empty portfolio rather than throwing.
@@ -259,7 +265,23 @@ async function buildPortfolio(
   // live one -- otherwise a learner could be approved and then rewrite their business
   // problem into anything. The reviewer preview passes null and gets the live rows,
   // because the live text is exactly what they are being asked to approve.
-  const projects = approvedProjects ?? await readLiveProjects(enrollmentId, now);
+  let projects = approvedProjects ?? await readLiveProjects(enrollmentId, now);
+  // The reviewer previews LIVE, so the hero images resolve now - they are approving
+  // the exact images that `decidePortfolioReview` will then freeze. A published page
+  // never reaches this branch, so a stranger's page load makes no GitHub calls.
+  if (!approvedProjects) {
+    try {
+      const { withHeroImages } = await import('./portfolioHeroImage');
+      projects = await withHeroImages(projects as any[]);
+    } catch (err: any) {
+      console.warn(JSON.stringify({
+        timestamp: now.toISOString(), level: 'warn', service: 'backend',
+        event: 'portfolio_hero_image_unavailable', outcome: 'partial',
+        error_class: err?.error_class || err?.name || 'Error',
+        context: { enrollment_id: enrollmentId },
+      }));
+    }
+  }
 
   // Repo-proven capability. Read LIVE and never frozen: the system observes it, the
   // learner does not author it, so the same rule as the CAPE band applies -- live where
@@ -280,6 +302,22 @@ async function buildPortfolio(
     }));
   }
 
+  // The resume history. Frozen for a stranger, live for the reviewer who is being asked
+  // to approve it -- the same rule the project text follows above.
+  let resume: ResumeHistory = approvedResume ?? { ...EMPTY_RESUME_HISTORY };
+  if (!approvedResume) {
+    try {
+      resume = await readResumeHistory(enrollmentId);
+    } catch (err: any) {
+      console.warn(JSON.stringify({
+        timestamp: now.toISOString(), level: 'warn', service: 'backend',
+        event: 'public_portfolio_resume_unavailable', outcome: 'partial',
+        error_class: err?.error_class || err?.name || 'Error',
+        context: { enrollment_id: enrollmentId },
+      }));
+    }
+  }
+
   return projectPublicPortfolio({
     // On an unapproved page `approvedIdentity` is null, so the reviewer sees the LIVE
     // headline -- which is the text they are being asked to approve.
@@ -287,6 +325,7 @@ async function buildPortfolio(
     projects,
     capabilities,
     records,
+    resume,
     generatedAt: now.toISOString(),
   });
 }
