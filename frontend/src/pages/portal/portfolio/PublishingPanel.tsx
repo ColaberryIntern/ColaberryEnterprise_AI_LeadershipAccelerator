@@ -82,7 +82,11 @@ const PublishingPanel: React.FC = () => {
       {/* ── draft: ask for review ── */}
       {(status?.state === 'draft' || status?.state === 'changes_requested') && (
         <section className="cp-card">
-          <h2>{status.state === 'changes_requested' ? 'Your reviewer asked for changes' : 'Ready to be reviewed?'}</h2>
+          <h2>
+            {status.state === 'changes_requested'
+              ? 'Your reviewer asked for changes to this record'
+              : 'Is your capstone record ready to be reviewed?'}
+          </h2>
 
           {status.state === 'changes_requested' && status.last_review?.notes && (
             <div className="cp-note-block" role="note">{status.last_review.notes}</div>
@@ -103,7 +107,7 @@ const PublishingPanel: React.FC = () => {
       {/* ── in review ── */}
       {status?.state === 'in_review' && (
         <section className="cp-card">
-          <h2>Awaiting review</h2>
+          <h2>Your capstone record is awaiting review</h2>
           <p className="cp-muted">
             You sent <strong>version {status.version}</strong>. A mentor will approve it or come
             back with changes.
@@ -118,8 +122,11 @@ const PublishingPanel: React.FC = () => {
       {/* ── published ── */}
       {status?.state === 'published' && (
         <section className="cp-card">
-          <h2>Your record is live</h2>
-          <p className="cp-muted">Approved at version {status.version}.</p>
+          <h2>Your capstone record is live</h2>
+          <p className="cp-muted">
+            Approved at version {status.version}. This is the single project write-up —
+            your portfolio page, higher up this tab, is published separately.
+          </p>
           {status.public_url && (
             <div className="cp-note-block">
               <strong>enterprise.colaberry.ai{status.public_url}</strong>
@@ -131,10 +138,15 @@ const PublishingPanel: React.FC = () => {
       {/* ── visibility: the learner's own choice ── */}
       {status && status.state !== 'no_record' && (
         <section className="cp-card" aria-labelledby="cp-vis-h">
-          <h2 id="cp-vis-h">Who can see this record</h2>
+          {/* NAMES THE OBJECT, because this tab carries two visibility controls and Ali
+              read them as a duplicate: "mine has Who can see this.... twice". They govern
+              different things — the portfolio page above indexes everything, this governs
+              ONE record — and both have to say so, or the pair looks like a bug. */}
+          <h2 id="cp-vis-h">Who can see this capstone record</h2>
           <p className="cp-muted">
-            This is yours to set, and it is separate from review. A mentor approves that the work
-            is ready; you decide the audience.
+            This controls the single record above, not your portfolio page higher up the
+            tab. Setting one never changes the other. It is yours to set and separate from
+            review: a mentor approves that the work is ready; you decide the audience.
           </p>
           <ul className="cp-vis">
             {(Object.keys(VIS_COPY) as RecordVisibility[]).map((v) => (
