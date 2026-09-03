@@ -284,7 +284,10 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       campaign_id: campaign_id ?? null,
     });
 
-    const page_category = categorizePagePath(page_path);
+    // Categorise within the resolved brand. `ecosystem` is null when the site slug does
+    // not resolve, and passing null keeps the legacy global map — an unresolved site
+    // categorises exactly as it did before rather than losing its category entirely.
+    const page_category = categorizePagePath(page_path, ecosystem?.brandSlug);
 
     await recordPageEvent({
       session_id: sessionId,
@@ -446,7 +449,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
 
     let eventsRecorded = 0;
     for (const event of acceptedEvents) {
-      const page_category = categorizePagePath(event.page_path);
+      const page_category = categorizePagePath(event.page_path, ecosystem?.brandSlug);
       await recordPageEvent({
         session_id: sessionId,
         visitor_id: visitorId,
