@@ -352,6 +352,75 @@ async function buildPortfolio(
     }));
   }
 
+  // The competency bands and the evidence behind them. VALIDATED rows only, and summed
+  // from each row's own `competency_weights`, so every score names its artefacts.
+  // `jsonb_array_elements` throws on a non-array, so the shape is checked in the WHERE
+  // rather than trusted -- one malformed row must not cost the whole page its bands.
+  let competencies: unknown[] = [];
+  let evidenceBySource: unknown[] = [];
+  try {
+    const [comp]: any = await sequelize.query(
+      `SELECT w->>'domain_id' AS domain, SUM((w->>'weight')::numeric)::int AS score
+         FROM evidence_records e, jsonb_array_elements(e.competency_weights) w
+        WHERE e.enrollment_id = $1
+          AND e.validated = true
+          AND jsonb_typeof(e.competency_weights) = 'array'
+        GROUP BY 1`,
+      { bind: [enrollmentId] },
+    );
+    competencies = Array.isArray(comp) ? comp : [];
+    const [src]: any = await sequelize.query(
+      `SELECT source_type, COUNT(*)::int AS count
+         FROM evidence_records
+        WHERE enrollment_id = $1 AND validated = true
+        GROUP BY 1`,
+      { bind: [enrollmentId] },
+    );
+    evidenceBySource = Array.isArray(src) ? src : [];
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_competencies_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
+  // Repository facts for the featured block. Distinct languages, and the number of
+  // top-level areas the work is organised across, counted from the stored file tree.
+  let featuredRepoUrl: string | null = null;
+  let featuredLanguages: number | null = null;
+  let featuredTopLevelAreas: number | null = null;
+  try {
+    const [conns]: any = await sequelize.query(
+      `SELECT repo_url, repo_language, file_tree_json
+         FROM github_connections WHERE enrollment_id = $1`,
+      { bind: [enrollmentId] },
+    );
+    const rows: any[] = Array.isArray(conns) ? conns : [];
+    featuredRepoUrl = rows.find((r) => typeof r?.repo_url === 'string')?.repo_url ?? null;
+    const langs = new Set(rows.map((r) => r?.repo_language).filter((l) => typeof l === 'string' && l));
+    featuredLanguages = langs.size || null;
+    const areas = new Set<string>();
+    for (const r of rows) {
+      const tree = r?.file_tree_json;
+      const paths: unknown[] = Array.isArray(tree) ? tree : (Array.isArray(tree?.paths) ? tree.paths : []);
+      for (const p of paths) {
+        const s = typeof p === 'string' ? p : (p as any)?.path;
+        if (typeof s !== 'string' || !s.includes('/')) continue;
+        areas.add(s.split('/')[0]);
+      }
+    }
+    featuredTopLevelAreas = areas.size || null;
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_repo_facts_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
   // The About paragraph names the project the record is about, in the learner's own words.
   const firstRecord: any = Array.isArray(records) ? (records as any[])[0] : null;
 
@@ -367,6 +436,11 @@ async function buildPortfolio(
     filesCommitted,
     projectName: firstRecord?.project_name ?? null,
     projectDescriptor: firstRecord?.descriptor ?? null,
+    competencies,
+    evidenceBySource,
+    featuredRepoUrl,
+    featuredLanguages,
+    featuredTopLevelAreas,
     generatedAt: now.toISOString(),
   });
 }

@@ -128,7 +128,8 @@ describe('careerPortfolioPublicProjection', () => {
   it('publishes exactly the agreed top-level keys and no others', () => {
     // If someone adds a field to the payload, this fails until they consider it here.
     expect(Object.keys(project()).sort()).toEqual([
-      'about', 'capabilities', 'education', 'experience', 'generated_at', 'identity',
+      'about', 'capabilities', 'competencies', 'competency_domain_count', 'education',
+      'evidence_by_source', 'experience', 'featured', 'generated_at', 'identity',
       'private_repository_count', 'projects', 'records', 'repositories', 'stats',
     ]);
   });
