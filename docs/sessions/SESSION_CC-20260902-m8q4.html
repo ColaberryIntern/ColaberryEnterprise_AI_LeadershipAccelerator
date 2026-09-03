@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, September 2, 2026 at 3:55 PM</div>
-    <div><span class="sid">CC-20260902-m8q4</span><span class="count">3 changes</span></div>
+    <div class="meta">Generated Wednesday, September 2, 2026 at 4:19 PM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">6 changes</span></div>
   </header>
   <main>
     
@@ -102,6 +102,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">all seven pages 200 on `aiflotation.com` and on `www.`; `/assets/site.css` byte-identical to `origin/main` (10,970 bytes, `diff` clean), which is what proves the running nginx image contains #2024 rather than merely that a deploy ran; the brand font computed as applied on all seven; no horizontal overflow at 360×800; the mobile nav resolving to seven stacked rows, confirming #2024&#39;s fix is the one in production; `/start/` posting to `/api/leads/ingest?source=ai-flotation&amp;entry=workflow_intake`; zero console errors and zero failed subresources. 47 assertions, no failures. The intake form was never submitted — a real POST would write a lead attributed to `ai-flotation` and corrupt the attribution the site exists to produce.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">PRs [#2018](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/2018) and [#2024](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/2024) shipped under `CC-20260823-r4k9` and are recorded here rather than in that session&#39;s log, since a session may only write entries carrying its own ID. That tab died before writing them up; this is not a second claim on its work.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Unpacked the design system and vendored it into the repo**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`apps/ai-flotation-public/src/assets/design/` — `colors.css`, `typography.css`, `spacing.css`, `motion.css`, `components.css`, `ai-flotation-mark.svg`, `DESIGN_SYSTEM.md`, all verbatim from the source bundle.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the build copies them into `dist/assets/design/` (confirmed by listing it), `validate-app-boundaries.js` clean at 11 files.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the `.html` in Downloads is **not a document, it is a self-extracting bundle** — one line of JSON holding 49 gzip+base64 assets that the page inflates in the browser. Reading the file tells you nothing, and pasting it is what killed `CC-20260823-r4k9`. Unpacked with `zlib.gunzipSync` instead. It carried the real token files, the logo, and a written spec; nothing had to be inferred from a screenshot.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Rebuilt the public site on the design tokens — a deliberate rebrand**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`site.css` rewritten to consume the vendored tokens, and the Google Fonts link swapped on all seven pages.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">computed values read out of the live DOM rather than assumed — `--fg #1A1917`, `--fg-muted #56524B`, `--accent #BA430E`, `--bg #F7F6F4`; `h1`/`h2` in **Space Grotesk**, body in **Archivo**. 69 checks pass, including all 14 contrast assertions, which is the design system&#39;s AA guarantee holding in practice rather than on paper. Boundaries clean. Desktop and mobile screenshots opened.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**this is a visible rebrand of a site that went live the same day.** Navy `#16304f` / brass `#b4813a` / IBM Plex becomes rust `#BA430E` on warm paper-grey with Space Grotesk. Variant A (&quot;Forge&quot;) is the documented default; variant B (&quot;Harbor&quot;, teal) is one `data-variant=&quot;harbor&quot;` attribute on `&lt;html&gt;` and needs no CSS change. Two deliberate deviations are named in the stylesheet rather than hidden: `--mono` (the source defines no monospace, but this site sets record-like material in one) and the OS-dark-preference bridge (the source switches on `data-theme`; this site has no theme control and no JS to set one, so it mirrors the dark token block under `prefers-color-scheme`).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Caught the same specificity bug a second time, in my own new code**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`form.intake input:not([type=&quot;checkbox&quot;])` in `site.css`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">measured the element&#39;s box — **13×13px**, was rendering 44px square.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`form.intake input` is (0,1,2) and `.consent input` is (0,1,1), so the consent checkbox inherited the text-field sizing and rendered as a large empty square next to its label. **Every assertion passed while it was broken** — same as the masthead button earlier today. It was caught by opening the mobile screenshot, which is the second time in one session that looking found what measuring did not.</span></div>
           
         </div>
       </article>

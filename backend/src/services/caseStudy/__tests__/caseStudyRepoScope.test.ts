@@ -1,3 +1,4 @@
+import { asInstance, dropColumn } from './sequelizeInstanceFake';
 import { randomUUID } from 'crypto';
 
 /**
@@ -25,8 +26,8 @@ class FakeRepoTable {
       allow_public_repo_link: false, metadata: {}, project_id: null, github_connection_id: null,
       default_branch: null, last_seen_sha: null, last_synced_at: null, path_scope: [], ...values,
     };
-    this.rows.push(row);
-    return row;
+    this.rows.push(asInstance(row));
+    return this.rows[this.rows.length - 1];
   }
   async findAll(opts: any): Promise<FakeRow[]> {
     return this.rows.filter((r) => r.collection_id === opts?.where?.collection_id);
@@ -87,7 +88,7 @@ jest.mock('../../../config/database', () => ({
 }));
 
 import {
-  attachRepository, listRepositories, setRepositoryPathScope, isCaseStudyRepoError,
+  attachRepository, listRepositories, setRepositoryPathScope, setRepositoryRole, isCaseStudyRepoError,
 } from '../caseStudyRepoCollection';
 import { MAX_SCOPE_PREFIXES, normaliseScope } from '../repoPathScope';
 
@@ -203,7 +204,7 @@ describe('reading a scope back', () => {
     // `undefined` here. Describing the whole repository is the safe reading:
     // describing a fraction of it and calling that the whole is not.
     await attach(['backend/src']);
-    delete mockRepoTable.rows[0].path_scope;
+    dropColumn(mockRepoTable.rows[0], 'path_scope');
     const [listed] = await listRepositories({ caseStudyId: CASE_STUDY });
     expect('pathScope' in listed).toBe(false);
   });
@@ -213,5 +214,57 @@ describe('reading a scope back', () => {
     mockRepoTable.rows[0].path_scope = ['backend/src', 42, null, 'frontend/src'];
     const [listed] = await listRepositories({ caseStudyId: CASE_STUDY });
     expect(listed.pathScope).toEqual(['backend/src', 'frontend/src']);
+  });
+});
+
+describe('the RECORD a write returns, not just the row it wrote', () => {
+  /**
+   * THE BUG THIS EXISTS FOR, found on production rather than here.
+   *
+   * `loadRows` cast Sequelize instances to `RepoRow` without converting them. An
+   * instance exposes its columns through prototype getters, so `row.repo_owner`
+   * read fine and `{ ...row }` copied NONE of them. Both writers built their
+   * return value by spreading — `toRecord({ ...target, role })` — so the record
+   * handed back to the admin UI had `undefined` for owner, name and URL, and
+   * `toRecord`'s fail-closed defaults turned the missing role into `other` and
+   * the missing visibility into `unknown`. It looked like data, not like an error.
+   *
+   * The whole suite was green throughout, because the fake table returned plain
+   * objects. The fake was FRIENDLIER than reality, so it could only confirm the
+   * code. `sequelizeInstanceFake.ts` now models the getters, and these assertions
+   * fail without the `.get({ plain: true })` in `loadRows`.
+   */
+  it('setRepositoryPathScope returns a fully populated record', async () => {
+    const { repository } = await attach();
+    const updated = await setRepositoryPathScope({
+      caseStudyId: CASE_STUDY, repositoryId: repository.id, pathScope: ['backend/src'],
+    });
+    expect(updated.repoOwner).toBe('acme');
+    expect(updated.repoName).toBe('monorepo');
+    expect(updated.repoUrl).toContain('acme/monorepo');
+    // The role must survive the write. `other` here is not a value — it is
+    // `toRecord` failing closed over a field that arrived undefined.
+    expect(updated.role).toBe('primary');
+  });
+
+  it('setRepositoryRole returns a fully populated record too', async () => {
+    // The same defect, and it PREDATES path scoping — this is the regression
+    // guard for the endpoint that already shipped with it.
+    const { repository } = await attach();
+    const updated = await setRepositoryRole({
+      caseStudyId: CASE_STUDY, repositoryId: repository.id, role: 'backend',
+    });
+    expect(updated.repoOwner).toBe('acme');
+    expect(updated.repoName).toBe('monorepo');
+    expect(updated.role).toBe('backend');
+  });
+
+  it('attachRepository returns a fully populated record', async () => {
+    // The create path returns an instance too, so it had the same exposure.
+    const { repository } = await attach(['backend/src']);
+    expect(repository.repoOwner).toBe('acme');
+    expect(repository.repoName).toBe('monorepo');
+    expect(repository.role).toBe('primary');
+    expect(repository.pathScope).toEqual(['backend/src']);
   });
 });
