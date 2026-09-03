@@ -10,7 +10,6 @@
   "base_sha": "e99fdb35",
   "branch": "workstream/ai-flotation-gate0",
   "worktree_clean_at_start": true,
-
   "plan_assumptions_corrected": [
     {
       "id": "CORRECTION-1",
@@ -48,7 +47,6 @@
       "impact": "delivery-scoped message domain required; reuse would attach client delivery discussion to an expiring visitor session"
     }
   ],
-
   "live_defects_found": [
     {
       "id": "DEFECT-1",
@@ -58,36 +56,38 @@
       "recommended_position": "before Gate 1, not inside Gate 12"
     }
   ],
-
   "escalations": [
     {
       "id": "ESCALATION-1",
       "subject": "subscription billing has no provider",
       "boundary": "external dependency / paid provider introduction",
-      "blocks": ["Gate 7"],
+      "blocks": [
+        "Gate 7"
+      ],
       "note": "a separate workstream was exploring Stripe as an international rail; reconcile rather than decide twice"
     },
     {
       "id": "ESCALATION-2",
       "subject": "voice intake ownership",
       "boundary": "product decision - fourth Synthflow agent vs reuse of the callback agent",
-      "blocks": ["Gate 3"],
+      "blocks": [
+        "Gate 3"
+      ],
       "note": "changes who owns the phone number and the consent record"
     }
   ],
-
   "reuse_summary": {
     "agentic_responsibilities_total": 15,
     "already_exist": 14,
     "genuinely_new": 1,
     "the_new_one": "Project AI - the client-facing project-scoped agent"
   },
-
   "artifacts": {
     "written": [
       "CURRENT_STATE.md",
       "REUSE_MAP.md",
-      "IMPLEMENTATION_STATUS.json"
+      "IMPLEMENTATION_STATUS.json",
+      "BASELINE_TEST_RESULTS.md"
     ],
     "outstanding": [
       "CUSTOMER_JOURNEY.md",
@@ -101,17 +101,24 @@
       "VOICE_INTAKE_MAP.md",
       "CLIENT_VISIBILITY_MAP.md",
       "SECURITY_THREAT_MODEL.md",
-      "TEST_PLAN.md",
-      "BASELINE_TEST_RESULTS.md"
+      "TEST_PLAN.md"
     ]
   },
-
   "baseline_tests": {
-    "command": "npx jest -c jest.ci.config.ts",
-    "status": "running",
+    "command": "cd backend && npx jest -c jest.ci.config.ts",
+    "status": "complete",
+    "suites_passed": 1033,
+    "suites_failed": 1,
+    "suites_skipped": 3,
+    "suites_total": 1037,
+    "tests_passed": 15943,
+    "tests_skipped": 121,
+    "tests_total": 16064,
+    "duration_seconds": 309.192,
+    "failing_suite": "src/__tests__/services/interviewService.test.ts",
+    "failure_cause": "environmental - @anthropic-ai/sdk declared in backend/package.json but not installed in this worktree; the suite never executed, nothing asserted. CI installs it and passes.",
     "note": "the CI config is the gate; scoped local runs miss contract suites. Local tsc is unusable - the only resolvable TypeScript is the root-hoisted 4.9.5, which cannot parse @types/d3-dispatch or zod/v4"
   },
-
   "gate_0_complete": false,
-  "next_action": "finish remaining artifacts and record baseline results; do not begin Gate 1 until Gate 0 is signed off"
+  "next_action": "finish the 12 remaining Gate 0 artifacts; resolve ESCALATION-1 and ESCALATION-2; do not begin Gate 1 until Gate 0 is signed off"
 }
