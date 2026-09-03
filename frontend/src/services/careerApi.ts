@@ -326,6 +326,21 @@ export async function fetchPortfolioPreview(enrollmentId: string): Promise<any> 
   return res.data.portfolio;
 }
 
+/**
+ * The LEARNER'S OWN preview of their portfolio page.
+ *
+ * Same payload, same allow-list, and the same component renders it downstream, so the
+ * learner, the reviewer and a stranger are all looking at one rendering rather than
+ * three that can drift. Portal route, so `portalApi`, and it takes no id: the subject
+ * is whoever is signed in.
+ */
+export async function fetchMyPortfolioPreview(): Promise<any> {
+  const res = await portalApi.get<{ ok: boolean; portfolio: any }>(
+    '/api/portal/career/portfolio-page/preview',
+  );
+  return res.data.portfolio;
+}
+
 // ── Per-post consent ───────────────────────────────────────────────────────
 
 export interface PostConsentRow {

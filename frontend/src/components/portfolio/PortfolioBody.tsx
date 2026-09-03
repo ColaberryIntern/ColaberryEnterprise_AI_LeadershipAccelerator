@@ -138,7 +138,17 @@ const StatTile: React.FC<{ value: number | null | undefined; label: string }> = 
   );
 };
 
-const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
+/**
+ * `embedded` renders the same document WITHOUT the page furniture: no top nav, no
+ * full-height page background, no sticky rail. It exists because this component is shown
+ * in three places and only one of them IS a page - the learner previews it inside the
+ * Publishing tab and a reviewer inside the admin screen, where a second sticky brand bar
+ * halfway down somebody else's layout is a bug, not a feature. The CONTENT is identical
+ * in all three, which is the property worth protecting.
+ */
+const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
+  portfolio, embedded = false,
+}) => {
   const { identity, capabilities, records, repositories, private_repository_count } = portfolio;
   const projects = portfolio.projects || [];
   const experience = portfolio.experience || [];
@@ -164,7 +174,8 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
     && !projects.length && !experience.length && !education.length && !about.length;
 
   return (
-    <div className="pf">
+    <div className={embedded ? 'pf pf-embedded' : 'pf'}>
+      {!embedded && (
       <nav className="pf-nav">
         <div className="pf-nav-in">
           {/* Refactored.ai, not Colaberry, and the wordmark carries the name so no
@@ -188,6 +199,7 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
           </div>
         </div>
       </nav>
+      )}
 
       <div className="pf-wrap">
         <aside className="pf-rail">

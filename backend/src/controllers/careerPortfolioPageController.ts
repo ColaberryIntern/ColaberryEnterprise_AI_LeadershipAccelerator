@@ -76,6 +76,28 @@ export async function handleSetPortfolioPageVisibility(req: Request, res: Respon
   } catch (e) { fail(res, e, next); }
 }
 
+/**
+ * GET /api/portal/career/portfolio-page/preview
+ *
+ * WHAT THE LEARNER IS ABOUT TO ASK SOMEONE TO APPROVE. The Publishing tab could show the
+ * address, the state and the visibility controls, but the page itself only became
+ * openable once it was already live -- so a learner pressed "Ask for review" on something
+ * they had never seen. That is the same defect Ali reported on the reviewer's side ("it's
+ * just asking me to give changes but I can't view what I'm supposed to be approving"),
+ * one seat over.
+ *
+ * It serves `getPortfolioPreview` -- the SAME function behind the reviewer's preview and
+ * the same allow-list the public page uses -- so the learner, the reviewer and the
+ * stranger are all looking at one rendering. No `canReview` check: the subject is the
+ * caller's own enrollment, taken from the session rather than the URL, so there is no id
+ * here for anyone to substitute.
+ */
+export async function handleGetMyPortfolioPreview(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ ok: true, ...await getPortfolioPreview(eid(req)) });
+  } catch (e) { fail(res, e, next); }
+}
+
 /** POST /api/portal/career/portfolio-page/request-review */
 export async function handleRequestPortfolioPageReview(req: Request, res: Response, next: NextFunction) {
   try {
