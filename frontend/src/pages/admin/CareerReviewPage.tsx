@@ -148,7 +148,11 @@ const CareerReviewPage: React.FC = () => {
                 <p className="cr-muted">Preview unavailable.</p>
               ) : (
                 <div className="cr-preview">
-                  <PortfolioBody portfolio={pagePreview[p.enrollment_id]} />
+                  {/* `embedded`: the reviewer is looking at the page INSIDE the admin
+                      screen, so it drops the portfolio's own nav and full-height ground.
+                      The content is identical to what publishes, which is the part a
+                      review depends on. */}
+                  <PortfolioBody portfolio={pagePreview[p.enrollment_id]} embedded />
                 </div>
               )}
 

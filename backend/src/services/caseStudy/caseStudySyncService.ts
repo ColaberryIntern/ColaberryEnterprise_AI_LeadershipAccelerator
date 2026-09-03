@@ -83,6 +83,7 @@ import { ensureTraceId } from '../../utils/requestContext';
 import { listRepositories } from './caseStudyRepoCollection';
 import { analyzeRepositories } from './caseStudyRepoAnalyzer';
 import { analyzerInputsFor } from './caseStudyAnalyzerInputs';
+import { writeRepoProvenance } from './caseStudyRepoProvenanceWriter';
 import type { AnalyzeRepositoryInput, CaseStudyRepoFacts } from './caseStudyRepoAnalyzer';
 import { repoLogIdentity, opaqueRepoRef } from './caseStudyRepoReader';
 import { PARSEABLE_MANIFEST_FILENAME, pickManifestFilename, readCaseStudyManifest } from './caseStudyManifestReader';
@@ -245,6 +246,23 @@ export async function syncCaseStudy(input: SyncCaseStudyInput): Promise<CaseStud
         correlationId, ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
       });
       const analysis = await analyzeRepositories(inputs, { correlationId });
+
+      // Write back what this read learned about each repository BEFORE the
+      // snapshot is built. `last_seen_sha`, `last_synced_at` and `default_branch`
+      // were declared, read by toRecord and projected — and never written by
+      // anything, so they were permanently null on every Case Study. That is why
+      // repository-backed evidence could not be pinned to a commit: not because
+      // the sync did not know the sha, but because nobody stored it.
+      //
+      // It cannot fail the sync. A run that produced a good snapshot and then
+      // threw on bookkeeping would turn a complete result into a failed one.
+      const provenance = await writeRepoProvenance(analysis.analyzed, records, new Date());
+      if (provenance.failed > 0 || provenance.updated === 0) {
+        // A silent zero is the failure mode worth seeing: it means the columns
+        // stayed empty and nobody was told.
+        syncLog('case_study.repo_provenance_written', provenance.failed ? 'partial' : 'unchanged',
+          correlationId, { case_study_id: caseStudyId, ...provenance });
+      }
 
       for (const failure of analysis.failures.slice(0, MAX_RECORDED_REPO_ERRORS)) {
         const attached = byKey.get(repoKey(failure.repoOwner, failure.repoName));
