@@ -3,6 +3,8 @@
  *
  *   GET  /api/portal/cert-prep                      — availability + readiness summary
  *   GET  /api/portal/cert-prep/domains              — blueprint domains with per-domain state
+ *   GET  /api/portal/cert-prep/evidence             — objectives vs verified build evidence
+ *   POST /api/portal/cert-prep/evidence/refresh     — re-scan artifacts for candidates
  *   GET  /api/portal/cert-prep/sessions             — this student's sitting history
  *   POST /api/portal/cert-prep/sessions             — start a diagnostic / practice / mock
  *   GET  /api/portal/cert-prep/sessions/:id         — resume (safe items only)
@@ -39,6 +41,7 @@ import {
 } from '../services/certPrep/certSessionService';
 import { computeReadiness, recordReadinessSnapshot } from '../services/certPrep/certReadinessService';
 import { awardForCompletedSession } from '../services/certPrep/certPointsService';
+import { getEvidenceMap, proposeCandidates } from '../services/certPrep/certEvidenceService';
 
 const router = Router();
 const eid = (req: Request) => req.participant!.sub;
@@ -122,6 +125,52 @@ router.get('/api/portal/cert-prep/domains', requireParticipant, async (req: Requ
         state: readiness?.domain_breakdown.find((b) => b.domain_id === d.domain_id) ?? null,
       })),
     });
+  } catch (err) {
+    fail(res, err, next);
+  }
+});
+
+/**
+ * The evidence map: every blueprint objective with its state and, where it is not
+ * yet verified, the build that would close it.
+ */
+router.get('/api/portal/cert-prep/evidence', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  if (!gate(res)) return;
+  try {
+    const availability = await getCertAvailability(eid(req));
+    if (!availability.available) {
+      res.status(403).json({ error: 'Cert Prep is not available yet', code: 'CERT_PREP_NOT_AVAILABLE', availability });
+      return;
+    }
+    const map = await getEvidenceMap(eid(req), availability.trackId ?? undefined);
+    if (!map) {
+      res.status(409).json({ error: 'No certification blueprint is configured', code: 'CERT_NO_BLUEPRINT' });
+      return;
+    }
+    res.json(map);
+  } catch (err) {
+    fail(res, err, next);
+  }
+});
+
+/**
+ * Re-scan this student's artifacts for candidate evidence.
+ *
+ * Safe for a student to trigger: it can only ever create PENDING candidates, and
+ * the unique index means it cannot duplicate one or resurrect a rejected one.
+ * Verification remains an instructor action on a separate surface.
+ */
+router.post('/api/portal/cert-prep/evidence/refresh', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  if (!gate(res)) return;
+  try {
+    const availability = await getCertAvailability(eid(req));
+    if (!availability.available) {
+      res.status(403).json({ error: 'Cert Prep is not available yet', code: 'CERT_PREP_NOT_AVAILABLE', availability });
+      return;
+    }
+    const result = await proposeCandidates(eid(req), availability.trackId ?? undefined);
+    const map = await getEvidenceMap(eid(req), availability.trackId ?? undefined);
+    res.json({ ...result, map });
   } catch (err) {
     fail(res, err, next);
   }

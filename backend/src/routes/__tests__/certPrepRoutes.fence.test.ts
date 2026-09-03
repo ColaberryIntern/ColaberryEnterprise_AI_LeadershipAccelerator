@@ -132,7 +132,14 @@ jest.mock('../../models/CertResponse', () => ({
   __esModule: true,
   default: { findAll: jest.fn(async () => []), findOrCreate: jest.fn(async () => [{ save: jest.fn() }, true]) },
 }));
-jest.mock('../../models/CertEvidenceMapping', () => ({ __esModule: true, default: { findAll: jest.fn(async () => []) } }));
+jest.mock('../../models/CertEvidenceMapping', () => ({
+  __esModule: true,
+  default: { findAll: jest.fn(async () => []), findOrCreate: jest.fn(async () => [{}, true]), findByPk: jest.fn() },
+}));
+// Reached through certEvidenceService, which the router imports. The real models
+// call Model.init() at import time against the stubbed sequelize.
+jest.mock('../../models/PortfolioArtifact', () => ({ __esModule: true, default: { findAll: jest.fn(async () => []) } }));
+jest.mock('../../models/EvidenceRecord', () => ({ __esModule: true, default: { findAll: jest.fn(async () => []) } }));
 jest.mock('../../models/CertReadinessSnapshot', () => ({
   __esModule: true,
   default: { create: jest.fn(async (a: any) => a), findAll: jest.fn(async () => []) },
@@ -263,6 +270,30 @@ describe('authorization and isolation', () => {
     const res = await get(`/api/portal/cert-prep/sessions/${sessionId}`, OTHER_ENROLLMENT);
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('CERT_SESSION_NOT_FOUND');
+  });
+});
+
+describe('the evidence map', () => {
+  it('WEEK 6 cannot read it', async () => {
+    const res = await get('/api/portal/cert-prep/evidence', WEEK6_ENROLLMENT);
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('CERT_PREP_NOT_AVAILABLE');
+  });
+
+  it('WEEK 9 sees every objective, missing by default, each with a build action', async () => {
+    const res = await get('/api/portal/cert-prep/evidence', WEEK9_ENROLLMENT);
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(1);          // the single mocked domain has one objective
+    expect(res.body.verified).toBe(0);
+    expect(res.body.objectives[0].state).toBe('missing');
+    expect(res.body.objectives[0].recommended_action.kind).toBe('build');
+  });
+
+  it('a refresh can only ever propose PENDING candidates', async () => {
+    const res = await post('/api/portal/cert-prep/evidence/refresh', WEEK9_ENROLLMENT);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('proposed');
+    expect(res.body).toHaveProperty('considered');
   });
 });
 
