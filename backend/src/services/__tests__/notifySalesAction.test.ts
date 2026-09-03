@@ -98,6 +98,52 @@ describe('notify_sales', () => {
     expect(mockSendNewLeadAlert).toHaveBeenCalledWith(expect.objectContaining({ alreadyNotified: true }));
   });
 
+  describe("carrying the prospect's own words", () => {
+    // Found in production, not in review. Lead 24920 arrived through the live form with a
+    // written message, and the alert said "They did not write a message." The ingest
+    // normalizer files free-text under metadata.message and leaves the lead column empty,
+    // so reading only ctx.lead.message drops the most useful line in the email.
+    const withMessage = (leadMessage: any, normalized: Record<string, any>) => ({
+      ...ctx(),
+      lead: { ...ctx().lead, message: leadMessage },
+      normalized,
+    });
+
+    it('prefers the message on the lead when it is there', async () => {
+      mockSendNewLeadAlert.mockResolvedValue({ sent: true, to: 'a@b.test' });
+      await notifySales({ type: 'notify_sales' }, withMessage('on the lead', { message: 'normalized' }) as any);
+      expect(mockSendNewLeadAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ lead: expect.objectContaining({ message: 'on the lead' }) }),
+      );
+    });
+
+    it('falls back to the normalized message', async () => {
+      mockSendNewLeadAlert.mockResolvedValue({ sent: true, to: 'a@b.test' });
+      await notifySales({ type: 'notify_sales' }, withMessage('', { message: 'normalized words' }) as any);
+      expect(mockSendNewLeadAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ lead: expect.objectContaining({ message: 'normalized words' }) }),
+      );
+    });
+
+    it('falls back to normalized.metadata.message, which is where the form actually puts it', async () => {
+      mockSendNewLeadAlert.mockResolvedValue({ sent: true, to: 'a@b.test' });
+      await notifySales(
+        { type: 'notify_sales' },
+        withMessage('', { message: '', metadata: { message: 'what they typed' } }) as any,
+      );
+      expect(mockSendNewLeadAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ lead: expect.objectContaining({ message: 'what they typed' }) }),
+      );
+    });
+
+    it('does not invent a message when there genuinely is none', async () => {
+      mockSendNewLeadAlert.mockResolvedValue({ sent: true, to: 'a@b.test' });
+      await notifySales({ type: 'notify_sales' }, withMessage('', { message: '', metadata: {} }) as any);
+      const sent = mockSendNewLeadAlert.mock.calls[0][0];
+      expect(sent.lead.message).toBeFalsy();
+    });
+  });
+
   it('refuses a channel it cannot actually send to', async () => {
     // Slack is V2 and does not exist. Claiming to have sent to it would be the original
     // defect wearing a different label.
