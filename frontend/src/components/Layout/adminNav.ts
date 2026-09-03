@@ -57,6 +57,14 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/communications', label: 'Communications', icon: 'chat-3-line' },
     { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast-line' },
     { path: '/admin/visitors', label: 'Visitors', icon: 'eye-line' },
+    // Explorer Growth OS Command Center (spec §26). Deliberately in the
+    // Campaigns group: `section: 'campaigns'` is what the spec assigns the page,
+    // and it is the same section the BACKEND gate already classifies
+    // `/api/admin/explorer-growth` under (`mgmtSectionGate.ts`'s PATH_SECTION),
+    // so nav visibility and API access agree by construction rather than by
+    // luck. A link sitting in a group whose section the API does not recognise
+    // is a link that renders for someone the API will then 403.
+    { path: '/admin/explorer-growth', label: 'Explorer Growth', icon: 'radar-line' },
   ]},
   { label: 'Lead Ingestion', section: 'lead_ingestion', links: [
     { path: '/admin/sources', label: 'Sources', icon: 'upload-cloud-2-line' },
