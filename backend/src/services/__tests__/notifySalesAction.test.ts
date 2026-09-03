@@ -144,6 +144,38 @@ describe('notify_sales', () => {
     });
   });
 
+  describe('the role field', () => {
+    // Same mismatch as the message, found in the same delivered email: the alert said
+    // "Role: not given" for a submission that included "Head of Operations". Lead carries
+    // both `role` and `title`; the public form fills `role`.
+    it('falls back from title to role', async () => {
+      mockSendNewLeadAlert.mockResolvedValue({ sent: true, to: 'a@b.test' });
+      const c = { ...ctx(), lead: { ...ctx().lead, title: '', role: 'Head of Operations' } };
+      await notifySales({ type: 'notify_sales' }, c as any);
+      expect(mockSendNewLeadAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ lead: expect.objectContaining({ title: 'Head of Operations' }) }),
+      );
+    });
+
+    it('falls back to the normalized role', async () => {
+      mockSendNewLeadAlert.mockResolvedValue({ sent: true, to: 'a@b.test' });
+      const c = { ...ctx(), lead: { ...ctx().lead, title: '', role: '' }, normalized: { role: 'Ops Lead' } };
+      await notifySales({ type: 'notify_sales' }, c as any);
+      expect(mockSendNewLeadAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ lead: expect.objectContaining({ title: 'Ops Lead' }) }),
+      );
+    });
+
+    it('prefers an explicit title over role', async () => {
+      mockSendNewLeadAlert.mockResolvedValue({ sent: true, to: 'a@b.test' });
+      const c = { ...ctx(), lead: { ...ctx().lead, title: 'CTO', role: 'Head of Operations' } };
+      await notifySales({ type: 'notify_sales' }, c as any);
+      expect(mockSendNewLeadAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ lead: expect.objectContaining({ title: 'CTO' }) }),
+      );
+    });
+  });
+
   it('refuses a channel it cannot actually send to', async () => {
     // Slack is V2 and does not exist. Claiming to have sent to it would be the original
     // defect wearing a different label.
