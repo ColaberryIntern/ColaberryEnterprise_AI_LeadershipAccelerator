@@ -1,0 +1,188 @@
+/*
+ * Career Pathways Network — public site (opportunitylift.org).
+ *
+ * The palette, type, spacing, radius, shadow and motion here are NOT invented. They come
+ * from the CPN design system, vendored verbatim into `design/` from the Multi-Brand
+ * Tokens source. Variant A ("Grove") is the default: a deep green accent on warm ivory,
+ * Bitter headings over Atkinson Hyperlegible body, 12px radius.
+ *
+ * Read `design/DESIGN_SYSTEM.md` before changing anything here. Two rules from it are
+ * load-bearing and easy to break by accident:
+ *
+ *   1. ONE accent does all the work. One filled primary action per view; the accent marks
+ *      that action and active state, nothing else. `--accent-soft` is the only tint.
+ *   2. Reference semantic tokens (`--bg`, `--accent`, `--fg-muted`), never raw hex. The
+ *      contrast pairs are guaranteed by the token set, not by anything measured here.
+ *
+ * Atkinson Hyperlegible is not a stylistic preference. It was designed by the Braille
+ * Institute for low-vision readers, and the source system pairs it with "no thin weights
+ * anywhere - cheap phones, bad lighting." For a scholarship audience that is a functional
+ * requirement, so do not swap it for something that photographs better.
+ *
+ * Switching the whole site to variant B ("Vestry", purple) is one attribute on <html>:
+ * data-variant="vestry". Nothing in this file needs to change for that to work.
+ *
+ * Dependency-free by design. No framework, no build step beyond token substitution. This
+ * file is copied verbatim by packages/app-build (only .html is transformed), which is why
+ * it carries no {{brand.*}} tokens.
+ */
+
+@import url('design/colors.css');
+@import url('design/typography.css');
+@import url('design/spacing.css');
+@import url('design/motion.css');
+@import url('design/base.css');
+
+/* The design system switches themes on an attribute (`data-theme="dark"`), which needs a
+   deliberate choice somewhere. This site has no theme control and no JavaScript to set
+   one, so it honours the reader's OS preference instead.
+
+   These values MIRROR the `[data-theme="dark"]` block in design/colors.css. They are
+   duplicated because CSS cannot alias one selector's declarations to another - if that
+   file's dark set changes, change this too. The attribute still wins where it is set.
+
+   Kept here rather than in design/colors.css so that file stays a pristine copy of the
+   upstream export and can be re-vendored without losing this. Same placement, and same
+   reasoning, as the AI Flotation site. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101311;
+    --bg-elevated: #1A1E1A;
+    --fg: #F3F1E9;
+    --fg-muted: #B9B5A6;
+    --accent: #5CC08E;
+    --accent-contrast: #0B2417;
+    --accent-soft: #17352A;
+    --line: #33382F;
+    --success: #6BCB93;
+    --warning: #E3B341;
+    --danger: #F0736B;
+    --accent-hover: color-mix(in srgb, var(--accent) 88%, #fff);
+    --accent-press: color-mix(in srgb, var(--accent) 78%, #fff);
+  }
+
+  :root:not([data-theme="light"])[data-variant="vestry"] {
+    --bg: #14111A;
+    --bg-elevated: #1E1927;
+    --fg: #F1EDF6;
+    --fg-muted: #B3ABC0;
+    --accent: #B197E0;
+    --accent-contrast: #1D1030;
+    --accent-soft: #2C2140;
+    --line: #362E44;
+  }
+}
+
+:root {
+  /* A layout measure, not a brand token; the source takes no position on it. */
+  --wrap: 46rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Page. This is still the skeleton: it exists to prove domain resolution,
+   tracking, entry-point attribution and lead ingest end to end. What changed is
+   that it now wears CPN's real identity instead of a placeholder green I picked
+   before the design system existed. The real site is a separate design project.
+   --------------------------------------------------------------------------- */
+
+* { box-sizing: border-box; }
+
+main {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: var(--space-12) var(--page-padding) var(--space-16);
+}
+
+h1 { letter-spacing: -0.01em; margin-bottom: var(--space-2); }
+
+p.tagline {
+  color: var(--fg-muted);
+  font-size: var(--fs-h4);
+  margin: 0 0 var(--space-8);
+}
+
+.banner {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: var(--fs-caption);
+  color: var(--fg-muted);
+  margin-bottom: var(--space-8);
+}
+
+form {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  padding: var(--space-6);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+form h2 { margin: 0 0 var(--space-4); font-size: var(--fs-h4); }
+
+label {
+  display: block;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  margin: var(--space-4) 0 var(--space-1);
+}
+
+input, textarea {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  font: inherit;
+}
+
+input:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.consent {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin-top: var(--space-4);
+  font-size: var(--fs-caption);
+  color: var(--fg-muted);
+}
+
+.consent input { width: auto; min-height: 0; margin-top: 0.3rem; }
+
+button {
+  margin-top: var(--space-6);
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease);
+}
+
+button:hover:not(:disabled) { background: var(--accent-hover); }
+button:active:not(:disabled) { background: var(--accent-press); }
+button:disabled { opacity: 0.55; cursor: progress; }
+
+#status { margin-top: var(--space-4); font-size: var(--fs-caption); min-height: 1.4rem; }
+#status[data-state="ok"] { color: var(--success); }
+#status[data-state="error"] { color: var(--danger); }
+
+footer {
+  margin-top: var(--space-12);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-caption);
+  color: var(--fg-muted);
+}

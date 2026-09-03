@@ -1,16 +1,34 @@
 import { Op } from 'sequelize';
 import { Visitor, VisitorSession, PageEvent, Lead, Activity, EventLedger } from '../models';
 import { env } from '../config/env';
+import { categorizeForBrand } from './pageCategoryMaps';
 
 /**
  * Maps a URL path to a known page category.
  * Strips query parameters and trailing slashes before matching.
  */
-export function categorizePagePath(path: string): string {
+/**
+ * Decide what a page means, for the brand it belongs to.
+ *
+ * `brandSlug` is optional and the omission is meaningful, not lazy: when it is absent, or
+ * when the brand declares no map of its own, this falls through to the Colaberry route
+ * map below and behaves exactly as it always has. The platform is bit-for-bit unchanged.
+ *
+ * When a brand DOES declare a map, that map is authoritative and the Colaberry map is not
+ * consulted at all. This is the whole point. A shared fallback is how AI Flotation's
+ * `/about` came to be labelled `homepage` — Colaberry's rule, applied confidently to
+ * another company's page.
+ */
+export function categorizePagePath(path: string, brandSlug?: string | null): string {
   // Strip query parameters
   let cleaned = path.split('?')[0];
   // Strip trailing slashes (but keep leading slash)
   cleaned = cleaned.replace(/\/+$/, '') || '/';
+
+  if (brandSlug) {
+    const brandCategory = categorizeForBrand(cleaned, brandSlug);
+    if (brandCategory !== null) return brandCategory;
+  }
 
   const categoryMap: Record<string, string> = {
     '/': 'homepage',
