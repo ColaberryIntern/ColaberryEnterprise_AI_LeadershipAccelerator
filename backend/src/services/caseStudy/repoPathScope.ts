@@ -28,12 +28,24 @@ function normalise(prefix: string): string {
 }
 
 /**
- * Spec §37's bound, applied to prefixes rather than repositories. A scope is
- * typed by hand into an admin field and every prefix widens what one Case Study
- * claims to be about; twenty is far past any honest feature and still small
- * enough that the stored array cannot become a payload.
+ * The bound on how many prefixes one scope may carry.
+ *
+ * RAISED FROM 20 TO 40 ON 2026-09-02, deliberately and not to make anything pass.
+ * The first real scope this feature was built for - the learning system behind the
+ * "From AI Lessons to Verifiable AI Capability" case study - needs THIRTY file
+ * paths, and it needs them at file granularity for an honest reason: the five
+ * `services/cape/cape*` evidence files sit in a directory holding twenty more
+ * services about placement, diagnostics and governance that the story is NOT
+ * about. Prefixes match at segment boundaries, so there is no way to name those
+ * five without also claiming the other twenty.
+ *
+ * So 20 was a guess ("far past any honest feature") that its own first real use
+ * case disproved. The bound still exists, because an unbounded array on a write
+ * path is a payload rather than a setting - 40 is still small enough that the
+ * stored value cannot become one, and still small enough that a person can read
+ * the list and check it.
  */
-export const MAX_SCOPE_PREFIXES = 20;
+export const MAX_SCOPE_PREFIXES = 40;
 
 /**
  * The canonical form of a scope, as it is STORED.
