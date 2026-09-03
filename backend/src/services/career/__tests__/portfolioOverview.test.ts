@@ -125,3 +125,47 @@ describe('composeAbout', () => {
     expect(many).toContain('4 capabilities are');
   });
 });
+
+/**
+ * The descriptor guard. `content_json->system->descriptor` is not a one-line summary
+ * despite the name - it is the WHOLE deliverable document, and on 2026-09-03 this
+ * composer published its opening lines verbatim into a live public About block. These
+ * are regression cases against the real value.
+ */
+describe('composeAbout descriptor guard', () => {
+  const withDescriptor = (projectDescriptor: string) => composeAbout({
+    fullName: 'Ali Muwwakkil', headline: 'Managing Director',
+    experience: [role()], capabilityCount: 2, projectDescriptor,
+  }).join(' | ');
+
+  it('refuses the actual markdown document seen in production', () => {
+    const out = withDescriptor(`# Enterprise AI Strategy - Executive Deliverable
+
+**Organization:** Colaberry Enterprise AI Accelerator
+**Industry:** Education Technology / AI Training`);
+    expect(out).not.toContain('#');
+    expect(out).not.toContain('**');
+    expect(out).not.toContain('Organization:');
+  });
+
+  it('refuses anything carrying a line break, rather than truncating it', () => {
+    // The first 200 characters of a document is still a document.
+    expect(withDescriptor('A tidy first line.' + String.fromCharCode(10) + 'A second one.'))
+      .not.toContain('A tidy first line');
+  });
+
+  it('refuses markdown even on a single line', () => {
+    expect(withDescriptor('# A heading')).not.toContain('A heading');
+    expect(withDescriptor('- a bullet')).not.toContain('a bullet');
+    expect(withDescriptor('**bold lead**')).not.toContain('bold lead');
+  });
+
+  it('refuses a descriptor too long to be a sentence', () => {
+    expect(withDescriptor('x'.repeat(400))).not.toContain('xxx');
+  });
+
+  it('accepts a genuine one-line descriptor', () => {
+    const out = withDescriptor('A triage assistant that drafts support notes from ticket threads.');
+    expect(out).toContain('A triage assistant that drafts support notes');
+  });
+});
