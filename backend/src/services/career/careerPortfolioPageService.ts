@@ -318,6 +318,43 @@ async function buildPortfolio(
     }
   }
 
+  // The overview counters. Read LIVE and never frozen, for the same reason the capability
+  // band is: the system observes them, the learner does not author them.
+  //
+  // `evidence_records` is NOT the discredited count. Audited against production on
+  // 2026-09-03: 546 rows across deliverable / github_commit / prompt_lab / implementation
+  // / instructor_review, with not one consumption event among them. Every row is something
+  // the learner did, which is what makes it printable beside their name. The count this
+  // page previously refused came from `student_skill_evidence`, where all 8,895 rows are
+  // `source='timeline'` - a different table meaning a different thing.
+  let evidenceRecords: number | null = null;
+  let filesCommitted: number | null = null;
+  try {
+    const [rows]: any = await sequelize.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM evidence_records WHERE enrollment_id = $1) AS evidence,
+         (SELECT COALESCE(SUM(file_count), 0)::int FROM github_connections
+           WHERE enrollment_id = $1) AS files`,
+      { bind: [enrollmentId] },
+    );
+    const counts = rows?.[0];
+    evidenceRecords = typeof counts?.evidence === 'number' && counts.evidence > 0
+      ? counts.evidence : null;
+    filesCommitted = typeof counts?.files === 'number' && counts.files > 0
+      ? counts.files : null;
+  } catch (err: any) {
+    // A missing counter drops its own tile. It never costs the reader the whole page.
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_counters_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
+  // The About paragraph names the project the record is about, in the learner's own words.
+  const firstRecord: any = Array.isArray(records) ? (records as any[])[0] : null;
+
   return projectPublicPortfolio({
     // On an unapproved page `approvedIdentity` is null, so the reviewer sees the LIVE
     // headline -- which is the text they are being asked to approve.
@@ -326,6 +363,10 @@ async function buildPortfolio(
     capabilities,
     records,
     resume,
+    evidenceRecords,
+    filesCommitted,
+    projectName: firstRecord?.project_name ?? null,
+    projectDescriptor: firstRecord?.descriptor ?? null,
     generatedAt: now.toISOString(),
   });
 }
