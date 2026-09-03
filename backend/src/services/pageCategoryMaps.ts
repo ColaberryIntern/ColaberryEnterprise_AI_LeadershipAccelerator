@@ -63,6 +63,19 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       // Currently reads "We have nothing to show you here yet." The category describes
       // the surface, not its fill state, so it stays correct as the page gains content.
       '/results': 'case_studies',
+      // Added 2026-09-03, and it is the page this brand was missing. "Build membership
+      // ... why it is priced this way" is a genuine pricing page, so it earns `pricing`
+      // (35) directly - but the larger effect is combinatorial: with `/start` already
+      // `enroll` it completes `evaluation_pattern` (45), and alongside the `program`
+      // pages and `/results` it completes `research_pattern` (30). One page revives
+      // three signals worth 110 points, which is exactly the gap flagged when this map
+      // was written and the brand had nowhere to express price.
+      '/pricing': 'pricing',
+      // The methodology page: "Architecture of Trust", seven layers, how a build is
+      // held together. Same family as /what-we-build and /approach - it explains the
+      // offering rather than showcasing results or asking for anything - so `program`
+      // is the honest category. It is not case_studies: there are no outcomes on it.
+      '/trust-before-intelligence': 'program',
       // Deliberately NOT `homepage`. That was Colaberry's rule for its own /about, and
       // inheriting it here is the exact cross-brand leak this module exists to stop.
       '/about': 'about',
