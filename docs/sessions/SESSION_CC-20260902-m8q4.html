@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, September 2, 2026 at 8:55 PM</div>
-    <div><span class="sid">CC-20260902-m8q4</span><span class="count">11 changes</span></div>
+    <div class="meta">Generated Wednesday, September 2, 2026 at 10:14 PM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">12 changes</span></div>
   </header>
   <main>
     
@@ -222,6 +222,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">no flotation template anywhere under `backend/src/services/email*`; the design bundle&#39;s email is a React view inside the explorer app (`// Logos, Login, Email views`), not a droppable HTML file.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">`/start/` explicitly promises the opposite — *&quot;We do not send an automated confirmation, so nothing will land in your inbox from this form — saying otherwise would be a promise the system does not currently keep.&quot;* Styling an email here would mean **creating an outbound send** and rewriting that copy, which is a product decision rather than a restyle. Put to Ali; he chose to leave it. The honest state is recorded rather than quietly closed as done.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>**Verified the themed client room on dev, with a control that proves the blast radius is one brand**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in the repo — dev deployed at `928d84d9`, and one `brand_id` moved and moved back.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**the same token and the same project, shot twice, with only `brand_id` changed between them.** Before (`refactored`): `--accent` empty, no hairline, brand name `rgba(33, 37, 41, 0.75)` — the neutral surface. After (`ai-flotation`): `--accent` **#BA430E**, hairline **rgb(186, 67, 14)**, brand name in the same rust. Both screenshots opened and compared; every other pixel is identical. The pale-rust active nav item appears in **both**, so it is pre-existing Bootstrap styling and not something this change introduced.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the `DB_NAME` trap was checked before and after the dev deploy. `.env` on that worktree carries **two** `DB_NAME` lines, `accelerator_prod` then `accelerator_dev1`; the last wins, and the container resolved to `/accelerator_dev1` both times. Worth knowing before someone reorders that file. Dev data was restored to `refactored` afterwards, so the box is as it was found.</span></div>
           
         </div>
       </article>
