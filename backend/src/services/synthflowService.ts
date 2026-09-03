@@ -23,6 +23,11 @@ interface VoiceCallParams {
   name: string;
   phone: string;
   callType: 'welcome' | 'interest' | 'callback';
+  /**
+   * Which brand is calling. Absent means the Colaberry bootcamp agents, which is what
+   * every existing caller means and why this is optional rather than required.
+   */
+  brandSlug?: string;
   /** Dynamic prompt/instructions for the AI agent on this specific call */
   prompt?: string;
   /** Structured context passed as customer variables to the AI agent */
@@ -45,6 +50,33 @@ interface SynthflowResponse {
   success: boolean;
   data?: any;
   error?: string;
+}
+
+/**
+ * Which Synthflow agent should speak on this call.
+ *
+ * The agent carries its own knowledge base server-side, so this choice decides what the
+ * person on the phone is told about — and by whom.
+ *
+ * ## AI Flotation never falls back
+ *
+ * Every other route here degrades to a neighbouring agent when its slot is unset, which is
+ * reasonable while the agents all speak for the same business. AI Flotation does not: its
+ * prospect answering the phone to a Colaberry bootcamp agent is worse than no call at all,
+ * and it is the exact outcome the decision to give it its own agent was meant to prevent.
+ *
+ * So an unconfigured AI Flotation agent returns empty, and the caller skips deterministically
+ * rather than dialling with somebody else's voice.
+ */
+export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback'; brandSlug?: string }): string {
+  if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
+
+  // 'callback' (inbound "call me now") uses its own dedicated agent so it never
+  // conflates with Maya's proactive interest calls. Falls back to the interest
+  // agent when the callback slot is unset so the feature works with minimal config.
+  if (params.callType === 'welcome') return env.synthflowWelcomeAgentId;
+  if (params.callType === 'callback') return env.synthflowCallbackAgentId || env.synthflowInterestAgentId;
+  return env.synthflowInterestAgentId;
 }
 
 export async function triggerVoiceCall(params: VoiceCallParams): Promise<SynthflowResponse> {
@@ -70,14 +102,7 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { skipped: true, reason: 'no_api_key' } };
   }
 
-  // 'callback' (inbound "call me now") uses its own dedicated agent so it never
-  // conflates with Maya's proactive interest calls. Falls back to the interest
-  // agent when the callback slot is unset so the feature works with minimal config.
-  const agentId = params.callType === 'welcome'
-    ? env.synthflowWelcomeAgentId
-    : params.callType === 'callback'
-      ? (env.synthflowCallbackAgentId || env.synthflowInterestAgentId)
-      : env.synthflowInterestAgentId;
+  const agentId = resolveAgentId({ callType: params.callType, brandSlug: params.brandSlug });
 
   if (!agentId) {
     console.warn(`[Synthflow] No agent ID configured for ${params.callType}. Skipping.`);

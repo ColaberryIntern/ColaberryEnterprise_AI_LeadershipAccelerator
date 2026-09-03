@@ -161,13 +161,17 @@ export async function requestInstantCallback(
     name: payload.name,
     phone: targetPhone,
     callType: 'callback',
+    // The source IS the brand for this purpose: a callback requested from an
+    // ai-flotation surface must be spoken by the AI Flotation agent, and if that agent is
+    // not configured the call is skipped rather than handed to a bootcamp voice.
+    brandSlug: payload.source,
     context: {
       lead_name: payload.name,
       lead_company: payload.company || undefined,
       lead_title: payload.title || undefined,
       lead_email: payload.email,
       lead_interest: payload.interest_area || undefined,
-      step_goal: 'Inbound "call me now" — the prospect just asked on training.colaberry.com to be called right away.',
+      step_goal: `Inbound "call me now" — the prospect just asked on ${payload.source} to be called right away.`,
     },
   });
 
