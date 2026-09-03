@@ -9,12 +9,14 @@ import {
   AgentNotFoundError,
   ReportSubscriptionNotFoundError,
 } from '../../services/agentReportSubscriptionService';
+import { listReportRunsForAgent } from '../../services/agentReportRunService';
 import agentReportSubscriptionRoutes from '../../routes/admin/agentReportSubscriptionRoutes';
 
 jest.mock('../../services/agentReportSubscriptionService', () => {
   const actual = jest.requireActual('../../services/agentReportSubscriptionService');
   return { ...actual, createReportSubscription: jest.fn(), listReportSubscriptions: jest.fn(), updateReportSubscription: jest.fn() };
 });
+jest.mock('../../services/agentReportRunService', () => ({ listReportRunsForAgent: jest.fn() }));
 
 const mockOrgMemberFindOne = jest.fn();
 jest.mock('../../models/OrgMember', () => ({
@@ -30,6 +32,7 @@ jest.mock('../../services/workforce/orgChartHierarchyService', () => ({
 const mockCreateReportSubscription = createReportSubscription as unknown as jest.Mock;
 const mockListReportSubscriptions = listReportSubscriptions as unknown as jest.Mock;
 const mockUpdateReportSubscription = updateReportSubscription as unknown as jest.Mock;
+const mockListReportRunsForAgent = listReportRunsForAgent as unknown as jest.Mock;
 
 function buildApp() {
   const app = express();
@@ -185,5 +188,52 @@ describe('PATCH /api/admin/agents/:id/report-subscriptions/:subscriptionId', () 
       .send({ enabled: false });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/admin/agents/:id/report-runs', () => {
+  it('happy path: 200s with the real delivery history and success rate', async () => {
+    mockListReportRunsForAgent.mockResolvedValue({ windowDays: 30, runs: [{ id: 'run-1', deliveryStatus: 'sent' }], sent: 1, failed: 0, pending: 0, successRatePct: 100 });
+
+    const res = await request(buildApp())
+      .get('/api/admin/agents/agent-1/report-runs')
+      .set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.successRatePct).toBe(100);
+    expect(res.body.runs).toHaveLength(1);
+  });
+
+  it('boundary: a nonexistent agent 404s', async () => {
+    mockListReportRunsForAgent.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .get('/api/admin/agents/does-not-exist/report-runs')
+      .set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("auth: an admin outside this agent's reporting chain is 403d and the service is never called", async () => {
+    mockOrgMemberFindOne.mockResolvedValue({ id: 'org-member-1' });
+    mockIsAgentInHumanDownstream.mockResolvedValue(false);
+
+    const res = await request(buildApp())
+      .get('/api/admin/agents/agent-1/report-runs')
+      .set('Authorization', `Bearer ${managerToken()}`);
+
+    expect(res.status).toBe(403);
+    expect(mockListReportRunsForAgent).not.toHaveBeenCalled();
+  });
+
+  it('failure: an unexpected service error 500s without leaking the raw message', async () => {
+    mockListReportRunsForAgent.mockRejectedValue(new Error('db unavailable'));
+
+    const res = await request(buildApp())
+      .get('/api/admin/agents/agent-1/report-runs')
+      .set('Authorization', `Bearer ${superAdminToken()}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).not.toMatch(/db unavailable/);
   });
 });

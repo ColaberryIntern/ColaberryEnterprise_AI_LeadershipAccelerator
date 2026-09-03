@@ -1,5 +1,16 @@
 import { logActivity } from './activityService';
-import { Campaign } from '../models';
+import { Campaign, CommunicationLog } from '../models';
+import { sendNewLeadAlert } from './emailService';
+import { logCommunication } from './communicationLogService';
+
+/**
+ * Marks the audit rows this handler writes, so the dedup query is unambiguous.
+ *
+ * Carried in `metadata` rather than a dedicated column: CommunicationLog has no
+ * `template` field, and inventing one would mean a migration for a marker. `provider`
+ * was the other candidate and is wrong - it means the transport, not the purpose.
+ */
+const NEW_LEAD_ALERT_PURPOSE = 'new_lead_alert';
 
 /**
  * A routing action execution context. `lead` is the Sequelize Lead instance,
@@ -28,16 +39,93 @@ const tagLead: ActionHandler = async (action, ctx) => {
   return { ok: true, detail: { tag } };
 };
 
+/**
+ * Tell a human that a lead arrived.
+ *
+ * WHAT THIS REPLACED, AND WHY IT MATTERED
+ *
+ * This handler used to write an Activity row and `return { ok: true }` with a comment
+ * saying real wiring would arrive later. It never did. So the routing engine reported a
+ * successful notification for every matching lead and sent nothing — and unlike a missing
+ * handler, which is an absence somebody eventually notices, a handler returning `ok` is a
+ * positive signal that is false. Every dashboard, test and operator reading routing
+ * outcomes would have believed it.
+ *
+ * It is the same failure this repo already legislates against — `not_run != pass`,
+ * `waived != pass` — applied to a side effect instead of a check.
+ *
+ * So the contract here is: **send, or say why not.** Never both silent and green.
+ */
 const notifySales: ActionHandler = async (action, ctx) => {
-  // Stub: emit an Activity row; real email/slack wiring arrives with
-  // the sales notification service. Not blocking ingest.
+  const channel = String(action.channel || 'email');
+  if (channel !== 'email') {
+    // Slack is V2 and does not exist. Claiming to have sent to it would repeat exactly
+    // the defect this handler was rewritten to remove.
+    return { ok: false, error: `unsupported_channel:${channel}` };
+  }
+
+  // One lead, one alert, forever — not a time window. A lead is ingested once, so a
+  // second alert for the same lead is always a duplicate however long the gap. Keyed on
+  // the audit log rather than an in-memory guard, so a restart cannot re-send.
+  const alreadyNotified = Boolean(await CommunicationLog.findOne({
+    where: { lead_id: ctx.lead.id, channel: 'email', status: 'sent', metadata: { purpose: NEW_LEAD_ALERT_PURPOSE } },
+    attributes: ['id'],
+  }));
+
+  const result = await sendNewLeadAlert({
+    lead: {
+      id: ctx.lead.id,
+      name: ctx.lead.name,
+      email: ctx.lead.email,
+      company: ctx.lead.company,
+      phone: ctx.lead.phone,
+      title: ctx.lead.title,
+      message: ctx.lead.message,
+      source: ctx.lead.source || ctx.source_slug,
+    },
+    recipients: action.to,
+    convertUrl: action.convert_url,
+    alreadyNotified,
+  });
+
+  // Logged whichever way it went, so "we thought we told someone" is answerable later.
+  try {
+    await logCommunication({
+      lead_id: ctx.lead.id,
+      channel: 'email',
+      delivery_mode: result.sent ? 'live' : 'blocked',
+      status: result.sent ? 'sent' : 'blocked',
+      to_address: result.to || null,
+      subject: `New lead alert: ${ctx.lead.id}`,
+      provider: 'smtp',
+      provider_message_id: result.messageId || null,
+      metadata: { purpose: NEW_LEAD_ALERT_PURPOSE },
+      error_message: result.sent ? null : result.reason || 'not_sent',
+    } as any);
+  } catch (logErr: any) {
+    // A failed audit write must not turn a delivered alert into a reported failure.
+    console.error('[Routing] new-lead alert logged failed:', logErr?.message);
+  }
+
   await logActivity({
     lead_id: ctx.lead.id,
     type: 'system',
-    subject: `Sales notification triggered (${action.channel || 'email'})`,
-    metadata: { subtype: 'routing_action', action_type: 'notify_sales', ...action },
+    subject: result.sent
+      ? `Sales notified by email (lead ${ctx.lead.id})`
+      : `Sales notification NOT sent: ${result.reason}`,
+    metadata: { subtype: 'routing_action', action_type: 'notify_sales', sent: result.sent, reason: result.reason },
   });
-  return { ok: true, detail: { channel: action.channel || 'email' } };
+
+  if (!result.sent) {
+    // `already_notified` is the one non-send that is a correct outcome rather than a
+    // problem: the human was told the first time. Reported as ok with the reason, so it
+    // does not raise a failure alarm on every replay.
+    if (result.reason === 'already_notified') {
+      return { ok: true, detail: { channel, sent: false, reason: result.reason } };
+    }
+    return { ok: false, error: result.reason || 'not_sent' };
+  }
+  return { ok: true, detail: { channel, sent: true, to: result.to, message_id: result.messageId } };
 };
 
 const sendPdf: ActionHandler = async (action, ctx) => {
