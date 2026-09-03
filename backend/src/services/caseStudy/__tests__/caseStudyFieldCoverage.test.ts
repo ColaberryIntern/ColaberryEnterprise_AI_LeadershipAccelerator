@@ -66,8 +66,14 @@ describe('Case Study field coverage — drift guard', () => {
     // Regenerating and comparing is what makes the other assertions trustworthy:
     // without it, someone could add a field, hand-write an entry saying anything,
     // and the map would agree with itself while disagreeing with the code.
+    // Line endings are NORMALISED before comparing. `core.autocrlf` rewrites the
+    // committed file to CRLF on checkout on Windows while the generator emits LF,
+    // so a raw comparison fails on a difference that is an environment property
+    // rather than a content one — and a test that fails for the wrong reason gets
+    // disabled rather than fixed.
+    const lf = (t: string): string => t.replace(/\r\n/g, '\n');
     const expected = JSON.stringify(build(), null, 2) + '\n';
-    expect(fs.readFileSync(coveragePath(), 'utf8')).toEqual(expected);
+    expect(lf(fs.readFileSync(coveragePath(), 'utf8'))).toEqual(lf(expected));
   });
 
   it('never marks an internal-only field as publicly projected', () => {
