@@ -10,6 +10,7 @@ import organizationRoutes from './admin/organizationRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
+import explorerGrowthRoutes from './admin/explorerGrowthRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
@@ -157,6 +158,14 @@ router.use(caseStudyStudioRoutes);
 // `/api/admin/case-studies`, so `mgmtSectionGate`'s existing `program` row
 // already covers it.
 router.use(caseStudyMetricRoutes);
+// Explorer Growth OS Command Center (spec 27). Mounted like every sibling: no
+// path prefix here, because the sub-router declares full /api/admin paths and
+// carries its own PATH-SCOPED requireAdmin. Its paths sit under
+// /api/admin/explorer-growth, which mgmtSectionGate classifies as campaigns
+// (see the PATH_SECTION row) - a new prefix left unmapped would be
+// deny-by-default for every scoped management role while legacy admin passed,
+// which is a surface that half-works and looks fine.
+router.use(explorerGrowthRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
 router.use(settingsRoutes);
