@@ -114,6 +114,12 @@ interface ClientEngagement {
 interface ClientBrand {
   id: string;
   name?: string;
+  /**
+   * Names a theme; never carries colours. The client resolves it against the registry in
+   * theme/deliveryBrandThemes.ts, so the palette can change without a schema change and
+   * an unknown key simply renders the neutral surface.
+   */
+  default_theme_key?: string | null;
 }
 
 interface ProjectDetail {
@@ -426,6 +432,7 @@ const ClientPortal: React.FC = () => {
     <div className="min-vh-100 bg-light py-3 px-2 px-lg-3">
       <DeliveryShell
         brandName={brand?.name ?? null}
+        themeKey={brand?.default_theme_key ?? null}
         audienceLabel="Client review"
         audienceTone="client"
         projectName={project.name ?? 'Untitled project'}

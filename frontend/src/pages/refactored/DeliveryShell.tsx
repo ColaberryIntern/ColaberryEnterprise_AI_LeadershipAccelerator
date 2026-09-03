@@ -1,4 +1,5 @@
 import React from 'react';
+import { themeForBrand, themeStyle } from '../../theme/deliveryBrandThemes';
 
 /**
  * DeliveryShell — the chrome both halves of the Refactored Delivery OS share.
@@ -41,6 +42,15 @@ export interface DeliveryShellProps {
    * no imagery at all.
    */
   brandName?: string | null;
+  /**
+   * The owning brand's `default_theme_key`, straight from the client payload.
+   *
+   * A key the registry does not know - and a null, which is every brand that has no
+   * agreed palette - renders exactly the neutral surface this shell rendered before
+   * theming existed. That is the property that makes it safe to theme one brand without
+   * touching what another brand's client sees.
+   */
+  themeKey?: string | null;
   personName: string;
   personRole: string;
   sections: readonly DeliverySection[];
@@ -65,6 +75,7 @@ const DeliveryShell: React.FC<DeliveryShellProps> = ({
   projectName,
   engagementName,
   brandName,
+  themeKey,
   personName,
   personRole,
   sections,
@@ -74,15 +85,25 @@ const DeliveryShell: React.FC<DeliveryShellProps> = ({
   children,
 }) => {
   const active = sections.find((s) => s.key === activeKey) ?? sections[0];
+  const theme = themeForBrand(themeKey);
 
   return (
-    <div className="container-fluid px-0">
+    <div className="container-fluid px-0" style={themeStyle(theme)}>
       <div className="card border-0 shadow-sm overflow-hidden">
+        {/*
+          A themed room gets a hairline of its brand's accent along the top. A mark is
+          still not drawn - the reasoning above has not changed, and a colour is something
+          the brand chose while a logo would be something we drew for them.
+        */}
+        {theme && <div style={{ height: 3, background: 'var(--accent)' }} />}
         {/* Top bar */}
         <div className="d-flex align-items-center gap-2 px-3 py-2 border-bottom bg-white flex-wrap">
           {/* The brand's NAME, not a mark. See brandName above for why no logo is drawn. */}
           {brandName && (
-            <span className="fw-semibold text-uppercase small text-muted" style={{ letterSpacing: '.06em' }}>
+            <span
+              className={`fw-semibold text-uppercase small${theme ? '' : ' text-muted'}`}
+              style={{ letterSpacing: '.06em', ...(theme ? { color: 'var(--accent)' } : {}) }}
+            >
               {brandName}
             </span>
           )}
