@@ -1,0 +1,40 @@
+/* Career Pathways Network — color tokens. Source of truth: exports/cpn.tokens.json (systemIds cpn-a "Grove", cpn-b "Vestry").
+   Default scope = Grove (Option A). Dark mode: data-theme="dark" on <html>. Vestry: data-variant="vestry" on <html>.
+   All five AA pairs are guaranteed in every scope (measured ratios in exports/cpn.*.payload.json). */
+:root{
+  --system-id:"cpn-a"; /* @kind other */
+  --bg:#FFFDF8; --bg-elevated:#FFFFFF;
+  --fg:#1C1B18; --fg-muted:#4E4B42;
+  --accent:#1D6A4C; --accent-contrast:#FFFFFF; --accent-soft:#DFF0E6;
+  --line:#DDD8CB;
+  --success:#256C3A; --warning:#8A5A00; --danger:#B3261E;
+  --accent-hover:color-mix(in srgb, var(--accent) 88%, #000);
+  --accent-press:color-mix(in srgb, var(--accent) 78%, #000);
+  --focus-ring:0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+  --shadow:0 1px 4px rgba(28,27,24,0.14);
+}
+[data-theme="dark"]{
+  --bg:#101311; --bg-elevated:#1A1E1A;
+  --fg:#F3F1E9; --fg-muted:#B9B5A6;
+  --accent:#5CC08E; --accent-contrast:#0B2417; --accent-soft:#17352A;
+  --line:#33382F;
+  --success:#6BCB93; --warning:#E3B341; --danger:#F0736B;
+  --accent-hover:color-mix(in srgb, var(--accent) 88%, #fff);
+  --accent-press:color-mix(in srgb, var(--accent) 78%, #fff);
+}
+[data-variant="vestry"]{
+  --system-id:"cpn-b"; /* @kind other */
+  --bg:#FCFAF7; --bg-elevated:#FFFFFF;
+  --fg:#221D28; --fg-muted:#57505F;
+  --accent:#6D4CA3; --accent-contrast:#FFFFFF; --accent-soft:#EDE6F7;
+  --line:#DFD9D2;
+  --success:#256C3A; --warning:#8A5A00; --danger:#B3261E;
+  --shadow:0 1px 4px rgba(30,24,38,0.14);
+}
+[data-variant="vestry"][data-theme="dark"]{
+  --bg:#14111A; --bg-elevated:#1E1927;
+  --fg:#F1EDF6; --fg-muted:#B3ABC0;
+  --accent:#B197E0; --accent-contrast:#1D1030; --accent-soft:#2C2140;
+  --line:#362E44;
+  --success:#6BCB93; --warning:#E3B341; --danger:#F0736B;
+}
