@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, September 2, 2026 at 8:23 PM</div>
-    <div><span class="sid">CC-20260902-m8q4</span><span class="count">9 changes</span></div>
+    <div class="meta">Generated Wednesday, September 2, 2026 at 8:55 PM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">11 changes</span></div>
   </header>
   <main>
     
@@ -192,6 +192,36 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**117 assertions against the live domain in a real browser, zero failures.** On every one of the seven pages: headings computed as **Space Grotesk**, body **Archivo**, `--accent` **#BA430E**, `--bg` **#F7F6F4**, the stylesheet URL content-addressed, no horizontal overflow at 360×800, and every button clearing 4.5:1. Zero console errors, zero failed subresources. `live-home-desktop.png` opened and looked at. The stamped URL `/assets/site.css?v=ed056639` was confirmed to serve CSS containing `Space Grotesk` and `:not(.btn)`.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**the deploy was deliberately held until #2033 merged.** Republishing the rebrand at the same `site.css` URL would have put it behind the same four-hour edge cache that hid this morning&#39;s fix. Landing the fingerprinting first meant the new HTML pointed at a URL that had never been cached, so the change was live on the first request instead of in four hours. This is the whole argument for the fingerprinting, tested in production the same day it was written.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>**Built the theme layer `brands.default_theme_key` had been waiting for**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`frontend/src/theme/deliveryBrandThemes.ts` (new registry), `DeliveryShell.tsx` (accepts `themeKey`, applies the tokens as custom properties and an accent hairline), `ClientPortal.tsx` (passes the key through), `clientVisibility.ts` (`default_theme_key` added to the client brand allowlist).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**773 tests across 36 suites pass** over `services/delivery` and `modules/delivery`, including the allowlist contract. Frontend `tsc --noEmit` clean. The parity test was **proved by breaking it**: changing `--accent` to `#BA430F` failed two assertions naming the token and both values, then was reverted.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the tokens are duplicated from `apps/ai-flotation-public/src/assets/design/colors.css` because `frontend/` importing from `apps/` is the exact edge `validate-app-boundaries.js` forbids — the alternative to duplication is a boundary violation, not a shared import. `deliveryBrandThemes.test.ts` parses both files and fails on any disagreement, so the copy cannot drift into a second, slightly different rust.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>**Established that there is no AI Flotation email to restyle**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing — investigation, and a decision not to build.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no flotation template anywhere under `backend/src/services/email*`; the design bundle&#39;s email is a React view inside the explorer app (`// Logos, Login, Email views`), not a droppable HTML file.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`/start/` explicitly promises the opposite — *&quot;We do not send an automated confirmation, so nothing will land in your inbox from this form — saying otherwise would be a promise the system does not currently keep.&quot;* Styling an email here would mean **creating an outbound send** and rewriting that copy, which is a product decision rather than a restyle. Put to Ali; he chose to leave it. The honest state is recorded rather than quietly closed as done.</span></div>
           
         </div>
       </article>
