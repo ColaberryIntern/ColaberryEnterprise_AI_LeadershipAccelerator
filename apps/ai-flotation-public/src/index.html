@@ -17,10 +17,10 @@
       <div class="wrap bar">
         <a class="logo" href="/">
           <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="7" r="4" fill="#b4813a"></circle>
-            <path d="M2 15h20" stroke="#16304f" stroke-width="2"></path>
-            <circle cx="6" cy="19.5" r="2" fill="#16304f" opacity=".35"></circle>
-            <circle cx="17" cy="20" r="1.5" fill="#16304f" opacity=".25"></circle>
+            <circle class="mark-float" cx="12" cy="7" r="4"></circle>
+            <path class="mark-line" d="M2 15h20" stroke-width="2"></path>
+            <circle class="mark-sunk" cx="6" cy="19.5" r="2" opacity=".35"></circle>
+            <circle class="mark-sunk" cx="17" cy="20" r="1.5" opacity=".25"></circle>
           </svg>
           AI Flotation
         </a>
@@ -41,14 +41,36 @@
       <section class="hero">
         <div class="wrap">
           <p class="eyebrow">Controlled lift</p>
-          <h1 style="margin-top:.7rem">The work your business runs on is invisible. We surface it, then govern it.</h1>
+          <h1 style="margin-top:.7rem">Tell us what you want to build. We take it from there.</h1>
           <p class="sub" style="margin-top:1rem">
-            AI Flotation turns a costly manual workflow into an operating system you can see:
-            every decision on the record, evidence before anything ships, and a person holding
-            every gate.
+            An idea, a workflow that costs you every morning, or a system you already have.
+            AI speed, human quality, and you holding every decision that matters.
           </p>
+
+          <!--
+            The idea comes first, the form comes later.
+
+            This replaced a hero whose only action was a link to a five-field form. Seven
+            people reached that form in the site's first four days and none of them filled
+            it in - which is what asking a stranger to describe their business before
+            showing them anything usually earns.
+
+            Nothing is submitted here. The text is handed to /start/ so the first thing
+            somebody types is kept, not re-typed. A GET with the idea in the query keeps
+            this working with no JavaScript at all, which matters because this is the one
+            control on the page that has to work.
+          -->
+          <form class="idea" action="/start/" method="get">
+            <label class="idea-label" for="idea">What do you want to build?</label>
+            <div class="idea-row">
+              <input id="idea" name="idea" type="text" autocomplete="off"
+                     placeholder="A system that tells dispatch which jobs are at risk" />
+              <button class="btn btn-primary" type="submit" data-cta="Start with your idea">Start</button>
+            </div>
+            <p class="idea-note">No account, no call booked. We read it and come back to you about the work.</p>
+          </form>
+
           <div class="cta-row">
-            <a class="btn btn-primary" href="/start/" data-cta="Start a project">Start a project</a>
             <a class="btn btn-ghost" href="/approach/">How it works</a>
           </div>
 
@@ -104,7 +126,7 @@
         <div class="wrap">
           <p class="eyebrow quiet">How it works</p>
           <h2>Six stages, in this order</h2>
-          <p class="measure" style="color:var(--muted)">
+          <p class="measure" style="color:var(--fg-muted)">
             The order is the product. Each stage produces something the next one needs, and
             nothing skips ahead because a build happened to finish.
           </p>
@@ -124,7 +146,7 @@
         <div class="wrap">
           <p class="eyebrow quiet">Delivery standard</p>
           <h2>You can watch it happen</h2>
-          <p class="measure" style="color:var(--muted)">
+          <p class="measure" style="color:var(--fg-muted)">
             Clients get their own room in the system. Not a status email &mdash; the actual record:
             what was decided, what shipped, and the evidence behind it, including the checks that
             were waived and why.
@@ -142,8 +164,8 @@
 
       <section class="band">
         <div class="wrap" style="align-items:flex-start">
-          <h2>Show us the workflow that is costing you.</h2>
-          <p class="measure" style="color:var(--muted)">
+          <h2>Tell us what you want to build.</h2>
+          <p class="measure" style="color:var(--fg-muted)">
             The first conversation is about the work, not about AI. If there is no system worth
             building, we will tell you that.
           </p>
