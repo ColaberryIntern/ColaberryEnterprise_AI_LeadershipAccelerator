@@ -78,7 +78,18 @@ Reusing the training agent would have an AI Flotation prospect spoken to by a bo
 agent. Adding a fourth is cheap. But it is a product and brand decision, not an
 implementation detail.
 
-→ **ESCALATION-2.**
+→ **ESCALATION-2 — RULED 2026-09-03: AI Flotation gets its own agent.**
+
+A fourth Synthflow agent, not reuse of the callback agent. Consequences to build against:
+
+- its **own knowledge base**, attached server-side, speaking about AI Flotation rather than the bootcamp
+- its **own phone number**, which is what a prospect sees and calls back
+- its **own consent text and record** — `CALLBACK_CONSENT_TEXT` is written for the training callback and must not be silently reused for a different company
+- **separable call volume** in reporting, which the Delivery Economics Engine needs to attribute voice minutes per free session
+
+A new `SYNTHFLOW_*_AGENT_ID` env key follows the existing naming, and the deterministic
+`skipped` status already covers the window where the key is unset — so the flow degrades
+to a no-op rather than calling the wrong agent.
 
 ## Scope correction for Gate 3
 

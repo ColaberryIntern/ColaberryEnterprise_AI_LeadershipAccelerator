@@ -69,7 +69,18 @@ in the contract are the expensive parts and they are already built; only the own
 column is wrong. But nullable-ing a non-null FK on a live table is a schema decision and
 belongs to the DRI, not to implementation.
 
-→ **ESCALATION-3.**
+→ **ESCALATION-3 — RULED 2026-09-03: option 1 approved by the DRI.**
+
+`GitHubConnection.enrollment_id` becomes nullable and gains `delivery_project_id`. One
+repo-connection concept serves students and commercial clients, and the expensive parts —
+verification, token custody, revocation handling — are reused rather than duplicated.
+
+**The cost of that choice, stated plainly:** every existing reader assumes an enrollment is
+present. Making the column nullable does not make those readers safe; it makes them
+*wrong at runtime instead of at the schema*. Before this ships, every consumer of
+`GitHubConnection` must be audited for an unguarded `enrollment_id`, and the migration
+must be paired with tests that construct a connection with a null enrollment and a
+delivery project. That audit is Gate 9's first task, not an afterthought.
 
 ## Custody principle to preserve
 

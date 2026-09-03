@@ -3,7 +3,7 @@
   "checkpoint": "A",
   "gate": 0,
   "gate_name": "Discovery + contracts",
-  "status": "awaiting_signoff",
+  "status": "escalations_resolved",
   "feature_code_written": false,
   "session": "CC-20260902-m8q4",
   "date": "2026-09-03",
@@ -64,7 +64,15 @@
       "blocks": [
         "Gate 7"
       ],
-      "note": "a separate workstream was exploring Stripe as an international rail; reconcile rather than decide twice"
+      "note": "a separate workstream was exploring Stripe as an international rail; reconcile rather than decide twice",
+      "status": "resolved",
+      "ruling": "REUSE the existing term-subscription pattern on PaySimple one-time checkout; do NOT introduce an auto-charging provider yet",
+      "ruled_by": "DRI (Ali)",
+      "ruled_on": "2026-09-03",
+      "interpretation_note": "DRI answered 'ok' to the narrowed choice; read as assent to the reuse option because introducing a paid external provider is a governance boundary and the safe reading of an ambiguous assent is the one that adds no dependency. Flagged to the DRI for correction.",
+      "unblocks": [
+        "Gate 7"
+      ]
     },
     {
       "id": "ESCALATION-2",
@@ -73,7 +81,15 @@
       "blocks": [
         "Gate 3"
       ],
-      "note": "changes who owns the phone number and the consent record"
+      "note": "changes who owns the phone number and the consent record",
+      "status": "resolved",
+      "ruling": "AI Flotation gets its OWN Synthflow agent - a fourth agent, not reuse of the callback agent",
+      "ruled_by": "DRI (Ali)",
+      "ruled_on": "2026-09-03",
+      "consequence": "own knowledge base, own phone number, own consent text and record, separable call volume in reporting",
+      "unblocks": [
+        "Gate 3"
+      ]
     },
     {
       "id": "ESCALATION-3",
@@ -84,6 +100,15 @@
       "blocks": [
         "Gate 9",
         "Gate 15 delivery-ready gate"
+      ],
+      "status": "resolved",
+      "ruling": "APPROVED - option 1: make GitHubConnection.enrollment_id nullable and add delivery_project_id",
+      "ruled_by": "DRI (Ali)",
+      "ruled_on": "2026-09-03",
+      "consequence": "one repo-connection concept serves students and commercial clients; the verification loop, token custody and revocation handling are reused rather than duplicated. Every existing reader that assumes an enrollment is present must be audited.",
+      "unblocks": [
+        "Gate 9",
+        "delivery-ready gate"
       ]
     }
   ],
@@ -130,7 +155,7 @@
     "note": "the CI config is the gate; scoped local runs miss contract suites. Local tsc is unusable - the only resolvable TypeScript is the root-hoisted 4.9.5, which cannot parse @types/d3-dispatch or zod/v4"
   },
   "gate_0_complete": true,
-  "next_action": "Gate 0 artifacts complete. Resolve ESCALATION-1 (billing provider), ESCALATION-2 (voice agent ownership) and ESCALATION-3 (repo connection enrollment coupling). Recommended before Gate 1: fix the lead-ingest notification (DEFECT-1). Do not begin Gate 1 until signed off.",
+  "next_action": "All three escalations ruled 2026-09-03. Recommended first: DEFECT-1, the lead-ingest notification, ahead of Gate 1.",
   "pricing_input": {
     "supplied_by": "DRI (Ali), 2026-09-03",
     "note": "recorded as business configuration; Claude did not choose these (plan section 25)",

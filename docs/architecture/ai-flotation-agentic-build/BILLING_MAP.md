@@ -38,9 +38,23 @@ Flotation client has no enrollment. Third instance of the enrollment coupling de
 or is not current — but it means renewal is an operational act until PaySimple recurring
 is enabled or another provider is approved.
 
-→ **ESCALATION-1** remains open, but is *narrower* than first recorded: the platform has a
-working term-subscription pattern. The decision is only whether to (a) reuse it for
-commercial clients, accepting manual renewal, or (b) introduce an auto-charging provider.
+→ **ESCALATION-1 — RULED 2026-09-03: reuse the existing term-subscription pattern.**
+
+No auto-charging provider is introduced. A commercial plan is a term that a discrete
+PaySimple hosted payment extends, exactly as `Subscription` already works, with
+`paysimple_schedule_id` still reserved for the day recurring is enabled.
+
+*Interpretation note:* the DRI answered "ok" to the narrowed choice. That is read as assent
+to reuse, because introducing a paid external provider is a governance boundary and the
+safe reading of an ambiguous assent is the option that adds no dependency. Flagged for
+correction rather than assumed silently.
+
+**What reuse actually costs, stated plainly:** renewal becomes an operational act. A term
+ends, and unless someone acts, an active build lane lapses. That is survivable at a
+handful of clients and is not survivable at fifty. Two things must therefore ship with it:
+
+- **a lapse is storable state, not an inference.** `Subscription.status` already has `past_due` for exactly this reason — its comment notes that before recurring billing there was nothing to record, so a lapse was inferred on a dashboard and no code could act on it.
+- **entitlement is checked at execution time**, not at checkout time. §28's rule — payment success must not immediately run code; payment confirmed → entitlement active → activation allowed — matters more, not less, when renewal is manual.
 
 ## 3. Pricing — business configuration, supplied by the DRI
 
