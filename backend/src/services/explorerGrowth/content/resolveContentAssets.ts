@@ -88,8 +88,18 @@ const RESOLVE_SQL = `
    LIMIT :max_rows
 `;
 
-/** Postgres array literal for a text[] bind. */
-function pgArray(values: readonly string[]): string {
+/**
+ * Postgres array literal for a text[] bind.
+ *
+ * Exported because the Command Center's Content tab binds the same `kinds` and
+ * stage arrays and must render them identically. Sequelize's `replacements` is
+ * TEXTUAL substitution, not a server-side bind: passing a raw JS array yields
+ * `CAST('LESSON' AS text[])`, which Postgres rejects with "malformed array
+ * literal", and a two-element array yields `CAST('A', 'B' AS text[])`, a syntax
+ * error. A second copy of this function would be one refactor away from
+ * diverging on the escaping rule.
+ */
+export function pgArray(values: readonly string[]): string {
   return `{${values.map((v) => `"${String(v).replace(/(["\\])/g, '\\$1')}"`).join(',')}}`;
 }
 
