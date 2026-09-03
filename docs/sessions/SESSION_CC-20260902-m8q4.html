@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, September 2, 2026 at 4:19 PM</div>
-    <div><span class="sid">CC-20260902-m8q4</span><span class="count">6 changes</span></div>
+    <div class="meta">Generated Wednesday, September 2, 2026 at 8:02 PM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">8 changes</span></div>
   </header>
   <main>
     
@@ -147,6 +147,36 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">measured the element&#39;s box — **13×13px**, was rendering 44px square.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">`form.intake input` is (0,1,2) and `.consent input` is (0,1,1), so the consent checkbox inherited the text-field sizing and rendered as a large empty square next to its label. **Every assertion passed while it was broken** — same as the masthead button earlier today. It was caught by opening the mobile screenshot, which is the second time in one session that looking found what measuring did not.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**Content-addressed every built asset, so a deploy cannot be invisible again**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`packages/app-build/index.js` — a `fingerprintAssets` pass stamps every asset reference with a content hash (`/assets/site.css?v=ed056639`), rewriting to a fixed point so an imported file is stamped before its importer&#39;s own hash is final.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">13 tests across 3 suites pass, 5 of them new and covering the chain, idempotency, external URLs and the page-link exclusion. All three apps (`ai-flotation-public`, `cpn-public`, `refactored-public`) build. Boundaries clean. The 69-check site harness still passes with versioned URLs. Confirmed in the artifact: `href=&quot;/assets/site.css?v=ed056639&quot;`, `url(&#39;design/colors.css?v=351638dc&#39;)`, and `href=&quot;/about/&quot;` left alone.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the accessibility fix deployed earlier today was invisible in production.** The container served the corrected CSS and Cloudflare kept handing visitors the old copy — `cf-cache-status: HIT`, `Age: 1553`, `max-age=14400`. Every signal said the deploy worked: container running, file on disk correct, CI green, exit code 0. Only fetching the public URL disagreed. Page HTML is never edge-cached (`cf-cache-status: DYNAMIC`), so fresh HTML pointing at a never-before-seen URL is guaranteed to miss the cache. The subtle part is the chain — `index.html` → `site.css` → `design/colors.css`: if a token file changes and the stylesheet&#39;s URL does not move, the stale CSS is still served while everything looks correct. That case is the third test. Applies to all three apps rather than this one, because the failure is a property of the build, not of a brand.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>**Cleared the stray commit that was blocking production deploys**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in the repo — production host state only.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`cfe0d7be` preserved on branch `prod-local/session-10-progress` and confirmed still reachable by `git log` after the move; `main` fast-forwarded to `origin/main` (now `eb05587c`); untracked file count **18 before and 18 after**, so no other session&#39;s scratch work was disturbed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the prod checkout sat one commit ahead of `origin/main` — an Aug 24 commit touching only `PROGRESS.md`, never pushed. `deploy-prod.sh` refuses to build when `HEAD` is not `origin/main`, and it was right to: that check is what stops a box shipping code nobody reviewed. It would have blocked every future deploy from that host. Preserved rather than discarded, because it is not this session&#39;s commit to delete.</span></div>
           
         </div>
       </article>
