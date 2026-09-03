@@ -44,10 +44,11 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
    * submit CTA. It earns `enroll` (strength 45, the highest single page-visit signal in
    * the system) because that is genuinely what a visit to it means.
    *
-   * NOTE, and it is a real gap rather than an oversight: this brand has NO pricing page.
-   * So `pricing_visit`, and the two multi-page patterns that require a pricing view
-   * (`research_pattern`, `evaluation_pattern`), stay unreachable here no matter what this
-   * map says. That is a content decision to make, not a bug to fix in code.
+   * The pricing gap this note used to describe is CLOSED. `/pricing` shipped on
+   * 2026-09-03 as the build-membership page, so `pricing_visit` and the two multi-page
+   * patterns that require a pricing view (`research_pattern`, `evaluation_pattern`) are
+   * reachable for this brand for the first time. The content decision was made; this map
+   * is what makes the signal follow it.
    */
   'ai-flotation': {
     exact: {
@@ -60,6 +61,13 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       '/what-we-build': 'program',
       '/approach': 'program',
       '/delivery-standard': 'program',
+      // The standard the service is built to. A visitor reading it is evaluating the
+      // offering itself, which is what `program` means here - not a separate 'trust'
+      // category that no consumer would branch on.
+      '/trust-before-intelligence': 'program',
+      // Build membership. `pricing` is the global vocabulary's own term, so the existing
+      // pricing_visit signal and the research/evaluation patterns pick it up unchanged.
+      '/pricing': 'pricing',
       // Currently reads "We have nothing to show you here yet." The category describes
       // the surface, not its fill state, so it stays correct as the page gains content.
       '/results': 'case_studies',
