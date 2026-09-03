@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, September 2, 2026 at 8:02 PM</div>
-    <div><span class="sid">CC-20260902-m8q4</span><span class="count">8 changes</span></div>
+    <div class="meta">Generated Wednesday, September 2, 2026 at 8:23 PM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">9 changes</span></div>
   </header>
   <main>
     
@@ -177,6 +177,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">`cfe0d7be` preserved on branch `prod-local/session-10-progress` and confirmed still reachable by `git log` after the move; `main` fast-forwarded to `origin/main` (now `eb05587c`); untracked file count **18 before and 18 after**, so no other session&#39;s scratch work was disturbed.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">the prod checkout sat one commit ahead of `origin/main` — an Aug 24 commit touching only `PROGRESS.md`, never pushed. `deploy-prod.sh` refuses to build when `HEAD` is not `origin/main`, and it was right to: that check is what stops a box shipping code nobody reviewed. It would have blocked every future deploy from that host. Preserved rather than discarded, because it is not this session&#39;s commit to delete.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**One deploy carried the rebrand and the versioned URLs, and it was visible immediately**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in the repo — `bash scripts/deploy-prod.sh nginx` on the production host, at `1afde469`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**117 assertions against the live domain in a real browser, zero failures.** On every one of the seven pages: headings computed as **Space Grotesk**, body **Archivo**, `--accent` **#BA430E**, `--bg` **#F7F6F4**, the stylesheet URL content-addressed, no horizontal overflow at 360×800, and every button clearing 4.5:1. Zero console errors, zero failed subresources. `live-home-desktop.png` opened and looked at. The stamped URL `/assets/site.css?v=ed056639` was confirmed to serve CSS containing `Space Grotesk` and `:not(.btn)`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the deploy was deliberately held until #2033 merged.** Republishing the rebrand at the same `site.css` URL would have put it behind the same four-hour edge cache that hid this morning&#39;s fix. Landing the fingerprinting first meant the new HTML pointed at a URL that had never been cached, so the change was live on the first request instead of in four hours. This is the whole argument for the fingerprinting, tested in production the same day it was written.</span></div>
           
         </div>
       </article>
