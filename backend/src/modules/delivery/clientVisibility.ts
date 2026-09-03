@@ -183,14 +183,18 @@ export const CLIENT_FIELD_ALLOWLIST: Record<ClientObjectKind, readonly string[]>
   // engagement - AI Flotation, Refactored.ai, CPN. Rendering a hardcoded identity here
   // would have to be undone the first time a non-Colaberry brand delivers a project.
   //
-  // Colours and logo are deliberately NOT here. `brands.default_theme_key` exists and is
-  // seeded for all five brands, but nothing implements it - there is no theme registry,
-  // no per-theme CSS and no consumer. Projecting a theme key the client surface cannot
-  // honour would be shipping a promise instead of a feature. Ali's call, deferred.
+  // `default_theme_key` is now here, and the reason it was withheld is the reason it is
+  // allowed: a theme registry exists and consumes it. Until 2026-09-02 there was none, so
+  // projecting the key would have been shipping a promise instead of a feature.
+  // `frontend/src/theme/deliveryBrandThemes.ts` is the consumer; a key it does not know
+  // renders exactly the neutral surface that shipped before it, so adding a brand cannot
+  // change what another brand's client sees.
   //
-  // Absent: slug and status (internal), metadata (an open bag), tenant_id, and
-  // default_theme_key until something can act on it.
-  brand: ['id', 'name'],
+  // It is a KEY, not colours: an opaque string naming a theme, which leaks nothing about
+  // the brand and lets the palette change without a schema change.
+  //
+  // Still absent: slug and status (internal), metadata (an open bag), tenant_id.
+  brand: ['id', 'name', 'default_theme_key'],
   // The engagement a project belongs to. A client is shown its NAME because a project
   // without the engagement around it reads as an orphan - but almost nothing else.
   //

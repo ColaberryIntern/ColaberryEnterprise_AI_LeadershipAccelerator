@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260902-m8q4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, September 2, 2026 at 8:55 PM</div>
+    <div><span class="sid">CC-20260902-m8q4</span><span class="count">11 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Verified the live site in a real browser, and found the primary call to action unreadable**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`apps/ai-flotation-public/src/assets/site.css` — `.nav a` no longer paints buttons (`:not(.btn)`), and the dark block gives `.btn-primary` a label colour that follows its fill.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">measured in the browser, before and after. Before: `&quot;Start a Project&quot;` computed to `rgb(95, 107, 125)` on `rgb(22, 48, 79)` — **2.48:1**, against a 4.5:1 AA floor. After: white on navy, and the rebuilt `home-mobile.png` opened and confirmed by eye rather than inferred from the passing run. 69 checks pass in `verifyAiFlotationPublic.js`, `validate-app-boundaries.js` clean, 18 tests across 3 suites (`appInternalLinks`, `nginxDefaultServer`, `ecosystemSeedData`).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the cause is CSS specificity, not a colour choice.** `.nav a` is `(0,1,1)`; `.btn-primary` is `(0,1,0)`. The nav rule won, so the muted grey painted both masthead buttons and the site&#39;s primary CTA shipped looking like a disabled control. The dark theme carried a second, independent instance of the same failure: dark inverts `--navy` to a pale `#9dbbd8` while the button label stayed hardcoded `#fff` — **2.0:1**, and that one affected *every* primary button on the site, hero included, not just the two in the masthead. Fixed at the source rather than with another specificity override, which would have had to be repeated in the dark block.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Taught the harness to catch it, and proved the assertion actually fires**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`scripts/verifyAiFlotationPublic.js` — every `.btn` on every page, in both viewports, is now measured for contrast against its own painted background (walking up the tree for a transparent button) and must clear 4.5:1.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">run against the **pre-fix** `dist/` first, where it failed 14 times with `&quot;Start a Project&quot; at 2.48:1`; then rebuilt and re-run, where it passes. The BREAK was observed before the HARDEN was trusted.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">two things were wrong with the assertion before it was usable, and both are the kind that make a test worse than none. It first reported `[object Object]`, naming neither the button nor the ratio. Then it failed on *every* run even when correct, because this file&#39;s `check()` compares with `===` and two empty arrays are never equal — so the finding is joined to a string. A test that fails green-or-red identically is not a gate. Both causes are commented at the call site.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Confirmed #2018 and #2024 are live, which the tab that shipped them never got to record**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing — verification only, against production.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">all seven pages 200 on `aiflotation.com` and on `www.`; `/assets/site.css` byte-identical to `origin/main` (10,970 bytes, `diff` clean), which is what proves the running nginx image contains #2024 rather than merely that a deploy ran; the brand font computed as applied on all seven; no horizontal overflow at 360×800; the mobile nav resolving to seven stacked rows, confirming #2024&#39;s fix is the one in production; `/start/` posting to `/api/leads/ingest?source=ai-flotation&amp;entry=workflow_intake`; zero console errors and zero failed subresources. 47 assertions, no failures. The intake form was never submitted — a real POST would write a lead attributed to `ai-flotation` and corrupt the attribution the site exists to produce.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PRs [#2018](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/2018) and [#2024](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/2024) shipped under `CC-20260823-r4k9` and are recorded here rather than in that session&#39;s log, since a session may only write entries carrying its own ID. That tab died before writing them up; this is not a second claim on its work.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Unpacked the design system and vendored it into the repo**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`apps/ai-flotation-public/src/assets/design/` — `colors.css`, `typography.css`, `spacing.css`, `motion.css`, `components.css`, `ai-flotation-mark.svg`, `DESIGN_SYSTEM.md`, all verbatim from the source bundle.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">the build copies them into `dist/assets/design/` (confirmed by listing it), `validate-app-boundaries.js` clean at 11 files.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the `.html` in Downloads is **not a document, it is a self-extracting bundle** — one line of JSON holding 49 gzip+base64 assets that the page inflates in the browser. Reading the file tells you nothing, and pasting it is what killed `CC-20260823-r4k9`. Unpacked with `zlib.gunzipSync` instead. It carried the real token files, the logo, and a written spec; nothing had to be inferred from a screenshot.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Rebuilt the public site on the design tokens — a deliberate rebrand**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`site.css` rewritten to consume the vendored tokens, and the Google Fonts link swapped on all seven pages.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">computed values read out of the live DOM rather than assumed — `--fg #1A1917`, `--fg-muted #56524B`, `--accent #BA430E`, `--bg #F7F6F4`; `h1`/`h2` in **Space Grotesk**, body in **Archivo**. 69 checks pass, including all 14 contrast assertions, which is the design system&#39;s AA guarantee holding in practice rather than on paper. Boundaries clean. Desktop and mobile screenshots opened.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**this is a visible rebrand of a site that went live the same day.** Navy `#16304f` / brass `#b4813a` / IBM Plex becomes rust `#BA430E` on warm paper-grey with Space Grotesk. Variant A (&quot;Forge&quot;) is the documented default; variant B (&quot;Harbor&quot;, teal) is one `data-variant=&quot;harbor&quot;` attribute on `&lt;html&gt;` and needs no CSS change. Two deliberate deviations are named in the stylesheet rather than hidden: `--mono` (the source defines no monospace, but this site sets record-like material in one) and the OS-dark-preference bridge (the source switches on `data-theme`; this site has no theme control and no JS to set one, so it mirrors the dark token block under `prefers-color-scheme`).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Caught the same specificity bug a second time, in my own new code**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`form.intake input:not([type=&quot;checkbox&quot;])` in `site.css`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">measured the element&#39;s box — **13×13px**, was rendering 44px square.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`form.intake input` is (0,1,2) and `.consent input` is (0,1,1), so the consent checkbox inherited the text-field sizing and rendered as a large empty square next to its label. **Every assertion passed while it was broken** — same as the masthead button earlier today. It was caught by opening the mobile screenshot, which is the second time in one session that looking found what measuring did not.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**Content-addressed every built asset, so a deploy cannot be invisible again**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`packages/app-build/index.js` — a `fingerprintAssets` pass stamps every asset reference with a content hash (`/assets/site.css?v=ed056639`), rewriting to a fixed point so an imported file is stamped before its importer&#39;s own hash is final.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">13 tests across 3 suites pass, 5 of them new and covering the chain, idempotency, external URLs and the page-link exclusion. All three apps (`ai-flotation-public`, `cpn-public`, `refactored-public`) build. Boundaries clean. The 69-check site harness still passes with versioned URLs. Confirmed in the artifact: `href=&quot;/assets/site.css?v=ed056639&quot;`, `url(&#39;design/colors.css?v=351638dc&#39;)`, and `href=&quot;/about/&quot;` left alone.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the accessibility fix deployed earlier today was invisible in production.** The container served the corrected CSS and Cloudflare kept handing visitors the old copy — `cf-cache-status: HIT`, `Age: 1553`, `max-age=14400`. Every signal said the deploy worked: container running, file on disk correct, CI green, exit code 0. Only fetching the public URL disagreed. Page HTML is never edge-cached (`cf-cache-status: DYNAMIC`), so fresh HTML pointing at a never-before-seen URL is guaranteed to miss the cache. The subtle part is the chain — `index.html` → `site.css` → `design/colors.css`: if a token file changes and the stylesheet&#39;s URL does not move, the stale CSS is still served while everything looks correct. That case is the third test. Applies to all three apps rather than this one, because the failure is a property of the build, not of a brand.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>**Cleared the stray commit that was blocking production deploys**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in the repo — production host state only.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`cfe0d7be` preserved on branch `prod-local/session-10-progress` and confirmed still reachable by `git log` after the move; `main` fast-forwarded to `origin/main` (now `eb05587c`); untracked file count **18 before and 18 after**, so no other session&#39;s scratch work was disturbed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the prod checkout sat one commit ahead of `origin/main` — an Aug 24 commit touching only `PROGRESS.md`, never pushed. `deploy-prod.sh` refuses to build when `HEAD` is not `origin/main`, and it was right to: that check is what stops a box shipping code nobody reviewed. It would have blocked every future deploy from that host. Preserved rather than discarded, because it is not this session&#39;s commit to delete.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**One deploy carried the rebrand and the versioned URLs, and it was visible immediately**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing in the repo — `bash scripts/deploy-prod.sh nginx` on the production host, at `1afde469`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**117 assertions against the live domain in a real browser, zero failures.** On every one of the seven pages: headings computed as **Space Grotesk**, body **Archivo**, `--accent` **#BA430E**, `--bg` **#F7F6F4**, the stylesheet URL content-addressed, no horizontal overflow at 360×800, and every button clearing 4.5:1. Zero console errors, zero failed subresources. `live-home-desktop.png` opened and looked at. The stamped URL `/assets/site.css?v=ed056639` was confirmed to serve CSS containing `Space Grotesk` and `:not(.btn)`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the deploy was deliberately held until #2033 merged.** Republishing the rebrand at the same `site.css` URL would have put it behind the same four-hour edge cache that hid this morning&#39;s fix. Landing the fingerprinting first meant the new HTML pointed at a URL that had never been cached, so the change was live on the first request instead of in four hours. This is the whole argument for the fingerprinting, tested in production the same day it was written.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>**Built the theme layer `brands.default_theme_key` had been waiting for**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`frontend/src/theme/deliveryBrandThemes.ts` (new registry), `DeliveryShell.tsx` (accepts `themeKey`, applies the tokens as custom properties and an accent hairline), `ClientPortal.tsx` (passes the key through), `clientVisibility.ts` (`default_theme_key` added to the client brand allowlist).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**773 tests across 36 suites pass** over `services/delivery` and `modules/delivery`, including the allowlist contract. Frontend `tsc --noEmit` clean. The parity test was **proved by breaking it**: changing `--accent` to `#BA430F` failed two assertions naming the token and both values, then was reverted.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the tokens are duplicated from `apps/ai-flotation-public/src/assets/design/colors.css` because `frontend/` importing from `apps/` is the exact edge `validate-app-boundaries.js` forbids — the alternative to duplication is a boundary violation, not a shared import. `deliveryBrandThemes.test.ts` parses both files and fails on any disagreement, so the copy cannot drift into a second, slightly different rust.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>**Established that there is no AI Flotation email to restyle**</h2>
+          <span class="badge">2026-09-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nothing — investigation, and a decision not to build.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">no flotation template anywhere under `backend/src/services/email*`; the design bundle&#39;s email is a React view inside the explorer app (`// Logos, Login, Email views`), not a droppable HTML file.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`/start/` explicitly promises the opposite — *&quot;We do not send an automated confirmation, so nothing will land in your inbox from this form — saying otherwise would be a promise the system does not currently keep.&quot;* Styling an email here would mean **creating an outbound send** and rewriting that copy, which is a product decision rather than a restyle. Put to Ali; he chose to leave it. The honest state is recorded rather than quietly closed as done.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260902-m8q4.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
