@@ -40,6 +40,40 @@ export interface AgentDetailResult {
      * ladder, `null` for an agent never yet reactivated through that flow.
      * Purely declarative — not enforced anywhere yet. */
     autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
+    /** AI Agent Dashboard redesign, Trust & Control slice 2 (2026-09-03) —
+     * real AiAgent columns never surfaced by this endpoint before: which of
+     * the 18 real `departments` slugs this agent is classified under (`null`
+     * when unclassified/cross-cutting, never forced), which registry
+     * module/source file it was seeded from, its 3 execution-limit
+     * ceilings (agentPermissionService.ts's real enforcement, not display-
+     * only), and whether its autonomy_level was ever deliberately set by an
+     * operator vs. sitting on the untouched migration default (`null` set-
+     * at means the latter). `scope` (JSONB) is deliberately NOT included —
+     * confirmed via AiAgent.ts's own header comment to be a reserved,
+     * always-empty column today; surfacing a perpetually-empty field would
+     * misrepresent it as meaningful.
+     *
+     * The 3 execution limits are `number | null`, not `number` — a real,
+     * live-caught bug: AiAgent.ts's own class declares them non-nullable
+     * (`declare max_runs_per_hour: number`), but a real agent
+     * (CoryStrategicAgent, an on-demand type never touched by the normal
+     * registry-seed default-assignment path) genuinely has `null` in the
+     * database for all 3, confirmed via a direct query before writing this.
+     * `agentPermissionService.ts`'s own checkRunLimit()/checkWriteLimit()/
+     * checkProposalLimit() already treat a null column as "use the real
+     * default" (`agent.max_runs_per_hour || DEFAULT_MAX_RUNS_PER_HOUR`) —
+     * this endpoint passes the real stored value through honestly rather
+     * than silently substituting that default, so the UI can disclose
+     * which is true instead of rendering a blank. The AiAgent.ts type
+     * itself is a separate, pre-existing inconsistency, flagged but not
+     * fixed here — out of this checkpoint's scope. */
+    department: string | null;
+    module: string | null;
+    source_file: string | null;
+    max_runs_per_hour: number | null;
+    max_writes_per_execution: number | null;
+    max_proposals_per_run: number | null;
+    autonomy_level_set_at: Date | null;
   };
   identity: {
     admin_user_id: string;
@@ -384,6 +418,13 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       enabled: agent.enabled,
       created_at: agent.created_at ?? null,
       autonomy_level: agent.autonomy_level ?? null,
+      department: agent.department ?? null,
+      module: agent.module ?? null,
+      source_file: agent.source_file ?? null,
+      max_runs_per_hour: agent.max_runs_per_hour ?? null,
+      max_writes_per_execution: agent.max_writes_per_execution ?? null,
+      max_proposals_per_run: agent.max_proposals_per_run ?? null,
+      autonomy_level_set_at: agent.autonomy_level_set_at ?? null,
     },
     identity: adminUser
       ? {

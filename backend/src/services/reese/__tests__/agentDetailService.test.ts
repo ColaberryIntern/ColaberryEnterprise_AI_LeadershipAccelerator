@@ -103,6 +103,58 @@ describe('getAgentDetail', () => {
     expect(result!.tickets).toHaveLength(1);
   });
 
+  // Trust & Control slice 2 (2026-09-03) — real, previously-unexposed
+  // AiAgent columns now pass through verbatim. Set via a local override
+  // (never the shared reeseAgent fixture) — the related_tasks honesty-
+  // boundary test above depends on the base fixture having no `module`.
+  it('agent.department/module/source_file/execution-limits/autonomy_level_set_at pass through the real values verbatim', async () => {
+    const setAt = new Date('2026-08-25T12:00:00Z');
+    mockAgentFindByPk.mockResolvedValue({
+      ...reeseAgent, department: 'student_success', module: 'reese', source_file: 'reeseWorker.ts',
+      max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
+      autonomy_level_set_at: setAt,
+    });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.department).toBe('student_success');
+    expect(result!.agent.module).toBe('reese');
+    expect(result!.agent.source_file).toBe('reeseWorker.ts');
+    expect(result!.agent.max_runs_per_hour).toBe(60);
+    expect(result!.agent.max_writes_per_execution).toBe(100);
+    expect(result!.agent.max_proposals_per_run).toBe(50);
+    expect(result!.agent.autonomy_level_set_at).toEqual(setAt);
+  });
+
+  // Trust & Control slice 2 (2026-09-03) — an unclassified agent (the
+  // common case for most of the fleet, per AiAgent.ts's own comment) must
+  // read as an honest null, never a fabricated department.
+  it('agent.department is honestly null for an unclassified agent', async () => {
+    mockAgentFindByPk.mockResolvedValue({ ...reeseAgent, department: null });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.department).toBeNull();
+  });
+
+  // Trust & Control slice 2 (2026-09-03) — real, live-caught bug: an
+  // on-demand agent (e.g. CoryStrategicAgent) that never went through the
+  // registry-seed default-assignment path genuinely has `null` execution
+  // limits in the database, despite AiAgent.ts's class declaring them
+  // non-nullable. This endpoint must pass real `null` through honestly,
+  // never a fabricated number and never a silently-substituted default.
+  it('agent execution limits are honestly null for an agent never touched by registry-seed defaults', async () => {
+    mockAgentFindByPk.mockResolvedValue({
+      ...reeseAgent, max_runs_per_hour: null, max_writes_per_execution: null, max_proposals_per_run: null,
+    });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.agent.max_runs_per_hour).toBeNull();
+    expect(result!.agent.max_writes_per_execution).toBeNull();
+    expect(result!.agent.max_proposals_per_run).toBeNull();
+  });
+
   // AI Workforce Reset, Phase C (2026-08-24) — Permitted dimension of the
   // Trust Contract: a real, previously-reactivated agent's chosen autonomy
   // level passes through verbatim.

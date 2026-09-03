@@ -19,6 +19,7 @@ import { evaluateAllAgents } from '../services/agentResourceMonitor';
 import { getProposalStats } from '../services/proposalCleanupService';
 import { runSafetySweep } from '../services/agentSafetyAlertService';
 import { logAiEvent } from '../services/aiEventService';
+import { approveProposedAction, rejectProposedAction } from '../services/agentApprovalService';
 
 // ---------------------------------------------------------------------------
 // Proposed Actions
@@ -59,43 +60,14 @@ export async function handleApproveProposal(req: Request, res: Response, next: N
     const { notes } = req.body;
     const adminEmail = (req as any).admin?.email || 'unknown';
 
-    const proposal = await ProposedAgentAction.findByPk(id);
-    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
-    if (proposal.status !== 'pending') return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
-
-    // Check expiry
-    if (proposal.expires_at && new Date() > proposal.expires_at) {
-      await proposal.update({ status: 'expired' });
+    const result = await approveProposedAction(id, adminEmail, notes || null);
+    if (result.outcome !== 'approved') {
+      if (result.outcome === 'not_found') return res.status(404).json({ error: 'Proposal not found' });
+      if (result.outcome === 'not_pending') return res.status(400).json({ error: `Proposal is already ${result.proposal!.status}` });
       return res.status(400).json({ error: 'Proposal has expired' });
     }
 
-    // Apply the proposed changes to the target record
-    let applied = false;
-    if (proposal.target_table === 'scheduled_emails') {
-      const email = await ScheduledEmail.findByPk(proposal.target_id);
-      if (email) {
-        await email.update(proposal.proposed_changes);
-        applied = true;
-      }
-    }
-
-    await proposal.update({
-      status: 'approved',
-      reviewed_by: adminEmail,
-      reviewed_at: new Date(),
-      review_notes: notes || null,
-      applied_at: applied ? new Date() : null,
-    });
-
-    await logAiEvent('agent_governance', 'proposal_approved', undefined, undefined, {
-      proposal_id: id,
-      agent_name: proposal.agent_name,
-      action_type: proposal.action_type,
-      reviewed_by: adminEmail,
-      applied,
-    });
-
-    res.json({ success: true, applied, proposal });
+    res.json({ success: true, applied: result.applied, proposal: result.proposal });
   } catch (err) {
     next(err);
   }
@@ -108,25 +80,11 @@ export async function handleRejectProposal(req: Request, res: Response, next: Ne
     const { notes } = req.body;
     const adminEmail = (req as any).admin?.email || 'unknown';
 
-    const proposal = await ProposedAgentAction.findByPk(id);
-    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
-    if (proposal.status !== 'pending') return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
+    const result = await rejectProposedAction(id, adminEmail, notes || null);
+    if (result.outcome === 'not_found') return res.status(404).json({ error: 'Proposal not found' });
+    if (result.outcome === 'not_pending') return res.status(400).json({ error: `Proposal is already ${result.proposal!.status}` });
 
-    await proposal.update({
-      status: 'rejected',
-      reviewed_by: adminEmail,
-      reviewed_at: new Date(),
-      review_notes: notes || null,
-    });
-
-    await logAiEvent('agent_governance', 'proposal_rejected', undefined, undefined, {
-      proposal_id: id,
-      agent_name: proposal.agent_name,
-      action_type: proposal.action_type,
-      reviewed_by: adminEmail,
-    });
-
-    res.json({ success: true, proposal });
+    res.json({ success: true, proposal: result.proposal });
   } catch (err) {
     next(err);
   }

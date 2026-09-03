@@ -163,6 +163,22 @@ export interface AgentDetail {
     /** AI Workforce Reset, Phase C (2026-08-24) — Permitted dimension of the
      * Trust Contract; `null` until this agent is reactivated through that flow. */
     autonomy_level: 'observe' | 'suggest' | 'act_audited' | 'communicate' | null;
+    /** Trust & Control slice 2 (2026-09-03) — real platform-configuration
+     * facts, not shown anywhere else on this page. `scope` is deliberately
+     * not included: a reserved, always-empty JSONB column today. The 3
+     * execution limits are honestly nullable — a real agent
+     * (CoryStrategicAgent) has `null` here despite the backend model's own
+     * class declaring them non-nullable; the real enforcement code
+     * (agentPermissionService.ts) falls back to a default when null, and
+     * the UI discloses that rather than rendering a fabricated number or a
+     * confusing blank. */
+    department: string | null;
+    module: string | null;
+    source_file: string | null;
+    max_runs_per_hour: number | null;
+    max_writes_per_execution: number | null;
+    max_proposals_per_run: number | null;
+    autonomy_level_set_at: string | null;
   };
   identity: AgentDetailIdentity | null;
   live_status: 'online' | 'away' | 'offline' | 'unknown';
@@ -181,6 +197,25 @@ export interface AgentDetail {
   capabilities: AgentDetailCapabilities;
   reports_to: AgentDetailReportsTo | null;
   trust_contract: AgentDetailTrustContract;
+  goals: AgentGoalsDimension[];
+  goals_overall: number;
+}
+
+/** AI Workforce Management, Checkpoint E (Trust Before Intelligence
+ * Workspace) — real GOALS™ dimensions (Colaberry's own operational-
+ * excellence framework, from Ram Katamaraja's "Trust Before Intelligence"
+ * book, ch. 7: Governance/Observability/Availability/Lexicon/Solid), scored
+ * 0-5 each. `source: 'fixed'` means the dimension is structural (a real
+ * declared permission tier or category), not freshly measured on this
+ * call — disclosed honestly rather than presented as a live reading. This
+ * type existed on the backend since 2026-09-01 with zero frontend
+ * consumers until the Trust & Control redesign surfaced it. */
+export interface AgentGoalsDimension {
+  key: 'governance' | 'observability' | 'availability' | 'lexicon' | 'solid';
+  label: string;
+  score: number;
+  source: 'live' | 'fixed';
+  evidence: string;
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {

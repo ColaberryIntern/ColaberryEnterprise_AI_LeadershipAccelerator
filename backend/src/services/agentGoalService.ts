@@ -33,9 +33,18 @@ export interface AgentGoalView {
   comparison: AgentGoalComparison;
   targetValue: number;
   /** The real, live-computed current value for this metric — never stored,
-   * never stale, computed the same way every time this is read. */
-  currentValue: number;
-  met: boolean;
+   * never stale, computed the same way every time this is read. `null`
+   * means there is no real underlying data to compute this from yet (never
+   * to be confused with a genuine, computed `0`). */
+  currentValue: number | null;
+  /** `null` — UNMEASURED — when `currentValue` is `null`. A goal can never
+   * read as "met" from the absence of data; only from a real computed
+   * value that actually satisfies the comparison. See AGENT_GOAL_FIX
+   * (2026-09-02): the previous version defaulted an absent value to `0`,
+   * which made every `at_most` goal vacuously "met" for any agent with no
+   * AdminUser link or no cost-tracked events — confirmed live and flagged
+   * in the Checkpoint A design review before this fix landed. */
+  met: boolean | null;
   status: 'active' | 'archived';
   createdByEmail: string;
   createdAt: Date;
@@ -44,19 +53,28 @@ export interface AgentGoalView {
 /**
  * Computes the real current value for a goal's metric, reusing the exact
  * same functions Agent Detail's own cost_summary/open_ticket_count already
- * use — never a second, drifting calculation.
+ * use — never a second, drifting calculation. `null` means there is no real
+ * data source to compute this metric from today — distinct from a real,
+ * computed `0` (e.g. an agent with real cost-tracked events that genuinely
+ * summed to $0, or a real AdminUser link with genuinely zero open tickets).
  */
-async function computeMetricValue(metricKey: AgentGoalMetricKey, agent: AiAgent): Promise<number> {
+async function computeMetricValue(metricKey: AgentGoalMetricKey, agent: AiAgent): Promise<number | null> {
   if (metricKey === 'monthly_cost_usd') {
     const rows = await agentCostRows(30, agent.id);
-    return rows[0]?.costUsd ?? 0;
+    // agentCostRows returns [] (not a zero-value row) when this agent has
+    // no cost-tracked ai_events in the window at all — a real absence, not
+    // a real zero. Only a genuine row's real costUsd counts as measured.
+    return rows.length > 0 ? rows[0].costUsd : null;
   }
-  // open_ticket_count
+  // open_ticket_count — no AdminUser link means there is no real way to
+  // resolve this agent's tickets at all, not that it genuinely has zero.
   const adminUser = await AdminUser.findOne({ where: { agent_id: agent.id } });
-  return adminUser ? countOpenTicketsForAgent(adminUser.id, agent) : 0;
+  if (!adminUser) return null;
+  return countOpenTicketsForAgent(adminUser.id, agent);
 }
 
-function isMet(comparison: AgentGoalComparison, targetValue: number, currentValue: number): boolean {
+function isMet(comparison: AgentGoalComparison, targetValue: number, currentValue: number | null): boolean | null {
+  if (currentValue === null) return null;
   return comparison === 'at_most' ? currentValue <= targetValue : currentValue >= targetValue;
 }
 

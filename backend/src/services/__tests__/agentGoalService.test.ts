@@ -75,7 +75,7 @@ describe('createGoal — real metric computation, never fabricated', () => {
     expect(result.met).toBe(false); // 15 > 10
   });
 
-  it('boundary: an agent with no linked AdminUser gets a real 0 for open_ticket_count, matching Agent Detail\'s own fallback — not an error, not fabricated', async () => {
+  it('regression: an agent with no linked AdminUser is UNMEASURED (null), never a fabricated 0 — the real bug caught in the Checkpoint A design review, fixed here', async () => {
     mockGoalCreate.mockResolvedValue({
       id: 'goal-3', metric_key: 'open_ticket_count', comparison: 'at_least', target_value: 0,
       status: 'active', created_by_email: 'manager@colaberry.com', created_at: new Date(),
@@ -85,7 +85,22 @@ describe('createGoal — real metric computation, never fabricated', () => {
     const result = await createGoal('agent-1', null, 'manager@colaberry.com', 'open_ticket_count', 'at_least', 0);
 
     expect(mockCountOpenTicketsForAgent).not.toHaveBeenCalled();
+    expect(result.currentValue).toBeNull();
+    expect(result.met).toBeNull(); // never vacuously "met" from missing data
+  });
+
+  it('a real AdminUser link with genuinely zero open tickets is a real, measured 0 — distinct from the no-link UNMEASURED case above', async () => {
+    mockGoalCreate.mockResolvedValue({
+      id: 'goal-3b', metric_key: 'open_ticket_count', comparison: 'at_most', target_value: 5,
+      status: 'active', created_by_email: 'manager@colaberry.com', created_at: new Date(),
+    });
+    mockAdminUserFindOne.mockResolvedValue({ id: 'admin-user-1' });
+    mockCountOpenTicketsForAgent.mockResolvedValue(0);
+
+    const result = await createGoal('agent-1', null, 'manager@colaberry.com', 'open_ticket_count', 'at_most', 5);
+
     expect(result.currentValue).toBe(0);
+    expect(result.met).toBe(true); // a real, measured 0 <= 5 — legitimately met, not vacuous
   });
 
   it('at_least comparison direction is honored correctly', async () => {
@@ -107,7 +122,7 @@ describe('createGoal — real metric computation, never fabricated', () => {
     expect(mockGoalCreate).not.toHaveBeenCalled();
   });
 
-  it('boundary: zero real cost-tracked events over the window is a real 0, not an error', async () => {
+  it('regression: zero real cost-tracked events over the window is UNMEASURED (null), never a fabricated 0 that vacuously satisfies an at_most goal', async () => {
     mockGoalCreate.mockResolvedValue({
       id: 'goal-5', metric_key: 'monthly_cost_usd', comparison: 'at_most', target_value: 50,
       status: 'active', created_by_email: 'manager@colaberry.com', created_at: new Date(),
@@ -116,7 +131,21 @@ describe('createGoal — real metric computation, never fabricated', () => {
 
     const result = await createGoal('agent-1', null, 'manager@colaberry.com', 'monthly_cost_usd', 'at_most', 50);
 
+    expect(result.currentValue).toBeNull();
+    expect(result.met).toBeNull();
+  });
+
+  it('a real cost row that genuinely sums to $0 is a real, measured 0 — distinct from no rows at all', async () => {
+    mockGoalCreate.mockResolvedValue({
+      id: 'goal-5b', metric_key: 'monthly_cost_usd', comparison: 'at_most', target_value: 50,
+      status: 'active', created_by_email: 'manager@colaberry.com', created_at: new Date(),
+    });
+    mockAgentCostRows.mockResolvedValue([{ agentId: 'agent-1', costUsd: 0, runs: 3 }]);
+
+    const result = await createGoal('agent-1', null, 'manager@colaberry.com', 'monthly_cost_usd', 'at_most', 50);
+
     expect(result.currentValue).toBe(0);
+    expect(result.met).toBe(true); // a real, measured $0 <= $50 — legitimately met
   });
 });
 

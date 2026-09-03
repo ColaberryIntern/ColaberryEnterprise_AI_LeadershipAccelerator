@@ -43,10 +43,20 @@ export interface AgentReportSubscriptionAttributes {
   timezone: string;
   channel?: AgentReportChannel;
   enabled?: boolean;
-  created_at?: Date;
-  updated_at?: Date;
 }
 
+// AI Agent Dashboard redesign, Checkpoint C, Reports slice (2026-09-02) —
+// `timestamps: true` + `underscored: true` below means Sequelize's real
+// runtime attribute names are `createdAt`/`updatedAt` (camelCase), mapped
+// to the `created_at`/`updated_at` DB columns — not `created_at`/
+// `updated_at` as JS-level attribute names. A prior version of this file
+// declared the JS-level names as snake_case, which type-checked fine but
+// was always `undefined` at runtime (confirmed live: every subscription's
+// `created_at` read as `undefined`, and the one real call site —
+// agentReportSubscriptionService.ts's toView() — silently passed that
+// through to the frontend as `createdAt: undefined`, rendering as
+// "unknown" in the UI). Never caught before because no frontend consumer
+// exercised this field until this checkpoint's Reports tab.
 class AgentReportSubscription extends Model<AgentReportSubscriptionAttributes> implements AgentReportSubscriptionAttributes {
   declare id: string;
   declare agent_id: string;
@@ -58,8 +68,8 @@ class AgentReportSubscription extends Model<AgentReportSubscriptionAttributes> i
   declare timezone: string;
   declare channel: AgentReportChannel;
   declare enabled: boolean;
-  declare created_at: Date;
-  declare updated_at: Date;
+  declare createdAt: Date;
+  declare updatedAt: Date;
 }
 
 AgentReportSubscription.init(
