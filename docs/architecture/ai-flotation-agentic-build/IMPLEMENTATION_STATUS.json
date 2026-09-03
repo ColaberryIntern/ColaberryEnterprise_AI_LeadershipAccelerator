@@ -1,0 +1,117 @@
+{
+  "plan": "AI_FLOTATION_AGENTIC_SOFTWARE_BUILD_MASTER_CLAUDE_CODE_PLAN",
+  "checkpoint": "A",
+  "gate": 0,
+  "gate_name": "Discovery + contracts",
+  "status": "in_progress",
+  "feature_code_written": false,
+  "session": "CC-20260902-m8q4",
+  "date": "2026-09-03",
+  "base_sha": "e99fdb35",
+  "branch": "workstream/ai-flotation-gate0",
+  "worktree_clean_at_start": true,
+
+  "plan_assumptions_corrected": [
+    {
+      "id": "CORRECTION-1",
+      "plan_ref": "§7, §55",
+      "claim": "no syntheflow symbol in repo; treat as new provider adapter",
+      "reality": "vendor is spelled Synthflow; SYNTHFLOW_API_KEY and three agent ids already configured in backend/src/config/env.ts, alongside services/callbackRequestService.ts",
+      "impact": "Gate 3 is an audit and a reuse decision, not a greenfield integration"
+    },
+    {
+      "id": "CORRECTION-2",
+      "plan_ref": "§24, §25",
+      "claim": "inspect for a payment provider; introduce BillingProvider seam if none",
+      "reality": "PaySimple exists (services/paysimpleService.ts) with hosted one-time payment links and no recurring, subscription, schedule or plan function; services/billing/ holds gateway state and health checks only",
+      "impact": "the BuildPlan subscription model has no provider capable of running it; Gate 7 is blocked"
+    },
+    {
+      "id": "CORRECTION-3",
+      "plan_ref": "§7, §29",
+      "claim": "marketing to delivery conversion exists",
+      "reality": "confirmed; shipped 2026-09-03 in PR #2043 with operator surface in PR #2045, idempotent on organizations.lead_id and delivery_engagements.source_lead_id, proved dry against production",
+      "impact": "Gate 8 largely met; remaining work is importing free project truth"
+    },
+    {
+      "id": "CORRECTION-4",
+      "plan_ref": "§9 Q20, §19, §65",
+      "claim": "unknown which TBI scores are runtime vs documentation",
+      "reality": "modules/delivery/inpact.ts is consumed by deliveryTrustGate.ts, releaseGate.ts, deliveryStoryContract.ts and deliveryOpportunityMap.ts",
+      "impact": "TBI gates releases at runtime; Gate 19 is projection work, and any new score would diverge"
+    },
+    {
+      "id": "CORRECTION-5",
+      "plan_ref": "§41",
+      "claim": "reuse existing chat infrastructure if generic enough",
+      "reality": "ChatConversation is keyed on visitor_id, lead_id, session_id, page_url, trigger_type and has no project dimension",
+      "impact": "delivery-scoped message domain required; reuse would attach client delivery discussion to an expiring visitor session"
+    }
+  ],
+
+  "live_defects_found": [
+    {
+      "id": "DEFECT-1",
+      "file": "backend/src/controllers/leadIngestionController.ts",
+      "finding": "lead ingest stores the lead and notifies nobody - no email, alert or outbound webhook",
+      "why_it_matters": "the live /start/ page promises the details reach the team that reads them; every gate above assumes an inbound is noticed",
+      "recommended_position": "before Gate 1, not inside Gate 12"
+    }
+  ],
+
+  "escalations": [
+    {
+      "id": "ESCALATION-1",
+      "subject": "subscription billing has no provider",
+      "boundary": "external dependency / paid provider introduction",
+      "blocks": ["Gate 7"],
+      "note": "a separate workstream was exploring Stripe as an international rail; reconcile rather than decide twice"
+    },
+    {
+      "id": "ESCALATION-2",
+      "subject": "voice intake ownership",
+      "boundary": "product decision - fourth Synthflow agent vs reuse of the callback agent",
+      "blocks": ["Gate 3"],
+      "note": "changes who owns the phone number and the consent record"
+    }
+  ],
+
+  "reuse_summary": {
+    "agentic_responsibilities_total": 15,
+    "already_exist": 14,
+    "genuinely_new": 1,
+    "the_new_one": "Project AI - the client-facing project-scoped agent"
+  },
+
+  "artifacts": {
+    "written": [
+      "CURRENT_STATE.md",
+      "REUSE_MAP.md",
+      "IMPLEMENTATION_STATUS.json"
+    ],
+    "outstanding": [
+      "CUSTOMER_JOURNEY.md",
+      "FREE_TO_PAID_CONTRACT.md",
+      "AGENTIC_ENGINE_MAP.md",
+      "TBI_INTEGRATION_MAP.md",
+      "REPO_OWNERSHIP_MAP.md",
+      "CRM_ATTRIBUTION_MAP.md",
+      "COMMUNICATION_MAP.md",
+      "BILLING_MAP.md",
+      "VOICE_INTAKE_MAP.md",
+      "CLIENT_VISIBILITY_MAP.md",
+      "SECURITY_THREAT_MODEL.md",
+      "TEST_PLAN.md",
+      "BASELINE_TEST_RESULTS.md"
+    ]
+  },
+
+  "baseline_tests": {
+    "command": "npx jest -c jest.ci.config.ts",
+    "status": "running",
+    "note": "the CI config is the gate; scoped local runs miss contract suites. Local tsc is unusable - the only resolvable TypeScript is the root-hoisted 4.9.5, which cannot parse @types/d3-dispatch or zod/v4"
+  },
+
+  "gate_0_complete": false,
+  "next_action": "finish remaining artifacts and record baseline results; do not begin Gate 1 until Gate 0 is signed off"
+}
