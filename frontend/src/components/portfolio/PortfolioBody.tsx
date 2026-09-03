@@ -46,6 +46,18 @@ interface PortfolioStats {
   evidence_records?: number | null;
 }
 
+interface FeaturedProject {
+  name: string;
+  repo_url: string | null;
+  files: number | null;
+  top_level_areas: number | null;
+  capabilities: number | null;
+  languages: number | null;
+}
+
+interface Competency { domain: string; label: string; score: number }
+interface EvidenceSource { source_type: string; label: string; count: number }
+
 interface Portfolio {
   identity: {
     full_name: string; headline: string | null; cohort_name: string | null;
@@ -54,6 +66,10 @@ interface Portfolio {
   };
   about?: string[];
   stats?: PortfolioStats;
+  featured?: FeaturedProject | null;
+  competencies?: Competency[];
+  competency_domain_count?: number;
+  evidence_by_source?: EvidenceSource[];
   experience?: ExperienceItem[];
   education?: EducationItem[];
   capabilities: Capability[];
@@ -129,6 +145,13 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
   const education = portfolio.education || [];
   const about = portfolio.about || [];
   const stats = portfolio.stats || {};
+  const featured = portfolio.featured || null;
+  const competencies = portfolio.competencies || [];
+  const domainCount = portfolio.competency_domain_count || 0;
+  const evidenceBySource = portfolio.evidence_by_source || [];
+  // Bars are drawn relative to the strongest domain, so the shape of the profile reads
+  // at a glance without implying a ceiling nobody defined.
+  const topScore = competencies.reduce((m, c) => Math.max(m, c.score), 0) || 1;
 
   const statTiles = [
     { value: stats.years_experience, label: 'Years experience' },
@@ -144,10 +167,17 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
     <div className="pf">
       <nav className="pf-nav">
         <div className="pf-nav-in">
-          <span className="pf-brand">
-            <span className="pf-mark" aria-hidden="true">C</span>
-            Colaberry
-          </span>
+          {/* Refactored.ai, not Colaberry, and the wordmark carries the name so no
+              heading text sits beside it. The asset is vendored into /public rather
+              than hot-linked from their CDN: this is a public page, and a third-party
+              request on it is a third party watching whoever reads it. */}
+          <img
+            className="pf-logo"
+            src="/refactored-logo.svg"
+            alt="Refactored.ai"
+            width={256}
+            height={50}
+          />
           <div className="pf-navlinks">
             {(about.length > 0 || statTiles.length > 0) && (
               <a className="pf-navlink" href="#overview">Overview</a>
@@ -241,6 +271,35 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
             </section>
           )}
 
+          {featured && (
+            <section className="pf-card">
+              <SectionHead>Featured project</SectionHead>
+              <Rule />
+              <h3 className="pf-feat-name">{featured.name}</h3>
+              {featured.repo_url && (
+                <a className="pf-feat-repo" href={featured.repo_url}
+                   target="_blank" rel="noopener noreferrer">
+                  {featured.repo_url.replace(/^https:\/\/github\.com\//, '')}
+                </a>
+              )}
+              {/* Each figure comes from the repository itself. A null renders no cell at
+                  all, so a project the platform can see less of simply says less. */}
+              <div className="pf-feat-nums">
+                {[
+                  { v: featured.files, l: 'Files' },
+                  { v: featured.top_level_areas, l: 'Top level areas' },
+                  { v: featured.capabilities, l: 'Capabilities' },
+                  { v: featured.languages, l: 'Languages' },
+                ].filter((n) => typeof n.v === 'number' && (n.v as number) > 0).map((n) => (
+                  <div className="pf-feat-num" key={n.l}>
+                    <b>{n.v}</b>
+                    <span>{n.l}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           <ExperienceSection items={experience} badge="parsed from their resume" />
 
           {projects.length > 0 && (
@@ -283,7 +342,7 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
           )}
 
           {records.length > 0 && (
-            <section id="skills" className="pf-card">
+            <section className="pf-card">
               <SectionHead>
                 {records.length === 1 ? 'Written up' : `Written up (${records.length})`}
               </SectionHead>
@@ -298,6 +357,74 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio }> = ({ portfolio }) => {
           )}
 
           <EducationSection items={education} />
+
+          {/* Every line here traces to a file in their repository. The count IS the
+              reason: it is what the platform observed, not a claim about quality. */}
+          {capabilities.length > 0 && (
+            <section id="skills" className="pf-card">
+              <SectionHead badge="every line traces to committed code">
+                Skills, and why each is listed
+              </SectionHead>
+              <Rule />
+              <ul className="pf-list">
+                {capabilities.map((c) => (
+                  <li key={c.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+                    <span className="pf-title" style={{ fontSize: 15 }}>{c.name}</span>
+                    <span style={{ color: 'var(--pf-mut)', fontSize: 13.5 }}>
+                      {c.count > 1 && <>{c.count} committed</>}
+                      {c.proven && <>{c.count > 1 ? ' · ' : ''}demonstrated</>}
+                      {c.on_sample && <> · built on the sample</>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {competencies.length > 0 && (
+            <section className="pf-card">
+              <SectionHead badge="from validated evidence">Competencies earned</SectionHead>
+              <Rule />
+              {competencies.map((c) => (
+                <div className="pf-bar" key={c.domain}>
+                  <div className="pf-bar-label">{c.label}</div>
+                  <div className="pf-bar-track">
+                    <div
+                      className="pf-bar-fill"
+                      style={{ width: `${Math.max(4, Math.round((c.score / topScore) * 100))}%` }}
+                    />
+                  </div>
+                  <div className="pf-bar-val">{c.score}</div>
+                </div>
+              ))}
+              {/* The list is capped, so it says so rather than implying it is the whole. */}
+              {domainCount > competencies.length && (
+                <p className="pf-note">
+                  Showing the strongest {competencies.length} of {domainCount} domains.
+                </p>
+              )}
+            </section>
+          )}
+
+          {evidenceBySource.length > 0 && (
+            <section className="pf-card">
+              <SectionHead>Evidence behind those competencies</SectionHead>
+              <Rule />
+              <div className="pf-chips">
+                {evidenceBySource.map((e) => (
+                  <div className="pf-chip" key={e.source_type}>
+                    <b>{e.count}</b>
+                    <span>{e.label}</span>
+                  </div>
+                ))}
+              </div>
+              {/* The distinction this page has to keep making, stated once, plainly. */}
+              <p className="pf-note">
+                Each record is something they did and submitted. None of it is time spent
+                reading.
+              </p>
+            </section>
+          )}
 
           {(repositories.length > 0 || private_repository_count > 0) && (
             <section className="pf-card">

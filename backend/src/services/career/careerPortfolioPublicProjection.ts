@@ -65,6 +65,10 @@ import {
 } from '../resumeHistory';
 import type { ResumeExperience, ResumeEducation } from '../resumeHistory';
 import { composeAbout, composeStats, type PortfolioStats } from './portfolioOverview';
+import {
+  normalizeCompetencies, normalizeEvidenceSources, composeFeatured, countCompetencyDomains,
+  type PublicCompetency, type PublicEvidenceSource, type PublicFeaturedProject,
+} from './portfolioEvidence';
 
 
 
@@ -214,6 +218,14 @@ export interface PublicPortfolio {
   /** Deterministically composed paragraphs. Empty when there is nothing to say. */
   about: string[];
   stats: PortfolioStats;
+  /** The capstone, stated in numbers taken from the repository itself. */
+  featured: PublicFeaturedProject | null;
+  /** Competency bands, from VALIDATED evidence only. Capped; see below. */
+  competencies: PublicCompetency[];
+  /** How many domains exist in total, so a capped list can still say so honestly. */
+  competency_domain_count: number;
+  /** The classes of evidence those bands are summed from. */
+  evidence_by_source: PublicEvidenceSource[];
   /** Most recent FIRST. Empty when no resume was ever ingested. */
   experience: PublicExperience[];
   education: PublicEducation[];
@@ -301,6 +313,14 @@ export interface ProjectPortfolioInput {
   /** The capstone project's name and descriptor, for the About paragraph. */
   projectName?: string | null;
   projectDescriptor?: string | null;
+  /** `{domain, score}` rows summed from VALIDATED evidence_records only. */
+  competencies?: unknown;
+  /** `{source_type, count}` rows over the same validated set. */
+  evidenceBySource?: unknown;
+  /** Repository-derived counts for the featured project block. */
+  featuredRepoUrl?: string | null;
+  featuredTopLevelAreas?: number | null;
+  featuredLanguages?: number | null;
   /**
    * `OnboardingProfile.extracted` - raw LLM output from the resume ingest. Passed
    * in raw ON PURPOSE: normalization is this module's job, so there is exactly one
@@ -409,10 +429,25 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     evidenceRecords: typeof input.evidenceRecords === 'number' ? input.evidenceRecords : null,
   };
 
+  // Competencies are capped for readability, but the honest total travels with them so
+  // the page can say "12 of 19" rather than implying nineteen is all there is.
+  const competencies = normalizeCompetencies(input.competencies);
+
   return {
     identity,
     about: composeAbout(overview),
     stats: composeStats(overview),
+    featured: composeFeatured({
+      name: str(input.projectName),
+      repoUrl: input.featuredRepoUrl,
+      files: overview.filesCommitted,
+      topLevelAreas: input.featuredTopLevelAreas,
+      capabilities: capabilities.length,
+      languages: input.featuredLanguages,
+    }),
+    competencies,
+    competency_domain_count: countCompetencyDomains(input.competencies),
+    evidence_by_source: normalizeEvidenceSources(input.evidenceBySource),
     experience,
     education,
     capabilities,

@@ -70,26 +70,14 @@
   flex-wrap: wrap;
 }
 
-.pf-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 800;
-  color: var(--pf-ink);
-  font-size: 18px;
-  text-decoration: none;
-}
-
-.pf-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--pf-a), var(--pf-a2));
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 15px;
-  font-weight: 800;
+/* The Refactored.ai wordmark. It already contains the name, so nothing is set beside
+   it. Its blue reads on both the light and the dark ground, so no filter is applied -
+   inverting it would only break a brand asset that does not need help. */
+.pf-logo {
+  height: 28px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
 }
 
 .pf-navlinks { display: flex; gap: 26px; margin-left: 8px; flex-wrap: wrap; }
@@ -294,6 +282,61 @@
 .pf-list a { color: var(--pf-a); font-weight: 600; text-decoration: none; }
 .pf-list a:hover { text-decoration: underline; }
 
+/* ── Featured project ─────────────────────────────────────────────────── */
+
+.pf-feat-name { font-size: 20px; font-weight: 800; color: var(--pf-ink); margin: 0; }
+.pf-feat-repo { font-size: 13px; color: var(--pf-a); margin-top: 4px; display: inline-block; text-decoration: none; word-break: break-all; }
+.pf-feat-repo:hover { text-decoration: underline; }
+
+.pf-feat-nums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 1px;
+  margin-top: 16px;
+  background: var(--pf-bd);
+  border: 1px solid var(--pf-bd);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pf-feat-num { background: var(--pf-card); padding: 14px 10px; text-align: center; }
+.pf-feat-num b { display: block; font-size: 22px; font-weight: 800; color: var(--pf-ink); }
+.pf-feat-num span { display: block; margin-top: 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--pf-mut); font-weight: 600; }
+
+/* ── Competency bars ──────────────────────────────────────────────────── */
+
+.pf-bar {
+  display: grid;
+  grid-template-columns: 190px 1fr 34px;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 0;
+}
+
+.pf-bar-label { font-size: 14px; color: var(--pf-body); }
+.pf-bar-track { background: var(--pf-al); border-radius: 999px; height: 9px; overflow: hidden; }
+.pf-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--pf-a), var(--pf-a2)); }
+.pf-bar-val { font-size: 13px; font-weight: 700; color: var(--pf-ink); text-align: right; }
+
+/* ── Evidence chips ───────────────────────────────────────────────────── */
+
+.pf-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.pf-chip {
+  border: 1px solid var(--pf-bd);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--pf-card);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pf-chip b { font-size: 18px; font-weight: 800; color: var(--pf-ink); }
+.pf-chip span { font-size: 13px; color: var(--pf-body); }
+
+.pf-note { font-size: 13px; color: var(--pf-mut); margin: 12px 0 0; }
+
 .pf-foot {
   max-width: 1180px;
   margin: 0 auto;
@@ -318,6 +361,7 @@
   .pf-stat:nth-child(2) { border-right: none; }
   .pf-stat:nth-child(1), .pf-stat:nth-child(2) { border-bottom: 1px solid var(--pf-bd); }
   .pf-job { grid-template-columns: 1fr; gap: 4px; }
+  .pf-bar { grid-template-columns: 118px 1fr 30px; gap: 9px; }
   .pf-nav-in { gap: 14px; min-height: 56px; }
   .pf-navlink { padding: 10px 0; }
 }
