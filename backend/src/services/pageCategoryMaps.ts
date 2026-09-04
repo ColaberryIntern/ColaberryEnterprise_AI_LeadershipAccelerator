@@ -82,10 +82,69 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       '/about': 'about',
     },
   },
+
+  /**
+   * Career Pathways Network - opportunitylift.org. One page today.
+   *
+   * The scholarship intake form lives ON the homepage rather than behind its own route,
+   * so `/` stays `homepage` and is NOT promoted to `enroll` to manufacture intent. The
+   * form is already covered by the mechanism built for forms: `form_started` (30) and
+   * `form_submitted` (50) fire from the form's own events regardless of page category.
+   * Labelling a homepage as an enrollment page to reach a number would make every bounce
+   * look like an application.
+   */
+  cpn: {
+    exact: {
+      '/': 'homepage',
+    },
+  },
+
+  /**
+   * Refactored.ai - a faithful port of the live site, pending redesign. This map
+   * describes the pages as they are today and will need revisiting when the site is
+   * rebuilt, which is equally true of the pages themselves.
+   *
+   * Several h1s in the capture are navigation text ("LEARN") rather than page headings,
+   * so these categories were read from each page's content and forms, not its heading.
+   */
+  refactored: {
+    exact: {
+      '/': 'homepage',
+      // The three audience pages: what Refactored offers, and to whom.
+      '/individuals': 'program',
+      '/organizations': 'program',
+      '/enterprise': 'program',
+      // A searchable content index, not a case-study surface. It showcases no outcomes,
+      // and labelling it `case_studies` would inflate `deep_scroll_case_study` (20)
+      // against a page that proves nothing.
+      '/public-library': 'library',
+      // The one page on the ported site where a visitor asks for the product: an intake
+      // form (`data-form="platform_interest"`) with a submit CTA. Same shape as AI
+      // Flotation's `/start`, so it earns the same category rather than a weaker one.
+      '/platform-interest': 'enroll',
+      // Three routes, one meaning: reach a human.
+      '/contact-us': 'contact',
+      '/feedback': 'contact',
+      '/enterprise-feedback': 'contact',
+      // Post-submission confirmation. Named so it is not `other`, but it carries no
+      // intent of its own - arriving here means the signal already fired upstream.
+      '/thank-you': 'thank_you',
+      // Legal pages. No commercial meaning, and deliberately named rather than left to
+      // fall through, so the uncategorised bucket keeps meaning "we have not looked".
+      '/privacy': 'legal',
+      '/terms': 'legal',
+    },
+  },
 };
 
-/** Brands whose pages exist but have no map yet. Phase 2 of the tracking work. */
-export const BRANDS_AWAITING_CATEGORY_MAP = ['cpn', 'refactored'] as const;
+/**
+ * Brands whose pages exist but have no map yet.
+ *
+ * Empty as of Phase 2: every app in this repository now declares its own categories.
+ * The constant stays, and the guard test still asserts it matches reality, so a new
+ * brand app cannot be added without either a map or a deliberate entry here.
+ */
+export const BRANDS_AWAITING_CATEGORY_MAP: readonly string[] = [];
 
 /**
  * Resolve a path within one brand's map. Returns null when the brand has no map, so the

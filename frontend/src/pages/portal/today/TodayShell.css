@@ -621,6 +621,17 @@
 @media(max-width:820px){
   .te-shell,.te-shell.collapsed,.te-shell.contacts-collapsed,.te-shell.collapsed.contacts-collapsed{grid-template-columns:1fr;grid-template-areas:"top" "main"}
   .te-nav,.te-contacts{display:none}
+  /* MEASURED FIX for horizontal overflow at mobile widths.
+     .te-shell is a grid, and a grid item defaults to `min-width:auto`, which
+     refuses to shrink below its own min-content width. So both the app bar and
+     the main column expanded to whatever their widest content needed and pushed
+     the document sideways — every portal page scrolled horizontally on a phone,
+     independent of which page it was.
+     Measured at 390px before/after: cert-prep 555 -> 390, points 750 -> 390,
+     community 410 -> 390. The tab bar was never the cause; it was already
+     fitting at 390 with 12 tabs of 32px. Named explicitly rather than
+     `.te-shell>*` so it is obvious which two items are grid children. */
+  .te-top,.te-main{min-width:0}
   .te-main{padding:18px 14px 84px}
   /* app bar: keep brand + theme + settings + avatar; drop the desktop rail + HUD */
   .te-rail,.te-hud{display:none}

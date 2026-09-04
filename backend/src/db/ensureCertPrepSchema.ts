@@ -1,3 +1,4 @@
+import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 
 /**
@@ -259,5 +260,66 @@ export async function ensureCertPrepSchema(): Promise<void> {
       console.warn('[DB] Cert Prep schema stmt skipped:', err?.message);
     }
   }
-  console.log('[DB] Cert Prep (Claude Architect readiness) schema ensured');
+
+  // POST-CONDITION CHECK — do not remove.
+  //
+  // The per-statement try/catch above is the repo's convention (see
+  // ensureCapeSchema) and it is right: a partial DB should self-heal and a
+  // re-run should be a no-op. But on its own it also means a FAILING statement
+  // logs one warning among hundreds of boot lines and the function still
+  // announces success. That is not hypothetical — the first real run of this
+  // file created 4 of 8 tables (the four without a foreign key to `enrollments`,
+  // which did not exist on that database) and reported "schema ensured".
+  //
+  // Four of these tables REFERENCE enrollments(id), so this schema cannot stand
+  // up on a database that has not already been through the app's own schema.
+  // That dependency is correct and intended — cert data belongs to an enrollment
+  // — but it has to fail loudly rather than silently leave half a feature.
+  const missing = await missingCertTables();
+  if (missing.length > 0) {
+    console.error(
+      `[DB] Cert Prep schema INCOMPLETE — ${missing.length} of ${CERT_TABLES.length} tables missing: ${missing.join(', ')}. ` +
+      'The four session/response/readiness/evidence tables REFERENCE enrollments(id); if that table does not exist yet, ' +
+      'this schema must run AFTER the core app schema. Cert Prep will not function until this is resolved.',
+    );
+    return;
+  }
+  console.log(`[DB] Cert Prep (Claude Architect readiness) schema ensured — all ${CERT_TABLES.length} tables present`);
+}
+
+/** Every table this module is responsible for. */
+export const CERT_TABLES = [
+  'cert_tracks',
+  'cert_domains',
+  'cert_questions',
+  'cert_question_revisions',
+  'cert_sessions',
+  'cert_responses',
+  'cert_readiness_snapshots',
+  'cert_evidence_mappings',
+] as const;
+
+/**
+ * Which of the Cert Prep tables are absent. Exported so a health check or a
+ * deployment gate can ask the same question the boot path asks.
+ */
+export async function missingCertTables(): Promise<string[]> {
+  try {
+    // `IN (:names)`, not `ANY(:names)` — Sequelize expands an array replacement
+    // into a comma-separated list, which is valid inside IN(...) and a syntax
+    // error inside ANY(...). QueryTypes.SELECT returns the rows directly rather
+    // than the [results, metadata] tuple, which is the other half of the same
+    // trap: destructuring the tuple for a SELECT silently yields metadata.
+    const rows = await sequelize.query<{ table_name: string }>(
+      `SELECT table_name::text AS table_name FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name IN (:names)`,
+      { replacements: { names: [...CERT_TABLES] }, type: QueryTypes.SELECT },
+    );
+    const present = new Set(rows.map((r) => r.table_name));
+    return CERT_TABLES.filter((t) => !present.has(t));
+  } catch (err: any) {
+    // If we cannot even ask, say so rather than reporting a clean bill of health.
+    console.warn('[DB] Cert Prep table check failed:', err?.message);
+    return [...CERT_TABLES];
+  }
 }

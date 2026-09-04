@@ -31,6 +31,12 @@
   var script = document.currentScript;
   if (!script) return;
 
+  // Do Not Track, honoured the same way the platform tracker honours it. The brand
+  // sites did not check this before, which meant one ecosystem answered the header on
+  // some pages and ignored it on others. Consistency here is the whole point of a
+  // shared SDK.
+  if (navigator.doNotTrack === '1' || window.doNotTrack === '1') return;
+
   var siteSlug = script.getAttribute('data-site') || '';
   var apiBase = script.getAttribute('data-api') || inferApiBase(script.src);
   if (!siteSlug) return;
@@ -147,6 +153,93 @@
     },
     { passive: true, capture: true },
   );
+
+  // --- engagement depth -----------------------------------------------------------
+  //
+  // Until this existed, a brand site could not produce four of the twenty signals the
+  // scorer defines: deep_scroll_program (25), deep_scroll_pricing (30),
+  // deep_scroll_case_study (20) and extended_time_on_page (15). Not "produced them
+  // rarely" — could not produce them at all, because the events they are derived from
+  // were never emitted here.
+
+  var SCROLL_THRESHOLDS = [25, 50, 75, 90, 100];
+  var firedThresholds = {};
+
+  function onScroll() {
+    var doc = document.documentElement;
+    var scrollable = doc.scrollHeight - doc.clientHeight;
+    // A page shorter than the viewport cannot be scrolled, and reporting 100% for it
+    // would turn every bounce on a short page into a deep-engagement signal.
+    if (scrollable <= 0) return;
+
+    var pct = Math.round((window.pageYOffset / scrollable) * 100);
+    for (var i = 0; i < SCROLL_THRESHOLDS.length; i++) {
+      var t = SCROLL_THRESHOLDS[i];
+      if (pct >= t && !firedThresholds[t]) {
+        firedThresholds[t] = true;
+        // TWO KEYS FOR ONE NUMBER, deliberately. Two server consumers read this payload
+        // under different names, and neither can change without breaking the other's
+        // historical rows:
+        //   journeyTimelineService   reads event_data.depth          (timeline label)
+        //   behavioralSignalService  reads event_data.depth_percent  (the >= 75 test
+        //     behind the three deep_scroll_* signals)
+        // The platform tracker learned this the hard way: it emitted `depth` alone, so
+        // the timeline label worked and the lead signals stayed dead, and the mismatch
+        // was invisible because both reads simply returned undefined.
+        track('scroll', { depth: t, depth_percent: t });
+      }
+    }
+  }
+
+  // --- time on page ---------------------------------------------------------------
+  //
+  // Accumulated VISIBLE time, not wall-clock since load. A tab left open in the
+  // background for an hour is not three minutes of reading, and counting it as such
+  // would make extended_time_on_page (strength 15) mean nothing.
+  var visibleStart = Date.now();
+  var totalVisibleMs = 0;
+  var timeReported = false;
+
+  function reportTimeOnPage() {
+    if (document.visibilityState === 'visible') {
+      totalVisibleMs += Date.now() - visibleStart;
+      visibleStart = Date.now();
+    }
+    var seconds = Math.round(totalVisibleMs / 1000);
+    // Nothing to say about a page that was never actually looked at.
+    if (seconds < 1) return;
+    // `seconds` is the key behavioralSignalService reads for the >= 180 test. Sending
+    // this under any other name is the same class of mistake as `depth` vs
+    // `depth_percent`, and would fail just as silently.
+    track('time_on_page', { seconds: seconds });
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+      reportTimeOnPage();
+      timeReported = true;
+    } else {
+      visibleStart = Date.now();
+      // A returning reader keeps accumulating, so a later report supersedes the earlier
+      // one rather than being suppressed by it.
+      timeReported = false;
+    }
+  });
+
+  // `pagehide` rather than `beforeunload`: mobile Safari and bfcache-restoring browsers
+  // frequently skip `beforeunload` entirely, which is exactly where short sessions get
+  // lost. The flag stops a hide-then-unload sequence reporting the same page twice.
+  window.addEventListener('pagehide', function () {
+    if (!timeReported) reportTimeOnPage();
+  });
+
+  // DELIBERATELY NOT EMITTED: `heartbeat`. The server accepts the type, but nothing
+  // consumes it — `recordPageEvent` does not touch the session row, and the only code
+  // that updates `duration_seconds` is `updateHeartbeat`, reachable solely through
+  // POST /api/t/heartbeat, which no client in this repository calls. Emitting a
+  // heartbeat every 30 seconds would add a row per visitor per half-minute and change
+  // no score. If session duration is fixed later, this is the place to add it.
+  document.addEventListener('scroll', onScroll, { passive: true });
 
   // Public surface, so an app can record a submit it handled itself.
   window.rfxTrack = track;

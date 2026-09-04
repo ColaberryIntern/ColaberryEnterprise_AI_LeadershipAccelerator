@@ -104,7 +104,10 @@ async function findPageBySlug(slug: string): Promise<PortfolioPageRow | null> {
 export async function readLiveProjects(enrollmentId: string, now: Date = new Date()): Promise<any[]> {
   try {
     const [rows] = await sequelize.query(
-      `SELECT name, organization_name, industry, primary_business_problem,
+      // `id` is selected ONLY to join a project to its capstone record below. The
+      // projection never publishes it -- it emits the record's slug instead, which is a
+      // public address, where the id is an internal key.
+      `SELECT id, name, organization_name, industry, primary_business_problem,
               selected_use_case, automation_goal, project_stage,
               github_repo_url, portfolio_url
          FROM projects
@@ -242,7 +245,10 @@ async function buildPortfolio(
     const [rows] = await sequelize.query(
       // `descriptor` is selected so the projection can fall back to the document's own
       // first heading when `project_name` is null, rather than printing the slug.
-      `SELECT slug,
+      // `project_id` lets the projection put each write-up on the project it is about,
+      // so a reader can drill from the project card into the record. Still filtered to
+      // PUBLISHED and non-private, so a draft record can never become a link.
+      `SELECT slug, project_id,
               content_json->'system'->>'project_name' AS project_name,
               content_json->'system'->>'descriptor'   AS descriptor,
               published_at
