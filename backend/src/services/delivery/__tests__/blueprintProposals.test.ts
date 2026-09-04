@@ -198,3 +198,47 @@ describe('applyProposals', () => {
     );
   });
 });
+
+/**
+ * The first live run produced no Trust Before Intelligence section at all. The model
+ * returned one nested object instead of several flat entries, the validator refused it -
+ * correctly - and the section stayed empty with the reason reading only
+ * "value: expected string, received object", which never said WHICH section had vanished.
+ *
+ * §19 is the section tied to the whole differentiator, so it failing silently is the worst
+ * available outcome.
+ */
+describe('the trust blueprint failing must not be silent', () => {
+  it('names the section in the refusal reason', () => {
+    const violation = proposalViolation({
+      section: 'trust_blueprint',
+      value: { what_ai_may_do: 'triage', what_requires_human: 'approval' },
+      trust_state: 'Required',
+    });
+    expect(violation).toContain('trust_blueprint');
+    expect(violation).toContain('expected string');
+  });
+
+  it('still reports a shape failure when the payload has no section at all', () => {
+    expect(proposalViolation({ value: 'orphaned' })).toBeTruthy();
+  });
+
+  it('carries the section through generateProposals so a caller can see what was lost', async () => {
+    mockChatJson.mockResolvedValue(
+      ok({ entries: [good, { section: 'trust_blueprint', value: { nested: true }, trust_state: 'Required' }] }),
+    );
+
+    const result = await generateProposals({ understanding, blueprint });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rejected[0].reason).toContain('trust_blueprint');
+  });
+
+  it('instructs the model to send several flat trust entries, not one nested object', () => {
+    const prompt = buildProposalPrompt(understanding, blueprint);
+    expect(prompt).toContain('SEVERAL SEPARATE ENTRIES');
+    expect(prompt).toContain('Do not return one nested object');
+    expect(prompt).toContain('"trust_state": "Required"');
+  });
+});
