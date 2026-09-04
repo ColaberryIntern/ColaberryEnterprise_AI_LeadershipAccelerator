@@ -220,11 +220,37 @@ a dedicated agent whose only job is imagery. It works while the record is author
 
 Do not block on it. Author the record in parallel and attach when it reports.
 
-### The cover image is the point
+### The cover image is the point — and you do NOT set it directly
 
-`identity.heroImageUrl` is the **cover of the case study page**. A record without one
-opens on text and reads as unfinished no matter how good the evidence is. Treat the
-cover as a required field, not an optional one.
+A record without a cover opens on text and reads as unfinished no matter how good the
+evidence is. But **`identity.heroImageUrl` is ignored by the public projection.**
+Setting it does nothing. Learned the hard way: it was set correctly on the snapshot and
+the page still showed a different image.
+
+The cover is CHOSEN, by artifact type, in this fixed order
+(`HERO_IMAGE_PRIORITY` in `caseStudyArtifactPresentation.ts`):
+
+```
+'screenshot'  ->  'architecture'  ->  'photo'
+```
+
+`resolveHeroImage()` walks that list and takes the first approved, public, http(s) image
+it finds. Consequences worth knowing BEFORE rendering anything:
+
+- **A `diagram` artifact can never be the cover.** It is not in the list. A dashboard
+  typed `diagram` will publish and will never appear as the hero.
+- **Type decides, not creation order.** An `architecture` image beats a `photo` however
+  they were added.
+- To make a specific image the cover, give it the **highest-priority type it honestly
+  is** — and never relabel a generated chart as a `screenshot` to promote it, because
+  `screenshot` asserts a capture of something running.
+
+Decide the cover by choosing which honest type the best image belongs to, then verify
+the projection actually returned it:
+
+```js
+p.projection.heroImageUrl   // must be the URL you expected, not merely non-null
+```
 
 ### What counts as a real image, in order of preference
 
@@ -287,7 +313,7 @@ alone does not put it on the page — **and set `identity.heroImageUrl` to the c
 
 ### Done means
 
-- [ ] `heroImageUrl` set — the page has a cover
+- [ ] The projection's `heroImageUrl` returns the image you INTENDED, not just non-null
 - [ ] **At least two** approved, publicly viewable images (readiness checks both)
 - [ ] Every image depicts *this* subject
 - [ ] Artifacts lifted into the snapshot, not just created as rows
