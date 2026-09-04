@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { getCrossBrandVisitors } from '../services/crossBrandVisitorService';
 import {
   listVisitors,
   getVisitorStats,
@@ -252,6 +253,25 @@ export async function handleGetVisitorIntent(req: Request, res: Response, next: 
 // ---------------------------------------------------------------------------
 // 10. High Intent Visitors              GET /api/admin/visitors/high-intent
 // ---------------------------------------------------------------------------
+
+/**
+ * One row per human who touched more than one brand, ordered by intent.
+ *
+ * The question every other visitor endpoint cannot answer: is the person reading AI
+ * Flotation's pricing page the same one who read Refactored's enterprise page last week.
+ */
+export async function handleGetCrossBrandVisitors(req: Request, res: Response, next: NextFunction) {
+  try {
+    const visitors = await getCrossBrandVisitors({
+      minBrands: req.query.minBrands ? Number(req.query.minBrands) : undefined,
+      days: req.query.days ? Number(req.query.days) : undefined,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+    });
+    res.json({ visitors, count: visitors.length });
+  } catch (err) {
+    next(err);
+  }
+}
 
 export async function handleGetHighIntentVisitors(req: Request, res: Response, next: NextFunction) {
   try {
