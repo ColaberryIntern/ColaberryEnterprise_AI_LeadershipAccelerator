@@ -5,13 +5,25 @@
  * that could drift from reality."
  *
  * TOOL_CAPABILITIES is the one structured dictionary every agent's reads/produces
- * view is derived from. Each entry is grounded in the REAL implementing code (cited
- * inline), not invented — the exact same 22 distinct tool strings enumerated across
- * this repo's `AGENT_REGISTRY` for every agent that appears on the Workforce OS
- * Live Agents panel (backend/src/services/agentRegistrySeed.ts): Reese's 2,
- * cory-engine's 4, CoryBrain's 3, InboxCaseEngine's 3,
- * workforce_intelligence_engine's 2, bpos_orchestrator's 3, and the 16 department
- * Strategy Architects' shared 5 (PR #1576).
+ * view is derived from — and, per Ali's own framing (2026-09-04, "a Global tool
+ * chest so they can be reused across different agents"), THIS is that tool chest.
+ * Before granting a new or existing agent a tool, check here first: reuse an
+ * existing entry whose real behavior matches, rather than inventing a
+ * differently-named tool that does the same thing. Only add a new entry when the
+ * capability is genuinely new. See `build-platform-agent/SKILL.md`'s trust &
+ * hierarchy section for the full onboarding checklist this backs.
+ *
+ * Each entry is grounded in the REAL implementing code (cited inline), not
+ * invented — as of 2026-09-04, the full 35 distinct tool strings enumerated
+ * across this repo's `AGENT_REGISTRY` (backend/src/services/agentRegistrySeed.ts):
+ * Reese's 2, cory-engine's 4, CoryBrain's 3, InboxCaseEngine's 3,
+ * workforce_intelligence_engine's 2, bpos_orchestrator's 3, the 16 department
+ * Strategy Architects' shared 5 (PR #1576), AgentBehaviorMonitorAgent's 4, and 5
+ * ticket/case auto-resolvers' 8 (WorkforceTicketAutoResolver,
+ * CoryEngineTicketAutoResolver, CoryBrainInitiativeTicketAutoResolver,
+ * InboxCaseSourceCompletionResolver, BposCapabilityTicketAutoResolver — added
+ * while closing the coverage gap this file's own `undocumentedTools` surfacing
+ * had been honestly flagging for them).
  *
  * A tool granted to a future agent that isn't in this dictionary yet is surfaced
  * honestly via `undocumentedTools` (deriveAgentCapabilities below), never silently
@@ -133,6 +145,95 @@ export const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
   llm_strategy_analysis: {
     reads: ['Department health + opportunity signals, reasoned over via GPT-4o (getOpenAIClient())'],
     produces: [],
+  },
+
+  // --- AgentBehaviorMonitorAgent (agentBehaviorMonitorAgent.ts, security_ops
+  // cron, every 10 minutes — 3 anomaly checks + the security-alert write, added
+  // 2026-09-04 closing this file's own previously-honest undocumentedTools gap) ---
+  detect_stuck_agents: {
+    reads: ['ai_agents.status / last_run_at — agents running longer than 15 minutes'],
+    produces: [],
+  },
+  detect_agent_error_spikes: {
+    reads: ['ai_agents.error_count — agents with more than 5 errors in the last hour'],
+    produces: [],
+  },
+  detect_agent_duration_anomalies: {
+    reads: ['ai_agents.avg_duration_ms — agents running more than 3x their own historical average'],
+    produces: [],
+  },
+  create_security_alerts: {
+    reads: [],
+    produces: ['DepartmentEvent records (security-ops alert writes)'],
+  },
+
+  // --- 5 ticket/case auto-resolvers (added 2026-09-04). All 5 share one
+  // pattern: deterministic re-derivation of the SAME condition the ticket/case
+  // was opened under, never a time-based fallback — a still-open condition is
+  // left untouched and reported, never force-closed. ---
+
+  // WorkforceTicketAutoResolver (workforceTicketAutoResolver.ts) — re-checks the
+  // exact >20% error-rate/>=10-error threshold a workforce_decision ticket was
+  // opened under.
+  close_workforce_tickets_on_recovery: {
+    reads: ['The specific error-rate/error-count condition the ticket was opened under'],
+    produces: ["Ticket status -> done, with a numbers-grounded evidence comment"],
+  },
+
+  // CoryEngineTicketAutoResolver (coryEngineTicketAutoResolver.ts) — re-runs
+  // ProblemDiscoveryAgent's own detectAgentFailures()/detectConversionDrops()
+  // against each open cory-engine ticket. error_spike tickets are deliberately
+  // never auto-closed (a known bad SQL column reference makes that specific
+  // re-check untrustworthy) — left untouched by design, not force-closed.
+  query_lead_conversion_metrics: {
+    reads: ['Lead conversion funnel metrics (ProblemDiscoveryAgent.detectConversionDrops())'],
+    produces: [],
+  },
+  close_cory_engine_tickets_on_recovery: {
+    reads: ['The specific detection condition (agent failure or conversion drop) the ticket was opened under'],
+    produces: ["Ticket status -> done, with a numbers-grounded evidence comment"],
+  },
+
+  // CoryBrainInitiativeTicketAutoResolver (corybrainInitiativeTicketAutoResolver.ts)
+  // — syncs a strategic initiative's parent/subtask tickets to the initiative's
+  // own current live status; never decides completion/cancellation itself, only
+  // propagates an already-established fact.
+  query_strategic_initiative_status: {
+    reads: ["The linked StrategicInitiative row's current status"],
+    produces: [],
+  },
+  close_corybrain_tickets_on_initiative_terminal_state: {
+    reads: [],
+    produces: ['Ticket status -> done (initiative completed) or cancelled (initiative cancelled)'],
+  },
+
+  // InboxCaseSourceCompletionResolver (inboxCaseSourceCompletionResolver.ts) —
+  // re-checks a case's linked basecamp_todo item via ops_bc_todos, then re-runs
+  // the existing evaluateClosureGuard()/closeCase() authority unmodified; a
+  // still-active todo or an undispositioned email item is left untouched.
+  query_basecamp_todo_completion_status: {
+    reads: ['ops_bc_todos — the Basecamp todo completion/trash disposition mirror'],
+    produces: [],
+  },
+  close_inboxcase_cases_on_source_completion_or_existing_guard_pass: {
+    reads: [],
+    produces: ['Case item dispositions (RESOLVED/NO_ACTION) and case closures via the existing closeCase() authority'],
+  },
+
+  // BposCapabilityTicketAutoResolver (bposCapabilityTicketAutoResolver.ts) —
+  // re-checks a capability_verification ticket's linked Capability row for a
+  // real, human-asserted user_status:'verified' signal, or the row's own hard
+  // deletion (capabilities has no soft-delete column). The ticket's original
+  // completion route (the AI Project Builder's execution-ticket endpoint) was
+  // deliberately retired 2026-07-18 with the backend left in place — this is
+  // the replacement closure path.
+  query_capability_verification_status: {
+    reads: ["The linked Capability row's user_status, or its own continued existence"],
+    produces: [],
+  },
+  close_bpos_tickets_on_capability_verified_or_deleted: {
+    reads: [],
+    produces: ['Ticket status -> done (capability verified) or cancelled (capability row deleted)'],
   },
 };
 
