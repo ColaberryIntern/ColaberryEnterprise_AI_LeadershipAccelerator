@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import AdminUser from '../../models/AdminUser';
 import AiAgent from '../../models/AiAgent';
-import { Ticket } from '../../models';
+import Ticket from '../../models/Ticket';
 import { buildCreatorIdMatchList } from './legacyCreatorAliases';
 import { getAgentExplainability } from '../agentExplainabilityService';
 

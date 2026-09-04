@@ -20,8 +20,9 @@ jest.mock('../../../models/AdminUser', () => ({
 }));
 
 const mockTicketFindAll = jest.fn();
-jest.mock('../../../models', () => ({
-  Ticket: { findAll: (...a: any[]) => mockTicketFindAll(...a) },
+jest.mock('../../../models/Ticket', () => ({
+  __esModule: true,
+  default: { findAll: (...a: any[]) => mockTicketFindAll(...a) },
 }));
 
 const mockGetExplainability = jest.fn();
