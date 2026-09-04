@@ -487,4 +487,35 @@ describe('careerPortfolioPublicProjection', () => {
       expect(build('nope').case_study_slug).toBeNull();
     });
   });
+
+  describe('a write-up links to the case study, or to nothing', () => {
+    const rec = (over: any = {}) => ({
+      slug: 'the-write-up', project_id: 'proj-1', published_at: AT, ...over,
+    });
+    const build = (records: any, caseStudyByProject: any = {}) => projectPublicPortfolio({
+      profile: loadedProfile(), projects: [{ id: 'proj-1', name: 'CoreOps' }],
+      records, caseStudyByProject, generatedAt: AT,
+    }).records;
+
+    it('carries the case study covering the same project', () => {
+      const out = build([rec()], { 'proj-1': 'the-ai-proposes-a-verified-human-decides' });
+      expect(out[0].case_study_slug).toBe('the-ai-proposes-a-verified-human-decides');
+    });
+
+    it('is null when no case study exists, so the page offers no link', () => {
+      expect(build([rec()], {})[0].case_study_slug).toBeNull();
+    });
+
+    it('does not attach a case study from a different project', () => {
+      expect(build([rec()], { 'proj-OTHER': 'somebody-elses' })[0].case_study_slug).toBeNull();
+    });
+
+    it('still publishes the write-up itself either way', () => {
+      // The work WAS written up; that stays true whether or not there is somewhere to
+      // send the reader. Only the link is withheld.
+      const out = build([rec()], {});
+      expect(out).toHaveLength(1);
+      expect(out[0].slug).toBe('the-write-up');
+    });
+  });
 });

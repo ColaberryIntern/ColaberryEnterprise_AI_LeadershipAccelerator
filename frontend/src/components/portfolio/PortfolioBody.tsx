@@ -27,7 +27,11 @@ import {
  */
 
 interface Capability { name: string; count: number; proven?: boolean; on_sample?: boolean }
-interface RecordLink { slug: string; title: string; published_at: string | null }
+interface RecordLink {
+  slug: string; title: string; published_at: string | null;
+  /** The case study covering the same work. Null means no link is offered. */
+  case_study_slug?: string | null;
+}
 
 interface ProjectItem {
   title: string; organization: string | null; industry: string | null;
@@ -402,8 +406,15 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
               <Rule />
               <ul className="pf-list">
                 {records.map((r) => (
-                  // The record is where the depth lives; this page is the index.
-                  <li key={r.slug}><a href={`/p/${r.slug}`}>{r.title}</a></li>
+                  <li key={r.slug}>
+                    {/* Offered as a link ONLY when there is a case study to open. The
+                        record's own /p/ address is a retired surface, so a write-up
+                        without a case study is stated rather than linked -- it happened,
+                        and saying so is true, but there is nowhere good to send anyone. */}
+                    {r.case_study_slug
+                      ? <a href={`/stories/${r.case_study_slug}`}>{r.title}</a>
+                      : <span className="pf-list-plain">{r.title}</span>}
+                  </li>
                 ))}
               </ul>
             </section>
