@@ -67,6 +67,21 @@ router.get('/api/admin/visitor-analytics/traffic-sources', requireAdmin, async (
   }
 });
 
+// ── Visitor KPIs (reach → acquisition → engagement → conversion) ──────────────
+
+router.get('/api/admin/visitor-analytics/kpis', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { getVisitorKpis } = await import('../../services/visitorKpiService');
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days as string, 10) || 30));
+    const includeBots = req.query.includeBots === 'true';
+    const data = await getVisitorKpis(days, includeBots);
+    res.json(data);
+  } catch (err: any) {
+    console.error('[VisitorAnalytics] KPI error:', err.message);
+    res.status(500).json({ error: 'Failed to load visitor KPIs' });
+  }
+});
+
 // ── Flow Sankey (traffic source → site entered → outcome) ─────────────────────
 
 router.get('/api/admin/visitor-analytics/flow-sankey', requireAdmin, async (req: Request, res: Response) => {
