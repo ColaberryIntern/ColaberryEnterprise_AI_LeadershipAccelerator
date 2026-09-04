@@ -98,19 +98,23 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
         ],
         // trustbeforeintelligence is Ram's book microsite feeding enterprise demand.
         //
-        // `advisor` and `worldoftaxonomy` were originally left unclassified because the
-        // code alone does not justify the assignment: advisor.colaberry.ai is a separate
-        // FastAPI product in its own repository. Ali classified both to Colaberry
-        // Enterprise on 2026-08-21 (DEC-06). That is a business fact the code cannot
-        // derive, which is exactly why it was asked rather than guessed, and it is
-        // recorded here so nobody re-litigates it in six months.
-        lead_source_slugs: [
-          'enterprise',
-          'colaberry',
-          'trustbeforeintelligence',
-          'advisor',
-          'worldoftaxonomy',
-        ],
+        // DECISION HISTORY, kept because the earlier note asked that this not be
+        // re-litigated silently.
+        //
+        // 2026-08-21 (DEC-06): Ali classified `advisor` and `worldoftaxonomy` to
+        // Colaberry Enterprise. Recorded then as a business fact the code cannot derive.
+        //
+        // 2026-09-04: REVERSED, by Ali, on evidence. Pooling meant five properties
+        // reported as one brand and every brand-keyed view showed their sum.
+        // `worldoftaxonomy` alone carried 161,881 events in thirty days - more than half
+        // of everything the estate records - so "Colaberry Enterprise: 317,231 events"
+        // was a true number mostly about a site nobody would think to name. The three
+        // distinct products are now their own brands.
+        //
+        // `colaberry` and `enterprise` deliberately stay TOGETHER. They are two
+        // hostnames for one company brand, which is what `domains` above already models;
+        // splitting a brand from itself over a hostname would be the opposite mistake.
+        lead_source_slugs: ['enterprise', 'colaberry'],
         // `enterprise` is the slug the server-side host map has been stamping on
         // enterprise.colaberry.ai traffic all along, with no matching row to attach to.
         tracking_sources: [
@@ -147,6 +151,49 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
             domain: 'training.colaberry.com',
           },
         ],
+      },
+      // The three properties split out of Colaberry Enterprise on 2026-09-04. Each is a
+      // distinct product with its own audience; none of them sends email, so none has a
+      // sender profile. They are tracked, not built here.
+      {
+        slug: 'worldoftaxonomy',
+        name: 'World of Taxonomy',
+        default_public_url: 'https://worldoftaxonomy.com',
+        default_theme_key: 'enterprise',
+        support_email: 'support@colaberry.com',
+        domains: [
+          { hostname: 'worldoftaxonomy.com', purpose: 'web', is_primary: true },
+          { hostname: 'www.worldoftaxonomy.com', purpose: 'web' },
+        ],
+        sender_profiles: [],
+        lead_source_slugs: ['worldoftaxonomy'],
+      },
+      {
+        slug: 'advisor',
+        name: 'AI Workforce Designer',
+        default_public_url: 'https://advisor.colaberry.ai',
+        default_theme_key: 'enterprise',
+        support_email: 'support@colaberry.com',
+        // A separate FastAPI product in its own repository. It reports here; it is not
+        // served from this codebase.
+        domains: [
+          { hostname: 'advisor.colaberry.ai', purpose: 'web', is_primary: true },
+        ],
+        sender_profiles: [],
+        lead_source_slugs: ['advisor'],
+      },
+      {
+        slug: 'trustbeforeintelligence',
+        name: 'Trust Before Intelligence',
+        default_public_url: 'https://trustbeforeintelligence.ai',
+        default_theme_key: 'enterprise',
+        support_email: 'support@colaberry.com',
+        domains: [
+          { hostname: 'trustbeforeintelligence.ai', purpose: 'web', is_primary: true },
+          { hostname: 'www.trustbeforeintelligence.ai', purpose: 'web' },
+        ],
+        sender_profiles: [],
+        lead_source_slugs: ['trustbeforeintelligence'],
       },
     ],
   },

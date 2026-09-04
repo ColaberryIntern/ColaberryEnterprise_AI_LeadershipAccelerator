@@ -97,6 +97,34 @@ describe('tracker / signal-detector payload contract', () => {
     expect(sdk).toContain("track('time_on_page'");
   });
 
+  it('emits a generic click, not only marked CTAs', () => {
+    // Before this, a brand site reported clicks only on elements someone had remembered
+    // to mark with data-cta: 7 of 207 on AI Flotation, 1 of 467 on Refactored. A visitor
+    // could follow every link in the navigation and register nothing.
+    expect(sdk).toContain("track('click'");
+    expect(sdk).toContain('a[href], button, [role="button"]');
+  });
+
+  it('the click payload uses the same key names as the platform tracker', () => {
+    // A consumer reading `element_text` must not find it under another name depending on
+    // which of our sites the visitor was on. That is exactly how `depth` and
+    // `depth_percent` came to disagree for the lifetime of a file.
+    const clickCall = sdk.match(/track\('click',\s*\{[\s\S]*?\}\)/);
+    expect(clickCall).not.toBeNull();
+    for (const key of ['element_text', 'element_tag', 'href', 'data_track']) {
+      expect(clickCall![0]).toContain(key);
+    }
+  });
+
+  it('a marked CTA still wins over the generic click', () => {
+    // Both would otherwise fire for the same element, double-counting one action and
+    // turning a strength-40 signal into a strength-15 one alongside it.
+    const idx = sdk.indexOf("track('cta_click'");
+    const generic = sdk.indexOf("track('click'");
+    expect(idx).toBeGreaterThan(-1);
+    expect(generic).toBeGreaterThan(idx);
+  });
+
   it('does not emit heartbeat, which nothing consumes', () => {
     // Deliberate omission, asserted so it stays deliberate. The server accepts the
     // type, but `recordPageEvent` never touches the session row and the only writer of
