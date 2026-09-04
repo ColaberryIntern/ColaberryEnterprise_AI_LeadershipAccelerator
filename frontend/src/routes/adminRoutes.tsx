@@ -29,6 +29,7 @@ const AdminApolloPage = lazy(() => import('../pages/admin/AdminApolloPage'));
 const CampaignBuilderPage = lazy(() => import('../pages/admin/CampaignBuilderPage'));
 const AdminICPInsightsPage = lazy(() => import('../pages/admin/AdminICPInsightsPage'));
 const AdminVisitorsPage = lazy(() => import('../pages/admin/AdminVisitorsPage'));
+const AdminTrackingEstatePage = lazy(() => import('../pages/admin/AdminTrackingEstatePage'));
 const AdminOpportunitiesPage = lazy(() => import('../pages/admin/AdminOpportunitiesPage'));
 const AdminAcceleratorPage = lazy(() => import('../pages/admin/AdminAcceleratorPage'));
 const AdminAcceleratorSessionTimelinePage = lazy(() => import('../pages/admin/AdminAcceleratorSessionTimelinePage'));
@@ -117,6 +118,8 @@ const adminRoutes = (
         <Route path="/admin/business-accounts/:id" element={<AdminBusinessAccountDetailPage />} />
         <Route path="/admin/leads/:id" element={<AdminLeadDetailPage />} />
         <Route path="/admin/visitors" element={<AdminVisitorsPage />} />
+        {/* Estate map: which sites report to which brand, read live. */}
+        <Route path="/admin/tracking-estate" element={<AdminTrackingEstatePage />} />
         <Route path="/admin/funnel" element={<AdminFunnelPage />} />
         <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
         <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />

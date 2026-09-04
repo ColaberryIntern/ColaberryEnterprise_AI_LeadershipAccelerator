@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { getTrackingEstate } from '../services/trackingEstateService';
 import { getCrossBrandVisitors } from '../services/crossBrandVisitorService';
 import {
   listVisitors,
@@ -277,6 +278,18 @@ export async function handleGetVisitorIntent(req: Request, res: Response, next: 
  * The question every other visitor endpoint cannot answer: is the person reading AI
  * Flotation's pricing page the same one who read Refactored's enterprise page last week.
  */
+/**
+ * The whole tracking estate: brands, their registered hostnames, and the site slugs that
+ * actually report. Returned at both grains because five properties resolve to one brand.
+ */
+export async function handleGetTrackingEstate(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await getTrackingEstate());
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function handleGetCrossBrandVisitors(req: Request, res: Response, next: NextFunction) {
   try {
     const visitors = await getCrossBrandVisitors({

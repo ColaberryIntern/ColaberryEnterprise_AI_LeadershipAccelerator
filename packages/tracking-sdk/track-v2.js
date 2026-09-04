@@ -132,13 +132,46 @@
     send('/api/t/identify', identifyPayload);
   }
 
+  // Selectors match the platform tracker's, so "what counts as a click" cannot mean two
+  // different things on two of our own sites.
+  var INTERACTIVE = 'a[href], button, [role="button"]';
+
+  function elementText(el) {
+    return (el.textContent || '').trim().slice(0, 120);
+  }
+
   document.addEventListener(
     'click',
     function (event) {
       var target = event.target;
       if (!target || !target.closest) return;
+
+      // A marked CTA is the higher-value reading and wins, exactly as on the platform.
       var cta = target.closest('[data-cta]');
-      if (cta) track('cta_click', { cta: cta.getAttribute('data-cta') });
+      if (cta) {
+        track('cta_click', { cta: cta.getAttribute('data-cta') });
+        return;
+      }
+
+      // EVERY other interactive element. Until this existed the brand sites reported
+      // clicks only on elements someone had remembered to mark with `data-cta` — 7 of
+      // 207 on AI Flotation, 1 of 467 on Refactored — so a visitor could read the whole
+      // site, follow every link in the navigation, and register no click at all. The
+      // platform tracker has emitted this since it was written; the newer SDK was the
+      // one seeing less.
+      var el = target.closest(INTERACTIVE);
+      if (!el) return;
+
+      // Payload keys mirror the platform's `click` exactly. A consumer reading
+      // `element_text` must not find it under a different name depending on which site
+      // the visitor happened to be on — that is the same class of mismatch that left
+      // `depth` and `depth_percent` disagreeing for the lifetime of a file.
+      track('click', {
+        element_text: elementText(el),
+        element_tag: el.tagName ? el.tagName.toLowerCase() : null,
+        href: el.getAttribute ? el.getAttribute('href') : null,
+        data_track: el.getAttribute ? el.getAttribute('data-track') : null,
+      });
     },
     { passive: true, capture: true },
   );
