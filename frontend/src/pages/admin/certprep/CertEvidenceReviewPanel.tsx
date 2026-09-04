@@ -91,17 +91,23 @@ export default function CertEvidenceReviewPanel({ enrollmentIds }: { enrollmentI
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * The id list is carried as a joined string so the effect depends on a stable
+   * primitive: a new array identity on every parent render would otherwise
+   * refetch the queue continuously. The ids are split back out inside, which
+   * keeps the dependency honest rather than silenced.
+   */
   const key = enrollmentIds.join(',');
 
   const load = useCallback(() => {
-    if (enrollmentIds.length === 0) { setRows([]); return Promise.resolve(); }
+    const ids = key ? key.split(',') : [];
+    if (ids.length === 0) { setRows([]); return Promise.resolve(); }
     setLoading(true);
     setError(null);
-    return fetchPendingEvidence(enrollmentIds)
+    return fetchPendingEvidence(ids)
       .then(setRows)
       .catch(() => setError('Could not load pending evidence.'))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   useEffect(() => { load(); }, [load]);
