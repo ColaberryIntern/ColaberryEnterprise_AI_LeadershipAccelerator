@@ -578,17 +578,51 @@ export async function listVisitors(params: {
         attributes: ['score', 'intent_level', 'signals_count', 'last_signal_at', 'score_updated_at'],
         required: false,
       },
-      {
-        model: Campaign,
-        as: 'campaign',
-        attributes: ['id', 'name'],
-        required: false,
-      },
+      // NO Campaign include here, deliberately. See the campaign lookup below.
     ],
     order: [[sortField, sortOrder]],
     limit,
     offset,
   });
+  /**
+   * Campaign names are resolved in a SECOND QUERY, not by an association.
+   *
+   * This list previously included `{ model: Campaign, as: 'campaign' }` — and
+   * there is no Visitor↔Campaign association anywhere in models/index.ts, so
+   * Sequelize threw `Campaign is not associated to Visitor!` on EVERY call.
+   * The page catches and logs, so the All Visitors tab has simply always shown
+   * "No visitor data yet." It has never worked.
+   *
+   * Adding the association would swap one runtime error for another: 
+   * `visitors.campaign_id` is VARCHAR while `campaigns.id` is UUID, so the join
+   * Sequelize generates fails with `operator does not exist: character varying
+   * = uuid`. Verified against the production schema before choosing this route.
+   *
+   * Two queries, no cast, no schema change, and the ids that are not valid UUIDs
+   * are dropped before they can reach Postgres and error.
+   */
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const campaignIds = Array.from(
+    new Set(
+      rows
+        .map((v: any) => (v.campaign_id ? String(v.campaign_id) : ''))
+        .filter((id: string) => UUID_RE.test(id)),
+    ),
+  );
+  const campaignsById = new Map<string, { id: string; name: string }>();
+  if (campaignIds.length > 0) {
+    try {
+      const campaigns: any[] = await Campaign.findAll({
+        where: { id: campaignIds },
+        attributes: ['id', 'name'],
+      });
+      for (const c of campaigns) campaignsById.set(String(c.id), { id: String(c.id), name: c.name });
+    } catch {
+      // A campaign name is a nicety; the visitor list is not. Never let the
+      // lookup take the list down again.
+    }
+  }
+
 
   return {
     // `is_bot` is emitted even though bots are filtered out by default, so that
@@ -596,6 +630,7 @@ export async function listVisitors(params: {
     // rather than merely present and indistinguishable from people.
     visitors: rows.map((v: any) => ({
       ...(typeof v.toJSON === 'function' ? v.toJSON() : v),
+      campaign: campaignsById.get(String(v.campaign_id)) ?? null,
       is_bot: isBotUserAgent(v.user_agent),
     })),
     total: count,
