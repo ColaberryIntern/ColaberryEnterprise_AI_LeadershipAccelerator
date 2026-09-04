@@ -102,6 +102,46 @@ export function labelViolation(html: string): string | null {
     : `concept does not label itself a ${CONCEPT_LABEL.toLowerCase()}`;
 }
 
+/** Below this, a `<style>` block is a gesture rather than a design. */
+export const MIN_CSS_CHARS = 400;
+
+/**
+ * Whether this looks designed, or merely rendered.
+ *
+ * §20 calls this moment the FINAL FREE WOW - the last thing a prospect sees before deciding
+ * to pay. The first real generation passed every correctness check and still came back as
+ * default-styled tables with stock green buttons, because the prompt demanded product
+ * specificity and said nothing at all about craft. It got exactly what was asked for.
+ *
+ * "Beautiful" is not decidable. These four things are, and each maps to a specific way an
+ * unstyled page announces itself:
+ *
+ *   no <style> at all      - browser defaults, every time
+ *   a token amount of CSS  - a gesture at styling rather than a design
+ *   no font-family         - Times New Roman, the single loudest "nobody designed this"
+ *   no colour or spacing   - black text on white with default margins
+ *
+ * This cannot make a concept good. It can stop one that nobody styled from reaching a
+ * customer at the moment they are deciding whether this company can build software.
+ */
+export function craftViolation(html: string): string | null {
+  const source = html || '';
+  const styles = [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n');
+
+  if (!styles.trim()) return 'concept has no <style> block — it will render as browser defaults';
+  if (styles.length < MIN_CSS_CHARS) {
+    return `concept has only ${styles.length} characters of CSS (needs ${MIN_CSS_CHARS}) — that is a gesture, not a design`;
+  }
+  if (!/font-family\s*:/i.test(styles)) {
+    return 'concept never sets font-family — it will render in the browser default serif';
+  }
+  if (!/(background|background-color)\s*:/i.test(styles) || !/(padding|margin|gap)\s*:/i.test(styles)) {
+    return 'concept sets no background or no spacing — black text on white with default margins';
+  }
+
+  return null;
+}
+
 /** Deterministic, so the instructions behind any concept can be reconstructed. */
 export function buildConceptPrompt(brief: DesignBrief, conceptKey: ConceptKey): string {
   const concept = CONCEPT_VARIANTS.find((c) => c.key === conceptKey)!;
@@ -137,7 +177,21 @@ export function buildConceptPrompt(brief: DesignBrief, conceptKey: ConceptKey): 
     '- Responsive enough to be readable on a phone.',
     '- No <script>: this is a static concept and will be rendered sandboxed.',
     '',
+    'CRAFT. THIS IS THE LAST THING THEY SEE BEFORE DECIDING WHETHER TO PAY.',
+    'A correct screen that looks unstyled undersells everything behind it. Default browser',
+    'styling reads as "nobody designed this", and it is the single fastest way to lose a room.',
+    '',
+    '- Set font-family explicitly on the page. A system stack is fine; the browser default serif is not.',
+    '- Use a real type scale: distinct sizes and weights for page title, section heading, body and label. Do not set everything to 16px bold.',
+    '- Use consistent spacing on a rhythm (for example 4 / 8 / 16 / 24 / 32px). Uneven padding is the tell of an unconsidered layout.',
+    '- Pick a restrained palette: one neutral for surfaces, one for text, and ONE accent. Do not use stock green and blue buttons.',
+    '- Give tables real treatment: aligned columns, a quiet header, readable row separation, and tabular figures for numbers.',
+    '- Status deserves design, not a coloured word: a quiet pill or a dot with a label. Never colour alone, since colour alone fails anyone who cannot see it.',
+    '- Include at least one considered empty or attention state — the screen when nothing needs doing, or when something is stuck. That is where a real product shows its thinking.',
+    '- Dates and figures should read as obviously illustrative. Prefer relative phrasing like "this morning" over a specific stale date.',
+    '',
     'Design for an operator who has done this job for years. Density and clarity over decoration.',
+    'Restraint is the point: this should look like a serious internal tool, not a marketing page.',
   ]
     .filter((line) => line !== '')
     .join('\n');
@@ -177,6 +231,7 @@ export async function generateConcept(params: {
   const violation =
     genericnessViolation(html, params.brief) ||
     labelViolation(html) ||
+    craftViolation(html) ||
     contactLeakViolation(html, params.contact || {});
 
   if (violation) {
