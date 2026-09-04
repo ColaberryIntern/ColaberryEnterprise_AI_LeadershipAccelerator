@@ -13,7 +13,6 @@ import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
 import HomeV2 from './pages/publicV2/HomeV2';
 import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
 import PlatformV2 from './pages/publicV2/PlatformV2';
-import ProofV2 from './pages/publicV2/ProofV2';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
 import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
@@ -75,7 +74,21 @@ function App() {
             <Route path="services" element={<ServicesV2 />} />
             <Route path="services/:slug" element={<ServiceDetailV2 />} />
             <Route path="platform" element={<PlatformV2 />} />
-            <Route path="proof" element={<ProofV2 />} />
+            {/*
+                /proof IS the published records now. Ali, 2026-09-04: "This
+                stories page needs to be integrated into the proof page or take
+                it over so Case Studies can be reviewed by people visiting our
+                website." It took it over.
+
+                The old ProofV2 explained a standard and then promised, in future
+                tense, that each record WOULD carry its evidence class and the
+                artifact behind it - a capability that had already shipped. So the
+                page a visitor reached from the header was describing as roadmap
+                the very thing the site could already show them. The evidence
+                standard survives as a band on the index (`StoriesStandardBand`);
+                the promise is replaced by the records that keep it.
+            */}
+            <Route path="proof" element={<StoriesV2 />} />
             <Route path="lab" element={<OpportunityLabV2 />} />
             {/* NOT "try": /try is the real product workspace
                 (ManagementPreviewPage, declared above). Mounting the V2 explainer
@@ -112,7 +125,19 @@ function App() {
             */}
             <Route path="start" element={<Navigate to="/try" replace />} />
             <Route path="pricing" element={<PricingV2 />} />
-            <Route path="stories" element={<StoriesV2 />} />
+            {/*
+                The index moved to /proof, so this is a redirect rather than a
+                second copy of the same list on a second URL - two addresses for
+                one page splits inbound links and gives search engines a
+                duplicate to choose between.
+
+                THE DETAIL PAGES DO NOT MOVE. `caseStudyPublicProjection` derives
+                `seo.canonicalUrl` as `/stories/<slug>`, and that address is baked
+                into every published snapshot and every share link already sent.
+                Moving them would rewrite the address of live pages for a tidier
+                tree - see the warning in `caseStudyAdminPublicationGuard`.
+            */}
+            <Route path="stories" element={<Navigate to="/proof" replace />} />
             {/*
                 The published-record detail surface. Declared WITHOUT a leading
                 slash, like every other child of this layout route -- a leading

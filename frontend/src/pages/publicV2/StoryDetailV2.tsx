@@ -221,7 +221,7 @@ function StoryDetailV2(): React.ReactElement {
             <h1>{NOT_FOUND_HEADING}</h1>
             <p className="cbv2-lede">{NOT_FOUND_BODY}</p>
             <p>
-              <Link className="cbv2-btn cbv2-btn--primary" to="/stories">
+              <Link className="cbv2-btn cbv2-btn--primary" to="/proof">
                 All published projects
               </Link>
             </p>

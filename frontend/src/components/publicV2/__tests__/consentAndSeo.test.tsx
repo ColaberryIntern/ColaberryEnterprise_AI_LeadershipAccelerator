@@ -162,17 +162,22 @@ describe('footer — every link resolves', () => {
     expect(FOOTER_LINKS.some((h) => h.includes('terms'))).toBe(false);
   });
 
-  it('links the stories index, and never one particular record', () => {
+  it('links the records index, and never one particular record', () => {
     /*
      * The index is a stable destination; a single record is not. A footer link
      * to one published slug would rot the day that record is unpublished, and
      * it would be a dead link in the site chrome rather than on one page. The
      * detail route is declared above so the table is complete, but the footer
      * must reach it only through the index.
+     *
+     * THE INDEX IS `/proof` NOW. The published records took that route over,
+     * and `/stories` redirects to it. The invariant did not change - only the
+     * address it points at - so this asserts the footer reaches the index at
+     * its real URL rather than through a redirect.
      */
-    expect(DECLARED_ROUTES).toContain('/stories');
+    expect(DECLARED_ROUTES).toContain('/proof');
     expect(DECLARED_ROUTES).toContain('/stories/:slug');
-    expect(FOOTER_LINKS).toContain('/stories');
+    expect(FOOTER_LINKS).toContain('/proof');
     expect(FOOTER_LINKS.filter((h) => h.startsWith('/stories/'))).toEqual([]);
   });
 });
