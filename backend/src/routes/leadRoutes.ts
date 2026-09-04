@@ -4,6 +4,7 @@ import { submitLead } from '../controllers/leadController';
 import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
 import { handleFlotationPreview } from '../controllers/flotationPreviewController';
+import { handleFlotationInterview } from '../controllers/flotationInterviewController';
 import { handleSalesHubCory } from '../controllers/salesHubCoryController';
 import {
   handleSponsorInquiry,
@@ -48,6 +49,14 @@ const previewRateLimiter = rateLimit({
   message: { error: 'Preview rate limit exceeded' },
 });
 
+const interviewRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Interview rate limit exceeded' },
+});
+
 const router = Router();
 
 // Sales-hub Cory RAG endpoint. Registered here (an early, public router) on
@@ -68,6 +77,12 @@ router.post('/api/sponsorship-kit-request', leadRateLimiter, requestSponsorshipK
 router.post('/api/sponsor-inquiry', leadRateLimiter, handleSponsorInquiry);
 router.post('/api/leads/ingest', ingestRateLimiter, handleLeadIngest);
 router.get('/api/flotation/preview/:token', previewRateLimiter, handleFlotationPreview);
+/**
+ * The interview is a MODEL CALL per message, so it is rate limited harder than the preview
+ * read. Twenty a minute is a fast conversation and a cheap ceiling; the interview service
+ * caps the exchanges within one conversation separately.
+ */
+router.post('/api/flotation/interview', interviewRateLimiter, handleFlotationInterview);
 router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
 
 // One Class, Many Doors — read-only Challenge leaderboard + Sponsor dashboard.
