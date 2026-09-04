@@ -5,7 +5,10 @@ import Pagination from '../../components/ui/Pagination';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
 
-const VisitorFlowGraph = lazy(() => import('../../components/admin/visitors/VisitorFlowGraph'));
+// Swapped from the force-directed VisitorFlowGraph: a force layout answers
+// "what connects to what", while the question this tab is asked is about the
+// VOLUME along each path. Sankey band width carries that directly.
+const VisitorSankeyFlow = lazy(() => import('../../components/admin/visitors/VisitorSankeyFlow'));
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -488,10 +491,27 @@ function AdminVisitorsPage() {
     setVisitorSignals([]);
     setVisitorIntentScore(null);
     try {
-      const [sessRes, intentRes] = await Promise.all([
+      const [sessRes, intentRes, profileRes] = await Promise.all([
         api.get(`/api/admin/visitors/${visitor.id}/sessions`),
         api.get(`/api/admin/visitors/${visitor.id}/intent`).catch(() => null),
+        // The full profile, which the modal has never actually fetched.
+        //
+        // `selectedVisitor` was set straight from the clicked ROW. A row from the
+        // live table carries session-shaped fields only — no first_seen_at,
+        // last_seen_at, total_sessions or total_pageviews — so the modal read
+        // undefined for each and its `?? 0` turned that into a confident
+        // "Total Sessions 0" for a visitor with 161 of them, and an empty
+        // First Seen. Same failure mode as the dashboard zeros: a missing field
+        // rendered as a plausible number rather than as missing.
+        api.get(`/api/admin/visitors/${visitor.id}`).catch(() => null),
       ]);
+      // Merged over the row rather than replacing it: the row holds live-only
+      // context (current_page, session_duration, site_slug) that the profile
+      // does not, and dropping it would empty half the modal to fill the rest.
+      if (profileRes?.data) {
+        const profile = profileRes.data.visitor ?? profileRes.data;
+        setSelectedVisitor((prev) => ({ ...(prev as Visitor), ...profile }));
+      }
       setVisitorSessions(sessRes.data.sessions || sessRes.data || []);
       if (intentRes?.data) {
         setVisitorIntentScore(intentRes.data.intent);
@@ -789,7 +809,7 @@ function AdminVisitorsPage() {
                       className="btn btn-sm btn-outline-primary"
                       onClick={() => setActiveTab('flow')}
                     >
-                      View Navigation Flow &rarr;
+                      View Traffic Flow &rarr;
                     </button>
                   </td>
                 </tr>
@@ -1566,7 +1586,7 @@ function AdminVisitorsPage() {
       <nav>
         <ul className="nav nav-tabs mb-4">
           {([
-            { key: 'flow' as TabKey, label: 'Navigation Flow' },
+            { key: 'flow' as TabKey, label: 'Traffic Flow' },
             { key: 'live' as TabKey, label: 'Live Visitors' },
             { key: 'all' as TabKey, label: 'All Visitors' },
             { key: 'high_intent' as TabKey, label: 'High Intent' },
@@ -1607,7 +1627,7 @@ function AdminVisitorsPage() {
       {activeTab === 'flow' && (
         <div style={{ height: 'calc(100vh - 200px)', minHeight: 400 }}>
           <Suspense fallback={<div className="text-center py-4"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>}>
-            <VisitorFlowGraph />
+            <VisitorSankeyFlow />
           </Suspense>
         </div>
       )}
