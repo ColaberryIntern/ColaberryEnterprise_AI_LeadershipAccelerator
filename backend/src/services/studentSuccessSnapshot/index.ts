@@ -13,16 +13,17 @@
  * identity/cohort, attendance (reusing Checkpoint B's fail-closed
  * reliability gate), timeline progress, assessment trend, reflection
  * completion. Slice 2 added 3 more: competency evidence, project/
- * repository progress, certification readiness. Slice 3 adds 4 more:
+ * repository progress, certification readiness. Slice 3 added 4 more:
  * artifacts/evidence, community/room/event activity (also covers the
  * mission's separate "engagement" category — no distinct engagement data
- * source was found at Checkpoint A discovery, so treating them as two
- * would invent a distinction this codebase doesn't have), open tickets/
- * interventions, previous Reese communications (message bodies
- * deliberately excluded — PII discipline). 2 categories remain: agreed
- * next steps/due dates (real Capability 6/7 work-ledger concept — doesn't
- * exist in this codebase yet, deliberately not faked) and instructor/
- * manager feedback (MentorReviewItem — a later slice).
+ * source was found at Checkpoint A discovery), open tickets/interventions,
+ * previous Reese communications. Slice 4 closes the last 2: instructor/
+ * manager feedback (MentorReviewItem, gated to only RELEASED items — the
+ * same real gate mentorFeedbackService.ts's own reader uses) and agreed
+ * next steps/due dates — which stays a real, permanent `not_applicable`
+ * (never a guessed value) because Capability 6/7's work-ledger/checklist
+ * system genuinely doesn't exist in this codebase yet. All 15 mission
+ * categories are now accounted for: 14 real, 1 honestly not_applicable.
  */
 import { getAttendanceField } from './attendanceSource';
 import { getIdentityField } from './identitySource';
@@ -36,6 +37,7 @@ import { getArtifactsEvidenceField } from './artifactsEvidenceSource';
 import { getCommunityActivityField } from './communityActivitySource';
 import { getTicketsInterventionsField } from './ticketsInterventionsSource';
 import { getPreviousReeseCommunicationsField } from './reeseCommunicationsSource';
+import { getInstructorFeedbackField } from './instructorFeedbackSource';
 import { AttendanceValue, IdentityValue, notApplicableField, SnapshotField, StudentSuccessSnapshot, TimelineProgressValue } from './types';
 
 export * from './types';
@@ -55,7 +57,7 @@ export async function getStudentSuccessSnapshot(enrollmentId: string): Promise<S
 
   const cohortId = identity.value?.cohortId ?? null;
 
-  const [attendanceR, timelineR, assessmentR, reflectionR, competencyR, projectR, certR, artifactsR, communityR, ticketsR, reeseCommsR] = await Promise.allSettled([
+  const [attendanceR, timelineR, assessmentR, reflectionR, competencyR, projectR, certR, artifactsR, communityR, ticketsR, reeseCommsR, instructorR] = await Promise.allSettled([
     getAttendanceField(enrollmentId, cohortId),
     getTimelineProgressField(enrollmentId),
     getAssessmentTrendField(enrollmentId),
@@ -67,6 +69,7 @@ export async function getStudentSuccessSnapshot(enrollmentId: string): Promise<S
     getCommunityActivityField(enrollmentId),
     getTicketsInterventionsField(enrollmentId),
     getPreviousReeseCommunicationsField(enrollmentId),
+    getInstructorFeedbackField(enrollmentId),
   ]);
 
   return {
@@ -84,6 +87,8 @@ export async function getStudentSuccessSnapshot(enrollmentId: string): Promise<S
     communityActivity: communityR.status === 'fulfilled' ? communityR.value : unknownField('community_posts', communityR.reason),
     ticketsInterventions: ticketsR.status === 'fulfilled' ? ticketsR.value : unknownField('tickets_via_community_room', ticketsR.reason),
     previousReeseCommunications: reeseCommsR.status === 'fulfilled' ? reeseCommsR.value : unknownField('room_messages', reeseCommsR.reason),
+    instructorFeedback: instructorR.status === 'fulfilled' ? instructorR.value : unknownField('mentor_review_items', instructorR.reason),
+    agreedNextSteps: notApplicableField('work_ledger', "Capability 6/7's stateful checklist/work-ledger system doesn't exist in this codebase yet."),
   };
 }
 

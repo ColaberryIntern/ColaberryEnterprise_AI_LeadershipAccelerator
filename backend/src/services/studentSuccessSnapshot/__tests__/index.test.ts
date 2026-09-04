@@ -34,6 +34,9 @@ jest.mock('../ticketsInterventionsSource', () => ({ getTicketsInterventionsField
 const mockGetPreviousReeseCommunicationsField = jest.fn();
 jest.mock('../reeseCommunicationsSource', () => ({ getPreviousReeseCommunicationsField: (...a: any[]) => mockGetPreviousReeseCommunicationsField(...a) }));
 
+const mockGetInstructorFeedbackField = jest.fn();
+jest.mock('../instructorFeedbackSource', () => ({ getInstructorFeedbackField: (...a: any[]) => mockGetInstructorFeedbackField(...a) }));
+
 import { getStudentSuccessSnapshot } from '../index';
 
 const KNOWN_FIELD = { value: {}, status: 'known', sourceSystem: 'x', sourceRecordIds: [], observedAt: new Date(), freshnessPolicy: 'real-time', reliabilityState: 'healthy' as const };
@@ -52,6 +55,7 @@ beforeEach(() => {
   mockGetCommunityActivityField.mockResolvedValue(KNOWN_FIELD);
   mockGetTicketsInterventionsField.mockResolvedValue(KNOWN_FIELD);
   mockGetPreviousReeseCommunicationsField.mockResolvedValue(KNOWN_FIELD);
+  mockGetInstructorFeedbackField.mockResolvedValue(KNOWN_FIELD);
 });
 
 describe('getStudentSuccessSnapshot', () => {
@@ -72,6 +76,15 @@ describe('getStudentSuccessSnapshot', () => {
     expect(snapshot.communityActivity.status).toBe('known');
     expect(snapshot.ticketsInterventions.status).toBe('known');
     expect(snapshot.previousReeseCommunications.status).toBe('known');
+    expect(snapshot.instructorFeedback.status).toBe('known');
+  });
+
+  it('all 15 mission categories are accounted for: 14 real fields plus one honest, permanent not_applicable', async () => {
+    const snapshot = await getStudentSuccessSnapshot('enrollment-1');
+
+    expect(snapshot.agreedNextSteps.status).toBe('not_applicable');
+    expect(snapshot.agreedNextSteps.value).toBeNull();
+    expect(snapshot.agreedNextSteps.reliabilityReason).toContain("doesn't exist");
   });
 
   it('resilience: identity lookup failure still yields the other real fields, and attendance is scoped to a null cohort rather than crashing', async () => {

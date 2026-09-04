@@ -85,6 +85,19 @@ export interface TicketsInterventionsValue {
   recentTickets: Array<{ id: string; title: string; status: string; type: string; updatedAt: string | null }>;
 }
 
+export interface InstructorFeedbackValue {
+  releasedCount: number;
+  lastReleasedAt: string | null;
+  avgConfidence: number | null;
+}
+
+/** Capability 6/7 (work ledger, stateful checklists, commitment tracking)
+ * doesn't exist in this codebase yet — confirmed at Checkpoint A
+ * discovery. There is real value here (once built), but nothing real to
+ * report today; this stays `not_applicable` (value always null), never a
+ * guessed/empty-but-pretending-to-be-real value. */
+export type AgreedNextStepsValue = null;
+
 export interface PreviousReeseCommunicationsValue {
   messageCount: number;
   lastMessageAt: string | null;
@@ -140,6 +153,9 @@ export interface StudentSuccessSnapshot {
   communityActivity: SnapshotField<CommunityActivityValue>;
   ticketsInterventions: SnapshotField<TicketsInterventionsValue>;
   previousReeseCommunications: SnapshotField<PreviousReeseCommunicationsValue>;
+  instructorFeedback: SnapshotField<InstructorFeedbackValue>;
+  /** Always `not_applicable` today — see AgreedNextStepsValue's own comment. */
+  agreedNextSteps: SnapshotField<AgreedNextStepsValue>;
 }
 
 /** A field with no real backing source yet — honest, never a guess. */
