@@ -255,6 +255,58 @@ const TabletIcon = () => (
   </svg>
 );
 
+/**
+ * A coloured tile row — the visual language the Sankey outcome tiles use.
+ *
+ * Introduced because three tabs (High Intent, Sessions, All Visitors) were fixed
+ * for correctness and gained NOTHING to look at: same table, different rows. A
+ * ranked list with no summary makes the reader compute the shape of the data in
+ * their head, which is exactly the job a dashboard is supposed to do for them.
+ *
+ * The colour is a SECOND channel, never the only one: every tile carries its
+ * label and its number, so the meaning survives a colourblind reader, a
+ * greyscale print, and forced-colours mode. The dot and the left border repeat
+ * what the words already say.
+ */
+function TileRow({ tiles }: { tiles: Array<{ label: string; value: string | number; color: string; sub?: string }> }) {
+  if (tiles.length === 0) return null;
+  return (
+    <div className="row g-2 mb-3">
+      {tiles.map((t) => (
+        <div className={`col-6 col-lg-${Math.max(2, Math.floor(12 / tiles.length))}`} key={t.label}>
+          <div
+            className="h-100 p-2 rounded"
+            style={{ background: 'var(--surface-sunken, #f7f7f6)', borderLeft: `4px solid ${t.color}` }}
+          >
+            <div className="small text-muted d-flex align-items-center gap-1">
+              <span
+                aria-hidden="true"
+                style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, display: 'inline-block' }}
+              />
+              {t.label}
+            </div>
+            <div className="fw-bold" style={{ fontSize: '1.25rem', lineHeight: 1.2 }}>
+              {typeof t.value === 'number' ? t.value.toLocaleString() : t.value}
+            </div>
+            {t.sub && <div className="small text-muted">{t.sub}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Palette validated for colourblind separation; see VisitorSankeyFlow. */
+const TILE = {
+  red: '#FB2832',
+  teal: '#2BA39A',
+  amber: '#E8920C',
+  violet: '#7A5AF0',
+  green: '#5BA63C',
+  magenta: '#C2185B',
+  grey: '#8C8C8C',
+};
+
 function DeviceIcon({ type }: { type?: string }) {
   if (type === 'mobile') return <MobileIcon />;
   if (type === 'tablet') return <TabletIcon />;
@@ -342,6 +394,9 @@ function AdminVisitorsPage() {
 
   /* --- High Intent --- */
   const [highIntentVisitors, setHighIntentVisitors] = useState<any[]>([]);
+  // Distribution comes from the server, filtered identically to the list, so the
+  // tiles and the table below them always describe the same population.
+  const [intentDistribution, setIntentDistribution] = useState<Record<string, number>>({});
 
   /* --- Detail modal signals --- */
   const [visitorSignals, setVisitorSignals] = useState<BehavioralSignalData[]>([]);
@@ -467,7 +522,11 @@ function AdminVisitorsPage() {
 
   const fetchHighIntent = useCallback(async () => {
     try {
-      const res = await api.get('/api/admin/visitors/high-intent', { params: { threshold: 20, limit: 50 } });
+      const [res, distRes] = await Promise.all([
+        api.get('/api/admin/visitors/high-intent', { params: { threshold: 20, limit: 50 } }),
+        api.get('/api/admin/visitors/intent-distribution').catch(() => null),
+      ]);
+      if (distRes?.data) setIntentDistribution(distRes.data.distribution ?? distRes.data);
       setHighIntentVisitors(res.data || []);
     } catch (err) {
       console.error('Failed to fetch high intent visitors:', err);
@@ -862,6 +921,26 @@ function AdminVisitorsPage() {
 
   const renderAllTab = () => (
     <>
+      {/* Named vs anonymous is the only split that matters on this list: a named
+          visitor can be followed up, an anonymous one cannot. */}
+      <TileRow
+        tiles={[
+          { label: 'Visitors', value: allTotal, color: TILE.violet, sub: 'crawlers excluded' },
+          {
+            label: 'Named',
+            value: allVisitors.filter((v) => v.lead_id).length,
+            color: TILE.green,
+            sub: 'on this page',
+          },
+          {
+            label: 'Anonymous',
+            value: allVisitors.filter((v) => !v.lead_id).length,
+            color: TILE.grey,
+            sub: 'on this page',
+          },
+          { label: 'Visitors (30d)', value: stats?.visitors30d ?? 0, color: TILE.teal, sub: 'people only' },
+        ]}
+      />
       {/* Filters */}
       <SectionCard className="mb-4">
         <div className="d-flex gap-2 mb-0 flex-wrap align-items-center">
@@ -1104,6 +1183,18 @@ function AdminVisitorsPage() {
   );
 
   const renderHighIntentTab = () => (
+    <>
+      {/* The shape of the list, above the list. A ranked table alone makes the
+          reader count rows to find out whether "high intent" means five people
+          or five hundred. */}
+      <TileRow
+        tiles={[
+          { label: 'Very high', value: intentDistribution.very_high ?? 0, color: TILE.red, sub: 'score 70-100' },
+          { label: 'High', value: intentDistribution.high ?? 0, color: TILE.amber, sub: 'score 45-69' },
+          { label: 'Medium', value: intentDistribution.medium ?? 0, color: TILE.teal, sub: 'score 20-44' },
+          { label: 'Showing', value: highIntentVisitors.length, color: TILE.violet, sub: 'above threshold' },
+        ]}
+      />
     <SectionCard
       title={`High Intent Visitors (${highIntentVisitors.length})`}
       icon="fire-line"
@@ -1178,6 +1269,7 @@ function AdminVisitorsPage() {
           </table>
       </div>
     </SectionCard>
+    </>
   );
 
   const renderChatTab = () => (
@@ -1282,6 +1374,17 @@ function AdminVisitorsPage() {
   );
 
   const renderSessionsTab = () => (
+    <>
+      {/* Sessions had no summary at all — just a list. These come from the same
+          bot-free stats the header cards use, so the two can never disagree. */}
+      <TileRow
+        tiles={[
+          { label: 'Sessions (30d)', value: stats?.sessions30d ?? 0, color: TILE.teal, sub: 'people only' },
+          { label: 'Visitors (30d)', value: stats?.visitors30d ?? 0, color: TILE.violet, sub: 'people only' },
+          { label: 'Bounce rate', value: `${stats?.bounceRate ?? 0}%`, color: TILE.amber, sub: 'one page and gone' },
+          { label: 'Avg session', value: formatDuration(stats?.avgDuration ?? 0), color: TILE.green, sub: 'time on site' },
+        ]}
+      />
     <SectionCard title="Recent Sessions" icon="history-line" padded={false}>
       <div className="table-responsive">
           <table className="table table-hover mb-0">
@@ -1326,6 +1429,7 @@ function AdminVisitorsPage() {
           </table>
       </div>
     </SectionCard>
+    </>
   );
 
   /* ---------------------------------------------------------------- */

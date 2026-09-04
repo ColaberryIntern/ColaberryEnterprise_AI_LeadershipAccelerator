@@ -244,8 +244,23 @@ export async function getIntentScoreForVisitor(visitorId: string): Promise<Inten
  * Get intent level distribution (how many visitors at each level).
  */
 export async function getIntentDistribution(): Promise<Record<string, number>> {
+  // Filtered exactly like getHighIntentVisitors. If the distribution counted
+  // crawlers while the list beside it did not, the chart and the table under it
+  // would describe different populations — and the crawlers all score 100, so
+  // the "very high" bar would be the one most inflated.
   const scores = await IntentScore.findAll({
     attributes: ['intent_level'],
+    where: {
+      [Op.and]: [
+        literal(
+          `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "IntentScore"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+        ),
+        literal(
+          `NOT EXISTS (SELECT 1 FROM "visitor_sessions" avs WHERE avs."visitor_id" = "IntentScore"."visitor_id" ` +
+            `AND NOT (${notAutomatedSessionSql('avs."pageview_count"', 'avs."duration_seconds"')}))`
+        ),
+      ],
+    },
   });
 
   const distribution: Record<string, number> = {
