@@ -12,6 +12,10 @@ a discovery report. The order below is the order that avoids repeating them.
 
 **This skill does not publish.** Publishing is a separate, explicit instruction.
 
+**Start section 8 (images) FIRST.** Dispatch an agent to find or produce the cover
+image before anything else begins — it takes longer than the rest and a case study
+without a cover reads as unfinished however good its evidence is.
+
 ---
 
 ## 0. Preflight — before any edit
@@ -196,18 +200,98 @@ p.projection.architecture.diagramSource ? 'renders' : 'SANITISER DROPPED IT'
 
 ---
 
-## 8. Pictures
+## 8. Images — start this FIRST, in parallel, and do not finish without them
 
-Text-only pages read as unfinished, and readiness penalises it:
-*"no approved screenshot, architecture image, photograph or demo"*, plus
-*"fewer than two approved images"*.
+**This is not a checklist item at the end. It is a workstream that begins before the
+narrative and runs alongside it, because finding or making the right image takes
+longer than everything else and cannot be rushed at the finish.**
 
-**A mermaid diagram is not an image.** It satisfies the architecture section, not the
-image checks.
+### Spawn an agent for it on day one
 
-Real images live at `https://enterprise.colaberry.ai/site-v2/…` and are referenced by
-`publicUrl` on an artifact with `visibility: public`, `status: approved`. Add at least
-one screenshot or photograph unless the record genuinely has none.
+The moment the subject is known — before the path scope, before the metrics — dispatch
+a dedicated agent whose only job is imagery. It works while the record is authored.
+
+> Find or produce the cover image and supporting images for a case study about
+> `<subject>`, repo `<owner/name>`. Search the repo for screenshots, dashboards,
+> architecture drawings and demo captures. Check `frontend/public/site-v2/` for an
+> existing asset that genuinely depicts this system. If the subject has a UI, find a
+> capture of it. If it has data, a dashboard view of that data is ideal. Report what
+> exists, what could be produced, and what would be dishonest to use.
+
+Do not block on it. Author the record in parallel and attach when it reports.
+
+### The cover image is the point
+
+`identity.heroImageUrl` is the **cover of the case study page**. A record without one
+opens on text and reads as unfinished no matter how good the evidence is. Treat the
+cover as a required field, not an optional one.
+
+### What counts as a real image, in order of preference
+
+1. **A screenshot of the thing running.** If the system has any interface, this is the
+   image. A dashboard, a console, a report, a queue view.
+2. **A dashboard of the system's own data** — a Power BI-style view built from real
+   figures the record already carries. This is the right answer when the subject is a
+   pipeline, an agent or a service with no interface of its own.
+3. **A rendered architecture diagram** — `scripts/renderCaseStudyDiagram.js` turns the
+   record's own `diagramSource` into a PNG.
+4. **A rendered metric chart** — `scripts/renderCaseStudyMetricChart.js` draws measured
+   values with the reproduce command printed underneath.
+5. **A photograph of the actual work or the actual people**, where one exists and
+   consent allows.
+
+### What does NOT count
+
+- **A mermaid block is not an image.** It satisfies the architecture section and fails
+  every image check.
+- **A stock photograph is not evidence.** An atmosphere image standing in for a
+  screenshot is the thing the publish rules exist to prevent — it implies a system was
+  seen working when it was not.
+- **A screenshot of a different system.** If the image does not depict *this* subject,
+  it is decoration pretending to be proof.
+
+### Generating one honestly
+
+When a subject has no interface — a classifier, a cron job, a library — the honest image
+is one made **from the record itself**:
+
+```bash
+node scripts/renderCaseStudyDiagram.js --in diagram.mmd --out frontend/public/site-v2/<name>.png
+node scripts/renderCaseStudyMetricChart.js --in bars.json --out frontend/public/site-v2/<name>.png   --title "..." --foot "Reproduce: <command>"
+```
+
+Both refuse to invent: the diagram renderer reads the record's own source and rejects
+anything containing `<`, and the chart prints the command to reproduce its numbers.
+
+**Watch the units.** An early chart plotted 945 lines beside 9 files on one axis — two
+different units, so both bars meant nothing. Compare like with like or use two charts.
+
+### Getting them served
+
+Images live in `frontend/public/site-v2/` and reach production through an **nginx
+deploy**, which also bounces the backend. Batch them: render every image for the record
+before deploying once.
+
+### Attaching them
+
+```js
+{ artifact_type: 'screenshot' | 'diagram' | 'architecture' | 'photo',
+  source_type: 'generated',        // or 'repo' for a capture from the codebase
+  source_commit_sha: <sha>,
+  visibility: 'public', status: 'approved',
+  public_url, preview_url }        // set BOTH; some surfaces read preview_url
+```
+
+Then lift the approved rows into the snapshot's `artifacts` section — creating the row
+alone does not put it on the page — **and set `identity.heroImageUrl` to the cover.**
+
+### Done means
+
+- [ ] `heroImageUrl` set — the page has a cover
+- [ ] **At least two** approved, publicly viewable images (readiness checks both)
+- [ ] Every image depicts *this* subject
+- [ ] Artifacts lifted into the snapshot, not just created as rows
+- [ ] Images verified live with an HTTP 200 before the record is called finished
 
 ---
 
