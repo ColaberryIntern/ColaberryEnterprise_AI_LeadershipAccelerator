@@ -460,9 +460,33 @@ export function resolveOrganizationLabel(content: CaseStudySnapshotContent): str
   return null;
 }
 
-/** The first approved, public, http(s) image among the artifacts. Never a guess. */
+/**
+ * The cover image: an explicit choice when one was made, otherwise the first
+ * approved, public, http(s) image by type priority. Never a guess.
+ *
+ * WHY THE EXPLICIT CHOICE EXISTS. The type priority is a sensible default and a
+ * poor decision-maker. Two records here each carry an `architecture` image and a
+ * `diagram`, and the better cover is the architecture drawing on one and the data
+ * dashboard on the other — an ordering cannot express that, so whichever order is
+ * chosen makes one of them worse. `identity.heroImageUrl` lets a record say which
+ * image it means, and the priority list keeps deciding for every record that does
+ * not say.
+ *
+ * IT IS STILL GATED. The named URL is honoured ONLY when it matches an artifact
+ * that already passed `projectArtifacts` — approved, open, publicly viewable.
+ * Trusting the field on its own would let a cover bypass artifact approval and
+ * publish a picture the gate never saw, which is the one thing it must not become.
+ */
 export function resolveHeroImage(content: CaseStudySnapshotContent): string | null {
   const approved = projectArtifacts(content?.artifacts ?? []);
+  const openUrls = approved
+    .filter((a) => a.access === 'open')
+    .flatMap((a) => [safeHttpUrl(a.previewUrl), safeHttpUrl(a.url)])
+    .filter((u): u is string => typeof u === 'string');
+
+  const chosen = safeHttpUrl(content?.identity?.heroImageUrl);
+  if (chosen && openUrls.includes(chosen)) return chosen;
+
   for (const kind of HERO_IMAGE_PRIORITY) {
     for (const a of approved) {
       if (a.access !== 'open' || a.artifactType !== kind) continue;

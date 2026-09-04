@@ -337,6 +337,16 @@ export interface CaseStudyIdentitySection {
   readonly builderNamingConsent: boolean;
   readonly builtByType?: CaseStudyBuiltByType;
   readonly programLabel?: string;
+  /**
+   * The cover image this record CHOOSES, when the type-priority default is not
+   * the right picture. Honoured by `resolveHeroImage` only when it matches an
+   * artifact that is already approved and publicly viewable — naming a URL here
+   * cannot publish an image the artifact gate never saw.
+   *
+   * Absent means "decide for me": the priority list picks screenshot, then
+   * architecture, then photo.
+   */
+  readonly heroImageUrl?: string;
   /** Duration renders only when verified, hence the paired verification. */
   readonly engagementWindow?: {
     readonly start: IsoDate;
