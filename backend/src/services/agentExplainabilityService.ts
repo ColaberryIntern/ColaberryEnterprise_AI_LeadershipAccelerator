@@ -69,7 +69,14 @@ function toExplainabilityEvent(row: AiEvent): ExplainabilityEvent {
     eventType: row.event_type,
     outcome: row.outcome,
     model: row.model,
-    costUsd: row.cost_usd,
+    // Real, live-caught bug (2026-09-04): AiEvent.cost_usd is a Postgres
+    // DECIMAL column, which Sequelize returns as a STRING on a plain model
+    // query (no explicit ::float cast, unlike trustMetricsService.ts's raw
+    // SQL cost queries) — the TS type here claimed `number` but the real
+    // runtime value was a string, crashing the frontend's `.toFixed(4)`
+    // call the moment a real cost-tracked event existed. Never fabricates a
+    // 0 for a genuinely null cost — only converts a real numeric string.
+    costUsd: row.cost_usd !== null && row.cost_usd !== undefined ? Number(row.cost_usd) : null,
     durationMs: row.duration_ms,
     createdAt: row.created_at,
     authorization,
