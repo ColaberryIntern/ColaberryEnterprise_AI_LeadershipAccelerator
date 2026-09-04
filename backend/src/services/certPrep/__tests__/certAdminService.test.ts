@@ -10,18 +10,21 @@ jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }
 jest.mock('../../../models/CertQuestion', () => ({ __esModule: true, default: { count: jest.fn() } }));
 jest.mock('../../../models/CertQuestionRevision', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 jest.mock('../../../models/CertReadinessSnapshot', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
+jest.mock('../../../models/CertEvidenceMapping', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 
 import { sequelize } from '../../../config/database';
 import CertQuestion from '../../../models/CertQuestion';
 import CertQuestionRevision from '../../../models/CertQuestionRevision';
+import CertEvidenceMapping from '../../../models/CertEvidenceMapping';
 import {
-  getItemStatistics, getBankHealth, getCohortReadiness, getNotStarted,
+  getItemStatistics, getBankHealth, getCohortReadiness, getNotStarted, getAuditTrail,
   P_VALUE_BROKEN, P_VALUE_TOO_EASY, MIN_EXPOSURES_FOR_STATS,
 } from '../certAdminService';
 
 const mQuery = sequelize.query as unknown as jest.Mock;
 const mRevisions = CertQuestionRevision.findAll as unknown as jest.Mock;
 const mCount = CertQuestion.count as unknown as jest.Mock;
+const mMappings = CertEvidenceMapping.findAll as unknown as jest.Mock;
 
 /** One aggregate row as the SQL returns it. */
 const agg = (over: any = {}) => ({
@@ -35,6 +38,7 @@ beforeEach(() => {
     { question_key: 'A1', revision: 1, difficulty: 'medium', blueprint_version: '1.0-2026-07' },
   ]);
   mCount.mockResolvedValue(20);
+  mMappings.mockResolvedValue([]);
 });
 
 describe('getItemStatistics', () => {
@@ -141,5 +145,65 @@ describe('cohort queries', () => {
     await getCohortDomainWeakness('c1');
     const sql = String(mQuery.mock.calls[mQuery.mock.calls.length - 1][0]);
     expect(sql).toMatch(/count\(DISTINCT cr\.enrollment_id\)/);
+  });
+});
+
+/**
+ * The audit trail exists so that "who let this reach a student?" has an answer.
+ * There are exactly two moments where a named human changes what a student
+ * sees, and an audit that carries only one of them looks complete while being
+ * half a record - which is worse than obviously missing.
+ */
+describe('getAuditTrail', () => {
+  const review = (over: any = {}) => ({
+    question_key: 'A1', revision: 1, review_status: 'approved',
+    reviewer: 'kes@colaberry.com', reviewed_at: new Date('2026-09-01T10:00:00Z'), ...over,
+  });
+  const decision = (over: any = {}) => ({
+    id: 'm1', enrollment_id: 'e1', domain_id: 'D2', objective_id: 'D2.1',
+    source_type: 'portfolio_artifact', mapping_state: 'verified', rejected_reason: null,
+    verified_by: 'farhat@colaberry.com', verified_at: new Date('2026-09-02T10:00:00Z'), ...over,
+  });
+
+  it('carries EVIDENCE decisions, not only question approvals', async () => {
+    mRevisions.mockResolvedValue([review()]);
+    mMappings.mockResolvedValue([decision()]);
+    const entries = await getAuditTrail();
+    expect(entries.map((e) => e.kind).sort()).toEqual(['evidence_decision', 'question_review']);
+  });
+
+  it('records a REJECTION and its reason - the entry somebody comes looking for', async () => {
+    mRevisions.mockResolvedValue([]);
+    mMappings.mockResolvedValue([decision({ mapping_state: 'rejected', rejected_reason: 'artifact is a plan, not a build' })]);
+    const [entry] = await getAuditTrail();
+    expect(entry.state).toBe('rejected');
+    expect(entry.reason).toBe('artifact is a plan, not a build');
+    expect(entry.actor).toBe('farhat@colaberry.com');
+  });
+
+  it('interleaves both kinds newest-first rather than listing one kind then the other', async () => {
+    mRevisions.mockResolvedValue([
+      review({ question_key: 'A9', reviewed_at: new Date('2026-09-03T10:00:00Z') }),
+      review({ question_key: 'A1', reviewed_at: new Date('2026-09-01T10:00:00Z') }),
+    ]);
+    mMappings.mockResolvedValue([decision({ verified_at: new Date('2026-09-02T10:00:00Z') })]);
+    const kinds = (await getAuditTrail()).map((e) => e.kind);
+    expect(kinds).toEqual(['question_review', 'evidence_decision', 'question_review']);
+  });
+
+  it('trims the MERGED list to the limit, so one busy kind cannot crowd out the other', async () => {
+    mRevisions.mockResolvedValue(
+      Array.from({ length: 50 }, (_, i) => review({ reviewed_at: new Date(2026, 8, 1, 0, i) })),
+    );
+    mMappings.mockResolvedValue([decision({ verified_at: new Date('2026-09-30T00:00:00Z') })]);
+    const entries = await getAuditTrail();
+    expect(entries).toHaveLength(50);
+    expect(entries[0].kind).toBe('evidence_decision'); // newest overall survives the trim
+  });
+
+  it('boundary: no decisions of either kind is an empty list, not a throw', async () => {
+    mRevisions.mockResolvedValue([]);
+    mMappings.mockResolvedValue([]);
+    await expect(getAuditTrail()).resolves.toEqual([]);
   });
 });

@@ -3,6 +3,7 @@ import { sequelize } from '../../config/database';
 import CertQuestion from '../../models/CertQuestion';
 import CertQuestionRevision from '../../models/CertQuestionRevision';
 import CertReadinessSnapshot from '../../models/CertReadinessSnapshot';
+import CertEvidenceMapping from '../../models/CertEvidenceMapping';
 
 /**
  * certAdminService — what an instructor needs to run Cert Prep for a cohort.
@@ -266,22 +267,78 @@ export async function getNotStarted(cohortId: string): Promise<{ enrollment_id: 
   ) as any;
 }
 
-/** Recent approvals and verifications — the audit trail, newest first. */
-export async function getAuditTrail(limit = 50): Promise<any[]> {
-  const approvals = await CertQuestionRevision.findAll({
-    where: { reviewer: { [Op.ne]: null as any }, reviewed_at: { [Op.ne]: null as any } },
-    attributes: ['question_key', 'revision', 'review_status', 'reviewer', 'reviewed_at'],
-    order: [['reviewed_at', 'DESC']],
-    limit,
-  });
-  return approvals.map((a) => ({
-    kind: 'question_review',
-    question_key: a.question_key,
-    revision: a.revision,
-    status: a.review_status,
-    actor: a.reviewer,
-    at: a.reviewed_at,
-  }));
+export interface AuditEntry {
+  kind: 'question_review' | 'evidence_decision';
+  actor: string;
+  at: Date;
+  /** question_review only */
+  question_key?: string;
+  revision?: number;
+  status?: string;
+  /** evidence_decision only */
+  mapping_id?: string;
+  enrollment_id?: string;
+  domain_id?: string;
+  objective_id?: string | null;
+  source_type?: string;
+  state?: string;
+  reason?: string | null;
+}
+
+/**
+ * Recent human decisions — the audit trail, newest first.
+ *
+ * BOTH kinds of decision, which is the whole point. There are exactly two
+ * moments in Cert Prep where a named human's judgement changes what a student
+ * sees: approving a question revision, and verifying (or rejecting) a piece of
+ * build evidence. An audit trail that carried only the first would look
+ * complete and would silently omit every evidence decision ever made —
+ * including the rejections, which are the ones somebody would come looking for.
+ *
+ * Each side is queried for `limit` rows and the merged list is trimmed back to
+ * `limit`, so a burst of one kind cannot push the other kind off the page
+ * before the merge sees it.
+ */
+export async function getAuditTrail(limit = 50): Promise<AuditEntry[]> {
+  const [approvals, decisions] = await Promise.all([
+    CertQuestionRevision.findAll({
+      where: { reviewer: { [Op.ne]: null as any }, reviewed_at: { [Op.ne]: null as any } },
+      attributes: ['question_key', 'revision', 'review_status', 'reviewer', 'reviewed_at'],
+      order: [['reviewed_at', 'DESC']],
+      limit,
+    }),
+    CertEvidenceMapping.findAll({
+      where: { verified_by: { [Op.ne]: null as any }, verified_at: { [Op.ne]: null as any } },
+      order: [['verified_at', 'DESC']],
+      limit,
+    }),
+  ]);
+
+  const entries: AuditEntry[] = [
+    ...approvals.map((a) => ({
+      kind: 'question_review' as const,
+      question_key: a.question_key,
+      revision: a.revision,
+      status: a.review_status,
+      actor: a.reviewer as string,
+      at: a.reviewed_at as Date,
+    })),
+    ...decisions.map((d) => ({
+      kind: 'evidence_decision' as const,
+      mapping_id: d.id,
+      enrollment_id: d.enrollment_id,
+      domain_id: d.domain_id,
+      objective_id: d.objective_id,
+      source_type: d.source_type,
+      state: d.mapping_state,
+      reason: d.rejected_reason,
+      actor: d.verified_by as string,
+      at: d.verified_at as Date,
+    })),
+  ];
+
+  entries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  return entries.slice(0, limit);
 }
 
 /** Readiness over time for one student — the instructor's progress view. */
