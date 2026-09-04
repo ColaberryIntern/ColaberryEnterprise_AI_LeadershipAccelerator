@@ -9,24 +9,28 @@
  * yields an honest `unknown` field for just that category, never a thrown
  * snapshot.
  *
- * Slice 1 (2026-09-04) implements 5 of the mission's 15 named categories
- * for real: identity/cohort, attendance (reusing Checkpoint B's fail-closed
+ * Slice 1 (2026-09-04) implemented 5 of the mission's 15 named categories:
+ * identity/cohort, attendance (reusing Checkpoint B's fail-closed
  * reliability gate), timeline progress, assessment trend, reflection
- * completion. The other 10 (engagement, competency evidence, certification
- * readiness, project/repository progress, artifacts/evidence, community/
- * room/event activity, open tickets/interventions, previous Reese
- * communications, agreed next steps/due dates, instructor/manager
- * feedback) are real, cataloged, un-built categories — deliberately not
- * stubbed as fake `not_applicable` placeholders on the snapshot type itself
- * (a field that doesn't exist yet shouldn't pretend to be a real "N/A"
- * verdict about the category) — they're added to the type and wired for
- * real in later slices, matching Checkpoint B's own small-slice discipline.
+ * completion. Slice 2 (2026-09-04) adds 3 more: competency evidence,
+ * project/repository progress, certification readiness. The remaining 7
+ * (engagement, artifacts/evidence, community/room/event activity, open
+ * tickets/interventions, previous Reese communications, agreed next
+ * steps/due dates, instructor/manager feedback) are real, cataloged,
+ * un-built categories — deliberately not stubbed as fake `not_applicable`
+ * placeholders on the snapshot type itself (a field that doesn't exist yet
+ * shouldn't pretend to be a real "N/A" verdict about the category) —
+ * they're added to the type and wired for real in later slices, matching
+ * Checkpoint B's own small-slice discipline.
  */
 import { getAttendanceField } from './attendanceSource';
 import { getIdentityField } from './identitySource';
 import { getTimelineProgressField } from './timelineProgressSource';
 import { getAssessmentTrendField } from './assessmentTrendSource';
 import { getReflectionCompletionField } from './reflectionCompletionSource';
+import { getCompetencyEvidenceField } from './competencyEvidenceSource';
+import { getProjectProgressField } from './projectProgressSource';
+import { getCertReadinessField } from './certReadinessSource';
 import { AttendanceValue, IdentityValue, notApplicableField, SnapshotField, StudentSuccessSnapshot, TimelineProgressValue } from './types';
 
 export * from './types';
@@ -46,11 +50,14 @@ export async function getStudentSuccessSnapshot(enrollmentId: string): Promise<S
 
   const cohortId = identity.value?.cohortId ?? null;
 
-  const [attendanceR, timelineR, assessmentR, reflectionR] = await Promise.allSettled([
+  const [attendanceR, timelineR, assessmentR, reflectionR, competencyR, projectR, certR] = await Promise.allSettled([
     getAttendanceField(enrollmentId, cohortId),
     getTimelineProgressField(enrollmentId),
     getAssessmentTrendField(enrollmentId),
     getReflectionCompletionField(enrollmentId),
+    getCompetencyEvidenceField(enrollmentId),
+    getProjectProgressField(enrollmentId),
+    getCertReadinessField(enrollmentId),
   ]);
 
   return {
@@ -61,6 +68,9 @@ export async function getStudentSuccessSnapshot(enrollmentId: string): Promise<S
     timelineProgress: timelineR.status === 'fulfilled' ? timelineR.value : unknownField<TimelineProgressValue>('timeline_card_progress', timelineR.reason),
     assessmentTrend: assessmentR.status === 'fulfilled' ? assessmentR.value : unknownField('assessment_attempts', assessmentR.reason),
     reflectionCompletion: reflectionR.status === 'fulfilled' ? reflectionR.value : unknownField('reflection_entries', reflectionR.reason),
+    competencyEvidence: competencyR.status === 'fulfilled' ? competencyR.value : unknownField('student_competency', competencyR.reason),
+    projectProgress: projectR.status === 'fulfilled' ? projectR.value : unknownField('projects', projectR.reason),
+    certReadiness: certR.status === 'fulfilled' ? certR.value : unknownField('cert_readiness_snapshots', certR.reason),
   };
 }
 
