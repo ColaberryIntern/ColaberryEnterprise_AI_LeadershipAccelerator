@@ -4,6 +4,7 @@ import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import BucketSections from '../../components/timeline/BucketSections';
 import { classroomSectionsEnabled } from './classroomBucketsFlag';
+import { fetchClassroomProjection, ClassroomProjection } from './classroomProjectionApi';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import { runtimeApi } from './runtime/runtimeApi';
@@ -188,6 +189,16 @@ const ClassroomPage: React.FC = () => {
   /* Off by default. A week that regroups itself under a student mid-cohort is
      a worse surprise than a flat feed, so this ships dark and turns on per
      cohort. Searching always uses the flat feed regardless. */
+  /* Live per-student state, fetched alongside the week rather than inside it.
+     A failure returns null and the sections render exactly as they did before. */
+  const [projection, setProjection] = useState<ClassroomProjection | null>(null);
+  useEffect(() => {
+    if (!classroomSectionsEnabled()) return;
+    let live = true;
+    fetchClassroomProjection().then((p) => { if (live) setProjection(p); });
+    return () => { live = false; };
+  }, []);
+
   const sectionsOn = useMemo(() => classroomSectionsEnabled() && tokenizeQuery(query).length === 0, [query]);
 
   const visibleCards = useMemo(() => filterCardsByQuery(weekCards, query), [weekCards, query]);
@@ -340,6 +351,7 @@ const ClassroomPage: React.FC = () => {
                     onComplete={completeCard}
                     onComments={openCard}
                     onWorkspace={openCard}
+                    projection={projection}
                   />
                 )
                 : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
