@@ -61,6 +61,7 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // first use with 'relation does not exist'. Both are idempotent and assert
 // their own post-conditions.
 import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
@@ -2567,6 +2568,19 @@ async function start(): Promise<void> {
   // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
   await ensureSponsorPortalAuditSchema();
   await ensureSbpSchema();
+  // Cert Prep (Claude Certified Architect readiness) — eight additive tables.
+  // Ensured at boot like its siblings, and NOT gated on CERT_PREP_ENABLED: the
+  // flag decides whether the feature answers requests, not whether its tables
+  // exist. Creating them only when the flag flips would mean the first request
+  // after enabling it races the DDL, and turning the flag off would leave a
+  // half-known schema behind. The DDL is idempotent and additive, so a
+  // flag-off deployment simply carries eight empty tables.
+  //
+  // It refuses to claim success it did not have: four of these tables
+  // REFERENCE enrollments(id), and on a database without it they failed
+  // silently while the per-statement try/catch let boot log "schema ensured".
+  // The function now post-checks and names what is missing.
+  await ensureCertPrepSchema();
   // projects.archived_at — the soft-delete stamp behind "remove my own project".
   // Must run before any request can hit the archive routes, because every
   // student-project listing query now filters on this column and a missing

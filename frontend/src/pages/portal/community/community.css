@@ -132,8 +132,9 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 .cm-feed .fcard + .fcard{margin-top:16px}
 
 @media (min-width:1024px){
-  .cm-layout{grid-template-columns:minmax(0,1fr) 320px}
-  .cm-side{position:sticky;top:16px}
+  /* Same rail geometry as every other main page (TodayShell.css defines it). */
+  .cm-layout{grid-template-columns:minmax(0,1fr) var(--te-side-w,340px)}
+  .cm-side{position:sticky;top:var(--te-side-top,20px)}
 }
 
 /* Pinned post — subtle amber rail so it reads as elevated without shouting. */
