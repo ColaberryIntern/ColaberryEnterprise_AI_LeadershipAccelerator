@@ -44,6 +44,16 @@ function lastBeaconBody(): Blob {
   return call[1];
 }
 
+/** jsdom's Blob has no `.text()`, so read it through FileReader instead. */
+function readBlob(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
   fetchMock.mockReset();
@@ -227,7 +237,10 @@ describe('beacon flush -> /api/t/batch content type', () => {
     Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
 
-    const parsed = JSON.parse(await lastBeaconBody().text());
+    // jsdom's Blob implements no `.text()`, so read it the way the platform did
+    // before that method existed. Using it would fail on the harness rather than on
+    // the behaviour, which is a test that reports the wrong thing.
+    const parsed = JSON.parse(await readBlob(lastBeaconBody()));
     const sent = parsed.events.find((e: any) => e.event_type === 'time_on_page');
     expect(sent).toBeDefined();
     // `seconds` is the key behavioralSignalService reads for its >= 180 test. Changing
