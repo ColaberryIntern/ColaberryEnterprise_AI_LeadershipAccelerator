@@ -1,23 +1,37 @@
 import { Op, fn, col, literal, QueryTypes } from 'sequelize';
 import { Visitor, VisitorSession, PageEvent, Lead, IntentScore, Campaign } from '../models';
 import { sequelize } from '../config/database';
+import { botExclusionSql, isBotUserAgent } from './visitorBotDetection';
 
 // ---------------------------------------------------------------------------
 // 1. Live Visitors
 // ---------------------------------------------------------------------------
 
-export async function getLiveVisitors(limit = 50): Promise<any[]> {
+export async function getLiveVisitors(limit = 50, includeBots = false): Promise<any[]> {
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
   // Find sessions that have at least one PageEvent with timestamp within the
   // last 5 minutes. Use a literal subquery in the WHERE clause so Sequelize
   // does not need a raw query.
+  //
+  // The bot predicate is applied HERE, in the same WHERE as the recency test,
+  // rather than by filtering the returned rows. Post-filtering would interact
+  // with LIMIT — asking for 50 and dropping the bots among them returns fewer
+  // than 50 while more live humans exist further down, which looks like a quiet
+  // site rather than a truncated query.
   const sessions = await VisitorSession.findAll({
     where: {
       [Op.and]: [
         literal(
           `EXISTS (SELECT 1 FROM "page_events" WHERE "page_events"."session_id" = "VisitorSession"."id" AND "page_events"."timestamp" > '${fiveMinutesAgo.toISOString()}')`
         ),
+        ...(includeBots
+          ? []
+          : [
+              literal(
+                `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "VisitorSession"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+              ),
+            ]),
       ],
     },
     include: [
@@ -81,6 +95,9 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
       city: visitor?.city ?? null,
       country: visitor?.country ?? null,
       is_identified: !!lead,
+      // Labelled even when bots are excluded, so turning "Show bots" on gives a
+      // list where the machines are marked rather than merely present.
+      is_bot: isBotUserAgent(visitor?.user_agent),
       intent_score: intentScore?.score ?? null,
       intent_level: intentScore?.intent_level ?? null,
     };
@@ -95,13 +112,20 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
  * the "Live Now" figure would silently cap the headline number at the page size
  * and read as a plateau rather than a truncation.
  */
-export async function countLiveVisitors(): Promise<number> {
+export async function countLiveVisitors(includeBots = false): Promise<number> {
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
+  // Joins `visitors` only to reach `user_agent`, and applies the SAME predicate
+  // the list query uses. If these two ever diverge the dashboard reports a
+  // headline the table below it contradicts.
+  const botFilter = includeBots ? '' : `AND ${botExclusionSql('v."user_agent"')}`;
+
   const [row] = await sequelize.query<{ count: string }>(
-    `SELECT COUNT(DISTINCT visitor_id)::int AS count
-       FROM page_events
-      WHERE timestamp > :since`,
+    `SELECT COUNT(DISTINCT pe.visitor_id)::int AS count
+       FROM page_events pe
+       JOIN visitors v ON v.id = pe.visitor_id
+      WHERE pe.timestamp > :since
+        ${botFilter}`,
     { replacements: { since: fiveMinutesAgo }, type: QueryTypes.SELECT }
   );
 

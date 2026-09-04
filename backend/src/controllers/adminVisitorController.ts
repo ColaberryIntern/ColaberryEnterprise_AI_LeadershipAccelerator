@@ -83,8 +83,14 @@ export async function handleGetLiveVisitors(req: Request, res: Response, next: N
   try {
     const requested = req.query.limit ? Number(req.query.limit) : 50;
     const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 200) : 50;
-    const [visitors, count] = await Promise.all([getLiveVisitors(limit), countLiveVisitors()]);
-    res.json({ visitors, count });
+    // Bots are hidden by default: the question this page answers is "who is on
+    // the site", and a crawler is not a who. Opt in with ?includeBots=true.
+    const includeBots = req.query.includeBots === 'true';
+    const [visitors, count] = await Promise.all([
+      getLiveVisitors(limit, includeBots),
+      countLiveVisitors(includeBots),
+    ]);
+    res.json({ visitors, count, includeBots });
   } catch (error) {
     next(error);
   }
