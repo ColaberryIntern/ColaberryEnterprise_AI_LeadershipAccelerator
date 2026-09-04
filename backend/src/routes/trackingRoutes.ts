@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { handleTrackEvent, handleTrackBatch, handleHeartbeat, handleIdentify } from '../controllers/trackingController';
+import { handlePortalSession } from '../controllers/portalTrackingController';
+import { requireParticipant } from '../middlewares/participantAuth';
 import {
   handleChatStart,
   handleChatMessage,
@@ -46,6 +48,12 @@ router.post('/api/t/event', eventLimiter, handleTrackEvent);
 router.post('/api/t/batch', batchLimiter, handleTrackBatch);
 router.post('/api/t/heartbeat', heartbeatLimiter, handleHeartbeat);
 router.post('/api/t/identify', eventLimiter, handleIdentify);
+
+// Signed-in portal sessions. requireParticipant is not optional here: the whole design
+// is that eligibility and identity are decided from the token rather than asserted by
+// the page. Rate-limited with the same bucket as events - it is called once per portal
+// mount, so anything approaching that ceiling is not a real browser.
+router.post('/api/t/portal-session', eventLimiter, requireParticipant, handlePortalSession);
 
 // Chat endpoints (public, rate-limited)
 const chatStartLimiter = rateLimit({
