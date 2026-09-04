@@ -216,3 +216,61 @@
   font-weight: var(--fw-medium);
   color: var(--text-strong);
 }
+
+/* ------------------------------------------------------------- the cover --- */
+
+/* THE MASTHEAD'S RIGHT HALF WAS EMPTY, AND THE PAGE HAD NO PICTURE ON IT.
+   Both facts had one cause: `heroImageUrl` reached the index card and was never
+   read by the detail page. So the title block ran to about half the measure on a
+   desktop and the other half held nothing, on the tallest band of the page.
+   The cover goes THERE rather than above the title or below the fold: beside the
+   standfirst that explains it, and in the column that was already empty.
+   IT IS NOT FREE, AND THE MEASUREMENT IS THE POINT. The band grows only when the
+   picture is taller than the words, and then only by the difference: measured at
+   495px on this record without a cover and 546px with one, against a masthead
+   that was 1142px before the context strip moved out of it. Stacking the same
+   image above the title would have cost its full height. That is the trade the
+   masthead's "subtract, never add" rule permits - 51px for the page's evidence,
+   not 431px.
+   7fr/5fr, not 1fr/1fr: the title and standfirst are the page's argument and the
+   picture is its evidence, so the words keep the larger track.
+   Below 64rem there is no second column and the figure stays last in source
+   order, which is where the markup already puts it.
+
+   TWO CHILDREN, NOT A ROW SPAN, AND THE DIFFERENCE WAS VISIBLE. The first
+   version left the masthead's eight children where they were and gave the cover
+   `grid-row: 1 / -1`. With no `grid-template-rows` the explicit grid has exactly
+   one line, so `-1` resolves back to line 1: the span collapses, the image lands
+   in row 1, and row 1 becomes as tall as the image. Measured result - the
+   breadcrumb at the top of the band and the title 600px below it with nothing in
+   between. `.cbv2-story__hero-copy` wraps the words so the grid has the two
+   children the two columns were always for. */
+.cbv2-story__hero-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+@media (min-width: 64rem) {
+  .cbv2-story__hero--cover {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    align-items: center;
+    column-gap: var(--space-10);
+  }
+}
+
+.cbv2-story__cover { margin: 0; width: 100%; min-width: 0; }
+
+/* A screenshot of a product UI is mostly light and it lands on the dark
+   masthead. The hairline stops a white-backed capture from bleeding into the
+   band, and the radius matches the cards further down so the picture reads as
+   the same family of object. */
+.cbv2-story__cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: var(--border-1) solid color-mix(in srgb, var(--text-on-inverse) 18%, transparent);
+  border-radius: var(--radius-lg);
+}
