@@ -30,6 +30,8 @@ interface Visitor {
   region?: string;
   country?: string;
   // live-only fields
+  session_id?: string;
+  site_slug?: string | null;
   current_page?: string;
   exit_page?: string;
   session_duration?: number;
@@ -84,6 +86,54 @@ interface VisitorStats {
   sessions30d: number;
   avgDuration: number;
   bounceRate: number;
+}
+
+/**
+ * The raw stats payload, in the snake_case the API actually speaks.
+ *
+ * This page declared `VisitorStats` in camelCase and assigned the response
+ * straight into it, so every field read back undefined and each card fell to its
+ * `?? 0`. TypeScript could not catch it: the value arrived as `any` from the HTTP
+ * client, and `?? 0` makes an undefined read look like a legitimate zero.
+ */
+interface RawVisitorStats {
+  liveCount?: number;
+  live_count?: number;
+  todayVisitors?: number;
+  visitors_today?: number;
+  todaySessions?: number;
+  sessions_today?: number;
+  visitors30d?: number;
+  total_visitors?: number;
+  sessions30d?: number;
+  total_sessions?: number;
+  avgDuration?: number;
+  avg_session_duration?: number;
+  bounceRate?: number;
+  bounce_rate?: number;
+}
+
+/**
+ * Normalise either naming convention into the view model.
+ *
+ * Accepting both is not indecision — it is what keeps the page correct across
+ * the deploy gap. The frontend ships as a cached bundle (Cloudflare holds app
+ * assets for hours) while the backend restarts immediately, so for a window the
+ * new page talks to the old API or the reverse. Reading both names means neither
+ * ordering shows a false zero.
+ */
+function normalizeStats(raw: RawVisitorStats | null | undefined): VisitorStats | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const pick = (a?: number, b?: number): number => (typeof a === 'number' ? a : typeof b === 'number' ? b : 0);
+  return {
+    liveCount: pick(raw.liveCount, raw.live_count),
+    todayVisitors: pick(raw.todayVisitors, raw.visitors_today),
+    todaySessions: pick(raw.todaySessions, raw.sessions_today),
+    visitors30d: pick(raw.visitors30d, raw.total_visitors),
+    sessions30d: pick(raw.sessions30d, raw.total_sessions),
+    avgDuration: pick(raw.avgDuration, raw.avg_session_duration),
+    bounceRate: pick(raw.bounceRate, raw.bounce_rate),
+  };
 }
 
 interface TopPage {
@@ -226,6 +276,9 @@ function AdminVisitorsPage() {
 
   /* --- Live visitors --- */
   const [liveVisitors, setLiveVisitors] = useState<Visitor[]>([]);
+  // Authoritative live count from the server. Kept apart from `liveVisitors.length`
+  // because the table is LIMITed — the list can be capped while the count is not.
+  const [liveCount, setLiveCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   /* --- All visitors --- */
@@ -289,7 +342,17 @@ function AdminVisitorsPage() {
   const fetchLive = useCallback(async () => {
     try {
       const res = await api.get('/api/admin/visitors/live');
-      setLiveVisitors(res.data.visitors || []);
+      // The endpoint now returns `{ visitors, count }`; it used to return the
+      // bare array. Both are read so a cached bundle and a fresh API — in either
+      // order — still populate the table.
+      const payload = res.data;
+      const rows: Visitor[] = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.visitors)
+          ? payload.visitors
+          : [];
+      setLiveVisitors(rows);
+      if (typeof payload?.count === 'number') setLiveCount(payload.count);
     } catch (err) {
       console.error('Failed to fetch live visitors:', err);
     }
@@ -298,7 +361,7 @@ function AdminVisitorsPage() {
   const fetchStats = useCallback(async () => {
     try {
       const res = await api.get('/api/admin/visitors/stats');
-      setStats(res.data.stats || res.data);
+      setStats(normalizeStats(res.data?.stats || res.data));
     } catch (err) {
       console.error('Failed to fetch visitor stats:', err);
     }
@@ -330,7 +393,10 @@ function AdminVisitorsPage() {
       ]);
       setTopPages(trendRes.data.topPages || []);
       setTrafficSources(trendRes.data.trafficSources || []);
-      setStats(topRes.data.stats || topRes.data);
+      // Normalised, not assigned raw. This writes the SAME `stats` state the
+      // header cards read, so skipping the mapping here would re-break every
+      // card the moment the Analytics tab loaded.
+      setStats(normalizeStats(topRes.data?.stats || topRes.data));
       setSitesBreakdown(sitesRes?.data || []);
     } catch (err) {
       console.error('Failed to fetch analytics:', err);
@@ -442,22 +508,47 @@ function AdminVisitorsPage() {
     }
   }, [activeTab, fetchLive, fetchStats, fetchAllVisitors, fetchHighIntent, fetchAnalytics, fetchSessions, fetchChat]);
 
-  // Auto-refresh for live tab
+  /**
+   * Live figures refresh on every tab, not just the Live tab.
+   *
+   * The header stat cards and the Live badge render above the tab strip, so they
+   * are on screen the whole time — but the poll used to be scoped to
+   * `activeTab === 'live'`, and the initial fetch too. Landing on the default
+   * Navigation Flow tab therefore showed no header cards at all, and any other
+   * tab froze them at whatever was last loaded. "Who is on the site" was only
+   * ever true on one tab.
+   *
+   * Polling pauses while the browser tab is hidden and fires once immediately on
+   * return: an admin tab left open overnight should not spend 2,880 requests
+   * refreshing a screen nobody is looking at, and the first thing he sees on
+   * coming back should be current rather than eight hours stale.
+   */
   useEffect(() => {
-    if (activeTab !== 'live') return;
-    const interval = setInterval(() => {
+    let cancelled = false;
+
+    const refresh = () => {
+      if (cancelled || document.visibilityState === 'hidden') return;
       fetchLive();
       fetchStats();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [activeTab, fetchLive, fetchStats]);
+    };
+
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [fetchLive, fetchStats]);
 
   /* ---------------------------------------------------------------- */
   /*  Per-page trust signal (Basecamp todo 10027085963)               */
   /* ---------------------------------------------------------------- */
 
   const trust: TrustSignal = useMemo(() => {
-    const live = stats?.liveCount ?? liveVisitors.length;
+    const live = liveCount ?? stats?.liveCount ?? liveVisitors.length;
     return {
       level: 'live',
       source: 'visitor analytics',
@@ -475,7 +566,7 @@ function AdminVisitorsPage() {
         },
       ],
     };
-  }, [stats, liveVisitors.length]);
+  }, [stats, liveCount, liveVisitors.length]);
 
   /* ---------------------------------------------------------------- */
   /*  Filter helpers                                                   */
@@ -523,7 +614,7 @@ function AdminVisitorsPage() {
       {stats && (
         <div className="row g-3 mb-4">
           <div className="col-sm-4">
-            <StatCard label="Live Now" value={stats.liveCount ?? liveVisitors.length} icon="broadcast-line" tone="success" />
+            <StatCard label="Live Now" value={liveCount ?? stats.liveCount ?? liveVisitors.length} icon="broadcast-line" tone="success" />
           </div>
           <div className="col-sm-4">
             <StatCard label="Sessions Today" value={stats.todaySessions ?? 0} icon="time-line" tone="info" />
@@ -556,7 +647,13 @@ function AdminVisitorsPage() {
 
       {/* Live visitors table */}
       <SectionCard
-        title={`Active Visitors (${liveVisitors.length})`}
+        // Says "50 of 63" rather than "50" when the list is truncated. A bare
+        // count that silently stops at the limit reads as a ceiling on traffic.
+        title={
+          liveCount != null && liveCount > liveVisitors.length
+            ? `Active Visitors (${liveVisitors.length} of ${liveCount})`
+            : `Active Visitors (${liveVisitors.length})`
+        }
         icon="pulse-line"
         actions={<span className="text-muted small">Auto-refreshes every 30s</span>}
         padded={false}
@@ -567,6 +664,7 @@ function AdminVisitorsPage() {
               <tr>
                 <th>Visitor</th>
                 <th>Status</th>
+                <th>Site</th>
                 <th>Intent</th>
                 <th>Current Page</th>
                 <th>Duration</th>
@@ -578,7 +676,7 @@ function AdminVisitorsPage() {
             <tbody>
               {liveVisitors.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-4">
+                  <td colSpan={9} className="text-center py-4">
                     <div className="text-muted mb-2">No visitors currently on the site.</div>
                     <button
                       className="btn btn-sm btn-outline-primary"
@@ -591,12 +689,16 @@ function AdminVisitorsPage() {
               ) : (
                 liveVisitors.map((v) => (
                   <tr
-                    key={v.id}
+                    // Keyed on the session, not the visitor: one visitor can hold
+                    // two concurrent sessions (two tabs, or desktop and phone) and
+                    // a visitor-id key would collide and drop a live row.
+                    key={v.session_id || v.id}
                     style={{ cursor: 'pointer' }}
                     onClick={() => fetchVisitorDetail(v)}
                   >
                     <td>{renderVisitorCell(v)}</td>
                     <td>{renderStatusBadge(v)}</td>
+                    <td className="small">{v.site_slug || <span className="text-muted">-</span>}</td>
                     <td><IntentBadge score={getIntentScore(v)} level={getIntentLevel(v)} /></td>
                     <td className="small text-truncate" style={{ maxWidth: 200 }}>
                       {v.current_page || v.exit_page || '-'}
@@ -1338,7 +1440,7 @@ function AdminVisitorsPage() {
         {stats && (
           <div className="row g-3">
             <div className="col-6 col-lg-3">
-              <StatCard label="Live Now" value={stats.liveCount ?? liveVisitors.length} icon="broadcast-line" tone="success" />
+              <StatCard label="Live Now" value={liveCount ?? stats.liveCount ?? liveVisitors.length} icon="broadcast-line" tone="success" />
             </div>
             <div className="col-6 col-lg-3">
               <StatCard label="Visitors Today" value={stats.todayVisitors ?? 0} icon="user-line" tone="primary" />

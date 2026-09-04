@@ -108,6 +108,48 @@
             </div>
           </form>
 
+          <!--
+            The second door. Section 14 of the build plan asks for several ways to start;
+            this is the one that actually works today, so it is the only one shown.
+
+            It posts to the SAME ingest endpoint as the form above, with a different entry
+            slug. That matters: the public site cannot reach /api/v1/request-callback,
+            which is guarded by a service token, and putting that token in a page would let
+            anyone make our number dial strangers. A routing rule turns this lead into a
+            call instead - no new public surface, and the consent, dedup and safety checks
+            all still apply server-side.
+          -->
+          <div class="callme" id="callme-block">
+            <h2 style="font-size:1.2rem">Or have our AI call you now</h2>
+            <p class="step-hint">
+              An AI assistant rings you straight away and asks about the work. It says it is an
+              AI when you pick up. Usually about five minutes.
+            </p>
+
+            <form class="intake" id="callme" data-form="call_me_now" novalidate>
+              <label for="cm-phone">Phone number</label>
+              <input id="cm-phone" name="phone" type="tel" autocomplete="tel" required
+                     placeholder="+1 555 0100" />
+
+              <label for="cm-name">Your name</label>
+              <input id="cm-name" name="name" type="text" autocomplete="name" required />
+
+              <label for="cm-email">Work email</label>
+              <input id="cm-email" name="email" type="email" autocomplete="email" required />
+
+              <div class="consent">
+                <input id="cm-consent" name="consent_contact" type="checkbox" />
+                <label for="cm-consent">
+                  I agree to be called now by an AI assistant on this number, and understand the
+                  call may be recorded and transcribed so AI Flotation can act on what I say.
+                </label>
+              </div>
+
+              <button type="submit" data-cta="Call me now">Call me now</button>
+              <div id="cm-status" role="status" aria-live="polite"></div>
+            </form>
+          </div>
+
           <p class="note" style="max-width:40rem;margin-top:1.5rem">
             <b>What happens next.</b> Your details reach the team that reads them. We do not send
             an automated confirmation, so nothing will land in your inbox from this form &mdash;
@@ -265,6 +307,91 @@
               // the fields, because retyping five fields after a network blip is the point
               // at which somebody gives up.
               fail((err && err.message ? err.message : 'Something went wrong.') + ' Your answers are still here — please try again.');
+            })
+            .finally(function () {
+              sending = false;
+              button.disabled = false;
+            });
+        });
+      })();
+
+      /*
+       * "Call me now".
+       *
+       * Same endpoint, same attribution, different entry slug - which is the only thing
+       * that distinguishes it server-side, where a routing rule turns this lead into an
+       * actual call. Kept in its own IIFE rather than folded into the intake handler
+       * above: they share nothing but the API base, and one function serving two forms is
+       * how a change to one silently breaks the other.
+       */
+      (function () {
+        var API = '{{brand.platformApiBase}}';
+        var form = document.getElementById('callme');
+        if (!form) return;
+        var status = document.getElementById('cm-status');
+        var button = form.querySelector('button[type=submit]');
+        var sending = false;
+
+        function fail(message) {
+          status.textContent = message;
+          status.setAttribute('data-state', 'error');
+        }
+
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          if (sending) return;
+
+          if (!form.checkValidity()) {
+            fail('Please add a name, a work email and the number to ring.');
+            var firstInvalid = form.querySelector(':invalid');
+            if (firstInvalid && firstInvalid.focus) firstInvalid.focus();
+            return;
+          }
+          // Consent is checked separately from validity: a call to somebody who did not
+          // agree to be called is the one failure here that is not merely annoying.
+          if (!document.getElementById('cm-consent').checked) {
+            fail('Please agree to be called before we ring you.');
+            return;
+          }
+
+          sending = true;
+          button.disabled = true;
+          status.textContent = 'Asking our AI assistant to ring you…';
+          status.removeAttribute('data-state');
+
+          var payload = {};
+          new FormData(form).forEach(function (value, key) { payload[key] = value; });
+          payload.consent_contact = true;
+          payload.page_url = window.location.href;
+          try {
+            payload.visitor_fingerprint = localStorage.getItem('rfx_fp') || undefined;
+          } catch (e) { /* blocked storage: ingest still works, just unlinked */ }
+
+          fetch(API + '/api/leads/ingest?source={{brand.sourceSlug}}&entry=call_me_now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+            .then(function (res) {
+              return res.json()
+                .catch(function () { return {}; })
+                .then(function (b) { return { ok: res.ok, body: b }; });
+            })
+            .then(function (result) {
+              if (!result.ok) {
+                throw new Error(result.body && result.body.error ? result.body.error : 'We could not request that call just now.');
+              }
+              if (window.rfxTrack) window.rfxTrack('form_submit', { form: 'call_me_now' });
+              // Deliberately hedged. The call is placed server-side after this responds,
+              // and it can still be refused there - by the safety gate, or because voice
+              // is unavailable. Promising a ringing phone we cannot guarantee is the
+              // failure mode this whole site is built to avoid.
+              status.textContent = 'Asked. Your phone should ring shortly — if it does not, we still have your details and will be in touch.';
+              status.setAttribute('data-state', 'ok');
+              form.reset();
+            })
+            .catch(function (err) {
+              fail((err && err.message ? err.message : 'Something went wrong.') + ' Your details are still here — please try again.');
             })
             .finally(function () {
               sending = false;

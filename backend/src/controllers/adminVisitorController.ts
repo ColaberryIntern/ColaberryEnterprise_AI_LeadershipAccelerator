@@ -3,6 +3,7 @@ import {
   listVisitors,
   getVisitorStats,
   getLiveVisitors,
+  countLiveVisitors,
   getVisitorTrend,
   getVisitorProfile,
 } from '../services/visitorAnalyticsService';
@@ -68,11 +69,22 @@ export async function handleGetVisitorStats(req: Request, res: Response, next: N
 // 3. Live Visitors                     GET /api/admin/visitors/live
 // ---------------------------------------------------------------------------
 
+/**
+ * Returns `{ visitors, count }`, not a bare array.
+ *
+ * The admin page has always read `res.data.visitors` here while this handler
+ * returned the array itself, so `res.data.visitors` was undefined, the `|| []`
+ * fallback took over, and the table rendered "No visitors currently on the site"
+ * no matter how many were. The envelope is what the only consumer already
+ * expects, and it carries `count` — the true number of live visitors, which is
+ * NOT `visitors.length` once the limit truncates the list.
+ */
 export async function handleGetLiveVisitors(req: Request, res: Response, next: NextFunction) {
   try {
-    const limit = req.query.limit ? Number(req.query.limit) : 50;
-    const live = await getLiveVisitors(limit);
-    res.json(live);
+    const requested = req.query.limit ? Number(req.query.limit) : 50;
+    const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 200) : 50;
+    const [visitors, count] = await Promise.all([getLiveVisitors(limit), countLiveVisitors()]);
+    res.json({ visitors, count });
   } catch (error) {
     next(error);
   }
