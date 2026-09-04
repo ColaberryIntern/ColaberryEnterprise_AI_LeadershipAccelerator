@@ -360,3 +360,71 @@ export function initTracker(): void {
   flushTimer = setInterval(() => flush(), 5000);
   heartbeatTimer = setInterval(heartbeat, 60000);
 }
+
+/**
+ * Link the anonymous fingerprint on this browser to a real person.
+ *
+ * WHY THIS EXISTS. `POST /api/t/identify` has been built, routed and working on
+ * the backend for the lifetime of this system, and `grep "t/identify"
+ * frontend/src` returned ZERO hits — nothing has ever called it. The measured
+ * consequence: of 1,791 visitors in production, 54 are linked to a person. 3.0%.
+ * Every other name arrived only because a campaign link happened to carry
+ * `?email=` or `?lid=`.
+ *
+ * The endpoint does more than store a name. `resolveIdentity` BACKFILLS: it
+ * stamps the lead onto the visitor's existing sessions and page events, so the
+ * moment someone fills in a form, everything they read beforehand — anonymously,
+ * possibly over weeks — becomes attributable to them. That history is already in
+ * the database. This call is the only thing standing between it and being
+ * readable.
+ *
+ * CONSENT IS RESPECTED BY CONSTRUCTION, not by a second check that could drift
+ * out of step with the first. The fingerprint only exists if `initTracker()` ran,
+ * and `initTracker()` runs only where tracking is permitted — on the V2 tree that
+ * means after an explicit grant (`config/v2Consent`). No fingerprint means no
+ * call, so a visitor who declined tracking and then submits a form is recorded as
+ * a lead by the form's own endpoint and is never joined to a browsing history
+ * that was never collected.
+ *
+ * FIRE AND FORGET. Identity resolution must never delay or fail a form
+ * submission: the form's own work is what the visitor came to do, and this is
+ * bookkeeping attached to it. Every failure path is swallowed deliberately.
+ */
+export function identifyVisitor(
+  email: string,
+  details: { name?: string; company?: string; phone?: string; metadata?: Record<string, unknown> } = {},
+): void {
+  if (typeof window === 'undefined') return;
+  if (!email || !email.includes('@')) return;
+
+  const fingerprint = getVisitorFingerprint();
+  // No fingerprint means tracking never started here. Minting one now would
+  // create the identifier that consent was meant to gate, at the exact moment
+  // someone handed over their name - which is the worst possible time to do it.
+  if (!fingerprint) return;
+
+  try {
+    fetch(`${API}/api/t/identify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fingerprint,
+        email: email.trim().toLowerCase(),
+        name: details.name,
+        company: details.company,
+        phone: details.phone,
+        metadata: details.metadata,
+      }),
+      keepalive: true,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        // Remember the lead id so subsequent flushes carry it even before the
+        // server has finished joining things up.
+        if (data && data.lead_id) {
+          try { localStorage.setItem(LEAD_KEY, String(data.lead_id)); } catch { /* silent */ }
+        }
+      })
+      .catch(() => { /* silent - never let bookkeeping break a form */ });
+  } catch { /* silent */ }
+}
