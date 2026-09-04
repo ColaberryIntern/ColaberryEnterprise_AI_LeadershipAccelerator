@@ -15,6 +15,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import CertReadinessHero from '../CertReadinessHero';
 import CertDomainMap from '../CertDomainMap';
+import CertProgressRail from '../CertProgressRail';
 import type { CertReadiness, CertTrackInfo, CertDomain } from '../../../../services/certPrepApi';
 
 const TRACK: CertTrackInfo = {
@@ -173,5 +174,68 @@ describe('CertDomainMap — unmeasured is not the same as zero', () => {
       <CertDomainMap domains={[]} readiness={null} onDrill={noop} />,
     );
     expect(html).toMatch(/No certification domains are configured/i);
+  });
+});
+
+
+/**
+ * The sticky rail is on screen the whole time a student works, so a number that
+ * lies there is worse than one buried in a tab. It obeys the same rules the hero
+ * does, and these assertions exist because the rail was written second and could
+ * easily have drifted from them.
+ */
+describe('CertProgressRail', () => {
+  const rail = (r: CertReadiness | null, doms: CertDomain[] = []) =>
+    renderToStaticMarkup(
+      <CertProgressRail
+        readiness={r}
+        domains={doms}
+        track={TRACK}
+        nextActionLabel="Take the baseline diagnostic"
+        onNextAction={noop}
+      />,
+    );
+
+  it('renders "Not measured" rather than the number underneath it', () => {
+    // The server computes a scaled value before it means anything; the state is
+    // what decides whether it may be shown.
+    const html = rail(readiness({ overall_state: 'not_measured', overall_scaled: 195 }));
+    expect(html).toContain('Not measured');
+    expect(html).not.toContain('195');
+  });
+
+  it('shows the score once the state says it means something', () => {
+    expect(rail(readiness({ overall_state: 'approaching', overall_scaled: 740 }))).toContain('740');
+  });
+
+  it('labels a thin sample provisional instead of presenting it as settled', () => {
+    expect(rail(readiness({ overall_state: 'building', overall_scaled: 600, sample_confidence: 0.2 })))
+      .toContain('provisional');
+  });
+
+  it('a domain with no answers shows a dash, never 0%', () => {
+    const doms = [{ domain_id: 'D4', name: 'Prompt Engineering', weight_pct: 20, weight_source: 'official', objectives: [] }] as unknown as CertDomain[];
+    const html = rail(readiness({ domain_breakdown: [] }), doms);
+    expect(html).toContain('—');
+  });
+
+  it('counts domains attempted out of the real domain count, not a hardcoded five', () => {
+    const doms = [
+      { domain_id: 'D1', name: 'a', weight_pct: 50, weight_source: 'official', objectives: [] },
+      { domain_id: 'D2', name: 'b', weight_pct: 50, weight_source: 'official', objectives: [] },
+    ] as unknown as CertDomain[];
+    const html = rail(readiness({
+      domain_breakdown: [
+        { domain_id: 'D1', knowledge_pct: 0.5, answered: 4, evidence_verified: 0, objectives_total: 3, objectives_evidenced: 0 },
+        { domain_id: 'D2', knowledge_pct: null, answered: 0, evidence_verified: 0, objectives_total: 3, objectives_evidenced: 0 },
+      ],
+    }), doms);
+    expect(html).toContain('1 of 2');
+  });
+
+  it('boundary: no readiness at all renders without throwing, and claims nothing', () => {
+    const html = rail(null);
+    expect(html).toContain('Not measured');
+    expect(html).not.toMatch(/\d{3}/);
   });
 });
