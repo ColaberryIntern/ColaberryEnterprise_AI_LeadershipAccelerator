@@ -298,3 +298,58 @@
   background: var(--surface-sunken, #f8fafc);
   overflow-x: auto;
 }
+
+/* The preview call-to-action, first thing in the Publishing tab.
+   THE LEFT BORDER AND THE BUTTON CARRY THE STATE, and they carry the same state the
+   sentence beside them states. Colour is a second channel for one fact, never a fact of
+   its own, so nothing here is conveyed by hue alone (WCAG 1.4.1). */
+.cp-preview-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin: 14px 0 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--pfcta-bd);
+  border-left: 5px solid var(--pfcta-accent);
+  background: var(--pfcta-bg);
+}
+
+.cp-preview-cta-text { display: grid; gap: 3px; min-width: 220px; }
+.cp-preview-cta-text strong { font-size: 15px; color: var(--pfcta-strong); }
+.cp-preview-cta-text span { font-size: 13px; color: var(--text-muted, #64748b); }
+
+.cp-preview-btn {
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 20px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  background: var(--pfcta-accent);
+  color: #fff;
+}
+
+.cp-preview-btn:hover:not(:disabled) { filter: brightness(0.93); }
+.cp-preview-btn:disabled { opacity: .6; cursor: default; }
+
+/* Live, by link or indexed: the page is doing its job. */
+.cp-preview-cta.is-live { --pfcta-accent: #15803d; --pfcta-bg: #f0fdf4; --pfcta-bd: #bbf7d0; --pfcta-strong: #14532d; }
+/* Somebody else has the next move. */
+.cp-preview-cta.is-review { --pfcta-accent: #1d4ed8; --pfcta-bg: #eff6ff; --pfcta-bd: #bfdbfe; --pfcta-strong: #1e3a8a; }
+/* Approved but nobody can open it -- the one state worth a warning colour, because it
+   reads as published and is not. */
+.cp-preview-cta.is-restricted { --pfcta-accent: #b45309; --pfcta-bg: #fffbeb; --pfcta-bd: #fde68a; --pfcta-strong: #78350f; }
+/* Not published yet: neutral, because nothing is wrong. */
+.cp-preview-cta.is-draft { --pfcta-accent: #475569; --pfcta-bg: #f8fafc; --pfcta-bd: #e2e8f0; --pfcta-strong: #0f172a; }
+
+[data-theme="dark"] .cp-preview-cta.is-live { --pfcta-bg: #052e16; --pfcta-bd: #166534; --pfcta-strong: #bbf7d0; --pfcta-accent: #16a34a; }
+[data-theme="dark"] .cp-preview-cta.is-review { --pfcta-bg: #172554; --pfcta-bd: #1e40af; --pfcta-strong: #bfdbfe; --pfcta-accent: #2563eb; }
+[data-theme="dark"] .cp-preview-cta.is-restricted { --pfcta-bg: #451a03; --pfcta-bd: #92400e; --pfcta-strong: #fde68a; --pfcta-accent: #d97706; }
+[data-theme="dark"] .cp-preview-cta.is-draft { --pfcta-bg: #1e293b; --pfcta-bd: #334155; --pfcta-strong: #e2e8f0; --pfcta-accent: #64748b; }
+
+.cp-preview-area { margin-top: 16px; }
