@@ -109,6 +109,15 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { skipped: true, reason: 'no_agent_id' } };
   }
 
+  // AI Flotation shares a SHELL agent whose saved prompt is only `{prompt}`. The
+  // instructions therefore arrive at call time, and without them the agent is not neutral -
+  // it is unscripted, on a number the person may associate with a different business.
+  // Refusing to dial is the safe outcome; a silent no-op is better than an improvised call.
+  if (params.brandSlug === 'ai-flotation' && !(params.prompt || '').trim()) {
+    console.warn('[Synthflow] AI Flotation call has no prompt. Refusing to dial an unscripted agent.');
+    return { success: true, data: { skipped: true, reason: 'no_prompt' } };
+  }
+
   // Check global test mode — redirect phone if enabled
   let actualPhone = params.phone;
   try {
@@ -145,12 +154,17 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     name: params.name,
   };
 
-  if (customVariables.length > 0) {
-    requestBody.custom_variables = customVariables;
+  if (params.prompt) {
+    // Sent BOTH ways on purpose. The agent's saved prompt embeds `{prompt}`, which
+    // Synthflow fills from custom_variables - so the variable is what actually reaches the
+    // conversation. The top-level field is kept because existing callers already rely on
+    // it and removing it would change their behaviour silently.
+    requestBody.prompt = params.prompt;
+    customVariables.push({ key: 'prompt', value: params.prompt });
   }
 
-  if (params.prompt) {
-    requestBody.prompt = params.prompt;
+  if (customVariables.length > 0) {
+    requestBody.custom_variables = customVariables;
   }
 
   try {
