@@ -385,3 +385,6 @@
 .pf-proj:hover .pf-projttl-link { color: var(--pf-a); }
 .pf-projttl-link:hover { text-decoration: underline; }
 .pf-proj:has(.pf-hero-link):hover { border-color: var(--pf-a); }
+
+/* A write-up with no case study behind it: stated, not offered as a click. */
+.pf-list-plain { color: var(--pf-body); }
