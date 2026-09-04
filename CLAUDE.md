@@ -681,6 +681,31 @@ Code locations: `backend/src/services/agents/openclaw/openclawPlatformStrategy.t
 
 ---
 
+# Case Studies
+
+Public case studies are records in the **Case Study OS**, never hardcoded React or a
+static page. Authoring one has a specific order and a set of mechanics that refuse you
+silently if you get them wrong — a diagram containing `<` is dropped to `null`, a
+section override on a nested path fails, a `verified` claim without an `evidenceId` is
+refused at the gate, and the claim scanner blocks banned phrases *even inside a
+negation*.
+
+**Full protocol lives in the `build-case-study` skill.** Invoke via `/build-case-study`
+before creating or rewriting any case study.
+
+Two rules worth stating here because they are about honesty rather than mechanics:
+
+- **Every count states its denominator.** "243 registered agents" and "116 that ran this
+  week" are different facts. Reporting the registry number as the operational one is the
+  failure the whole system exists to prevent.
+- **Never invent a figure to fill a card.** An honest `0`, or a capability marked
+  `not_pursued` with its reason, is stronger than a manufactured number.
+
+Records live in `docs/case-study/`; the field map is generated into
+`docs/case-study/FIELD_COVERAGE.json` and guarded by a drift test.
+
+---
+
 # Screenshot Capture + Review HTML
 
 Sprints that ship user-facing portal changes end with an HTML review doc embedding real production screenshots (not CSS mockups). All capture scripts route through `scripts/captureHelpers.js` for safe-width downscaling (1800px ceiling).
