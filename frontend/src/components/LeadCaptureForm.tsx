@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import api from '../utils/api';
 import { getUTMPayloadFields } from '../services/utmService';
+import { identifyVisitor } from '../utils/tracker';
 
 interface FormErrors {
   [key: string]: string;
@@ -114,6 +115,18 @@ function LeadCaptureForm({
         payload.visitor_fingerprint = visitorFp;
       }
       await api.post('/api/leads', payload);
+      // Join this browser's anonymous history to the person who just named
+      // themselves. `visitor_fingerprint` above only rides along on the lead row;
+      // it is this call that runs resolveIdentity and backfills their existing
+      // sessions and page events, which is what turns "Anonymous 6b7b25a6, 12
+      // pages" into "this named person read the pricing page twice last week".
+      // Fire-and-forget by design — it must never delay or fail the submission.
+      identifyVisitor(formData.email, {
+        name: formData.name,
+        company: formData.company,
+        phone: formData.phone,
+        metadata: { title: formData.title, source_form: 'lead_capture' },
+      });
       setSubmitted(true);
       if (onSuccess) {
         onSuccess({
