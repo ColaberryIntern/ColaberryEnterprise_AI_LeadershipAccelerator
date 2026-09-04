@@ -15,6 +15,8 @@ describe('parseRuleArgs', () => {
     expect(parseRuleArgs([...base, '--convert-url', 'https://x.test/c', '--commit'])).toEqual({
       sourceSlug: 'ai-flotation',
       to: 'ali@colaberry.com',
+      action: 'notify_sales',
+      entrySlug: undefined,
       name: 'Notify on ai-flotation lead',
       convertUrl: 'https://x.test/c',
       commit: true,
@@ -45,8 +47,46 @@ describe('parseRuleArgs', () => {
   });
 });
 
+describe('the callback rule', () => {
+  const callbackArgs = ['--source', 'ai-flotation', '--action', 'request_callback', '--entry', 'call_me_now'];
+
+  it('does not demand a recipient, because a callback rings the lead', () => {
+    // Asking for an email address to place a phone call would be requiring something the
+    // action never uses, and the operator would rightly wonder what it was for.
+    const args = parseRuleArgs(callbackArgs);
+    expect(args.action).toBe('request_callback');
+    expect(args.to).toBe('');
+  });
+
+  it('narrows to the entry, so only the call-me-now form dials', () => {
+    // Without this the rule would fire on every ai-flotation lead and phone people who
+    // filled in the written form and never asked to be called.
+    expect(buildRule(parseRuleArgs(callbackArgs)).conditions)
+      .toEqual({ source_slug: 'ai-flotation', entry_slug: 'call_me_now' });
+  });
+
+  it('fires request_callback and carries no email fields', () => {
+    expect(buildRule(parseRuleArgs(callbackArgs)).actions).toEqual([{ type: 'request_callback' }]);
+  });
+
+  it('names itself after what it does', () => {
+    expect(parseRuleArgs(callbackArgs).name).toBe('Call back on ai-flotation call_me_now');
+  });
+
+  it('rejects an action it cannot fire', () => {
+    // A typo would otherwise write a rule whose action no handler matches, which
+    // runAction reports as 'unknown' and nothing ever notices.
+    expect(() => parseRuleArgs(['--source', 'x', '--action', 'send_smoke_signal']))
+      .toThrow(/must be notify_sales or request_callback/);
+  });
+
+  it('still requires a recipient for a notification rule', () => {
+    expect(() => parseRuleArgs(['--source', 'x', '--action', 'notify_sales'])).toThrow(/--to/);
+  });
+});
+
 describe('buildRule', () => {
-  const args = { sourceSlug: 'ai-flotation', to: 'ali@colaberry.com', name: 'Notify on ai-flotation lead', commit: false };
+  const args = { sourceSlug: 'ai-flotation', to: 'ali@colaberry.com', name: 'Notify on ai-flotation lead', commit: false, action: 'notify_sales' as const };
 
   it('matches source_slug the way the engine evaluates conditions', () => {
     // A bare key is equality in evaluateConditions. Writing `source_slug_eq` would also
