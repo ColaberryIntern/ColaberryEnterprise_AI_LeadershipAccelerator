@@ -206,6 +206,19 @@ export interface PublicProject {
    * browser is told to fetch it.
    */
   hero_image_url: string | null;
+  /**
+   * The slug of the capstone record written about THIS project, or null.
+   *
+   * Ali: "I should be able to drill into the projects and get a similar Case study."
+   * The write-ups already existed but lived in a separate list, so a reader could see
+   * that a person had written something and not which project it was about.
+   *
+   * A SLUG AND NOT AN ID. `capstone_records.project_id` does the joining server-side;
+   * what crosses is the public address of a page a stranger may already open. Only
+   * PUBLISHED, non-private records are ever passed in, so a draft write-up cannot
+   * become a link here however this field is read.
+   */
+  record_slug: string | null;
 }
 
 export interface PublicRepository {
@@ -358,6 +371,16 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     }))
     .sort((a, b2) => a.name.localeCompare(b2.name));
 
+  // Which project each PUBLISHED write-up is about. Built before the projects are mapped
+  // so a card can carry its own record's address; `records` only ever contains published,
+  // non-private rows, so nothing draft can reach this map.
+  const recordSlugByProject = new Map<string, string>();
+  for (const r of (Array.isArray(input.records) ? input.records : []) as any[]) {
+    const pid = str(r?.project_id);
+    const slug = str(r?.slug);
+    if (pid && slug && !recordSlugByProject.has(pid)) recordSlugByProject.set(pid, slug);
+  }
+
   const rawProjects: any[] = Array.isArray(input.projects) ? input.projects : [];
   const projects: PublicProject[] = rawProjects
     .filter((p) => p && typeof p === 'object')
@@ -373,6 +396,7 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
       repo_url: httpUrl(p.github_repo_url),
       demo_url: httpUrl(p.portfolio_url),
       hero_image_url: httpUrl(p.hero_image_url),
+      record_slug: recordSlugByProject.get(str(p.id) ?? '') ?? null,
     }))
     .filter((p) => p.title !== '');
 
