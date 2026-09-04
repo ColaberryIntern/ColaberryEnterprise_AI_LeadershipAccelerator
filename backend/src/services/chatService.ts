@@ -742,6 +742,8 @@ export async function getConversationDetail(conversationId: string): Promise<{
 export async function getChatStats(): Promise<{
   total_conversations: number;
   active_conversations: number;
+  engaged_conversations: number;
+  abandoned_conversations: number;
   today_conversations: number;
   avg_messages: number;
 }> {
@@ -749,9 +751,33 @@ export async function getChatStats(): Promise<{
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const [total, active, today, avgData] = await Promise.all([
+  // "Active" was counting `status = 'active'`, and NOTHING EVER LEAVES THAT
+  // STATUS. In production all 129 conversations were 'active', so the card read
+  // "129 active conversations" — which sounds like 129 live chats needing a
+  // reply. Only 7 of them had more than one message; the other 122 are a widget
+  // opening and nobody saying anything.
+  //
+  // So the number is recomputed from what actually happened rather than from a
+  // status column that was never maintained:
+  //   engaged   — more than one message, i.e. a real exchange
+  //   abandoned — opened and went nowhere
+  //   active    — engaged AND touched in the last 30 minutes, which is the only
+  //               reading of "active" that would justify someone acting on it
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+  const [total, engaged, activeNow, today, avgData] = await Promise.all([
     ChatConversation.count(),
-    ChatConversation.count({ where: { status: 'active' } }),
+    ChatConversation.count({ where: { message_count: { [Op.gt]: 1 } } }),
+    // There is no `last_message_at` column on this model — recency has to come
+    // from `started_at`, plus "not yet ended", which is the honest approximation
+    // available rather than a field invented to make the query read better.
+    ChatConversation.count({
+      where: {
+        message_count: { [Op.gt]: 1 },
+        started_at: { [Op.gte]: thirtyMinutesAgo },
+        ended_at: { [Op.is]: null as any },
+      },
+    }),
     ChatConversation.count({ where: { started_at: { [Op.gte]: todayStart } } }),
     ChatConversation.findOne({
       attributes: [[fn('AVG', col('message_count')), 'avg_messages']],
@@ -761,7 +787,11 @@ export async function getChatStats(): Promise<{
 
   return {
     total_conversations: total,
-    active_conversations: active,
+    // Kept under its original name so the existing card keeps rendering, but it
+    // now means what a reader assumes it means.
+    active_conversations: activeNow,
+    engaged_conversations: engaged,
+    abandoned_conversations: total - engaged,
     today_conversations: today,
     avg_messages: Math.round(Number((avgData as any)?.avg_messages || 0) * 10) / 10,
   };

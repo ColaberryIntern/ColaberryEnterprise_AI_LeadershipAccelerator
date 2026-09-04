@@ -518,6 +518,7 @@ export async function listVisitors(params: {
   limit?: number;
   sort?: string;
   order?: string;
+  includeBots?: boolean;
 }): Promise<{ visitors: any[]; total: number; page: number; totalPages: number }> {
   const page = Math.max(params.page ?? 1, 1);
   const limit = Math.min(Math.max(params.limit ?? 25, 1), 100);
@@ -527,6 +528,13 @@ export async function listVisitors(params: {
   const sortOrder = (params.order ?? 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
   const where: any = {};
+
+  // The same definition of a person the live view and the stat cards use.
+  // Without it this list is 1,802 rows of which 54 are crawlers, sorted by
+  // last-seen — so the machines, which never stop, sit permanently at the top.
+  if (!params.includeBots) {
+    where[Op.and] = [literal(botExclusionSql('"Visitor"."user_agent"'))];
+  }
 
   // Identified filter
   if (params.identified === 'true') {
@@ -583,7 +591,13 @@ export async function listVisitors(params: {
   });
 
   return {
-    visitors: rows,
+    // `is_bot` is emitted even though bots are filtered out by default, so that
+    // turning the filter off produces a list where the machines are LABELLED
+    // rather than merely present and indistinguishable from people.
+    visitors: rows.map((v: any) => ({
+      ...(typeof v.toJSON === 'function' ? v.toJSON() : v),
+      is_bot: isBotUserAgent(v.user_agent),
+    })),
     total: count,
     page,
     totalPages: Math.ceil(count / limit),

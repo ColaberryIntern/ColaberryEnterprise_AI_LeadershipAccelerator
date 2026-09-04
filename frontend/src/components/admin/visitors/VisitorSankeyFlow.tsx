@@ -101,37 +101,102 @@ function VisitorSankeyFlow(): React.ReactElement {
     load();
   }, [load]);
 
-  /** Colour is keyed to the SOURCE NODE, so a band keeps its hue end to end. */
-  const colorForNode = useMemo(() => {
-    const map = new Map<number, string>();
+  /**
+   * Colour is keyed to the SITE, by name.
+   *
+   * Two reasons, both learned from the first attempt rendering entirely grey.
+   *
+   * BY SITE, because the site is the only entity present in BOTH hops. Colouring
+   * by traffic source leaves the second hop with nothing to inherit, and colouring
+   * by outcome leaves the first hop with nothing to predict — a source→site band
+   * aggregates several outcomes and cannot honestly carry one of their colours.
+   * Site is also the thing worth distinguishing: seven properties feed this chart.
+   *
+   * BY NAME, not index, because recharts hands the link renderer node OBJECTS
+   * whose shape varies by version. Indexing off `payload.source.index` silently
+   * produced `undefined` for every band, every lookup missed, and the whole
+   * diagram fell back to grey — a failure that looked like a design choice rather
+   * than a bug. Names are stable across versions and unique within the site column.
+   */
+  const colorForSite = useMemo(() => {
+    const map = new Map<string, string>();
     if (!data) return map;
     let next = 0;
-    data.nodes.forEach((n, i) => {
-      if (n.stage === 'source') {
-        map.set(i, palette[next % palette.length]);
+    data.nodes.forEach((n) => {
+      if (n.stage === 'site') {
+        map.set(n.name, palette[next % palette.length]);
         next += 1;
       }
     });
     return map;
   }, [data, palette]);
 
-  const colorForLink = useCallback(
-    (sourceIndex: number, targetIndex: number): string => {
-      if (colorForNode.has(sourceIndex)) return colorForNode.get(sourceIndex)!;
-      // Second hop: inherit from whichever source feeds this site most, so the
-      // ribbon does not change colour halfway across the diagram.
-      if (!data) return 'var(--color-border)';
-      let best: { value: number; color: string } | null = null;
-      for (const link of data.links) {
-        if (link.target !== sourceIndex) continue;
-        const color = colorForNode.get(link.source);
-        if (!color) continue;
-        if (!best || link.value > best.value) best = { value: link.value, color };
-      }
-      return best?.color ?? (isDark ? '#B4B4B4' : '#6B6B6B');
+  /** Outcome nodes read as a scale, so they take status colours rather than the
+   *  categorical ramp — identified is a win, bounced is not, and the colour
+   *  should say so without the reader consulting a legend. */
+  const outcomeColor = useCallback(
+    (name: string): string => {
+      const light: Record<string, string> = {
+        Identified: '#5BA63C',
+        Engaged: '#2BA39A',
+        Left: '#8C8C8C',
+        Bounced: '#E8920C',
+      };
+      const dark: Record<string, string> = {
+        Identified: '#8AC759',
+        Engaged: '#44C0B6',
+        Left: '#B4B4B4',
+        Bounced: '#F0A93A',
+      };
+      return (isDark ? dark : light)[name] ?? (isDark ? '#B4B4B4' : '#8C8C8C');
     },
-    [colorForNode, data, isDark],
+    [isDark],
   );
+
+  /** Resolve whichever end of a link is a site, and colour the band by it. */
+  const colorForLinkNames = useCallback(
+    (sourceName?: string, targetName?: string): string => {
+      if (sourceName && colorForSite.has(sourceName)) return colorForSite.get(sourceName)!;
+      if (targetName && colorForSite.has(targetName)) return colorForSite.get(targetName)!;
+      return isDark ? '#B4B4B4' : '#8C8C8C';
+    },
+    [colorForSite, isDark],
+  );
+
+  /**
+   * The outcome column as shares of total.
+   *
+   * "Bounced 2,596" is the number the chart already draws; "58.1% bounced" is the
+   * number someone can act on, and it is the one Ali asked for by name. Derived
+   * from the same nodes the diagram renders, so the tiles and the bands can never
+   * disagree — the alternative, a second query, is how a dashboard ends up
+   * contradicting itself.
+   */
+  const outcomeTotals = useMemo(() => {
+    if (!data || !data.total_sessions) return [];
+    const totals = new Map<string, number>();
+    for (const link of data.links) {
+      const target = data.nodes[link.target];
+      if (target?.stage !== 'outcome') continue;
+      totals.set(target.name, (totals.get(target.name) ?? 0) + link.value);
+    }
+    const ORDER = ['Identified', 'Engaged', 'Left', 'Bounced'];
+    const LABELS: Record<string, string> = {
+      Identified: 'Identified (became a lead)',
+      Engaged: 'Engaged (2+ pages)',
+      Left: 'Left after one page',
+      Bounced: 'Bounce rate',
+    };
+    return ORDER.filter((name) => totals.has(name)).map((name) => {
+      const value = totals.get(name)!;
+      return {
+        name,
+        label: LABELS[name] ?? name,
+        value,
+        pct: Math.round((value / data.total_sessions) * 1000) / 10,
+      };
+    });
+  }, [data]);
 
   const chart = useMemo(() => {
     if (!data || data.nodes.length === 0) return null;
@@ -145,53 +210,71 @@ function VisitorSankeyFlow(): React.ReactElement {
     (props: any) => {
       const { x, y, width, height, index, payload } = props;
       const stage: string = payload?.stage ?? 'site';
-      const fill = colorForNode.get(index) ?? (isDark ? '#4A4A4A' : '#D8D8D8');
+      const name: string = payload?.name ?? '';
+      const value = Number(payload?.value ?? 0);
+      const total = data?.total_sessions || 0;
+      // Percentages, because 2,920 means nothing without knowing it is 65% of
+      // everything. The share is the point of a Sankey; the raw count is detail.
+      const pct = total > 0 ? Math.round((value / total) * 1000) / 10 : 0;
+
+      const fill =
+        stage === 'site'
+          ? colorForSite.get(name) ?? (isDark ? '#4A4A4A' : '#D8D8D8')
+          : stage === 'outcome'
+            ? outcomeColor(name)
+            : isDark
+              ? '#6B6B6B'
+              : '#8C8C8C';
+
       const labelOnLeft = stage === 'outcome';
       return (
         <Layer key={`node-${index}`}>
           <Rectangle x={x} y={y} width={width} height={height} fill={fill} radius={2} />
           <text
             x={labelOnLeft ? x - 8 : x + width + 8}
-            y={y + height / 2}
+            y={y + height / 2 - 6}
             textAnchor={labelOnLeft ? 'end' : 'start'}
             dominantBaseline="middle"
             fontSize={12}
+            fontWeight={600}
             fill="var(--color-text)"
           >
-            {payload?.name}
+            {name}
           </text>
           <text
             x={labelOnLeft ? x - 8 : x + width + 8}
-            y={y + height / 2 + 14}
+            y={y + height / 2 + 9}
             textAnchor={labelOnLeft ? 'end' : 'start'}
             dominantBaseline="middle"
             fontSize={11}
             fill="var(--color-text-light)"
           >
-            {Number(payload?.value ?? 0).toLocaleString()}
+            {value.toLocaleString()} · {pct}%
           </text>
         </Layer>
       );
     },
-    [colorForNode, isDark],
+    [colorForSite, outcomeColor, isDark, data],
   );
 
   const renderLink = useCallback(
     (props: any) => {
       const { sourceX, targetX, sourceY, targetY, sourceControlX, targetControlX, linkWidth, index, payload } = props;
-      const stroke = colorForLink(payload?.source?.index ?? payload?.source, payload?.target?.index ?? payload?.target);
+      // Resolved by NAME. Reading `payload.source.index` returned undefined on
+      // this recharts version, which is what made every band render grey.
+      const stroke = colorForLinkNames(payload?.source?.name, payload?.target?.name);
       return (
         <path
           key={`link-${index}`}
           d={`M${sourceX},${sourceY}C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
           stroke={stroke}
           strokeWidth={linkWidth}
-          strokeOpacity={0.45}
+          strokeOpacity={0.5}
           fill="none"
         />
       );
     },
-    [colorForLink],
+    [colorForLinkNames],
   );
 
   return (
@@ -241,13 +324,49 @@ function VisitorSankeyFlow(): React.ReactElement {
 
       {!loading && !error && chart && chart.nodes.length > 0 && (
         <>
+          {/* The outcome column expressed as numbers, because a band's thickness
+              answers "which is bigger" but never "is 58% bounce good". Each tile
+              carries the same colour as its node in the diagram, so the eye can
+              move between the two without a legend. */}
+          <div className="row g-2 mb-3">
+            {outcomeTotals.map((o) => (
+              <div className="col-6 col-lg-3" key={o.name}>
+                <div
+                  className="h-100 p-2 rounded"
+                  style={{
+                    background: 'var(--surface-sunken, #f7f7f6)',
+                    borderLeft: `4px solid ${outcomeColor(o.name)}`,
+                  }}
+                >
+                  <div className="small text-muted d-flex align-items-center gap-1">
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: outcomeColor(o.name),
+                        display: 'inline-block',
+                      }}
+                    />
+                    {o.label}
+                  </div>
+                  <div className="fw-bold" style={{ fontSize: '1.25rem', lineHeight: 1.2 }}>
+                    {o.pct}%
+                  </div>
+                  <div className="small text-muted">{o.value.toLocaleString()} sessions</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="d-flex gap-3 flex-wrap mb-2 small text-muted">
             <span>Traffic source</span>
             <span aria-hidden="true">→</span>
             <span>Site entered</span>
             <span aria-hidden="true">→</span>
             <span>Outcome</span>
-            <span className="ms-auto">{data?.total_sessions.toLocaleString()} sessions</span>
+            <span className="ms-auto">{data?.total_sessions.toLocaleString()} human sessions</span>
           </div>
           <div style={{ width: '100%', height: 460 }}>
             <ResponsiveContainer width="100%" height="100%">
