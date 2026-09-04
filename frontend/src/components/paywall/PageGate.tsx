@@ -47,12 +47,35 @@ export const PaywallScreen: React.FC<{ copy: (typeof GATED_FEATURES)[GatedFeatur
  * everyone else gets the PaywallScreen instead, and the wrapped page's own code
  * never even mounts (no wasted data fetch for a student who was never going to
  * see it). See routes/portalRoutes.tsx for usage.
+ *
+ * `chromeless` drops the PortalShell from the gate's OWN states — the loading
+ * moment and the paywall. Ali, on the portfolio preview opening in a new tab:
+ * "before it fully opens it shows the border of enterprise.colaberry.ai which is
+ * not a good look". He is right: that page is a standalone render of a learner's
+ * public portfolio, so a portal sidebar flashing around it before it paints
+ * belongs to a different application than the one the tab claims to be.
+ *
+ * It changes ONLY what the gate draws. The entitlement check is identical, which
+ * is the half that matters — this is paywalled content either way.
  */
-export const PageGate: React.FC<{ feature: GatedFeatureKey; children: React.ReactNode }> = ({ feature, children }) => {
+export const PageGate: React.FC<{
+  feature: GatedFeatureKey;
+  children: React.ReactNode;
+  /** Render the gate's own states bare, for routes that are not portal pages. */
+  chromeless?: boolean;
+}> = ({ feature, children, chromeless = false }) => {
   const { isStaff, hasFullAccess, loading } = useEntitlement();
-  if (loading) return <PortalShell><div className="pg-loading">Loading…</div></PortalShell>;
+  const frame = (node: React.ReactNode) =>
+    (chromeless ? <>{node}</> : <PortalShell>{node}</PortalShell>);
+
+  if (loading) {
+    // Deliberately near-blank rather than a spinner on an empty portal frame: the
+    // page that follows paints its own full-height ground, so the quietest possible
+    // placeholder is the one that does not flash something else first.
+    return frame(<div className={chromeless ? 'pg-loading pg-loading-bare' : 'pg-loading'}>Loading…</div>);
+  }
   if (isStaff || hasFullAccess) return <>{children}</>;
-  return <PortalShell><PaywallScreen copy={GATED_FEATURES[feature]} /></PortalShell>;
+  return frame(<PaywallScreen copy={GATED_FEATURES[feature]} />);
 };
 
 export default PageGate;

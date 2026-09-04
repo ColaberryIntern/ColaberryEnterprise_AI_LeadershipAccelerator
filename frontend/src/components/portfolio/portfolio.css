@@ -388,3 +388,8 @@
 
 /* A write-up with no case study behind it: stated, not offered as a click. */
 .pf-list-plain { color: var(--pf-body); }
+
+/* The preview tab before the payload arrives. Full height on the portfolio's own ground,
+   so opening the tab never shows one background and then replaces it with another. */
+.pf-preview-interim { min-height: 100vh; display: grid; place-items: center; }
+.pf-preview-interim p { color: var(--pf-mut); font-size: 14px; margin: 0; }

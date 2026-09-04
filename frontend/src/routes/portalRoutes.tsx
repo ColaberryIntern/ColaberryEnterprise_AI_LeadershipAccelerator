@@ -77,7 +77,14 @@ const portalRoutes = (
           nothing. Same entitlement gate as the Studio it is reached from. */}
       <Route
         path="/portal/portfolio/preview"
-        element={<PageGate feature="portfolio"><PortfolioPreviewPage /></PageGate>}
+        element={(
+          // `chromeless`: this opens in its own tab as a standalone render of the
+          // learner's public page, so the gate must not flash a portal sidebar around
+          // it while entitlement resolves. Same check, no chrome.
+          <PageGate feature="portfolio" chromeless>
+            <PortfolioPreviewPage />
+          </PageGate>
+        )}
       />
       {/* Cert Prep — Claude Certified Architect readiness. Paywalled like its
           siblings; the Week 7 fence is enforced SERVER-side and the page renders

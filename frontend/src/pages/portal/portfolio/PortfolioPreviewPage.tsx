@@ -39,11 +39,23 @@ const PortfolioPreviewPage: React.FC = () => {
     document.title = 'Preview your portfolio page';
   }, []);
 
+  // Both interim states paint the PORTFOLIO's own ground, via the same `.pf` class the
+  // finished page uses. Otherwise the tab flashes the app's default background, then the
+  // portfolio's -- two surfaces for one page, in a tab whose whole job is to look like
+  // the published article.
   if (error) {
-    return <p style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>{error}</p>;
+    return (
+      <div className="pf pf-preview-interim">
+        <p>{error}</p>
+      </div>
+    );
   }
   if (!portfolio) {
-    return <p style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</p>;
+    return (
+      <div className="pf pf-preview-interim">
+        <p>Loading…</p>
+      </div>
+    );
   }
 
   return (
