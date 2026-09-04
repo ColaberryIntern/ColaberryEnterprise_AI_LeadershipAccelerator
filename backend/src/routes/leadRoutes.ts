@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { submitLead } from '../controllers/leadController';
 import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
+import { handleFlotationPreview } from '../controllers/flotationPreviewController';
 import { handleSalesHubCory } from '../controllers/salesHubCoryController';
 import {
   handleSponsorInquiry,
@@ -33,6 +34,20 @@ const ingestRateLimiter = rateLimit({
   message: { error: 'Ingest rate limit exceeded' },
 });
 
+/**
+ * The prospect polls this while their call is still running, so it is allowed to be chatty -
+ * but it reads by unguessable id, and a scraper walking ids would be doing so one guess at a
+ * time against a v4 UUID space. The cap is here to bound cost, not to stop enumeration;
+ * enumeration is stopped by the id itself and by every wrong answer looking identical.
+ */
+const previewRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Preview rate limit exceeded' },
+});
+
 const router = Router();
 
 // Sales-hub Cory RAG endpoint. Registered here (an early, public router) on
@@ -52,6 +67,7 @@ router.post('/api/sponsorship-kit-request', leadRateLimiter, requestSponsorshipK
 // before the auth guard). Reuses the lead rate limiter.
 router.post('/api/sponsor-inquiry', leadRateLimiter, handleSponsorInquiry);
 router.post('/api/leads/ingest', ingestRateLimiter, handleLeadIngest);
+router.get('/api/flotation/preview/:token', previewRateLimiter, handleFlotationPreview);
 router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
 
 // One Class, Many Doors — read-only Challenge leaderboard + Sponsor dashboard.

@@ -150,10 +150,51 @@
             </form>
           </div>
 
+          <!--
+            THE WRITE-UP, ON THE PAGE THEY ARE ALREADY ON.
+
+            No email and no login. The person who asked to be called is still here while
+            their phone rings, so what the conversation produced appears in front of them
+            rather than in an inbox nobody promised to fill.
+
+            Hidden until there is something to say. An empty panel that appears the moment
+            the form is submitted would be a promise made before anything has happened.
+          -->
+          <section id="preview" class="preview" hidden aria-live="polite">
+            <p class="preview-status" id="preview-status"></p>
+
+            <div id="preview-body" hidden>
+              <p class="eyebrow">I think you're building</p>
+              <h2 class="preview-title" id="preview-title"></h2>
+
+              <dl class="preview-counts" id="preview-counts"></dl>
+
+              <div id="preview-surfaces-wrap" hidden>
+                <h3 class="preview-h3">Proposed surfaces</h3>
+                <ul class="preview-surfaces" id="preview-surfaces"></ul>
+              </div>
+
+              <h3 class="preview-h3">What we heard</h3>
+              <ul class="preview-items" id="preview-items"></ul>
+
+              <div id="preview-open-wrap" hidden>
+                <h3 class="preview-h3">Still open</h3>
+                <ul class="preview-open" id="preview-open"></ul>
+              </div>
+
+              <p class="note preview-note">
+                Anything marked <span class="tag tag-inferred">we inferred this</span> is our
+                reading, not something you said. Tell us on the call, or reply to us, and we
+                will correct it.
+              </p>
+            </div>
+          </section>
+
           <p class="note" style="max-width:40rem;margin-top:1.5rem">
-            <b>What happens next.</b> Your details reach the team that reads them. We do not send
-            an automated confirmation, so nothing will land in your inbox from this form &mdash;
-            saying otherwise would be a promise the system does not currently keep.
+            <b>What happens next.</b> After the call, what you described gets written up and
+            appears on this page &mdash; you do not need to go anywhere or wait for an email.
+            We still do not send an automated confirmation, so nothing will land in your inbox
+            from this form; saying otherwise would be a promise the system does not keep.
           </p>
         </div>
       </section>
@@ -313,6 +354,146 @@
               button.disabled = false;
             });
         });
+
+        /*
+         * THE WRITE-UP, POLLED.
+         *
+         * A call takes minutes and the write-up runs after it ends, so this waits - but it
+         * waits a BOUNDED number of times. A page that polls forever is still costing the
+         * server something an hour after the person closed the tab, and it never gets to say
+         * "this did not work", which is the one thing a stuck viewer needs to hear.
+         *
+         * The interval widens as it goes: fast while the call might already be over, slow
+         * once it clearly is not. Twenty attempts on this curve covers about fifteen minutes,
+         * comfortably past a long conversation.
+         */
+        var PREVIEW_MAX_ATTEMPTS = 20;
+        var previewTimer = null;
+
+        function previewDelay(attempt) {
+          if (attempt < 5) return 5000;
+          if (attempt < 12) return 20000;
+          return 60000;
+        }
+
+        function startPreview(token) {
+          if (!token || previewTimer) return;
+          try { localStorage.setItem('flotation_preview_token', token); } catch (e) { /* private mode */ }
+          pollPreview(token, 0);
+        }
+
+        function pollPreview(token, attempt) {
+          if (attempt >= PREVIEW_MAX_ATTEMPTS) {
+            showPreviewStatus('We are still working on your write-up. Reload this page to check again.');
+            return;
+          }
+
+          fetch(API + '/api/flotation/preview/' + encodeURIComponent(token))
+            .then(function (res) { return res.json().catch(function () { return {}; }); })
+            .then(function (data) {
+              if (data.status === 'ready') return renderPreview(data);
+              if (data.status === 'failed') return showPreviewStatus(data.message || 'We could not write that up.');
+              // pending, not_found, or anything unexpected: keep waiting quietly. A
+              // not_found here usually means the lead row is still being written, and
+              // shouting about it would alarm someone whose call is going fine.
+              showPreviewStatus(data.message || 'We are writing up your conversation. This page updates on its own.');
+              previewTimer = window.setTimeout(function () {
+                previewTimer = null;
+                pollPreview(token, attempt + 1);
+              }, previewDelay(attempt));
+            })
+            .catch(function () {
+              previewTimer = window.setTimeout(function () {
+                previewTimer = null;
+                pollPreview(token, attempt + 1);
+              }, previewDelay(attempt));
+            });
+        }
+
+        function showPreviewStatus(text) {
+          var section = document.getElementById('preview');
+          var el = document.getElementById('preview-status');
+          if (!section || !el) return;
+          section.hidden = false;
+          el.textContent = text;
+        }
+
+        function fillList(id, wrapId, values) {
+          var ul = document.getElementById(id);
+          if (!ul) return;
+          ul.textContent = '';
+          values.forEach(function (v) {
+            var li = document.createElement('li');
+            li.textContent = v;
+            ul.appendChild(li);
+          });
+          if (wrapId) {
+            var wrap = document.getElementById(wrapId);
+            if (wrap) wrap.hidden = values.length === 0;
+          }
+        }
+
+        function renderPreview(data) {
+          var section = document.getElementById('preview');
+          var body = document.getElementById('preview-body');
+          var statusEl = document.getElementById('preview-status');
+          if (!section || !body) return;
+
+          section.hidden = false;
+          if (statusEl) statusEl.textContent = '';
+
+          var summary = data.summary || {};
+          document.getElementById('preview-title').textContent = summary.title || 'Your project';
+
+          var counts = [
+            ['Primary users', summary.primary_users],
+            ['Core workflows', summary.core_workflows],
+            ['AI opportunities', summary.ai_opportunities],
+            ['Human decision points', summary.human_decision_points]
+          ];
+          var dl = document.getElementById('preview-counts');
+          dl.textContent = '';
+          counts.forEach(function (pair) {
+            // A zero here is information, not an omission: it means the conversation never
+            // got to that, and hiding it would overstate how much we understood.
+            var dt = document.createElement('dt');
+            dt.textContent = pair[0];
+            var dd = document.createElement('dd');
+            dd.textContent = String(pair[1] === undefined ? 0 : pair[1]);
+            dl.appendChild(dt);
+            dl.appendChild(dd);
+          });
+
+          fillList('preview-surfaces', 'preview-surfaces-wrap', summary.proposed_surfaces || []);
+          fillList('preview-open', 'preview-open-wrap', data.still_open || []);
+
+          var items = document.getElementById('preview-items');
+          items.textContent = '';
+          (data.items || []).forEach(function (item) {
+            var li = document.createElement('li');
+            li.textContent = item.value;
+            if (item.inferred) {
+              // Marked, always. An inference shown beside things they actually said, with
+              // no way to tell them apart, is the failure this whole build guards against.
+              var tag = document.createElement('span');
+              tag.className = 'tag tag-inferred';
+              tag.textContent = 'we inferred this';
+              li.appendChild(document.createTextNode(' '));
+              li.appendChild(tag);
+            }
+            items.appendChild(li);
+          });
+
+          body.hidden = false;
+          if (window.rfxTrack) window.rfxTrack('preview_ready', { items: (data.items || []).length });
+        }
+
+        // Someone who reloads the page mid-call should not lose their write-up.
+        (function resumePreview() {
+          var saved = null;
+          try { saved = localStorage.getItem('flotation_preview_token'); } catch (e) { /* private mode */ }
+          if (saved) pollPreview(saved, 0);
+        })();
       })();
 
       /*
@@ -389,6 +570,7 @@
               status.textContent = 'Asked. Your phone should ring shortly — if it does not, we still have your details and will be in touch.';
               status.setAttribute('data-state', 'ok');
               form.reset();
+              if (result.body && result.body.rawPayloadId) startPreview(result.body.rawPayloadId);
             })
             .catch(function (err) {
               fail((err && err.message ? err.message : 'Something went wrong.') + ' Your details are still here — please try again.');

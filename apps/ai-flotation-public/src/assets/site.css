@@ -367,3 +367,118 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; }
 }
+
+/* ── The write-up panel ──────────────────────────────────────────────
+   Appears on /start after a call is requested. It is the first thing on this
+   site that shows a person their own words back, so it is styled as a document
+   rather than as a widget: generous measure, quiet rules, nothing that reads as
+   a marketing module.
+
+   The inferred tag is the load-bearing piece of design here. An inference
+   sitting beside something the customer actually said, with no way to tell them
+   apart, is the failure the whole build guards against - so it is marked in
+   TEXT as well as colour, because colour alone fails for anyone who cannot see
+   it (WCAG 1.4.1).
+   ------------------------------------------------------------------ */
+.preview {
+  margin-top: 2.5rem;
+  padding: 2rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  max-width: 46rem;
+}
+
+.preview-status {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.95rem;
+}
+
+.preview-status:empty { display: none; }
+
+.preview-title {
+  margin: 0.35rem 0 1.5rem;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.2;
+}
+
+.preview-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 1rem 1.5rem;
+  margin: 0 0 2rem;
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.preview-counts dt {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.preview-counts dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.preview-h3 {
+  margin: 1.75rem 0 0.75rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.preview-items,
+.preview-surfaces,
+.preview-open {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-items li,
+.preview-surfaces li,
+.preview-open li {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.5;
+}
+
+.preview-items li:last-child,
+.preview-surfaces li:last-child,
+.preview-open li:last-child { border-bottom: 0; }
+
+.preview-open li::before {
+  content: "?";
+  display: inline-block;
+  width: 1.25rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: 0.1em;
+}
+
+.tag-inferred {
+  background: var(--accent-soft);
+  color: var(--fg);
+  border: 1px solid var(--line);
+}
+
+.preview-note { margin-top: 1.75rem; }
