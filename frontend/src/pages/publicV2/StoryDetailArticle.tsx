@@ -8,6 +8,7 @@ import StoryContextStrip from './StoryContextStrip';
 import StorySectionList from './StorySectionList';
 import { storyIndicators } from './storyIndicatorModel';
 import { placeStoryFigures } from './storyFigurePlacement';
+import { coverFor } from './storyCover';
 import type {
   PublicCaseStudyDetail,
   PublicSurfaceView,
@@ -84,6 +85,9 @@ export function StoryDetailArticle({
      which subtracts them from its carousel - the same picture appearing inline
      and again in a track ten centimetres below reads as a rendering fault. */
   const figures = placeStoryFigures(record.artifacts, sections);
+  /* The masthead's cover. Null keeps the single-column hero exactly as it was,
+     so a record with no approved picture is unaffected by this layout. */
+  const cover = coverFor(record);
 
   return (
     /* The click handler is an observer on a container, the pattern
@@ -92,51 +96,72 @@ export function StoryDetailArticle({
        disable for a rule it never enabled is itself a build failure. */
     <article className="cbv2-story" onClick={onStoryClick} data-testid="story-article">
       <section className="cbv2-pagehero" aria-labelledby="cbv2-story-title">
-        <div className="cbv2-wrap cbv2-story__hero">
-          <p className="cbv2-story__crumb">
-            <Link to="/stories">All published projects</Link>
-          </p>
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{surface.hero.eyebrow}</p>
-          <h1 id="cbv2-story-title">{record.title}</h1>
-          {record.standfirst ? (
-            <p className="cbv2-pagehero__lede">{record.standfirst}</p>
+        <div
+          className={`cbv2-wrap cbv2-story__hero${cover ? ' cbv2-story__hero--cover' : ''}`}
+        >
+          {/* The masthead's words, wrapped so the hero grid has exactly two
+              children. Spanning the cover across the copy's rows instead does
+              not work: with no `grid-template-rows` the explicit grid has a
+              single line, so `grid-row: 1 / -1` collapses to row 1 and the
+              image's height becomes that row's height - which pushed the title
+              some 600px below the breadcrumb. Two children, two columns. */}
+          <div className="cbv2-story__hero-copy">
+            <p className="cbv2-story__crumb">
+              <Link to="/stories">All published projects</Link>
+            </p>
+            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{surface.hero.eyebrow}</p>
+            <h1 id="cbv2-story-title">{record.title}</h1>
+            {record.standfirst ? (
+              <p className="cbv2-pagehero__lede">{record.standfirst}</p>
+            ) : null}
+
+            <CaseStudyVerificationBadge
+              className="cbv2-story__badge"
+              verificationClass={record.verificationClass}
+              verificationMethod={record.verificationMethod}
+            />
+
+            {/* The counts, the facts grid and the headline figures used to stack
+                here. They are one band down now, on light ground - see
+                `StoryContextStrip`. The masthead was measured at 1142px and
+                2201px and is the heaviest thing on the page, so the format's
+                rule for it is subtract, never add. */}
+
+            {/* The surface's offer, and the repository when the projection was
+                willing to publish one. Both are real destinations; the copy-link
+                control keeps its own row below, with its own live region. */}
+            <div className="cbv2-story__actions">
+              <StoryHeroActions cta={record.cta} repositories={record.repositories} />
+            </div>
+
+            <div className="cbv2-story__share">
+              <button
+                type="button"
+                className="cbv2-btn cbv2-btn--ghost cbv2-btn--sm"
+                onClick={onShare}
+                data-testid="story-share"
+              >
+                Copy link
+              </button>
+              <span className="cbv2-story__share-state" aria-live="polite">
+                {shareState === 'copied' ? 'Link copied.' : null}
+                {shareState === 'failed'
+                  ? 'This browser would not let us copy. The address is in the address bar.'
+                  : null}
+              </span>
+            </div>
+          </div>
+
+          {/* The cover, LAST in source order and second in the grid. A reader on
+              a phone gets the title, the standfirst and the offer before the
+              picture, which is the order that answers "what is this" fastest;
+              at desktop widths CSS lifts it into the masthead's empty right
+              half, where it costs no vertical space at all. */}
+          {cover ? (
+            <figure className="cbv2-story__cover">
+              <img src={cover.src} alt={cover.alt} loading="eager" decoding="async" />
+            </figure>
           ) : null}
-
-          <CaseStudyVerificationBadge
-            className="cbv2-story__badge"
-            verificationClass={record.verificationClass}
-            verificationMethod={record.verificationMethod}
-          />
-
-          {/* The counts, the facts grid and the headline figures used to stack
-              here. They are one band down now, on light ground - see
-              `StoryContextStrip`. The masthead was measured at 1142px and
-              2201px and is the heaviest thing on the page, so the format's
-              rule for it is subtract, never add. */}
-
-          {/* The surface's offer, and the repository when the projection was
-              willing to publish one. Both are real destinations; the copy-link
-              control keeps its own row below, with its own live region. */}
-          <div className="cbv2-story__actions">
-            <StoryHeroActions cta={record.cta} repositories={record.repositories} />
-          </div>
-
-          <div className="cbv2-story__share">
-            <button
-              type="button"
-              className="cbv2-btn cbv2-btn--ghost cbv2-btn--sm"
-              onClick={onShare}
-              data-testid="story-share"
-            >
-              Copy link
-            </button>
-            <span className="cbv2-story__share-state" aria-live="polite">
-              {shareState === 'copied' ? 'Link copied.' : null}
-              {shareState === 'failed'
-                ? 'This browser would not let us copy. The address is in the address bar.'
-                : null}
-            </span>
-          </div>
         </div>
       </section>
 
