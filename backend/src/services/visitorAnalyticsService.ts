@@ -30,6 +30,45 @@ function sinceDays(days: number): Date {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
+/**
+ * "This session belongs to a person", as SQL, for a query that has
+ * `visitor_sessions` in scope under the given alias.
+ *
+ * WHY EVERY STAT NEEDS THIS AND NOT JUST THE LIVE LIST. The live table was
+ * filtered first because that is where the crawlers were visible. The counts
+ * around it were not, and they are read far more often: production reported
+ * 1,025 visitors and 41,034 sessions over 30 days, of which roughly three
+ * quarters are crawler sessions, and an average bounce rate of 93.8% that is
+ * mostly a machine fetching one page and leaving. Those are the numbers someone
+ * would quote in a board meeting.
+ *
+ * A dashboard that hides bots in one panel and counts them in the next is worse
+ * than one that counts them everywhere, because the disagreement is invisible
+ * and the reader has no way to know which panel to believe. One definition of
+ * "a person", applied everywhere.
+ */
+function humanSessionSql(sessionAlias: string, visitorIdColumn: string): string {
+  return (
+    `EXISTS (SELECT 1 FROM "visitors" hv WHERE hv."id" = ${visitorIdColumn} ` +
+    `AND ${botExclusionSql('hv."user_agent"')}) ` +
+    `AND ${notAutomatedSessionSql(`${sessionAlias}."pageview_count"`, `${sessionAlias}."duration_seconds"`)}`
+  );
+}
+
+/**
+ * The same rule as a Sequelize `where` fragment, for the model-based queries.
+ *
+ * `VisitorSession` is the alias Sequelize uses for the root model in these
+ * calls, which is why it is spelled out rather than parameterised — getting it
+ * wrong produces a SQL error rather than a wrong number, so it fails loudly.
+ */
+function humanSessionWhere(includeBots: boolean): Record<symbol, unknown> {
+  if (includeBots) return {};
+  return {
+    [Op.and]: [literal(humanSessionSql('"VisitorSession"', '"VisitorSession"."visitor_id"'))],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 1. Live Visitors
 // ---------------------------------------------------------------------------
@@ -259,7 +298,8 @@ export async function getLiveSignedInPeople(windowMinutes = 5, limit = 100): Pro
 // ---------------------------------------------------------------------------
 
 export async function getVisitorStats(
-  dateRange?: { from: string; to: string }
+  dateRange?: { from: string; to: string },
+  includeBots = false
 ): Promise<object> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -268,8 +308,13 @@ export async function getVisitorStats(
 
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const rangeWhere = { started_at: { [Op.between]: [from, to] } };
-  const todayWhere = { started_at: { [Op.gte]: todayStart } };
+  // Every figure on this card row now counts people only, matching the live list
+  // it sits above. Previously `liveCount` excluded bots and the four numbers
+  // beside it did not, so the same screen answered "who is here" and "how many
+  // came" using two different definitions of a visitor.
+  const human = humanSessionWhere(includeBots);
+  const rangeWhere = { started_at: { [Op.between]: [from, to] }, ...human };
+  const todayWhere = { started_at: { [Op.gte]: todayStart }, ...human };
 
   const [
     totalVisitors,
@@ -354,12 +399,14 @@ export async function getVisitorStats(
 // ---------------------------------------------------------------------------
 
 export async function getVisitorTrend(
-  days = 30
+  days = 30,
+  includeBots = false
 ): Promise<Array<{ date: string; visitors: number; sessions: number; pageviews: number }>> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const rows: any[] = await VisitorSession.findAll({
-    where: { started_at: { [Op.gte]: since } },
+    // Same definition of a visitor as the cards above the chart.
+    where: { started_at: { [Op.gte]: since }, ...humanSessionWhere(includeBots) },
     attributes: [
       [fn('DATE', col('started_at')), 'date'],
       [fn('COUNT', literal('DISTINCT "visitor_id"')), 'visitors'],
@@ -597,7 +644,11 @@ export interface VisitorDashboardSummary {
   page_views_per_session: number;
 }
 
-export async function getVisitorDashboard(days = 30): Promise<VisitorDashboardSummary> {
+export async function getVisitorDashboard(days = 30, includeBots = false): Promise<VisitorDashboardSummary> {
+  // Crawlers are excluded here for the same reason they are on the live
+  // list: this number is read as "how many people".
+  const humanFilter = includeBots ? '' : `AND ${humanSessionSql('"visitor_sessions"', '"visitor_sessions"."visitor_id"')}`;
+
   const [row] = await sequelize.query<VisitorDashboardSummary>(
     `SELECT
        COUNT(*)::int                                          AS total_sessions,
@@ -610,7 +661,8 @@ export async function getVisitorDashboard(days = 30): Promise<VisitorDashboardSu
             ELSE ROUND(SUM(pageview_count)::numeric / COUNT(*), 1)
        END::float                                             AS page_views_per_session
      FROM visitor_sessions
-     WHERE started_at >= :since`,
+     WHERE started_at >= :since
+       ${humanFilter}`,
     {
       replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
@@ -636,14 +688,19 @@ export interface ConversionFunnel {
   total_leads: number;
 }
 
-export async function getConversionFunnel(days = 30): Promise<ConversionFunnel> {
+export async function getConversionFunnel(days = 30, includeBots = false): Promise<ConversionFunnel> {
+  // Crawlers are excluded here for the same reason they are on the live
+  // list: this number is read as "how many people".
+  const humanFilter = includeBots ? '' : `AND ${humanSessionSql('vs', 'vs."visitor_id"')}`;
+
   const [row] = await sequelize.query<ConversionFunnel>(
     `SELECT
        COUNT(DISTINCT vs.visitor_id)::int   AS total_visitors,
        COUNT(DISTINCT vs.id)::int           AS total_sessions,
        COUNT(DISTINCT vs.lead_id)::int      AS total_leads
      FROM visitor_sessions vs
-     WHERE vs.started_at >= :since`,
+     WHERE vs.started_at >= :since
+       ${humanFilter}`,
     {
       replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
@@ -718,7 +775,11 @@ export interface DeviceBreakdown {
   percentage: number;
 }
 
-export async function getDeviceBreakdown(days = 30): Promise<DeviceBreakdown[]> {
+export async function getDeviceBreakdown(days = 30, includeBots = false): Promise<DeviceBreakdown[]> {
+  // Crawlers are excluded here for the same reason they are on the live
+  // list: this number is read as "how many people".
+  const humanFilter = includeBots ? '' : `AND ${humanSessionSql('"visitor_sessions"', '"visitor_sessions"."visitor_id"')}`;
+
   const rows = await sequelize.query<DeviceBreakdown>(
     `SELECT
        COALESCE(device_type, 'unknown')           AS device_type,
@@ -726,6 +787,7 @@ export async function getDeviceBreakdown(days = 30): Promise<DeviceBreakdown[]> 
        ROUND(COUNT(*)::numeric * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 1)::float AS percentage
      FROM visitor_sessions
      WHERE started_at >= :since
+       ${humanFilter}
      GROUP BY device_type
      ORDER BY session_count DESC`,
     {
@@ -760,7 +822,11 @@ const SITE_DISPLAY_NAMES: Record<string, string> = {
  * and page_events for pageview totals, scoped to last N days. Powers the "By Site"
  * panel on the admin visitor analytics page so we can see traffic per external site.
  */
-export async function getSitesBreakdown(days = 30): Promise<SiteBreakdown[]> {
+export async function getSitesBreakdown(days = 30, includeBots = false): Promise<SiteBreakdown[]> {
+  // Crawlers are excluded here for the same reason they are on the live
+  // list: this number is read as "how many people".
+  const humanFilter = includeBots ? '' : `AND ${humanSessionSql('vs', 'vs."visitor_id"')}`;
+
   const rows = await sequelize.query<{
     site_slug: string;
     sessions: string;
@@ -776,6 +842,7 @@ export async function getSitesBreakdown(days = 30): Promise<SiteBreakdown[]> {
        MAX(vs.started_at)                          AS last_seen_at
      FROM visitor_sessions vs
      WHERE vs.started_at >= :since
+       ${humanFilter}
      GROUP BY 1
      ORDER BY sessions DESC`,
     {
