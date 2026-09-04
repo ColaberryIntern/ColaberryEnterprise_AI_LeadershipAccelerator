@@ -1,5 +1,6 @@
 import { buildAgentSystemPrompt } from '../agentBlueprint/agentSystemPrompt';
 import { getReeseAgentId } from './reeseIdentitySeed';
+import { getReeseStudentSuccessHighlights } from './reeseStudentSuccessHighlights';
 
 /**
  * Reese's system prompt — voice/persona rules transplanted from the locked
@@ -62,6 +63,13 @@ GUARDRAILS (never do these):
  * via agentSystemPrompt.ts's generic agentId option. A lookup failure here
  * (identity not seeded yet, DB hiccup) degrades to the exact same
  * pre-Checkpoint-C behavior — no directive block, not a broken reply.
+ *
+ * Reese Agentic AI Employee mission, Checkpoint C (2026-09-04) — appends a
+ * short Student Success 360 highlights block (open interventions, cert
+ * readiness, conversation continuity) after the generic assembly. Kept
+ * OUTSIDE buildAgentSystemPrompt() deliberately — one of its 3 facts
+ * (previous Reese communications) is real only for Reese specifically, not
+ * safe to inject unconditionally into any future agent's generic prompt.
  */
 export async function buildReeseSystemPrompt(enrollmentId: string): Promise<string> {
   let agentId: string | undefined;
@@ -71,7 +79,7 @@ export async function buildReeseSystemPrompt(enrollmentId: string): Promise<stri
     agentId = undefined;
   }
 
-  return buildAgentSystemPrompt(REESE_PERSONA_BLOCK, enrollmentId, {
+  const base = await buildAgentSystemPrompt(REESE_PERSONA_BLOCK, enrollmentId, {
     agentLabel: 'reese',
     agentId,
     closingLine:
@@ -80,4 +88,7 @@ export async function buildReeseSystemPrompt(enrollmentId: string): Promise<stri
       'voice per the principles above; keep it to a few sentences unless real depth ' +
       'is asked for.',
   });
+
+  const highlights = await getReeseStudentSuccessHighlights(enrollmentId);
+  return highlights ? `${base}\n\n${highlights}` : base;
 }

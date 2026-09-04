@@ -14,17 +14,30 @@ jest.mock('../../managerDirectiveService', () => ({
 jest.mock('../../agentMemoryProposalService', () => ({
   getApprovedMemoryTexts: jest.fn(),
 }));
+// Reese Agentic AI Employee mission, Checkpoint C — buildReeseSystemPrompt()
+// now also calls getReeseStudentSuccessHighlights(), which transitively
+// queries a dozen real models via getStudentSuccessSnapshot(). Mocked
+// wholesale here since this file only tests voice/tone/directive-injection
+// behavior, not the highlights content itself (that's
+// reeseStudentSuccessHighlights.test.ts's own job) — matches the same
+// lesson applied repeatedly elsewhere this session for a new transitive
+// dependency added to an already-tested-differently file.
+jest.mock('../reeseStudentSuccessHighlights', () => ({
+  getReeseStudentSuccessHighlights: jest.fn(),
+}));
 
 import { getLearnerContextBlock } from '../../learnerContextService';
 import { getReeseAgentId } from '../reeseIdentitySeed';
 import { getActiveDirectiveTexts } from '../../managerDirectiveService';
 import { getApprovedMemoryTexts } from '../../agentMemoryProposalService';
+import { getReeseStudentSuccessHighlights } from '../reeseStudentSuccessHighlights';
 import { buildReeseSystemPrompt } from '../reeseSystemPrompt';
 
 const mockLearnerContext = getLearnerContextBlock as unknown as jest.Mock;
 const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
 const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
 const mockApprovedMemory = getApprovedMemoryTexts as unknown as jest.Mock;
+const mockHighlights = getReeseStudentSuccessHighlights as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -34,6 +47,7 @@ beforeEach(() => {
   mockGetReeseAgentId.mockResolvedValue('reese-agent-id');
   mockActiveDirectives.mockResolvedValue([]);
   mockApprovedMemory.mockResolvedValue([]);
+  mockHighlights.mockResolvedValue('');
 });
 
 describe('buildReeseSystemPrompt', () => {
@@ -105,5 +119,27 @@ describe('buildReeseSystemPrompt — manager directive injection (Checkpoint C, 
     expect(prompt).toContain('Reese');
     expect(prompt).not.toContain('MANAGER DIRECTIVES');
     expect(mockActiveDirectives).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildReeseSystemPrompt — Student Success 360 highlights (Checkpoint C, 2026-09-04)', () => {
+  it('happy path: real highlights content is appended after the base prompt', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockHighlights.mockResolvedValue('ADDITIONAL CONTEXT:\n- 1 open support ticket for this student — check before assuming a fresh start.');
+
+    const prompt = await buildReeseSystemPrompt('enrollment-7');
+
+    expect(mockHighlights).toHaveBeenCalledWith('enrollment-7');
+    expect(prompt).toContain('ADDITIONAL CONTEXT');
+    expect(prompt).toContain('1 open support ticket');
+  });
+
+  it('boundary: an empty highlights block (nothing notable) appends nothing — no empty "ADDITIONAL CONTEXT:" header', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockHighlights.mockResolvedValue('');
+
+    const prompt = await buildReeseSystemPrompt('enrollment-8');
+
+    expect(prompt).not.toContain('ADDITIONAL CONTEXT');
   });
 });
