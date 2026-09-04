@@ -44,10 +44,11 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
    * submit CTA. It earns `enroll` (strength 45, the highest single page-visit signal in
    * the system) because that is genuinely what a visit to it means.
    *
-   * NOTE, and it is a real gap rather than an oversight: this brand has NO pricing page.
-   * So `pricing_visit`, and the two multi-page patterns that require a pricing view
-   * (`research_pattern`, `evaluation_pattern`), stay unreachable here no matter what this
-   * map says. That is a content decision to make, not a bug to fix in code.
+   * The pricing gap this note used to describe is CLOSED. `/pricing` shipped on
+   * 2026-09-03 as the build-membership page, so `pricing_visit` and the two multi-page
+   * patterns that require a pricing view (`research_pattern`, `evaluation_pattern`) are
+   * reachable for this brand for the first time. The content decision was made; this map
+   * is what makes the signal follow it.
    */
   'ai-flotation': {
     exact: {

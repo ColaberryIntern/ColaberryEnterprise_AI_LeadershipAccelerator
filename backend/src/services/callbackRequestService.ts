@@ -9,6 +9,7 @@ import {
   CALLBACK_CONSENT_TTL_DAYS,
 } from './consent/captureSignupConsent';
 import { triggerVoiceCall } from './synthflowService';
+import { buildFlotationCallPrompt } from './voiceCallPrompt';
 import { logCommunication } from './communicationLogService';
 
 // Two callbacks to the same lead inside this window collapse to one call. This is
@@ -161,13 +162,28 @@ export async function requestInstantCallback(
     name: payload.name,
     phone: targetPhone,
     callType: 'callback',
+    // The source IS the brand for this purpose: a callback requested from an
+    // ai-flotation surface must be spoken with AI Flotation's instructions, and without
+    // them the call is skipped rather than improvised.
+    brandSlug: payload.source,
+    // Built per call rather than stored in the agent. The agent is a shell - its saved
+    // prompt is only `{prompt}` - so this string is what makes the call an AI Flotation
+    // call at all. Other sources keep the agent's own stored behaviour, unchanged.
+    prompt: payload.source === 'ai-flotation'
+      ? buildFlotationCallPrompt({
+        name: payload.name,
+        company: payload.company,
+        role: payload.role,
+        message: payload.message,
+      })
+      : undefined,
     context: {
       lead_name: payload.name,
       lead_company: payload.company || undefined,
       lead_title: payload.title || undefined,
       lead_email: payload.email,
       lead_interest: payload.interest_area || undefined,
-      step_goal: 'Inbound "call me now" — the prospect just asked on training.colaberry.com to be called right away.',
+      step_goal: `Inbound "call me now" — the prospect just asked on ${payload.source} to be called right away.`,
     },
   });
 
