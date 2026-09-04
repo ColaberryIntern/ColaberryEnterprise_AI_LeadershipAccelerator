@@ -291,6 +291,7 @@ describe('careerPortfolioPublicProjection', () => {
         demo_url: 'https://enterprise.colaberry.ai/',
         hero_image_url: null,
         record_slug: null,
+        case_study_slug: null,
       });
     });
 
@@ -322,7 +323,7 @@ describe('careerPortfolioPublicProjection', () => {
         .toEqual({
           title: 'PropertyPulse AI', organization: null, industry: null, problem: null,
           automation_goal: null, stage: 'discovery', repo_url: null, demo_url: null,
-          hero_image_url: null, record_slug: null,
+          hero_image_url: null, record_slug: null, case_study_slug: null,
         });
     });
 
@@ -452,6 +453,38 @@ describe('careerPortfolioPublicProjection', () => {
       expect(serialized).not.toContain('SENTINEL_PROJECT_ID');
       expect(serialized).not.toContain('"id"');
       expect(serialized).not.toContain('project_id');
+    });
+  });
+
+  describe('a case study outranks the capstone record', () => {
+    const proj = { id: 'proj-1', name: 'AI Support Workflow Assistant' };
+    const rec = { slug: 'the-write-up', project_id: 'proj-1', published_at: AT };
+    const build = (caseStudyByProject: any) => projectPublicPortfolio({
+      profile: loadedProfile(), projects: [proj], records: [rec],
+      caseStudyByProject, generatedAt: AT,
+    }).projects[0];
+
+    it('publishes both when both exist, so the page can prefer one', () => {
+      const p = build({ 'proj-1': 'ai-support-workflow-assistant' });
+      expect(p.case_study_slug).toBe('ai-support-workflow-assistant');
+      expect(p.record_slug).toBe('the-write-up');
+    });
+
+    it('leaves the case study null when none is publicly visible', () => {
+      // The page service only ever passes case studies that passed the Case Study OS's
+      // own gate, so an absent entry here means "not publishable", not "not looked for".
+      const p = build({});
+      expect(p.case_study_slug).toBeNull();
+      expect(p.record_slug).toBe('the-write-up');
+    });
+
+    it('does not borrow a case study belonging to a different project', () => {
+      expect(build({ 'proj-OTHER': 'somebody-elses' }).case_study_slug).toBeNull();
+    });
+
+    it('ignores a malformed map rather than throwing', () => {
+      expect(build(null).case_study_slug).toBeNull();
+      expect(build('nope').case_study_slug).toBeNull();
     });
   });
 });
