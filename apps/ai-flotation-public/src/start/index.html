@@ -488,11 +488,24 @@
           if (window.rfxTrack) window.rfxTrack('preview_ready', { items: (data.items || []).length });
         }
 
-        // Someone who reloads the page mid-call should not lose their write-up.
+        // Someone who reloads the page mid-call should not lose their write-up, and
+        // someone opening it on a second device has no localStorage to lose it from - so a
+        // ?token= link works too. That link is shareable rather than secret, which is
+        // already true of the underlying id and is why nothing more sensitive may ever
+        // travel through this surface.
         (function resumePreview() {
+          var fromUrl = null;
+          try {
+            fromUrl = new URLSearchParams(window.location.search).get('token');
+          } catch (e) { /* very old browser: fall through to storage */ }
+
           var saved = null;
           try { saved = localStorage.getItem('flotation_preview_token'); } catch (e) { /* private mode */ }
-          if (saved) pollPreview(saved, 0);
+
+          var token = fromUrl || saved;
+          if (!token) return;
+          if (fromUrl) { try { localStorage.setItem('flotation_preview_token', fromUrl); } catch (e) {} }
+          pollPreview(token, 0);
         })();
       })();
 
