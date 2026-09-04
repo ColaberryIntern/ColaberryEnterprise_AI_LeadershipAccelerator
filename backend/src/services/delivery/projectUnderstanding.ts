@@ -184,6 +184,44 @@ const understandingSchema = z.object({
   items: z.array(itemSchema),
 });
 
+/**
+ * Validate ONE item, saying what arrived rather than only what was expected.
+ *
+ * Zod's enum message lists the twenty valid options and omits the invalid one, which makes
+ * a real failure undiagnosable: "expected one of problem|desired_outcome|..." does not tell
+ * you the model said "budget". That mattered the first time this ran against a live
+ * transcript in production - the error named everything except the thing that was wrong.
+ *
+ * Per-item because a document is not all-or-nothing. A model that returns eleven good
+ * items and one with an invented dimension has still understood the call, and throwing the
+ * whole thing away over the twelfth is a worse outcome than dropping it and saying so.
+ */
+export function validateItem(raw: unknown): { ok: true; item: UnderstandingItem } | { ok: false; reason: string } {
+  const shape = itemSchema.safeParse(raw);
+  if (!shape.success) {
+    const got = (raw ?? {}) as Record<string, unknown>;
+    const reason = shape.error.issues
+      .map((issue) => {
+        const field = issue.path.join('.') || '(root)';
+        const received = got[String(issue.path[0])];
+        return received === undefined
+          ? `${field}: ${issue.message}`
+          : `${field}: ${issue.message} (received ${JSON.stringify(received)})`;
+      })
+      .join('; ');
+    return { ok: false, reason };
+  }
+
+  const item = shape.data as UnderstandingItem;
+  const violations = findIntegrityViolations({ title: 'x', proposed_surfaces: [], items: [item] });
+  if (violations.length > 0) {
+    // Strip the positional prefix; the caller knows which item this is.
+    return { ok: false, reason: violations.map((v) => v.replace(/^item \d+ \([^)]*\): /, '')).join('; ') };
+  }
+
+  return { ok: true, item };
+}
+
 export class UnderstandingContractError extends Error {
   readonly error_class = 'ContractViolation';
   readonly violations: string[];
