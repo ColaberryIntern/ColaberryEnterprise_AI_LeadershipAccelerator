@@ -4,7 +4,7 @@ import { useCalendarAvailability } from '../hooks/useCalendarAvailability';
 import { downloadICS } from '../utils/ics';
 import api from '../utils/api';
 import { getUTMPayloadFields } from '../services/utmService';
-import { trackEvent } from '../utils/tracker';
+import { trackEvent, identifyVisitor } from '../utils/tracker';
 
 interface StrategyCallModalProps {
   show: boolean;
@@ -186,6 +186,18 @@ export default function StrategyCallModal({
       });
       setBookingResult(res.data.booking);
       setStep('success');
+
+      // Someone who books a call is the highest-value visitor this site gets, and
+      // until now their prior browsing stayed anonymous: `visitor_fingerprint`
+      // above rides along on the booking row but nothing ran resolveIdentity, so
+      // the sessions where they read the pricing and the case studies were never
+      // joined to them. This is the call that backfills that history.
+      identifyVisitor(email, {
+        name: name.trim(),
+        company: company.trim(),
+        phone: phone.trim(),
+        metadata: { source_form: 'strategy_call', page_origin: pageOrigin || window.location.pathname },
+      });
 
       // Shadow lead for attribution
       api.post('/api/leads', {

@@ -427,6 +427,46 @@ async function buildPortfolio(
     }));
   }
 
+  // Which projects have a case study a stranger may actually open.
+  //
+  // THE VISIBILITY RULE IS NOT RE-IMPLEMENTED HERE. `loadPublishedRecordBySlug` and
+  // `isCandidatePubliclyVisible` are the Case Study OS's own gate, and they are called
+  // rather than copied: a second copy of that rule is how a portfolio ends up linking to
+  // a page that 404s. Looked up per project (a handful) rather than by loading every
+  // publication on the surface.
+  const caseStudyByProject: Record<string, string> = {};
+  try {
+    const projectIds = (projects as any[])
+      .map((p) => p?.id).filter((id): id is string => typeof id === 'string' && !!id);
+    if (projectIds.length) {
+      const [rows]: any = await sequelize.query(
+        `SELECT project_id, slug FROM case_studies
+          WHERE project_id = ANY($1::uuid[]) AND archived_at IS NULL`,
+        { bind: [projectIds] },
+      );
+      const [store, filters] = await Promise.all([
+        import('../caseStudy/caseStudyPublicStore'),
+        import('../caseStudy/caseStudyFilterService'),
+      ]);
+      for (const row of (Array.isArray(rows) ? rows : [])) {
+        if (!row?.slug || !row?.project_id || caseStudyByProject[row.project_id]) continue;
+        // eslint-disable-next-line no-await-in-loop -- one lookup per project, bounded.
+        const rec = await store.loadPublishedRecordBySlug(row.slug, 'enterprise');
+        if (rec && filters.isCandidatePubliclyVisible(rec.candidate, 'enterprise')) {
+          caseStudyByProject[row.project_id] = row.slug;
+        }
+      }
+    }
+  } catch (err: any) {
+    // A case study that cannot be resolved costs its link, never the page.
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'public_portfolio_case_study_unavailable', outcome: 'partial',
+      error_class: err?.error_class || err?.name || 'Error',
+      context: { enrollment_id: enrollmentId },
+    }));
+  }
+
   // The About paragraph names the project the record is about, in the learner's own words.
   const firstRecord: any = Array.isArray(records) ? (records as any[])[0] : null;
 
@@ -442,6 +482,7 @@ async function buildPortfolio(
     filesCommitted,
     projectName: firstRecord?.project_name ?? null,
     projectDescriptor: firstRecord?.descriptor ?? null,
+    caseStudyByProject,
     competencies,
     evidenceBySource,
     featuredRepoUrl,

@@ -3,6 +3,7 @@ import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
 import { validateForm, ValidationRules } from '../utils/formValidation';
+import { identifyVisitor } from '../utils/tracker';
 import { getUTMParams } from '../services/utmService';
 import api from '../utils/api';
 import { Button } from '../colaberry/components/core/Button';
@@ -116,6 +117,13 @@ function ContactPage() {
         pageOrigin: window.location.href,
       };
       await api.post('/api/leads', toLeadPayload(lead));
+      // Backfills this person's earlier anonymous sessions onto their lead.
+      identifyVisitor(lead.email, {
+        name: lead.fullName,
+        company: lead.company,
+        phone: lead.phone,
+        metadata: { source_form: FORM_TYPE, industry: lead.industry, title: lead.title },
+      });
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {

@@ -41,7 +41,13 @@ jest.mock('../../config/database', () => ({
   sequelize: { query: (...a: unknown[]) => query(...a) },
 }));
 
-import { getVisitorStats, getLiveVisitors, countLiveVisitors } from '../visitorAnalyticsService';
+import {
+  getVisitorStats,
+  getLiveVisitors,
+  countLiveVisitors,
+  getTopPages,
+  getTrafficSources,
+} from '../visitorAnalyticsService';
 
 /** Exactly the fields AdminVisitorsPage renders into a StatCard. */
 const CARD_FIELDS = [
@@ -188,5 +194,94 @@ describe('countLiveVisitors', () => {
     query.mockResolvedValueOnce([]);
 
     await expect(countLiveVisitors()).resolves.toBe(0);
+  });
+});
+
+/**
+ * `getTopPages` threw on every call it has ever received.
+ *
+ * The window was written `INTERVAL ':days days'` — the placeholder inside a
+ * string literal, where Sequelize deliberately does not substitute — so Postgres
+ * was handed the characters ":days days" and answered
+ * `invalid input syntax for type interval`. Confirmed against the production
+ * database before fixing, not inferred from reading it.
+ *
+ * The failure mode is why it survived: /api/admin/visitor-analytics/pages 500s,
+ * the page's `.catch(() => null)` swallows it, and the Top Pages panel renders
+ * "no data". A broken query and an empty result are indistinguishable on screen.
+ */
+describe('getTopPages — the interval bug', () => {
+  function sqlOf(call: number): string {
+    return String(query.mock.calls[call][0]);
+  }
+  function optsOf(call: number): any {
+    return query.mock.calls[call][1];
+  }
+
+  it('never embeds a placeholder inside a quoted interval literal', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await getTopPages(30, 20);
+
+    expect(sqlOf(0)).not.toContain("INTERVAL ':days");
+    // No INTERVAL literal may contain a placeholder at all — that is the whole
+    // defect class, stated directly rather than via a quote-counting regex that
+    // would also trip over the bot patterns' own quoted strings.
+    expect(sqlOf(0)).not.toMatch(/INTERVAL\s*'[^']*:/i);
+  });
+
+  it('passes the window as a real timestamp, so the driver binds it', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await getTopPages(7, 20);
+
+    const { since, limit } = optsOf(0).replacements;
+    expect(since).toBeInstanceOf(Date);
+    expect(limit).toBe(20);
+    // 7 days back, within a second of now.
+    const expected = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(since.getTime() - expected)).toBeLessThan(1000);
+  });
+
+  it('excludes bots by default and joins visitors to do it', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await getTopPages(30, 20);
+
+    expect(sqlOf(0)).toContain('JOIN visitors v ON v.id = pe.visitor_id');
+    expect(sqlOf(0)).toContain('ILIKE');
+  });
+
+  it('drops the join entirely when bots are requested', async () => {
+    query.mockResolvedValueOnce([]);
+
+    await getTopPages(30, 20, true);
+
+    expect(sqlOf(0)).not.toContain('JOIN visitors');
+    expect(sqlOf(0)).not.toContain('ILIKE');
+  });
+});
+
+describe('getTrafficSources — bot filtering', () => {
+  it('filters bots by default', async () => {
+    findAll.mockResolvedValueOnce([]);
+
+    await getTrafficSources();
+
+    // `Op.and` is a Symbol key, which JSON.stringify silently drops — so the
+    // filter has to be read off the symbol, not off a serialised copy.
+    const where = findAll.mock.calls[0][0].where;
+    const symbols = Object.getOwnPropertySymbols(where);
+    expect(symbols).toHaveLength(1);
+    expect(String((where as any)[symbols[0]][0].val)).toContain('ILIKE');
+  });
+
+  it('does not filter when bots are requested', async () => {
+    findAll.mockResolvedValueOnce([]);
+
+    await getTrafficSources(undefined, true);
+
+    const where = findAll.mock.calls[0][0].where;
+    expect(Object.getOwnPropertySymbols(where)).toHaveLength(0);
   });
 });

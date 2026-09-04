@@ -62,6 +62,44 @@ function browserInfo() {
   return { user_agent: navigator.userAgent, device_type: deviceType(), browser: detectBrowser(), os: detectOS() };
 }
 
+/**
+ * The referrer for this page load, captured once.
+ *
+ * The ingest has always read `referrer_url` off the request body and derived
+ * `visitor_sessions.referrer_domain` from it (backend trackingController
+ * `extractReferrerDomain`) — and this file has never sent the field. `grep
+ * referrer frontend/src/utils/tracker.ts` returned zero hits. So the column was
+ * NULL for every session the React app ever created, and the admin "Traffic
+ * Sources" panel, which COALESCEs it to 'direct', reported a single row:
+ * direct, 1,018 visitors, 40,954 sessions. 100% direct is not a finding about
+ * the audience, it is the shape of a field nobody was filling in.
+ *
+ * Captured lazily rather than at module load so importing this file never
+ * touches `document`, and cached because `document.referrer` describes the
+ * original page load and does not change as the SPA navigates — reading it per
+ * flush would return the same value with more opportunities to throw.
+ *
+ * Same-origin referrers are dropped. An internal link is not a traffic source,
+ * and counting one would file every visitor under our own hostname and bury the
+ * external sources this panel exists to show.
+ */
+let referrerResolved = false;
+let cachedReferrer: string | undefined;
+
+function pageReferrer(): string | undefined {
+  if (referrerResolved) return cachedReferrer;
+  referrerResolved = true;
+  try {
+    const raw = document.referrer;
+    if (!raw) return (cachedReferrer = undefined);
+    if (new URL(raw).hostname === location.hostname) return (cachedReferrer = undefined);
+    cachedReferrer = raw;
+  } catch {
+    cachedReferrer = undefined;
+  }
+  return cachedReferrer;
+}
+
 function push(event_type: string, props: Record<string, unknown> = {}) {
   // Snapshot the caller's payload BEFORE the campaign block below mutates
   // `props`, so `event_data` is exactly what the call site passed and nothing
@@ -144,7 +182,8 @@ function flush(useBeacon = false) {
   } catch { /* silent */ }
 
   if (useBeacon) {
-    const payload = JSON.stringify({ fingerprint: fp, ...info, campaign_id, email, lead_id, events });
+
+    const payload = JSON.stringify({ fingerprint: fp, ...info, referrer_url: pageReferrer(), campaign_id, email, lead_id, events });
     // SEND IT AS A TYPED BLOB, NOT A BARE STRING.
     //
     // `navigator.sendBeacon(url, someString)` transmits with
@@ -172,13 +211,14 @@ function flush(useBeacon = false) {
     // an untyped body that loses the payload again.
     const blob = new Blob([payload], { type: 'application/json' });
     try { navigator.sendBeacon(`${API}/api/t/batch`, blob); } catch { /* silent */ }
+
     return;
   }
 
   const url = events.length === 1 ? `${API}/api/t/event` : `${API}/api/t/batch`;
   const body = events.length === 1
-    ? { fingerprint: fp, ...info, campaign_id, email, lead_id, ...events[0] }
-    : { fingerprint: fp, ...info, campaign_id, email, lead_id, events };
+    ? { fingerprint: fp, ...info, referrer_url: pageReferrer(), campaign_id, email, lead_id, ...events[0] }
+    : { fingerprint: fp, ...info, referrer_url: pageReferrer(), campaign_id, email, lead_id, events };
 
   fetch(url, {
     method: 'POST',
@@ -319,4 +359,72 @@ export function initTracker(): void {
   // Timers
   flushTimer = setInterval(() => flush(), 5000);
   heartbeatTimer = setInterval(heartbeat, 60000);
+}
+
+/**
+ * Link the anonymous fingerprint on this browser to a real person.
+ *
+ * WHY THIS EXISTS. `POST /api/t/identify` has been built, routed and working on
+ * the backend for the lifetime of this system, and `grep "t/identify"
+ * frontend/src` returned ZERO hits — nothing has ever called it. The measured
+ * consequence: of 1,791 visitors in production, 54 are linked to a person. 3.0%.
+ * Every other name arrived only because a campaign link happened to carry
+ * `?email=` or `?lid=`.
+ *
+ * The endpoint does more than store a name. `resolveIdentity` BACKFILLS: it
+ * stamps the lead onto the visitor's existing sessions and page events, so the
+ * moment someone fills in a form, everything they read beforehand — anonymously,
+ * possibly over weeks — becomes attributable to them. That history is already in
+ * the database. This call is the only thing standing between it and being
+ * readable.
+ *
+ * CONSENT IS RESPECTED BY CONSTRUCTION, not by a second check that could drift
+ * out of step with the first. The fingerprint only exists if `initTracker()` ran,
+ * and `initTracker()` runs only where tracking is permitted — on the V2 tree that
+ * means after an explicit grant (`config/v2Consent`). No fingerprint means no
+ * call, so a visitor who declined tracking and then submits a form is recorded as
+ * a lead by the form's own endpoint and is never joined to a browsing history
+ * that was never collected.
+ *
+ * FIRE AND FORGET. Identity resolution must never delay or fail a form
+ * submission: the form's own work is what the visitor came to do, and this is
+ * bookkeeping attached to it. Every failure path is swallowed deliberately.
+ */
+export function identifyVisitor(
+  email: string,
+  details: { name?: string; company?: string; phone?: string; metadata?: Record<string, unknown> } = {},
+): void {
+  if (typeof window === 'undefined') return;
+  if (!email || !email.includes('@')) return;
+
+  const fingerprint = getVisitorFingerprint();
+  // No fingerprint means tracking never started here. Minting one now would
+  // create the identifier that consent was meant to gate, at the exact moment
+  // someone handed over their name - which is the worst possible time to do it.
+  if (!fingerprint) return;
+
+  try {
+    fetch(`${API}/api/t/identify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fingerprint,
+        email: email.trim().toLowerCase(),
+        name: details.name,
+        company: details.company,
+        phone: details.phone,
+        metadata: details.metadata,
+      }),
+      keepalive: true,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        // Remember the lead id so subsequent flushes carry it even before the
+        // server has finished joining things up.
+        if (data && data.lead_id) {
+          try { localStorage.setItem(LEAD_KEY, String(data.lead_id)); } catch { /* silent */ }
+        }
+      })
+      .catch(() => { /* silent - never let bookkeeping break a form */ });
+  } catch { /* silent */ }
 }

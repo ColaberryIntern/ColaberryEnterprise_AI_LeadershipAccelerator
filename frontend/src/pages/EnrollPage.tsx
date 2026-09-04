@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import api from '../utils/api';
 import { getUTMPayloadFields } from '../services/utmService';
+import { identifyVisitor } from '../utils/tracker';
 import { trackEvent } from '../utils/tracker';
 import { markOncePerSession } from '../utils/oncePerSession';
 import StrategyCallModal from '../components/StrategyCallModal';
@@ -122,6 +123,13 @@ function EnrollPage() {
       await api.post('/api/create-free-account', {
         ...formData,
         ...trackingData,
+      });
+      // Backfills the browsing that led to this signup onto the new lead.
+      identifyVisitor(formData.email, {
+        name: formData.full_name,
+        company: formData.company,
+        phone: formData.phone,
+        metadata: { source_form: 'enrollment', title: formData.title },
       });
       setSignupComplete(true);
     } catch (err: any) {
