@@ -35,6 +35,8 @@ interface ProjectItem {
   repo_url: string | null; demo_url: string | null;
   /** An image committed to the project's own PUBLIC repo. Null when there is none. */
   hero_image_url?: string | null;
+  /** The published write-up about THIS project, at /p/:slug. Null when there is none. */
+  record_slug?: string | null;
 }
 
 interface Repository { name: string; url: string }
@@ -325,14 +327,30 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
                   const meta = [p.organization, p.industry].filter(Boolean).join(' · ');
                   return (
                     <article className="pf-proj" key={`${p.title}${i}`}>
-                      <Hero title={p.title} src={p.hero_image_url} />
+                      {/* THE WHOLE CARD DRILLS IN when a write-up exists. Ali: "I should
+                          be able to drill into the projects and get a similar Case study."
+                          The hero and the title are one target rather than a small link,
+                          because a card that is clickable in one corner reads as a card
+                          that is not clickable. */}
+                      {p.record_slug
+                        ? <a href={`/p/${p.record_slug}`} className="pf-hero-link"><Hero title={p.title} src={p.hero_image_url} /></a>
+                        : <Hero title={p.title} src={p.hero_image_url} />}
                       <div className="pf-projbody">
-                        <h3 className="pf-projttl">{p.title}</h3>
+                        <h3 className="pf-projttl">
+                          {p.record_slug
+                            ? <a href={`/p/${p.record_slug}`} className="pf-projttl-link">{p.title}</a>
+                            : p.title}
+                        </h3>
                         {meta && <div className="pf-projmeta">{meta}</div>}
                         {p.problem && <p className="pf-projtext">{p.problem}</p>}
                         {p.automation_goal && <p className="pf-projtext">{p.automation_goal}</p>}
-                        {(p.repo_url || p.demo_url) && (
+                        {(p.repo_url || p.demo_url || p.record_slug) && (
                           <div className="pf-projlinks">
+                            {/* Named for what it is rather than "read more": this is the
+                                long-form account of the build, not a teaser. */}
+                            {p.record_slug && (
+                              <a href={`/p/${p.record_slug}`}>Read the full case study</a>
+                            )}
                             {p.demo_url && (
                               <a href={p.demo_url} target="_blank" rel="noopener noreferrer">
                                 View it live

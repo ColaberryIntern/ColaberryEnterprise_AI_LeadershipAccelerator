@@ -290,6 +290,7 @@ describe('careerPortfolioPublicProjection', () => {
         repo_url: 'https://github.com/x/y',
         demo_url: 'https://enterprise.colaberry.ai/',
         hero_image_url: null,
+        record_slug: null,
       });
     });
 
@@ -321,7 +322,7 @@ describe('careerPortfolioPublicProjection', () => {
         .toEqual({
           title: 'PropertyPulse AI', organization: null, industry: null, problem: null,
           automation_goal: null, stage: 'discovery', repo_url: null, demo_url: null,
-          hero_image_url: null,
+          hero_image_url: null, record_slug: null,
         });
     });
 
@@ -413,6 +414,44 @@ describe('careerPortfolioPublicProjection', () => {
       expect(withHero('javascript:alert(1)')).toBeNull();
       expect(withHero('data:image/png;base64,AAAA')).toBeNull();
       expect(withHero(undefined)).toBeNull();
+    });
+  });
+
+  describe('drilling from a project into its write-up', () => {
+    const project = (over: any = {}) => ({ id: 'proj-1', name: 'PropertyPulse AI', ...over });
+    const record = (over: any = {}) => ({
+      slug: 'ali-muwwakkil-propertypulse-ai', project_id: 'proj-1', published_at: AT, ...over,
+    });
+    const build = (projects: any, records: any) => projectPublicPortfolio({
+      profile: loadedProfile(), projects, records, generatedAt: AT,
+    });
+
+    it('puts the write-up on the project it is about', () => {
+      const out = build([project()], [record()]);
+      expect(out.projects[0].record_slug).toBe('ali-muwwakkil-propertypulse-ai');
+    });
+
+    it('does not attach a write-up belonging to a different project', () => {
+      const out = build([project()], [record({ project_id: 'proj-OTHER' })]);
+      expect(out.projects[0].record_slug).toBeNull();
+      // The record still publishes in its own right; only the JOIN is refused.
+      expect(out.records).toHaveLength(1);
+    });
+
+    it('is null when a record names no project at all', () => {
+      expect(build([project()], [record({ project_id: null })])[
+        'projects'][0].record_slug).toBeNull();
+    });
+
+    /**
+     * The id is selected server-side ONLY to perform this join. Publishing it would put
+     * an internal key on a public page for no reader's benefit.
+     */
+    it('never publishes the project id it joined on', () => {
+      const serialized = JSON.stringify(build([project({ id: 'SENTINEL_PROJECT_ID' })], []));
+      expect(serialized).not.toContain('SENTINEL_PROJECT_ID');
+      expect(serialized).not.toContain('"id"');
+      expect(serialized).not.toContain('project_id');
     });
   });
 });
