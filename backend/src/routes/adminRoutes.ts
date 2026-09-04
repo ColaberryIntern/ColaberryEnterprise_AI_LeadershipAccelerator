@@ -105,6 +105,7 @@ import communityMemberRoutes from './admin/communityMemberRoutes';
 import podcastRoutes from './admin/podcastRoutes';
 import vaErpRoutes from './admin/vaErpRoutes';
 import studentStoryRoutes from './admin/studentStoryRoutes';
+import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 
 const router = Router();
 
@@ -267,5 +268,9 @@ router.use(communityModerationRoutes);
 router.use(vaErpRoutes);
 router.use(communityMemberRoutes);
 router.use(studentStoryRoutes);
+// Cert Prep instructor surface. Path prefix is registered in mgmtSectionGate's
+// PATH_SECTION under 'program' - without that row the gate is deny-by-default
+// and every scoped mgmt token 403s here while legacy admin passes.
+router.use(certPrepAdminRoutes);
 
 export default router;

@@ -50,6 +50,13 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // manage Projects manage these. Without this row the gate is deny-by-default
   // and every scoped mgmt token 403s here while legacy admin passes.
   ['/api/admin/case-studies', 'program'],
+  // Cert Prep instructor/admin surface. Same section as '/api/admin/curriculum'
+  // and '/api/admin/cohorts': approving practice questions and verifying a
+  // student's build evidence is programme work, done by the roles that already
+  // manage curriculum. Registered here BEFORE the routes exist, for the reason
+  // the case-studies row above documents — an unmapped path is deny-by-default
+  // for every scoped mgmt token, failing with an error nothing explains.
+  ['/api/admin/cert-prep', 'program'],
   ['/api/admin/ceo', 'intelligence'], ['/api/admin/cb-system', 'intelligence'], ['/api/admin/intelligence', 'intelligence'],
   ['/api/admin/insights', 'intelligence'], ['/api/admin/governance', 'intelligence'],
   ['/api/admin/tickets', 'system'], ['/api/admin/reports', 'system'], ['/api/admin/settings', 'system'],
