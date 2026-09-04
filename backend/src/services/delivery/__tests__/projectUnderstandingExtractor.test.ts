@@ -16,6 +16,8 @@ import {
   buildExtractionUserPrompt,
   provenanceViolations,
   PROVENANCE_BY_SOURCE,
+  buildQuoteIndex,
+  quoteViolation,
 } from '../projectUnderstandingExtractor';
 
 const validPayload = {
@@ -34,6 +36,12 @@ const validPayload = {
 
 const ok = (parsed: any) => ({ parsed, runtime_ms: 120, cost_usd: 0.004 });
 
+/**
+ * Quotes are now checked against the conversation, so the fixture conversation has to
+ * actually contain what the fixture payload quotes.
+ */
+const CONVO = ['bot: tell me about the workflow', 'human: we re-key every invoice by hand every morning'].join('\n');
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockChatJson.mockResolvedValue(ok(validPayload));
@@ -41,7 +49,7 @@ beforeEach(() => {
 
 describe('extractUnderstanding', () => {
   it('returns a validated understanding on the happy path', async () => {
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -60,7 +68,7 @@ describe('extractUnderstanding', () => {
     // chatJson swallows JSON.parse failures and returns {} — the case this guards.
     mockChatJson.mockResolvedValue(ok({}));
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     expect(result).toMatchObject({ ok: false, error_class: 'EmptyModelResponse' });
     if (result.ok) return;
@@ -75,7 +83,7 @@ describe('extractUnderstanding', () => {
       }),
     );
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     expect(result).toMatchObject({ ok: false, error_class: 'ContractViolation' });
     if (result.ok) return;
@@ -90,7 +98,7 @@ describe('extractUnderstanding', () => {
       }),
     );
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     // It was the only item, so refusing it leaves nothing and the document fails. The
     // point being asserted is that `pm_confirmed` never survives a transcript run.
@@ -176,7 +184,7 @@ describe('one bad item does not discard the call', () => {
   it('keeps the valid items and reports the refused one', async () => {
     mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [good, bad, good] }));
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -188,7 +196,7 @@ describe('one bad item does not discard the call', () => {
   it('names the value that arrived, not only the ones expected', async () => {
     mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [good, bad] }));
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -198,7 +206,7 @@ describe('one bad item does not discard the call', () => {
   it('keeps the raw refused item so nothing vanishes silently', async () => {
     mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [good, bad] }));
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -209,7 +217,7 @@ describe('one bad item does not discard the call', () => {
     const lying = { ...good, provenance: 'ai_inferred', classification: 'FACT', source_quote: undefined };
     mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [good, lying] }));
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -218,7 +226,7 @@ describe('one bad item does not discard the call', () => {
   });
 
   it('reports a clean run as clean', async () => {
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.rejected).toEqual([]);
@@ -227,7 +235,7 @@ describe('one bad item does not discard the call', () => {
   it('still fails when EVERY item is refused — an understanding of nothing is not one', async () => {
     mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [bad, bad] }));
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
 
     expect(result).toMatchObject({ ok: false, error_class: 'ContractViolation' });
     if (result.ok) return;
@@ -237,7 +245,90 @@ describe('one bad item does not discard the call', () => {
   it('still fails when the document itself has no title', async () => {
     mockChatJson.mockResolvedValue(ok({ ...validPayload, title: '  ', items: [good] }));
 
-    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    const result = await extractUnderstanding({ conversation: CONVO, source: 'voice_transcript' });
     expect(result).toMatchObject({ ok: false, error_class: 'ContractViolation' });
+  });
+});
+
+/**
+ * Both of these failures happened on the FIRST real call this ran against, which is why
+ * they are enforced rather than trusted to the prompt: the model attributed a pain point
+ * to the AGENT's own sentence, and nothing at all stopped it from inventing a quote.
+ */
+describe('a quote must be real, and it must be theirs', () => {
+  const TRANSCRIPT = [
+    'bot: Hi, can you walk me through how that workflow works today?',
+    'human: Ralph usually is the keeper of the spreadsheet, our project manager.',
+    'bot: Makes sense. So Ralph has the sheet, and Johnny needs to stay in the loop.',
+    'human: We need an automated process that sends us a email report.',
+  ].join('\n');
+
+  const withQuote = (quote: string) => ({
+    ...validPayload,
+    items: [{ ...validPayload.items[0], source_quote: quote }],
+  });
+
+  const run = () => extractUnderstanding({ conversation: TRANSCRIPT, source: 'voice_transcript' });
+
+  it('accepts a verbatim quote from the customer', async () => {
+    mockChatJson.mockResolvedValue(ok(withQuote('Ralph usually is the keeper of the spreadsheet')));
+
+    const result = await run();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rejected).toEqual([]);
+  });
+
+  it('refuses a quote that is the agent talking', async () => {
+    mockChatJson.mockResolvedValue(ok(withQuote('Ralph has the sheet, and Johnny needs to stay in the loop')));
+
+    const result = await run();
+    expect(result).toMatchObject({ ok: false });
+    if (result.ok) return;
+    expect(result.violations?.join(' ')).toContain('agent speaking, not the customer');
+  });
+
+  it('refuses a quote that appears nowhere in the conversation', async () => {
+    mockChatJson.mockResolvedValue(ok(withQuote('We process about four hundred invoices a week')));
+
+    const result = await run();
+    expect(result).toMatchObject({ ok: false });
+    if (result.ok) return;
+    expect(result.violations?.join(' ')).toContain('does not appear in the conversation');
+  });
+
+  it('does not punish straightened punctuation or collapsed whitespace', async () => {
+    const curly = 'bot: hi\nhuman: We\u2019re rebuilding   it every morning.';
+    mockChatJson.mockResolvedValue(
+      ok({ ...validPayload, items: [{ ...validPayload.items[0], source_quote: "We're rebuilding it every morning." }] }),
+    );
+
+    const result = await extractUnderstanding({ conversation: curly, source: 'voice_transcript' });
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('buildQuoteIndex', () => {
+  it('separates the customer from the agent', () => {
+    const index = buildQuoteIndex('bot: what happens?\nhuman: ralph owns it', 'voice_transcript');
+    expect(index.has_turns).toBe(true);
+    expect(index.customer_text).toContain('ralph owns it');
+    expect(index.customer_text).not.toContain('what happens');
+  });
+
+  it('treats a wrapped line as part of the same turn, not a new one', () => {
+    const index = buildQuoteIndex('human: ralph owns it\nand rebuilds it daily', 'voice_transcript');
+    expect(index.customer_text).toContain('ralph owns it and rebuilds it daily');
+  });
+
+  it('falls back to verbatim-only when a source has no speakers', () => {
+    const index = buildQuoteIndex('A requirements document with no turns.', 'document');
+    expect(index.has_turns).toBe(false);
+    expect(quoteViolation('requirements document', index)).toBeNull();
+  });
+
+  it('still catches a fabricated quote when there are no speakers', () => {
+    const index = buildQuoteIndex('A requirements document with no turns.', 'document');
+    expect(quoteViolation('a budget of two million', index)).toContain('does not appear');
   });
 });
