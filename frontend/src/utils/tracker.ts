@@ -145,7 +145,33 @@ function flush(useBeacon = false) {
 
   if (useBeacon) {
     const payload = JSON.stringify({ fingerprint: fp, ...info, campaign_id, email, lead_id, events });
-    try { navigator.sendBeacon(`${API}/api/t/batch`, payload); } catch { /* silent */ }
+    // SEND IT AS A TYPED BLOB, NOT A BARE STRING.
+    //
+    // `navigator.sendBeacon(url, someString)` transmits with
+    // `Content-Type: text/plain;charset=UTF-8`. Express's `express.json()` only parses
+    // `application/json`, so every beacon body arrived unparsed and the payload inside
+    // it was lost. Silently: the request still returned 2xx, rows were still written,
+    // and only the `event_data` went missing.
+    //
+    // The measured consequence, before this fix: of 1,745 `time_on_page` rows in
+    // production, ZERO carried `event_data.seconds` — including the 141 written after
+    // `event_data` began landing correctly for `scroll`. `time_on_page` is emitted on
+    // `visibilitychange`, which is the one place this file uses a beacon, so it was the
+    // only event type wholly dependent on this path. `extended_time_on_page` (strength
+    // 15) has therefore never fired for any visitor on any surface, since the database
+    // began.
+    //
+    // A Blob carries its own Content-Type, which is what `sendBeacon` reads. This is
+    // safe here specifically because the request is SAME-ORIGIN: `API` is
+    // `REACT_APP_API_URL || ''`, the production image sets that variable empty
+    // (nginx/Dockerfile), and the deployed bundle calls `/api/t/batch` relative. A
+    // cross-origin `application/json` beacon would need a CORS preflight, which
+    // `sendBeacon` cannot perform — the usual reason people settle for `text/plain`.
+    // If `API` is ever pointed at another origin, this line has to be revisited, and
+    // switching to `fetch(..., keepalive: true)` is the answer rather than reverting to
+    // an untyped body that loses the payload again.
+    const blob = new Blob([payload], { type: 'application/json' });
+    try { navigator.sendBeacon(`${API}/api/t/batch`, blob); } catch { /* silent */ }
     return;
   }
 
