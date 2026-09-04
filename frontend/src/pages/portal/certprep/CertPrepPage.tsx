@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PortalShell from '../today/PortalShell';
 import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import CertReadinessHero from './CertReadinessHero';
@@ -60,6 +60,26 @@ const CertPrepPage: React.FC = () => {
   const [errorText, setErrorText] = useState<string>('');
   const [runnerMode, setRunnerMode] = useState<'diagnostic' | 'practice' | 'mock' | null>(null);
   const [runnerDomains, setRunnerDomains] = useState<string[] | undefined>(undefined);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * "See Why" answers the hero's readiness number by sending the student to the
+   * Domain Map. That map is ALSO the default tab, so `setTab('domains')` on its own
+   * is a no-op the first time anyone clicks it: React bails out on an identical
+   * state value, nothing re-renders, and the button reads as dead. Moving the panel
+   * into view is the part that actually answers the question, and it has to happen
+   * whether or not the tab changed.
+   */
+  const showDomainMap = useCallback(() => {
+    setTab('domains');
+    requestAnimationFrame(() => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      panel.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      panel.focus({ preventScroll: true });
+    });
+  }, []);
 
   const load = useCallback(async () => {
     setLoadState('loading');
@@ -272,7 +292,7 @@ const CertPrepPage: React.FC = () => {
               track={track}
               nextActionLabel={nextAction.label}
               onNextAction={() => startRun(nextAction.mode, nextAction.domainIds)}
-              onSeeWhy={() => setTab('domains')}
+              onSeeWhy={showDomainMap}
             />
 
             <div className="cp-tabs" role="tablist" aria-label="Cert Prep sections">
@@ -293,6 +313,7 @@ const CertPrepPage: React.FC = () => {
             </div>
 
             <div
+              ref={panelRef}
               className="cp-panel"
               role="tabpanel"
               id={`cp-panel-${tab}`}

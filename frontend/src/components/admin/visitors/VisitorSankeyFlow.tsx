@@ -44,6 +44,31 @@ interface SankeyNodeData {
   stage: 'source' | 'site' | 'outcome';
 }
 
+interface ChannelKpi {
+  channel: string;
+  unique_visitors: number;
+  sessions: number;
+  converted: number;
+  conversion_rate: number;
+}
+
+interface VisitorKpis {
+  days: number;
+  unique_visitors: number;
+  unique_visitors_7d: number;
+  sessions: number;
+  new_visitors: number;
+  returning_visitors: number;
+  new_visitor_rate: number;
+  sessions_per_visitor: number;
+  bounce_rate: number;
+  converted_visitors: number;
+  conversion_rate: number;
+  by_site: ChannelKpi[];
+  by_source: ChannelKpi[];
+  source_attribution_pending: boolean;
+}
+
 interface SankeyPayload {
   nodes: SankeyNodeData[];
   links: Array<{ source: number; target: number; value: number }>;
@@ -80,6 +105,8 @@ function VisitorSankeyFlow(): React.ReactElement {
   const [error, setError] = useState('');
   const [days, setDays] = useState('30');
   const [showTable, setShowTable] = useState(false);
+  const [kpis, setKpis] = useState<VisitorKpis | null>(null);
+  const [channelView, setChannelView] = useState<'site' | 'source'>('site');
   const isDark = useIsDark();
   const palette = isDark ? SOURCE_COLORS_DARK : SOURCE_COLORS_LIGHT;
 
@@ -87,8 +114,12 @@ function VisitorSankeyFlow(): React.ReactElement {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get('/api/admin/visitor-analytics/flow-sankey', { params: { days } });
+      const [res, kpiRes] = await Promise.all([
+        api.get('/api/admin/visitor-analytics/flow-sankey', { params: { days } }),
+        api.get('/api/admin/visitor-analytics/kpis', { params: { days } }).catch(() => null),
+      ]);
       setData(res.data);
+      if (kpiRes?.data) setKpis(kpiRes.data);
     } catch (err) {
       console.error('Failed to load visitor flow:', err);
       setError('Could not load the traffic flow.');
@@ -324,6 +355,51 @@ function VisitorSankeyFlow(): React.ReactElement {
 
       {!loading && !error && chart && chart.nodes.length > 0 && (
         <>
+          {/* REACH -> ACQUISITION -> ENGAGEMENT -> CONVERSION.
+              The order is the sequence a visitor actually moves through, so a
+              number that looks wrong can be traced to the stage before it.
+
+              Every figure counts PEOPLE, not sessions. 4,484 sessions is not
+              4,484 anyone — it is ~994 people visiting ~4.5 times each, and a
+              conversion rate computed per session would understate the funnel by
+              exactly that factor. */}
+          {kpis && (
+            <div className="row g-2 mb-3">
+              <div className="col-6 col-lg-3">
+                <div className="h-100 p-2 rounded" style={{ background: 'var(--surface-sunken, #f7f7f6)', borderLeft: '4px solid #7A5AF0' }}>
+                  <div className="small text-muted">Unique visitors</div>
+                  <div className="fw-bold" style={{ fontSize: '1.5rem', lineHeight: 1.15 }}>
+                    {kpis.unique_visitors.toLocaleString()}
+                  </div>
+                  <div className="small text-muted">{kpis.unique_visitors_7d.toLocaleString()} in last 7 days</div>
+                </div>
+              </div>
+              <div className="col-6 col-lg-3">
+                <div className="h-100 p-2 rounded" style={{ background: 'var(--surface-sunken, #f7f7f6)', borderLeft: '4px solid #2BA39A' }}>
+                  <div className="small text-muted">New visitors</div>
+                  <div className="fw-bold" style={{ fontSize: '1.5rem', lineHeight: 1.15 }}>{kpis.new_visitor_rate}%</div>
+                  <div className="small text-muted">
+                    {kpis.new_visitors.toLocaleString()} new · {kpis.returning_visitors.toLocaleString()} returning
+                  </div>
+                </div>
+              </div>
+              <div className="col-6 col-lg-3">
+                <div className="h-100 p-2 rounded" style={{ background: 'var(--surface-sunken, #f7f7f6)', borderLeft: '4px solid #E8920C' }}>
+                  <div className="small text-muted">Visits per person</div>
+                  <div className="fw-bold" style={{ fontSize: '1.5rem', lineHeight: 1.15 }}>{kpis.sessions_per_visitor}</div>
+                  <div className="small text-muted">{kpis.bounce_rate}% bounce · {kpis.sessions.toLocaleString()} sessions</div>
+                </div>
+              </div>
+              <div className="col-6 col-lg-3">
+                <div className="h-100 p-2 rounded" style={{ background: 'var(--surface-sunken, #f7f7f6)', borderLeft: '4px solid #5BA63C' }}>
+                  <div className="small text-muted">Visitor → lead</div>
+                  <div className="fw-bold" style={{ fontSize: '1.5rem', lineHeight: 1.15 }}>{kpis.conversion_rate}%</div>
+                  <div className="small text-muted">{kpis.converted_visitors.toLocaleString()} became leads</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* The outcome column expressed as numbers, because a band's thickness
               answers "which is bigger" but never "is 58% bounce good". Each tile
               carries the same colour as its node in the diagram, so the eye can
@@ -391,6 +467,95 @@ function VisitorSankeyFlow(): React.ReactElement {
             </ResponsiveContainer>
           </div>
         </>
+      )}
+
+      {/* CONVERSION BY CHANNEL — the ask, and the most decision-useful thing here.
+          Sorted by traffic so the biggest audiences are read first, which is what
+          exposes the gap: the property with the MOST visitors can be the one
+          converting worst, and that only shows when the two sit side by side.
+
+          Source is a separate view rather than a merged one because referrer
+          capture shipped on 2026-09-04 and cannot be backfilled — bucketing
+          everything unattributed into "Direct" would report a fact about a field
+          that was empty, not about the audience. */}
+      {kpis && (
+        <div className="mt-4">
+          <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+            <h6 className="mb-0">Conversion by {channelView === 'site' ? 'property' : 'source'}</h6>
+            <div className="btn-group btn-group-sm" role="group" aria-label="Channel dimension">
+              <button
+                type="button"
+                className={`btn btn-sm ${channelView === 'site' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                onClick={() => setChannelView('site')}
+              >
+                By property
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${channelView === 'source' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                onClick={() => setChannelView('source')}
+              >
+                By source
+              </button>
+            </div>
+          </div>
+
+          {channelView === 'source' && kpis.source_attribution_pending ? (
+            <div className="alert alert-light border small mb-0">
+              <strong>No source data yet.</strong> Referrer capture went live on 4 September and
+              cannot be backfilled, so traffic that arrived before then has no recorded source.
+              This fills in as new visitors arrive. Use <em>By property</em> in the meantime.
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-sm align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>{channelView === 'site' ? 'Property' : 'Source'}</th>
+                    <th className="text-end">Unique visitors</th>
+                    <th className="text-end">Sessions</th>
+                    <th className="text-end">Leads</th>
+                    <th style={{ minWidth: 160 }}>Conversion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(channelView === 'site' ? kpis.by_site : kpis.by_source).map((c) => {
+                    const best = Math.max(
+                      ...(channelView === 'site' ? kpis.by_site : kpis.by_source).map((x) => x.conversion_rate),
+                      1,
+                    );
+                    return (
+                      <tr key={c.channel}>
+                        <td className="small fw-medium">{c.channel}</td>
+                        <td className="text-end small">{c.unique_visitors.toLocaleString()}</td>
+                        <td className="text-end small text-muted">{c.sessions.toLocaleString()}</td>
+                        <td className="text-end small">{c.converted.toLocaleString()}</td>
+                        <td>
+                          <div className="d-flex align-items-center gap-2">
+                            {/* Bar width is relative to the best performer, so the
+                                spread between properties is visible rather than
+                                every bar being a sliver against 100%. */}
+                            <div style={{ flex: 1, height: 6, background: 'var(--color-border, #e4e4e3)', borderRadius: 3 }}>
+                              <div
+                                style={{
+                                  width: `${Math.min(100, (c.conversion_rate / best) * 100)}%`,
+                                  height: '100%',
+                                  borderRadius: 3,
+                                  background: c.conversion_rate >= best * 0.6 ? '#5BA63C' : c.conversion_rate > 0 ? '#E8920C' : '#8C8C8C',
+                                }}
+                              />
+                            </div>
+                            <span className="small text-nowrap" style={{ minWidth: 44 }}>{c.conversion_rate}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {/* The table is the accessibility relief for the two palette steps that sit

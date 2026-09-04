@@ -1,5 +1,5 @@
 const mockEnrollmentFindByPk = jest.fn();
-jest.mock('../../../models', () => ({ Enrollment: { findByPk: (...a: any[]) => mockEnrollmentFindByPk(...a) } }));
+jest.mock('../../../models/Enrollment', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => mockEnrollmentFindByPk(...a) } }));
 
 const mockCohortFindByPk = jest.fn();
 jest.mock('../../../models/Cohort', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => mockCohortFindByPk(...a) } }));

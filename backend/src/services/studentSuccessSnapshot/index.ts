@@ -12,16 +12,18 @@
  * Slice 1 (2026-09-04) implemented 5 of the mission's 15 named categories:
  * identity/cohort, attendance (reusing Checkpoint B's fail-closed
  * reliability gate), timeline progress, assessment trend, reflection
- * completion. Slice 2 (2026-09-04) adds 3 more: competency evidence,
- * project/repository progress, certification readiness. The remaining 7
- * (engagement, artifacts/evidence, community/room/event activity, open
- * tickets/interventions, previous Reese communications, agreed next
- * steps/due dates, instructor/manager feedback) are real, cataloged,
- * un-built categories — deliberately not stubbed as fake `not_applicable`
- * placeholders on the snapshot type itself (a field that doesn't exist yet
- * shouldn't pretend to be a real "N/A" verdict about the category) —
- * they're added to the type and wired for real in later slices, matching
- * Checkpoint B's own small-slice discipline.
+ * completion. Slice 2 added 3 more: competency evidence, project/
+ * repository progress, certification readiness. Slice 3 added 4 more:
+ * artifacts/evidence, community/room/event activity (also covers the
+ * mission's separate "engagement" category — no distinct engagement data
+ * source was found at Checkpoint A discovery), open tickets/interventions,
+ * previous Reese communications. Slice 4 closes the last 2: instructor/
+ * manager feedback (MentorReviewItem, gated to only RELEASED items — the
+ * same real gate mentorFeedbackService.ts's own reader uses) and agreed
+ * next steps/due dates — which stays a real, permanent `not_applicable`
+ * (never a guessed value) because Capability 6/7's work-ledger/checklist
+ * system genuinely doesn't exist in this codebase yet. All 15 mission
+ * categories are now accounted for: 14 real, 1 honestly not_applicable.
  */
 import { getAttendanceField } from './attendanceSource';
 import { getIdentityField } from './identitySource';
@@ -31,6 +33,11 @@ import { getReflectionCompletionField } from './reflectionCompletionSource';
 import { getCompetencyEvidenceField } from './competencyEvidenceSource';
 import { getProjectProgressField } from './projectProgressSource';
 import { getCertReadinessField } from './certReadinessSource';
+import { getArtifactsEvidenceField } from './artifactsEvidenceSource';
+import { getCommunityActivityField } from './communityActivitySource';
+import { getTicketsInterventionsField } from './ticketsInterventionsSource';
+import { getPreviousReeseCommunicationsField } from './reeseCommunicationsSource';
+import { getInstructorFeedbackField } from './instructorFeedbackSource';
 import { AttendanceValue, IdentityValue, notApplicableField, SnapshotField, StudentSuccessSnapshot, TimelineProgressValue } from './types';
 
 export * from './types';
@@ -50,7 +57,7 @@ export async function getStudentSuccessSnapshot(enrollmentId: string): Promise<S
 
   const cohortId = identity.value?.cohortId ?? null;
 
-  const [attendanceR, timelineR, assessmentR, reflectionR, competencyR, projectR, certR] = await Promise.allSettled([
+  const [attendanceR, timelineR, assessmentR, reflectionR, competencyR, projectR, certR, artifactsR, communityR, ticketsR, reeseCommsR, instructorR] = await Promise.allSettled([
     getAttendanceField(enrollmentId, cohortId),
     getTimelineProgressField(enrollmentId),
     getAssessmentTrendField(enrollmentId),
@@ -58,6 +65,11 @@ export async function getStudentSuccessSnapshot(enrollmentId: string): Promise<S
     getCompetencyEvidenceField(enrollmentId),
     getProjectProgressField(enrollmentId),
     getCertReadinessField(enrollmentId),
+    getArtifactsEvidenceField(enrollmentId),
+    getCommunityActivityField(enrollmentId),
+    getTicketsInterventionsField(enrollmentId),
+    getPreviousReeseCommunicationsField(enrollmentId),
+    getInstructorFeedbackField(enrollmentId),
   ]);
 
   return {
@@ -71,6 +83,12 @@ export async function getStudentSuccessSnapshot(enrollmentId: string): Promise<S
     competencyEvidence: competencyR.status === 'fulfilled' ? competencyR.value : unknownField('student_competency', competencyR.reason),
     projectProgress: projectR.status === 'fulfilled' ? projectR.value : unknownField('projects', projectR.reason),
     certReadiness: certR.status === 'fulfilled' ? certR.value : unknownField('cert_readiness_snapshots', certR.reason),
+    artifactsEvidence: artifactsR.status === 'fulfilled' ? artifactsR.value : unknownField('evidence_records', artifactsR.reason),
+    communityActivity: communityR.status === 'fulfilled' ? communityR.value : unknownField('community_posts', communityR.reason),
+    ticketsInterventions: ticketsR.status === 'fulfilled' ? ticketsR.value : unknownField('tickets_via_community_room', ticketsR.reason),
+    previousReeseCommunications: reeseCommsR.status === 'fulfilled' ? reeseCommsR.value : unknownField('room_messages', reeseCommsR.reason),
+    instructorFeedback: instructorR.status === 'fulfilled' ? instructorR.value : unknownField('mentor_review_items', instructorR.reason),
+    agreedNextSteps: notApplicableField('work_ledger', "Capability 6/7's stateful checklist/work-ledger system doesn't exist in this codebase yet."),
   };
 }
 

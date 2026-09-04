@@ -59,6 +59,11 @@ export default function WarRoomPage() {
   const [, setStats] = useState<any>(null);
   const [revenue, setRevenue] = useState<any>(null);
   const [liveMetrics, setLiveMetrics] = useState<any>(null);
+  // Visitor traffic, from the Visitors dashboard's own endpoint rather than a
+  // second implementation here. Both numbers are already crawler-free, so this
+  // card cannot disagree with the page it links to — which it would within a
+  // week if the War Room counted visitors its own way.
+  const [visitorStats, setVisitorStats] = useState<{ visitors30d?: number; liveCount?: number } | null>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [feed, setFeed] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -68,16 +73,24 @@ export default function WarRoomPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statsRes, revenueRes, liveRes, alertsRes, feedRes] = await Promise.all([
+      const [statsRes, revenueRes, liveRes, alertsRes, feedRes, visitorRes] = await Promise.all([
         api.get('/api/admin/stats').catch(() => ({ data: {} })),
         api.get('/api/admin/revenue/dashboard').catch(() => ({ data: {} })),
         api.get('/api/admin/war-room/live-metrics').catch(() => ({ data: {} })),
         api.get('/api/admin/alerts?status=new&limit=20').catch(() => ({ data: [] })),
         api.get('/api/admin/war-room/feed').catch(() => ({ data: [] })),
+        api.get('/api/admin/visitors/stats').catch(() => ({ data: {} })),
       ]);
       setStats(statsRes.data);
       setRevenue(revenueRes.data);
       setLiveMetrics(liveRes.data);
+      // Accepts either naming convention for the same reason the Visitors page
+      // does: the bundle and the API can be a deploy apart.
+      const vs = visitorRes.data || {};
+      setVisitorStats({
+        visitors30d: typeof vs.visitors30d === 'number' ? vs.visitors30d : vs.total_visitors,
+        liveCount: typeof vs.liveCount === 'number' ? vs.liveCount : vs.live_count,
+      });
       setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data?.alerts || []);
       setFeed(Array.isArray(feedRes.data) ? feedRes.data : []);
       setLastUpdate(new Date());
@@ -139,6 +152,31 @@ export default function WarRoomPage() {
       >
         {/* Live Metrics KPI row (was the dark-panel MetricCard grid). */}
         <div className="row g-3">
+          {/* Website visitors leads the row: it is the top of the funnel every
+              other number on this page depends on, and it was the one metric the
+              War Room never showed.
+
+              30 days is the headline and live-now is the sub-KPI, per the ask —
+              the 30-day figure is the one worth acting on, while "live now" is
+              volatile by nature and would make the card twitch if it led.
+
+              Both come from the Visitors dashboard's own endpoint, so this card
+              and that page can never disagree; and both are crawler-free, so the
+              number means people. `to` makes the whole card a link. */}
+          <div className="col-6 col-lg-3 col-xl-2">
+            <StatCard
+              label="Website Visitors"
+              value={visitorStats?.visitors30d ?? '...'}
+              icon="eye-line"
+              tone="primary"
+              hint={
+                visitorStats
+                  ? `${(visitorStats.liveCount ?? 0).toLocaleString()} live now · last 30 days`
+                  : undefined
+              }
+              to="/admin/visitors"
+            />
+          </div>
           <div className="col-6 col-lg-3 col-xl-2">
             <StatCard label="Emails Sent" value={liveMetrics?.emailsToday ?? '...'} icon="mail-send-line" tone="info" />
           </div>
