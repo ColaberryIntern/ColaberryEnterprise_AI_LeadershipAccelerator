@@ -83,7 +83,13 @@ const proposalSchema = z.object({
 export function proposalViolation(raw: unknown): string | null {
   const parsed = proposalSchema.safeParse(raw);
   if (!parsed.success) {
-    return parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+    // Name the section when the payload carries one. The first live run refused an entry
+    // with "value: expected string, received object" and nothing else - true, and useless,
+    // because it did not say WHICH section had silently produced nothing. It was the trust
+    // blueprint, and the section simply stayed empty with no indication why.
+    const section = (raw as any)?.section;
+    const detail = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+    return section ? `${section}: ${detail}` : detail;
   }
 
   const entry = parsed.data;
@@ -148,7 +154,13 @@ export function buildProposalPrompt(u: ProjectUnderstanding, blueprint: BuildBlu
     '- Never assign a maturity level, score, or grade to anything. Nothing has been built yet, so there is nothing to be mature about.',
     '- trust_state belongs ONLY on trust_blueprint entries.',
     '',
-    'For the trust blueprint, cover: what AI may do, what still requires a human, what context the AI needs, what data it relies on, what must be observable, what needs to be explainable.',
+    'THE TRUST BLUEPRINT NEEDS SEVERAL SEPARATE ENTRIES, one per concern, each a flat',
+    'string with its own trust_state. Do not return one nested object covering all of them -',
+    'it will be refused and the section will be empty. Cover: what AI may do, what still',
+    'requires a human, what context the AI needs, what data it relies on, what must be',
+    'observable, what needs to be explainable. For example:',
+    '  { "section": "trust_blueprint", "value": "A person approves any job refusal before it is sent", "trust_state": "Required" }',
+    '  { "section": "trust_blueprint", "value": "Report accuracy against the source sheet", "trust_state": "Not yet measurable" }',
     '',
     `Reference vocabulary for the dimensions you heard about: ${Object.values(DIMENSION_LABELS).slice(0, 8).join(', ')}.`,
     'Keep each value to one clear sentence. Fewer, better entries beat coverage.',
