@@ -83,11 +83,12 @@ export function StoryDetailArticle({
      survived `visibleSections`, so a figure can never follow a heading this
      record does not print. `placedHrefs` then goes down to the artifacts band,
      which subtracts them from its carousel - the same picture appearing inline
-     and again in a track ten centimetres below reads as a rendering fault. */
-  const figures = placeStoryFigures(record.artifacts, sections);
-  /* The masthead's cover. Null keeps the single-column hero exactly as it was,
-     so a record with no approved picture is unaffected by this layout. */
+     and again in a track ten centimetres below reads as a rendering fault.
+     The COVER is subtracted for the same reason: the masthead has already spent
+     it, so it must not also open the body. Null keeps the single-column hero
+     exactly as it was, so a record with no picture is unaffected. */
   const cover = coverFor(record);
+  const figures = placeStoryFigures(record.artifacts, sections, cover?.src ?? null);
 
   return (
     /* The click handler is an observer on a container, the pattern

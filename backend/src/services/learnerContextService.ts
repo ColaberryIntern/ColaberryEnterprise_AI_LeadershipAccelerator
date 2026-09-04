@@ -1,9 +1,12 @@
 /**
  * learnerContextService — the shared "student 360" the AI Mentor uses to get to
  * know a learner over time. Aggregates persona, competency genome, cross-card
- * assessment history and project readiness into ONE typed LearnerContext that
- * BOTH mentor surfaces (runtime coach + legacy lesson mentor) consume, so the
- * two never drift.
+ * assessment history, project readiness, and (Reese Agentic AI Employee
+ * mission, Checkpoint B) real attendance — gated through the metric
+ * reliability registry, honestly excluded rather than silently trusted when
+ * the cohort's attendance data is quarantined/degraded — into ONE typed
+ * LearnerContext that BOTH mentor surfaces (runtime coach + legacy lesson
+ * mentor) consume, so the two never drift.
  *
  * Design:
  *  - READ-ONLY sources only. It deliberately avoids projectProgressService
@@ -15,15 +18,19 @@
  *  - COMPACT + SAFE. Serialization (token budget + PII redaction) lives in the
  *    pure learnerContextFormat module.
  */
+import { Op } from 'sequelize';
 import { Enrollment } from '../models';
 import Cohort from '../models/Cohort';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import AssessmentAttempt from '../models/AssessmentAttempt';
+import AttendanceRecord from '../models/AttendanceRecord';
+import LiveSession from '../models/LiveSession';
 import LearnerMemory from '../models/LearnerMemory';
 import { getSkillGenome } from './skillGenomeService';
 import { getProjectByEnrollment } from './projectService';
+import { getReliabilityStatus } from './metricReliabilityService';
 import {
-  LearnerContext, emptyLearnerContext, renderLearnerContext, rollupAssessments,
+  LearnerAttendance, LearnerContext, emptyLearnerContext, renderLearnerContext, rollupAssessments,
 } from './learnerContextFormat';
 
 export { LearnerContext } from './learnerContextFormat';
@@ -40,6 +47,32 @@ function extractGaps(g: { layers?: Array<{ domains?: Array<{ skills?: Array<{ na
     }
   }
   return gaps.sort((a, b) => a.lvl - b.lvl).slice(0, 3).map((x) => x.name);
+}
+
+/**
+ * Real attendance for one student, gated through the metric reliability
+ * registry — Reese Agentic AI Employee mission, Checkpoint B's first
+ * consumer. When the cohort's attendance metric is quarantined/degraded,
+ * the real counts are never computed at all (not computed-then-hidden —
+ * genuinely not queried), and the honest exclusion reason is returned
+ * instead. "Sessions held so far" (not every scheduled session) is the
+ * denominator, matching acceleratorService.ts's own real fix for the bug
+ * where a fully-attending student read as having near-zero attendance
+ * because future/unscheduled sessions were counted in the total.
+ */
+async function getAttendanceForContext(enrollmentId: string, cohortId: string): Promise<LearnerAttendance> {
+  const reliability = await getReliabilityStatus('attendance', 'attendance.*', { scopeType: 'cohort', scopeValue: cohortId });
+  if (reliability.status !== 'healthy') {
+    return { sessions_present: 0, sessions_held_so_far: 0, attendance_pct: null, reliable: false, excluded_reason: reliability.reason };
+  }
+
+  const cohortSessions = await LiveSession.findAll({ where: { cohort_id: cohortId, status: { [Op.ne]: 'cancelled' } } });
+  const sessionsHeldSoFar = cohortSessions.filter((s: any) => s.status === 'completed' || s.status === 'live').length;
+  const attendanceRecords = await AttendanceRecord.findAll({ where: { enrollment_id: enrollmentId } });
+  const present = attendanceRecords.filter((r: any) => r.status === 'present' || r.status === 'late').length;
+  const attendance_pct = sessionsHeldSoFar > 0 ? (present / sessionsHeldSoFar) * 100 : null;
+
+  return { sessions_present: present, sessions_held_so_far: sessionsHeldSoFar, attendance_pct, reliable: true, excluded_reason: null };
 }
 
 /** Assemble the typed 360 for a student. Never throws — missing sources are skipped. */
@@ -70,6 +103,10 @@ export async function getLearnerContext(enrollmentId: string): Promise<LearnerCo
         const c: any = await Cohort.findByPk(e.cohort_id, { attributes: ['name'] });
         if (c) ctx.identity.cohort = c.name ?? null;
       } catch { /* cohort optional */ }
+
+      try {
+        ctx.attendance = await getAttendanceForContext(enrollmentId, e.cohort_id);
+      } catch { /* attendance optional — a lookup failure must never break a mentor turn */ }
     }
   }
 

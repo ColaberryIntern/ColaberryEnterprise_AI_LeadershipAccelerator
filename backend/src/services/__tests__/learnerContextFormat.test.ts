@@ -15,6 +15,7 @@ function full(): LearnerContext {
     competency: { proficiency_pct: 38, skills_mastered: 3, total_skills: 40, top_gaps: ['prompt_design', 'eval_methods', 'rag_basics'] },
     assessments: { evals_taken: 4, evals_passed: 2, avg_eval_pct: 68, weak_competencies: ['prompting', 'agents'] },
     project: { name: 'Support Copilot', stage: 'implementation', requirements_pct: 55 },
+    attendance: { sessions_present: 7, sessions_held_so_far: 9, attendance_pct: 77.78, reliable: true, excluded_reason: null },
   };
 }
 
@@ -30,6 +31,7 @@ describe('renderLearnerContext', () => {
     expect(out).toContain('Weakest: Prompt Design, Eval Methods, Rag Basics'); // slugs prettified
     expect(out).toContain('4 evaluations taken, 2 passed (avg 68%)');
     expect(out).toContain('Project "Support Copilot", stage: Implementation, requirements 55% complete');
+    expect(out).toContain('Attendance: 7/9 sessions held so far (78%)');
   });
 
   it('returns empty string when nothing is known yet (new enrollment)', () => {
@@ -61,6 +63,47 @@ describe('renderLearnerContext', () => {
     ctx.persona.goal = 'x'.repeat(5000);
     const out = renderLearnerContext(ctx, 300);
     expect(out.length).toBeLessThanOrEqual(300);
+  });
+});
+
+describe('renderLearnerContext — attendance honesty boundary (Reese Agentic AI Employee mission, Checkpoint B)', () => {
+  it('discloses exclusion, never the real numbers, when attendance is unreliable', () => {
+    const ctx = emptyLearnerContext();
+    ctx.attendance = { sessions_present: 7, sessions_held_so_far: 9, attendance_pct: 77.78, reliable: false, excluded_reason: 'Check-in system missing students since Monday' };
+
+    const out = renderLearnerContext(ctx);
+
+    expect(out).toContain('Attendance data is currently unreliable and has been excluded');
+    expect(out).toContain('Check-in system missing students since Monday');
+    expect(out).not.toContain('7/9');
+    expect(out).not.toContain('78%');
+  });
+
+  it('discloses exclusion even with no reason text, rather than a blank/confusing line', () => {
+    const ctx = emptyLearnerContext();
+    ctx.attendance = { sessions_present: 0, sessions_held_so_far: 0, attendance_pct: null, reliable: false, excluded_reason: null };
+
+    const out = renderLearnerContext(ctx);
+
+    expect(out).toContain('Attendance data is currently unreliable and has been excluded from this profile.');
+  });
+
+  it('honesty boundary: reliable attendance with zero sessions held so far renders nothing, never a fabricated 0%', () => {
+    const ctx = emptyLearnerContext();
+    ctx.attendance = { sessions_present: 0, sessions_held_so_far: 0, attendance_pct: null, reliable: true, excluded_reason: null };
+
+    const out = renderLearnerContext(ctx);
+
+    expect(out).not.toContain('Attendance');
+  });
+
+  it('no attendance data at all (null) renders nothing', () => {
+    const ctx = emptyLearnerContext();
+    ctx.attendance = null;
+
+    const out = renderLearnerContext(ctx);
+
+    expect(out).not.toContain('Attendance');
   });
 });
 
