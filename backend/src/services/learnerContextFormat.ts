@@ -19,6 +19,14 @@ export interface LearnerPersona { company?: string | null; industry?: string | n
 export interface LearnerCompetency { proficiency_pct: number | null; skills_mastered: number; total_skills: number; top_gaps: string[]; }
 export interface LearnerAssessments { evals_taken: number; evals_passed: number; avg_eval_pct: number | null; weak_competencies: string[]; }
 export interface LearnerProject { name: string | null; stage: string | null; requirements_pct: number | null; }
+/**
+ * `reliable: false` means the metric reliability gate (metricReliabilityService.ts)
+ * currently has this cohort's attendance quarantined or degraded — `sessions_present`/
+ * `sessions_held_so_far`/`attendance_pct` are deliberately left at their honest zero/
+ * null defaults in that case, never populated with the real (untrusted) counts, so a
+ * caller can't accidentally read them even by skipping the `reliable` check.
+ */
+export interface LearnerAttendance { sessions_present: number; sessions_held_so_far: number; attendance_pct: number | null; reliable: boolean; excluded_reason: string | null; }
 
 export interface LearnerContext {
   identity: LearnerIdentity;
@@ -26,6 +34,7 @@ export interface LearnerContext {
   competency: LearnerCompetency;
   assessments: LearnerAssessments;
   project: LearnerProject | null;
+  attendance: LearnerAttendance | null;
   memory?: Partial<DistilledMemory> | null; // the evolving profile (Phase 3), null if not distilled yet
 }
 
@@ -48,6 +57,7 @@ export function emptyLearnerContext(): LearnerContext {
     competency: { proficiency_pct: null, skills_mastered: 0, total_skills: 0, top_gaps: [] },
     assessments: { evals_taken: 0, evals_passed: 0, avg_eval_pct: null, weak_competencies: [] },
     project: null,
+    attendance: null,
     memory: null,
   };
 }
@@ -109,6 +119,16 @@ export function renderLearnerContext(ctx: LearnerContext, budget = 900): string 
     if (pr.stage) seg.push(`stage: ${pretty(pr.stage)}`);
     if (pr.requirements_pct != null) seg.push(`requirements ${Math.round(pr.requirements_pct)}% complete`);
     lines.push(`- Project ${seg.join(', ')}.`);
+  }
+
+  // attendance — Reese Agentic AI Employee mission, Checkpoint B. A quarantined/
+  // degraded source is disclosed honestly (never silently dropped, never used with
+  // the real numbers anyway — see LearnerAttendance's own doc comment).
+  const att = ctx.attendance;
+  if (att && !att.reliable) {
+    lines.push(`- Attendance data is currently unreliable and has been excluded from this profile${att.excluded_reason ? ` (${clip(att.excluded_reason, 100)})` : ''}.`);
+  } else if (att && att.sessions_held_so_far > 0) {
+    lines.push(`- Attendance: ${att.sessions_present}/${att.sessions_held_so_far} sessions held so far (${Math.round(att.attendance_pct ?? 0)}%).`);
   }
 
   // longitudinal memory (Phase 3) — what the mentor has learned over weeks
