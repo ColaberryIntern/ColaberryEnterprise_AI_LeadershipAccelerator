@@ -121,6 +121,23 @@ describe('brand page categories', () => {
     expect(categorizePagePath('/start', 'ai-flotation')).toBe('enroll');
   });
 
+  it('brands do not leak into each other, in any direction', () => {
+    // With three maps in play the risk is no longer only "Colaberry's rules leak out"
+    // but "any brand's rules leak into any other". A path that is meaningful to one
+    // brand must be meaningless to a brand that does not have that page.
+    expect(categorizePagePath('/pricing', 'ai-flotation')).toBe('pricing');
+    expect(categorizePagePath('/pricing', 'refactored')).toBe('other');
+    expect(categorizePagePath('/pricing', 'cpn')).toBe('other');
+
+    expect(categorizePagePath('/individuals', 'refactored')).toBe('program');
+    expect(categorizePagePath('/individuals', 'ai-flotation')).toBe('other');
+
+    // CPN's homepage carries its intake form, but stays `homepage`. Promoting it to
+    // `enroll` would make every bounce look like a scholarship application; the form's
+    // own form_started / form_submitted events are what carry that intent.
+    expect(categorizePagePath('/', 'cpn')).toBe('homepage');
+  });
+
   it('pricing and enroll both resolve, because the pattern needs the pair', () => {
     // `evaluation_pattern` (strength 45) fires only when one session sees BOTH a
     // pricing page and an enroll page. Asserting each alone would miss the case where
