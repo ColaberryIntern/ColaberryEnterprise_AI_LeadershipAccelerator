@@ -63,7 +63,10 @@ describe('getAgentExplainability', () => {
   it('happy path: a generic (non-authorization) event exposes only known-safe fields, never raw metadata', async () => {
     mockEventFindAll.mockResolvedValue([
       {
-        event_type: 'llm.call', outcome: 'success', model: 'gpt-4o-mini', cost_usd: 0.0042, duration_ms: 850,
+        // cost_usd is a real string here, not a number — matches what a
+        // Postgres DECIMAL column genuinely returns from a plain Sequelize
+        // model query (see the dedicated regression test below for why).
+        event_type: 'llm.call', outcome: 'success', model: 'gpt-4o-mini', cost_usd: '0.0042', duration_ms: 850,
         created_at: new Date('2026-09-01'), metadata: { some_internal_field: 'should not leak' },
       },
     ]);
@@ -74,6 +77,29 @@ describe('getAgentExplainability', () => {
       eventType: 'llm.call', outcome: 'success', model: 'gpt-4o-mini', costUsd: 0.0042, durationMs: 850,
       createdAt: new Date('2026-09-01'), authorization: null,
     });
+  });
+
+  // Real, live-caught bug (2026-09-04): AiEvent.cost_usd is a Postgres
+  // DECIMAL(12,6) column. A plain Sequelize model query (no explicit
+  // ::float cast, unlike trustMetricsService.ts's raw SQL cost queries)
+  // returns it as a STRING at runtime, even though both the model and this
+  // service's own TS types claimed `number`. The frontend's real crash
+  // (`e.costUsd.toFixed is not a function`) only surfaced once a real
+  // production agent (Reese) had a real cost-tracked event — this fixture,
+  // BEFORE the fix, used the wrong idealized `number` type and could never
+  // have caught it. Pins the real string-in-number-out conversion, and that
+  // a genuinely null cost is never fabricated into 0.
+  it('honesty boundary: cost_usd arrives from Sequelize as a real string (Postgres DECIMAL), and is converted to a real number — never left as a string, never fabricated when genuinely null', async () => {
+    mockEventFindAll.mockResolvedValue([
+      { event_type: 'llm.call', outcome: 'success', model: 'gpt-4o-mini', cost_usd: '0.000091', duration_ms: 848, created_at: new Date('2026-09-04'), metadata: null },
+      { event_type: 'llm.call', outcome: 'success', model: 'gpt-4o-mini', cost_usd: null, duration_ms: 200, created_at: new Date('2026-09-04'), metadata: null },
+    ]);
+
+    const result = await getAgentExplainability('agent-uuid-1');
+
+    expect(result!.events[0].costUsd).toBe(0.000091);
+    expect(typeof result!.events[0].costUsd).toBe('number');
+    expect(result!.events[1].costUsd).toBeNull();
   });
 
   it('happy path: an agent.authorization event exposes the real verdict/reason/mode/enforced, and nothing else from metadata', async () => {

@@ -62,6 +62,44 @@ function browserInfo() {
   return { user_agent: navigator.userAgent, device_type: deviceType(), browser: detectBrowser(), os: detectOS() };
 }
 
+/**
+ * The referrer for this page load, captured once.
+ *
+ * The ingest has always read `referrer_url` off the request body and derived
+ * `visitor_sessions.referrer_domain` from it (backend trackingController
+ * `extractReferrerDomain`) — and this file has never sent the field. `grep
+ * referrer frontend/src/utils/tracker.ts` returned zero hits. So the column was
+ * NULL for every session the React app ever created, and the admin "Traffic
+ * Sources" panel, which COALESCEs it to 'direct', reported a single row:
+ * direct, 1,018 visitors, 40,954 sessions. 100% direct is not a finding about
+ * the audience, it is the shape of a field nobody was filling in.
+ *
+ * Captured lazily rather than at module load so importing this file never
+ * touches `document`, and cached because `document.referrer` describes the
+ * original page load and does not change as the SPA navigates — reading it per
+ * flush would return the same value with more opportunities to throw.
+ *
+ * Same-origin referrers are dropped. An internal link is not a traffic source,
+ * and counting one would file every visitor under our own hostname and bury the
+ * external sources this panel exists to show.
+ */
+let referrerResolved = false;
+let cachedReferrer: string | undefined;
+
+function pageReferrer(): string | undefined {
+  if (referrerResolved) return cachedReferrer;
+  referrerResolved = true;
+  try {
+    const raw = document.referrer;
+    if (!raw) return (cachedReferrer = undefined);
+    if (new URL(raw).hostname === location.hostname) return (cachedReferrer = undefined);
+    cachedReferrer = raw;
+  } catch {
+    cachedReferrer = undefined;
+  }
+  return cachedReferrer;
+}
+
 function push(event_type: string, props: Record<string, unknown> = {}) {
   // Snapshot the caller's payload BEFORE the campaign block below mutates
   // `props`, so `event_data` is exactly what the call site passed and nothing
@@ -144,15 +182,43 @@ function flush(useBeacon = false) {
   } catch { /* silent */ }
 
   if (useBeacon) {
-    const payload = JSON.stringify({ fingerprint: fp, ...info, campaign_id, email, lead_id, events });
-    try { navigator.sendBeacon(`${API}/api/t/batch`, payload); } catch { /* silent */ }
+
+    const payload = JSON.stringify({ fingerprint: fp, ...info, referrer_url: pageReferrer(), campaign_id, email, lead_id, events });
+    // SEND IT AS A TYPED BLOB, NOT A BARE STRING.
+    //
+    // `navigator.sendBeacon(url, someString)` transmits with
+    // `Content-Type: text/plain;charset=UTF-8`. Express's `express.json()` only parses
+    // `application/json`, so every beacon body arrived unparsed and the payload inside
+    // it was lost. Silently: the request still returned 2xx, rows were still written,
+    // and only the `event_data` went missing.
+    //
+    // The measured consequence, before this fix: of 1,745 `time_on_page` rows in
+    // production, ZERO carried `event_data.seconds` — including the 141 written after
+    // `event_data` began landing correctly for `scroll`. `time_on_page` is emitted on
+    // `visibilitychange`, which is the one place this file uses a beacon, so it was the
+    // only event type wholly dependent on this path. `extended_time_on_page` (strength
+    // 15) has therefore never fired for any visitor on any surface, since the database
+    // began.
+    //
+    // A Blob carries its own Content-Type, which is what `sendBeacon` reads. This is
+    // safe here specifically because the request is SAME-ORIGIN: `API` is
+    // `REACT_APP_API_URL || ''`, the production image sets that variable empty
+    // (nginx/Dockerfile), and the deployed bundle calls `/api/t/batch` relative. A
+    // cross-origin `application/json` beacon would need a CORS preflight, which
+    // `sendBeacon` cannot perform — the usual reason people settle for `text/plain`.
+    // If `API` is ever pointed at another origin, this line has to be revisited, and
+    // switching to `fetch(..., keepalive: true)` is the answer rather than reverting to
+    // an untyped body that loses the payload again.
+    const blob = new Blob([payload], { type: 'application/json' });
+    try { navigator.sendBeacon(`${API}/api/t/batch`, blob); } catch { /* silent */ }
+
     return;
   }
 
   const url = events.length === 1 ? `${API}/api/t/event` : `${API}/api/t/batch`;
   const body = events.length === 1
-    ? { fingerprint: fp, ...info, campaign_id, email, lead_id, ...events[0] }
-    : { fingerprint: fp, ...info, campaign_id, email, lead_id, events };
+    ? { fingerprint: fp, ...info, referrer_url: pageReferrer(), campaign_id, email, lead_id, ...events[0] }
+    : { fingerprint: fp, ...info, referrer_url: pageReferrer(), campaign_id, email, lead_id, events };
 
   fetch(url, {
     method: 'POST',

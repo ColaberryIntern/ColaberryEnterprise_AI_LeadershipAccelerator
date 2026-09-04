@@ -83,6 +83,12 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/orchestration', label: 'Orchestration', icon: 'flow-chart' },
     { path: '/admin/cape-settings', label: 'Architecture Skills', icon: 'radar-line' },
     { path: '/admin/feed-control-governance', label: 'Feed Control Governance', icon: 'shield-star-line' },
+    // Cert Prep MUST stay in this group: the backend's mgmtSectionGate maps
+    // /api/admin/cert-prep to 'program', and a nav entry in any other group
+    // would give sectionForPath() a different answer than the API's gate — the
+    // link would render for an identity the API then 403s, or vanish for one it
+    // would have served.
+    { path: '/admin/cert-prep', label: 'Cert Prep', icon: 'award-line' },
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
     { path: '/admin/brain', label: 'Enterprise Intelligence', icon: 'brain-line' },
     { path: '/admin/projects', label: 'Projects', icon: 'rocket-2-line' },

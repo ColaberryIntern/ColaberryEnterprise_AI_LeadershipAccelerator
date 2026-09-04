@@ -393,6 +393,20 @@
       "disposition": "human_approved",
       "rule": "authored"
     },
+    "CaseStudyIdentitySection.heroImageUrl": {
+      "authoring": "admin artifacts panel — the record CHOOSES its cover",
+      "sourcePriority": "human choice > HERO_IMAGE_PRIORITY default",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "card media",
+      "detailHome": "the page cover",
+      "publicBehaviour": "honoured by resolveHeroImage ONLY when it matches an already-approved, publicly viewable artifact — naming a URL cannot publish an image the artifact gate never saw",
+      "emptyBehaviour": "the type priority decides: screenshot, then architecture, then photo",
+      "privacy": "public",
+      "test": "caseStudyPhotoAndDiagram.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyIdentitySection.organizationDisplayName": {
       "authoring": "admin narrative panel",
       "sourcePriority": "human override > repo sync",

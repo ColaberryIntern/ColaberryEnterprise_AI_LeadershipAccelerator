@@ -241,22 +241,54 @@ export async function startSession(
     .map((k) => ({ question_key: k, revision: latestByKey.get(k)! }));
 
   const minutes = defaults.minutes;
-  const session = await CertSession.create({
-    enrollment_id: input.enrollmentId,
-    track_id: blueprint.track.track_id,
-    mode: input.mode,
-    form_version: `${blueprint.track.blueprint_version}:${input.mode}:${served.length}`,
-    blueprint_version: blueprint.track.blueprint_version,
-    scoring_policy_version: SCORING_POLICY_VERSION,
-    question_keys: served,
-    status: 'in_progress',
-    time_limit_seconds: minutes ? minutes * 60 : null,
-    started_at: now,
-    expires_at: minutes ? new Date(now.getTime() + minutes * 60_000) : null,
-    idempotency_key: input.idempotencyKey ?? null,
-  });
+  try {
+    const session = await CertSession.create({
+      enrollment_id: input.enrollmentId,
+      track_id: blueprint.track.track_id,
+      mode: input.mode,
+      form_version: `${blueprint.track.blueprint_version}:${input.mode}:${served.length}`,
+      blueprint_version: blueprint.track.blueprint_version,
+      scoring_policy_version: SCORING_POLICY_VERSION,
+      question_keys: served,
+      status: 'in_progress',
+      time_limit_seconds: minutes ? minutes * 60 : null,
+      started_at: now,
+      expires_at: minutes ? new Date(now.getTime() + minutes * 60_000) : null,
+      idempotency_key: input.idempotencyKey ?? null,
+    });
 
-  return viewSession(session, now);
+    return viewSession(session, now);
+  } catch (err: any) {
+    /**
+     * The look-up above is a check-then-act, and two starts with the same key can
+     * both pass it before either inserts. `idx_cert_sessions_idempotency` then
+     * refuses the second write — which is the constraint doing exactly its job.
+     *
+     * What must NOT happen is that refusal reaching the student as a 500. It was,
+     * and only driving the real UI found it: React's dev-mode double effect fires
+     * the start twice with one key, and so does a double-click or a retried
+     * request in production. The row the loser wanted already exists, so the
+     * correct answer is that row, not an error.
+     *
+     * The constraint is therefore the coordination point rather than a failure
+     * mode: on conflict, re-read and return the winner's session.
+     */
+    const isUniqueViolation =
+      err?.name === 'SequelizeUniqueConstraintError' ||
+      err?.original?.code === '23505' ||
+      err?.parent?.code === '23505';
+
+    if (isUniqueViolation && input.idempotencyKey) {
+      const winner = await CertSession.findOne({ where: { idempotency_key: input.idempotencyKey } });
+      if (winner) {
+        if (winner.enrollment_id !== input.enrollmentId) {
+          throw new CertSessionError('Session not found', 404, 'CERT_SESSION_NOT_FOUND');
+        }
+        return viewSession(winner, now);
+      }
+    }
+    throw err;
+  }
 }
 
 // ── read / resume ────────────────────────────────────────────────────────────

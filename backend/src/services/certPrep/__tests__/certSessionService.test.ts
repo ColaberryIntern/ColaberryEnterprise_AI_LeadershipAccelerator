@@ -171,6 +171,71 @@ describe('startSession — idempotency', () => {
     await expect(startSession({ enrollmentId: 'e1', mode: 'mock', idempotencyKey: 'k' }, { now: NOW }))
       .rejects.toMatchObject({ status: 404, code: 'CERT_SESSION_NOT_FOUND' });
   });
+
+  /**
+   * The look-up is a check-then-act: two starts carrying the same key can both
+   * miss it and both try to insert. Found by driving the real UI, where React's
+   * dev-mode double effect fires the start twice with one key and the student
+   * saw "Internal server error" - the unique index had refused the second write
+   * and the refusal reached the page.
+   */
+  describe('when two starts race on the same key', () => {
+    const uniqueViolation = () => Object.assign(new Error('Validation error'), {
+      name: 'SequelizeUniqueConstraintError',
+    });
+
+    it('returns the session that won the race, not a 500', async () => {
+      wireOpen();
+      const winner = { id: 's-winner', enrollment_id: 'e1', question_keys: [], status: 'in_progress' };
+      mSession.findOne
+        .mockResolvedValueOnce(null)      // the check both callers passed
+        .mockResolvedValueOnce(winner);   // the re-read after the constraint fired
+      mSession.create.mockRejectedValueOnce(uniqueViolation());
+
+      const view = await startSession(
+        { enrollmentId: 'e1', mode: 'mock', idempotencyKey: 'start:e1:mock:1' },
+        { now: NOW },
+      );
+      expect(view.session).toBe(winner);
+    });
+
+    it('recognises the raw postgres code too, not only the Sequelize class name', async () => {
+      wireOpen();
+      const winner = { id: 's-winner', enrollment_id: 'e1', question_keys: [], status: 'in_progress' };
+      mSession.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(winner);
+      mSession.create.mockRejectedValueOnce(Object.assign(new Error('duplicate key'), { original: { code: '23505' } }));
+
+      await expect(startSession({ enrollmentId: 'e1', mode: 'mock', idempotencyKey: 'k' }, { now: NOW }))
+        .resolves.toMatchObject({ session: winner });
+    });
+
+    it('still refuses to hand over a session belonging to someone else on the re-read', async () => {
+      wireOpen();
+      mSession.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 's-other', enrollment_id: 'e2', question_keys: [] });
+      mSession.create.mockRejectedValueOnce(uniqueViolation());
+
+      await expect(startSession({ enrollmentId: 'e1', mode: 'mock', idempotencyKey: 'k' }, { now: NOW }))
+        .rejects.toMatchObject({ status: 404, code: 'CERT_SESSION_NOT_FOUND' });
+    });
+
+    it('does NOT swallow an unrelated write failure', async () => {
+      wireOpen();
+      mSession.findOne.mockResolvedValueOnce(null);
+      mSession.create.mockRejectedValueOnce(new Error('connection terminated'));
+
+      await expect(startSession({ enrollmentId: 'e1', mode: 'mock', idempotencyKey: 'k' }, { now: NOW }))
+        .rejects.toThrow('connection terminated');
+    });
+
+    it('a conflict with NO key given is rethrown - there is nothing to re-read', async () => {
+      wireOpen();
+      mSession.create.mockRejectedValueOnce(uniqueViolation());
+      await expect(startSession({ enrollmentId: 'e1', mode: 'mock' }, { now: NOW }))
+        .rejects.toThrow('Validation error');
+    });
+  });
 });
 
 describe('ownership', () => {

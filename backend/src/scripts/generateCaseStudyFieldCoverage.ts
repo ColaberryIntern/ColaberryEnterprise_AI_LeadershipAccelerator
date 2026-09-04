@@ -116,6 +116,16 @@ const AUTHORED: Record<string, Entry> = {
     disposition: 'human_approved', detailHome: 'ledger "Elapsed" + badge',
     emptyBehaviour: 'cell reads "not recorded"',
   }),
+  'CaseStudyIdentitySection.heroImageUrl': D({
+    disposition: 'human_approved', aiMayInfer: false, approvalRequired: true,
+    authoring: 'admin artifacts panel — the record CHOOSES its cover',
+    sourcePriority: 'human choice > HERO_IMAGE_PRIORITY default',
+    indexHome: 'card media', detailHome: 'the page cover',
+    publicBehaviour: 'honoured by resolveHeroImage ONLY when it matches an already-approved, '
+      + 'publicly viewable artifact — naming a URL cannot publish an image the artifact gate never saw',
+    emptyBehaviour: 'the type priority decides: screenshot, then architecture, then photo',
+    test: 'caseStudyPhotoAndDiagram.test.ts',
+  }),
   'CaseStudyIdentitySection.productionStatus': D({
     disposition: 'human_approved', indexHome: 'card status', detailHome: 'ledger "In production"',
     emptyBehaviour: 'cell empty; outcome check fails',
