@@ -62,6 +62,31 @@ export interface ReflectionCompletionValue {
   lastReadiness: number | null;
 }
 
+export interface CompetencyEvidenceValue {
+  domains: Array<{ domainId: string; domainName: string; confidence: number; evidenceCount: number }>;
+}
+
+export interface ProjectProgressValue {
+  name: string | null;
+  stage: string | null;
+  requirementsCompletionPct: number | null;
+  repoConnected: boolean;
+  totalStories: number;
+  /** StudentTask.verified_at IS NOT NULL — platform-confirmed completion,
+   * distinct from the student's own self-reported status. */
+  verifiedStories: number;
+}
+
+export interface CertReadinessValue {
+  overallState: 'not_measured' | 'building' | 'approaching' | 'sustained';
+  overallScaled: number | null;
+  knowledgeScaled: number | null;
+  evidenceCoveragePct: number | null;
+  /** false = a coverage estimate, not an exam-weighted one — must be
+   * captioned honestly by any caller, per the model's own header comment. */
+  weightsAvailable: boolean;
+}
+
 /**
  * Capability 2's own field list, in the mission's stated order. Slice 1
  * (2026-09-04) implements identity/attendance/timelineProgress/
@@ -79,6 +104,9 @@ export interface StudentSuccessSnapshot {
   timelineProgress: SnapshotField<TimelineProgressValue>;
   assessmentTrend: SnapshotField<AssessmentTrendValue>;
   reflectionCompletion: SnapshotField<ReflectionCompletionValue>;
+  competencyEvidence: SnapshotField<CompetencyEvidenceValue>;
+  projectProgress: SnapshotField<ProjectProgressValue>;
+  certReadiness: SnapshotField<CertReadinessValue>;
 }
 
 /** A field with no real backing source yet — honest, never a guess. */
