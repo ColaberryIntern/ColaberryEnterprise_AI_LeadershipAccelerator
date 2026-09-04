@@ -89,6 +89,31 @@ describe('buildFlotationCallPrompt', () => {
     expect(buildFlotationCallPrompt(facts)).toEqual(buildFlotationCallPrompt({ ...facts }));
   });
 
+  describe('how it ends', () => {
+    const prompt = buildFlotationCallPrompt(facts);
+
+    it('says the project is being set up', () => {
+      expect(prompt).toMatch(/their project is being set up now/);
+    });
+
+    it('promises a person will email, not an automated confirmation', () => {
+      // The distinction the whole delivery standard turns on. Nothing automated sends
+      // that email yet, so the agent must describe a human keeping a commitment - an
+      // unanswered lead is then a person failing to reply, not software claiming a
+      // success it never achieved.
+      expect(prompt).toMatch(/someone from AI Flotation will email them/);
+      expect(prompt).toMatch(/Do not say an automated message or confirmation is coming/);
+    });
+
+    it('refuses to give a date or a number of days', () => {
+      expect(prompt).toMatch(/Do not give a date or a number of days/);
+    });
+
+    it('still confirms the email by spelling it back', () => {
+      expect(prompt).toMatch(/spelling it back so you have it right/);
+    });
+  });
+
   it('states the goal as understanding, not selling', () => {
     const prompt = buildFlotationCallPrompt(facts);
     expect(prompt).toMatch(/You are not selling/);
