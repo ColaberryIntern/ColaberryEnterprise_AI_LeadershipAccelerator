@@ -211,6 +211,33 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   // Points-earned FX: displayTotal counts UP to the real total; `fx` drives the
   // "+N" burst + a brief scale-pulse on the HUD when points land.
   const [displayTotal, setDisplayTotal] = useState(0);
+  /**
+   * The app bar is sticky at top:0 and its height is content-driven, so any
+   * sticky element below it has to know how tall it is or it parks underneath.
+   * Every page's right-hand rail was doing exactly that: measured at 1600x950,
+   * the bar's bottom edge sat at 110px while the rail stuck at 20px, hiding its
+   * top 90px — the "Your builds" and "Where you are" headings included.
+   *
+   * Measuring beats hardcoding here because the bar is not one height: it
+   * changes with the condensed slot, and shrinks its padding on mobile. The
+   * observed height is published as --te-top-h on the shell, and the shared
+   * rail offset is derived from it, so one measurement keeps every page right.
+   */
+  const topBarRef = useRef<HTMLElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const bar = topBarRef.current;
+    const shell = shellRef.current;
+    if (!bar || !shell) return;
+    const apply = () => shell.style.setProperty('--te-top-h', `${Math.round(bar.getBoundingClientRect().height)}px`);
+    apply();
+    if (typeof ResizeObserver === 'undefined') return;   // jsdom, older browsers
+    const ro = new ResizeObserver(apply);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
+
   const displayRef = useRef(0);
   const [fx, setFx] = useState<{ delta: number; key: number } | null>(null);
   const fxKeyRef = useRef(0);
@@ -443,12 +470,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
   const showFind = railView === 'find' && !contactsCollapsed;
 
   return (
-    <div className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}`}>
+    <div ref={shellRef} className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}`}>
       {/* Points celebration — confetti splash scaled by the award, fires on the timeline
           (and anywhere in the shell) when points land. */}
       <ConfettiCelebration />
       {/* ── topbar ── */}
-      <header className="te-top">
+      <header className="te-top" ref={topBarRef}>
         <button type="button" className="te-navtoggle" onClick={() => setNavCollapsed((c) => !c)}
           title={navCollapsed ? 'Expand menu' : 'Collapse menu'} aria-label="Toggle menu" aria-expanded={!navCollapsed}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>

@@ -212,3 +212,25 @@
   margin-top: 6px; font-size: 9.5px; font-weight: 800; letter-spacing: .05em;
   text-transform: uppercase; color: #FB2832;
 }
+
+/* ── sticky rail ─────────────────────────────────────────────────────────────
+   The column geometry (width, gap, sticky offset, collapse breakpoint) comes
+   from the shell's shared `.te-grid`/`.te-side` in TodayShell.css; only the
+   card's contents are styled here, so this page cannot drift from Projects,
+   Today or Cert Prep.
+
+   Deliberately NOT scoped under .points-root like the rest of this file: the
+   rail renders in the shell's aside, outside the drill-down's root element, so
+   a .points-root prefix would never match. The pts-rail- prefix carries the
+   scoping instead. */
+.pts-rail { padding: 18px; }
+.pts-rail-h { font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted, #6B6B6B); margin: 0 0 12px; }
+.pts-rail-total { font-size: 34px; font-weight: 800; line-height: 1; color: var(--strong, #1A1A1A);
+  font-variant-numeric: tabular-nums; }
+.pts-rail-total span { font-size: 15px; font-weight: 700; color: var(--muted, #6B6B6B); margin-left: 6px; }
+.pts-rail-level { margin-top: 8px; font-weight: 700; color: var(--strong, #1A1A1A); }
+.pts-rail-bar { height: 8px; border-radius: 999px; background: var(--border, #E7E6E3); overflow: hidden; margin: 12px 0 8px; }
+.pts-rail-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--leaf, #2F7A46); }
+.pts-rail-next { margin: 0; font-size: 13px; color: var(--muted, #6B6B6B); }
+.pts-rail-note { margin: 0; font-size: 13px; color: var(--muted, #6B6B6B); }

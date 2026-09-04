@@ -137,28 +137,23 @@
   min-width: 0;
 }
 
-/* TWO COLUMNS FROM 64rem, AND THIS IS THE PART THAT ACTUALLY SAVES HEIGHT.
-   Moving a block from the masthead to the band below it does not, by itself,
-   bring the first sentence of the story any closer - the same content is still
-   between the reader and it. What shortens the page is putting the scannable
-   half (counts, facts) beside the readable half (the figure card with its
-   sample, methodology and limitations) instead of above it.
-   5fr/7fr rather than 1fr/1fr because the two halves are not the same weight:
-   the facts are short label-value pairs and the figure card carries a paragraph
-   of methodology. Both tracks get a zero floor so a long programme name or an
-   unbroken URL cannot widen a column and push the page sideways. Below 64rem it
-   is one column and the order is source order, which is already the order a
-   reader wants: counts, facts, figures. */
-@media (min-width: 64rem) {
-  .cbv2-story__context-body {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    align-items: start;
-    column-gap: var(--space-10);
-  }
-  /* The rail spans both tracks: it is a single horizontal line of chips and
-     confining it to the narrow column would wrap it into three rows. */
-  .cbv2-story__context-body .cbv2-story__indicators { grid-column: 1 / -1; }
-}
+/* THIS BAND WAS TWO COLUMNS AND IT IS ONE AGAIN. THE SPLIT ASSUMED ONE FIGURE.
+   The previous rule put the scannable half (counts, facts) in a 5fr track beside
+   the readable half (the figure card) in a 7fr track, to save height. That works
+   when there is exactly ONE headline figure. It does not survive two.
+   With two figures the 7fr track is about 700px at a 1440 viewport, so the
+   metrics grid fits two 20rem columns and every card becomes a narrow tower -
+   methodology prose wrapping at roughly forty characters, six labelled rows
+   stacked. Meanwhile the left track holds six short label-value pairs, runs out
+   after three rows, and leaves a column-height void beside them. The band was
+   measured on this page with two figures: the facts ended at "Learner /
+   September 4, 2026" and nothing followed for the height of a screen.
+   So the trade is refused rather than tuned. One column, three full-width rows,
+   in the order a reader already wants: counts, facts, figures. The facts row
+   then lays out six-across on one line instead of two-across on three, which
+   gives back most of the height the split was buying, and the figure cards get
+   the full measure - which is what makes the methodology paragraph readable.
+   The rail needs no `grid-column` override now: every row spans the band. */
 
 /* ------------------------------------------------------------------ tone --- */
 
@@ -201,8 +196,12 @@
   list-style: none;
 }
 
+/* 24rem, not 20rem. A metric card is not a stat tile: it carries a baseline, a
+   unit, a sample and a paragraph of methodology, so its floor has to be a width
+   that paragraph can be read at. At 20rem three cards fit a full-width band and
+   the methodology wraps to a column of about forty characters. */
 @media (min-width: 48rem) {
-  .cbv2-story__metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+  .cbv2-story__metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); }
 }
 
 .cbv2-story__metric {
@@ -218,6 +217,26 @@
 }
 
 .cbv2-story__metric-context { display: grid; gap: var(--space-2); margin: 0; }
+
+/* THE LABEL GOES BESIDE ITS VALUE, NOT ABOVE IT.
+   Four rows - baseline, unit, sample, methodology - each printing a small-caps
+   label on its own line above its value, is eight lines of card height to carry
+   four facts, and three of those values are two or three words long. Putting the
+   label in a fixed left track halves the block and lines the values up, so the
+   card can be read down a single edge.
+   `8rem` fits the longest of these labels ("methodology") without wrapping, and
+   the value track keeps a zero floor so an unbroken sample path cannot widen the
+   card. Below 34rem - a phone, or a card that ended up in a narrow track - it
+   stays stacked, because a two-column definition list at that width gives the
+   value about twelve characters. */
+@media (min-width: 34rem) {
+  .cbv2-story__metric-context > div {
+    display: grid;
+    grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+    column-gap: var(--space-4);
+    align-items: baseline;
+  }
+}
 .cbv2-story__limits {
   margin: var(--space-2) 0 0;
   padding-left: var(--space-5);

@@ -233,3 +233,35 @@
   .cp-root .cp-ev-list li { grid-template-columns: 34px 1fr; }
   .cp-root .cp-ev-state { grid-column: 1 / -1; }
 }
+
+/* ── the sticky progress rail ────────────────────────────────────────────────
+   Lives in the shell's shared `.te-side` slot (TodayShell.css), so the column
+   width, gap, sticky offset and collapse breakpoint are the platform's rather
+   than this page's. Only the contents are styled here.
+
+   `.cp-col` is the working column: it must be allowed to shrink, because a grid
+   item defaults to `min-width:auto` and would otherwise push the page sideways
+   the moment a wide table or a long question appeared in it. */
+.cp-root .cp-col { min-width: 0; }
+
+.cp-root .cp-rail-card { padding: 18px 18px 16px; margin-bottom: 16px; }
+.cp-root .cp-rail-h { font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--cp-faint); margin: 0 0 12px; }
+
+.cp-root .cp-rail-row { display: grid; grid-template-columns: 1fr auto; align-items: baseline;
+  gap: 4px 10px; padding: 7px 0; border-bottom: 1px solid var(--cp-line); }
+.cp-root .cp-rail-row:last-of-type { border-bottom: none; }
+.cp-root .cp-rail-label { font-size: 13px; color: var(--cp-mut); }
+.cp-root .cp-rail-value { font-size: 17px; font-weight: 800; color: var(--cp-ink); font-variant-numeric: tabular-nums; }
+.cp-root .cp-rail-hint { grid-column: 1 / -1; font-size: 12px; color: var(--cp-faint); line-height: 1.4; }
+.cp-root .cp-rail-muted { color: var(--cp-faint); font-weight: 600; font-size: 15px; }
+.cp-root .cp-rail-note { font-size: 12px; color: var(--cp-faint); line-height: 1.5; margin: 10px 0 0; }
+.cp-root .cp-rail-cta { width: 100%; margin-top: 14px; }
+
+.cp-root .cp-rail-domains { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.cp-root .cp-rail-domains li { display: grid; grid-template-columns: 26px 1fr 40px; align-items: center; gap: 8px; }
+.cp-root .cp-rail-dk { font-size: 12px; font-weight: 800; color: var(--cp-faint); }
+.cp-root .cp-rail-dbar { height: 6px; border-radius: 999px; background: var(--cp-line); overflow: hidden; }
+.cp-root .cp-rail-dbar > span { display: block; height: 100%; border-radius: 999px; background: var(--cp-good); }
+.cp-root .cp-rail-dpct { font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums;
+  color: var(--cp-ink); }

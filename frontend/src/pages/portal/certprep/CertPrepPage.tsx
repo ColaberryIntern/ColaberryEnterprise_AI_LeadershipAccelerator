@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PortalShell from '../today/PortalShell';
+import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import CertReadinessHero from './CertReadinessHero';
+import CertProgressRail from './CertProgressRail';
 import CertDomainMap from './CertDomainMap';
 import CertEvidencePanel from './CertEvidencePanel';
 import CertSessionRunner from './CertSessionRunner';
@@ -30,10 +32,16 @@ import './certPrep.css';
  * renders a decision made elsewhere.
  */
 
-type TabKey = 'overview' | 'domains' | 'practice' | 'mocks' | 'evidence';
+/**
+ * There is no 'overview' tab any more. The overview was a compact domain map
+ * behind a tab, which meant a student had to leave whatever they were doing to
+ * check whether it had moved. It now lives in the sticky rail on the right,
+ * where it stays in view while the working area scrolls — the same shape every
+ * other main portal page uses.
+ */
+type TabKey = 'domains' | 'practice' | 'mocks' | 'evidence';
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
   { key: 'domains', label: 'Domain Map' },
   { key: 'practice', label: 'Practice' },
   { key: 'mocks', label: 'Mock Exams' },
@@ -48,7 +56,7 @@ const CertPrepPage: React.FC = () => {
   const [readiness, setReadiness] = useState<CertReadiness | null>(null);
   const [track, setTrack] = useState<CertTrackInfo | null>(null);
   const [domains, setDomains] = useState<CertDomain[]>([]);
-  const [tab, setTab] = useState<TabKey>('overview');
+  const [tab, setTab] = useState<TabKey>('domains');
   const [errorText, setErrorText] = useState<string>('');
   const [runnerMode, setRunnerMode] = useState<'diagnostic' | 'practice' | 'mock' | null>(null);
   const [runnerDomains, setRunnerDomains] = useState<string[] | undefined>(undefined);
@@ -189,8 +197,42 @@ const CertPrepPage: React.FC = () => {
   }
 
   // ── ready ──────────────────────────────────────────────────────────────────
+  const railState = readiness?.overall_state ?? 'not_measured';
+  /**
+   * The condensed bar obeys the SAME honesty rule as the hero and the rail: a
+   * readiness the server calls `not_measured` reads "Not measured", never the
+   * number underneath it. The server does compute a scaled value before it is
+   * meaningful, and printing it here would have contradicted the two other
+   * places on the same screen that correctly refuse to.
+   */
+  const condensedSub = railState !== 'not_measured' && readiness?.overall_scaled != null
+    ? `Readiness ${readiness.overall_scaled} · ${readiness.answered_total} answered`
+    : `Not measured · ${readiness?.answered_total ?? 0} answered`;
+
   return (
-    <PortalShell>
+    <PortalShell
+      /* The same header slot every other main page fills: once you scroll past
+         the hero, the next action condenses into the top bar so it is reachable
+         without scrolling back. `CondensedHeaderCard` is the shared shape, so
+         this reads identically to Projects, Classroom and Today. */
+      condensedSlot={(
+        <CondensedHeaderCard
+          label="Cert Prep"
+          title={nextAction.label}
+          sub={condensedSub}
+          tone={railState === 'sustained' ? 'leaf' : railState === 'approaching' ? 'berry' : 'amber'}
+          action={(
+            <button
+              type="button"
+              className="cp-btn cp-btn--primary"
+              onClick={() => startRun(nextAction.mode, nextAction.domainIds)}
+            >
+              Start
+            </button>
+          )}
+        />
+      )}
+    >
       {/* The h1 is the PAGE ("Cert Prep"), not the track — the destination is Cert
           Prep and the certification is what it prepares for, so the track name
           reads better in the subtitle.
@@ -214,6 +256,8 @@ const CertPrepPage: React.FC = () => {
 
       <div className="cp-root">
         {runnerMode ? (
+          /* A sitting takes the full width on purpose: the rail is a tracker for
+             between runs, and a countdown next to a question is a distraction. */
           <CertSessionRunner
             mode={runnerMode}
             domainIds={runnerDomains}
@@ -221,7 +265,8 @@ const CertPrepPage: React.FC = () => {
             onFinished={onRunFinished}
           />
         ) : (
-          <>
+          <div className="te-grid">
+            <div className="cp-col">
             <CertReadinessHero
               readiness={readiness}
               track={track}
@@ -254,11 +299,10 @@ const CertPrepPage: React.FC = () => {
               aria-labelledby={`cp-tab-${tab}`}
               tabIndex={0}
             >
-              {(tab === 'overview' || tab === 'domains') && (
+              {tab === 'domains' && (
                 <CertDomainMap
                   domains={domains}
                   readiness={readiness}
-                  compact={tab === 'overview'}
                   onDrill={(domainId) => startRun('practice', [domainId])}
                 />
               )}
@@ -298,7 +342,22 @@ const CertPrepPage: React.FC = () => {
 
               {tab === 'evidence' && <CertEvidencePanel />}
             </div>
-          </>
+            </div>
+
+            {/* The shell's shared sticky rail — right of the working column,
+                left of the contacts list, the same slot Projects and Today use.
+                It carries what a student watches while they work, so the numbers
+                stay on screen instead of living behind a tab. */}
+            <aside className="te-side">
+              <CertProgressRail
+                readiness={readiness}
+                domains={domains}
+                track={track}
+                nextActionLabel={nextAction.label}
+                onNextAction={() => startRun(nextAction.mode, nextAction.domainIds)}
+              />
+            </aside>
+          </div>
         )}
       </div>
     </PortalShell>
