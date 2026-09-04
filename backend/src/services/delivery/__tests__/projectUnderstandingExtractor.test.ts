@@ -92,10 +92,12 @@ describe('extractUnderstanding', () => {
 
     const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
 
+    // It was the only item, so refusing it leaves nothing and the document fails. The
+    // point being asserted is that `pm_confirmed` never survives a transcript run.
     expect(result).toMatchObject({ ok: false, error_class: 'ContractViolation' });
     if (result.ok) return;
-    expect(result.error).toContain('could not have');
     expect(result.error).toContain('pm_confirmed');
+    expect(result.error).toContain('not available to a voice_transcript extraction');
   });
 
   it('passes the conversation and the known facts to the model', async () => {
@@ -158,5 +160,84 @@ describe('the prompt', () => {
 
   it('omits the preamble entirely when nothing is known about them', () => {
     expect(buildExtractionUserPrompt('just the call')).not.toContain('WHAT WE ALREADY KNEW');
+  });
+});
+
+/**
+ * Model drift on an enum key is normal, and it cost a real extraction in production: the
+ * first live run against a 245-second call failed entirely because ONE item carried an
+ * invented dimension, while a rerun of the same transcript produced eleven valid ones.
+ * Losing a customer's whole interview to that is a worse failure than dropping the item.
+ */
+describe('one bad item does not discard the call', () => {
+  const good = validPayload.items[0];
+  const bad = { ...good, dimension: 'budget' };
+
+  it('keeps the valid items and reports the refused one', async () => {
+    mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [good, bad, good] }));
+
+    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.understanding.items).toHaveLength(2);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0].index).toBe(1);
+  });
+
+  it('names the value that arrived, not only the ones expected', async () => {
+    mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [good, bad] }));
+
+    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rejected[0].reason).toContain('budget');
+  });
+
+  it('keeps the raw refused item so nothing vanishes silently', async () => {
+    mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [good, bad] }));
+
+    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rejected[0].raw).toEqual(bad);
+  });
+
+  it('refuses an item that breaks the fact firewall, and keeps the rest', async () => {
+    const lying = { ...good, provenance: 'ai_inferred', classification: 'FACT', source_quote: undefined };
+    mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [good, lying] }));
+
+    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.understanding.items).toHaveLength(1);
+    expect(result.rejected[0].reason).toContain('cannot support one');
+  });
+
+  it('reports a clean run as clean', async () => {
+    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rejected).toEqual([]);
+  });
+
+  it('still fails when EVERY item is refused — an understanding of nothing is not one', async () => {
+    mockChatJson.mockResolvedValue(ok({ ...validPayload, items: [bad, bad] }));
+
+    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+
+    expect(result).toMatchObject({ ok: false, error_class: 'ContractViolation' });
+    if (result.ok) return;
+    expect(result.error).toContain('every item was refused');
+  });
+
+  it('still fails when the document itself has no title', async () => {
+    mockChatJson.mockResolvedValue(ok({ ...validPayload, title: '  ', items: [good] }));
+
+    const result = await extractUnderstanding({ conversation: 'a real call', source: 'voice_transcript' });
+    expect(result).toMatchObject({ ok: false, error_class: 'ContractViolation' });
   });
 });
