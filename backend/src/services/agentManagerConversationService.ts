@@ -3,14 +3,24 @@ import AgentManagerConversation from '../models/AgentManagerConversation';
 import AgentManagerMessage from '../models/AgentManagerMessage';
 import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { buildAgentManagerConversationSystemPrompt } from './agentBlueprint/agentManagerConversationPrompt';
+import {
+  applyConfirmedReliabilityChange, buildConfirmationCardText, detectConfirmationReply, detectReliabilityIntent, toPendingConfirmation,
+} from './managerReliabilityIntentService';
 
 // AI Workforce Management, Checkpoint C — Direct Agent Communication, first
 // slice. Generic by construction — works off AiAgent.id, not hardcoded to
 // any one agent. Purely conversational: sending a message never creates a
 // ManagerDirective, approves an inbox item, or changes anything beyond the
-// conversation history itself — intent classification and confirmation
-// cards for durable-state-creating requests are real, deliberately deferred
-// scope (see AgentManagerMessage.ts's own header comment).
+// conversation history itself — full intent classification and confirmation
+// cards for EVERY durable-state-creating request remain real, deliberately
+// deferred scope (see AgentManagerMessage.ts's own header comment).
+//
+// Reese Agentic AI Employee mission, Checkpoint B (2026-09-04) narrows that
+// deferral by exactly one real slice: reliability-declaration intent
+// (QUARANTINE_METRIC/RESTORE_METRIC) is now detected and gated behind a real
+// confirmation turn — see managerReliabilityIntentService.ts. Every other
+// intent (ASK/INSTRUCT/CORRECT/APPROVE/COACH/SCHEDULE/...) is still purely
+// conversational, unchanged.
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const HISTORY_LIMIT = 20;
@@ -74,6 +84,44 @@ export async function getConversationHistory(agentId: string, participantEmail: 
 }
 
 /**
+ * Returns the reply text to send AND persist if this message was handled by
+ * the reliability-confirmation flow, or `null` if the normal LLM reply path
+ * should run instead. Never mutates durable reliability state on the SAME
+ * turn a declaration is first detected — that only happens on a real,
+ * separate confirming reply, matching the mission's "no casual sentence
+ * silently mutates durable governance state" requirement.
+ */
+async function handlePendingOrNewReliabilityIntent(
+  conversation: AgentManagerConversation,
+  messageText: string,
+  participantEmail: string,
+): Promise<string | null> {
+  const pending = conversation.pending_reliability_confirmation;
+
+  if (pending) {
+    const verdict = detectConfirmationReply(messageText);
+    if (verdict === 'confirm') {
+      await conversation.update({ pending_reliability_confirmation: null });
+      const { summary } = await applyConfirmedReliabilityChange(pending, participantEmail);
+      return summary;
+    }
+    // 'cancel' or 'ambiguous' both clear the pending state — a durable
+    // governance change never lingers waiting for a confirmation that may
+    // never come; the manager can always say it again.
+    await conversation.update({ pending_reliability_confirmation: null });
+    return `Okay, no change made — ${pending.sourceSystem} stays as it was. Let me know if you did want to change that.`;
+  }
+
+  const detected = detectReliabilityIntent(messageText);
+  if (detected) {
+    await conversation.update({ pending_reliability_confirmation: toPendingConfirmation(detected) });
+    return buildConfirmationCardText(detected);
+  }
+
+  return null;
+}
+
+/**
  * Sends a manager's message and returns the agent's real reply. Persists
  * both turns. Real per-call cost is tracked against this agent's real id
  * (getInstrumentedOpenAI's agent_id tag) — same fix this session already
@@ -92,6 +140,21 @@ export async function sendManagerMessage(
   const conversation = await getOrCreateConversation(agentId, participantEmail, participantOrgMemberId);
 
   await AgentManagerMessage.create({ conversation_id: conversation.id, role: 'manager', content: messageText });
+
+  // Reese Agentic AI Employee mission, Checkpoint B — reliability confirmation
+  // workflow. Checked BEFORE the normal LLM reply path, and returns early on
+  // a match: a pending confirmation or a freshly detected declaration is
+  // handled deterministically, never left to an LLM to phrase or forget.
+  const reliabilityReply = await handlePendingOrNewReliabilityIntent(conversation, messageText, participantEmail);
+  if (reliabilityReply !== null) {
+    await AgentManagerMessage.create({ conversation_id: conversation.id, role: 'agent', content: reliabilityReply });
+    const rows = await AgentManagerMessage.findAll({
+      where: { conversation_id: conversation.id },
+      order: [['created_at', 'ASC']],
+      limit: HISTORY_LIMIT,
+    });
+    return { conversationId: conversation.id, agentId, messages: rows.map(toMessageView) };
+  }
 
   const recent = await AgentManagerMessage.findAll({
     where: { conversation_id: conversation.id },

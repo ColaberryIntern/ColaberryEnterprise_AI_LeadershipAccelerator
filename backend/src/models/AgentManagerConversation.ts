@@ -20,6 +20,22 @@ import { sequelize } from '../config/database';
  * multiple threads. If a real need for multiple named conversations per
  * manager emerges later, that's a new column, not a retrofit onto this one.
  */
+/**
+ * Reese Agentic AI Employee mission, Checkpoint B — the one pending
+ * quarantine/restore proposal a manager's message detected, awaiting their
+ * next reply to confirm or cancel. Never applied to durable reliability
+ * state until confirmed — see managerReliabilityIntentService.ts.
+ */
+export interface PendingReliabilityConfirmation {
+  direction: 'quarantine' | 'restore';
+  sourceSystem: string;
+  metricKey: string;
+  scopeType: 'global' | 'cohort' | 'student' | 'time_range';
+  scopeValue: string | null;
+  reason: string;
+  detectedAt: string;
+}
+
 export interface AgentManagerConversationAttributes {
   id?: string;
   agent_id: string;
@@ -28,6 +44,7 @@ export interface AgentManagerConversationAttributes {
    * — a platform super_admin is never resolved to an org_member by the auth
    * gate. */
   participant_org_member_id?: string | null;
+  pending_reliability_confirmation?: PendingReliabilityConfirmation | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -40,6 +57,7 @@ class AgentManagerConversation
   declare agent_id: string;
   declare participant_email: string;
   declare participant_org_member_id: string | null;
+  declare pending_reliability_confirmation: PendingReliabilityConfirmation | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -50,6 +68,7 @@ AgentManagerConversation.init(
     agent_id: { type: DataTypes.UUID, allowNull: false, references: { model: 'ai_agents', key: 'id' } },
     participant_email: { type: DataTypes.STRING(255), allowNull: false },
     participant_org_member_id: { type: DataTypes.UUID, allowNull: true, references: { model: 'org_members', key: 'id' } },
+    pending_reliability_confirmation: { type: DataTypes.JSONB, allowNull: true },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   },
