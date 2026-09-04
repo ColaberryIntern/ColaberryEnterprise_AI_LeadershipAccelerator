@@ -29,7 +29,8 @@ platform concerns around them, to what already exists.
 | Security / trust evaluation | `services/delivery/deliveryTrustGate.ts` + `modules/delivery/inpact.ts` | REUSE |
 | Release | `services/delivery/releaseGate.ts`, `modules/delivery/releaseChecks.ts` | REUSE |
 | Client acceptance | `services/delivery/clientAcceptance.ts` + `clientAcceptanceService.ts` | REUSE |
-| Requirements | `services/delivery/deliveryContractService.ts` | REUSE |
+| Requirements (delivery contract) | `services/delivery/deliveryContractService.ts` | REUSE |
+| Requirements (project pipeline) | `services/requirementsGenerationService.ts`, `requirementsMaterializeService.ts`, `models/RequirementsMap.ts` | **REUSE AT ACTIVATION** |
 | Architecture decisions | `services/delivery/deliveryDecisionService.ts` | REUSE |
 | UX / design loop | `services/delivery/deliveryDesignLoop.ts` | REUSE |
 | Opportunity mapping | `services/delivery/deliveryOpportunityMap.ts` | REUSE |
@@ -81,3 +82,47 @@ The plan's 21 gates assume more greenfield than exists. Re-scoped:
 
 The honest shape: **this is less construction and more assembly**, with two decisions
 outside implementation and one live defect that should be fixed before any of it.
+
+
+## Correction, 2026-09-04 — the requirements pipeline this map missed
+
+This map originally named only `deliveryContractService.ts` under Requirements. That was
+incomplete in a way that mattered: the platform already runs a **proven idea-to-requirements
+pipeline** behind `/portal/projects`, and it was not listed at all.
+
+```
+requirementsGenerationService   -> AI_ProjectArchitect (professional ~15 min | autonomous ~30 min)
+materializeRequirementsFromDocument(projectId, docText) -> RequirementsMap rows (status 'unmatched')
+createTasksFromRequirements     -> StudentTask
+smartRequirementVerifier        -> verifies each requirement against real repo file paths
+```
+
+### Why AI Flotation still needs its own discovery contract
+
+The two verify different things, on different axes:
+
+| | Verifies | Question it answers |
+|---|---|---|
+| `RequirementsMap` | requirement <-> code | "Is it built?" |
+| `projectUnderstanding` | statement <-> customer | "Did they actually say it?" |
+
+`RequirementsMap` carries `confidence_score`, `verification_status` and `semantic_status`
+but **no provenance** - nothing records who said a thing. Section 16 requires exactly that,
+because the free experience starts with a stranger on a four-minute phone call rather than
+an enrolled learner with a repo. The existing pipeline also assumes what a prospect does not
+have: it is built around `createProjectForEnrollment` / `getProjectByEnrollment` and
+`StudentTask`, and a 15-30 minute external job cannot run inside a call flow.
+
+### The decision (Ali, 2026-09-04)
+
+**Convert into the existing pipeline at activation, not before it.**
+
+The free phase keeps the conversation-based contract, which tracks who said what. At
+payment/activation the CUSTOMER-CONFIRMED understanding renders to a requirements document
+and feeds `materializeRequirementsFromDocument`, so nothing is retyped and the proven
+verifier still runs against the real repo.
+
+This is section 18's "convertible into paid delivery truth without retyping everything",
+with a named target rather than an aspiration. Only `client_confirmed` items should cross
+that boundary - an assumption must not become a governed requirement by passing through a
+checkout.
