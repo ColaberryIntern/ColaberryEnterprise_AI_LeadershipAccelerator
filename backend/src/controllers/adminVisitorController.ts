@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { getCrossBrandVisitors } from '../services/crossBrandVisitorService';
 import {
   listVisitors,
   getVisitorStats,
@@ -39,6 +40,7 @@ export async function handleListVisitors(req: Request, res: Response, next: Next
       limit: limit ? Number(limit) : undefined,
       sort: sort as string | undefined,
       order: order as string | undefined,
+      includeBots: req.query.includeBots === 'true',
     });
 
     res.json(result);
@@ -163,7 +165,22 @@ export async function handleListSessions(req: Request, res: Response, next: Next
     const page = Math.max(Number(req.query.page) || 1, 1);
     const offset = (page - 1) * limit;
 
+    const includeBots = req.query.includeBots === 'true';
+    const { literal, Op } = require('sequelize');
+    const { botExclusionSql, notAutomatedSessionSql } = require('../services/visitorBotDetection');
+    // Unfiltered this lists all 84,416 sessions newest-first, and crawlers never
+    // stop, so the first page was permanently machines.
+    const where = includeBots
+      ? {}
+      : {
+          [Op.and]: [
+            literal(`EXISTS (SELECT 1 FROM "visitors" sv WHERE sv."id" = "VisitorSession"."visitor_id" AND ${botExclusionSql('sv."user_agent"')})`),
+            literal(notAutomatedSessionSql('"VisitorSession"."pageview_count"', '"VisitorSession"."duration_seconds"')),
+          ],
+        };
+
     const { rows, count } = await VisitorSession.findAndCountAll({
+      where,
       order: [['started_at', 'DESC']],
       limit,
       offset,
@@ -193,6 +210,7 @@ export async function handleListSessions(req: Request, res: Response, next: Next
       referrer_domain: s.utm_source || null,
       utm_source: s.utm_source,
       device_type: s.device_type,
+      site_slug: s.site_slug ?? null,
     }));
 
     res.json({ sessions, total: count, page, totalPages: Math.ceil(count / limit) });
@@ -252,6 +270,25 @@ export async function handleGetVisitorIntent(req: Request, res: Response, next: 
 // ---------------------------------------------------------------------------
 // 10. High Intent Visitors              GET /api/admin/visitors/high-intent
 // ---------------------------------------------------------------------------
+
+/**
+ * One row per human who touched more than one brand, ordered by intent.
+ *
+ * The question every other visitor endpoint cannot answer: is the person reading AI
+ * Flotation's pricing page the same one who read Refactored's enterprise page last week.
+ */
+export async function handleGetCrossBrandVisitors(req: Request, res: Response, next: NextFunction) {
+  try {
+    const visitors = await getCrossBrandVisitors({
+      minBrands: req.query.minBrands ? Number(req.query.minBrands) : undefined,
+      days: req.query.days ? Number(req.query.days) : undefined,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+    });
+    res.json({ visitors, count: visitors.length });
+  } catch (err) {
+    next(err);
+  }
+}
 
 export async function handleGetHighIntentVisitors(req: Request, res: Response, next: NextFunction) {
   try {

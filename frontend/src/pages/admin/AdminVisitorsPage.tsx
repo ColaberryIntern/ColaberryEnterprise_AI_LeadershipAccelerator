@@ -352,7 +352,7 @@ function AdminVisitorsPage() {
   const [chatTotal, setChatTotal] = useState(0);
   const [chatPage, setChatPage] = useState(1);
   const [chatTotalPages, setChatTotalPages] = useState(1);
-  const [chatStats, setChatStats] = useState<{ total_conversations: number; active_conversations: number; today_conversations: number; avg_messages: number } | null>(null);
+  const [chatStats, setChatStats] = useState<{ total_conversations: number; active_conversations: number; engaged_conversations?: number; abandoned_conversations?: number; today_conversations: number; avg_messages: number } | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<ChatConversationData | null>(null);
   const [conversationMessages, setConversationMessages] = useState<ChatMessageData2[]>([]);
 
@@ -928,7 +928,7 @@ function AdminVisitorsPage() {
               <tbody>
                 {allVisitors.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center text-muted py-4">
+                    <td colSpan={10} className="text-center text-muted py-4">
                       {hasFilters ? 'No visitors match the current filters.' : 'No visitor data yet.'}
                     </td>
                   </tr>
@@ -1189,10 +1189,23 @@ function AdminVisitorsPage() {
             <StatCard label="Total Conversations" value={chatStats.total_conversations} icon="chat-3-line" tone="primary" />
           </div>
           <div className="col-6 col-lg-3">
-            <StatCard label="Active Now" value={chatStats.active_conversations} icon="chat-smile-2-line" tone="success" />
+            {/* Was "Active Now" reading `status = 'active'` — a column nothing ever
+                changes, so it showed 129 of 129 and implied 129 live chats. Only 7
+                had more than one message. Engaged is the honest headline. */}
+            <StatCard
+              label="Engaged (2+ messages)"
+              value={chatStats.engaged_conversations ?? chatStats.active_conversations}
+              icon="chat-smile-2-line"
+              tone="success"
+            />
           </div>
           <div className="col-6 col-lg-3">
-            <StatCard label="Today" value={chatStats.today_conversations} icon="calendar-line" tone="info" />
+            <StatCard
+              label="Abandoned (no reply)"
+              value={chatStats.abandoned_conversations ?? 0}
+              icon="chat-delete-line"
+              tone="warning"
+            />
           </div>
           <div className="col-6 col-lg-3">
             <StatCard label="Avg Messages" value={chatStats.avg_messages} icon="message-2-line" tone="warning" />

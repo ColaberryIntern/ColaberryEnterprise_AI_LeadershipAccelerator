@@ -1,7 +1,7 @@
 import { Op, literal } from 'sequelize';
 import { BehavioralSignal, IntentScore, Visitor } from '../models';
 import { logAgentExecution } from './governanceService';
-import { botExclusionSql, isBotUserAgent } from './visitorBotDetection';
+import { botExclusionSql, isBotUserAgent, notAutomatedSessionSql } from './visitorBotDetection';
 
 /**
  * Time-decay half-life in days. A signal loses half its weight every 7 days.
@@ -210,6 +210,16 @@ export async function getHighIntentVisitors(
       [Op.and]: [
         literal(
           `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "IntentScore"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+        ),
+        // The user-agent rule alone was not enough here, and this list is where
+        // it mattered most. 42 of 619 intent rows are backed by a crawler that
+        // presents a clean browser string — and because the model rewards volume,
+        // those crawlers score 100 and sit at the TOP of the list, which is the
+        // only part of it anyone reads. A visitor with any session that looks
+        // automated is excluded outright.
+        literal(
+          `NOT EXISTS (SELECT 1 FROM "visitor_sessions" avs WHERE avs."visitor_id" = "IntentScore"."visitor_id" ` +
+            `AND NOT (${notAutomatedSessionSql('avs."pageview_count"', 'avs."duration_seconds"')}))`
         ),
       ],
     },

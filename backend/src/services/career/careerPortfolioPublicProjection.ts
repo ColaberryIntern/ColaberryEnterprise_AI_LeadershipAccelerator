@@ -165,6 +165,16 @@ export interface PublicRecord {
   slug: string;
   title: string;
   published_at: string | null;
+  /**
+   * The case study covering the same project, or null.
+   *
+   * Ali: "The written up should go to the case study as well if it exists." The record's
+   * own address at `/p/:slug` is a retired surface, so a write-up is offered as a LINK
+   * only when there is a case study to send the reader to. Without one it still appears
+   * -- the work was written up and saying so is true -- but as text rather than an
+   * invitation to click into somewhere nobody maintains.
+   */
+  case_study_slug: string | null;
 }
 
 /**
@@ -431,6 +441,9 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
       slug: str(r.slug)!,
       title: recordTitle(r),
       published_at: str(r.published_at),
+      // Same project, same map the cards use, so a record and its project can never
+      // offer a reader two different destinations for one piece of work.
+      case_study_slug: caseStudyByProject[str(r.project_id) ?? ''] ?? null,
     }));
 
   // Repos: a public one is named and linked, a private one is only counted.
