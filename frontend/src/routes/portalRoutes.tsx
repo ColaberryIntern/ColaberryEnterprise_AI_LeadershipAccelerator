@@ -27,6 +27,7 @@ const EventsPage = lazy(() => import('../pages/portal/events/EventsPage'));
 const PointsPage = lazy(() => import('../pages/portal/points/PointsPage'));
 const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'));
 const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
+const PortfolioPreviewPage = lazy(() => import('../pages/portal/portfolio/PortfolioPreviewPage'));
 const CertPrepPage = lazy(() => import('../pages/portal/certprep/CertPrepPage'));
 const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage'));
 const PeopleDirectoryPage = lazy(() => import('../pages/portal/community/PeopleDirectoryPage'));
@@ -71,6 +72,13 @@ const portalRoutes = (
       {/* Living Career Portfolio — the private Career Studio. Gated like its
           siblings; the resume prerequisite inside it is enforced server-side. */}
       <Route path="/portal/portfolio" element={<PageGate feature="portfolio"><PortfolioPage /></PageGate>} />
+      {/* The learner's own page as a PAGE, opened in a new tab from Publishing. `preview`
+          is a static segment and /portal/portfolio has no dynamic child, so it shadows
+          nothing. Same entitlement gate as the Studio it is reached from. */}
+      <Route
+        path="/portal/portfolio/preview"
+        element={<PageGate feature="portfolio"><PortfolioPreviewPage /></PageGate>}
+      />
       {/* Cert Prep — Claude Certified Architect readiness. Paywalled like its
           siblings; the Week 7 fence is enforced SERVER-side and the page renders
           whatever the API says, so a client reaching this route early still sees
