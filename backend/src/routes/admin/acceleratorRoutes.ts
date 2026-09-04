@@ -19,6 +19,7 @@ import {
   handleGetPortalLink,
   handleGetViewAsToken,
   handleGetPersonHistory,
+  handleGetStudentSuccessSnapshot,
 } from '../../controllers/acceleratorController';
 import {
   handleAdminOverrideLessonStatus,
@@ -100,6 +101,8 @@ router.get('/api/admin/accelerator/enrollments/:id/portal-link', requireAdmin, h
 // Read-only "View as member" — mints a read_only participant token (server blocks all writes).
 router.get('/api/admin/accelerator/enrollments/:id/view-as-token', requireAdmin, handleGetViewAsToken);
 router.get('/api/admin/accelerator/enrollments/:id/history', requireAdmin, handleGetPersonHistory);
+// Student Success 360 — all 15 evidence categories for one enrollment, for the admin drill-down page.
+router.get('/api/admin/accelerator/enrollments/:id/success-snapshot', requireAdmin, handleGetStudentSuccessSnapshot);
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
 router.delete('/api/admin/accelerator/sessions/:id', requireAdmin, handleDeleteSession);
