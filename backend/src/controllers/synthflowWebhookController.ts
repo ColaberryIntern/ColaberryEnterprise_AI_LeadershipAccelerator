@@ -6,6 +6,7 @@ import { CallContactLog } from '../models';
 import { processCallTranscript } from '../services/callTranscriptProcessor';
 import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
 import { logActivity } from '../services/activityService';
+import { recordUnderstandingFromConversation } from '../services/delivery/recordProjectUnderstanding';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
@@ -129,6 +130,43 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
         });
       } catch (actErr: any) {
         console.warn(`[Synthflow Webhook] Activity bridge error:`, actErr.message);
+      }
+    }
+
+    // AI Flotation: the call IS the discovery interview, so turn it into structured
+    // project truth rather than leaving the customer's own description of their business
+    // sitting unread in a transcript column.
+    //
+    // Scoped to this brand on purpose. The other agents on this number run bootcamp
+    // callbacks, where there is no project to understand and an extraction would be spend
+    // with no consumer.
+    //
+    // Non-fatal and deliberately last: recording that the call happened is this endpoint's
+    // actual contract with the vendor, and it must not be lost because a downstream step
+    // failed. `recordUnderstandingFromConversation` never throws, but the guard stays
+    // because that is a promise made by another module and this one should not depend on
+    // it holding forever.
+    if (callCompleted && transcript && commMeta.source === 'ai-flotation') {
+      try {
+        const leadRecord = commLog.lead_id ? await Lead.findByPk(commLog.lead_id) : null;
+        const outcome = await recordUnderstandingFromConversation({
+          leadId: commLog.lead_id as number | null,
+          source: 'voice_transcript',
+          sourceRef: call_id,
+          conversation: transcript,
+          facts: {
+            name: (leadRecord as any)?.name || null,
+            company: (leadRecord as any)?.company || null,
+            role: (leadRecord as any)?.role || (leadRecord as any)?.title || null,
+          },
+        });
+        console.log(
+          `[Synthflow Webhook] project understanding ${outcome.status}` +
+            `${outcome.reason ? ` (${outcome.reason})` : ''}` +
+            `${outcome.kept !== undefined ? ` kept=${outcome.kept} rejected=${outcome.rejected}` : ''}`,
+        );
+      } catch (undErr: any) {
+        console.warn('[Synthflow Webhook] project understanding error:', undErr.message);
       }
     }
 
