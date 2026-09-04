@@ -395,18 +395,34 @@ function AdminVisitorsPage() {
 
   const fetchAnalytics = useCallback(async () => {
     try {
-      const [trendRes, topRes, srcRes, sitesRes] = await Promise.all([
+      // Top Pages and Traffic Sources used to be read off the /visitors/trend
+      // response as `.topPages` and `.trafficSources`. That endpoint returns a
+      // flat array of daily {date, visitors, sessions, pageviews} and has never
+      // had either key, so both panels rendered their empty state permanently
+      // while /visitor-analytics/pages sat unused (and, until this change,
+      // 500ing on a malformed interval).
+      const [trendRes, statsRes, pagesRes, srcRes, sitesRes] = await Promise.all([
         api.get('/api/admin/visitors/trend'),
         api.get('/api/admin/visitors/stats'),
-        api.get('/api/admin/visitors/stats'),
+        api.get('/api/admin/visitor-analytics/pages', { params: { days: 30, limit: 20 } }).catch(() => null),
+        api.get('/api/admin/visitor-analytics/traffic-sources').catch(() => null),
         api.get('/api/admin/visitor-analytics/sites', { params: { days: 30 } }).catch(() => null),
       ]);
-      setTopPages(trendRes.data.topPages || []);
-      setTrafficSources(trendRes.data.trafficSources || []);
+      // The service speaks column names (page_path / view_count); the table reads
+      // page / views. Mapped here rather than renamed server-side because
+      // `TopPage` is an exported type with other consumers.
+      setTopPages(
+        (pagesRes?.data || []).map((p: any) => ({
+          page: p.page_path ?? p.page ?? '(unknown)',
+          views: Number(p.view_count ?? p.views ?? 0),
+          unique_visitors: Number(p.unique_visitors ?? 0),
+        })),
+      );
+      setTrafficSources(srcRes?.data || []);
       // Normalised, not assigned raw. This writes the SAME `stats` state the
       // header cards read, so skipping the mapping here would re-break every
       // card the moment the Analytics tab loaded.
-      setStats(normalizeStats(topRes.data?.stats || topRes.data));
+      setStats(normalizeStats(statsRes.data?.stats || statsRes.data));
       setSitesBreakdown(sitesRes?.data || []);
     } catch (err) {
       console.error('Failed to fetch analytics:', err);

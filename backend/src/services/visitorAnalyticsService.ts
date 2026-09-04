@@ -296,7 +296,8 @@ export async function getPagePopularity(
 // ---------------------------------------------------------------------------
 
 export async function getTrafficSources(
-  dateRange?: { from: string; to: string }
+  dateRange?: { from: string; to: string },
+  includeBots = false
 ): Promise<Array<{ source: string; visitors: number; sessions: number }>> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -306,6 +307,16 @@ export async function getTrafficSources(
   const rows: any[] = await VisitorSession.findAll({
     where: {
       started_at: { [Op.between]: [from, to] },
+      // Same rule as the live list, so "Traffic Sources" describes people.
+      ...(includeBots
+        ? {}
+        : {
+            [Op.and]: [
+              literal(
+                `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "VisitorSession"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+              ),
+            ],
+          }),
     },
     attributes: [
       [fn('COALESCE', col('referrer_domain'), literal("'direct'")), 'source'],
@@ -531,7 +542,27 @@ export interface TopPage {
   unique_visitors: number;
 }
 
-export async function getTopPages(days = 30, limit = 20): Promise<TopPage[]> {
+export async function getTopPages(days = 30, limit = 20, includeBots = false): Promise<TopPage[]> {
+  // `INTERVAL ':days days'` put the placeholder INSIDE a string literal, and
+  // Sequelize deliberately does not substitute inside quotes — so Postgres
+  // received the characters ":days days" and threw
+  // `invalid input syntax for type interval`. Every call to this function has
+  // failed since it was written, which means /api/admin/visitor-analytics/pages
+  // has never once returned a row: it 500s, the page catches, and the panel
+  // renders its empty state. A bug that only ever produced "no data" rather than
+  // a visible error.
+  //
+  // The window is computed in JS and passed as a real timestamp, which removes
+  // the string-interpolation question rather than re-solving it.
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  // Bots excluded by default, matching the live view. Without this the list is
+  // just the crawler's sitemap: production holds 275,587 pageviews under a
+  // single category, nearly all of it automated traffic on one property, which
+  // would bury every page a person actually read.
+  const botJoin = includeBots ? '' : 'JOIN visitors v ON v.id = pe.visitor_id';
+  const botFilter = includeBots ? '' : `AND ${botExclusionSql('v."user_agent"')}`;
+
   const rows = await sequelize.query<TopPage>(
     `SELECT
        pe.page_path,
@@ -539,13 +570,15 @@ export async function getTopPages(days = 30, limit = 20): Promise<TopPage[]> {
        COUNT(*)::int                             AS view_count,
        COUNT(DISTINCT pe.visitor_id)::int        AS unique_visitors
      FROM page_events pe
+     ${botJoin}
      WHERE pe.event_type = 'pageview'
-       AND pe.timestamp >= NOW() - INTERVAL ':days days'
+       AND pe.timestamp >= :since
+       ${botFilter}
      GROUP BY pe.page_path
      ORDER BY view_count DESC
      LIMIT :limit`,
     {
-      replacements: { days, limit },
+      replacements: { since, limit },
       type: QueryTypes.SELECT,
     },
   );
