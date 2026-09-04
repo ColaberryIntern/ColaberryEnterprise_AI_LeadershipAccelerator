@@ -9,9 +9,20 @@
  */
 const mockDeclareReliabilityChange = jest.fn();
 const mockRestoreMetric = jest.fn();
+const mockGetReliabilityStatus = jest.fn();
 jest.mock('../metricReliabilityService', () => ({
   declareReliabilityChange: (...a: any[]) => mockDeclareReliabilityChange(...a),
   restoreMetric: (...a: any[]) => mockRestoreMetric(...a),
+  getReliabilityStatus: (...a: any[]) => mockGetReliabilityStatus(...a),
+}));
+
+const mockCreateTicket = jest.fn();
+const mockUpdateTicketStatus = jest.fn();
+const mockAddTicketComment = jest.fn();
+jest.mock('../ticketService', () => ({
+  createTicket: (...a: any[]) => mockCreateTicket(...a),
+  updateTicketStatus: (...a: any[]) => mockUpdateTicketStatus(...a),
+  addTicketComment: (...a: any[]) => mockAddTicketComment(...a),
 }));
 
 import {
@@ -26,6 +37,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockDeclareReliabilityChange.mockResolvedValue({});
   mockRestoreMetric.mockResolvedValue({});
+  mockGetReliabilityStatus.mockResolvedValue({ status: 'quarantined', severity: 'high', reason: 'was broken', declaredAt: new Date(), recordId: 'rec-1', incidentTicketId: null });
+  mockCreateTicket.mockResolvedValue({ id: 'ticket-1' });
+  mockUpdateTicketStatus.mockResolvedValue(undefined);
+  mockAddTicketComment.mockResolvedValue(undefined);
 });
 
 describe('detectReliabilityIntent', () => {
@@ -118,20 +133,25 @@ describe('detectConfirmationReply', () => {
 });
 
 describe('applyConfirmedReliabilityChange', () => {
-  it('quarantine: calls declareReliabilityChange with the pending record\'s real fields, never restoreMetric', async () => {
+  it('quarantine: creates a real incident ticket FIRST, then calls declareReliabilityChange with its real id, never restoreMetric', async () => {
     const pending = { direction: 'quarantine' as const, sourceSystem: 'attendance', metricKey: 'attendance.*', scopeType: 'global' as const, scopeValue: null, reason: 'Attendance is broken.', detectedAt: '2026-09-04T00:00:00.000Z' };
+    mockCreateTicket.mockResolvedValue({ id: 'ticket-42' });
 
     const result = await applyConfirmedReliabilityChange(pending, 'ali@colaberry.com');
 
+    expect(mockCreateTicket).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'data_reliability_incident', status: 'in_progress', created_by_type: 'human', created_by_id: 'ali@colaberry.com', description: 'Attendance is broken.',
+    }));
     expect(mockDeclareReliabilityChange).toHaveBeenCalledWith(expect.objectContaining({
-      sourceSystem: 'attendance', metricKey: 'attendance.*', status: 'quarantined', reason: 'Attendance is broken.', declaredByEmail: 'ali@colaberry.com', declaredBySource: 'manager_report',
+      sourceSystem: 'attendance', metricKey: 'attendance.*', status: 'quarantined', reason: 'Attendance is broken.', declaredByEmail: 'ali@colaberry.com', declaredBySource: 'manager_report', incidentTicketId: 'ticket-42',
     }));
     expect(mockRestoreMetric).not.toHaveBeenCalled();
     expect(result.summary).toContain('quarantined');
   });
 
-  it('restore: calls restoreMetric with the pending record\'s reason as recovery evidence, never declareReliabilityChange', async () => {
+  it('restore: calls restoreMetric with the pending record\'s reason as recovery evidence, never declareReliabilityChange, and closes the real linked incident ticket', async () => {
     const pending = { direction: 'restore' as const, sourceSystem: 'attendance', metricKey: 'attendance.*', scopeType: 'global' as const, scopeValue: null, reason: 'Attendance is fixed now.', detectedAt: '2026-09-04T00:00:00.000Z' };
+    mockGetReliabilityStatus.mockResolvedValue({ status: 'quarantined', severity: 'high', reason: 'Attendance is broken.', declaredAt: new Date(), recordId: 'rec-1', incidentTicketId: 'ticket-42' });
 
     const result = await applyConfirmedReliabilityChange(pending, 'ali@colaberry.com');
 
@@ -139,6 +159,29 @@ describe('applyConfirmedReliabilityChange', () => {
       sourceSystem: 'attendance', metricKey: 'attendance.*', recoveryEvidence: 'Attendance is fixed now.', restoredByEmail: 'ali@colaberry.com',
     }));
     expect(mockDeclareReliabilityChange).not.toHaveBeenCalled();
+    expect(mockAddTicketComment).toHaveBeenCalledWith('ticket-42', expect.stringContaining('Restored'), 'human', 'ali@colaberry.com');
+    expect(mockUpdateTicketStatus).toHaveBeenCalledWith('ticket-42', 'done', 'human', 'ali@colaberry.com');
+    expect(result.summary).toContain('restored');
+  });
+
+  it('restore: no linked incident ticket on the record means no ticket calls at all — nothing to close, not an error', async () => {
+    const pending = { direction: 'restore' as const, sourceSystem: 'attendance', metricKey: 'attendance.*', scopeType: 'global' as const, scopeValue: null, reason: 'Attendance is fixed now.', detectedAt: '2026-09-04T00:00:00.000Z' };
+    mockGetReliabilityStatus.mockResolvedValue({ status: 'quarantined', severity: 'high', reason: 'Attendance is broken.', declaredAt: new Date(), recordId: 'rec-1', incidentTicketId: null });
+
+    await applyConfirmedReliabilityChange(pending, 'ali@colaberry.com');
+
+    expect(mockUpdateTicketStatus).not.toHaveBeenCalled();
+    expect(mockAddTicketComment).not.toHaveBeenCalled();
+  });
+
+  it('fail-safe: a ticket-closure failure never blocks the real restoration that already succeeded', async () => {
+    const pending = { direction: 'restore' as const, sourceSystem: 'attendance', metricKey: 'attendance.*', scopeType: 'global' as const, scopeValue: null, reason: 'Attendance is fixed now.', detectedAt: '2026-09-04T00:00:00.000Z' };
+    mockGetReliabilityStatus.mockResolvedValue({ status: 'quarantined', severity: 'high', reason: 'Attendance is broken.', declaredAt: new Date(), recordId: 'rec-1', incidentTicketId: 'ticket-42' });
+    mockUpdateTicketStatus.mockRejectedValue(new Error('ticket already closed by someone else'));
+
+    const result = await applyConfirmedReliabilityChange(pending, 'ali@colaberry.com');
+
+    expect(mockRestoreMetric).toHaveBeenCalled();
     expect(result.summary).toContain('restored');
   });
 });

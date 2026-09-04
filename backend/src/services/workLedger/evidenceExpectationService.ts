@@ -137,6 +137,16 @@ const TYPE_DEFAULTS: Record<TicketType, TicketEvidenceExpectations> = {
   // honest auto-decision note for, so this ticket type starts getting real
   // Decisions-tab content immediately, not just a corrected label.
   inbox_case: { visualProof: NOT_APPLICABLE, workGraph: EXPECTED, decisions: EXPECTED },
+
+  // Reese Agentic AI Employee mission, Checkpoint B (2026-09-04) — the
+  // incident linked to a manager-confirmed metric reliability declaration
+  // (managerReliabilityIntentService.ts). Always created with
+  // created_by_type:'human' (the confirming manager), so rule 1 above
+  // already forces all-EXPECTED for every real instance of this type — this
+  // entry exists only because Record<TicketType, ...> requires one, and is
+  // classified the same way as company_directive/workforce_decision:
+  // a governance decision, no visual or multi-step-workflow dimension.
+  data_reliability_incident: { visualProof: NOT_APPLICABLE, workGraph: NOT_APPLICABLE, decisions: EXPECTED },
 };
 
 /**

@@ -1,5 +1,6 @@
 import { PendingReliabilityConfirmation } from '../models/AgentManagerConversation';
-import { declareReliabilityChange, restoreMetric } from './metricReliabilityService';
+import { declareReliabilityChange, getReliabilityStatus, restoreMetric } from './metricReliabilityService';
+import { createTicket, updateTicketStatus, addTicketComment } from './ticketService';
 
 /**
  * managerReliabilityIntentService — Reese Agentic AI Employee mission,
@@ -123,6 +124,34 @@ export function detectConfirmationReply(messageText: string): ConfirmationReplyV
 }
 
 /**
+ * Real ProofDesk incident linkage — mission requirement: "Create/link an
+ * operational incident or ProofDesk ticket." Created with
+ * created_by_type:'human' (the confirming manager's real email as the
+ * actor id, matching the "email is the reliable identity" convention this
+ * whole conversation surface already uses), so enforceReportsToGate()
+ * bypasses the chain-of-command check entirely — a human filing a
+ * governance ticket needs no agent reports-to resolution. Starts
+ * 'in_progress' (not the default 'backlog') so a later direct transition
+ * to 'done' on restoration is a real, valid state-machine move
+ * (backlog -> done is not).
+ */
+async function createIncidentTicket(pending: PendingReliabilityConfirmation, confirmedByEmail: string): Promise<string> {
+  const ticket = await createTicket({
+    title: `Data reliability: ${pending.sourceSystem} quarantined`,
+    description: pending.reason,
+    type: 'data_reliability_incident',
+    status: 'in_progress',
+    priority: 'high',
+    source: 'manager_report',
+    created_by_type: 'human',
+    created_by_id: confirmedByEmail,
+    entity_type: 'metric_reliability',
+    entity_id: `${pending.sourceSystem}:${pending.metricKey}:${pending.scopeType}:${pending.scopeValue ?? 'global'}`,
+  });
+  return ticket.id;
+}
+
+/**
  * Executes a confirmed pending declaration for real — the one place this
  * whole flow actually writes durable state. Restoration requires a real
  * evidence sentence; since a confirmed conversational restore has no
@@ -137,6 +166,7 @@ export async function applyConfirmedReliabilityChange(
   const scope = { scopeType: pending.scopeType, scopeValue: pending.scopeValue };
 
   if (pending.direction === 'quarantine') {
+    const incidentTicketId = await createIncidentTicket(pending, confirmedByEmail);
     await declareReliabilityChange({
       sourceSystem: pending.sourceSystem,
       metricKey: pending.metricKey,
@@ -146,10 +176,16 @@ export async function applyConfirmedReliabilityChange(
       reason: pending.reason,
       declaredBySource: 'manager_report',
       declaredByEmail: confirmedByEmail,
+      incidentTicketId,
     });
-    return { summary: `Done. ${pending.sourceSystem} is now quarantined — I'll exclude it from assessments and messages until you tell me it's restored.` };
+    return { summary: `Done. ${pending.sourceSystem} is now quarantined — I'll exclude it from assessments and messages until you tell me it's restored. Tracking as a real ProofDesk ticket.` };
   }
 
+  // Look up the existing record's real linked incident BEFORE restoreMetric()
+  // mutates the row — there is no separate "which incident does this restore"
+  // input from the conversation, so the registry's own current state is the
+  // only honest source for it.
+  const before = await getReliabilityStatus(pending.sourceSystem, pending.metricKey, scope);
   await restoreMetric({
     sourceSystem: pending.sourceSystem,
     metricKey: pending.metricKey,
@@ -157,5 +193,18 @@ export async function applyConfirmedReliabilityChange(
     recoveryEvidence: pending.reason,
     restoredByEmail: confirmedByEmail,
   });
+
+  if (before.incidentTicketId) {
+    try {
+      await addTicketComment(before.incidentTicketId, `Restored: ${pending.reason}`, 'human', confirmedByEmail);
+      await updateTicketStatus(before.incidentTicketId, 'done', 'human', confirmedByEmail);
+    } catch {
+      // A ticket-closure failure must never block the real reliability
+      // restoration that already succeeded above — the registry state is
+      // the source of truth; the ticket is a linked record of it, not the
+      // other way around.
+    }
+  }
+
   return { summary: `Done. ${pending.sourceSystem} is restored — I'll use it normally again going forward.` };
 }

@@ -24,7 +24,13 @@ export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_acti
   // evidenceExpectationService.ts's classifier entirely, ever since it
   // shipped. Fixed by giving it a real union member so the compiler and this
   // module's own anti-vacuity test both enforce it going forward.
-  | 'inbox_case';
+  | 'inbox_case'
+  // Reese Agentic AI Employee mission, Checkpoint B (2026-09-04) — the real
+  // ProofDesk incident a manager-confirmed metric reliability declaration
+  // links to. See managerReliabilityIntentService.ts's
+  // applyConfirmedReliabilityChange(). Distinct from every other type so
+  // reliability-incident history stays queryable on its own.
+  | 'data_reliability_incident';
 export type TicketActorType = 'human' | 'cory' | 'agent'
   // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
   // autonomous background agents ('agent') so ticket activity attributed to Reese

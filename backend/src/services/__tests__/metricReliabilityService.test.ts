@@ -64,7 +64,7 @@ describe('getReliabilityStatus', () => {
 
     const result = await getReliabilityStatus('attendance', 'attendance.*');
 
-    expect(result).toEqual({ status: 'healthy', severity: null, reason: null, declaredAt: null, recordId: null });
+    expect(result).toEqual({ status: 'healthy', severity: null, reason: null, declaredAt: null, recordId: null, incidentTicketId: null });
   });
 
   it('happy path: a real quarantined global record is returned as-is', async () => {

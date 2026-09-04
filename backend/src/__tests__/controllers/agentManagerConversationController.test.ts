@@ -5,6 +5,23 @@ import { env } from '../../config/env';
 import { getConversationHistory, sendManagerMessage, AgentNotFoundError } from '../../services/agentManagerConversationService';
 import agentManagerConversationRoutes from '../../routes/admin/agentManagerConversationRoutes';
 
+// Reese Agentic AI Employee mission, Checkpoint B — requireActual() below still
+// executes agentManagerConversationService.ts's real top-level imports, including
+// managerReliabilityIntentService.ts, which transitively imports ticketService.ts,
+// which imports { Ticket, TicketActivity } from the models barrel — loading the
+// full association graph and crashing this file's own partial model mocks (the
+// exact same class of failure agentManagerConversationService.test.ts's own fix
+// addresses, and agentRecentActivitySummary.ts's fix addressed earlier the same
+// session). Mocked wholesale since this controller test only exercises the two
+// overridden functions below, never the reliability-intent logic itself.
+jest.mock('../../services/managerReliabilityIntentService', () => ({
+  detectReliabilityIntent: jest.fn(() => null),
+  detectConfirmationReply: jest.fn(() => 'ambiguous'),
+  buildConfirmationCardText: jest.fn(() => ''),
+  toPendingConfirmation: jest.fn(),
+  applyConfirmedReliabilityChange: jest.fn(),
+}));
+
 jest.mock('../../services/agentManagerConversationService', () => {
   const actual = jest.requireActual('../../services/agentManagerConversationService');
   return { ...actual, getConversationHistory: jest.fn(), sendManagerMessage: jest.fn() };
