@@ -219,6 +219,17 @@ export interface PublicProject {
    * become a link here however this field is read.
    */
   record_slug: string | null;
+  /**
+   * The published case study about THIS project, at /stories/:slug, or null.
+   *
+   * Ali, on landing from a card: "Clicking on the card takes you to a non matching page.
+   * It should look more like this /stories/". A case study IS the richer surface, so it
+   * is preferred over the capstone record wherever one is publicly visible.
+   *
+   * Whether it is publicly visible is decided by the Case Study OS's own gate, called
+   * rather than copied - see the note in careerPortfolioPageService.
+   */
+  case_study_slug: string | null;
 }
 
 export interface PublicRepository {
@@ -326,6 +337,8 @@ export interface ProjectPortfolioInput {
   /** The capstone project's name and descriptor, for the About paragraph. */
   projectName?: string | null;
   projectDescriptor?: string | null;
+  /** `project_id -> case study slug`, already gated by the Case Study OS's own rule. */
+  caseStudyByProject?: Record<string, string>;
   /** `{domain, score}` rows summed from VALIDATED evidence_records only. */
   competencies?: unknown;
   /** `{source_type, count}` rows over the same validated set. */
@@ -381,6 +394,11 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
     if (pid && slug && !recordSlugByProject.has(pid)) recordSlugByProject.set(pid, slug);
   }
 
+  const caseStudyByProject: Record<string, string> =
+    (input.caseStudyByProject && typeof input.caseStudyByProject === 'object')
+      ? input.caseStudyByProject as Record<string, string>
+      : {};
+
   const rawProjects: any[] = Array.isArray(input.projects) ? input.projects : [];
   const projects: PublicProject[] = rawProjects
     .filter((p) => p && typeof p === 'object')
@@ -397,6 +415,7 @@ export function projectPublicPortfolio(input: ProjectPortfolioInput): PublicPort
       demo_url: httpUrl(p.portfolio_url),
       hero_image_url: httpUrl(p.hero_image_url),
       record_slug: recordSlugByProject.get(str(p.id) ?? '') ?? null,
+      case_study_slug: caseStudyByProject[str(p.id) ?? ''] ?? null,
     }))
     .filter((p) => p.title !== '');
 
