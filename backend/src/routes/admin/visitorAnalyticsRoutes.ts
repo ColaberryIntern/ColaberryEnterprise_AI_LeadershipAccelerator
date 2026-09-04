@@ -38,11 +38,32 @@ router.get('/api/admin/visitor-analytics/pages', requireAdmin, async (req: Reque
     const { getTopPages } = await import('../../services/visitorAnalyticsService');
     const days = Math.max(1, parseInt(req.query.days as string, 10) || 30);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
-    const data = await getTopPages(days, limit);
+    const includeBots = req.query.includeBots === 'true';
+    const data = await getTopPages(days, limit, includeBots);
     res.json(data);
   } catch (err: any) {
     console.error('[VisitorAnalytics] Top pages error:', err.message);
     res.status(500).json({ error: 'Failed to load top pages' });
+  }
+});
+
+// ── Traffic Sources ───────────────────────────────────────────────────────────
+
+/**
+ * The Analytics tab has always had a "Traffic Sources" panel and there has never
+ * been an endpoint behind it — `fetchAnalytics` read `trafficSources` off the
+ * `/visitors/trend` response, which returns a flat array of daily counts and has
+ * no such key. The panel therefore rendered its empty state permanently.
+ */
+router.get('/api/admin/visitor-analytics/traffic-sources', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { getTrafficSources } = await import('../../services/visitorAnalyticsService');
+    const includeBots = req.query.includeBots === 'true';
+    const data = await getTrafficSources(undefined, includeBots);
+    res.json(data);
+  } catch (err: any) {
+    console.error('[VisitorAnalytics] Traffic sources error:', err.message);
+    res.status(500).json({ error: 'Failed to load traffic sources' });
   }
 });
 

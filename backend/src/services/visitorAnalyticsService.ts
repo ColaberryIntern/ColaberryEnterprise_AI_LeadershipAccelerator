@@ -8,6 +8,28 @@ import {
   notAutomatedSessionSql,
 } from './visitorBotDetection';
 
+/**
+ * The start of a `days`-long window, as a real timestamp.
+ *
+ * Five queries in this file wrote their window as `INTERVAL ':days days'` — the
+ * placeholder INSIDE a string literal, where Sequelize deliberately does not
+ * substitute. Postgres received the characters ":days days" and answered
+ * `invalid input syntax for type interval`, so getVisitorDashboard,
+ * getConversionFunnel, getTopPages, getDeviceBreakdown and getSitesBreakdown
+ * threw on every call any of them has ever received. Confirmed one at a time
+ * against the production database before this was written.
+ *
+ * They failed invisibly because each caller wraps the request in
+ * `.catch(() => null)` and renders an empty state: a 500 and "no data" look
+ * identical on screen.
+ *
+ * Binding a timestamp removes the interpolation question rather than re-solving
+ * it per query, which is why this is one helper and not five careful edits.
+ */
+function sinceDays(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
 // ---------------------------------------------------------------------------
 // 1. Live Visitors
 // ---------------------------------------------------------------------------
@@ -396,7 +418,8 @@ export async function getPagePopularity(
 // ---------------------------------------------------------------------------
 
 export async function getTrafficSources(
-  dateRange?: { from: string; to: string }
+  dateRange?: { from: string; to: string },
+  includeBots = false
 ): Promise<Array<{ source: string; visitors: number; sessions: number }>> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -406,6 +429,16 @@ export async function getTrafficSources(
   const rows: any[] = await VisitorSession.findAll({
     where: {
       started_at: { [Op.between]: [from, to] },
+      // Same rule as the live list, so "Traffic Sources" describes people.
+      ...(includeBots
+        ? {}
+        : {
+            [Op.and]: [
+              literal(
+                `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "VisitorSession"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+              ),
+            ],
+          }),
     },
     attributes: [
       [fn('COALESCE', col('referrer_domain'), literal("'direct'")), 'source'],
@@ -577,9 +610,9 @@ export async function getVisitorDashboard(days = 30): Promise<VisitorDashboardSu
             ELSE ROUND(SUM(pageview_count)::numeric / COUNT(*), 1)
        END::float                                             AS page_views_per_session
      FROM visitor_sessions
-     WHERE started_at >= NOW() - INTERVAL ':days days'`,
+     WHERE started_at >= :since`,
     {
-      replacements: { days },
+      replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
     },
   );
@@ -610,9 +643,9 @@ export async function getConversionFunnel(days = 30): Promise<ConversionFunnel> 
        COUNT(DISTINCT vs.id)::int           AS total_sessions,
        COUNT(DISTINCT vs.lead_id)::int      AS total_leads
      FROM visitor_sessions vs
-     WHERE vs.started_at >= NOW() - INTERVAL ':days days'`,
+     WHERE vs.started_at >= :since`,
     {
-      replacements: { days },
+      replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
     },
   );
@@ -631,7 +664,27 @@ export interface TopPage {
   unique_visitors: number;
 }
 
-export async function getTopPages(days = 30, limit = 20): Promise<TopPage[]> {
+export async function getTopPages(days = 30, limit = 20, includeBots = false): Promise<TopPage[]> {
+  // `INTERVAL ':days days'` put the placeholder INSIDE a string literal, and
+  // Sequelize deliberately does not substitute inside quotes — so Postgres
+  // received the characters ":days days" and threw
+  // `invalid input syntax for type interval`. Every call to this function has
+  // failed since it was written, which means /api/admin/visitor-analytics/pages
+  // has never once returned a row: it 500s, the page catches, and the panel
+  // renders its empty state. A bug that only ever produced "no data" rather than
+  // a visible error.
+  //
+  // The window is computed in JS and passed as a real timestamp, which removes
+  // the string-interpolation question rather than re-solving it.
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  // Bots excluded by default, matching the live view. Without this the list is
+  // just the crawler's sitemap: production holds 275,587 pageviews under a
+  // single category, nearly all of it automated traffic on one property, which
+  // would bury every page a person actually read.
+  const botJoin = includeBots ? '' : 'JOIN visitors v ON v.id = pe.visitor_id';
+  const botFilter = includeBots ? '' : `AND ${botExclusionSql('v."user_agent"')}`;
+
   const rows = await sequelize.query<TopPage>(
     `SELECT
        pe.page_path,
@@ -639,13 +692,15 @@ export async function getTopPages(days = 30, limit = 20): Promise<TopPage[]> {
        COUNT(*)::int                             AS view_count,
        COUNT(DISTINCT pe.visitor_id)::int        AS unique_visitors
      FROM page_events pe
+     ${botJoin}
      WHERE pe.event_type = 'pageview'
-       AND pe.timestamp >= NOW() - INTERVAL ':days days'
+       AND pe.timestamp >= :since
+       ${botFilter}
      GROUP BY pe.page_path
      ORDER BY view_count DESC
      LIMIT :limit`,
     {
-      replacements: { days, limit },
+      replacements: { since, limit },
       type: QueryTypes.SELECT,
     },
   );
@@ -670,11 +725,11 @@ export async function getDeviceBreakdown(days = 30): Promise<DeviceBreakdown[]> 
        COUNT(*)::int                               AS session_count,
        ROUND(COUNT(*)::numeric * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 1)::float AS percentage
      FROM visitor_sessions
-     WHERE started_at >= NOW() - INTERVAL ':days days'
+     WHERE started_at >= :since
      GROUP BY device_type
      ORDER BY session_count DESC`,
     {
-      replacements: { days },
+      replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
     },
   );
@@ -720,11 +775,11 @@ export async function getSitesBreakdown(days = 30): Promise<SiteBreakdown[]> {
        COALESCE(SUM(vs.pageview_count), 0)         AS pageviews,
        MAX(vs.started_at)                          AS last_seen_at
      FROM visitor_sessions vs
-     WHERE vs.started_at >= NOW() - INTERVAL ':days days'
+     WHERE vs.started_at >= :since
      GROUP BY 1
      ORDER BY sessions DESC`,
     {
-      replacements: { days },
+      replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
     },
   );
