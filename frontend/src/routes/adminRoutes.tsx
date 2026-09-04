@@ -20,6 +20,7 @@ const AdminRefundsPage = lazy(() => import('../pages/admin/AdminRefundsPage'));
 const AdminSettingsPage = lazy(() => import('../pages/admin/AdminSettingsPage'));
 const AdminCapeSettingsPage = lazy(() => import('../pages/admin/AdminCapeSettingsPage'));
 const AdminFeedControlGovernancePage = lazy(() => import('../pages/admin/AdminFeedControlGovernancePage'));
+const AdminCertPrepPage = lazy(() => import('../pages/admin/certprep/AdminCertPrepPage'));
 const AdminEventLedgerPage = lazy(() => import('../pages/admin/AdminEventLedgerPage'));
 const AdminCampaignsPage = lazy(() => import('../pages/admin/AdminCampaignsPage'));
 const ExplorerGrowthPage = lazy(() => import('../pages/admin/ExplorerGrowthPage'));
@@ -130,6 +131,7 @@ const adminRoutes = (
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route path="/admin/cape-settings" element={<AdminCapeSettingsPage />} />
         <Route path="/admin/feed-control-governance" element={<AdminFeedControlGovernancePage />} />
+        <Route path="/admin/cert-prep" element={<AdminCertPrepPage />} />
         <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />

@@ -15,12 +15,18 @@
 
 const getLiveVisitors = jest.fn();
 const countLiveVisitors = jest.fn();
+const getLiveSignedInPeople = jest.fn();
 
 jest.mock('../../services/visitorAnalyticsService', () => ({
   listVisitors: jest.fn(),
   getVisitorStats: jest.fn(),
   getLiveVisitors: (...a: unknown[]) => getLiveVisitors(...a),
   countLiveVisitors: (...a: unknown[]) => countLiveVisitors(...a),
+  // Omitting this is not a harmless gap. The handler calls all three inside one
+  // Promise.all; an undefined function throws while constructing the array, so
+  // the already-created getLiveVisitors rejection is never awaited and surfaces
+  // as an unhandled rejection that fails the whole suite rather than one test.
+  getLiveSignedInPeople: (...a: unknown[]) => getLiveSignedInPeople(...a),
   getVisitorTrend: jest.fn(),
   getVisitorProfile: jest.fn(),
 }));
@@ -59,6 +65,8 @@ const next = jest.fn() as unknown as NextFunction;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Presence resolves by default; tests that care override it.
+  getLiveSignedInPeople.mockResolvedValue([]);
 });
 
 const ROW = { id: 'visitor-1', session_id: 'session-1', fingerprint: 'abc123' };
@@ -174,4 +182,43 @@ it('forwards a query failure to the error handler rather than sending an empty l
 
   expect(json).not.toHaveBeenCalled();
   expect(nextFn).toHaveBeenCalledWith(boom);
+});
+
+describe('signed-in people', () => {
+  const PERSON = { enrollment_id: 'e1', name: 'Piyush Prajapati', avatar_url: null, last_active_at: '2026-09-04T12:00:00Z', cohort_id: 'c1', presence_status: 'online' };
+
+  it('returns named portal people alongside the anonymous list', async () => {
+    getLiveVisitors.mockResolvedValueOnce([ROW]);
+    countLiveVisitors.mockResolvedValueOnce(1);
+    getLiveSignedInPeople.mockResolvedValueOnce([PERSON]);
+    const { res, json } = mockRes();
+
+    await handleGetLiveVisitors({ query: {} } as unknown as Request, res, next);
+
+    const payload = json.mock.calls[0][0];
+    expect(payload.signed_in).toEqual([PERSON]);
+    expect(payload.signed_in_count).toBe(1);
+    // Kept apart from `count`: a fingerprint and a named human are different
+    // units, and summing them would double-count one person.
+    expect(payload.count).toBe(1);
+  });
+
+  /**
+   * Presence is an enrichment. If it fails, the anonymous list — the thing this
+   * endpoint primarily exists to serve — must still be returned.
+   */
+  it('still serves the visitor list when presence lookup fails', async () => {
+    getLiveVisitors.mockResolvedValueOnce([ROW]);
+    countLiveVisitors.mockResolvedValueOnce(1);
+    getLiveSignedInPeople.mockRejectedValueOnce(new Error('presence table unavailable'));
+    const { res, json } = mockRes();
+    const nextFn = jest.fn();
+
+    await handleGetLiveVisitors({ query: {} } as unknown as Request, res, nextFn as unknown as NextFunction);
+
+    const payload = json.mock.calls[0][0];
+    expect(payload.visitors).toEqual([ROW]);
+    expect(payload.signed_in).toEqual([]);
+    expect(nextFn).not.toHaveBeenCalled();
+  });
 });

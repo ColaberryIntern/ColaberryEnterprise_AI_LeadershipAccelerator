@@ -8,7 +8,13 @@
  * production is serving right now — are the regression this file exists to hold.
  */
 
-import { isBotUserAgent, botExclusionSql, BOT_UA_PATTERNS } from '../visitorBotDetection';
+import {
+  isBotUserAgent,
+  botExclusionSql,
+  BOT_UA_PATTERNS,
+  isLikelyAutomatedSession,
+  notAutomatedSessionSql,
+} from '../visitorBotDetection';
 
 /** Verbatim from production, 3-day sample, 2026-09-04. */
 const GOOGLEBOT =
@@ -101,5 +107,79 @@ describe('botExclusionSql', () => {
     for (const pattern of BOT_UA_PATTERNS) {
       expect(pattern).toMatch(/^[a-z0-9 ._/+;)-]+$/);
     }
+  });
+});
+
+/**
+ * Behavioural detection, for crawlers that present a clean browser string.
+ *
+ * The positive cases are taken verbatim from the live dashboard on 2026-09-04 —
+ * twenty concurrent "visitors" reporting Mac Chrome / Mac Safari / Windows
+ * Chrome while walking taxonomy node URLs. The negative cases are ordinary
+ * human sessions, and they matter more: this rule can hide a real prospect, and
+ * an invisible lost prospect is a worse failure than a visible crawler.
+ */
+describe('isLikelyAutomatedSession — catches the disguised crawl', () => {
+  it.each([
+    ['291 pages over 19 hours', { pageview_count: 291, duration_seconds: 1141 * 60 }],
+    ['243 pages over 15 hours', { pageview_count: 243, duration_seconds: 904 * 60 }],
+    ['137 pages over 7 hours', { pageview_count: 137, duration_seconds: 426 * 60 }],
+    ['a fast scraper: 60 pages in 5 minutes', { pageview_count: 60, duration_seconds: 300 }],
+  ])('flags %s', (_label, session) => {
+    expect(isLikelyAutomatedSession(session)).toBe(true);
+  });
+
+  /**
+   * 291 pages across 19 hours is only 0.25 pages per minute. A rate test alone
+   * would clear it, which is why the volume+endurance rule exists at all.
+   */
+  it('catches the slow patient crawler a rate test would miss', () => {
+    const slow = { pageview_count: 291, duration_seconds: 1141 * 60 };
+    const perMinute = slow.pageview_count / (slow.duration_seconds / 60);
+    expect(perMinute).toBeLessThan(1);
+    expect(isLikelyAutomatedSession(slow)).toBe(true);
+  });
+});
+
+describe('isLikelyAutomatedSession — must not hide a person', () => {
+  it.each([
+    ['a quick look: 2 pages, 16 minutes', { pageview_count: 2, duration_seconds: 16 * 60 }],
+    ['an engaged read: 12 pages, 35 minutes', { pageview_count: 12, duration_seconds: 35 * 60 }],
+    ['a long researcher: 25 pages, 3 hours', { pageview_count: 25, duration_seconds: 3 * 3600 }],
+    ['a tab left open: 3 pages, 9 hours', { pageview_count: 3, duration_seconds: 9 * 3600 }],
+    ['a burst of clicks: 6 pages in 30 seconds', { pageview_count: 6, duration_seconds: 30 }],
+    ['an empty session', { pageview_count: 0, duration_seconds: 0 }],
+  ])('does not flag %s', (_label, session) => {
+    expect(isLikelyAutomatedSession(session)).toBe(false);
+  });
+
+  it('survives null and missing fields rather than guessing', () => {
+    expect(isLikelyAutomatedSession({})).toBe(false);
+    expect(isLikelyAutomatedSession({ pageview_count: null, duration_seconds: null })).toBe(false);
+  });
+
+  /**
+   * The conservative choice, asserted so it is a decision on record rather than
+   * an accident: a 12-page, 2-hour session on a crawled property is probably
+   * automated too, and is deliberately left alone.
+   */
+  it('knowingly lets the ambiguous middle through', () => {
+    expect(isLikelyAutomatedSession({ pageview_count: 12, duration_seconds: 2 * 3600 })).toBe(false);
+  });
+});
+
+describe('notAutomatedSessionSql', () => {
+  it('negates both rules so SQL and JS agree', () => {
+    const sql = notAutomatedSessionSql('vs."pageview_count"', 'vs."duration_seconds"');
+    expect(sql.startsWith('NOT (')).toBe(true);
+    expect(sql).toContain('>= 40');
+    expect(sql).toContain('>= 7200');
+    expect(sql).toContain('> 5');
+  });
+
+  it('guards the rate division against a zero duration', () => {
+    // COALESCE(...,1) on the divisor: a session with duration 0 must not divide
+    // by zero and take the whole live query down.
+    expect(notAutomatedSessionSql('p', 'd')).toContain('COALESCE(d,1)');
   });
 });

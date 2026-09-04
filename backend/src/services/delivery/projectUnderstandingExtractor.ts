@@ -36,6 +36,7 @@
 import { chatJson } from '../runtime/runtimeAi';
 import {
   parseUnderstanding,
+  validateItem,
   UnderstandingContractError,
   UNDERSTANDING_DIMENSIONS,
   DIMENSION_LABELS,
@@ -58,8 +59,28 @@ export interface ExtractionFacts {
   role?: string | null;
 }
 
+/**
+ * An item the model produced that the contract would not accept.
+ *
+ * Kept rather than discarded. The customer said something to produce it, and a dropped item
+ * that nobody can see is indistinguishable from a call that was never made - so the raw
+ * value travels with the reason it was refused, and a human can look at the pile.
+ */
+export interface RejectedItem {
+  index: number;
+  reason: string;
+  raw: unknown;
+}
+
 export type ExtractionResult =
-  | { ok: true; understanding: ProjectUnderstanding; runtime_ms: number; cost_usd: number }
+  | {
+      ok: true;
+      understanding: ProjectUnderstanding;
+      /** Items the contract refused. Empty on a clean run; never silently dropped. */
+      rejected: RejectedItem[];
+      runtime_ms: number;
+      cost_usd: number;
+    }
   | { ok: false; error_class: 'EmptyInput' | 'EmptyModelResponse' | 'ContractViolation'; error: string; violations?: string[] };
 
 /**
@@ -180,20 +201,54 @@ export async function extractUnderstanding(params: {
     };
   }
 
-  try {
-    const understanding = parseUnderstanding(parsed);
+  // Items are validated ONE AT A TIME rather than as a block.
+  //
+  // The first live run against a real 245-second call failed entirely because the model
+  // invented a dimension on a single item; a rerun of the same transcript produced eleven
+  // valid ones. Model drift on an enum key is normal and will keep happening, and losing a
+  // customer's whole interview to it is a far worse failure than dropping the one item.
+  // Nothing is coerced or repaired - refused items are returned, with the reason and their
+  // raw value, so the loss is visible instead of silent.
+  const allowed = PROVENANCE_BY_SOURCE[params.source];
+  const rawItems: unknown[] = Array.isArray((parsed as any).items) ? (parsed as any).items : [];
+  const items: any[] = [];
+  const rejected: RejectedItem[] = [];
 
-    const sourceViolations = provenanceViolations(understanding, params.source);
-    if (sourceViolations.length > 0) {
+  rawItems.forEach((raw, index) => {
+    const checked = validateItem(raw);
+    if (!checked.ok) {
+      rejected.push({ index, reason: checked.reason, raw });
+      return;
+    }
+    if (!allowed.includes(checked.item.provenance)) {
+      rejected.push({
+        index,
+        reason: `provenance "${checked.item.provenance}" is not available to a ${params.source} extraction`,
+        raw,
+      });
+      return;
+    }
+    items.push(checked.item);
+  });
+
+  // Document-level failures, which per-item salvage cannot rescue: no name for the project,
+  // or nothing left after the refusals. An understanding of nothing is not an understanding.
+  try {
+    const understanding = parseUnderstanding({ ...(parsed as any), items });
+
+    if (understanding.items.length === 0) {
       return {
         ok: false,
         error_class: 'ContractViolation',
-        error: `extraction claimed provenance it could not have: ${sourceViolations.join('; ')}`,
-        violations: sourceViolations,
+        error:
+          rejected.length > 0
+            ? `every item was refused by the contract: ${rejected.map((r) => r.reason).join('; ')}`
+            : 'model returned no items',
+        violations: rejected.map((r) => `item ${r.index}: ${r.reason}`),
       };
     }
 
-    return { ok: true, understanding, runtime_ms, cost_usd };
+    return { ok: true, understanding, rejected, runtime_ms, cost_usd };
   } catch (err: any) {
     if (err instanceof UnderstandingContractError) {
       return { ok: false, error_class: 'ContractViolation', error: err.message, violations: err.violations };

@@ -1,6 +1,7 @@
-import { Op } from 'sequelize';
+import { Op, literal } from 'sequelize';
 import { BehavioralSignal, IntentScore, Visitor } from '../models';
 import { logAgentExecution } from './governanceService';
+import { botExclusionSql, isBotUserAgent } from './visitorBotDetection';
 
 /**
  * Time-decay half-life in days. A signal loses half its weight every 7 days.
@@ -46,6 +47,18 @@ export async function computeIntentScore(visitorId: string): Promise<IntentScore
   const startTime = Date.now();
   const visitor = await Visitor.findByPk(visitorId);
   if (!visitor) return null;
+
+  // A crawler is not a lead. Every one of the twenty automated sessions on the
+  // live dashboard on 2026-09-04 carried a score of 100 "Very High" — the crawl
+  // was walking hundreds of pages, which is exactly what the model rewards — and
+  // those scores feed the high-intent list and the behavioural trigger campaigns.
+  // So the pollution was not cosmetic: it was queueing outreach at machines.
+  //
+  // Declining to score is the right move rather than scoring and filtering later:
+  // an unwritten row cannot leak into a consumer that forgot to filter.
+  if (isBotUserAgent((visitor as any).user_agent)) {
+    return null;
+  }
 
   const now = new Date();
 
@@ -188,8 +201,18 @@ export async function getHighIntentVisitors(
   threshold = 45,
   limit = 50
 ): Promise<IntentScore[]> {
+  // Historical rows written before bots were excluded from scoring are still in
+  // the table, so the read filters as well as the write. Belt and braces on
+  // purpose: this list is what a human acts on.
   return IntentScore.findAll({
-    where: { score: { [Op.gte]: threshold } },
+    where: {
+      score: { [Op.gte]: threshold },
+      [Op.and]: [
+        literal(
+          `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "IntentScore"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+        ),
+      ],
+    },
     order: [['score', 'DESC']],
     limit,
     include: [

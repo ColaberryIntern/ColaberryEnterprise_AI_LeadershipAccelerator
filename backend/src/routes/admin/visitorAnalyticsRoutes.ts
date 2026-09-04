@@ -67,6 +67,21 @@ router.get('/api/admin/visitor-analytics/traffic-sources', requireAdmin, async (
   }
 });
 
+// ── Flow Sankey (traffic source → site entered → outcome) ─────────────────────
+
+router.get('/api/admin/visitor-analytics/flow-sankey', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { getVisitorFlowSankey } = await import('../../services/visitorFlowSankeyService');
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days as string, 10) || 30));
+    const includeBots = req.query.includeBots === 'true';
+    const data = await getVisitorFlowSankey(days, includeBots);
+    res.json(data);
+  } catch (err: any) {
+    console.error('[VisitorAnalytics] Flow sankey error:', err.message);
+    res.status(500).json({ error: 'Failed to load visitor flow' });
+  }
+});
+
 // ── Sites Breakdown (per-site traffic for cross-site visibility) ──────────────
 
 router.get('/api/admin/visitor-analytics/sites', requireAdmin, async (req: Request, res: Response) => {
