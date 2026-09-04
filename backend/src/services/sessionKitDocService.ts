@@ -39,6 +39,35 @@ export async function renderSessionOutline(sessionId: string): Promise<string | 
   return renderClassOutline(spec);
 }
 
+/**
+ * Render the pre-class TEACHING GUIDE for a session — the long-form document an
+ * instructor reads (or prints) before teaching: every slide in order, in plain
+ * language, with the terms it uses and the pacing it implies. Same KitSpec the
+ * deck renders from, so the two can never describe different classes.
+ * Null if the session does not exist.
+ */
+export async function renderSessionTeachingGuide(sessionId: string): Promise<string | null> {
+  const kit = await buildSessionKit(sessionId);
+  if (!kit) return null;
+  // Loaded on first use rather than at import. The guide is four modules of
+  // mostly-static strings — a stylesheet, a browser runtime, ~90 glossary
+  // entries — that nothing else in the process ever needs, and this endpoint
+  // is a download somebody asks for a handful of times a week. Keeping it out
+  // of the startup graph costs nothing here and keeps boot paying only for
+  // what every request actually uses.
+  const { renderTeachingGuide } = await import('./classKit/teachingGuideHtml');
+  const config = await getKitConfig(sessionId);
+  const spec = buildKitSpec({
+    session: kit.session,
+    cohortName: kit.cohort_name,
+    checkinUrl: kit.checkin_url,
+    qrSvg: kit.qr_svg,
+    meetLink: kit.meeting_link,
+    config,
+  });
+  return renderTeachingGuide(spec);
+}
+
 export type KitDocMode = 'live' | 'rehearse' | 'standalone';
 
 /**

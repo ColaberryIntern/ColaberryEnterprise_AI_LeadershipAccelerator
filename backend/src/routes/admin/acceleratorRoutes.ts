@@ -4,6 +4,7 @@ import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
   handleGetSessionKit, handleGetPresenterLink, handleGetSessionKitDoc, handleGetSessionOutline, handleGetSessionReadiness,
+  handleGetSessionTeachingGuide,
   handleGetSessionKitConfig, handleSaveSessionKitConfig, handleGenerateInteraction, handleRewriteCategory,
   handleGenerateMeetLink, handleGenerateCohortMeetLinks,
   handleGetAttendance, handleMarkAttendance, handleUpdateAttendance,
@@ -117,6 +118,8 @@ router.get('/api/admin/accelerator/sessions/:id/kit-doc', requireAdmin, handleGe
 router.get('/api/admin/accelerator/sessions/:id/outline', requireAdmin, handleGetSessionOutline);
 // Instructor readiness report (prep + source/evidence ledger).
 router.get('/api/admin/accelerator/sessions/:id/readiness', requireAdmin, handleGetSessionReadiness);
+// Pre-class teaching guide (every slide in plain language) — read or print before teaching.
+router.get('/api/admin/accelerator/sessions/:id/teaching-guide', requireAdmin, handleGetSessionTeachingGuide);
 // Instructor Class Kit overrides (story beats, Theater, Build Bay detail, evidence).
 router.get('/api/admin/accelerator/sessions/:id/kit-config', requireAdmin, handleGetSessionKitConfig);
 router.put('/api/admin/accelerator/sessions/:id/kit-config', requireAdmin, handleSaveSessionKitConfig);
