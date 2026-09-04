@@ -50,6 +50,13 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
     const intentScore = visitor?.intentScore;
 
     return {
+      // `id` and `fingerprint` are the names the admin view model declares
+      // (frontend AdminVisitorsPage `Visitor`). They were previously emitted only
+      // as `visitor_id` / `visitor_fingerprint`, so every live row rendered with
+      // an undefined React key and an "Anonymous" label with no fingerprint tail,
+      // and clicking a row called `/api/admin/visitors/undefined/sessions`.
+      id: s.visitor_id,
+      fingerprint: visitor?.fingerprint ?? null,
       session_id: s.id,
       visitor_id: s.visitor_id,
       visitor_fingerprint: visitor?.fingerprint ?? null,
@@ -57,9 +64,18 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
       lead_name: lead?.name ?? null,
       current_page: s.exit_page,
       started_at: s.started_at,
+      // Same number under both names, deliberately. The table reads
+      // `session_duration`; `duration_seconds` is kept because it is the column
+      // name and the shape every other session payload in this service uses.
+      session_duration: s.duration_seconds,
       duration_seconds: s.duration_seconds,
       pageview_count: s.pageview_count,
       referrer_domain: s.referrer_domain,
+      // Which property the visitor is actually on. The tracker feeds eight
+      // hostnames into one table, so a live row without this is unattributable —
+      // a crawler on worldoftaxonomy.com and a buyer on enterprise.colaberry.ai
+      // render identically without it.
+      site_slug: s.site_slug ?? visitor?.site_slug ?? null,
       device_type: s.device_type ?? visitor?.device_type ?? null,
       ip_address: s.ip_address ?? visitor?.ip_address ?? null,
       city: visitor?.city ?? null,
@@ -69,6 +85,27 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
       intent_level: intentScore?.intent_level ?? null,
     };
   });
+}
+
+/**
+ * How many distinct visitors have fired a page event in the last 5 minutes.
+ *
+ * Counted separately from `getLiveVisitors` rather than derived from its length:
+ * that function is LIMITed (50 by default) for the table, so using its length as
+ * the "Live Now" figure would silently cap the headline number at the page size
+ * and read as a plateau rather than a truncation.
+ */
+export async function countLiveVisitors(): Promise<number> {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+  const [row] = await sequelize.query<{ count: string }>(
+    `SELECT COUNT(DISTINCT visitor_id)::int AS count
+       FROM page_events
+      WHERE timestamp > :since`,
+    { replacements: { since: fiveMinutesAgo }, type: QueryTypes.SELECT }
+  );
+
+  return Number(row?.count ?? 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +133,7 @@ export async function getVisitorStats(
     bounceData,
     visitorsToday,
     sessionsToday,
+    liveCount,
   ] = await Promise.all([
     VisitorSession.count({
       where: rangeWhere,
@@ -123,6 +161,7 @@ export async function getVisitorStats(
       col: 'visitor_id',
     }),
     VisitorSession.count({ where: todayWhere }),
+    countLiveVisitors(),
   ]);
 
   const avgDurationVal = (avgDuration as any)?.avg_duration ?? 0;
@@ -130,7 +169,29 @@ export async function getVisitorStats(
   const totalCount = Number((bounceData as any)?.total_count ?? 0);
   const bounceRate = totalCount > 0 ? Math.round((bounceCount / totalCount) * 10000) / 100 : 0;
 
+  // Two naming conventions on purpose, and this is the fix rather than a wart.
+  //
+  // The admin page declares its `VisitorStats` in camelCase (liveCount,
+  // todayVisitors, todaySessions, visitors30d, sessions30d, avgDuration,
+  // bounceRate) and this function only ever returned snake_case. Nothing threw:
+  // every card read `stats.todayVisitors ?? 0` off an object that had
+  // `visitors_today`, so the whole dashboard rendered a confident 0 against a
+  // table holding 40,788 sessions. `liveCount` had no server-side source at all.
+  //
+  // The snake_case keys are retained because they are this endpoint's shipped
+  // shape and match the column names every other query in this file returns;
+  // dropping them would trade one silent contract break for another.
   return {
+    // camelCase — the shape the admin view model consumes
+    liveCount,
+    todayVisitors: visitorsToday,
+    todaySessions: sessionsToday,
+    visitors30d: totalVisitors,
+    sessions30d: totalSessions,
+    pageviews30d: pageviewSum ?? 0,
+    avgDuration: Math.round(Number(avgDurationVal)),
+    bounceRate,
+    // snake_case — retained for the shipped contract
     total_visitors: totalVisitors,
     total_sessions: totalSessions,
     total_pageviews: pageviewSum ?? 0,
@@ -138,6 +199,7 @@ export async function getVisitorStats(
     bounce_rate: bounceRate,
     visitors_today: visitorsToday,
     sessions_today: sessionsToday,
+    live_count: liveCount,
   };
 }
 
