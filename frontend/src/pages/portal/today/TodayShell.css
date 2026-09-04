@@ -318,7 +318,18 @@
 .te-page-h .crumb{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--cherry-text);margin-bottom:6px}
 .te-page-h h1{font-size:30px;line-height:1.12;color:var(--strong);margin:0;font-weight:700;letter-spacing:-.01em}
 .te-page-h .sub{color:var(--muted);font-size:16px;margin-top:6px;max-width:720px}
-.te-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;align-items:start}
+/* The ONE definition of the portal's two-column format: a working column that
+   can shrink, and a fixed-width secondary rail to its right (and left of the
+   contacts list). Classroom and Community render their own markup but read
+   these same values, so the three pages cannot drift apart by a few pixels the
+   way they had. Every consumer uses a fallback, because timeline.css is also
+   used outside the portal shell where these custom properties do not exist. */
+.te-shell{--te-side-w:340px;--te-side-gap:22px;
+  /* Clear the sticky app bar. --te-top-h is measured and published by
+     PortalShell (it is not one fixed height: the condensed slot and the mobile
+     padding both change it); the fallback is the height observed at 1600x950. */
+  --te-side-top:calc(var(--te-top-h,110px) + 16px)}
+.te-grid{display:grid;grid-template-columns:minmax(0,1fr) var(--te-side-w,340px);gap:var(--te-side-gap,22px);align-items:start}
 /* The timeline (middle) is the priority and must not go skinny: drop the inner
    340px aside early so the feed keeps its width. Shrink order overall: the right
    rail (contacts) collapses first (≤1200), then the left nav (≤1000); the middle
@@ -328,7 +339,7 @@
 /* sticky right rail, same pattern as Classroom's .tl-side (timeline.css) --
    stays in view while the middle column scrolls; drops back to normal flow
    once the grid collapses to one column so it doesn't stick mid-stack. */
-.te-side{position:sticky;top:20px;align-self:start}
+.te-side{position:sticky;top:var(--te-side-top,20px);align-self:start}
 @media(max-width:1300px){.te-side{position:static;top:auto}}
 
 .te-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-16);box-shadow:var(--shadow-md)}
