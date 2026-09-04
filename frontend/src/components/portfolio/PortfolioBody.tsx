@@ -37,6 +37,25 @@ interface ProjectItem {
   hero_image_url?: string | null;
   /** The published write-up about THIS project, at /p/:slug. Null when there is none. */
   record_slug?: string | null;
+  /** The published case study about THIS project, at /stories/:slug. Preferred. */
+  case_study_slug?: string | null;
+}
+
+/**
+ * Where a project card drills to, and what the link should be called.
+ *
+ * THE CASE STUDY WINS when there is one. Ali, on landing from a card: "Clicking on the
+ * card takes you to a non matching page. It should look more like this /stories/". The
+ * case study is the richer surface and the one the rest of the site uses; the capstone
+ * record remains the fallback so a project that has only a write-up still drills
+ * somewhere rather than going quiet.
+ */
+function drillTarget(p: ProjectItem): { href: string; label: string } | null {
+  if (p.case_study_slug) {
+    return { href: `/stories/${p.case_study_slug}`, label: 'Read the full case study' };
+  }
+  if (p.record_slug) return { href: `/p/${p.record_slug}`, label: 'Read the write-up' };
+  return null;
 }
 
 interface Repository { name: string; url: string }
@@ -325,6 +344,7 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
               <div className="pf-projects">
                 {projects.map((p, i) => {
                   const meta = [p.organization, p.industry].filter(Boolean).join(' · ');
+                  const drill = drillTarget(p);
                   return (
                     <article className="pf-proj" key={`${p.title}${i}`}>
                       {/* THE WHOLE CARD DRILLS IN when a write-up exists. Ali: "I should
@@ -332,25 +352,23 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
                           The hero and the title are one target rather than a small link,
                           because a card that is clickable in one corner reads as a card
                           that is not clickable. */}
-                      {p.record_slug
-                        ? <a href={`/p/${p.record_slug}`} className="pf-hero-link"><Hero title={p.title} src={p.hero_image_url} /></a>
+                      {drill
+                        ? <a href={drill.href} className="pf-hero-link"><Hero title={p.title} src={p.hero_image_url} /></a>
                         : <Hero title={p.title} src={p.hero_image_url} />}
                       <div className="pf-projbody">
                         <h3 className="pf-projttl">
-                          {p.record_slug
-                            ? <a href={`/p/${p.record_slug}`} className="pf-projttl-link">{p.title}</a>
+                          {drill
+                            ? <a href={drill.href} className="pf-projttl-link">{p.title}</a>
                             : p.title}
                         </h3>
                         {meta && <div className="pf-projmeta">{meta}</div>}
                         {p.problem && <p className="pf-projtext">{p.problem}</p>}
                         {p.automation_goal && <p className="pf-projtext">{p.automation_goal}</p>}
-                        {(p.repo_url || p.demo_url || p.record_slug) && (
+                        {(p.repo_url || p.demo_url || drill) && (
                           <div className="pf-projlinks">
                             {/* Named for what it is rather than "read more": this is the
                                 long-form account of the build, not a teaser. */}
-                            {p.record_slug && (
-                              <a href={`/p/${p.record_slug}`}>Read the full case study</a>
-                            )}
+                            {drill && <a href={drill.href}>{drill.label}</a>}
                             {p.demo_url && (
                               <a href={p.demo_url} target="_blank" rel="noopener noreferrer">
                                 View it live
