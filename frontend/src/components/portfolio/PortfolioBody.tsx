@@ -42,19 +42,24 @@ interface ProjectItem {
 }
 
 /**
- * Where a project card drills to, and what the link should be called.
+ * Where a project card drills to, or null when it should not be clickable at all.
  *
- * THE CASE STUDY WINS when there is one. Ali, on landing from a card: "Clicking on the
- * card takes you to a non matching page. It should look more like this /stories/". The
- * case study is the richer surface and the one the rest of the site uses; the capstone
- * record remains the fallback so a project that has only a write-up still drills
- * somewhere rather than going quiet.
+ * A CASE STUDY IS THE ONLY DESTINATION. Ali: "when I click on the project, it takes me to
+ * a page we don't even use anymore. It should only be clickable if it's connected to a
+ * Case study. Otherwise the other links are just fine."
+ *
+ * `/p/:slug` — the capstone record — was the fallback and is now refused. A card that
+ * looks clickable and lands somewhere retired is worse than a card that does not invite
+ * the click: the reader has already spent the click before learning it was not worth it.
+ * `record_slug` is still published, so restoring the fallback is a one-line change if
+ * that surface comes back.
+ *
+ * The repository and demo links are untouched. They go where they say they go.
  */
 function drillTarget(p: ProjectItem): { href: string; label: string } | null {
   if (p.case_study_slug) {
     return { href: `/stories/${p.case_study_slug}`, label: 'Read the full case study' };
   }
-  if (p.record_slug) return { href: `/p/${p.record_slug}`, label: 'Read the write-up' };
   return null;
 }
 
