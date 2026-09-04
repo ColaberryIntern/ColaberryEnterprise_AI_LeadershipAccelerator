@@ -2465,6 +2465,36 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'rather than trusting a status code.',
     enabled: true,
   },
+  // --- Reese Phase 1: presence heartbeat (closing the gap the Phase 2 comment
+  // below has flagged since 2026-08-16) ---
+  // schedulerService.ts's startScheduler() has called
+  // instrumentCronJob('ReesePresenceHeartbeat', ...) every minute since Phase 1
+  // shipped, but with no matching AiAgent row, instrumentCronJob() takes its
+  // "agent not in registry, run untracked" branch on every single run: no
+  // enabled/paused gate, no run_count/error_count, no AiAgentActivityLog row,
+  // invisible to cronHealthAlertService's missed-run alerting and to Admin >
+  // Agents. The cron code itself needed zero changes — instrumentCronJob() was
+  // always looking this row up by name; it just never existed. Ali, reviewing
+  // the Reese agent family for exactly this kind of ungoverned-agent risk
+  // (2026-09-04): register it, leave Phase 2's two crons and the supersession
+  // resolver below exactly as they are — each already has its own real,
+  // independent kill switch.
+  {
+    agent_name: 'ReesePresenceHeartbeat',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reesePresenceHeartbeat.ts',
+    trigger_type: 'cron',
+    schedule: '*/1 * * * *',
+    category: 'student_success',
+    description:
+      'Reese Phase 1 — touches only Reese\'s own CommunityMember.last_active_at ' +
+      'every minute, the same cadence a real student\'s browser uses, so the ' +
+      'People panel\'s existing presence logic reads Reese as online with no ' +
+      'new real-time infrastructure. No LLM call, no message sent, no ticket ' +
+      'created — a presence signal only.',
+    enabled: true,
+  },
   // --- Reese Phase 2: Autonomous Outreach (the two new scheduled crons) ---
   // Registered here (not left to run "untracked", the gap Phase 1's own
   // ReesePresenceHeartbeat cron has today) specifically so
