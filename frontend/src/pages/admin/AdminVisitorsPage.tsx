@@ -33,6 +33,7 @@ interface Visitor {
   session_id?: string;
   site_slug?: string | null;
   is_bot?: boolean;
+  is_likely_bot?: boolean;
   current_page?: string;
   exit_page?: string;
   session_duration?: number;
@@ -47,6 +48,23 @@ interface Visitor {
     last_signal_at?: string;
     score_updated_at?: string;
   } | null;
+}
+
+/**
+ * Someone signed into the portal right now, by name.
+ *
+ * A different unit from `Visitor` and rendered in its own list on purpose: this
+ * comes from portal presence (which knows who people are), not from the
+ * anonymous tracker (which knows only a fingerprint). Merging them would imply
+ * an equivalence that does not hold and could count one human twice.
+ */
+interface SignedInPerson {
+  enrollment_id: string;
+  name: string;
+  avatar_url: string | null;
+  last_active_at: string;
+  cohort_id: string | null;
+  presence_status: string;
 }
 
 interface BehavioralSignalData {
@@ -284,6 +302,9 @@ function AdminVisitorsPage() {
   // question about people. Off rather than on because the counts feed judgement
   // about real demand.
   const [showBots, setShowBots] = useState(false);
+  // Signed-in portal people, from presence. Separate state because it is a
+  // separate list from a separate source, not another page of `liveVisitors`.
+  const [signedIn, setSignedIn] = useState<SignedInPerson[]>([]);
   const [loading, setLoading] = useState(true);
 
   /* --- All visitors --- */
@@ -360,6 +381,7 @@ function AdminVisitorsPage() {
           : [];
       setLiveVisitors(rows);
       if (typeof payload?.count === 'number') setLiveCount(payload.count);
+      setSignedIn(Array.isArray(payload?.signed_in) ? payload.signed_in : []);
     } catch (err) {
       console.error('Failed to fetch live visitors:', err);
     }
@@ -614,6 +636,10 @@ function AdminVisitorsPage() {
     // useful fact about it, and a row reading "Anonymous" for Googlebot invites
     // the reader to treat it as a person.
     if (v.is_bot) return <StatusBadge label="Bot" tone="warning" />;
+    // Distinct label from "Bot": this one is an inference from behaviour (40+
+    // pages over 2+ hours, or a crawl rate no person sustains), not something
+    // the client declared. Saying which rule fired lets the reader judge it.
+    if (v.is_likely_bot) return <StatusBadge label="Likely bot" tone="warning" />;
     return v.lead_id
       ? <StatusBadge label="Known" tone="success" />
       : <StatusBadge label="Anonymous" tone="neutral" />;
@@ -660,14 +686,63 @@ function AdminVisitorsPage() {
         </div>
       )}
 
+      {/* Signed-in people — named, from portal presence, not the tracker */}
+      <SectionCard
+        title={`Signed in now (${signedIn.length})`}
+        icon="user-star-line"
+        actions={
+          <span className="text-muted small">
+            People in the portal, by name — from presence, not tracking
+          </span>
+        }
+        className="mb-4"
+        padded={false}
+      >
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>Person</th>
+                <th>Status</th>
+                <th>Last active</th>
+              </tr>
+            </thead>
+            <tbody>
+              {signedIn.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="text-center py-4">
+                    <div className="text-muted">Nobody is signed into the portal right now.</div>
+                  </td>
+                </tr>
+              ) : (
+                signedIn.map((p) => (
+                  <tr key={p.enrollment_id}>
+                    <td>
+                      <span className="fw-medium">{p.name}</span>
+                    </td>
+                    <td><StatusBadge label="Signed in" tone="success" /></td>
+                    <td className="small text-muted">{formatRelative(p.last_active_at)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+
       {/* Live visitors table */}
       <SectionCard
         // Says "50 of 63" rather than "50" when the list is truncated. A bare
         // count that silently stops at the limit reads as a ceiling on traffic.
+        // Named "Anonymous" rather than "Active" because the distinction is the
+        // whole point of the two tables: this one can only ever show fingerprints
+        // from the public sites, and reading it as "everyone on the site" is
+        // exactly the misunderstanding that made a signed-in colleague look
+        // missing.
         title={
           liveCount != null && liveCount > liveVisitors.length
-            ? `Active Visitors (${liveVisitors.length} of ${liveCount})`
-            : `Active Visitors (${liveVisitors.length})`
+            ? `Anonymous visitors (${liveVisitors.length} of ${liveCount})`
+            : `Anonymous visitors (${liveVisitors.length})`
         }
         icon="pulse-line"
         actions={

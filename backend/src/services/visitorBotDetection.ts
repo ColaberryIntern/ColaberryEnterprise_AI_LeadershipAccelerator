@@ -14,12 +14,14 @@
  * distinguishes that from a real person, and pretending otherwise would put a
  * confident "human" label on a bot, which is worse than leaving it unlabelled.
  *
- * So this is deliberately a LOW-FALSE-POSITIVE filter, not a complete one. It
- * removes the crawlers that announce themselves and says nothing about the rest.
- * Catching the liars needs behavioural signals — request rate, pageviews per
- * session, whether the client ever executes JS — which is a separate piece of
- * work with a different risk profile, because those heuristics CAN misclassify
- * a real, fast-reading person.
+ * So the user-agent half is deliberately a LOW-FALSE-POSITIVE filter: it removes
+ * the crawlers that announce themselves and says nothing about the rest.
+ *
+ * The liars are caught by the BEHAVIOURAL half at the bottom of this file, added
+ * once the disguised crawl became visible on the live dashboard. The two halves
+ * answer different questions and are reported separately — `is_bot` for "it said
+ * so", `is_likely_bot` for "it behaved that way" — because the second is a
+ * judgement and the reader deserves to know which one fired.
  */
 
 /**
@@ -140,4 +142,83 @@ export function isBotUserAgent(userAgent?: string | null): boolean {
 export function botExclusionSql(column: string): string {
   const clauses = BOT_UA_PATTERNS.map((p) => `${column} ILIKE '%${p}%'`).join(' OR ');
   return `(${column} IS NULL OR NOT (${clauses}))`;
+}
+
+// ---------------------------------------------------------------------------
+// Behavioural detection — for crawlers that present a clean browser string
+// ---------------------------------------------------------------------------
+
+/**
+ * Some crawlers lie, and the user-agent rules above cannot see them.
+ *
+ * Observed on the live dashboard 2026-09-04: twenty concurrent "visitors", every
+ * one reporting Mac Chrome, Mac Safari or Windows Chrome — no bot marker
+ * anywhere — walking `/system/...` and `/crosswalks/...` node URLs. One had
+ * accumulated 291 pageviews across 19 hours; another 243 across 15. They were
+ * also every one of them scored "100 Very High" intent, so the crawl was
+ * feeding the lead-scoring model as well as the visitor count.
+ *
+ * No string comparison can separate those from a person. The BEHAVIOUR can, and
+ * it is not a close call, which is why the thresholds below are set where a
+ * human being simply does not go rather than where the crawlers happen to sit.
+ *
+ * DELIBERATELY CONSERVATIVE. A filter that hides a real prospect is far worse
+ * than one that lets a crawler through: the crawler is visible and annoying,
+ * whereas the hidden human is invisible and silently costs a sale. So these
+ * catch the extreme end and knowingly miss the rest — a session of 12 pages over
+ * two hours is left alone even though it is probably automated too.
+ */
+export const AUTOMATED_MIN_PAGEVIEWS = 40;
+export const AUTOMATED_MIN_DURATION_SECONDS = 2 * 60 * 60; // 2 hours
+export const AUTOMATED_MAX_PAGES_PER_MINUTE = 5;
+/** Below this, a high rate is just a fast first few clicks, not a crawl. */
+export const AUTOMATED_RATE_MIN_PAGEVIEWS = 10;
+
+export interface SessionShape {
+  pageview_count?: number | null;
+  duration_seconds?: number | null;
+}
+
+/**
+ * Two independent rules, either sufficient:
+ *
+ *  1. Volume AND endurance — 40+ pages sustained over 2+ hours. Catches the slow,
+ *     patient crawler (291 pages / 19 hours reads as only 0.25 pages per minute,
+ *     so a rate test alone would miss it entirely).
+ *  2. Rate — more than 5 pages a minute once at least 10 pages deep. Catches the
+ *     fast scraper that a duration test would miss.
+ *
+ * Neither triggers on ordinary reading: 40 pages in one sitting is already
+ * unusual, and pairing it with two continuous hours puts it out of human reach.
+ */
+export function isLikelyAutomatedSession(session: SessionShape): boolean {
+  const pages = Number(session?.pageview_count ?? 0);
+  const seconds = Number(session?.duration_seconds ?? 0);
+  if (!Number.isFinite(pages) || !Number.isFinite(seconds)) return false;
+
+  if (pages >= AUTOMATED_MIN_PAGEVIEWS && seconds >= AUTOMATED_MIN_DURATION_SECONDS) return true;
+
+  if (pages >= AUTOMATED_RATE_MIN_PAGEVIEWS && seconds >= 60) {
+    const perMinute = pages / (seconds / 60);
+    if (perMinute > AUTOMATED_MAX_PAGES_PER_MINUTE) return true;
+  }
+
+  return false;
+}
+
+/**
+ * The same two rules as SQL, negated — "this session is NOT automated".
+ *
+ * Expressed here rather than by filtering rows in JS for the same reason the
+ * user-agent rule is: the live list is LIMITed, so dropping rows after the query
+ * returns fewer than asked for while more real people wait further down.
+ *
+ * Column names are supplied by the caller and every call site passes a literal.
+ */
+export function notAutomatedSessionSql(pageviewCol: string, durationCol: string): string {
+  const volume = `(COALESCE(${pageviewCol},0) >= ${AUTOMATED_MIN_PAGEVIEWS} AND COALESCE(${durationCol},0) >= ${AUTOMATED_MIN_DURATION_SECONDS})`;
+  const rate =
+    `(COALESCE(${pageviewCol},0) >= ${AUTOMATED_RATE_MIN_PAGEVIEWS} AND COALESCE(${durationCol},0) >= 60 ` +
+    `AND (COALESCE(${pageviewCol},0)::numeric / (COALESCE(${durationCol},1)::numeric / 60)) > ${AUTOMATED_MAX_PAGES_PER_MINUTE})`;
+  return `NOT (${volume} OR ${rate})`;
 }
