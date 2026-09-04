@@ -439,9 +439,32 @@ async function buildPortfolio(
     const projectIds = (projects as any[])
       .map((p) => p?.id).filter((id): id is string => typeof id === 'string' && !!id);
     if (projectIds.length) {
+      // TWO WAYS A CASE STUDY BELONGS TO A PROJECT, and the second is the one that
+      // matches reality. `case_studies.project_id` is set only when the record was
+      // created FROM a project. Every case study published on this platform so far was
+      // created from a repo collection instead, so that column is null on all of them --
+      // measured 2026-09-04: 8 of 9 rows, including the one live at
+      // /stories/the-ai-proposes-a-verified-human-decides, which is Quincy Nkwain
+      // Ninying's and was invisible to a project_id-only join.
+      //
+      // The repository is what actually carries the ownership: the case study's repo
+      // matches a `github_connections` row, and that row names the project. Matched
+      // case-insensitively because GitHub owner/name are.
       const [rows]: any = await sequelize.query(
-        `SELECT project_id, slug FROM case_studies
-          WHERE project_id = ANY($1::uuid[]) AND archived_at IS NULL`,
+        `SELECT DISTINCT project_id, slug FROM (
+           SELECT c.project_id, c.slug
+             FROM case_studies c
+            WHERE c.project_id = ANY($1::uuid[]) AND c.archived_at IS NULL
+           UNION
+           SELECT g.project_id, c.slug
+             FROM github_connections g
+             JOIN case_study_repositories r
+               ON lower(r.repo_owner) = lower(g.repo_owner)
+              AND lower(r.repo_name)  = lower(g.repo_name)
+             JOIN case_study_repo_collections col ON col.id = r.collection_id
+             JOIN case_studies c ON c.id = col.case_study_id
+            WHERE g.project_id = ANY($1::uuid[]) AND c.archived_at IS NULL
+         ) linked`,
         { bind: [projectIds] },
       );
       const [store, filters] = await Promise.all([
