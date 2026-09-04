@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PortalShell from '../today/PortalShell';
+import CondensedHeaderCard from '../../../pages/portal/today/CondensedHeaderCard';
 import { PaywallScreen } from '../../../components/paywall/PageGate';
 import { GATED_FEATURES } from '../../../components/paywall/gatedFeatures';
 import { fetchCareerProfile, CareerProfile } from '../../../services/careerApi';
@@ -107,8 +108,35 @@ const PortfolioPage: React.FC = () => {
     );
   }
 
+  // The next thing to do, carried into the sticky header once the page condenses -- the
+  // same affordance Classroom, Projects, Rooms and Community already give. Ali: "when I
+  // start scrolling down in the Portfolio area, next step should show at the top like the
+  // others do."
+  //
+  // It reads the FIRST UNMET readiness requirement rather than inventing an instruction,
+  // so the header and the checklist below it can never disagree. When everything is met
+  // the tone turns leaf and it says so instead of manufacturing another task.
+  const nextRequirement = profile.readiness?.requirements?.find((r) => !r.met) ?? null;
+  const allMet = !!profile.readiness && !nextRequirement;
+
   return (
-    <PortalShell>
+    <PortalShell
+      condensedSlot={(
+        <CondensedHeaderCard
+          tone={allMet ? 'leaf' : 'amber'}
+          label="Your portfolio"
+          title={allMet
+            ? 'Every readiness step is done'
+            : (nextRequirement?.label ?? 'Your portfolio')}
+          sub={allMet
+            ? 'Ask for review when you are ready to publish.'
+            : (nextRequirement?.detail
+              ?? (profile.readiness
+                ? `${profile.readiness.met_count} of ${profile.readiness.total_count} steps done`
+                : undefined))}
+        />
+      )}
+    >
       <div className="te-page-h cp-head">
         <div>
           <div className="crumb">Your career</div>
