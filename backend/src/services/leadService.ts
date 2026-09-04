@@ -162,17 +162,32 @@ export async function createLead(data: LeadInput) {
       await tryEnrollInWarmCampaign(recentDuplicate);
       return { lead: recentDuplicate, isDuplicate: true };
     }
+  }
 
-    // Duplicate check: same email (any age) — prevents unique constraint violation
-    const existingByEmail = await Lead.findOne({
-      where: { email: data.email },
-      order: [['created_at', 'DESC']],
-    });
-    if (existingByEmail) {
-      await tryEnrollInWarmCampaign(existingByEmail);
-      return { lead: existingByEmail, isDuplicate: true };
-    }
+  // Existing email — checked even for bypass phones, deliberately.
+  //
+  // This is not a dedup POLICY, it is a database INVARIANT: `leads_email_unique` is a
+  // unique index on lower(email). Skipping it does not create a second lead, it throws
+  // SequelizeUniqueConstraintError — whose default `.message` is the famously unhelpful
+  // string "Validation error" — which the ingest service turns into a 500.
+  //
+  // That is exactly how it failed: the bypass exists so a tester can re-run the full flow,
+  // but by also skipping this check it made the second run impossible for any email that
+  // already existed. The bypass worked once, then 500'd forever.
+  //
+  // Nothing is lost by deduping here. Ingest dispatches routing rules on the returned lead
+  // regardless of `isDuplicate` (leadIngestionService step 11), so the callback still
+  // places, the alert still sends, and the flow is still re-testable end to end.
+  const existingByEmail = await Lead.findOne({
+    where: { email: data.email },
+    order: [['created_at', 'DESC']],
+  });
+  if (existingByEmail) {
+    await tryEnrollInWarmCampaign(existingByEmail);
+    return { lead: existingByEmail, isDuplicate: true };
+  }
 
+  if (!isBypassPhone) {
     // Duplicate check: same phone (normalized)
     if (data.phone) {
       const phoneMatch = await findLeadByNormalizedPhone(data.phone);

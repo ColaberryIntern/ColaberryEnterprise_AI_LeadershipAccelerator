@@ -32,6 +32,7 @@ interface Visitor {
   // live-only fields
   session_id?: string;
   site_slug?: string | null;
+  is_bot?: boolean;
   current_page?: string;
   exit_page?: string;
   session_duration?: number;
@@ -279,6 +280,10 @@ function AdminVisitorsPage() {
   // Authoritative live count from the server. Kept apart from `liveVisitors.length`
   // because the table is LIMITed — the list can be capped while the count is not.
   const [liveCount, setLiveCount] = useState<number | null>(null);
+  // Self-identifying crawlers are hidden by default — "who is on the site" is a
+  // question about people. Off rather than on because the counts feed judgement
+  // about real demand.
+  const [showBots, setShowBots] = useState(false);
   const [loading, setLoading] = useState(true);
 
   /* --- All visitors --- */
@@ -341,7 +346,9 @@ function AdminVisitorsPage() {
 
   const fetchLive = useCallback(async () => {
     try {
-      const res = await api.get('/api/admin/visitors/live');
+      const res = await api.get('/api/admin/visitors/live', {
+        params: showBots ? { includeBots: 'true' } : undefined,
+      });
       // The endpoint now returns `{ visitors, count }`; it used to return the
       // bare array. Both are read so a cached bundle and a fresh API — in either
       // order — still populate the table.
@@ -356,7 +363,10 @@ function AdminVisitorsPage() {
     } catch (err) {
       console.error('Failed to fetch live visitors:', err);
     }
-  }, []);
+    // `showBots` is a real dependency: the poll closes over it, so omitting it
+    // would leave the 30s refresh permanently fetching the value the toggle had
+    // at mount and silently undo the user's choice on the next tick.
+  }, [showBots]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -599,10 +609,15 @@ function AdminVisitorsPage() {
     </div>
   );
 
-  const renderStatusBadge = (v: Visitor) =>
-    v.lead_id
+  const renderStatusBadge = (v: Visitor) => {
+    // "Bot" outranks Known/Anonymous: whether a crawler is identified is not the
+    // useful fact about it, and a row reading "Anonymous" for Googlebot invites
+    // the reader to treat it as a person.
+    if (v.is_bot) return <StatusBadge label="Bot" tone="warning" />;
+    return v.lead_id
       ? <StatusBadge label="Known" tone="success" />
       : <StatusBadge label="Anonymous" tone="neutral" />;
+  };
 
   /* ---------------------------------------------------------------- */
   /*  Tab content                                                      */
@@ -655,7 +670,24 @@ function AdminVisitorsPage() {
             : `Active Visitors (${liveVisitors.length})`
         }
         icon="pulse-line"
-        actions={<span className="text-muted small">Auto-refreshes every 30s</span>}
+        actions={
+          <div className="d-flex align-items-center gap-3">
+            <div className="form-check form-switch mb-0">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="live-show-bots"
+                checked={showBots}
+                onChange={(e) => setShowBots(e.target.checked)}
+              />
+              <label className="form-check-label small" htmlFor="live-show-bots">
+                Show bots
+              </label>
+            </div>
+            <span className="text-muted small">Auto-refreshes every 30s</span>
+          </div>
+        }
         padded={false}
       >
         <div className="table-responsive">

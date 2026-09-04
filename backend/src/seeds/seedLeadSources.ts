@@ -207,6 +207,31 @@ const SEEDS: SeedSource[] = [
         },
         required_fields: ['email'],
       },
+      {
+        // "Call me now" on /start/. Registered here because an entry point is DATA: the
+        // ingest service refuses any slug it does not know, so shipping the button without
+        // this row produced a form that validated client-side, posted, and was rejected
+        // with "Unknown or inactive entry point" - which is exactly what happened when the
+        // live page was first pressed.
+        slug: 'call_me_now',
+        name: 'Call Me Now',
+        page: '/start',
+        form_name: 'call-me-now',
+        description: 'Instant AI callback request on the AI Flotation start page',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          // The whole point of this entry. Without the mapping the number never reaches
+          // the lead row and the callback action has nothing to dial.
+          phone: 'phone',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        // Phone is required HERE rather than only in the routing action, so somebody who
+        // omits it is told on the form instead of getting a cheerful "we'll ring you"
+        // followed by silence.
+        required_fields: ['email', 'phone'],
+      },
     ],
   },
   {

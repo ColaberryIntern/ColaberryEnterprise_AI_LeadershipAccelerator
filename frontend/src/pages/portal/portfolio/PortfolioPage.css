@@ -334,8 +334,11 @@
   color: #fff;
 }
 
-.cp-preview-btn:hover:not(:disabled) { filter: brightness(0.93); }
-.cp-preview-btn:disabled { opacity: .6; cursor: default; }
+/* It is an <a> now, so the link defaults have to be answered explicitly or it renders
+   as underlined blue text inside a coloured button. */
+.cp-preview-btn { text-decoration: none; display: inline-block; }
+.cp-preview-btn:hover { filter: brightness(0.93); text-decoration: none; color: #fff; }
+.cp-preview-btn:visited, .cp-preview-btn:active { color: #fff; }
 
 /* Live, by link or indexed: the page is doing its job. */
 .cp-preview-cta.is-live { --pfcta-accent: #15803d; --pfcta-bg: #f0fdf4; --pfcta-bd: #bbf7d0; --pfcta-strong: #14532d; }
