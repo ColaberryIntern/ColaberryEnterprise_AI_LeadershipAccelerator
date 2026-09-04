@@ -4,6 +4,7 @@ import {
   getVisitorStats,
   getLiveVisitors,
   countLiveVisitors,
+  getLiveSignedInPeople,
   getVisitorTrend,
   getVisitorProfile,
 } from '../services/visitorAnalyticsService';
@@ -86,11 +87,21 @@ export async function handleGetLiveVisitors(req: Request, res: Response, next: N
     // Bots are hidden by default: the question this page answers is "who is on
     // the site", and a crawler is not a who. Opt in with ?includeBots=true.
     const includeBots = req.query.includeBots === 'true';
-    const [visitors, count] = await Promise.all([
+    const [visitors, count, signedIn] = await Promise.all([
       getLiveVisitors(limit, includeBots),
       countLiveVisitors(includeBots),
+      // Never allowed to take the endpoint down: presence is an enrichment, and
+      // a failure here must not cost the anonymous list it sits beside.
+      getLiveSignedInPeople().catch((err) => {
+        console.warn('[AdminVisitors] presence lookup failed (non-blocking):', err.message);
+        return [];
+      }),
     ]);
-    res.json({ visitors, count, includeBots });
+    // `signed_in` is a SEPARATE list with its own count, deliberately not folded
+    // into `count`. An anonymous fingerprint and a named person are different
+    // units; summing them would produce a headline that means nothing and could
+    // double-count the same human twice over.
+    res.json({ visitors, count, includeBots, signed_in: signedIn, signed_in_count: signedIn.length });
   } catch (error) {
     next(error);
   }
