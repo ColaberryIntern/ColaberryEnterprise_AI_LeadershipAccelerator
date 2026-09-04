@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { rewriteLinksWithJourneyToken } from './journeyLinkRewriter';
 import { randomUUID } from 'crypto';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
@@ -1025,6 +1026,17 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
 
   // Reply-To: use reply subdomain so Mandrill catches inbound replies
   // For Ali personal outreach, reply goes to ali@colaberry.com directly (he handles personally)
+  // Per-recipient journey token, minted HERE and not earlier. Sequence bodies are
+  // rendered at enrollment and stored on ScheduledEmail, then sent days or weeks later;
+  // a `jx` lives 30 minutes, so a token minted at render time would be expired before
+  // the mail left the queue. Same reason, same place, as the signed unsubscribe URL
+  // above. Only hostnames registered in brand_domains are touched - see
+  // journeyLinkRewriter for why that allowlist is the security property.
+  html = await rewriteLinksWithJourneyToken(html, {
+    leadId: action.lead_id ?? null,
+    campaignId: action.campaign_id ?? null,
+  });
+
   const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
   const replyToAddr = campaignType === 'executive_outreach'
     ? 'ali@colaberry.com'
