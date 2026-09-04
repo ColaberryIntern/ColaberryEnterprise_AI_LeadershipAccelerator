@@ -393,8 +393,14 @@ async function layout(browser) {
     await signIn(page, FIXTURES.open.token);
     await page.goto(`${BASE}/portal/cert-prep`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2500);
-    await page.evaluate(() => window.scrollTo(0, 800));
-    await page.waitForTimeout(900);
+    // Wait for the page to be tall enough to scroll past the condense threshold
+    // (220px) before scrolling. A fixed pause passed locally and failed against
+    // production, where the first render is slower - the check was measuring how
+    // fast the page loaded, not whether the header condenses.
+    await page.waitForFunction(() => document.documentElement.scrollHeight > window.innerHeight + 400, null,
+      { timeout: 20000 }).catch(() => undefined);
+    await page.evaluate(() => window.scrollTo(0, Math.max(900, document.documentElement.scrollHeight * 0.4)));
+    await page.waitForTimeout(1500);
     const m = await page.evaluate(() => {
       const top = document.querySelector('.te-top');
       const side = document.querySelector('.te-side');
