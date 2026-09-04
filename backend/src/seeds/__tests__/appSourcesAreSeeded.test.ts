@@ -49,6 +49,17 @@ function seededPairs(): Set<string> {
   return pairs;
 }
 
+/** Every .html under a directory, at any depth. */
+function htmlFilesUnder(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...htmlFilesUnder(full));
+    else if (entry.name.endsWith('.html')) out.push(full);
+  }
+  return out;
+}
+
 /** (source, entry) pairs the apps actually post to, read out of their HTML. */
 function appPairs(): Array<{ app: string; file: string; source: string; entry: string }> {
   const found: Array<{ app: string; file: string; source: string; entry: string }> = [];
@@ -58,9 +69,19 @@ function appPairs(): Array<{ app: string; file: string; source: string; entry: s
     const srcDir = path.join(APPS_DIR, app, 'src');
     if (!fs.existsSync(srcDir)) continue;
 
-    for (const file of fs.readdirSync(srcDir)) {
-      if (!file.endsWith('.html')) continue;
-      const html = fs.readFileSync(path.join(srcDir, file), 'utf8');
+    // RECURSIVE, and that is the whole point of this walk.
+    //
+    // It used to read only the files directly inside `src/`. Every page of these sites
+    // except the homepage lives in its own directory - `src/start/index.html` - so the
+    // one file it looked at was the one least likely to carry a form. A "call me now"
+    // form shipped in `start/` posting to an unseeded entry point, this test passed, and
+    // the failure surfaced only when the live button was pressed and the server answered
+    // "Unknown or inactive entry point".
+    //
+    // The test that exists to stop this bug happening a fourth time could not see three
+    // quarters of the pages it was guarding.
+    for (const file of htmlFilesUnder(srcDir)) {
+      const html = fs.readFileSync(file, 'utf8');
       for (const m of html.matchAll(/ingest\?source=([a-z0-9{}.\-]+)&entry=([a-z0-9_]+)/gi)) {
         // `{{brand.sourceSlug}}` is substituted at build time; resolve it from the app's
         // brand config so the assertion is about the real slug, not the token.
@@ -69,7 +90,7 @@ function appPairs(): Array<{ app: string; file: string; source: string; entry: s
           const cfg = fs.readFileSync(path.join(APPS_DIR, app, 'brand.config.js'), 'utf8');
           source = (cfg.match(/sourceSlug:\s*'([a-z0-9-]+)'/) || [, ''])[1];
         }
-        found.push({ app, file, source, entry: m[2] });
+        found.push({ app, file: path.relative(srcDir, file), source, entry: m[2] });
       }
     }
   }
