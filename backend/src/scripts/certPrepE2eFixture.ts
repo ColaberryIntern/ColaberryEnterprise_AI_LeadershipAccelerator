@@ -21,7 +21,6 @@
  *   node dist/scripts/certPrepE2eFixture.js            # create + print tokens
  *   node dist/scripts/certPrepE2eFixture.js --cleanup  # remove everything
  */
-import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
@@ -57,9 +56,16 @@ async function ensureCohort(name: string, startDate: string): Promise<string> {
       { replacements: { startDate, id: existing.id }, type: QueryTypes.UPDATE });
     return existing.id;
   }
+  /**
+   * core_day and core_time are NOT NULL in production and were not in the
+   * development database this script was written against. The first production
+   * run failed on exactly that: `null value in column "core_day"`. They are
+   * supplied here rather than made nullable, because a cohort genuinely has a
+   * meeting day and the drift is in the dev schema, not the prod one.
+   */
   const created = await one<{ id: string }>(
-    `INSERT INTO cohorts (id, name, start_date, created_at)
-     VALUES (gen_random_uuid(), :name, :startDate, NOW()) RETURNING id`,
+    `INSERT INTO cohorts (id, name, start_date, core_day, core_time, created_at)
+     VALUES (gen_random_uuid(), :name, :startDate, 'Monday', '18:00', NOW()) RETURNING id`,
     { name, startDate },
   );
   return created!.id;
@@ -76,7 +82,15 @@ async function ensureCohort(name: string, startDate: string): Promise<string> {
 async function ensureEnrollment(
   email: string, fullName: string, cohortId: string,
 ): Promise<{ id: string; portalToken: string }> {
-  const portalToken = crypto.randomBytes(24).toString('hex');
+  /**
+   * A UUID, not a hex string. `enrollments.portal_token` is typed `uuid` in
+   * production, and the first run there failed with
+   * `invalid input syntax for type uuid`. Generated in Postgres so the column's
+   * own type decides the format rather than this file guessing at it.
+   */
+  const [{ portal_token: portalToken }] = await sequelize.query<{ portal_token: string }>(
+    'SELECT gen_random_uuid()::text AS portal_token', { type: QueryTypes.SELECT },
+  );
   const expires = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
 
   const existing = await one<{ id: string }>(
@@ -93,8 +107,8 @@ async function ensureEnrollment(
   }
   const created = await one<{ id: string }>(
     `INSERT INTO enrollments
-       (id, full_name, email, cohort_id, status, portal_token, portal_token_expires_at, enrolled_at, created_at)
-     VALUES (gen_random_uuid(), :fullName, :email, :cohortId, 'active', :portalToken, :expires, NOW(), NOW())
+       (id, full_name, email, company, cohort_id, status, portal_token, portal_token_expires_at, enrolled_at, created_at)
+     VALUES (gen_random_uuid(), :fullName, :email, 'Colaberry E2E', :cohortId, 'active', :portalToken, :expires, NOW(), NOW())
      RETURNING id`,
     { fullName, email, cohortId, portalToken, expires },
   );

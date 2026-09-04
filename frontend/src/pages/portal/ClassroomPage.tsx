@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
+import BucketSections from '../../components/timeline/BucketSections';
+import { classroomSectionsEnabled } from './classroomBucketsFlag';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import { runtimeApi } from './runtime/runtimeApi';
@@ -183,6 +185,11 @@ const ClassroomPage: React.FC = () => {
   // weekCards (above) so the progress bar doesn't jump around as the student
   // types — only the rendered feed narrows to the matches.
   const searchTokens = useMemo(() => tokenizeQuery(query), [query]);
+  /* Off by default. A week that regroups itself under a student mid-cohort is
+     a worse surprise than a flat feed, so this ships dark and turns on per
+     cohort. Searching always uses the flat feed regardless. */
+  const sectionsOn = useMemo(() => classroomSectionsEnabled() && tokenizeQuery(query).length === 0, [query]);
+
   const visibleCards = useMemo(() => filterCardsByQuery(weekCards, query), [weekCards, query]);
   const searching = searchTokens.length > 0;
 
@@ -319,7 +326,23 @@ const ClassroomPage: React.FC = () => {
             ? <div className="tl-empty">No cards here yet.</div>
             : visibleCards.length === 0
               ? <div className="tl-empty">No cards match “{query.trim()}”. <button type="button" className="tl-btn sm primary" style={{ marginLeft: 8 }} onClick={() => setQuery('')}>Clear search</button></div>
-              : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
+              : sectionsOn
+                ? (
+                  /* Same cards, same handlers, same card component — grouped into
+                     the buckets every card already carries. Searching falls back
+                     to the flat feed on purpose: a search result set is not a
+                     week, and splitting six matches across seven headings buries
+                     them under their own section furniture. */
+                  <BucketSections
+                    cards={visibleCards}
+                    compactCompleted
+                    onOpen={openCard}
+                    onComplete={completeCard}
+                    onComments={openCard}
+                    onWorkspace={openCard}
+                  />
+                )
+                : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
         </div>
 
         <aside className="tl-side">
