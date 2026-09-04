@@ -31,6 +31,23 @@ jest.mock('../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }))
 jest.mock('../agentBlueprint/agentManagerConversationPrompt', () => ({
   buildAgentManagerConversationSystemPrompt: jest.fn(),
 }));
+// Reese Agentic AI Employee mission, Checkpoint B — agentManagerConversationService.ts
+// now imports managerReliabilityIntentService.ts, which imports ticketService.ts,
+// which imports { Ticket, TicketActivity } from '../models' — the barrel, which
+// triggers the full association graph (models/index.ts) at module-load time. This
+// test's own AiAgent mock is a plain object with no hasMany/belongsTo, so letting the
+// real barrel load crashes it — the exact same class of failure CI caught earlier
+// this session for agentRecentActivitySummary.ts's own barrel import. Mocked
+// wholesale here (this file only needs the detection path to return "not a
+// reliability message" for its own unrelated test messages, never the real logic —
+// that's agentManagerConversationService.reliabilityConfirmation.test.ts's job).
+jest.mock('../managerReliabilityIntentService', () => ({
+  detectReliabilityIntent: jest.fn(() => null),
+  detectConfirmationReply: jest.fn(() => 'ambiguous'),
+  buildConfirmationCardText: jest.fn(() => ''),
+  toPendingConfirmation: jest.fn(),
+  applyConfirmedReliabilityChange: jest.fn(),
+}));
 
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { buildAgentManagerConversationSystemPrompt } from '../agentBlueprint/agentManagerConversationPrompt';

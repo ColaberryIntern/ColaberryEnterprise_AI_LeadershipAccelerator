@@ -29,9 +29,18 @@ jest.mock('../agentBlueprint/agentManagerConversationPrompt', () => ({ buildAgen
 
 const mockDeclareReliabilityChange = jest.fn();
 const mockRestoreMetric = jest.fn();
+const mockGetReliabilityStatus = jest.fn();
 jest.mock('../metricReliabilityService', () => ({
   declareReliabilityChange: (...a: any[]) => mockDeclareReliabilityChange(...a),
   restoreMetric: (...a: any[]) => mockRestoreMetric(...a),
+  getReliabilityStatus: (...a: any[]) => mockGetReliabilityStatus(...a),
+}));
+
+const mockCreateTicket = jest.fn();
+jest.mock('../ticketService', () => ({
+  createTicket: (...a: any[]) => mockCreateTicket(...a),
+  updateTicketStatus: jest.fn(),
+  addTicketComment: jest.fn(),
 }));
 
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
@@ -52,6 +61,8 @@ beforeEach(() => {
   mockMessageFindAll.mockResolvedValue([]);
   mockDeclareReliabilityChange.mockResolvedValue({});
   mockRestoreMetric.mockResolvedValue({});
+  mockGetReliabilityStatus.mockResolvedValue({ status: 'quarantined', severity: 'high', reason: 'Attendance is broken.', declaredAt: new Date(), recordId: 'rec-1', incidentTicketId: null });
+  mockCreateTicket.mockResolvedValue({ id: 'ticket-1' });
 });
 
 describe('sendManagerMessage — reliability confirmation workflow', () => {

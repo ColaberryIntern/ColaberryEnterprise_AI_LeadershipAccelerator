@@ -37,6 +37,7 @@ export interface ReliabilityStatusResult {
   reason: string | null;
   declaredAt: Date | null;
   recordId: string | null;
+  incidentTicketId: string | null;
 }
 
 const HEALTHY_DEFAULT: ReliabilityStatusResult = {
@@ -45,6 +46,7 @@ const HEALTHY_DEFAULT: ReliabilityStatusResult = {
   reason: null,
   declaredAt: null,
   recordId: null,
+  incidentTicketId: null,
 };
 
 /**
@@ -81,6 +83,7 @@ export async function getReliabilityStatus(
     reason: record.reason,
     declaredAt: record.declared_at,
     recordId: record.id,
+    incidentTicketId: record.incident_ticket_id,
   };
 }
 
