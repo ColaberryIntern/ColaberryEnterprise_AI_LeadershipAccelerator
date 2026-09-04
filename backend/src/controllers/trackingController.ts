@@ -25,6 +25,7 @@ import {
   validateFingerprint,
   validateTrackEvent,
 } from './tracking/trackingEventValidation';
+import { verifyJourneyToken } from '../modules/attribution/journeyLinkService';
 
 /** Fire-and-forget signal detection + intent scoring + behavioral triggers for high-value events */
 function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
@@ -500,12 +501,50 @@ export async function handleIdentify(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { fingerprint, email, name, company, phone, metadata } = req.body;
+    const { fingerprint, email, name, company, phone, metadata, jx } = req.body;
 
     if (!fingerprint || typeof fingerprint !== 'string') {
       res.status(400).json({ error: 'fingerprint is required' });
       return;
     }
+
+    // A visitor arriving through a signed cross-domain link carries a `jx` token and no
+    // email — the whole point of the token is that the email never travels in the URL.
+    // Requiring one here rejected every journey link we have ever sent.
+    //
+    // The token is the only thing trusted on this path, and only after its HMAC and
+    // expiry verify. It is never used to CREATE a lead: an attacker who could mint a
+    // token would otherwise be able to manufacture leads, and a token that no longer
+    // resolves is indistinguishable from one that never did.
+    if (jx) {
+      const payload = verifyJourneyToken(typeof jx === 'string' ? jx : null);
+      // 204 on every failure, and on success. A distinguishable response would turn this
+      // endpoint into an oracle for which lead ids exist and which tokens are still live.
+      if (!payload || typeof payload.l !== 'number') {
+        res.status(204).end();
+        return;
+      }
+
+      const { Lead: LeadModel } = require('../models');
+      const tokenLead = await LeadModel.findByPk(payload.l);
+      if (!tokenLead) {
+        res.status(204).end();
+        return;
+      }
+
+      const journeyVisitorId = await findOrCreateVisitor(fingerprint, {
+        ip_address: (req.headers['x-forwarded-for'] as string || req.ip || '').split(',')[0].trim(),
+        user_agent: req.headers['user-agent'] || '',
+      });
+      await resolveIdentity(journeyVisitorId, tokenLead.id);
+
+      console.log(
+        `[Tracking] Journey token bound visitor ${fingerprint.substring(0, 12)} to lead ${tokenLead.id}`
+      );
+      res.status(204).end();
+      return;
+    }
+
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       res.status(400).json({ error: 'valid email is required' });
       return;
