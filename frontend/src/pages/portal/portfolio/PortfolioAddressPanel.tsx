@@ -79,6 +79,57 @@ const PortfolioAddressPanel: React.FC = () => {
         One page for everything you have built, separate from each individual record.
       </p>
 
+      {/* FIRST THING IN THE TAB, and coloured by what is actually true of the page.
+          Ali: "put the Preview my page at the top and in a different color so it's
+          noticable ... color coordinate it based on if it is live, or the access it's
+          given." The colour is a SECOND channel for the fact the sentence already
+          states, never a fact of its own, so nothing here is carried by hue alone. */}
+      <div
+        className={`cp-preview-cta ${
+          isLive ? 'is-live'
+            : awaitingReview ? 'is-review'
+              : page.status === 'published' ? 'is-restricted'
+                : 'is-draft'
+        }`}
+      >
+        <div className="cp-preview-cta-text">
+          <strong>
+            {isLive
+              ? (page.visibility === 'public'
+                ? 'Live, and search engines may index it'
+                : 'Live — anyone with the link can read it')
+              : awaitingReview ? 'Waiting on a mentor to review it'
+                : page.status === 'published' ? 'Approved, but set to “Only me”'
+                  : 'Not published yet'}
+          </strong>
+          <span>
+            Exactly what a reviewer, and then a stranger, will see. Not a mock-up — the
+            same page, from the same data.
+          </span>
+        </div>
+        <button
+          type="button"
+          className="cp-preview-btn"
+          disabled={previewBusy}
+          onClick={() => {
+            if (showPreview) { setShowPreview(false); return; }
+            setShowPreview(true);
+            // Loaded on demand rather than with the tab: most visits here are to change
+            // visibility, and this is by far the expensive read.
+            if (!preview && !previewBusy) {
+              setPreviewBusy(true);
+              setPreviewError(null);
+              fetchMyPortfolioPreview()
+                .then(setPreview)
+                .catch(() => setPreviewError('Could not load your preview just now.'))
+                .finally(() => setPreviewBusy(false));
+            }
+          }}
+        >
+          {previewBusy ? 'Loading…' : showPreview ? 'Hide preview' : 'Preview my page'}
+        </button>
+      </div>
+
       <div className="cp-address">
         {isLive
           ? <a href={page.public_path} target="_blank" rel="noopener noreferrer">enterprise.colaberry.ai{page.public_path}</a>
@@ -146,37 +197,8 @@ const PortfolioAddressPanel: React.FC = () => {
         Default is “anyone with the link”, which search engines are told to ignore. Only you can change that.
       </p>
 
-      {/* SEE IT BEFORE ASKING SOMEONE TO APPROVE IT. Until now the page only became
-          openable once it was already live, so the button above asked a learner to
-          publish something they had never seen. Loaded on demand rather than with the
-          tab: most visits here are to change visibility, and this is the expensive read. */}
-      <h4 className="cp-sub">What your page looks like</h4>
-      <p className="cp-muted" style={{ marginTop: 0 }}>
-        Exactly what a reviewer and then a stranger will see. Nothing here is a mock-up —
-        it is the same page, rendered from the same data.
-      </p>
-      {!showPreview && (
-        <button
-          className="cp-btn"
-          disabled={previewBusy}
-          onClick={() => {
-            setShowPreview(true);
-            if (!preview && !previewBusy) {
-              setPreviewBusy(true);
-              setPreviewError(null);
-              fetchMyPortfolioPreview()
-                .then(setPreview)
-                .catch(() => setPreviewError('Could not load your preview just now.'))
-                .finally(() => setPreviewBusy(false));
-            }
-          }}
-        >
-          {previewBusy ? 'Loading…' : 'Preview my page'}
-        </button>
-      )}
       {showPreview && (
-        <>
-          <button className="cp-btn" onClick={() => setShowPreview(false)}>Hide preview</button>
+        <div className="cp-preview-area">
           {previewBusy && <p className="cp-muted">Loading…</p>}
           {previewError && <p className="cp-error">{previewError}</p>}
           {preview && (
@@ -184,7 +206,7 @@ const PortfolioAddressPanel: React.FC = () => {
               <PortfolioBody portfolio={preview} embedded />
             </div>
           )}
-        </>
+        </div>
       )}
 
       {error && <p className="cp-error">{error}</p>}

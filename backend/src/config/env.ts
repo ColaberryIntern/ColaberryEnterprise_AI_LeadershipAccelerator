@@ -83,6 +83,11 @@ export const env = {
   // (the Cora Outbound Admissions agent, module 1b432b69-fcb1-4b70-9130-8a66e45eaff5).
   // Falls back to the interest agent in synthflowService if left unset.
   synthflowCallbackAgentId: process.env.SYNTHFLOW_CALLBACK_AGENT_ID || '',
+  // AI Flotation's own callback agent. Deliberately NOT falling back to the shared
+  // callback or interest agents: those speak for the bootcamp from their own knowledge
+  // base, and an AI Flotation prospect answering the phone to a Colaberry bootcamp agent
+  // is a worse outcome than no call at all. Unset means the voice path skips, loudly.
+  synthflowAiFlotationAgentId: process.env.SYNTHFLOW_AI_FLOTATION_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',
@@ -155,6 +160,11 @@ export const env = {
   // Project backend v2 — persisted student-projects read API (P1). Default OFF;
   // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
   projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
+  // Cert Prep (Claude Certified Architect readiness). Default OFF: deploying the
+  // routes changes nothing until this is set, and the Week 7 fence inside the
+  // service is a SEPARATE, always-on control — this flag decides whether the
+  // feature exists at all, the fence decides who may use it once it does.
+  certPrepEnabled: process.env.CERT_PREP_ENABLED === 'true',
   // Student Build Pipeline. SEPARATE from projectApiEnabled deliberately: that
   // flag is already true in production and shared with projectsPortalRoutes, so
   // reusing it would make the new pipeline live the moment it deploys and give

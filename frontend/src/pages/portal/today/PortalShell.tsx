@@ -25,10 +25,12 @@ import type { GatedFeatureKey } from '../../../components/paywall/gatedFeatures'
 import { useScrollCondense } from '../../../hooks/useScrollCondense';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
-// icon per item. Today / Path / Schedule / Projects / Classroom / Community /
-// Rooms / Portfolio are built and navigate; Cert Prep is still deferred past the
-// P0 launch fence and renders as a dimmed "Soon" item. (Rooms IS the group-chat
-// surface — text + video rooms — so the old "Group Chat" placeholder was removed.)
+// icon per item. Every destination now navigates. Cert Prep was a dimmed "Soon"
+// item until 2026-09-03; it is now routed and content-gated like Classroom and
+// Projects. Its own Week 7 availability fence lives SERVER-side, so the nav item
+// is present from day one and the page explains when the track opens rather than
+// the sidebar hiding it. (Rooms IS the group-chat surface — text + video rooms —
+// so the old "Group Chat" placeholder was removed.)
 // `gate` marks an item as content-paywalled (<PageGate> on its route) — the item
 // STAYS a clickable Link (unlike `soon`, which fully disables it): a free/unpaid
 // student can click through and see the upsell screen the route itself renders.
@@ -93,7 +95,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Projects', to: '/portal/projects', gate: 'projects', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
       ) },
-      { label: 'Cert Prep', soon: true, icon: (
+      { label: 'Cert Prep', to: '/portal/cert-prep', gate: 'cert-prep', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M9 11l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       ) },
     ],
