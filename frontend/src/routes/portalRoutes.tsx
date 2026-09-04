@@ -27,6 +27,7 @@ const EventsPage = lazy(() => import('../pages/portal/events/EventsPage'));
 const PointsPage = lazy(() => import('../pages/portal/points/PointsPage'));
 const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'));
 const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
+const CertPrepPage = lazy(() => import('../pages/portal/certprep/CertPrepPage'));
 const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage'));
 const PeopleDirectoryPage = lazy(() => import('../pages/portal/community/PeopleDirectoryPage'));
 const RoomsPage = lazy(() => import('../pages/portal/rooms/RoomsPage'));
@@ -70,6 +71,11 @@ const portalRoutes = (
       {/* Living Career Portfolio — the private Career Studio. Gated like its
           siblings; the resume prerequisite inside it is enforced server-side. */}
       <Route path="/portal/portfolio" element={<PageGate feature="portfolio"><PortfolioPage /></PageGate>} />
+      {/* Cert Prep — Claude Certified Architect readiness. Paywalled like its
+          siblings; the Week 7 fence is enforced SERVER-side and the page renders
+          whatever the API says, so a client reaching this route early still sees
+          the locked state rather than an empty dashboard. */}
+      <Route path="/portal/cert-prep" element={<PageGate feature="cert-prep"><CertPrepPage /></PageGate>} />
       <Route path="/portal/community" element={<CommunityPage />} />
       <Route path="/portal/community/people" element={<PeopleDirectoryPage />} />
       <Route path="/portal/rooms" element={<RoomsPage />} />

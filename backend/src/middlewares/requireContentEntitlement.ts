@@ -20,7 +20,10 @@ import { resolveContentPageAccess } from '../services/access/contentEntitlement'
  * is the actual security boundary, not decoration on top of the frontend gate.
  */
 
-type GatedFeature = 'classroom' | 'projects' | 'portfolio';
+// Mirrors GatedFeatureKey in frontend/src/components/paywall/gatedFeatures.tsx —
+// the frontend already carried 'cert-prep' while this union did not, so the
+// paywall copy existed with no server-side counterpart to enforce it.
+type GatedFeature = 'classroom' | 'projects' | 'portfolio' | 'cert-prep';
 
 const NOT_ENTITLED_BODY = (feature: GatedFeature) => ({
   error: 'content_requires_paid',
