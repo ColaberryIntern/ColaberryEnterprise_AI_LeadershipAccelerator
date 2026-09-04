@@ -220,37 +220,81 @@ a dedicated agent whose only job is imagery. It works while the record is author
 
 Do not block on it. Author the record in parallel and attach when it reports.
 
-### The cover image is the point — and you do NOT set it directly
+### The cover image is the point
 
 A record without a cover opens on text and reads as unfinished no matter how good the
-evidence is. But **`identity.heroImageUrl` is ignored by the public projection.**
-Setting it does nothing. Learned the hard way: it was set correctly on the snapshot and
-the page still showed a different image.
+evidence is.
 
-The cover is CHOSEN, by artifact type, in this fixed order
+`identity.heroImageUrl` **now names the cover, and it is gated.** It did not always: it
+was set correctly on a snapshot, the page showed a different image, and the reason was
+that nothing read the field — it was not even on the domain type. It is real now, and the
+gate is the part that matters: `resolveHeroImage()` accepts the named URL **only if it
+matches an approved, publicly-viewable artifact on the same record**, so naming a URL can
+never publish a picture the artifact approval did not see. A URL that fails the gate falls
+back to type priority rather than erroring, which means *a silently wrong cover is the
+failure mode* — verify, do not assume.
+
+When nothing is named, the cover falls back to artifact type in this fixed order
 (`HERO_IMAGE_PRIORITY` in `caseStudyArtifactPresentation.ts`):
 
 ```
 'screenshot'  ->  'architecture'  ->  'photo'
 ```
 
-`resolveHeroImage()` walks that list and takes the first approved, public, http(s) image
-it finds. Consequences worth knowing BEFORE rendering anything:
+Consequences worth knowing BEFORE rendering anything:
 
-- **A `diagram` artifact can never be the cover.** It is not in the list. A dashboard
-  typed `diagram` will publish and will never appear as the hero.
+- **`diagram` is not a valid artifact type at all.** It is absent from
+  `HERO_IMAGE_PRIORITY` *and* from `CaseStudyArtifactType`. Writing one does not fail at
+  the write — it fails in the browser, where `ARTIFACT_TYPE_LABELS['diagram']` is
+  undefined and `.toLowerCase()` throws, **blanking the entire page**. This shipped. The
+  valid set is: `screenshot, architecture, photo, demo, deck, roadmap, report,
+  evaluation, code, document, other`.
 - **Type decides, not creation order.** An `architecture` image beats a `photo` however
   they were added.
-- To make a specific image the cover, give it the **highest-priority type it honestly
-  is** — and never relabel a generated chart as a `screenshot` to promote it, because
-  `screenshot` asserts a capture of something running.
+- Never relabel a generated chart as a `screenshot` to promote it: `screenshot` asserts a
+  capture of something running.
 
-Decide the cover by choosing which honest type the best image belongs to, then verify
-the projection actually returned it:
+Verify the projection actually returned what you intended:
 
 ```js
 p.projection.heroImageUrl   // must be the URL you expected, not merely non-null
 ```
+
+### Before falling back to a generated image: prove the repo has no interface
+
+You may not generate an image until you have **searched the repository for one and come
+back empty**. On the CoreOps record this step was skipped, a dashboard was generated from
+the record's own figures, and Ali asked the only question that mattered — *"Are you saying
+that image was in the repo?"* It was not. The repo had shipped a nine-page
+`command-center/` app the whole time.
+
+```bash
+find <repo> -name "*.html" -not -path "*/node_modules/*" | head -40
+find <repo> \( -name "*.tsx" -o -name "*.vue" -o -name "*.svelte" \) -not -path "*/node_modules/*" | head
+ls <repo>/{public,static,dist,build,docs,ui,web,app,frontend} 2>/dev/null
+```
+
+An interface counts even when it is static HTML with no server and is deployed nowhere.
+`scripts/captureRepoUiScreenshots.js` serves a directory locally and screenshots named
+pages, so anything that renders in a browser can be photographed:
+
+```bash
+node scripts/captureRepoUiScreenshots.js --root <repo> --out frontend/public/site-v2 \
+  --height 1250 --page ui/index.html:shot-<slug>-console
+```
+
+**Serve the REPOSITORY ROOT, not the UI folder.** A page fetching `.colaberry/plan.json`
+resolves it against the document root. Rooted at the UI folder, every capture came back a
+perfectly rendered shell reading *"plan.json is missing or unreadable — nothing to show
+yet"*: real chrome, real CSS, zero content. Rooted one level up, the same page rendered
+thirteen traced requirements.
+
+**Then open the PNG and look at it.** The script refuses a page under 40 characters, and
+that guard is nowhere near enough — the empty-state captures above carried 273 to 440
+characters of real text and were still worthless. A byte count proves a page rendered, not
+that it rendered anything. Pick the page with the most *content*, not the most bytes: of
+nine CoreOps tabs, four were honest empty states and the best one had six times the text
+of the tab that was captured first.
 
 ### What counts as a real image, in order of preference
 
@@ -268,8 +312,18 @@ p.projection.heroImageUrl   // must be the URL you expected, not merely non-null
 
 ### What does NOT count
 
-- **A mermaid block is not an image.** It satisfies the architecture section and fails
-  every image check.
+- **A mermaid block is not an image, and a rendered mermaid chart is not a picture.**
+  The block satisfies the architecture section and fails every image check. Rendering it
+  to PNG does not promote it: Ali's ruling is *"you can't use a mermaid chart as a picture
+  because the formatting will be off."* A diagram rendered at a diagram's aspect ratio,
+  dropped into a slot shaped for a screenshot, reads as a mistake — it sits tiny and
+  centred with the page's whitespace around it. Diagrams belong in the architecture
+  section, inline, where the layout expects their shape. **Two real pictures beat one real
+  picture plus a rendered diagram.**
+- **A chart of the record's own numbers is not a screenshot of the product**, and must
+  never be captioned as though it were. If tier 2 is genuinely the best available, say
+  what it is in the artifact description — *"a dashboard built from the figures this
+  record carries"* — and never style it to resemble the subject's real console.
 - **A stock photograph is not evidence.** An atmosphere image standing in for a
   screenshot is the thing the publish rules exist to prevent — it implies a system was
   seen working when it was not.
@@ -301,12 +355,18 @@ before deploying once.
 ### Attaching them
 
 ```js
-{ artifact_type: 'screenshot' | 'diagram' | 'architecture' | 'photo',
+{ artifact_type: 'screenshot' | 'architecture' | 'photo' | 'report',
   source_type: 'generated',        // or 'repo' for a capture from the codebase
   source_commit_sha: <sha>,
   visibility: 'public', status: 'approved',
   public_url, preview_url }        // set BOTH; some surfaces read preview_url
 ```
+
+**`artifact_type` is a closed set and writing outside it blanks the page.** There is no
+write-time validation, so a bad value persists happily and only fails in the browser,
+where `ARTIFACT_TYPE_LABELS[type]` is undefined and `.toLowerCase()` throws. The full
+valid set: `screenshot, architecture, photo, demo, deck, roadmap, report, evaluation,
+code, document, other`. `diagram` is **not** one of them.
 
 Then lift the approved rows into the snapshot's `artifacts` section — creating the row
 alone does not put it on the page — **and set `identity.heroImageUrl` to the cover.**
@@ -316,8 +376,73 @@ alone does not put it on the page — **and set `identity.heroImageUrl` to the c
 - [ ] The projection's `heroImageUrl` returns the image you INTENDED, not just non-null
 - [ ] **At least two** approved, publicly viewable images (readiness checks both)
 - [ ] Every image depicts *this* subject
+- [ ] Every `artifact_type` is in the valid set above
 - [ ] Artifacts lifted into the snapshot, not just created as rows
 - [ ] Images verified live with an HTTP 200 before the record is called finished
+- [ ] **The rendered page was opened and looked at** — see section 8b
+
+---
+
+## 8b. Open the page and look at it
+
+A record can pass every gate in this file and still be wrong on screen. Ali's ruling
+after the CoreOps record published: *"The content is good when everything is there, but it
+needs a UI/UX developer to make the format correct."* Data checks do not catch layout.
+
+**Never call a record finished from an API response.** Render it and photograph it:
+
+```bash
+BROWSER=none PORT=4321 npx react-scripts start          # in frontend/
+node scripts/previewStoryLayout.js --slug <slug> \
+  --payload <projection.json> --out preview.png --width 1440
+node scripts/previewStoryLayout.js --slug <slug> \
+  --payload <projection.json> --out band.png --clip ".cbv2-story__context"
+```
+
+`previewStoryLayout.js` intercepts the public API in the browser and fulfils it from a
+file, so it renders **the real page component with real content** without writing
+anything. That matters: a fixture with two-word metric values hides the exact defect this
+is for. Take the live projection, substitute only what is under review.
+
+It prints the measurements that catch the failures seen so far:
+
+| Reading | What a bad value means |
+|---|---|
+| `pageScrollW > viewportW` | Something is pushing the page sideways |
+| `factRows` > 1 at 1440px | The facts row is trapped in a narrow track |
+| `metricHeights` wildly unequal or > ~800px | Cards are in a column too narrow for their prose |
+| `cover: null` when a cover is set | The hero is not rendering it |
+| `problems[]` non-empty | A JS error or a failed asset |
+
+**Check at 1440 and at 390.** Both were needed: the desktop defect was a void, the phone
+risk is horizontal overflow.
+
+### The layout failures this page has actually shipped
+
+- **A band sized for one card, given two.** The context band split 5fr/7fr to put facts
+  beside the figure card. With two headline figures the 7fr track fits two 20rem columns,
+  every card becomes a narrow tower of wrapped prose, and the six short facts run out
+  after three rows — leaving a screen-height void beside them. **A layout tuned for one of
+  something is a defect waiting for the second one.**
+- **A cover that no page rendered.** `heroImageUrl` reached the index card and the detail
+  page ignored it, so the page a shared link opens was the one page with no picture — and
+  the masthead held an empty right half the whole time.
+- **`grid-row: 1 / -1` with no `grid-template-rows`.** The explicit grid has one line, so
+  `-1` resolves back to line 1, the span collapses, and the spanning element's height
+  becomes row 1's height. It put 600px between a breadcrumb and a title. If an element
+  must span a variable number of rows, **wrap the others in one child instead.**
+- **Labels stacked above two-word values.** Four label/value rows printing the label on
+  its own line is eight lines of card height to carry four facts. Put the label in a fixed
+  left track.
+
+### Before publishing, confirm on the rendered page
+
+- [ ] The cover appears in the masthead, at a size that can be read
+- [ ] No band has a void larger than a card beside its content
+- [ ] Every metric card's methodology paragraph has a readable measure, not ~40 characters
+- [ ] `pageScrollW === viewportW` at 1440 **and** 390
+- [ ] Diagrams are in the architecture section, not standing in for a picture
+- [ ] `problems[]` is empty
 
 ---
 
