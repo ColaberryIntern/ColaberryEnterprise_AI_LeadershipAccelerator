@@ -191,10 +191,22 @@ const CertPrepPage: React.FC = () => {
   // ── ready ──────────────────────────────────────────────────────────────────
   return (
     <PortalShell>
+      {/* The h1 is the PAGE ("Cert Prep"), not the track — the destination is Cert
+          Prep and the certification is what it prepares for, so the track name
+          reads better in the subtitle.
+
+          Measured note, so nobody re-derives it: this is NOT what fixes mobile
+          overflow. The portal overflows horizontally at 390px on every page
+          because the mobile bottom nav renders ~13 items that do not fit
+          (/portal/points is worse than this page). Adding Cert Prep to the nav
+          makes that bar one item wider; the bar was already overflowing without
+          it. That is shell chrome shared by every surface and is deliberately
+          left alone here rather than fixed from inside one feature. */}
       <div className="te-page-h">
         <div className="crumb">Your career</div>
-        <h1>{track?.display_name ?? 'Cert Prep'}</h1>
+        <h1>Cert Prep</h1>
         <div className="sub">
+          {track?.display_name ? `${track.display_name}. ` : ''}
           Turn what you built in Classroom and Projects into a measured readiness plan.
           {availability?.programWeek ? ` You are in Week ${availability.programWeek}.` : ''}
         </div>
