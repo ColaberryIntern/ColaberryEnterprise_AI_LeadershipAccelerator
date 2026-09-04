@@ -427,6 +427,23 @@ function AdminAcceleratorPage() {
     } catch { showToast('Failed to download the class file', 'error'); }
   };
 
+  // Download the pre-class teaching guide — every slide in plain language, with
+  // the terms it uses and where the pacing gets tight. A download rather than a
+  // new tab on purpose: it is read before class, often on another device, and
+  // annotated or printed, so it should land in Downloads and stay there.
+  const handleDownloadTeachingGuide = async (sessionId: string, title: string) => {
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/teaching-guide`, { responseType: 'text' });
+      const blob = new Blob([res.data as string], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `teaching-guide-${(title || 'session').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)}.html`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast('Downloaded the teaching guide', 'success');
+    } catch { showToast('Failed to download the teaching guide', 'error'); }
+  };
+
   // Open the instructor readiness report (prep + source ledger).
   const handleOpenReadiness = async (sessionId: string) => {
     const w = window.open('', '_blank');
@@ -895,11 +912,12 @@ function AdminAcceleratorPage() {
                         <div className="d-flex gap-1">
                           <div className="btn-group" style={{ position: 'relative' }}>
                             <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class. The check-in QR is on the first slides.">▶ Present</button>
-                            <button className="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" onClick={() => setPresentMenu(presentMenu === s.id ? null : s.id)} title="More: Rehearse · Download · Readiness"><span className="visually-hidden">More</span></button>
+                            <button className="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" onClick={() => setPresentMenu(presentMenu === s.id ? null : s.id)} title="More: Rehearse · Download · Teaching guide · Readiness"><span className="visually-hidden">More</span></button>
                             {presentMenu === s.id && (
                               <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 1050, display: 'block' }}>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenKitDeck(s.id, 'rehearse'); }}>🎓 Rehearse (live off)</button>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleDownloadKit(s.id, s.title); }}>⬇️ Download standalone HTML</button>
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleDownloadTeachingGuide(s.id, s.title); }} title="Read before class — every slide in plain language, the terms behind it, and where the pacing gets tight">📖 Teaching guide (download)</button>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenReadiness(s.id); }}>📋 Readiness report</button>
                                 <div className="dropdown-divider" />
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); setKitSessionId(s.id); }} title="Private to you — shows your script when you full-screen a diagram">📱 My presenter link</button>

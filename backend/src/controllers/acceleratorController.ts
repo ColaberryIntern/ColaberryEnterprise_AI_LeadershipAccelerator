@@ -12,7 +12,7 @@ import {
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { buildSessionKit } from '../services/sessionKitService';
-import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, getPresenterLink, KitDocMode } from '../services/sessionKitDocService';
+import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, renderSessionTeachingGuide, getPresenterLink, KitDocMode } from '../services/sessionKitDocService';
 import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
 import { getKitConfigDefaults } from '../services/classKit/kitConfigDefaults';
 import { generateQuestion, rewriteTeach, rewriteStoryBeats, rewritePrompts } from '../services/classKit/kitConfigAi';
@@ -160,6 +160,17 @@ export async function handleGetSessionReadiness(req: Request, res: Response, nex
 export async function handleGetSessionOutline(req: Request, res: Response, next: NextFunction) {
   try {
     const html = await renderSessionOutline(req.params.id as string);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+// Teaching guide: the long-form pre-class read — every slide in order, in plain
+// language, with the terms it uses and where the pacing gets tight. text/html.
+// Downloaded from the accelerator manager's Present menu. 404 if missing.
+export async function handleGetSessionTeachingGuide(req: Request, res: Response, next: NextFunction) {
+  try {
+    const html = await renderSessionTeachingGuide(req.params.id as string);
     if (!html) return res.status(404).json({ error: 'Session not found' });
     res.type('html').send(html);
   } catch (err) { next(err); }

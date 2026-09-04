@@ -469,6 +469,15 @@ import CaseStudyStoryline from './CaseStudyStoryline';
 import CaseStudyAiDraft from './CaseStudyAiDraft';
 import CaseStudyQuote from './CaseStudyQuote';
 import CaseStudyChart from './CaseStudyChart';
+// Cert Prep (Claude Certified Architect readiness) — see db/ensureCertPrepSchema.ts
+import CertTrack from './CertTrack';
+import CertDomain from './CertDomain';
+import CertQuestion from './CertQuestion';
+import CertQuestionRevision from './CertQuestionRevision';
+import CertSession from './CertSession';
+import CertResponse from './CertResponse';
+import CertReadinessSnapshot from './CertReadinessSnapshot';
+import CertEvidenceMapping from './CertEvidenceMapping';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1223,6 +1232,9 @@ Cohort.hasMany(OrgCohort, { foreignKey: 'cohort_id', as: 'orgLinks', onDelete: '
 OrgCohort.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
 
 export {
+  // Cert Prep (Claude Certified Architect readiness)
+  CertTrack, CertDomain, CertQuestion, CertQuestionRevision,
+  CertSession, CertResponse, CertReadinessSnapshot, CertEvidenceMapping,
   Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
