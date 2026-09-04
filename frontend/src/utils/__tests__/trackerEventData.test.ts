@@ -37,11 +37,21 @@ async function loadTracker() {
   return import('../tracker');
 }
 
+const beaconMock = jest.fn();
+
+function lastBeaconBody(): Blob {
+  const call = beaconMock.mock.calls[beaconMock.mock.calls.length - 1] as unknown as [string, Blob];
+  return call[1];
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
   fetchMock.mockReset();
   fetchMock.mockImplementation(() => Promise.resolve({ ok: true }));
   (global as any).fetch = fetchMock;
+  beaconMock.mockReset();
+  beaconMock.mockImplementation(() => true);
+  (navigator as any).sendBeacon = beaconMock;
   localStorage.clear();
 });
 
@@ -172,5 +182,56 @@ describe('scroll depth reaches both server consumers', () => {
     // depth for the timeline label. Both are now populated.
     expect(scroll.event_data.depth).toBe(scroll.event_data.depth_percent);
     expect(scroll.event_data.depth_percent).toBeGreaterThanOrEqual(25);
+  });
+});
+
+/**
+ * The beacon path must carry a Content-Type the server will parse.
+ *
+ * THE BUG THIS PINS. `navigator.sendBeacon(url, someString)` transmits as
+ * `text/plain;charset=UTF-8`. `express.json()` parses only `application/json`, so every
+ * beacon body arrived unparsed and its payload was dropped — silently, with a 2xx and a
+ * written row, only `event_data` missing.
+ *
+ * `time_on_page` is emitted on `visibilitychange`, the one place this file beacons, so
+ * it was the only event type entirely dependent on this path. Measured before the fix:
+ * of 1,745 `time_on_page` rows in production, ZERO carried `event_data.seconds`,
+ * including the 141 written after `event_data` began landing correctly for `scroll`.
+ * `extended_time_on_page` has never fired for any visitor, on any surface, ever.
+ *
+ * Asserting the Blob's TYPE is the whole point. A test that only checked the body
+ * contents would have passed throughout the entire life of the defect.
+ */
+describe('beacon flush -> /api/t/batch content type', () => {
+  it('sends a Blob typed application/json, not a bare string', async () => {
+    const { initTracker, trackEvent } = await loadTracker();
+    initTracker();
+    trackEvent('time_on_page', { seconds: 240 });
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(beaconMock).toHaveBeenCalled();
+    const body = lastBeaconBody();
+    // A string body is exactly the defect. Blob carries its own Content-Type, which is
+    // what sendBeacon reads and what express.json() requires.
+    expect(typeof body).not.toBe('string');
+    expect(body.type).toBe('application/json');
+  });
+
+  it('the beacon body still parses, and still carries event_data', async () => {
+    const { initTracker, trackEvent } = await loadTracker();
+    initTracker();
+    trackEvent('time_on_page', { seconds: 240 });
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    const parsed = JSON.parse(await lastBeaconBody().text());
+    const sent = parsed.events.find((e: any) => e.event_type === 'time_on_page');
+    expect(sent).toBeDefined();
+    // `seconds` is the key behavioralSignalService reads for its >= 180 test. Changing
+    // the Content-Type without this key surviving would fix nothing.
+    expect(sent.event_data.seconds).toBe(240);
   });
 });
