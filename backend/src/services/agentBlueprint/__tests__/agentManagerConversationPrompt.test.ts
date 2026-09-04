@@ -7,17 +7,21 @@
  */
 jest.mock('../../managerDirectiveService', () => ({ getActiveDirectiveTexts: jest.fn() }));
 jest.mock('../../agentMemoryProposalService', () => ({ getApprovedMemoryTexts: jest.fn() }));
+jest.mock('../agentRecentActivitySummary', () => ({ getRecentActivitySummary: jest.fn() }));
 
 import { getActiveDirectiveTexts } from '../../managerDirectiveService';
 import { getApprovedMemoryTexts } from '../../agentMemoryProposalService';
+import { getRecentActivitySummary } from '../agentRecentActivitySummary';
 import { buildAgentManagerConversationSystemPrompt } from '../agentManagerConversationPrompt';
 
 const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
 const mockApprovedMemory = getApprovedMemoryTexts as unknown as jest.Mock;
+const mockRecentActivity = getRecentActivitySummary as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockApprovedMemory.mockResolvedValue([]);
+  mockRecentActivity.mockResolvedValue({ tickets: [], events: [] });
 });
 
 describe('buildAgentManagerConversationSystemPrompt', () => {
@@ -86,5 +90,32 @@ describe('buildAgentManagerConversationSystemPrompt — approved memory injectio
     const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
 
     expect(prompt).not.toContain('APPROVED MEMORY');
+  });
+});
+
+describe('buildAgentManagerConversationSystemPrompt — recent activity injection (2026-09-04)', () => {
+  it('happy path: real recent tickets and real recent activity are both injected, so "what have you worked on" can be answered honestly', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+    mockRecentActivity.mockResolvedValue({
+      tickets: [{ title: 'Student flagged inactivity risk', status: 'done', updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) }],
+      events: [{ eventType: 'llm.call', model: 'gpt-4o-mini', costUsd: 0.000091, createdAt: new Date(Date.now() - 60 * 60 * 1000) }],
+    });
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(prompt).toContain('YOUR REAL RECENT WORK');
+    expect(prompt).toContain('Student flagged inactivity risk');
+    expect(prompt).toContain('gpt-4o-mini');
+    expect(prompt).not.toContain('no recent tickets or recorded activity');
+  });
+
+  it('honesty boundary: zero tickets and zero events means an honest "no recent activity" line, never a fabricated one', async () => {
+    mockActiveDirectives.mockResolvedValue([]);
+    mockRecentActivity.mockResolvedValue({ tickets: [], events: [] });
+
+    const prompt = await buildAgentManagerConversationSystemPrompt('agent-1', 'Reese', 'You are Reese.');
+
+    expect(prompt).toContain('You have no recent tickets or recorded activity yet');
+    expect(prompt).not.toContain('YOUR REAL RECENT WORK');
   });
 });
