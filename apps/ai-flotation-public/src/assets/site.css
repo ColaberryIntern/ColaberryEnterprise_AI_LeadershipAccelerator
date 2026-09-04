@@ -288,6 +288,8 @@ form.intake {
   box-shadow: var(--shadow);
 }
 /* The two-step intake. `hidden` is set by script, never here - see the note in start/. */
+.callme { margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--line); max-width: 40rem; }
+.callme .intake { margin-top: var(--space-4); }
 .step-hint { color: var(--fg-muted); font-size: var(--fs-caption); margin: 6px 0 var(--space-3); }
 .step-2[hidden] { display: none; }
 .step-2 { border-top: 1px solid var(--line); margin-top: var(--space-6); padding-top: var(--space-2); }
