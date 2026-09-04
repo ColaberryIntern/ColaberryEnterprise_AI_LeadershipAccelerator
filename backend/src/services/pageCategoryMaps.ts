@@ -61,13 +61,6 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       '/what-we-build': 'program',
       '/approach': 'program',
       '/delivery-standard': 'program',
-      // The standard the service is built to. A visitor reading it is evaluating the
-      // offering itself, which is what `program` means here - not a separate 'trust'
-      // category that no consumer would branch on.
-      '/trust-before-intelligence': 'program',
-      // Build membership. `pricing` is the global vocabulary's own term, so the existing
-      // pricing_visit signal and the research/evaluation patterns pick it up unchanged.
-      '/pricing': 'pricing',
       // Currently reads "We have nothing to show you here yet." The category describes
       // the surface, not its fill state, so it stays correct as the page gains content.
       '/results': 'case_studies',
