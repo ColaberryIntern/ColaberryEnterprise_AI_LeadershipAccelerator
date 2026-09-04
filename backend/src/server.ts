@@ -85,6 +85,7 @@ import { ensureAgentReportRunSchema } from './db/ensureAgentReportRunSchema';
 import { ensureAgentMemoryProposalSchema } from './db/ensureAgentMemoryProposalSchema';
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
+import { ensureMetricReliabilityRecordSchema } from './db/ensureMetricReliabilityRecordSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
 import {
@@ -2727,6 +2728,12 @@ async function start(): Promise<void> {
   // Additive, idempotent, no flag. No seeder writes to it; a manager writes
   // the first row via POST .../memory-proposals.
   await ensureAgentMemoryProposalSchema();
+  // Reese Agentic AI Employee mission, Checkpoint B — the metric reliability
+  // registry, confirmed absent anywhere in this codebase at Checkpoint A
+  // discovery. Additive, idempotent, no flag. No seeder writes to it; a
+  // manager or an agent-detected reliability change writes the first row
+  // via metricReliabilityService.ts's declareReliabilityChange().
+  await ensureMetricReliabilityRecordSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
