@@ -16,7 +16,9 @@ import {
   buildConceptPrompt,
   contactLeakViolation,
   labelViolation,
+  craftViolation,
   CONCEPT_LABEL,
+  MIN_CSS_CHARS,
 } from '../uiConceptGenerator';
 import { buildDesignBrief } from '../designBrief';
 import { parseUnderstanding } from '../projectUnderstanding';
@@ -41,9 +43,27 @@ const understanding = parseUnderstanding({
 
 const brief = buildDesignBrief(understanding, projectBlueprint(understanding));
 
+/**
+ * A fixture that clears the craft bar, because the bar is the point.
+ *
+ * The first version of this fixture had a single `font:14px sans-serif` rule and the craft
+ * gate refused it — correctly. Lowering the threshold to accommodate a lazy fixture would
+ * have quietly disabled the check this file exists to hold.
+ */
 const goodHtml =
-  '<style>.c{font:14px sans-serif}</style><div class="c"><p>Concept — illustrative data</p>' +
-  '<h1>Dispatch Command Center</h1><p>Ralph · Power BI rebuild · refusal noted in Slack</p></div>';
+  '<style>' +
+  ':root{--fg:#1a1a1a;--muted:#6b6b6b;--surface:#ffffff;--bg:#faf9f7;--accent:#ba430e;--line:#e6e3df}' +
+  'body{font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg);margin:0}' +
+  '.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:24px;margin:16px}' +
+  '.title{font-size:24px;font-weight:600;letter-spacing:-0.01em;margin:0 0 8px}' +
+  '.label{font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted)}' +
+  'table{border-collapse:collapse;width:100%}th{text-align:left;font-size:12px;color:var(--muted);padding:8px 12px}' +
+  'td{padding:12px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}' +
+  '.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;border:1px solid var(--line)}' +
+  '</style>' +
+  '<div class="card"><p class="label">Concept — illustrative data</p>' +
+  '<h1 class="title">Dispatch Command Center</h1>' +
+  '<p>Ralph · Power BI rebuild · refusal noted in Slack</p></div>';
 
 const ok = (parsed: any) => ({ parsed, runtime_ms: 2400, cost_usd: 0.01 });
 
@@ -217,5 +237,93 @@ describe('the prompt', () => {
 
   it('is deterministic', () => {
     expect(buildConceptPrompt(brief, 'executive')).toBe(buildConceptPrompt(brief, 'executive'));
+  });
+});
+
+/**
+ * §20 calls this moment the FINAL FREE WOW — the last thing a prospect sees before deciding
+ * to pay. The first real generation passed every correctness check and came back as
+ * default-styled tables with stock green buttons, because the prompt demanded product
+ * specificity and said nothing about craft. It got exactly what was asked for.
+ *
+ * "Beautiful" is not decidable. "Nobody styled this" is.
+ */
+describe('a concept must look designed, not merely rendered', () => {
+  // Reuses the module fixture, which already clears the bar. A second, smaller "styled"
+  // example would only test whether I can write CSS that satisfies my own threshold.
+  const styled = goodHtml;
+
+  it('accepts a concept with a real stylesheet', () => {
+    expect(craftViolation(styled)).toBeNull();
+  });
+
+  it('refuses html with no style block at all', () => {
+    expect(craftViolation('<h1>Ralph</h1><p>Concept</p>')).toContain('browser defaults');
+  });
+
+  it('refuses a token gesture at styling', () => {
+    expect(craftViolation('<style>body{color:red}</style><p>Concept</p>')).toContain('not a design');
+  });
+
+  it('refuses a concept that never sets font-family — the default serif tell', () => {
+    const noFont = styled.replace(/font-family:[^;]+;/, '');
+    expect(craftViolation(noFont)).toContain('default serif');
+  });
+
+  it('refuses a concept with no background or no spacing', () => {
+    // Long enough to clear the CSS floor, so it fails for the reason under test rather
+    // than for length — otherwise this would pass while proving nothing.
+    const flat =
+      '<style>body{font-family:ui-sans-serif,system-ui,sans-serif;color:#111}' +
+      'h1{font-size:20px;font-weight:600;letter-spacing:-0.01em}' +
+      'h2{font-size:16px;font-weight:600}p{line-height:1.5}' +
+      '.a{border:1px solid #ccc}.b{border-collapse:collapse}.c{text-align:left}' +
+      '.d{font-size:12px;text-transform:uppercase}.e{font-weight:500}.f{line-height:1.4}' +
+      '.g{font-variant-numeric:tabular-nums}.h{text-decoration:none}' +
+      '.i{border-top:1px solid #eee}.j{border-radius:8px}</style><p>Concept</p>';
+    expect(craftViolation(flat)).toContain('default margins');
+  });
+
+  it('rejects an unstyled concept through the generator, not just in isolation', async () => {
+    mockChatJson.mockResolvedValue(ok({ html: '<h1>Ralph · Power BI</h1><p>Concept</p>' }));
+
+    const { concept, rejected } = await generateConcept({ brief, conceptKey: 'operational' });
+
+    expect(concept).toBeUndefined();
+    expect(rejected?.reason).toContain('browser defaults');
+  });
+
+  it('holds the CSS floor where the constant says it is', () => {
+    expect(MIN_CSS_CHARS).toBe(400);
+  });
+});
+
+describe('the prompt asks for craft, because the first version did not', () => {
+  const prompt = buildConceptPrompt(brief, 'command_center');
+
+  it('says why craft matters here specifically', () => {
+    expect(prompt).toContain('LAST THING THEY SEE BEFORE DECIDING WHETHER TO PAY');
+  });
+
+  it('names the specific tells of an unstyled page', () => {
+    expect(prompt).toContain('font-family');
+    expect(prompt).toContain('type scale');
+    expect(prompt).toContain('spacing on a rhythm');
+  });
+
+  it('forbids the stock button palette that the first generation reached for', () => {
+    expect(prompt).toContain('stock green and blue buttons');
+  });
+
+  it('requires status to be more than a coloured word, and never colour alone', () => {
+    expect(prompt).toContain('Never colour alone');
+  });
+
+  it('asks for a considered empty or attention state', () => {
+    expect(prompt).toContain('empty or attention state');
+  });
+
+  it('steers away from stale specific dates', () => {
+    expect(prompt).toContain('obviously illustrative');
   });
 });
