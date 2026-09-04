@@ -92,12 +92,22 @@ export function figureAllowedAfter(slide: StorySlide, section: CaseStudySectionK
  *
  * `sections` must be the page's already-computed visible list, so a figure can
  * never be placed after a section that is not on the page.
+ *
+ * `excludeHref` IS THE COVER, AND IT IS NOT AN OPTIONAL TIDY-UP. The masthead now
+ * renders `heroImageUrl`, and without this the cover is also the first thing
+ * eligible for the first figure gap - so the same picture opens the page and then
+ * appears again, larger, a few hundred pixels below it. Measured on the live
+ * record after the cover shipped: the traceability capture rendered three times
+ * on one page. This is the same principle `placedHrefs` already applies to the
+ * carousel, extended to the one image the masthead has taken.
  */
 export function placeStoryFigures(
   artifacts: readonly PublicCaseStudyArtifact[],
   sections: readonly CaseStudySectionKey[],
+  excludeHref?: string | null,
 ): StoryFigurePlacement {
-  const slides = imageSlides(artifacts);
+  const all = imageSlides(artifacts);
+  const slides = excludeHref ? all.filter((slide) => slide.href !== excludeHref) : all;
   if (slides.length === 0) return EMPTY;
 
   const gaps = sections.filter((key) => FIGURE_GAP_SECTIONS.includes(key));
