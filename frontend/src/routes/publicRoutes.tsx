@@ -40,8 +40,8 @@ const publicRoutes = (
       those because "the old site is not needed" would break paying customers.
   */}
   <Route path="/program" element={<Navigate to="/platform" replace />} />
-  <Route path="/case-studies" element={<Navigate to="/stories" replace />} />
-  <Route path="/demo-day" element={<Navigate to="/stories" replace />} />
+  <Route path="/case-studies" element={<Navigate to="/proof" replace />} />
+  <Route path="/demo-day" element={<Navigate to="/proof" replace />} />
   <Route path="/advisory" element={<Navigate to="/services" replace />} />
   <Route path="/consulting" element={<Navigate to="/services" replace />} />
   <Route path="/about" element={<Navigate to="/" replace />} />

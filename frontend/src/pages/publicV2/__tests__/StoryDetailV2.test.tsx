@@ -338,7 +338,10 @@ describe('an unknown or unpublished slug gets the not-found treatment', () => {
     mount('/stories/nope');
     await settle();
     expect(text()).toContain('Project record not found');
-    expect(q('a[href="/stories"]')).not.toBeNull();
+    // The way back is the index, which is /proof now - the records took that
+    // route over. The detail URL itself is unchanged, so the mount path above
+    // is still /stories/<slug>.
+    expect(q('a[href="/proof"]')).not.toBeNull();
   });
 
   it('renders the same page for a record that exists but is not published here', async () => {

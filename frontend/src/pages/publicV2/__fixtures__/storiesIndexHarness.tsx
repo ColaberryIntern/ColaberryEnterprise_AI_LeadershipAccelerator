@@ -127,7 +127,7 @@ function Probe(): null {
   return null;
 }
 
-export function mount(path = '/stories'): void {
+export function mount(path = '/proof'): void {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -136,7 +136,7 @@ export function mount(path = '/stories'): void {
       <MemoryRouter initialEntries={[path]}>
         <Probe />
         <Routes>
-          <Route path="/stories" element={<StoriesV2 />} />
+          <Route path="/proof" element={<StoriesV2 />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -189,11 +189,11 @@ export const click = (selector: string): void => {
 export const textOf = (html: string): string =>
   html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
-export const staticHtml = (path = '/stories'): string =>
+export const staticHtml = (path = '/proof'): string =>
   renderToStaticMarkup(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/stories" element={<StoriesV2 />} />
+        <Route path="/proof" element={<StoriesV2 />} />
       </Routes>
     </MemoryRouter>,
   );

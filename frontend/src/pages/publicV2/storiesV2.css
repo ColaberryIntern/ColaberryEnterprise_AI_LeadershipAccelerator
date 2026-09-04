@@ -165,3 +165,66 @@
   justify-content: center;
   gap: var(--space-4);
 }
+
+/* =============================================================== standard ===
+   The evidence standard, carried over from the retired `/proof` page when the
+   published records took that route over.
+
+   IT IS NOT A COPY OF THE OLD LAYOUT. `proofV2.css` gave "verified" the full
+   width of a 3-column grid because on that page it was the argument, and the
+   other three classes were its qualifiers. Here the band is a preamble to a list
+   of records, not the subject of the page, so all four sit equal and compact -
+   a reader is on their way to the cards and needs the vocabulary, not an essay.
+   ========================================================================== */
+
+.cbv2-stories__standard-lede { margin: var(--space-3) 0 var(--space-6); }
+
+.cbv2-stories__standard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Two columns from 40rem, four from 72rem. Not `auto-fit`: the four classes are
+   a fixed set, and auto-fit would strand a lone card on a row at some widths. */
+@media (min-width: 40rem) {
+  .cbv2-stories__standard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 72rem) {
+  .cbv2-stories__standard { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.cbv2-stories__standard-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  min-width: 0;
+}
+
+/* The class name is the label the CARDS print, so it is set in the same register
+   a badge is - small, uppercase - rather than as a heading in the page's scale. */
+.cbv2-stories__standard-name {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-strong);
+}
+
+.cbv2-stories__standard-meaning {
+  margin: 0;
+  color: var(--text-strong);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.cbv2-stories__standard-rule {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.6;
+}

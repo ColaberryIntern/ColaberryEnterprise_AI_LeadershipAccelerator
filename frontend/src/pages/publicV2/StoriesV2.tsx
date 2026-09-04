@@ -21,6 +21,8 @@ import type {
   PublicCaseStudyTaxonomyFacets,
 } from '../../services/caseStudyPublicTypes';
 import { trackCaseStudyCardClick, trackCaseStudyFilter } from '../../utils/caseStudyTracking';
+import StoriesStandardBand from './StoriesStandardBand';
+import StoriesCta from './StoriesCta';
 import {
   MASTHEAD_FALLBACK,
   WIDE_VIEWPORT,
@@ -262,6 +264,9 @@ function StoriesV2(): React.ReactElement {
         </div>
       </section>
 
+      {/* The vocabulary before the cards that use it - see `StoriesStandardBand`. */}
+      <StoriesStandardBand />
+
       <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-stories-results-title">
         <div className="cbv2-wrap cbv2-stories">
           <h2 className="cbv2-cs-sr-only" id="cbv2-stories-results-title">
@@ -372,25 +377,7 @@ function StoriesV2(): React.ReactElement {
         </div>
       </section>
 
-      <section
-        className="cbv2-rv cbv2-section cbv2-section--inverse"
-        aria-labelledby="cbv2-stories-cta"
-      >
-        <div className="cbv2-wrap cbv2-wrap--narrow cbv2-stories__cta">
-          <h2 id="cbv2-stories-cta">Bring us a workflow worth improving.</h2>
-          <p className="cbv2-lede">
-            Map the workflow you would want recorded here, and a person will reply.
-          </p>
-          <div className="cbv2-stories__actions">
-            <Link className="cbv2-btn cbv2-btn--primary" to="/lab">
-              Map an opportunity
-            </Link>
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/proof">
-              Read the proof standard
-            </Link>
-          </div>
-        </div>
-      </section>
+      <StoriesCta />
     </>
   );
 }
