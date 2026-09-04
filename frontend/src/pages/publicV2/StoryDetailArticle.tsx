@@ -108,7 +108,7 @@ export function StoryDetailArticle({
               some 600px below the breadcrumb. Two children, two columns. */}
           <div className="cbv2-story__hero-copy">
             <p className="cbv2-story__crumb">
-              <Link to="/stories">All published projects</Link>
+              <Link to="/proof">All published projects</Link>
             </p>
             <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{surface.hero.eyebrow}</p>
             <h1 id="cbv2-story-title">{record.title}</h1>

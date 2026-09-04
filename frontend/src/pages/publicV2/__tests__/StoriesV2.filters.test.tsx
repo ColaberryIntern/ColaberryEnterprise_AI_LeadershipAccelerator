@@ -104,7 +104,7 @@ describe('the facet menu is derived from what is published', () => {
 /* ------------------------------------------------------ URL round-trip --- */
 
 describe('filter state is URL-addressable and survives reload and back/forward', () => {
-  const DEEP_LINK = '/stories?capability=agents&industry=Energy&stack=Claude,MCP';
+  const DEEP_LINK = '/proof?capability=agents&industry=Energy&stack=Claude,MCP';
 
   it('reads the spec example URL into the request it issues', async () => {
     H.mount(DEEP_LINK);
@@ -138,7 +138,7 @@ describe('filter state is URL-addressable and survives reload and back/forward',
     await H.settle();
     H.click('[id="stories-filter-stack-Claude"]');
     await H.settle();
-    const url = `/stories${H.search()}`;
+    const url = `/proof${H.search()}`;
 
     H.unmount();
     jest.clearAllMocks();
@@ -214,7 +214,7 @@ describe('pending and illustrative records are hidden by default', () => {
   });
 
   it('honours an explicit opt-in, because hidden by default is a default', async () => {
-    H.mount('/stories?verification=illustrative');
+    H.mount('/proof?verification=illustrative');
     await H.settle();
     expect(sentFilters(0).verification).toEqual(['illustrative']);
   });
@@ -296,7 +296,7 @@ describe('accessibility, with a check for each rule rather than a comment', () =
   });
 
   it('makes every page-level control a real button', async () => {
-    H.mount('/stories?capability=agents');
+    H.mount('/proof?capability=agents');
     await H.settle();
     const clear = H.q('[data-testid="stories-clear-filters"]') as HTMLButtonElement;
     expect(clear.tagName).toBe('BUTTON');

@@ -22,7 +22,6 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import HomeV2 from '../../../pages/publicV2/HomeV2';
 import { ServicesV2, ServiceDetailV2 } from '../../../pages/publicV2/ServicesV2';
 import PlatformV2 from '../../../pages/publicV2/PlatformV2';
-import ProofV2 from '../../../pages/publicV2/ProofV2';
 import OpportunityLabV2 from '../../../pages/publicV2/OpportunityLabV2';
 import TryV2 from '../../../pages/publicV2/TryV2';
 import PrivacyV2 from '../../../pages/publicV2/PrivacyV2';
@@ -90,7 +89,6 @@ const PAGES: [string, React.ReactElement, string][] = [
   // ServiceDetailV2 is NOT listed here — it reads its slug from useParams, so it
   // needs a real <Route> to resolve. It gets its own describe block below.
   ['PlatformV2', <PlatformV2 />, '/platform'],
-  ['ProofV2', <ProofV2 />, '/proof'],
   ['OpportunityLabV2', <OpportunityLabV2 />, '/lab'],
   ['TryV2', <TryV2 />, '/try'],
   ['PrivacyV2', <PrivacyV2 />, '/privacy'],
@@ -99,7 +97,9 @@ const PAGES: [string, React.ReactElement, string][] = [
   // exactly the state whose links (the closing CTA) are hardcoded and therefore
   // the ones this suite can prove. Card hrefs are built by
   // `caseStudyDetailPath()` and covered by StoriesV2.test.tsx.
-  ['StoriesV2', <StoriesV2 />, '/stories'],
+  // StoriesV2 serves /proof now - the published records took that route
+  // over, so this walks the page a visitor reaches from the header.
+  ['StoriesV2', <StoriesV2 />, '/proof'],
   ['PublicHeaderV2', <PublicHeaderV2 />, '/'],
   ['PublicFooterV2', <PublicFooterV2 />, '/'],
 ];

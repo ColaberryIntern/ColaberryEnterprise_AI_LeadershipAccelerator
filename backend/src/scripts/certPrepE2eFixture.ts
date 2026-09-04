@@ -21,6 +21,7 @@
  *   node dist/scripts/certPrepE2eFixture.js            # create + print tokens
  *   node dist/scripts/certPrepE2eFixture.js --cleanup  # remove everything
  */
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
@@ -64,21 +65,40 @@ async function ensureCohort(name: string, startDate: string): Promise<string> {
   return created!.id;
 }
 
-async function ensureEnrollment(email: string, fullName: string, cohortId: string): Promise<string> {
+/**
+ * A portal token as well as the id, so a human can open the fixture's portal in
+ * their own browser rather than having to be handed a JWT. This is the same
+ * magic-link mechanism the real login uses: `verifyMagicLink` matches on
+ * `portal_token`, an unexpired `portal_token_expires_at`, and `status='active'`.
+ * Short-lived on purpose — a fixture account that stays reachable for a month is
+ * a standing invitation.
+ */
+async function ensureEnrollment(
+  email: string, fullName: string, cohortId: string,
+): Promise<{ id: string; portalToken: string }> {
+  const portalToken = crypto.randomBytes(24).toString('hex');
+  const expires = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+
   const existing = await one<{ id: string }>(
     'SELECT id FROM enrollments WHERE email = :email LIMIT 1', { email },
   );
   if (existing) {
-    await sequelize.query('UPDATE enrollments SET cohort_id = :cohortId WHERE id = :id',
-      { replacements: { cohortId, id: existing.id }, type: QueryTypes.UPDATE });
-    return existing.id;
+    await sequelize.query(
+      `UPDATE enrollments
+          SET cohort_id = :cohortId, portal_token = :portalToken,
+              portal_token_expires_at = :expires, status = 'active'
+        WHERE id = :id`,
+      { replacements: { cohortId, id: existing.id, portalToken, expires }, type: QueryTypes.UPDATE });
+    return { id: existing.id, portalToken };
   }
   const created = await one<{ id: string }>(
-    `INSERT INTO enrollments (id, full_name, email, cohort_id, enrolled_at, created_at)
-     VALUES (gen_random_uuid(), :fullName, :email, :cohortId, NOW(), NOW()) RETURNING id`,
-    { fullName, email, cohortId },
+    `INSERT INTO enrollments
+       (id, full_name, email, cohort_id, status, portal_token, portal_token_expires_at, enrolled_at, created_at)
+     VALUES (gen_random_uuid(), :fullName, :email, :cohortId, 'active', :portalToken, :expires, NOW(), NOW())
+     RETURNING id`,
+    { fullName, email, cohortId, portalToken, expires },
   );
-  return created!.id;
+  return { id: created!.id, portalToken };
 }
 
 /** The same token shape the real portal login mints — role, sub, cohort. */
@@ -127,23 +147,27 @@ async function main(): Promise<void> {
 
   const openCohort = await ensureCohort(`Cert Prep ${MARKER} open`, isoWeeksAgo(OPEN_WEEKS_AGO));
   const lockedCohort = await ensureCohort(`Cert Prep ${MARKER} locked`, isoWeeksAgo(LOCKED_WEEKS_AGO));
-  const openEnrollment = await ensureEnrollment(OPEN_EMAIL, 'Cert Prep E2E (open)', openCohort);
-  const lockedEnrollment = await ensureEnrollment(LOCKED_EMAIL, 'Cert Prep E2E (locked)', lockedCohort);
+  const open = await ensureEnrollment(OPEN_EMAIL, 'Cert Prep E2E (open)', openCohort);
+  const locked = await ensureEnrollment(LOCKED_EMAIL, 'Cert Prep E2E (locked)', lockedCohort);
+  const site = process.env.PORTAL_BASE_URL ?? 'https://enterprise.colaberry.ai';
+  const link = (t: string) => `${site}/portal/verify?token=${t}&next=/portal/cert-prep`;
 
   const out = {
     open: {
-      enrollment_id: openEnrollment,
+      enrollment_id: open.id,
       cohort_id: openCohort,
       email: OPEN_EMAIL,
       weeks_ago: OPEN_WEEKS_AGO,
-      token: participantToken(openEnrollment, OPEN_EMAIL, openCohort),
+      token: participantToken(open.id, OPEN_EMAIL, openCohort),
+      portal_link: link(open.portalToken),
     },
     locked: {
-      enrollment_id: lockedEnrollment,
+      enrollment_id: locked.id,
       cohort_id: lockedCohort,
       email: LOCKED_EMAIL,
       weeks_ago: LOCKED_WEEKS_AGO,
-      token: participantToken(lockedEnrollment, LOCKED_EMAIL, lockedCohort),
+      token: participantToken(locked.id, LOCKED_EMAIL, lockedCohort),
+      portal_link: link(locked.portalToken),
     },
   };
   console.log('FIXTURES_JSON_BEGIN');

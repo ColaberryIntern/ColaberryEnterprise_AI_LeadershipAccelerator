@@ -119,7 +119,7 @@ describe('an empty list is two different situations, and a failure is neither', 
 
   it('says "no match" when records exist but none came back', async () => {
     indexMock.mockResolvedValue(H.list({ items: [], total: 0, ledger: H.ledger({ projects: 3 }) }));
-    H.mount('/stories?capability=agents');
+    H.mount('/proof?capability=agents');
     await H.settle();
     expect(H.text()).toContain(H.FILTERED_EMPTY);
     expect(H.text()).not.toContain(H.LIBRARY_EMPTY);
@@ -139,7 +139,7 @@ describe('an empty list is two different situations, and a failure is neither', 
     // Verification found this scenario uncovered: inlining the decision at the
     // call site changed behaviour in exactly this case and no test moved.
     indexMock.mockResolvedValue(H.list({ items: [], total: 0, ledger: H.ledger({ projects: 3 }) }));
-    H.mount('/stories');
+    H.mount('/proof');
     await H.settle();
 
     expect(H.q('[data-testid="stories-empty"]')?.getAttribute('data-empty')).toBe('filtered');

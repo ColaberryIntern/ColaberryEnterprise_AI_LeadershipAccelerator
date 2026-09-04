@@ -585,12 +585,36 @@ export const CLAIMS: readonly Claim[] = [
     key: 'surface.proof.room',
     publicWording: 'Every proof record carries its evidence class and the evidence behind it.',
     verification: 'VERIFIED',
-    capability: 'unbuilt',
-    evidenceSource: 'No evidence_class taxonomy in backend/src.',
+    /*
+     * BUILT, 2026-09-04. This read `unbuilt` on the evidence "No evidence_class
+     * taxonomy in backend/src", which was true when it was checked on 2026-08-07
+     * and stopped being true when the Case Study OS shipped.
+     *
+     * Leaving it was not cosmetic. `/proof` rendered a CapabilityNotice and a
+     * future-tense paragraph promising that each record WOULD carry its evidence
+     * class - on a site that could already show published records doing exactly
+     * that. A stale `unbuilt` understates the product in the one place a reader
+     * goes to check whether the product is overstated.
+     */
+    capability: 'live',
+    evidenceSource:
+      'GET /api/public/case-studies returns published records each carrying a '
+      + 'verificationClass and verificationMethod; the detail projection adds evidence, '
+      + 'artifacts, methodology and limitations per figure. Publishing is gated by '
+      + 'caseStudyPublishGate, which refuses a verified claim carrying no evidenceId.',
     owner: 'Eng',
-    lastVerifiedAt: '2026-08-07',
+    lastVerifiedAt: '2026-09-04',
     approvedRoutes: ['*'],
-    requiresSampleLabel: true,
+    /*
+     * FALSE NOW, AND THAT IS THE POINT OF THE FLAG. It was true while the surface
+     * was unbuilt: anything shown alongside would necessarily have been sample
+     * data. The records are real and each figure declares its own class, so a
+     * blanket "sample" marker on this surface would now mislabel verified work as
+     * illustrative - the same error as the old page, pointing the other way.
+     * A record that IS illustrative still carries its own label, from its own
+     * verification class, which is where that decision belongs.
+     */
+    requiresSampleLabel: false,
   },
 
   /* ── fabricated content: hard blocks ───────────────────────────────────── */
