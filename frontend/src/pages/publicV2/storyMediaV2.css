@@ -223,9 +223,15 @@
    Both facts had one cause: `heroImageUrl` reached the index card and was never
    read by the detail page. So the title block ran to about half the measure on a
    desktop and the other half held nothing, on the tallest band of the page.
-   The cover goes THERE rather than above the title or below the fold: it costs
-   no vertical space, it sits beside the standfirst that explains it, and the
-   masthead's "subtract, never add" rule survives - the band does not get taller.
+   The cover goes THERE rather than above the title or below the fold: beside the
+   standfirst that explains it, and in the column that was already empty.
+   IT IS NOT FREE, AND THE MEASUREMENT IS THE POINT. The band grows only when the
+   picture is taller than the words, and then only by the difference: measured at
+   495px on this record without a cover and 546px with one, against a masthead
+   that was 1142px before the context strip moved out of it. Stacking the same
+   image above the title would have cost its full height. That is the trade the
+   masthead's "subtract, never add" rule permits - 51px for the page's evidence,
+   not 431px.
    7fr/5fr, not 1fr/1fr: the title and standfirst are the page's argument and the
    picture is its evidence, so the words keep the larger track.
    Below 64rem there is no second column and the figure stays last in source
