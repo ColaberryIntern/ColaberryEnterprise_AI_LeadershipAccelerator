@@ -81,6 +81,31 @@ describe('deriveAgentCapabilities', () => {
     expect(first).toEqual(second);
   });
 
+  it('happy path: AgentBehaviorMonitorAgent\'s real 5-tool set (added 2026-09-04, closing this file\'s own undocumentedTools gap) resolves fully documented', () => {
+    const result = deriveAgentCapabilities([
+      'detect_stuck_agents',
+      'detect_agent_error_spikes',
+      'detect_agent_duration_anomalies',
+      'create_security_alerts',
+      'create_tickets',
+    ]);
+
+    expect(result.undocumentedTools).toEqual([]);
+    expect(result.reads).toEqual(expect.arrayContaining([
+      'ai_agents.status / last_run_at — agents running longer than 15 minutes',
+      'ai_agents.error_count — agents with more than 5 errors in the last hour',
+    ]));
+    expect(result.produces).toEqual(expect.arrayContaining(['DepartmentEvent records (security-ops alert writes)', 'Tickets (via createTicket())']));
+  });
+
+  it('happy path: a ticket auto-resolver\'s real 2-tool set (query + close, added 2026-09-04) resolves fully documented', () => {
+    const result = deriveAgentCapabilities(['query_strategic_initiative_status', 'close_corybrain_tickets_on_initiative_terminal_state']);
+
+    expect(result.undocumentedTools).toEqual([]);
+    expect(result.reads).toEqual(["The linked StrategicInitiative row's current status"]);
+    expect(result.produces).toEqual(['Ticket status -> done (initiative completed) or cancelled (initiative cancelled)']);
+  });
+
   it('every entry in TOOL_CAPABILITIES has at least one read or produce fact (no dead/empty entries)', () => {
     for (const [tool, capability] of Object.entries(TOOL_CAPABILITIES)) {
       const hasContent = capability.reads.length > 0 || capability.produces.length > 0;
