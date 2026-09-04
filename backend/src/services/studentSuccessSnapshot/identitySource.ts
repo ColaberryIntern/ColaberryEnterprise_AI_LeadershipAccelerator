@@ -1,4 +1,8 @@
-import { Enrollment } from '../../models';
+// Direct import, not the '../../models' barrel — the barrel triggers the
+// full association graph at load time, which has broken 3 separate test
+// files elsewhere in this session (agentRecentActivitySummary.ts,
+// managerReliabilityIntentService.ts x2).
+import Enrollment from '../../models/Enrollment';
 import Cohort from '../../models/Cohort';
 import { IdentityValue, SnapshotField } from './types';
 

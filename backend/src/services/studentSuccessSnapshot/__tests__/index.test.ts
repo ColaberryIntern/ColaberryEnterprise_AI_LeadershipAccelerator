@@ -22,6 +22,18 @@ jest.mock('../projectProgressSource', () => ({ getProjectProgressField: (...a: a
 const mockGetCertReadinessField = jest.fn();
 jest.mock('../certReadinessSource', () => ({ getCertReadinessField: (...a: any[]) => mockGetCertReadinessField(...a) }));
 
+const mockGetArtifactsEvidenceField = jest.fn();
+jest.mock('../artifactsEvidenceSource', () => ({ getArtifactsEvidenceField: (...a: any[]) => mockGetArtifactsEvidenceField(...a) }));
+
+const mockGetCommunityActivityField = jest.fn();
+jest.mock('../communityActivitySource', () => ({ getCommunityActivityField: (...a: any[]) => mockGetCommunityActivityField(...a) }));
+
+const mockGetTicketsInterventionsField = jest.fn();
+jest.mock('../ticketsInterventionsSource', () => ({ getTicketsInterventionsField: (...a: any[]) => mockGetTicketsInterventionsField(...a) }));
+
+const mockGetPreviousReeseCommunicationsField = jest.fn();
+jest.mock('../reeseCommunicationsSource', () => ({ getPreviousReeseCommunicationsField: (...a: any[]) => mockGetPreviousReeseCommunicationsField(...a) }));
+
 import { getStudentSuccessSnapshot } from '../index';
 
 const KNOWN_FIELD = { value: {}, status: 'known', sourceSystem: 'x', sourceRecordIds: [], observedAt: new Date(), freshnessPolicy: 'real-time', reliabilityState: 'healthy' as const };
@@ -36,6 +48,10 @@ beforeEach(() => {
   mockGetCompetencyEvidenceField.mockResolvedValue(KNOWN_FIELD);
   mockGetProjectProgressField.mockResolvedValue(KNOWN_FIELD);
   mockGetCertReadinessField.mockResolvedValue(KNOWN_FIELD);
+  mockGetArtifactsEvidenceField.mockResolvedValue(KNOWN_FIELD);
+  mockGetCommunityActivityField.mockResolvedValue(KNOWN_FIELD);
+  mockGetTicketsInterventionsField.mockResolvedValue(KNOWN_FIELD);
+  mockGetPreviousReeseCommunicationsField.mockResolvedValue(KNOWN_FIELD);
 });
 
 describe('getStudentSuccessSnapshot', () => {
@@ -52,6 +68,10 @@ describe('getStudentSuccessSnapshot', () => {
     expect(snapshot.competencyEvidence.status).toBe('known');
     expect(snapshot.projectProgress.status).toBe('known');
     expect(snapshot.certReadiness.status).toBe('known');
+    expect(snapshot.artifactsEvidence.status).toBe('known');
+    expect(snapshot.communityActivity.status).toBe('known');
+    expect(snapshot.ticketsInterventions.status).toBe('known');
+    expect(snapshot.previousReeseCommunications.status).toBe('known');
   });
 
   it('resilience: identity lookup failure still yields the other real fields, and attendance is scoped to a null cohort rather than crashing', async () => {

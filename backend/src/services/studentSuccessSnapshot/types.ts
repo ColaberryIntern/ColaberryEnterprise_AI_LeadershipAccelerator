@@ -66,6 +66,35 @@ export interface CompetencyEvidenceValue {
   domains: Array<{ domainId: string; domainName: string; confidence: number; evidenceCount: number }>;
 }
 
+export interface ArtifactsEvidenceValue {
+  totalValidated: number;
+  bySourceType: Record<string, number>;
+}
+
+export interface CommunityActivityValue {
+  postCount: number;
+  totalLikesReceived: number;
+  totalCommentsReceived: number;
+  communityPoints: number;
+  communityLevel: number;
+}
+
+export interface TicketsInterventionsValue {
+  openCount: number;
+  totalCount: number;
+  recentTickets: Array<{ id: string; title: string; status: string; type: string; updatedAt: string | null }>;
+}
+
+export interface PreviousReeseCommunicationsValue {
+  messageCount: number;
+  lastMessageAt: string | null;
+  /** Body text deliberately excluded — matches this codebase's own
+   * PII-redaction discipline (learnerContextFormat.ts's redactPII()). A
+   * caller that genuinely needs message content should read RoomMessage
+   * directly with its own justification, not get it smuggled through here. */
+  recentMessages: Array<{ enrollmentId: string | null; isFromReese: boolean; createdAt: string | null }>;
+}
+
 export interface ProjectProgressValue {
   name: string | null;
   stage: string | null;
@@ -107,6 +136,10 @@ export interface StudentSuccessSnapshot {
   competencyEvidence: SnapshotField<CompetencyEvidenceValue>;
   projectProgress: SnapshotField<ProjectProgressValue>;
   certReadiness: SnapshotField<CertReadinessValue>;
+  artifactsEvidence: SnapshotField<ArtifactsEvidenceValue>;
+  communityActivity: SnapshotField<CommunityActivityValue>;
+  ticketsInterventions: SnapshotField<TicketsInterventionsValue>;
+  previousReeseCommunications: SnapshotField<PreviousReeseCommunicationsValue>;
 }
 
 /** A field with no real backing source yet — honest, never a guess. */
