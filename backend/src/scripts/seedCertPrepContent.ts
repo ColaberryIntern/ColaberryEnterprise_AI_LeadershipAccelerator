@@ -36,7 +36,7 @@ import { ensureCertPrepSchema, missingCertTables } from '../db/ensureCertPrepSch
 import { seedBlueprint, getCurrentBlueprint } from '../services/certPrep/certBlueprintService';
 import { createDraftRevision, validateRevision, setReviewStatus } from '../services/certPrep/certQuestionBankService';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../data/certBlueprints/ccarFoundations';
-import { CCAR_F_SAMPLE_ITEMS } from '../data/certBlueprints/ccarFoundationsItems';
+import { CCAR_F_ALL_ITEMS } from '../data/certBlueprints/items';
 import CertQuestionRevision from '../models/CertQuestionRevision';
 
 const args = process.argv.slice(2);
@@ -77,19 +77,19 @@ async function main(): Promise<void> {
   log(`blueprint source: ${blueprint.track.blueprint_source} (${blueprint.track.blueprint_version})`);
 
   if (withItems) {
-    const problems = CCAR_F_SAMPLE_ITEMS.flatMap((i) =>
+    const problems = CCAR_F_ALL_ITEMS.flatMap((i) =>
       validateRevision(i).map((p) => `${i.question_key}: ${p}`));
     if (problems.length > 0) {
       throw new Error(`items failed validation:\n  ${problems.join('\n  ')}`);
     }
     let created = 0;
-    for (const input of CCAR_F_SAMPLE_ITEMS) {
+    for (const input of CCAR_F_ALL_ITEMS) {
       const existing = await CertQuestionRevision.findOne({ where: { question_key: input.question_key } });
       if (existing) continue;              // never a second revision by accident
       await createDraftRevision(input);
       created += 1;
     }
-    log(`items           : ${created} created as DRAFT, ${CCAR_F_SAMPLE_ITEMS.length - created} already present`);
+    log(`items           : ${created} created as DRAFT, ${CCAR_F_ALL_ITEMS.length - created} already present`);
   }
 
   if (approveAs) {
