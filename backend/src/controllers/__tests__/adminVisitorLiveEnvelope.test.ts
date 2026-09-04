@@ -97,7 +97,7 @@ it('clamps a hostile limit instead of passing it to the database', async () => {
 
   await handleGetLiveVisitors({ query: { limit: '100000' } } as unknown as Request, res, next);
 
-  expect(getLiveVisitors).toHaveBeenCalledWith(200);
+  expect(getLiveVisitors).toHaveBeenCalledWith(200, false);
 });
 
 it('falls back to the default when limit is not a number', async () => {
@@ -107,7 +107,58 @@ it('falls back to the default when limit is not a number', async () => {
 
   await handleGetLiveVisitors({ query: { limit: 'all' } } as unknown as Request, res, next);
 
-  expect(getLiveVisitors).toHaveBeenCalledWith(50);
+  expect(getLiveVisitors).toHaveBeenCalledWith(50, false);
+});
+
+describe('bot filtering', () => {
+  it('excludes bots by default — "who is on the site" is a question about people', async () => {
+    getLiveVisitors.mockResolvedValueOnce([]);
+    countLiveVisitors.mockResolvedValueOnce(0);
+    const { res, json } = mockRes();
+
+    await handleGetLiveVisitors({ query: {} } as unknown as Request, res, next);
+
+    expect(getLiveVisitors).toHaveBeenCalledWith(50, false);
+    expect(countLiveVisitors).toHaveBeenCalledWith(false);
+    expect(json.mock.calls[0][0].includeBots).toBe(false);
+  });
+
+  it('includes them on ?includeBots=true', async () => {
+    getLiveVisitors.mockResolvedValueOnce([ROW]);
+    countLiveVisitors.mockResolvedValueOnce(1);
+    const { res, json } = mockRes();
+
+    await handleGetLiveVisitors({ query: { includeBots: 'true' } } as unknown as Request, res, next);
+
+    expect(getLiveVisitors).toHaveBeenCalledWith(50, true);
+    expect(countLiveVisitors).toHaveBeenCalledWith(true);
+    expect(json.mock.calls[0][0].includeBots).toBe(true);
+  });
+
+  /**
+   * The list and the count must be filtered the same way, always. A headline of
+   * 12 above a table of 3 is the exact defect class this dashboard just came out
+   * of, so the two calls are asserted to agree rather than merely both existing.
+   */
+  it('passes the same bot setting to the list and the count', async () => {
+    getLiveVisitors.mockResolvedValueOnce([]);
+    countLiveVisitors.mockResolvedValueOnce(0);
+    const { res } = mockRes();
+
+    await handleGetLiveVisitors({ query: { includeBots: 'true' } } as unknown as Request, res, next);
+
+    expect(getLiveVisitors.mock.calls[0][1]).toBe(countLiveVisitors.mock.calls[0][0]);
+  });
+
+  it('treats any value other than the literal "true" as off', async () => {
+    getLiveVisitors.mockResolvedValueOnce([]);
+    countLiveVisitors.mockResolvedValueOnce(0);
+    const { res } = mockRes();
+
+    await handleGetLiveVisitors({ query: { includeBots: '1' } } as unknown as Request, res, next);
+
+    expect(getLiveVisitors).toHaveBeenCalledWith(50, false);
+  });
 });
 
 it('forwards a query failure to the error handler rather than sending an empty list', async () => {

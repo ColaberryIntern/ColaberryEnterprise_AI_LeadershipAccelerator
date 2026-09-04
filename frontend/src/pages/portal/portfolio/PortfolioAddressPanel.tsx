@@ -3,11 +3,9 @@ import {
   fetchPortfolioPage,
   setPortfolioPageVisibility,
   requestPortfolioPageReview,
-  fetchMyPortfolioPreview,
   type PortfolioPageState,
   type PortfolioPageVisibility,
 } from '../../../services/careerApi';
-import PortfolioBody from '../../../components/portfolio/PortfolioBody';
 
 /**
  * PortfolioAddressPanel — the learner's controls for their person-level page at /u/:slug.
@@ -38,10 +36,6 @@ const PortfolioAddressPanel: React.FC = () => {
   const [page, setPage] = useState<PortfolioPageState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
-  const [preview, setPreview] = useState<any>(null);
-  const [previewBusy, setPreviewBusy] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -107,27 +101,20 @@ const PortfolioAddressPanel: React.FC = () => {
             same page, from the same data.
           </span>
         </div>
-        <button
-          type="button"
+        {/* A LINK, NOT A TOGGLE. Ali: "when I click on the new tab, I was expecting it to
+            open the page. We already have a gate — don't need another one with that
+            button." Expanding a panel to see your own page was a second gate governing
+            nothing. It points at the in-portal preview rather than the public URL because
+            that URL only resolves once the page is live, and most learners will click
+            this before then; the address above is the real link once there is one. */}
+        <a
           className="cp-preview-btn"
-          disabled={previewBusy}
-          onClick={() => {
-            if (showPreview) { setShowPreview(false); return; }
-            setShowPreview(true);
-            // Loaded on demand rather than with the tab: most visits here are to change
-            // visibility, and this is by far the expensive read.
-            if (!preview && !previewBusy) {
-              setPreviewBusy(true);
-              setPreviewError(null);
-              fetchMyPortfolioPreview()
-                .then(setPreview)
-                .catch(() => setPreviewError('Could not load your preview just now.'))
-                .finally(() => setPreviewBusy(false));
-            }
-          }}
+          href="/portal/portfolio/preview"
+          target="_blank"
+          rel="noopener noreferrer"
         >
-          {previewBusy ? 'Loading…' : showPreview ? 'Hide preview' : 'Preview my page'}
-        </button>
+          Preview my page
+        </a>
       </div>
 
       <div className="cp-address">
@@ -196,18 +183,6 @@ const PortfolioAddressPanel: React.FC = () => {
       <p className="cp-fine">
         Default is “anyone with the link”, which search engines are told to ignore. Only you can change that.
       </p>
-
-      {showPreview && (
-        <div className="cp-preview-area">
-          {previewBusy && <p className="cp-muted">Loading…</p>}
-          {previewError && <p className="cp-error">{previewError}</p>}
-          {preview && (
-            <div className="cp-portfolio-preview">
-              <PortfolioBody portfolio={preview} embedded />
-            </div>
-          )}
-        </div>
-      )}
 
       {error && <p className="cp-error">{error}</p>}
     </section>

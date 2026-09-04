@@ -35,6 +35,10 @@ export interface RuleArgs {
   name: string;
   convertUrl?: string;
   commit: boolean;
+  /** Which action the rule fires. `notify_sales` emails a human; `request_callback` dials. */
+  action: 'notify_sales' | 'request_callback';
+  /** Narrows the rule to one form. Omitted means every lead from the source. */
+  entrySlug?: string;
 }
 
 export function parseRuleArgs(argv: string[]): RuleArgs {
@@ -43,16 +47,30 @@ export function parseRuleArgs(argv: string[]): RuleArgs {
     return i >= 0 ? argv[i + 1] : undefined;
   };
   const sourceSlug = (value('--source') || '').trim();
+  const action = (value('--action') || 'notify_sales').trim() as RuleArgs['action'];
+  const entrySlug = (value('--entry') || '').trim() || undefined;
   const to = (value('--to') || '').trim();
+
   if (!sourceSlug) throw new Error('--source <slug> is required (matches lead source_slug)');
+  if (action !== 'notify_sales' && action !== 'request_callback') {
+    throw new Error(`--action must be notify_sales or request_callback, got '${action}'`);
+  }
+  // Only the notification needs a recipient. A callback rings the number on the lead, so
+  // demanding an address for it would be asking for something the action never uses.
   // Required rather than defaulted to the admin list: a rule that silently notifies
   // whoever the global setting happens to name is a rule nobody can reason about.
-  if (!to) throw new Error('--to <email> is required (who should be told)');
+  if (action === 'notify_sales' && !to) throw new Error('--to <email> is required (who should be told)');
+
+  const defaultName = action === 'request_callback'
+    ? `Call back on ${sourceSlug} ${entrySlug || 'lead'}`
+    : `Notify on ${sourceSlug} lead`;
 
   return {
     sourceSlug,
     to,
-    name: (value('--name') || `Notify on ${sourceSlug} lead`).trim(),
+    action,
+    entrySlug,
+    name: (value('--name') || defaultName).trim(),
     convertUrl: value('--convert-url'),
     commit: argv.includes('--commit'),
   };
@@ -67,14 +85,19 @@ export function buildRule(args: RuleArgs): {
     name: args.name,
     // Leaves room above and below for rules that must run first or last.
     priority: 100,
-    // A bare key is equality in this engine; `source_slug` is a top-level fact.
-    conditions: { source_slug: args.sourceSlug },
-    actions: [{
-      type: 'notify_sales',
-      channel: 'email',
-      to: args.to,
-      ...(args.convertUrl ? { convert_url: args.convertUrl } : {}),
-    }],
+    // A bare key is equality in this engine; both are top-level facts.
+    conditions: {
+      source_slug: args.sourceSlug,
+      ...(args.entrySlug ? { entry_slug: args.entrySlug } : {}),
+    },
+    actions: [args.action === 'request_callback'
+      ? { type: 'request_callback' }
+      : {
+        type: 'notify_sales',
+        channel: 'email',
+        to: args.to,
+        ...(args.convertUrl ? { convert_url: args.convertUrl } : {}),
+      }],
     // Other rules for this source should still get their turn.
     continue_on_match: true,
     is_active: true,
@@ -93,8 +116,8 @@ async function main(): Promise<void> {
   const existing = await RoutingRule.findOne({ where: { name: rule.name } });
 
   console.log(`[rule] ${existing ? 'UPDATE existing' : 'CREATE new'}: ${rule.name}`);
-  console.log(`  when   : source_slug = ${args.sourceSlug}`);
-  console.log(`  then   : notify_sales by email to ${args.to}`);
+  console.log(`  when   : source_slug = ${args.sourceSlug}${args.entrySlug ? ` AND entry_slug = ${args.entrySlug}` : ''}`);
+  console.log(`  then   : ${args.action === 'request_callback' ? 'request_callback (dial the number on the lead)' : `notify_sales by email to ${args.to}`}`);
   if (args.convertUrl) console.log(`  convert: ${args.convertUrl}`);
 
   const total = await RoutingRule.count();
@@ -112,7 +135,9 @@ async function main(): Promise<void> {
     const created = await RoutingRule.create(rule as any);
     console.log(`\n[rule] CREATED ${(created as any).id}`);
   }
-  console.log(`A ${args.sourceSlug} lead will now email ${args.to}. One alert per lead, deduped on the audit log.`);
+  console.log(args.action === 'request_callback'
+    ? `A ${args.sourceSlug}${args.entrySlug ? ` ${args.entrySlug}` : ''} lead will now be called back on the number it carries. Repeat requests inside five minutes collapse to one call.`
+    : `A ${args.sourceSlug} lead will now email ${args.to}. One alert per lead, deduped on the audit log.`);
 }
 
 // Guarded so a test can import the pure helpers without connecting to a database.

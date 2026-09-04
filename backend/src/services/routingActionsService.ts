@@ -2,6 +2,7 @@ import { logActivity } from './activityService';
 import { Campaign, CommunicationLog } from '../models';
 import { sendNewLeadAlert } from './emailService';
 import { logCommunication } from './communicationLogService';
+import { requestInstantCallback } from './callbackRequestService';
 
 /**
  * Marks the audit rows this handler writes, so the dedup query is unambiguous.
@@ -143,6 +144,67 @@ const notifySales: ActionHandler = async (action, ctx) => {
   return { ok: true, detail: { channel, sent: true, to: result.to, message_id: result.messageId } };
 };
 
+/**
+ * Call them back, now, because they asked to be called.
+ *
+ * WHY THIS IS A ROUTING ACTION AND NOT AN ENDPOINT
+ *
+ * `/api/v1/request-callback` exists already, but it is guarded by a service token - it is
+ * server-to-server. A dependency-free public site cannot call it, and putting a service
+ * token in the browser to make it possible would hand anyone on the internet the ability
+ * to make our number dial strangers.
+ *
+ * So the public path is the one that already exists and is already rate limited: the form
+ * posts a lead, and a routing rule fires this. No new public surface, no token in a page,
+ * and the consent, dedup and safety checks in requestInstantCallback all still apply.
+ *
+ * The honesty contract matches notify_sales: place the call, or say why not. A
+ * `skipped` from the voice layer - feature disabled, no agent, no prompt - is NOT a
+ * success, and reporting it as one would recreate the defect this file was rewritten to
+ * remove.
+ */
+const requestCallback: ActionHandler = async (action, ctx) => {
+  const phone = String(ctx.lead.phone || ctx.normalized?.phone || '').trim();
+  const email = String(ctx.lead.email || '').trim();
+
+  // Both are required by the shared callback service: the phone is what it dials, and the
+  // email is how the lead is resolved idempotently. Missing either is a refusal with a
+  // reason rather than a silent no-op.
+  if (!phone) return { ok: false, error: 'no_phone' };
+  if (!email) return { ok: false, error: 'no_email' };
+
+  const result = await requestInstantCallback({
+    name: ctx.lead.name || 'there',
+    email,
+    phone,
+    // Drives BOTH the brand's agent and its per-call prompt downstream.
+    source: ctx.source_slug,
+    company: ctx.lead.company || undefined,
+    role: ctx.lead.role || undefined,
+    // Their own words, found the same way the alert finds them: the normalizer files
+    // free text under metadata.message and leaves the lead column empty.
+    message: ctx.lead.message
+      || ctx.normalized?.message
+      || (ctx.normalized?.metadata as Record<string, any> | undefined)?.message
+      || undefined,
+  } as any, ctx.raw_payload_id);
+
+  await logActivity({
+    lead_id: ctx.lead.id,
+    type: 'system',
+    subject: `Callback ${result.status} (lead ${ctx.lead.id})`,
+    metadata: { subtype: 'routing_action', action_type: 'request_callback', status: result.status, call_id: result.call_id },
+  });
+
+  // `deduplicated` is a correct outcome, not a failure: they asked twice inside the
+  // window and one call is the right answer. Everything else that did not dial is a
+  // failure with its reason attached.
+  if (result.status === 'call_initiated' || result.status === 'deduplicated') {
+    return { ok: true, detail: { status: result.status, call_id: result.call_id, deduped: result.deduped } };
+  }
+  return { ok: false, error: `${result.status}${result.reason ? `:${result.reason}` : ''}` };
+};
+
 const sendPdf: ActionHandler = async (action, ctx) => {
   // Stub for the PDF delivery integration. Logs the intent so we can audit
   // which leads should have received which asset. Downstream worker will
@@ -202,6 +264,7 @@ const triggerBookingFlow: ActionHandler = async (action, ctx) => {
 export const ACTION_HANDLERS: Record<string, ActionHandler> = {
   tag_lead: tagLead,
   notify_sales: notifySales,
+  request_callback: requestCallback,
   send_pdf: sendPdf,
   enroll_campaign: enrollCampaign,
   create_deal: createDeal,

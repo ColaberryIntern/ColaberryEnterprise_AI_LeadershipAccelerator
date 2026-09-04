@@ -335,6 +335,34 @@ async function main() {
     check('  the form is reset', await page.inputValue('#name'), '');
     check('  and promises NO email', /email/i.test(await page.textContent('#status')), false);
 
+    // ---- the second door: "call me now" ------------------------------------------
+    //
+    // A call to somebody who did not agree to be called is the one failure on this page
+    // that is not merely annoying, so the consent gate is asserted before anything else.
+    captured = null;
+    mode = 'ok';
+    await page.goto(base + '/start/', { waitUntil: 'domcontentloaded' });
+    check('the call-me-now form is on the page', await page.isVisible('#callme'), true);
+
+    await page.fill('#cm-phone', '+15550100');
+    await page.fill('#cm-name', 'Dana Whitfield');
+    await page.fill('#cm-email', 'dana@meridianfreight.com');
+    await page.click('#callme button[type=submit]');
+    await page.waitForTimeout(150);
+    check('  without consent it refuses', await page.getAttribute('#cm-status', 'data-state'), 'error');
+    check('  and no call was requested', captured, null);
+
+    await page.check('#cm-consent');
+    await page.click('#callme button[type=submit]');
+    await page.waitForSelector('#cm-status[data-state="ok"]');
+    check('  with consent it is accepted', await page.getAttribute('#cm-status', 'data-state'), 'ok');
+    check('  posts under the call_me_now entry', /entry=call_me_now$/.test(captured.url), true);
+    check('  carries the consent flag', captured.body.consent_contact, true);
+    check('  carries the number to ring', captured.body.phone, '+15550100');
+    // Hedged on purpose: the call is placed server-side after this responds and can still
+    // be refused there, so the page must not promise a ringing phone.
+    check('  does not promise the phone WILL ring', /should ring/.test(await page.textContent('#cm-status')), true);
+
     const out = path.join(OUT, 'start-success.png');
     await safeScreenshot(page, out, { fullPage: false, label: 'start-success' });
     shots.push({ file: path.basename(out), proves: 'intake success state, no email promised' });
