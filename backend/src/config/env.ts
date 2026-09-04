@@ -83,6 +83,11 @@ export const env = {
   // (the Cora Outbound Admissions agent, module 1b432b69-fcb1-4b70-9130-8a66e45eaff5).
   // Falls back to the interest agent in synthflowService if left unset.
   synthflowCallbackAgentId: process.env.SYNTHFLOW_CALLBACK_AGENT_ID || '',
+  // AI Flotation's own callback agent. Deliberately NOT falling back to the shared
+  // callback or interest agents: those speak for the bootcamp from their own knowledge
+  // base, and an AI Flotation prospect answering the phone to a Colaberry bootcamp agent
+  // is a worse outcome than no call at all. Unset means the voice path skips, loudly.
+  synthflowAiFlotationAgentId: process.env.SYNTHFLOW_AI_FLOTATION_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',

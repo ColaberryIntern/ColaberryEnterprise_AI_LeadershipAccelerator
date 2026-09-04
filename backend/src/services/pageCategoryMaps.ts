@@ -44,11 +44,11 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
    * submit CTA. It earns `enroll` (strength 45, the highest single page-visit signal in
    * the system) because that is genuinely what a visit to it means.
    *
-   * HISTORY, kept because it explains the shape of this map: when it was first written
-   * this brand had NO pricing page, so `pricing_visit` and the two patterns requiring a
-   * pricing view were unreachable here whatever the map said. `/pricing` shipped hours
-   * later and closed that on its own. The note is corrected rather than deleted, because
-   * a comment confidently stating something untrue is worse than no comment at all.
+   * The pricing gap this note used to describe is CLOSED. `/pricing` shipped on
+   * 2026-09-03 as the build-membership page, so `pricing_visit` and the two multi-page
+   * patterns that require a pricing view (`research_pattern`, `evaluation_pattern`) are
+   * reachable for this brand for the first time. The content decision was made; this map
+   * is what makes the signal follow it.
    */
   'ai-flotation': {
     exact: {
