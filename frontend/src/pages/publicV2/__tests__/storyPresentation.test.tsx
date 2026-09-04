@@ -212,6 +212,33 @@ describe('a picture is met while the reading is still going on', () => {
     expect(figuresAfter(placement, 'architecture').map((f) => f.title)).toEqual(['Shot 1']);
   });
 
+  /**
+   * MUTATION: drop the `excludeHref` filter in `placeStoryFigures`.
+   * FAILS: "never places the cover again in the body" -> expected 1 placed,
+   *        got 2 (the masthead's picture opens the body as well).
+   *
+   * WHY IT IS HERE. Measured on the live record the day the cover shipped: the
+   * traceability capture rendered THREE times on one page - masthead, first
+   * figure gap, and the artifacts strip. The masthead spending an image has to
+   * remove it from the body, or every record with a cover repeats itself.
+   */
+  it('never places the cover again in the body', () => {
+    const record = detail({ artifacts: [shot(1), shot(2)] });
+    const first = record.artifacts[0];
+    const second = record.artifacts[1];
+    if (first.access !== 'open' || second.access !== 'open') throw new Error('fixture');
+    const placement = placeStoryFigures(record.artifacts, ALL_SECTIONS, first.url);
+
+    expect(placement.placedHrefs).toEqual([second.url]);
+    expect(placement.placedHrefs).not.toContain(first.url);
+  });
+
+  it('places everything when no cover is named, so the exclusion is not vacuous', () => {
+    const record = detail({ artifacts: [shot(1), shot(2)] });
+    expect(placeStoryFigures(record.artifacts, ALL_SECTIONS, null).placedHrefs).toHaveLength(2);
+    expect(placeStoryFigures(record.artifacts, ALL_SECTIONS).placedHrefs).toHaveLength(2);
+  });
+
   it('puts at most one picture in a gap, so a gap never becomes a gallery', () => {
     const record = detail({ artifacts: [shot(1), shot(2), shot(3), shot(4)] });
     const placement = placeStoryFigures(record.artifacts, ALL_SECTIONS);
