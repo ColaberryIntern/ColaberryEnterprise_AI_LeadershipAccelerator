@@ -20,6 +20,7 @@
  *   node dist/scripts/seedTypeCertificationMap.js --apply
  */
 import { QueryTypes } from 'sequelize';
+import { canonicalJson } from '../utils/canonicalHash';
 import { sequelize } from '../config/database';
 import { getCurrentBlueprint } from '../services/certPrep/certBlueprintService';
 import {
@@ -31,26 +32,19 @@ import {
 const apply = process.argv.includes('--apply');
 
 /**
- * Compare jsonb by VALUE, not by the order Postgres happens to store keys in.
+ * jsonb does not preserve key order, so the stored value comes back with its
+ * keys sorted by Postgres and never string-matches the object built here. The
+ * first version of this script compared `JSON.stringify` both sides and
+ * reported four pending changes on every run FOREVER, including immediately
+ * after a successful apply - four needless UPDATEs bumping `updated_at` and a
+ * dry run whose diff could never reach zero.
  *
- * The first version compared `JSON.stringify(next)` against the stringified
- * column, and reported four pending changes on every run FOREVER - including
- * the run immediately after a successful apply. jsonb does not preserve key
- * order: it stores `grain` first because that key is shortest, while the object
- * built here starts with `objective_ids`. Two identical values, two different
- * strings, and a script that re-issued four UPDATEs and bumped `updated_at`
- * every time it ran. That is the first-run/second-run divergence the repo
- * forbids, and it stayed invisible until the seeder was deliberately run twice.
+ * `canonicalJson` is imported rather than reimplemented. This script carried
+ * its own copy for exactly one day, which is one day longer than the util's own
+ * header warns about: two implementations of one invariant disagree eventually,
+ * and `seedCertPrepContent` then hit the SAME bug because it could not use a
+ * private helper living in this file.
  */
-export function canonicalJson(value: unknown): string {
-  return JSON.stringify(value, (_key, v) =>
-    v && typeof v === 'object' && !Array.isArray(v)
-      ? Object.fromEntries(
-          Object.keys(v as Record<string, unknown>).sort().map((k) => [k, (v as Record<string, unknown>)[k]]),
-        )
-      : v,
-  );
-}
 
 interface TypeRow { slug: string; certification_mapping: unknown; portfolio_eligible: boolean | null }
 

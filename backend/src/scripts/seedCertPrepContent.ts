@@ -31,6 +31,7 @@
  *   node dist/scripts/seedCertPrepContent.js --items --approve-as e2e@colaberry.test
  */
 import { QueryTypes } from 'sequelize';
+import { sameContent } from './lib/certItemContent';
 import { sequelize } from '../config/database';
 import { ensureCertPrepSchema, missingCertTables } from '../db/ensureCertPrepSchema';
 import { seedBlueprint, getCurrentBlueprint } from '../services/certPrep/certBlueprintService';
@@ -60,22 +61,6 @@ const approveAs = approveIdx >= 0 ? args[approveIdx + 1] : null;
  */
 const revise = args.includes('--revise');
 
-/**
- * Compare on what a student actually sees and is scored on. Difficulty and
- * scenario labels are editorial metadata; changing one is not worth re-opening
- * an approved question for review.
- */
-const sameContent = (
-  stored: { stem: string; options: unknown; correct_keys: unknown; rationale: string | null; distractor_rationales: unknown },
-  authored: { stem: string; options: unknown; correct_keys: unknown; rationale: string; distractor_rationales?: unknown },
-): boolean => {
-  const norm = (v: unknown): string => JSON.stringify(v ?? null);
-  return stored.stem === authored.stem
-    && norm(stored.options) === norm(authored.options)
-    && norm(stored.correct_keys) === norm(authored.correct_keys)
-    && (stored.rationale ?? '') === authored.rationale
-    && norm(stored.distractor_rationales) === norm(authored.distractor_rationales);
-};
 
 function log(line: string): void {
   console.log(line);
@@ -164,10 +149,13 @@ async function main(): Promise<void> {
   log(`bank            : ${counts.map((c) => `${c.review_status} ${c.n}`).join(' · ') || 'empty'}`);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error('FAILED:', err?.message ?? err);
-    process.exit(1);
-  })
-  .finally(() => { void sequelize.close().catch(() => undefined); });
+// Guarded so a test can import `sameContent` without running the seeder.
+if (require.main === module) {
+  main()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error('FAILED:', err?.message ?? err);
+      process.exit(1);
+    })
+    .finally(() => { void sequelize.close().catch(() => undefined); });
+}
