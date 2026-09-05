@@ -41,6 +41,76 @@ export type Difficulty = 'easy' | 'medium' | 'hard';
  * An item whose distractors nobody would pick teaches nothing and measures
  * nothing, which is why `dead distractor` is a flag in the admin statistics.
  */
+/**
+ * WHERE THE CORRECT ANSWER SITS IS DECIDED HERE, NOT BY THE AUTHOR.
+ *
+ * Authored as written, this bank keyed 110 of 150 items to B. Per domain it ran
+ * as high as 83%, and on a 60-item mock drawn to blueprint demand an always-B
+ * candidate scored 43.9/60 = 73% against a 72% pass mark. A student who knew
+ * nothing passed. Nothing failed and no test caught it: the bank checked that
+ * the correct option was not the LONGEST (that cue was found and fixed during
+ * authoring, 140/150 down to 38%) and never checked where it SAT.
+ *
+ * The fix is not to re-letter 150 items by hand, because the next author would
+ * reintroduce the same bias the same way - writing the key first and the
+ * distractors after it is a natural habit, not a mistake anyone repeats
+ * deliberately. So position is assigned here, from the question key, and the
+ * authored order in the domain files carries no meaning beyond "the key is
+ * whichever option the correct_keys argument names".
+ *
+ * Derived from the QUESTION KEY rather than the item's index, so it is stable:
+ * inserting an item never moves anybody else's answer, which matters because
+ * the database holds a seeded copy and a re-seed has to be a no-op. FNV-1a is
+ * used for the same reason - a fixed, dependency-free hash whose output cannot
+ * drift between Node versions the way a language-level hash might.
+ *
+ * Multi-select items are left in authored order: "which position holds the
+ * answer" is not a question with one answer when two options are correct, and
+ * there are three of them in the bank.
+ */
+const fnv1a = (text: string): number => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+};
+
+/**
+ * Move the single correct option to a key-derived position, keeping the
+ * distractors in their authored relative order so an author's deliberate
+ * sequencing survives everything except the position of the key itself.
+ */
+export const assignAnswerPosition = (
+  questionKey: string,
+  options: [string, string][],
+  correct: string[],
+): { options: [string, string][]; correct: string[]; remap: Record<string, string> } => {
+  const letters = options.map(([k]) => k);
+  if (correct.length !== 1) {
+    return { options, correct, remap: Object.fromEntries(letters.map((k) => [k, k])) };
+  }
+  const target = fnv1a(questionKey) % options.length;
+  const correctIdx = options.findIndex(([k]) => k === correct[0]);
+  if (correctIdx < 0) return { options, correct, remap: Object.fromEntries(letters.map((k) => [k, k])) };
+
+  const distractors = options.filter((_, i) => i !== correctIdx);
+  const reordered: [string, string][] = [];
+  let d = 0;
+  for (let slot = 0; slot < options.length; slot += 1) {
+    reordered.push(slot === target ? options[correctIdx] : distractors[d++]);
+  }
+
+  // Re-letter in place: slot 0 is always 'A' whatever text landed there.
+  const remap: Record<string, string> = {};
+  const relettered = reordered.map(([oldKey, text], i) => {
+    remap[oldKey] = letters[i];
+    return [letters[i], text] as [string, string];
+  });
+  return { options: relettered, correct: [letters[target]], remap };
+};
+
 export const item = (
   key: string,
   domain: string,
@@ -52,19 +122,29 @@ export const item = (
   correct: string[],
   rationale: string,
   distractors: Record<string, string>,
-): DraftRevisionInput => ({
-  question_key: key,
-  track_id: TRACK,
-  blueprint_version: BP,
-  domain_id: domain,
-  objective_id: objective,
-  scenario_family: scenario,
-  stem,
-  options: options.map(([k, text]) => ({ key: k, text })),
-  correct_keys: correct,
-  select_count: correct.length,
-  rationale,
-  distractor_rationales: distractors,
-  difficulty,
-  author: 'colaberry',
-});
+): DraftRevisionInput => {
+  const placed = assignAnswerPosition(key, options, correct);
+  // The distractor rationales are keyed by option letter, so they move with the
+  // options. Missing this is how a rebalance silently attaches the explanation
+  // for one wrong answer to a different wrong answer.
+  const movedRationales: Record<string, string> = {};
+  for (const [oldKey, text] of Object.entries(distractors)) {
+    movedRationales[placed.remap[oldKey] ?? oldKey] = text;
+  }
+  return {
+    question_key: key,
+    track_id: TRACK,
+    blueprint_version: BP,
+    domain_id: domain,
+    objective_id: objective,
+    scenario_family: scenario,
+    stem,
+    options: placed.options.map(([k, text]) => ({ key: k, text })),
+    correct_keys: placed.correct,
+    select_count: placed.correct.length,
+    rationale,
+    distractor_rationales: movedRationales,
+    difficulty,
+    author: 'colaberry',
+  };
+};

@@ -44,6 +44,39 @@ const withItems = args.includes('--items');
 const approveIdx = args.indexOf('--approve-as');
 const approveAs = approveIdx >= 0 ? args[approveIdx + 1] : null;
 
+/**
+ * `--revise` mints a NEW REVISION where the authored item no longer matches what
+ * is stored, instead of skipping it. Off by default and deliberately awkward,
+ * for the same reason `--approve-as` is: re-writing the question a student is
+ * about to be scored against is not something a routine seed run should do as a
+ * side effect.
+ *
+ * It never edits a stored revision in place. `cert_responses.question_revision`
+ * pins every recorded answer to the exact revision that was served, so an answer
+ * already given keeps meaning what it meant. The new revision arrives as a DRAFT
+ * and students keep being served the last APPROVED one until a named reviewer
+ * approves it -- which is the whole point of the review gate, and it applies to
+ * a correction just as much as to a new item.
+ */
+const revise = args.includes('--revise');
+
+/**
+ * Compare on what a student actually sees and is scored on. Difficulty and
+ * scenario labels are editorial metadata; changing one is not worth re-opening
+ * an approved question for review.
+ */
+const sameContent = (
+  stored: { stem: string; options: unknown; correct_keys: unknown; rationale: string | null; distractor_rationales: unknown },
+  authored: { stem: string; options: unknown; correct_keys: unknown; rationale: string; distractor_rationales?: unknown },
+): boolean => {
+  const norm = (v: unknown): string => JSON.stringify(v ?? null);
+  return stored.stem === authored.stem
+    && norm(stored.options) === norm(authored.options)
+    && norm(stored.correct_keys) === norm(authored.correct_keys)
+    && (stored.rationale ?? '') === authored.rationale
+    && norm(stored.distractor_rationales) === norm(authored.distractor_rationales);
+};
+
 function log(line: string): void {
   console.log(line);
 }
@@ -83,13 +116,33 @@ async function main(): Promise<void> {
       throw new Error(`items failed validation:\n  ${problems.join('\n  ')}`);
     }
     let created = 0;
+    let revised = 0;
+    let unchanged = 0;
     for (const input of CCAR_F_ALL_ITEMS) {
-      const existing = await CertQuestionRevision.findOne({ where: { question_key: input.question_key } });
-      if (existing) continue;              // never a second revision by accident
-      await createDraftRevision(input);
-      created += 1;
+      const latest = await CertQuestionRevision.findOne({
+        where: { question_key: input.question_key },
+        order: [['revision', 'DESC']],
+      });
+      if (!latest) {
+        await createDraftRevision(input);
+        created += 1;
+        continue;
+      }
+      if (!revise) continue;               // never a second revision by accident
+      if (sameContent(latest, input)) { unchanged += 1; continue; }
+      await createDraftRevision(input);    // mints revision N+1, as a DRAFT
+      revised += 1;
     }
-    log(`items           : ${created} created as DRAFT, ${CCAR_F_ALL_ITEMS.length - created} already present`);
+    if (revise) {
+      log(`items           : ${created} created, ${revised} REVISED as new drafts, ${unchanged} unchanged`);
+      if (revised > 0) {
+        log('                  ^ the new revisions are DRAFTS. Students keep being served the');
+        log('                    previously approved revision until a named reviewer approves these.');
+      }
+    } else {
+      log(`items           : ${created} created as DRAFT, ${CCAR_F_ALL_ITEMS.length - created} already present`);
+      log('                  (pass --revise to mint a new revision where the authored item has changed)');
+    }
   }
 
   if (approveAs) {
