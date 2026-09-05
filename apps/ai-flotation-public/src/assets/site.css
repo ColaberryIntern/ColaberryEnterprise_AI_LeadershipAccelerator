@@ -880,3 +880,21 @@ a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
   height: auto;
   max-width: 40rem;
 }
+
+/* ================================================= case-study shell mapping ===
+   `packages/case-study-shell/case-studies.css` decides no colour. It reads
+   `--cs-*` and this is where AI Flotation answers, so the shared record page
+   comes out in this brand's palette without the shared file knowing this brand
+   exists. training.colaberry.com will answer the same six names differently.
+   ========================================================================== */
+
+:root {
+  --cs-fg: var(--fg);
+  --cs-fg-muted: var(--fg-muted);
+  --cs-bg: var(--bg);
+  --cs-surface: var(--bg-elevated);
+  --cs-line: var(--line);
+  --cs-accent: var(--accent);
+  --cs-accent-contrast: var(--accent-contrast);
+  --cs-radius: calc(var(--radius) + 4px);
+}
