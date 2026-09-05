@@ -234,6 +234,19 @@
                 Hidden until there is something to scan - an empty gallery would promise a
                 demonstration we did not manage to produce.
               -->
+              <!--
+                Their workflow, with the part that stops being theirs marked.
+
+                Server-generated SVG rather than a diagram library: this site ships no
+                JavaScript at all, and vendoring two megabytes to draw a short sequence
+                would be the most expensive box ever rendered.
+              -->
+              <section id="workflow" class="workflow" hidden>
+                <h3 class="preview-h3">Your workflow today</h3>
+                <p class="scope-lead">The steps you described, and the ones that would stop landing on a person.</p>
+                <div class="workflow-svg" id="workflow-svg"></div>
+              </section>
+
               <section id="prototypes" class="prototypes" hidden>
                 <h3 class="preview-h3">See it on your phone</h3>
                 <p class="scope-lead">
@@ -566,6 +579,15 @@
            * The QR arrives as an SVG string from the server rather than being drawn here,
            * which keeps the page dependency-free - the whole site ships no libraries.
            */
+          // The diagram. `workflow_svg` is our own generated markup, never model text, so
+          // inlining it is safe - and it inherits the page's theme through the CSS custom
+          // properties it references.
+          var wfWrap = document.getElementById('workflow');
+          var wfSvg = document.getElementById('workflow-svg');
+          var svg = (scope && scope.workflow_svg) || '';
+          wfSvg.innerHTML = svg;
+          wfWrap.hidden = !svg;
+
           var protoWrap = document.getElementById('prototypes');
           var grid = document.getElementById('proto-grid');
           var protos = data.prototypes || [];

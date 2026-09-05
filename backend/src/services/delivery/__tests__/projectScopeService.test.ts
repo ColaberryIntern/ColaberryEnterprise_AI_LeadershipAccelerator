@@ -125,3 +125,45 @@ describe('the screens section', () => {
     expect(screens.join(' ')).toContain('Large type');
   });
 });
+
+/**
+ * The first live scope read "You want the app should improve the navigation experience..."
+ * — two subjects in one sentence, because "You want" was prepended to something that
+ * already had one. Outcomes come back as full sentences at least as often as noun phrases.
+ */
+describe('the summary reads like a sentence a person wrote', () => {
+  const withOutcome = (value: string) =>
+    parseUnderstanding({
+      title: 'T',
+      proposed_surfaces: [],
+      items: [said('problem', 'Getting around the city is hard.'), said('desired_outcome', value)],
+    });
+
+  it('does not prepend "You want" to a sentence that already has a subject', () => {
+    const scope = assembleScope(
+      withOutcome('The app should improve navigation for older adults.'),
+      projectBlueprint(withOutcome('The app should improve navigation for older adults.')),
+      AT,
+    );
+
+    expect(scope.summary).not.toContain('You want the app should');
+    expect(scope.summary).toContain('The app should improve');
+  });
+
+  it('still frames a bare noun phrase as something they want', () => {
+    const u = withOutcome('Automatic alerts when someone is late.');
+    const scope = assembleScope(u, projectBlueprint(u), AT);
+
+    expect(scope.summary).toContain('You want automatic alerts');
+  });
+
+  it('omits the clause entirely when no outcome was captured', () => {
+    const u = parseUnderstanding({
+      title: 'T',
+      proposed_surfaces: [],
+      items: [said('problem', 'Getting around the city is hard.')],
+    });
+
+    expect(assembleScope(u, projectBlueprint(u), AT).summary).not.toContain('You want');
+  });
+});
