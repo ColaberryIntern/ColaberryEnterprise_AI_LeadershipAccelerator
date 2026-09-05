@@ -271,8 +271,25 @@
 }
 
 /* ============================================================= word cloud ===
-   The same facets as the sidebar, weighted by count. Sits above the two-column
-   split because it describes the library rather than the current result set.
+   The same facets as the sidebar, weighted by count and COLOURED BY FIELD.
+
+   COLOUR IS INFORMATION HERE, NOT DECORATION. The cloud mixes three
+   vocabularies - what the work does, what it was built with, and whose industry
+   it was for - and a reader scanning needs to tell them apart without reading
+   every word. That is the whole job the hue is doing, which is why the panel
+   prints a key: an unexplained colour is decoration wearing information's
+   clothes.
+
+   THE HUES COME FROM `--chart-*`, the categorical palette, because distinguishing
+   categories is precisely what that family exists for. Deliberately NOT the
+   semantic ramps - `--amber-500` is commented "warning - UI feedback only" in the
+   token file, and an industry that reads as a warning is worse than one that
+   reads as grey.
+
+   EVERY TINT IS DERIVED FROM ONE HUE BY THE SAME FORMULA. Each field sets
+   `--cloud-hue` and nothing below it changes, so adding a fourth field is one
+   declaration rather than a new block - and the three chips cannot drift into
+   three slightly different shapes.
    ========================================================================== */
 
 .cbv2-stories__cloud {
@@ -283,12 +300,45 @@
   border-radius: var(--radius-lg);
 }
 
+.cbv2-stories__cloud-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+  margin-bottom: var(--space-5);
+}
+
 .cbv2-stories__cloud-title { margin: 0 0 var(--space-1); font-size: var(--fs-body-lg); }
-.cbv2-stories__cloud-hint {
-  margin: 0 0 var(--space-4);
+.cbv2-stories__cloud-hint { margin: 0; font-size: var(--fs-body-sm); color: var(--text-muted); }
+
+/* ------------------------------------------------------------------ key --- */
+
+.cbv2-stories__cloud-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cbv2-stories__cloud-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--fs-body-sm);
   color: var(--text-muted);
 }
+
+.cbv2-stories__cloud-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--cloud-hue);
+}
+
+/* ---------------------------------------------------------------- terms --- */
 
 .cbv2-stories__cloud-terms {
   display: flex;
@@ -300,9 +350,24 @@
   list-style: none;
 }
 
-/* Sized inline from the count. Everything else about the chip is fixed here so
-   a heavier term reads as more prominent WITHOUT also becoming a different kind
-   of object - one vocabulary, one control, varying only in weight. */
+/* The hue, set once per field. Everything else reads it.
+   VIOLET FOR INDUSTRY, NOT TEAL. `--chart-6` was the first choice and sat too
+   close to the stack blue to separate at a glance - which is the one job the
+   colour has here. `--chart-5` is far enough from both green and blue that a
+   reader can sort the cloud without reading it. */
+.cbv2-stories__cloud-key-item[data-field='capability'],
+.cbv2-stories__cloud-term[data-field='capability'] { --cloud-hue: var(--chart-3); }
+.cbv2-stories__cloud-key-item[data-field='stack'],
+.cbv2-stories__cloud-term[data-field='stack'] { --cloud-hue: var(--chart-1); }
+.cbv2-stories__cloud-key-item[data-field='industry'],
+.cbv2-stories__cloud-term[data-field='industry'] { --cloud-hue: var(--chart-5); }
+/* A field with no mapping still renders, in the page's own ink rather than
+   inheriting whichever hue happened to be declared last. */
+.cbv2-stories__cloud-term { --cloud-hue: var(--text-muted); }
+
+/* Font size is set inline from the count. Everything else is fixed here, so a
+   heavier term reads as more prominent WITHOUT becoming a different kind of
+   object - one control, varying only in weight. */
 .cbv2-stories__cloud-term {
   display: inline-flex;
   align-items: baseline;
@@ -310,35 +375,50 @@
   padding: var(--space-1) var(--space-3);
   font-family: inherit;
   font-weight: var(--fw-medium);
-  line-height: 1.3;
-  color: var(--text-body);
-  background: var(--surface-sunken);
-  border: var(--border-1) solid var(--border-subtle);
+  line-height: 1.35;
+  /* 82% hue on the page's ink: enough colour to read as its category, dark
+     enough to stay text rather than becoming a coloured label. */
+  color: color-mix(in srgb, var(--cloud-hue) 82%, var(--text-strong));
+  background: color-mix(in srgb, var(--cloud-hue) 9%, var(--surface-card));
+  border: var(--border-1) solid color-mix(in srgb, var(--cloud-hue) 28%, var(--surface-card));
   border-radius: var(--radius-pill);
   cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
-.cbv2-stories__cloud-term:hover { border-color: var(--text-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-stories__cloud-term { transition: none; }
+}
+
+.cbv2-stories__cloud-term:hover {
+  background: color-mix(in srgb, var(--cloud-hue) 18%, var(--surface-card));
+  border-color: color-mix(in srgb, var(--cloud-hue) 45%, var(--surface-card));
+}
+
 .cbv2-stories__cloud-term:focus-visible {
   outline: var(--border-2) solid var(--text-strong);
   outline-offset: 2px;
 }
 
-/* SELECTED IS NOT SIGNALLED BY COLOUR ALONE. The chip inverts AND the button
-   carries aria-pressed, so the state survives a reader who cannot separate the
-   two backgrounds. */
+/* SELECTED IS NOT SIGNALLED BY COLOUR ALONE. The chip fills, the label goes to
+   the inverse ink AND the button carries aria-pressed - so the state survives a
+   reader who cannot separate a tint from a fill. The 1px lift is the only motion
+   on the control and it is removed under prefers-reduced-motion above. */
 .cbv2-stories__cloud-term[data-on='true'] {
   color: var(--text-on-inverse);
-  background: var(--surface-inverse);
-  border-color: var(--surface-inverse);
+  background: var(--cloud-hue);
+  border-color: var(--cloud-hue);
+  font-weight: var(--fw-bold);
+  transform: translateY(-1px);
 }
 
-/* The weight, said in words. Smaller than its term but never below the body-sm
-   floor, because it is the accessible form of the size signal. */
+/* The weight, said in words, for anyone who cannot use size as information.
+   Never below the body-sm floor, because it is the accessible form of the
+   signal rather than a footnote to it. */
 .cbv2-stories__cloud-count {
   font-size: var(--fs-body-sm);
   font-weight: var(--fw-regular);
-  color: var(--text-muted);
+  color: color-mix(in srgb, var(--cloud-hue) 55%, var(--text-muted));
 }
 .cbv2-stories__cloud-term[data-on='true'] .cbv2-stories__cloud-count {
   color: var(--text-on-inverse);
