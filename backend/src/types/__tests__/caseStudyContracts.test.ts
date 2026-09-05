@@ -393,10 +393,25 @@ describe('surfaces and sorts', () => {
     expect(isCaseStudySurfaceKey('linkedin')).toBe(false);
   });
 
-  it('marks only enterprise publishable in Phase 1', () => {
-    expect([...PUBLISHABLE_SURFACE_KEYS]).toEqual(['enterprise']);
-    expect(isPublishableSurfaceKey('enterprise')).toBe(true);
-    for (const key of ['training', 'ai-flotation', 'refactored']) {
+  /**
+   * PUBLISHABLE IS A SUBSET OF DECLARED, AND THE GAP IS THE POINT.
+   *
+   * `ai-flotation` moved into the publishable set on 2026-09-05, when
+   * aiflotation.com/results gained a page that renders records for it. Every
+   * surface is still DECLARED - that is what lets a lens preview one without
+   * anyone being able to publish to it - but only the two with a real page are
+   * publishable.
+   *
+   * The loop below is what stops that subset quietly becoming everything: a
+   * surface with nowhere to appear must stay refused, or an operator marks a
+   * record live and no reader can ever reach it.
+   */
+  it('publishes only to surfaces that have a page to appear on', () => {
+    expect([...PUBLISHABLE_SURFACE_KEYS]).toEqual(['enterprise', 'ai-flotation']);
+    for (const key of ['enterprise', 'ai-flotation']) {
+      expect(isPublishableSurfaceKey(key)).toBe(true);
+    }
+    for (const key of ['training', 'refactored']) {
       expect(isCaseStudySurfaceKey(key)).toBe(true);
       expect(isPublishableSurfaceKey(key)).toBe(false);
     }

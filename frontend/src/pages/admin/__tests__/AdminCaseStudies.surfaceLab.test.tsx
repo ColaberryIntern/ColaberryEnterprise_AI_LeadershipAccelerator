@@ -148,7 +148,7 @@ describe('switching a lens creates nothing, publishes nothing, mutates nothing',
 
     H.click('cs-studio-tab-publish');
     await H.settle();
-    H.click(CASE_STUDY_CONTROLS.publish);
+    H.click(`${CASE_STUDY_CONTROLS.publish}-enterprise`);
     await H.settle();
 
     expect(api.publishCaseStudy).toHaveBeenCalledWith(ID, { surfaceKey: 'enterprise' });
@@ -160,9 +160,47 @@ describe('switching a lens creates nothing, publishes nothing, mutates nothing',
     await H.settle();
     H.click('cs-studio-tab-publish');
     await H.settle();
-    H.click(CASE_STUDY_CONTROLS.unpublish);
+    H.click(`${CASE_STUDY_CONTROLS.unpublish}-enterprise`);
     await H.settle();
     expect(api.unpublishCaseStudy).toHaveBeenCalledWith(ID, { surfaceKey: 'enterprise' });
+  });
+
+  /**
+   * THE CAPABILITY ALI ASKED FOR: "control what Case Study is shown on what site".
+   *
+   * The two tests above prove publish does not FOLLOW the lens. This one proves
+   * it can still be AIMED - at a second brand, deliberately, from that brand's own
+   * row. Without it, the pair above would be satisfied by a page that had quietly
+   * lost the ability to publish anywhere but Enterprise.
+   */
+  it('publishes to AI Flotation from its own row, while the lens sits elsewhere', async () => {
+    await mountDetail();
+    H.click('cs-lens-tab-training');
+    await H.settle();
+    H.click('cs-studio-tab-publish');
+    await H.settle();
+    H.click(`${CASE_STUDY_CONTROLS.publish}-ai-flotation`);
+    await H.settle();
+
+    // The row that was pressed decides the surface - not the lens tab, which is
+    // still on Training, and not the Enterprise default.
+    expect(api.publishCaseStudy).toHaveBeenCalledWith(ID, { surfaceKey: 'ai-flotation' });
+  });
+
+  it('offers a site with no page for this record a Publish, and a live one a Republish', async () => {
+    await mountDetail();
+    H.click('cs-studio-tab-publish');
+    await H.settle();
+
+    /* Republish is not decoration. It re-runs the gate and re-pins the approved
+       snapshot, which is how an edited record reaches the public page - so a live
+       row must never lose the control. */
+    expect(H.el(`${CASE_STUDY_CONTROLS.publish}-enterprise`).textContent).toBe('Republish');
+    expect(H.query(`${CASE_STUDY_CONTROLS.unpublish}-enterprise`)).not.toBeNull();
+
+    expect(H.el(`${CASE_STUDY_CONTROLS.publish}-ai-flotation`).textContent).toBe('Publish');
+    // Nothing to withdraw where nothing was published.
+    expect(H.query(`${CASE_STUDY_CONTROLS.unpublish}-ai-flotation`)).toBeNull();
   });
 
   it('says so on screen, so the operator does not have to infer it', async () => {

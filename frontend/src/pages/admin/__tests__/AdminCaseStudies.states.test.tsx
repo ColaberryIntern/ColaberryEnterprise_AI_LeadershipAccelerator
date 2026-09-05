@@ -160,7 +160,7 @@ describe('AdminCaseStudyDetailPage — the publish gate speaks in full', () => {
   it('renders EVERY blocker the gate named, not the first', async () => {
     refusePublish();
     await mountDetail('publish');
-    H.click(CASE_STUDY_CONTROLS.publish);
+    H.click(`${CASE_STUDY_CONTROLS.publish}-enterprise`);
     await H.settle();
 
     expect(H.text()).toContain(blockers[0].message);
@@ -173,7 +173,7 @@ describe('AdminCaseStudyDetailPage — the publish gate speaks in full', () => {
   it('gives each blocker its field and its remedy, so the reason is actionable', async () => {
     refusePublish();
     await mountDetail('publish');
-    H.click(CASE_STUDY_CONTROLS.publish);
+    H.click(`${CASE_STUDY_CONTROLS.publish}-enterprise`);
     await H.settle();
 
     expect(H.text()).toContain('heroMetrics.0.verification.class');
@@ -187,9 +187,9 @@ describe('AdminCaseStudyDetailPage — the publish gate speaks in full', () => {
   it('leaves the publish button enabled after a refusal, so the fix can be retried', async () => {
     refusePublish();
     await mountDetail('publish');
-    H.click(CASE_STUDY_CONTROLS.publish);
+    H.click(`${CASE_STUDY_CONTROLS.publish}-enterprise`);
     await H.settle();
-    expect((H.el(CASE_STUDY_CONTROLS.publish) as HTMLButtonElement).disabled).toBe(false);
+    expect((H.el(`${CASE_STUDY_CONTROLS.publish}-enterprise`) as HTMLButtonElement).disabled).toBe(false);
   });
 
   // The PREVIEW tab, not PUBLISH: this test is about the gate verdict a preview

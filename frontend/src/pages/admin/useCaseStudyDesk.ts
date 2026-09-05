@@ -44,6 +44,21 @@ import type {
  * decisions and they stay two names.
  */
 export const PUBLISH_SURFACE: CaseStudySurfaceKey = 'enterprise';
+
+/*
+ * 2026-09-05: publish and unpublish now TAKE a surface, because Ali asked to
+ * "control what Case Study is shown on what site" and AI Flotation gained a
+ * page to be shown on.
+ *
+ * THE RULE THE CONSTANT ABOVE EXISTS FOR IS UNCHANGED, and this is the part
+ * worth reading twice. Publish still does NOT follow `lensSurface`. The danger
+ * that constant was written against - an operator idly exploring a lens being
+ * one click from publishing to it - is avoided the same way it always was: the
+ * surface comes from the control the operator pressed, never from the tab they
+ * happen to be looking at. The panel renders one named button per publishable
+ * surface, so choosing one is a deliberate act with the brand's name on it.
+ * `PUBLISH_SURFACE` remains the default for any caller that names none.
+ */
 const SYNC_RUN_PAGE = { limit: 20, offset: 0 };
 
 export interface CaseStudyDeskState {
@@ -82,14 +97,14 @@ export interface CaseStudyDeskState {
   override: (path: string, value: string, note?: string) => void;
   setRawPanelOpen: (open: boolean) => void;
   onSync: () => Promise<void>;
-  onPublish: () => Promise<void>;
+  onPublish: (surfaceKey?: CaseStudySurfaceKey) => Promise<void>;
   onSelectLens: (surfaceKey: CaseStudySurfaceKey) => void;
   runPreview: (surfaceKey: CaseStudySurfaceKey) => Promise<void>;
   onLoadRuns: () => Promise<void>;
   onDiff: () => Promise<void>;
   onSelectProvenanceVersion: (snapshotId: string) => Promise<void>;
   onApprove: () => void;
-  onUnpublish: () => void;
+  onUnpublish: (surfaceKey?: CaseStudySurfaceKey) => void;
   onArchive: (title: string) => void;
   onSaveConsent: (patch: CaseStudyUpdatePatch) => void;
   onAttachRepo: (body: { reference: string; role?: CaseStudyRepoRole }) => void;
@@ -205,16 +220,16 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
    * Publish. A refusal is not an error to be summarised: it is a list of named
    * conditions, and every one of them is put on screen.
    */
-  const onPublish = useCallback(async () => {
+  const onPublish = useCallback(async (surfaceKey: CaseStudySurfaceKey = PUBLISH_SURFACE) => {
     setBusy(true);
     setActionError(null);
     setActionNote(null);
     setBlockers([]);
     try {
-      const result = await publishCaseStudy(id, { surfaceKey: PUBLISH_SURFACE });
+      const result = await publishCaseStudy(id, { surfaceKey });
       setGateUnknown(false);
       setActionNote(result.outcome === 'published'
-        ? `Published snapshot v${result.snapshotVersion} to the enterprise surface.`
+        ? `Published snapshot v${result.snapshotVersion} to the ${surfaceKey} surface.`
         : 'Nothing changed: that snapshot was already live on this surface.');
       await load();
     } catch (err) {
@@ -355,9 +370,9 @@ export function useCaseStudyDesk(id: string): CaseStudyDeskState {
       'Snapshot approved. It now supersedes any earlier approved version.');
   }, [act, detail, id]);
 
-  const onUnpublish = useCallback((): void => {
-    void act('this unpublish', () => unpublishCaseStudy(id, { surfaceKey: PUBLISH_SURFACE }),
-      'Unpublished. Snapshots, evidence and publication history are kept.');
+  const onUnpublish = useCallback((surfaceKey: CaseStudySurfaceKey = PUBLISH_SURFACE): void => {
+    void act('this unpublish', () => unpublishCaseStudy(id, { surfaceKey }),
+      `Unpublished from ${surfaceKey}. Snapshots, evidence and publication history are kept.`);
   }, [act, id]);
 
   const onArchive = useCallback((title: string): void => {

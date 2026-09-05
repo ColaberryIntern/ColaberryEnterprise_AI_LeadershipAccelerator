@@ -893,14 +893,33 @@ describe('AC9 — an unverified production / ROI / outcome claim exists', () => 
 
 /* ══════════════════════════════════════════════ AC13 — surface control ════ */
 
-describe('AC13 — only `enterprise` may publish', () => {
-  it.each(['training', 'ai-flotation', 'refactored'] as const)(
+/**
+ * `ai-flotation` MOVED FROM THE REFUSED LIST TO THE ALLOWED ONE on 2026-09-05,
+ * when aiflotation.com/results gained a page to render records on. This block
+ * used to assert that all three non-enterprise surfaces were refused; that was
+ * a Phase 1 fact, not a permanent one, and the gate's own refusal text always
+ * said so - "the other surfaces exist so that adding one later is a publication
+ * row rather than a schema change".
+ *
+ * The boundary still exists and is still tested. `training` and `refactored`
+ * have no page to appear on, so they stay refused, and the two tests below are
+ * what stop the allowed list quietly growing to everything.
+ */
+describe('AC13 — surface control', () => {
+  it.each(['training', 'refactored'] as const)(
     'accepts "%s" in the contract and refuses it at the gate', (surfaceKey) => {
       const decision = evaluate({ surfaceKey });
       expect(decision.allowed).toBe(false);
       expect(withCode(decision, 'surface_not_publishable')[0].message).toBe(
         `surface "${surfaceKey}" is accepted by the contract but is not publishable in Phase 1`,
       );
+    },
+  );
+
+  it.each(['enterprise', 'ai-flotation'] as const)(
+    'raises no surface blocker for "%s", which has a page to appear on', (surfaceKey) => {
+      const decision = evaluate({ surfaceKey });
+      expect(withCode(decision, 'surface_not_publishable')).toEqual([]);
     },
   );
 
