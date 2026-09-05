@@ -243,7 +243,23 @@ export function projectPublicDetail(input: PublicProjectionInput): PublicCaseStu
     seo: {
       title: c.title,
       description,
-      canonicalUrl: `${input.canonicalBaseUrl.replace(/\/+$/, '')}/stories/${input.slug}`,
+      /*
+       * THE CANONICAL BELONGS TO THE SURFACE, NOT TO THE PLATFORM.
+       *
+       * This was `${canonicalBaseUrl}/stories/${slug}` for every surface, which
+       * was right while only Enterprise had a page. It stopped being right the
+       * moment AI Flotation published: a reader on aiflotation.com would have
+       * been served a canonical pointing at enterprise.colaberry.ai, handing
+       * one brand's ranking to another company's domain and telling a crawler
+       * the AI Flotation page was a duplicate of somebody else's.
+       *
+       * Each surface states where it is read. Enterprise's value is unchanged,
+       * so no live address moves. A surface with no page yet falls back to the
+       * platform rather than inventing a URL nobody serves.
+       */
+      canonicalUrl: profile.publicBaseUrl && profile.detailPathPrefix
+        ? `${profile.publicBaseUrl.replace(/\/+$/, '')}${profile.detailPathPrefix}/${input.slug}`
+        : `${input.canonicalBaseUrl.replace(/\/+$/, '')}/stories/${input.slug}`,
       ogImageUrl: c.heroImageUrl,
       ogType: 'article',
     },
