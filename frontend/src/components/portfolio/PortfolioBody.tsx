@@ -196,7 +196,14 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
   const statTiles = [
     { value: stats.years_experience, label: 'Years experience' },
     { value: stats.files_committed, label: 'Files committed' },
-    { value: stats.capabilities, label: 'Capabilities' },
+    // NOT just 'Capabilities'. The Career Studio shows the learner a stat labelled
+    // "verified capabilities", counted from the CAPE skills ledger by evidence level.
+    // THIS number is a different measure entirely - capabilities the platform found
+    // PRESENT IN THEIR REPOSITORY. Both are honest and they do not agree, so sharing
+    // one word across the two pages a learner compares makes a correct page look
+    // broken. The source is named here for the same reason the rail below says
+    // "Proven in their repo" and CapstoneRecordPage says it too.
+    { value: stats.capabilities, label: 'Capabilities in repo' },
     { value: stats.evidence_records, label: 'Evidence records' },
   ].filter((t) => typeof t.value === 'number' && (t.value as number) > 0);
 
