@@ -117,26 +117,31 @@ async function main(): Promise<void> {
     }
   }
 
-  // ── portfolio eligibility ─────────────────────────────────────────────────
+  // ── portfolio eligibility: VERIFIED HERE, OWNED BY THE REGISTRY ───────────
+  //
+  // This section used to UPDATE the column, and the update did not survive a
+  // backend restart. `typeSeeder.ts` re-asserts the registry defaults on every
+  // boot over a fixed column list, and `portfolio_eligible` is on that list
+  // while `certification_mapping` is not. So a write here was reverted the next
+  // time the container came up, and the seeder would have reported the same
+  // pending change forever - the same shape of defect as the jsonb key-order
+  // bug, from a different cause.
+  //
+  // The registry is the source of truth for this column, so eligibility is now
+  // declared in `services/timeline/typeRegistry.ts` and this only CHECKS it.
+  // A drift line means somebody removed the flag from the registry, which is
+  // worth knowing and is not something this script should paper over.
   console.log('');
-  let portfolioChanges = 0;
+  let portfolioDrift = 0;
   for (const p of PORTFOLIO_ELIGIBLE_ADDITIONS) {
-    const already = bySlug.get(p.type_slug)?.portfolio_eligible === true;
-    console.log(`${already ? '  =' : '  →'} ${p.type_slug.padEnd(24)} portfolio_eligible`);
-    if (!already) {
-      portfolioChanges += 1;
-      if (apply) {
-        await sequelize.query(
-          'UPDATE curriculum_type_definitions SET portfolio_eligible = true, updated_at = NOW() WHERE slug = :slug',
-          { replacements: { slug: p.type_slug }, type: QueryTypes.UPDATE },
-        );
-      }
-    }
+    const ok = bySlug.get(p.type_slug)?.portfolio_eligible === true;
+    console.log(`${ok ? '  =' : '  !'} ${p.type_slug.padEnd(24)} portfolio_eligible${ok ? '' : '  DRIFT: not set - declare it in typeRegistry.ts, not here'}`);
+    if (!ok) portfolioDrift += 1;
   }
 
   console.log('');
   console.log(`mappings   : ${mappingChanges} change(s)${apply ? ' written' : ' pending'}`);
-  console.log(`portfolio  : ${portfolioChanges} change(s)${apply ? ' written' : ' pending'}`);
+  console.log(`portfolio  : ${portfolioDrift === 0 ? 'in sync with the registry' : `${portfolioDrift} DRIFT - fix typeRegistry.ts`}`);
   console.log(`unmapped   : ${UNMAPPABLE_AT_TYPE_LEVEL.length} evidence-producing type(s) left unmapped on purpose —`);
   UNMAPPABLE_AT_TYPE_LEVEL.forEach((u) => console.log(`             ${u.type_slug}: ${u.reason}`));
 

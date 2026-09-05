@@ -14,6 +14,7 @@ import {
 } from '../typeCertificationMap';
 import { CCAR_FOUNDATIONS_BLUEPRINT } from '../ccarFoundations';
 import { CCAR_F_MATCH_RULES } from '../../../services/certPrep/certEvidenceService';
+import { CARD_TYPES } from '../../../services/timeline/typeRegistry';
 
 const objectivesInBlueprint = new Set(
   CCAR_FOUNDATIONS_BLUEPRINT.domains.flatMap((d) => d.objectives.map((o) => o.objective_id)),
@@ -131,5 +132,18 @@ describe('portfolio eligibility additions', () => {
   it('stays a widening rather than a sweep', () => {
     // A portfolio assembled from everything is not a portfolio.
     expect(PORTFOLIO_ELIGIBLE_ADDITIONS.length).toBeLessThanOrEqual(5);
+  });
+
+  it('every addition is DECLARED IN THE REGISTRY, because boot overwrites the column', () => {
+    // The seeder used to UPDATE portfolio_eligible, and the write did not
+    // survive a backend restart: typeSeeder re-asserts the registry defaults on
+    // every boot over a fixed column list, and portfolio_eligible is on it
+    // (certification_mapping is not, which is why the mappings do survive).
+    // So eligibility has to be declared in the registry or it silently reverts.
+    // This test is the joint between the two files.
+    const byslug = new Map(CARD_TYPES.map((t) => [t.slug, t]));
+    for (const p of PORTFOLIO_ELIGIBLE_ADDITIONS) {
+      expect(byslug.get(p.type_slug)?.portfolio_eligible).toBe(true);
+    }
   });
 });
