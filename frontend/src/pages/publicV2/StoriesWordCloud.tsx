@@ -52,6 +52,23 @@ interface CloudTerm {
 
 export const DEFAULT_CLOUD_FIELDS = ['capability', 'stack', 'industry'] as const;
 
+/**
+ * What each colour means, printed. A cloud of three mixed vocabularies needs the
+ * reader to be able to tell a capability from a language at a glance - that is
+ * the job colour is doing here, so the key has to be on the page or the colour is
+ * decoration pretending to be information.
+ *
+ * The hues come from the `--chart-*` categorical palette, which exists to
+ * distinguish categories. Deliberately NOT the semantic ramps: `--amber-500` is
+ * commented "warning - UI feedback only" in the token file, and an industry
+ * reading as a warning is worse than an industry reading as grey.
+ */
+export const CLOUD_FIELD_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  capability: 'Capability',
+  stack: 'Stack',
+  industry: 'Industry',
+});
+
 export function cloudTerms(
   groups: readonly CaseStudyFilterGroup[],
   fields: readonly CaseStudyFilterGroup['field'][],
@@ -93,10 +110,26 @@ export function StoriesWordCloud({
 
   return (
     <div className="cbv2-stories__cloud" data-testid="stories-word-cloud">
-      <h3 className="cbv2-stories__cloud-title">What is in here</h3>
-      <p className="cbv2-stories__cloud-hint">
-        Every word is a filter. Bigger means more records carry it.
-      </p>
+      <div className="cbv2-stories__cloud-head">
+        <div>
+          <h3 className="cbv2-stories__cloud-title">What is in here</h3>
+          <p className="cbv2-stories__cloud-hint">
+            Every word is a filter. Bigger means more records carry it.
+          </p>
+        </div>
+        {/* The key. Only fields that actually produced a term are listed, so it
+            never promises a colour the cloud below does not contain. */}
+        <ul className="cbv2-stories__cloud-key">
+          {fields
+            .filter((field) => terms.some((term) => term.field === field))
+            .map((field) => (
+              <li className="cbv2-stories__cloud-key-item" key={field} data-field={field}>
+                <span className="cbv2-stories__cloud-swatch" aria-hidden="true" />
+                {CLOUD_FIELD_LABELS[field] ?? field}
+              </li>
+            ))}
+        </ul>
+      </div>
       <ul className="cbv2-stories__cloud-terms">
         {terms.map((term) => {
           const on = selected(term.field, term.value);
