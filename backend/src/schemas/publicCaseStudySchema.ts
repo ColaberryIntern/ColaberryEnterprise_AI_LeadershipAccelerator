@@ -98,6 +98,18 @@ export const PublicCaseStudyListQuery = z.object({
   // return identical sets - not that its existence is hidden. A malformed value
   // still 400s, so the parameter is discoverable either way.
   repo_visibility: enumList(keys(REPO_VISIBILITY_MAP)),
+  /*
+   * Free text. Matched against the PROJECTED card text only - see
+   * `caseStudySearch.ts`, where that boundary is a privacy property rather than
+   * an implementation detail.
+   *
+   * Deliberately NOT pattern-restricted: a reader may type anything, and the
+   * normaliser strips every character that is not a letter or a digit before the
+   * value reaches a comparison. Nothing built from it reaches SQL, a regex or a
+   * shell. The length cap is the same one every other string here carries - a
+   * query is a filter, not a payload.
+   */
+  q: z.string().trim().min(1).max(160).optional(),
   collection: z.string().trim().min(1).max(160).optional(),
   featured: z.enum(['true', 'false']).optional(),
   sort: z.enum(list(CASE_STUDY_SORT_KEYS)).optional(),

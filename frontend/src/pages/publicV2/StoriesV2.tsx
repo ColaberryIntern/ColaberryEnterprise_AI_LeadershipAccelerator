@@ -23,6 +23,9 @@ import type {
 import { trackCaseStudyCardClick, trackCaseStudyFilter } from '../../utils/caseStudyTracking';
 import StoriesStandardBand from './StoriesStandardBand';
 import StoriesCta from './StoriesCta';
+import StoriesFilterAside from './StoriesFilterAside';
+import StoriesSearch from './StoriesSearch';
+import StoriesWordCloud from './StoriesWordCloud';
 import {
   MASTHEAD_FALLBACK,
   WIDE_VIEWPORT,
@@ -190,6 +193,18 @@ function StoriesV2(): React.ReactElement {
     [commit, filters],
   );
 
+  const onSearch = useCallback(
+    (q: string): void => {
+      // Tracked as a filter, because that is what it is - the analytics stream
+      // should not have to know search is a different mechanism.
+      pendingFilterEvent.current = { filter_key: 'q', filter_value: q || 'cleared' };
+      // Page resets with it: holding page 3 while the result set changes shows
+      // an empty page, which is the same reason `toggleCaseStudyFacet` does it.
+      commit({ ...filters, q, page: null });
+    },
+    [commit, filters],
+  );
+
   const onClearFilters = useCallback((): void => {
     pendingFilterEvent.current = { filter_key: 'all', filter_value: 'cleared' };
     commit(EMPTY_CASE_STUDY_FILTERS);
@@ -273,34 +288,31 @@ function StoriesV2(): React.ReactElement {
             Published projects
           </h2>
 
+          {/* Above the split, because it describes the LIBRARY rather than the
+              current result set - and because a reader who does not yet know the
+              vocabulary cannot use a grouped sidebar well. Same filter state as
+              the sidebar; clicking a word is clicking its checkbox. */}
+          <StoriesWordCloud
+            groups={groups}
+            selected={(field, value) => (filters[field] as readonly string[]).includes(value)}
+            onToggle={onToggleFacet}
+          />
+
           <div className="cbv2-stories__layout">
-            <aside
-              className="cbv2-stories__aside"
-              aria-label="Filter published projects"
-              data-testid="stories-filters"
-            >
-              <CaseStudyFilters
-                groups={groups}
-                value={filters}
-                onToggle={onToggleFacet}
-                openByDefault={wide}
-                idPrefix="stories-filter"
-              />
-              {facetsFailed ? (
-                <p className="cbv2-stories__note" data-testid="stories-facets-note">
-                  The filter list could not be loaded, so it is not shown. The project records
-                  below are unaffected.
-                </p>
-              ) : null}
-              {withheld > 0 ? (
-                <p className="cbv2-stories__note" data-testid="stories-hidden-note">
-                  Illustrative demonstrations are withheld unless you select them under
-                  Verification.
-                </p>
-              ) : null}
-            </aside>
+            <StoriesFilterAside
+              groups={groups}
+              value={filters}
+              onToggle={onToggleFacet}
+              openByDefault={wide}
+              facetsFailed={facetsFailed}
+              withheld={withheld}
+            />
 
             <div className="cbv2-stories__main">
+              {/* Directly above the count it moves, so cause and effect are one
+                  glance apart. */}
+              <StoriesSearch value={filters.q} onCommit={onSearch} />
+
               <div className="cbv2-stories__toolbar">
                 {/* Present from first paint, so a change to its text is announced.
                     A live region inserted along with its content often is not. */}
