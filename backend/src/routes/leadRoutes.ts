@@ -5,6 +5,7 @@ import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
 import { handleFlotationPreview } from '../controllers/flotationPreviewController';
 import { handleFlotationInterview } from '../controllers/flotationInterviewController';
+import { handleFlotationApp } from '../controllers/flotationAppController';
 import { handleSalesHubCory } from '../controllers/salesHubCoryController';
 import {
   handleSponsorInquiry,
@@ -83,6 +84,12 @@ router.get('/api/flotation/preview/:token', previewRateLimiter, handleFlotationP
  * caps the exchanges within one conversation separately.
  */
 router.post('/api/flotation/interview', interviewRateLimiter, handleFlotationInterview);
+/**
+ * A generated concept, rendered on its own for a phone. Shares the preview limiter: it is a
+ * read of something already produced, and a prospect passing their phone round a table will
+ * legitimately load it several times.
+ */
+router.get('/api/flotation/app/:token/:key', previewRateLimiter, handleFlotationApp);
 router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
 
 // One Class, Many Doors — read-only Challenge leaderboard + Sponsor dashboard.

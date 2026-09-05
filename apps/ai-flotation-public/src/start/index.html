@@ -224,6 +224,25 @@
 
               <dl class="preview-counts" id="preview-counts"></dl>
 
+              <!--
+                THEIR APP, ON THEIR PHONE.
+
+                This sits high on purpose. The scope argues; this demonstrates. A prospect
+                holding up a phone during the conversation and seeing their own product is
+                the moment the rest of the page is trying to earn.
+
+                Hidden until there is something to scan - an empty gallery would promise a
+                demonstration we did not manage to produce.
+              -->
+              <section id="prototypes" class="prototypes" hidden>
+                <h3 class="preview-h3">See it on your phone</h3>
+                <p class="scope-lead">
+                  Point a camera at a code. These are concepts, generated from what you just
+                  told us &mdash; illustrative, not a working product.
+                </p>
+                <div class="proto-grid" id="proto-grid"></div>
+              </section>
+
               <div id="scope-sections"></div>
 
               <div id="preview-open-wrap" hidden>
@@ -539,6 +558,59 @@
             dl.appendChild(dd);
           });
           dl.hidden = figures.length === 0;
+
+          /*
+           * The prototypes. Rendered before the scope sections because this is the part a
+           * person reaches for first: the QR turns a document into a demonstration.
+           *
+           * The QR arrives as an SVG string from the server rather than being drawn here,
+           * which keeps the page dependency-free - the whole site ships no libraries.
+           */
+          var protoWrap = document.getElementById('prototypes');
+          var grid = document.getElementById('proto-grid');
+          var protos = data.prototypes || [];
+          grid.textContent = '';
+
+          protos.forEach(function (p) {
+            var card = document.createElement('div');
+            card.className = 'proto' + (p.recommended ? ' proto-recommended' : '');
+
+            var qr = document.createElement('div');
+            qr.className = 'proto-qr';
+            // Server-generated SVG. Safe to inline: it is our own qrcode output, not model
+            // text, and the concept it points at is served under a sandbox CSP.
+            qr.innerHTML = p.qr_svg;
+
+            var name = document.createElement('p');
+            name.className = 'proto-name';
+            name.textContent = p.title;
+            if (p.recommended) {
+              var star = document.createElement('span');
+              star.className = 'proto-badge';
+              star.textContent = 'Recommended';
+              name.appendChild(document.createTextNode(' '));
+              name.appendChild(star);
+            }
+
+            var why = document.createElement('p');
+            why.className = 'proto-why';
+            why.textContent = p.rationale;
+
+            var open = document.createElement('a');
+            open.className = 'proto-open';
+            open.href = p.url;
+            open.target = '_blank';
+            open.rel = 'noopener';
+            open.textContent = 'Open on this screen';
+
+            card.appendChild(qr);
+            card.appendChild(name);
+            card.appendChild(why);
+            card.appendChild(open);
+            grid.appendChild(card);
+          });
+
+          protoWrap.hidden = protos.length === 0;
 
           // The scope itself: what we would build, in what order, what runs itself.
           var wrap = document.getElementById('scope-sections');

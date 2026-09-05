@@ -102,6 +102,29 @@ export function labelViolation(html: string): string | null {
     : `concept does not label itself a ${CONCEPT_LABEL.toLowerCase()}`;
 }
 
+/**
+ * Anything that could execute, in a document we are about to serve from our own origin.
+ *
+ * The prompt asks for no `<script>`. Asking is not a control - it was unchecked until a
+ * concept was about to be served at a real URL, at which point "the prompt said not to"
+ * stops being an acceptable answer. Served concepts also carry a sandbox CSP, so this is
+ * the inner of two independent layers rather than the only one.
+ *
+ * Inline handlers and `javascript:` URLs are checked as well as script tags, because a
+ * model producing an "interactive" concept reaches for `onclick` long before it reaches
+ * for a script block.
+ */
+export function executableViolation(html: string): string | null {
+  const source = html || '';
+
+  if (/<script\b/i.test(source)) return 'concept contains a <script> tag';
+  if (/\son[a-z]+\s*=/i.test(source)) return 'concept contains an inline event handler';
+  if (/javascript\s*:/i.test(source)) return 'concept contains a javascript: URL';
+  if (/<iframe\b|<object\b|<embed\b/i.test(source)) return 'concept embeds external content';
+
+  return null;
+}
+
 /** Below this, a `<style>` block is a gesture rather than a design. */
 export const MIN_CSS_CHARS = 400;
 
@@ -229,6 +252,7 @@ export async function generateConcept(params: {
   }
 
   const violation =
+    executableViolation(html) ||
     genericnessViolation(html, params.brief) ||
     labelViolation(html) ||
     craftViolation(html) ||
