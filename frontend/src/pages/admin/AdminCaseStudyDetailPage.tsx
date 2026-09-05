@@ -75,9 +75,10 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
    * did not ask for. It is held HERE rather than inside the panel so leaving the
    * tab and coming back does not reset the surface the operator chose.
    *
-   * It starts on `PUBLISH_SURFACE` because that is the one live surface, and it
-   * is passed as a VALUE, never wired back: nothing in this lens can reach
-   * `publishCaseStudy`. See `useCaseStudyPreviewLens`.
+   * It starts on `PUBLISH_SURFACE` because that is the DEFAULT surface, not
+   * because it is the only live one - AI Flotation publishes too since
+   * 2026-09-05. It is passed as a VALUE, never wired back: nothing in this lens
+   * can reach `publishCaseStudy`. See `useCaseStudyPreviewLens`.
    */
   const previewLens = useCaseStudyPreviewLens(id, tab === 'preview', PUBLISH_SURFACE);
 
@@ -345,8 +346,8 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
               onArchive={() => desk.onArchive(record.title)}
             />
             <p className="small text-muted" data-testid="cs-publish-surface-note">
-              Publishing targets the <code>{PUBLISH_SURFACE}</code> surface. Exploring a lens on the
-              SURFACES tab never changes that.
+              Each site publishes on its own. A record can be live on one and not another,
+              and exploring a lens on the SURFACES tab never publishes anything.
             </p>
           </>
         ) : null}

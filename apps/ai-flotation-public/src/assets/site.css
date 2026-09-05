@@ -702,4 +702,163 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
 .proto-open:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+
+/* ============================================================ records index ===
+   The published-records shelf on /results: a weighted word cloud, a filter
+   sidebar and type-to-filter search.
+
+   SAME CAPABILITIES AS THE ENTERPRISE INDEX, NOT THE SAME PIXELS. Ali asked for
+   it to work "the same way it shows up on enterprise page with the word chart
+   and filters to the left". This wears AI Flotation's typeface, palette and
+   spacing - copying Colaberry Enterprise's styling onto this domain would undo
+   the brand separation the surface system exists to keep.
+
+   THE CATEGORICAL HUES ARE SCOPED HERE, NOT ADDED TO THE PALETTE. A word cloud
+   mixing three vocabularies needs a reader to tell a capability from a language
+   at a glance, which needs three distinguishable hues - and this site's brand is
+   deliberately one accent. So they live on these classes rather than becoming
+   brand tokens, and they are muted to sit inside a restrained palette rather
+   than shouting over it. `--accent` leads, because capability is what the work
+   DOES and that is the thing this site is about.
+   ========================================================================== */
+
+.records-layout { display: grid; gap: var(--space-6); align-items: start; }
+@media (min-width: 900px) {
+  .records-layout { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); }
+}
+
+.records-main { min-width: 0; }
+
+/* ------------------------------------------------------------ the search --- */
+
+.records-search-label {
+  display: block;
+  font-size: var(--fs-small);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: var(--space-2);
+}
+.records-search {
+  width: 100%;
+  padding: .7rem .9rem;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.records-search::placeholder { color: var(--fg-muted); }
+.records-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Reserves its line, so the cards below do not jump when a count appears. */
+.records-count {
+  min-height: 1.4em;
+  margin: var(--space-3) 0 var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--fg-muted);
+}
+
+/* ----------------------------------------------------------- the filters --- */
+
+.records-filters { display: grid; gap: var(--space-5); }
+.filter-group h3 {
+  font-size: var(--fs-small);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: var(--space-2);
+}
+.filter-row {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  padding: .2rem 0;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.filter-row input { accent-color: var(--accent); }
+.filter-count { margin-left: auto; color: var(--fg-muted); font-size: var(--fs-small); }
+
+/* --------------------------------------------------------- the word cloud --- */
+
+.cloud {
+  margin-bottom: var(--space-6);
+  padding: var(--space-5);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+}
+.cloud-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-5);
+  margin-bottom: var(--space-4);
+}
+.cloud-head h3 { margin-bottom: .2rem; }
+.cloud-head p { font-size: var(--fs-body); color: var(--fg-muted); margin: 0; }
+
+.cloud-key { display: flex; flex-wrap: wrap; gap: .4rem 1rem; list-style: none; margin: 0; padding: 0; }
+.cloud-key li { display: inline-flex; align-items: center; gap: .45rem; font-size: var(--fs-small); color: var(--fg-muted); }
+.cloud-swatch { width: .7rem; height: .7rem; border-radius: 3px; background: var(--cloud-hue); }
+
+.cloud-terms { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem .6rem; list-style: none; margin: 0; padding: 0; }
+
+/* The hue, set once per field; every rule below reads it, so a fourth field is
+   one declaration rather than another block. */
+.cloud-term, .cloud-key li { --cloud-hue: var(--fg-muted); }
+.cloud-term[data-field='capability'], .cloud-key li[data-field='capability'] { --cloud-hue: var(--accent); }
+.cloud-term[data-field='stack'], .cloud-key li[data-field='stack'] { --cloud-hue: #2E6A86; }
+.cloud-term[data-field='industry'], .cloud-key li[data-field='industry'] { --cloud-hue: #5B6E3C; }
+
+.cloud-term {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .3rem;
+  padding: .2rem .7rem;
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--cloud-hue) 80%, var(--fg));
+  background: color-mix(in srgb, var(--cloud-hue) 9%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--cloud-hue) 28%, var(--bg-elevated));
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.cloud-term:hover {
+  background: color-mix(in srgb, var(--cloud-hue) 18%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--cloud-hue) 45%, var(--bg-elevated));
+}
+.cloud-term:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Selected is not signalled by colour alone: the chip fills, the weight rises,
+   and the button carries aria-pressed. */
+.cloud-term[data-on='true'] {
+  color: var(--accent-contrast);
+  background: var(--cloud-hue);
+  border-color: var(--cloud-hue);
+  font-weight: 600;
+}
+.cloud-count { font-size: var(--fs-small); font-weight: 400; color: color-mix(in srgb, var(--cloud-hue) 55%, var(--fg-muted)); }
+.cloud-term[data-on='true'] .cloud-count { color: var(--accent-contrast); }
+
+@media (prefers-reduced-motion: reduce) { .cloud-term { transition: none; } }
+
+/* ------------------------------------------------------------ the records --- */
+
+/* The card is a link. `.tile` already carries the surface; this adds the
+   affordance and the verification word every record must print. */
+a.record { display: block; text-decoration: none; color: inherit; }
+a.record:hover { border-color: var(--accent); }
+a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.record-verify {
+  display: inline-block;
+  margin-top: .8rem;
+  font-size: var(--fs-small);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
 }
