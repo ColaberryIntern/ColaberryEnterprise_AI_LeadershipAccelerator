@@ -30,6 +30,28 @@ import {
 
 const apply = process.argv.includes('--apply');
 
+/**
+ * Compare jsonb by VALUE, not by the order Postgres happens to store keys in.
+ *
+ * The first version compared `JSON.stringify(next)` against the stringified
+ * column, and reported four pending changes on every run FOREVER - including
+ * the run immediately after a successful apply. jsonb does not preserve key
+ * order: it stores `grain` first because that key is shortest, while the object
+ * built here starts with `objective_ids`. Two identical values, two different
+ * strings, and a script that re-issued four UPDATEs and bumped `updated_at`
+ * every time it ran. That is the first-run/second-run divergence the repo
+ * forbids, and it stayed invisible until the seeder was deliberately run twice.
+ */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.keys(v as Record<string, unknown>).sort().map((k) => [k, (v as Record<string, unknown>)[k]]),
+        )
+      : v,
+  );
+}
+
 interface TypeRow { slug: string; certification_mapping: unknown; portfolio_eligible: boolean | null }
 
 async function main(): Promise<void> {
@@ -81,8 +103,8 @@ async function main(): Promise<void> {
   let mappingChanges = 0;
   for (const m of TYPE_CERTIFICATION_MAP) {
     const next = { objective_ids: m.objective_ids, rationale: m.rationale, grain: 'type' };
-    const current = JSON.stringify(bySlug.get(m.type_slug)?.certification_mapping ?? null);
-    const same = current === JSON.stringify(next);
+    const current = bySlug.get(m.type_slug)?.certification_mapping ?? null;
+    const same = canonicalJson(current) === canonicalJson(next);
     console.log(`${same ? '  =' : '  →'} ${m.type_slug.padEnd(24)} ${m.objective_ids.join(', ')}`);
     if (!same) {
       mappingChanges += 1;
@@ -126,7 +148,10 @@ async function main(): Promise<void> {
   console.log(`types carrying a mapping now: ${after[0]?.n ?? '?'} of ${rows.length} active`);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => { console.error('FAILED:', err?.message ?? err); process.exit(1); })
-  .finally(() => { void sequelize.close().catch(() => undefined); });
+// Guarded so a test can import this module without running the seeder.
+if (require.main === module) {
+  main()
+    .then(() => process.exit(0))
+    .catch((err) => { console.error('FAILED:', err?.message ?? err); process.exit(1); })
+    .finally(() => { void sequelize.close().catch(() => undefined); });
+}
