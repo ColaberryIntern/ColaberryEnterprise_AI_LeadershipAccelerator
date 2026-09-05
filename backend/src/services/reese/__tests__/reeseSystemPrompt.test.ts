@@ -25,12 +25,20 @@ jest.mock('../../agentMemoryProposalService', () => ({
 jest.mock('../reeseStudentSuccessHighlights', () => ({
   getReeseStudentSuccessHighlights: jest.fn(),
 }));
+// Checkpoint D — buildReeseSystemPrompt() now also calls
+// getReeseHealthAssessmentHighlight(), which transitively queries
+// StudentAssessment. Mocked wholesale for the same reason as the Checkpoint C
+// highlights mock above.
+jest.mock('../reeseHealthAssessmentHighlights', () => ({
+  getReeseHealthAssessmentHighlight: jest.fn(),
+}));
 
 import { getLearnerContextBlock } from '../../learnerContextService';
 import { getReeseAgentId } from '../reeseIdentitySeed';
 import { getActiveDirectiveTexts } from '../../managerDirectiveService';
 import { getApprovedMemoryTexts } from '../../agentMemoryProposalService';
 import { getReeseStudentSuccessHighlights } from '../reeseStudentSuccessHighlights';
+import { getReeseHealthAssessmentHighlight } from '../reeseHealthAssessmentHighlights';
 import { buildReeseSystemPrompt } from '../reeseSystemPrompt';
 
 const mockLearnerContext = getLearnerContextBlock as unknown as jest.Mock;
@@ -38,6 +46,7 @@ const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
 const mockActiveDirectives = getActiveDirectiveTexts as unknown as jest.Mock;
 const mockApprovedMemory = getApprovedMemoryTexts as unknown as jest.Mock;
 const mockHighlights = getReeseStudentSuccessHighlights as unknown as jest.Mock;
+const mockHealthHighlight = getReeseHealthAssessmentHighlight as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -48,6 +57,7 @@ beforeEach(() => {
   mockActiveDirectives.mockResolvedValue([]);
   mockApprovedMemory.mockResolvedValue([]);
   mockHighlights.mockResolvedValue('');
+  mockHealthHighlight.mockResolvedValue('');
 });
 
 describe('buildReeseSystemPrompt', () => {
@@ -141,5 +151,41 @@ describe('buildReeseSystemPrompt — Student Success 360 highlights (Checkpoint 
     const prompt = await buildReeseSystemPrompt('enrollment-8');
 
     expect(prompt).not.toContain('ADDITIONAL CONTEXT');
+  });
+});
+
+describe('buildReeseSystemPrompt — health assessment highlight (Checkpoint D, 2026-09-05)', () => {
+  it('happy path: a notable health assessment is appended alongside the Student Success 360 highlights', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockHighlights.mockResolvedValue('ADDITIONAL CONTEXT:\n- 1 open support ticket for this student — check before assuming a fresh start.');
+    mockHealthHighlight.mockResolvedValue('RECENT HEALTH ASSESSMENT (for your own awareness — do not recite this to the student):\n- Status: at risk (likely cause: motivation confidence decline).');
+
+    const prompt = await buildReeseSystemPrompt('enrollment-9');
+
+    expect(mockHealthHighlight).toHaveBeenCalledWith('enrollment-9');
+    expect(prompt).toContain('ADDITIONAL CONTEXT');
+    expect(prompt).toContain('RECENT HEALTH ASSESSMENT');
+    expect(prompt).toContain('at risk');
+  });
+
+  it('boundary: a notable health assessment appends on its own even when the Student Success 360 highlights are empty', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockHighlights.mockResolvedValue('');
+    mockHealthHighlight.mockResolvedValue('RECENT HEALTH ASSESSMENT (for your own awareness — do not recite this to the student):\n- Status: watch.');
+
+    const prompt = await buildReeseSystemPrompt('enrollment-10');
+
+    expect(prompt).toContain('RECENT HEALTH ASSESSMENT');
+  });
+
+  it('boundary: both blocks empty appends neither header', async () => {
+    mockLearnerContext.mockResolvedValue('');
+    mockHighlights.mockResolvedValue('');
+    mockHealthHighlight.mockResolvedValue('');
+
+    const prompt = await buildReeseSystemPrompt('enrollment-11');
+
+    expect(prompt).not.toContain('ADDITIONAL CONTEXT');
+    expect(prompt).not.toContain('RECENT HEALTH ASSESSMENT');
   });
 });

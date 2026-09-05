@@ -16,6 +16,7 @@ jest.mock('../reeseTicketLinkService', () => ({
   ensureReeseTicketForRoom: jest.fn(),
   logReeseExchangeActivity: jest.fn(),
 }));
+jest.mock('../../studentHealthAssessment', () => ({ maybeRefreshStudentAssessment: jest.fn() }));
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
@@ -24,6 +25,7 @@ import { buildReeseSystemPrompt } from '../reeseSystemPrompt';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { sendDmMessage } from '../../communityRooms/dmService';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from '../reeseTicketLinkService';
+import { maybeRefreshStudentAssessment } from '../../studentHealthAssessment';
 import { maybeTriggerReeseReply } from '../reeseReplyService';
 
 const mockMembershipFindOne = RoomMembership.findOne as unknown as jest.Mock;
@@ -36,6 +38,7 @@ const mockGetInstrumentedOpenAI = getInstrumentedOpenAI as unknown as jest.Mock;
 const mockSendDmMessage = sendDmMessage as unknown as jest.Mock;
 const mockEnsureTicket = ensureReeseTicketForRoom as unknown as jest.Mock;
 const mockLogExchange = logReeseExchangeActivity as unknown as jest.Mock;
+const mockMaybeRefreshAssessment = maybeRefreshStudentAssessment as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const REESE_AGENT_ID = 'reese-agent-1';
@@ -72,6 +75,7 @@ beforeEach(() => {
   mockSendDmMessage.mockResolvedValue({ id: 'reply-msg-1', content: 'Here is your next move.' });
   mockEnsureTicket.mockResolvedValue({ id: 'ticket-1' });
   mockLogExchange.mockResolvedValue(undefined);
+  mockMaybeRefreshAssessment.mockResolvedValue(undefined);
 });
 
 describe('maybeTriggerReeseReply', () => {
@@ -159,6 +163,22 @@ describe('maybeTriggerReeseReply', () => {
 
     await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
     expect(mockSendDmMessage).not.toHaveBeenCalled();
+  });
+
+  it('Checkpoint D: a successful reply also fires the opportunistic assessment refresh for the sender, fire-and-forget', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockMaybeRefreshAssessment).toHaveBeenCalledWith(STUDENT_ID);
+  });
+
+  it('Checkpoint D boundary: an assessment-refresh failure never breaks or delays the reply itself (fire-and-forget)', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockMaybeRefreshAssessment.mockRejectedValue(new Error('LLM provider timeout'));
+
+    await expect(maybeTriggerReeseReply(ROOM_ID, STUDENT_ID)).resolves.toBeUndefined();
+    expect(mockSendDmMessage).toHaveBeenCalledTimes(1); // the reply itself still went out
   });
 
   it('conversation history is passed to the LLM with correct role mapping (Reese = assistant, everyone else = user)', async () => {

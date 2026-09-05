@@ -8,6 +8,7 @@ import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicke
 import { agentHasTool } from '../agents/tools/agentToolRegistry';
 import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
 import type { AttachmentRef } from '../agents/tools/types';
+import { maybeRefreshStudentAssessment } from '../studentHealthAssessment';
 
 // Reese Phase 1 — the ONLY place Reese-authored DM content is ever produced.
 // Reactive, guarded, never proactive:
@@ -168,6 +169,20 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
     const replyMessage = await sendDmMessage(
       { enrollmentId: reeseEnrollmentId, cohortId: null, isAdmin: false }, roomId, reply,
     );
+
+    // Reese Agentic AI Employee mission, Checkpoint D — opportunistic,
+    // cost-bounded assessment refresh. Fire-and-forget: never awaited, so a
+    // slow or failed LLM call here can never delay or break the reply the
+    // student is waiting on. maybeRefreshStudentAssessment() itself no-ops
+    // (no LLM call) unless the student's last assessment is missing or past
+    // its own reassessment_date — this is the real trigger for Checkpoint D's
+    // engine now that it's wired in, since no dedicated cron sweep exists.
+    maybeRefreshStudentAssessment(senderEnrollmentId).catch((e: any) => {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'reese', event: 'assessment_refresh_failed',
+        room_id: roomId, error_class: e?.name || 'Error', message: String(e?.message || e),
+      }));
+    });
 
     if (ticketId) {
       // 'ai_staff' ticket activity is attributed to Reese's AdminUser id (the
