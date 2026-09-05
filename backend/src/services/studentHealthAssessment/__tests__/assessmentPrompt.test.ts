@@ -101,6 +101,29 @@ describe('parseAssessmentResponse', () => {
     expect(judgment.requiresHumanReview).toBe(true);
   });
 
+  it('honesty boundary: a real production case — a confident non-unknown status with an empty supportingCategories array is discarded, never trusted (caught live on gpt-4o-mini, Checkpoint D verification)', () => {
+    const judgment = parseAssessmentResponse({
+      status: 'critical', primaryRootCause: 'motivation_confidence_decline', secondaryRootCause: null,
+      supportingCategories: [], contradictingCategories: [], unansweredQuestions: [],
+      recommendedIntervention: 'Increase engagement.', requiresHumanReview: true,
+    }, evidence());
+
+    expect(judgment.status).toBe('unknown');
+    expect(judgment.primaryRootCause).toBeNull();
+    expect(judgment.requiresHumanReview).toBe(true);
+  });
+
+  it('a status is kept when supportingCategories survives filtering to at least one real category, even if some cited categories were dropped', () => {
+    const judgment = parseAssessmentResponse({
+      status: 'watch', primaryRootCause: null, secondaryRootCause: null,
+      supportingCategories: ['attendance', 'not_a_real_category'], contradictingCategories: [],
+      unansweredQuestions: [], recommendedIntervention: null, requiresHumanReview: false,
+    }, evidence());
+
+    expect(judgment.status).toBe('watch');
+    expect(judgment.supportingCategories).toEqual(['attendance']);
+  });
+
   it('an invalid status value degrades to the unknown fallback entirely', () => {
     const judgment = parseAssessmentResponse({ status: 'thriving' }, evidence());
 
