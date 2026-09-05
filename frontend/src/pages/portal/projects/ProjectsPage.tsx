@@ -18,6 +18,7 @@ import {
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
 import { syncProjectsWithBackend, refreshProjectsFromBackend, hydrateProjectById, pushActiveProject } from './projectSync';
+import ProjectDriftBanner from './ProjectDriftBanner';
 import ArchiveProjectDialog from './ArchiveProjectDialog';
 import {
   fetchArchivedProjects, restoreProject as callRestore,
@@ -626,6 +627,10 @@ const ProjectsPage: React.FC = () => {
       >
         {(condensed) => (
           <div className="pj-root">
+            {/* Mounted here because this is the screen that shows a story as
+                0 of 3. Farhat read exactly that on a project she was not
+                building in, and had no way to find out. */}
+            <ProjectDriftBanner onSwitched={() => { void refreshProjectsFromBackend(); }} />
             <ProjectInterior
               project={active}
               condensed={condensed}
