@@ -20,6 +20,8 @@ Rules (non-negotiable):
 - If the evidence is genuinely mixed or you cannot support a specific status, return "unknown" rather than guessing.
 - primaryRootCause/secondaryRootCause must come only from the given enum, or be null.
 - supportingCategories/contradictingCategories must be category keys taken only from the list you were given.
+- MANDATORY: for any status other than "unknown", supportingCategories MUST list at least one of the evidence category keys above that directly justifies your conclusion. A status with an empty supportingCategories list will be discarded and replaced with "unknown" — citing evidence is not optional.
+- A category showing 0/0 (e.g. "0/0 sessions attended") means nothing has happened YET, not that the student failed — do not treat a 0/0 as decline. Only treat a ratio with a real nonzero denominator (e.g. 0/10) as a negative signal.
 - Respond with STRICT JSON only, matching this exact shape:
 {
   "status": "on_track" | "watch" | "at_risk" | "critical" | "unknown",
@@ -84,6 +86,20 @@ export function parseAssessmentResponse(parsed: any, evidence: AssembledEvidence
   const contradictingCategories = Array.isArray(parsed.contradictingCategories)
     ? parsed.contradictingCategories.filter((c: unknown) => typeof c === 'string' && knownCategories.has(c as any))
     : [];
+
+  // Deterministic enforcement of "no classification without evidence
+  // provenance" — the mission's own hard rule. A smaller/cheaper model can
+  // and does return a confident, non-"unknown" status with an empty
+  // supportingCategories array despite being told this is mandatory (caught
+  // live in production during Checkpoint D's own verification pass, on
+  // gpt-4o-mini). Prompting alone is not enough to guarantee this rule; this
+  // gate is what actually guarantees it regardless of model compliance.
+  if (parsed.status !== 'unknown' && supportingCategories.length === 0) {
+    return {
+      ...fallback,
+      unansweredQuestions: ['The model produced a status without citing any supporting evidence — discarded rather than trusted.'],
+    };
+  }
   const unansweredQuestions = Array.isArray(parsed.unansweredQuestions)
     ? parsed.unansweredQuestions.filter((q: unknown) => typeof q === 'string' && q.trim().length > 0).slice(0, MAX_UNANSWERED_QUESTIONS)
     : [];

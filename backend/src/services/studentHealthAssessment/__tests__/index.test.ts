@@ -102,7 +102,7 @@ describe('assessStudentHealth', () => {
     mockChatJson.mockResolvedValue({
       parsed: {
         status: 'critical', primaryRootCause: 'motivation_confidence_decline', secondaryRootCause: null,
-        supportingCategories: [], contradictingCategories: [], unansweredQuestions: [],
+        supportingCategories: ['attendance'], contradictingCategories: [], unansweredQuestions: [],
         recommendedIntervention: 'Escalate to instructor.', requiresHumanReview: false,
       },
       runtime_ms: 400, cost_usd: 0.001,
