@@ -86,6 +86,7 @@ import { ensureAgentMemoryProposalSchema } from './db/ensureAgentMemoryProposalS
 import { ensureAiAgentDepartmentScopeSchema } from './db/ensureAiAgentDepartmentScopeSchema';
 import { ensureTicketCreatorIndexSchema } from './db/ensureTicketCreatorIndexSchema';
 import { ensureMetricReliabilityRecordSchema } from './db/ensureMetricReliabilityRecordSchema';
+import { ensureStudentAssessmentSchema } from './db/ensureStudentAssessmentSchema';
 import { ensureAgentManagerConversationReliabilitySchema } from './db/ensureAgentManagerConversationReliabilitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
@@ -2735,6 +2736,11 @@ async function start(): Promise<void> {
   // manager or an agent-detected reliability change writes the first row
   // via metricReliabilityService.ts's declareReliabilityChange().
   await ensureMetricReliabilityRecordSchema();
+  // Reese Agentic AI Employee mission, Checkpoint D — student health
+  // assessment history, confirmed absent at discovery. Additive, idempotent,
+  // no flag. No seeder writes to it; assessStudentHealth.ts writes the first
+  // row on demand.
+  await ensureStudentAssessmentSchema();
   // Reese Agentic AI Employee mission, Checkpoint B — the manager
   // confirmation workflow's one new column (pending_reliability_confirmation)
   // on the existing agent_manager_conversations table. Additive, idempotent,
