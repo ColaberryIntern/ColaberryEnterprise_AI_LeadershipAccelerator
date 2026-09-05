@@ -46,7 +46,19 @@
       </section>
       <section class="band alt" id="results-band">
         <div class="wrap">
-          <div class="grid" id="results-records" hidden></div>
+          <!-- The word cloud: a view of the whole shelf, above the split. -->
+          <div class="cloud" id="results-cloud" hidden></div>
+
+          <div class="records-layout" id="results-layout" hidden>
+            <aside class="records-filters" id="results-filters" aria-label="Filter published results" hidden></aside>
+            <div class="records-main">
+              <label class="records-search-label" for="results-q">Search the results</label>
+              <input class="records-search" id="results-q" type="search" autocomplete="off"
+                     placeholder="e.g. audit trail, SQL Server, typescript" />
+              <p class="records-count" id="results-count" aria-live="polite"></p>
+              <div class="grid" id="results-records" hidden></div>
+            </div>
+          </div>
           <div class="empty" id="results-empty">
             <h3>No published results yet</h3>
             <p>
@@ -107,79 +119,7 @@
     </footer>
 
 
-    <!--
-      RESULTS ARE FETCHED, AND THE EMPTY STATE IS THE DEFAULT THAT SHIPS.
-
-      The markup above is the honest empty page, exactly as it read before this
-      script existed. JS only ever UPGRADES it. So a failed request, a blocked
-      script or an API outage leaves a reader on a page that says we have nothing
-      to show rather than on a blank band or a spinner that never resolves -
-      which, on a page whose whole argument is that we do not overstate, is the
-      only acceptable failure mode.
-
-      `surface=ai-flotation` is what makes this AI Flotation's shelf rather than
-      Colaberry's. The parameter is not a secret and grants nothing: a record
-      appears here only if someone published it TO this surface in the admin.
-      Asking for a surface with nothing on it returns an empty list, and this
-      page then says so in its own words.
-
-      Every field rendered below is consent-resolved by the server before it is
-      sent. There is no client-side decision about what may be shown.
-    -->
-    <script>
-      (function () {
-        var API = '{{brand.platformApiBase}}';
-        var box = document.getElementById("results-records");
-        var empty = document.getElementById("results-empty");
-        var why = document.getElementById("results-why-empty");
-        var title = document.getElementById("results-title");
-        var sub = document.getElementById("results-sub");
-        if (!box || !empty) return;
-
-        function text(node, value) { node.textContent = value; return node; }
-
-        function card(record) {
-          var el = document.createElement("article");
-          el.className = "tile";
-          el.appendChild(text(document.createElement("h3"), record.title));
-          if (record.standfirst) {
-            el.appendChild(text(document.createElement("p"), record.standfirst));
-          }
-          /* The verification class, printed. A record that reaches this page
-             carries its own evidence class, and hiding it here would be the
-             delivery standard saying one thing and the results page another. */
-          if (record.verificationClass) {
-            var pill = text(document.createElement("p"), record.verificationClass);
-            pill.className = "eyebrow quiet";
-            pill.style.marginTop = ".8rem";
-            el.appendChild(pill);
-          }
-          return el;
-        }
-
-        fetch(API + "/api/public/case-studies?surface=ai-flotation&limit=24", {
-          headers: { Accept: "application/json" }
-        })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (body) {
-            var items = body && Array.isArray(body.items) ? body.items : [];
-            if (items.length === 0) return;
-
-            items.forEach(function (record) { box.appendChild(card(record)); });
-            box.hidden = false;
-            empty.hidden = true;
-            if (why) why.hidden = true;
-
-            /* The masthead is rewritten from the SURFACE the server returned, not
-               from a string typed here, so the page cannot claim a framing the
-               record was not published under. */
-            var hero = body.surface && body.surface.hero;
-            if (hero && title && hero.title) text(title, hero.title);
-            if (hero && sub && hero.description) text(sub, hero.description);
-          })
-          .catch(function () { /* Empty state already on the page. Nothing to do. */ });
-      })();
-    </script>
+    <script src="/assets/records.js" data-api="{{brand.platformApiBase}}" defer></script>
     <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
   </body>
 </html>
