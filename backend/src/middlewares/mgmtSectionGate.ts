@@ -61,6 +61,29 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/insights', 'intelligence'], ['/api/admin/governance', 'intelligence'],
   ['/api/admin/tickets', 'system'], ['/api/admin/reports', 'system'], ['/api/admin/settings', 'system'],
   ['/api/admin/students', 'students'], // Support role's read-only student-story surface
+
+  // ── Surfaces with no sidebar entry ──────────────────────────────────────
+  //
+  // Twelve admin routes had no nav entry, so the frontend's sectionForPath()
+  // returned null and ProtectedRoute admitted every mgmt-role identity, while
+  // this gate denied them by default. A mentor could open /admin/apollo and get
+  // a page that 403d on every call with nothing explaining why.
+  //
+  // These rows are the backend half of the fix; the frontend half is
+  // UNLISTED_PATH_SECTIONS in adminNav.ts, and a test asserts the two agree.
+  // As the explorer-growth row above already argues: an UNMAPPED path is a
+  // latent 403, and classified paths fail predictably.
+  ['/api/admin/apollo', 'lead_ingestion'],
+  ['/api/admin/import', 'lead_ingestion'],
+  ['/api/admin/tracking-estate', 'campaigns'],
+  ['/api/admin/executive-narrative', 'dashboard'],
+  // Audit ledger — classified from what it returns (event_type, actor,
+  // entity_type, entity_id, payload), not from its name.
+  ['/api/admin/events', 'system'],
+  ['/api/admin/work-ledger-health', 'system'],
+  ['/api/admin/automation', 'system'],
+  ['/api/admin/agent-orphans', 'intelligence'],
+  ['/api/admin/knowledge-ops', 'intelligence'],
 ];
 
 // Section-agnostic admin endpoints every mgmt role may hit (identity, not data).

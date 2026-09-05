@@ -28,6 +28,18 @@ import { LifecycleStage } from './lifecycle';
 const SECTION_STAGES: Record<string, readonly LifecycleStage[]> = {
   // The lead queue and pipeline: acquisition, up to but not including enrolment.
   leads: ['anonymous_visitor', 'identified_visitor', 'lead', 'applicant'],
+  // Admissions. A DELIBERATE WIDENING, decided 2026-09-05, not an inheritance:
+  // this section previously granted no person rows at all, because it gates
+  // ingestion configuration (sources, routing rules) rather than people. Ali
+  // asked for Admissions to see leads AND students, on the reasoning that the
+  // role follows a person from first contact through to enrolment. The range
+  // therefore runs from anonymous_visitor to graduate and stops short of
+  // returning_customer, which is a billing relationship rather than an
+  // admissions one.
+  lead_ingestion: [
+    'anonymous_visitor', 'identified_visitor', 'lead', 'applicant',
+    'enrolled_student', 'active_learner', 'graduate',
+  ],
   // Revenue sees anyone who has or could have a billing relationship.
   //
   // `active_learner` is in this list because leaving it out put a HOLE in the

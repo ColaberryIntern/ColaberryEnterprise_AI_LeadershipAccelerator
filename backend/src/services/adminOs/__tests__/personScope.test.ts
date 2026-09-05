@@ -27,8 +27,25 @@ describe('person scope', () => {
     // Tooling sections grant pages, not people.
     expect(hasAnyPersonScope(['dashboard'])).toBe(false);
     expect(hasAnyPersonScope(['system'])).toBe(false);
-    expect(hasAnyPersonScope(['lead_ingestion'])).toBe(false);
     expect(hasAnyPersonScope(['campaigns'])).toBe(false);
+    expect(hasAnyPersonScope(['intelligence'])).toBe(false);
+    expect(hasAnyPersonScope(['trust'])).toBe(false);
+  });
+
+  it('gives Admissions leads AND students, by decision rather than inheritance', () => {
+    // Decided 2026-09-05. lead_ingestion previously granted NO person rows —
+    // it gates ingestion configuration, not people — so this is a deliberate
+    // widening of the Admissions role, recorded here so it cannot later be
+    // mistaken for something the section always did.
+    const admissions = sectionsFor('admissions');
+    expect(hasAnyPersonScope(admissions)).toBe(true);
+    expect(canSeeStage(admissions, 'lead')).toBe(true);
+    expect(canSeeStage(admissions, 'applicant')).toBe(true);
+    expect(canSeeStage(admissions, 'enrolled_student')).toBe(true);
+    expect(canSeeStage(admissions, 'graduate')).toBe(true);
+    // Stops short of returning_customer: that is a billing relationship, and
+    // Admissions was granted acquisition-through-enrolment, not revenue.
+    expect(canSeeStage(admissions, 'returning_customer')).toBe(false);
   });
 
   // ── The case that forced this module to exist ─────────────────────────────
@@ -76,7 +93,7 @@ describe('person scope', () => {
     expect(needsPerRecordScope(mentor)).toContain('career_review');
   });
 
-  it('gives a community organizer no person rows at all', () => {
+  it('still gives a community organizer no person rows at all', () => {
     // Its only grant is a landing page; its real permission is feed moderation,
     // enforced elsewhere against mgmt_role.
     expect(hasAnyPersonScope(sectionsFor('community_organizer'))).toBe(false);

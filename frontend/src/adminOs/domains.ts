@@ -61,7 +61,12 @@ export const DOMAINS: readonly DomainDef[] = [
     label: 'Command Center',
     icon: 'dashboard-line',
     path: '/admin/command-center',
-    absorbs: ['/admin/dashboard', '/admin/war-room'],
+    absorbs: [
+      '/admin/dashboard',
+      '/admin/war-room',
+      // Adopted 2026-09-05 — had no nav entry, so the gates disagreed about it.
+      '/admin/executive-narrative',
+    ],
   },
   {
     key: 'growth',
@@ -83,6 +88,10 @@ export const DOMAINS: readonly DomainDef[] = [
       '/admin/ingest-logs',
       '/admin/routing-rules',
       '/admin/autonomous',
+      // Adopted 2026-09-05 — acquisition tooling that had no nav entry.
+      '/admin/apollo',
+      '/admin/import',
+      '/admin/tracking-estate',
     ],
   },
   {
@@ -122,7 +131,10 @@ export const DOMAINS: readonly DomainDef[] = [
     // section by `widgetIsVisible`, so a mentor sees the learning panel and a
     // revenue rep sees the billing panel, and neither sees the other. That is
     // the property that lets a 360 view exist without becoming a 360 grant.
-    ownSections: ['leads', 'revenue', 'students', 'program', 'career_review'],
+    // 'lead_ingestion' is here because Admissions was granted person rows on
+    // 2026-09-05. Without it the scope would grant the rows and the domain would
+    // never render — the roster would exist and be unreachable.
+    ownSections: ['leads', 'revenue', 'students', 'program', 'career_review', 'lead_ingestion'],
   },
   {
     key: 'operations',
@@ -147,6 +159,14 @@ export const DOMAINS: readonly DomainDef[] = [
       '/admin/inbox',
       '/admin/missed-opportunities',
       '/admin/content-queue',
+      // Adopted 2026-09-05 — operational surfaces that had no nav entry.
+      // '/admin/events' is the AUDIT ledger, classified from what it returns
+      // rather than from its name.
+      '/admin/events',
+      '/admin/work-ledger-health',
+      '/admin/automation',
+      '/admin/agent-orphans',
+      '/admin/knowledge-ops',
     ],
   },
 ];

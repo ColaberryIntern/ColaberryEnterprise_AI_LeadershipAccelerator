@@ -1,4 +1,4 @@
-import { ALL_LINKS, sectionForPath } from '../../components/Layout/adminNav';
+import { ALL_LINKS, UNLISTED_PATH_SECTIONS, sectionForPath } from '../../components/Layout/adminNav';
 import {
   DOMAINS,
   accessibleLinksForDomain,
@@ -51,14 +51,36 @@ describe('admin OS domains', () => {
     }
   });
 
-  it('only absorbs paths the nav actually knows about', () => {
-    // An absorbed path with no nav entry has no section, so it would be
-    // unreachable — or worse, treated as ungated.
-    const known = new Set(ALL_LINKS.map((l) => l.path));
+  it('only absorbs paths the app actually classifies', () => {
+    // An absorbed path with no section would be unreachable — or worse, treated
+    // as ungated. A path qualifies either by having a nav entry or by being
+    // classified in UNLISTED_PATH_SECTIONS.
+    const known = new Set([
+      ...ALL_LINKS.map((l) => l.path),
+      ...UNLISTED_PATH_SECTIONS.map(([path]) => path),
+    ]);
     for (const domain of DOMAINS) {
       for (const path of domain.absorbs) {
         expect(known.has(path)).toBe(true);
       }
+    }
+  });
+
+  it('gives every adopted orphan a domain', () => {
+    // The nine surfaces that had no nav entry. Classifying one without giving it
+    // a domain would leave it reachable and unplaced, which is the state this
+    // whole pass exists to end.
+    for (const [path] of UNLISTED_PATH_SECTIONS) {
+      expect(domainForLegacyPath(path)).toBeDefined();
+    }
+  });
+
+  it('places each adopted orphan in a domain that holds its section', () => {
+    // A path filed under a domain that does not carry its section would render
+    // in a sidebar group whose members the identity cannot open.
+    for (const [path, section] of UNLISTED_PATH_SECTIONS) {
+      const domain = domainForLegacyPath(path)!;
+      expect(sectionsForDomain(domain)).toContain(section);
     }
   });
 
@@ -104,6 +126,8 @@ describe('admin OS domains', () => {
     const learning = DOMAINS.find((d) => d.key === 'learning')!;
     expect(canOpenDomain(learning, can('admissions'))).toBe(false);
     expect(visibleDomains(can('admissions')).map((d) => d.key)).not.toContain('learning');
+    // Admissions holds no revenue section either.
+    expect(canOpenDomain(DOMAINS.find((d) => d.key === 'revenue')!, can('admissions'))).toBe(false);
   });
 
   it('gives the support role its student surfaces and nothing else', () => {
@@ -145,8 +169,9 @@ describe('admin OS domains', () => {
     expect(canOpenDomain(people, can('revenue'))).toBe(true);   // holds 'leads'
     expect(canOpenDomain(people, can('support'))).toBe(true);   // holds 'students'
     expect(canOpenDomain(people, can('mentor'))).toBe(true);    // holds 'career_review'
-    // Admissions holds only lead_ingestion — pipeline plumbing, not person data.
-    expect(canOpenDomain(people, can('admissions'))).toBe(false);
+    // Admissions was granted person rows on 2026-09-05, so it opens People too.
+    // Before that decision lead_ingestion was pipeline plumbing and granted none.
+    expect(canOpenDomain(people, can('admissions'))).toBe(true);
     // A landing page alone grants nothing.
     expect(canOpenDomain(people, can('community_organizer'))).toBe(false);
   });

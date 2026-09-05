@@ -165,14 +165,17 @@ export const METRICS: Record<string, MetricDef> = {
     unit: 'currency',
     definition: 'Gross revenue less refunds and adjustments in the period.',
     formula: 'gross - refunds - adjustments',
-    sources: ['refunds', 'external payment processor'],
+    sources: ['PaySimple (transactions)', 'CCPP SQL Server (plan and enrolment context)', 'refunds'],
     grain: 'transaction',
     dimensions: ['plan', 'cohort', 'source', 'period'],
     status: 'unavailable',
     statusReason:
-      'Discovery found no local payments table; payment records live outside this database, and ' +
-      'refunds holds only 3 rows with the latest dated 2026-08-06. The source must be confirmed ' +
-      'before any net-revenue figure is published.',
+      'Source IDENTIFIED but not yet wired (confirmed 2026-09-05): transactions from PaySimple, ' +
+      'plan and enrolment context from CCPP. There is still no local payments table, and refunds ' +
+      'holds 3 rows with the latest dated 2026-08-06, so nothing here can compute a figure yet. ' +
+      'Knowing where the data lives is not the same as having read it — this stays unavailable, ' +
+      'and renders as such, until the integration lands and is reconciled against app-originated ' +
+      'checkouts only.',
     drilldown: { target: 'revenue.transactions', requiredFilters: ['period'] },
   },
 
