@@ -36,6 +36,7 @@
 import { sequelize } from '../../config/database';
 import { getCareerProfile } from './careerProfileService';
 import { projectPublicPortfolio, type PublicPortfolio } from './careerPortfolioPublicProjection';
+import { caseStudyLinksForProjects } from './portfolioCaseStudyLinks';
 import {
   readResumeHistory, approvedResumeHistoryOf, EMPTY_RESUME_HISTORY, type ResumeHistory,
 } from './resumeHistoryAdapter';
@@ -427,59 +428,14 @@ async function buildPortfolio(
     }));
   }
 
-  // Which projects have a case study a stranger may actually open.
-  //
-  // THE VISIBILITY RULE IS NOT RE-IMPLEMENTED HERE. `loadPublishedRecordBySlug` and
-  // `isCandidatePubliclyVisible` are the Case Study OS's own gate, and they are called
-  // rather than copied: a second copy of that rule is how a portfolio ends up linking to
-  // a page that 404s. Looked up per project (a handful) rather than by loading every
-  // publication on the surface.
-  const caseStudyByProject: Record<string, string> = {};
+  // Which projects have a case study a stranger may actually open. The rule, the
+  // union query and the gate wiring live in `portfolioCaseStudyLinks.ts` -- split
+  // out when this file reached CLAUDE.md's 500-line ceiling, and tested there on
+  // its own, because it is the one rule that can point a stranger at a learner's
+  // writing.
+  let caseStudyByProject: Record<string, string> = {};
   try {
-    const projectIds = (projects as any[])
-      .map((p) => p?.id).filter((id): id is string => typeof id === 'string' && !!id);
-    if (projectIds.length) {
-      // TWO WAYS A CASE STUDY BELONGS TO A PROJECT, and the second is the one that
-      // matches reality. `case_studies.project_id` is set only when the record was
-      // created FROM a project. Every case study published on this platform so far was
-      // created from a repo collection instead, so that column is null on all of them --
-      // measured 2026-09-04: 8 of 9 rows, including the one live at
-      // /stories/the-ai-proposes-a-verified-human-decides, which is Quincy Nkwain
-      // Ninying's and was invisible to a project_id-only join.
-      //
-      // The repository is what actually carries the ownership: the case study's repo
-      // matches a `github_connections` row, and that row names the project. Matched
-      // case-insensitively because GitHub owner/name are.
-      const [rows]: any = await sequelize.query(
-        `SELECT DISTINCT project_id, slug FROM (
-           SELECT c.project_id, c.slug
-             FROM case_studies c
-            WHERE c.project_id = ANY($1::uuid[]) AND c.archived_at IS NULL
-           UNION
-           SELECT g.project_id, c.slug
-             FROM github_connections g
-             JOIN case_study_repositories r
-               ON lower(r.repo_owner) = lower(g.repo_owner)
-              AND lower(r.repo_name)  = lower(g.repo_name)
-             JOIN case_study_repo_collections col ON col.id = r.collection_id
-             JOIN case_studies c ON c.id = col.case_study_id
-            WHERE g.project_id = ANY($1::uuid[]) AND c.archived_at IS NULL
-         ) linked`,
-        { bind: [projectIds] },
-      );
-      const [store, filters] = await Promise.all([
-        import('../caseStudy/caseStudyPublicStore'),
-        import('../caseStudy/caseStudyFilterService'),
-      ]);
-      for (const row of (Array.isArray(rows) ? rows : [])) {
-        if (!row?.slug || !row?.project_id || caseStudyByProject[row.project_id]) continue;
-        // eslint-disable-next-line no-await-in-loop -- one lookup per project, bounded.
-        const rec = await store.loadPublishedRecordBySlug(row.slug, 'enterprise');
-        if (rec && filters.isCandidatePubliclyVisible(rec.candidate, 'enterprise')) {
-          caseStudyByProject[row.project_id] = row.slug;
-        }
-      }
-    }
+    caseStudyByProject = await caseStudyLinksForProjects(projects);
   } catch (err: any) {
     // A case study that cannot be resolved costs its link, never the page.
     console.warn(JSON.stringify({
