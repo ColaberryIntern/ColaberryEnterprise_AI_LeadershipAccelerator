@@ -60,6 +60,20 @@ function log(event: string, outcome: Outcome, context: Record<string, unknown>):
   );
 }
 
+/**
+ * Rows affected by a write.
+ *
+ * Sequelize types the metadata half of a query result as `{}`, so it cannot be
+ * read as a number without narrowing. Doing that here once, defensively, keeps
+ * every call site honest: an unexpected shape reports 0 work rather than NaN,
+ * and a NaN in a log line is worse than a wrong count because it reads as a bug
+ * in the logger rather than in the query.
+ */
+function affectedRows(result: unknown): number {
+  const meta = Array.isArray(result) ? result[1] : undefined;
+  return typeof meta === 'number' ? meta : 0;
+}
+
 /** The normalisation, expressed once, in SQL. Must mirror normalizeEmail(). */
 const NORM = (col: string) => `lower(btrim(${col}))`;
 const USABLE = (col: string) =>
@@ -114,15 +128,15 @@ async function run(apply: boolean): Promise<void> {
     // UNION already de-duplicates, so an address appearing in both leads and
     // enrollments yields ONE person. ON CONFLICT DO NOTHING makes a re-run a
     // no-op rather than a constraint violation.
-    const [, personsCreated] = await sequelize.query(
+    const personsCreated = affectedRows(await sequelize.query(
       `INSERT INTO persons (primary_email)
        SELECT ${NORM('email')} FROM leads WHERE ${USABLE('email')}
        UNION
        SELECT ${NORM('email')} FROM enrollments WHERE ${USABLE('email')}
        ON CONFLICT (primary_email) DO NOTHING`,
       { transaction: tx },
-    );
-    log('persons_upserted', 'success', { created: personsCreated ?? 0 });
+    ));
+    log('persons_upserted', 'success', { created: personsCreated });
 
     // ── 2. Link the records ─────────────────────────────────────────────────
     //
@@ -131,31 +145,31 @@ async function run(apply: boolean): Promise<void> {
     // and an interrupted run simply continues.
     const linkCounts: Record<string, number> = {};
     for (const table of ['leads', 'enrollments']) {
-      const [, count] = await sequelize.query(
+      const count = affectedRows(await sequelize.query(
         `UPDATE ${table} t SET person_id = p.id
          FROM persons p
          WHERE t.person_id IS NULL
            AND ${USABLE('t.email')}
            AND p.primary_email = ${NORM('t.email')}`,
         { transaction: tx },
-      );
-      linkCounts[table] = count ?? 0;
-      log('records_linked', 'success', { table, linked: count ?? 0 });
+      ));
+      linkCounts[table] = count;
+      log('records_linked', 'success', { table, linked: count });
     }
 
     // Visitors carry no email of their own; they inherit their person from the
     // lead they were already resolved to. A visitor with no lead_id stays NULL,
     // which is correct — an anonymous fingerprint is not yet a person.
-    const [, visitorsLinked] = await sequelize.query(
+    const visitorsLinked = affectedRows(await sequelize.query(
       `UPDATE visitors v SET person_id = l.person_id
        FROM leads l
        WHERE v.person_id IS NULL
          AND v.lead_id = l.id
          AND l.person_id IS NOT NULL`,
       { transaction: tx },
-    );
-    linkCounts.visitors = visitorsLinked ?? 0;
-    log('records_linked', 'success', { table: 'visitors', linked: visitorsLinked ?? 0 });
+    ));
+    linkCounts.visitors = visitorsLinked;
+    log('records_linked', 'success', { table: 'visitors', linked: visitorsLinked });
 
     // ── 3. Queue genuine ambiguity ──────────────────────────────────────────
     //
@@ -163,7 +177,7 @@ async function run(apply: boolean): Promise<void> {
     // It runs anyway, because that is a property of today's data rather than a
     // guarantee, and the day it stops being true this must queue rather than
     // pick.
-    const [, queued] = await sequelize.query(
+    const queued = affectedRows(await sequelize.query(
       `INSERT INTO person_resolution_queue (source_table, source_id, reason, candidates)
        SELECT 'leads', min(id)::text, 'ambiguous',
               jsonb_agg(jsonb_build_object('candidateId', id::text, 'method', 'exact_email'))
@@ -173,8 +187,8 @@ async function run(apply: boolean): Promise<void> {
        HAVING COUNT(*) > 1
        ON CONFLICT (source_table, source_id) WHERE status = 'pending' DO NOTHING`,
       { transaction: tx },
-    );
-    log('ambiguous_queued', 'success', { queued: queued ?? 0 });
+    ));
+    log('ambiguous_queued', 'success', { queued });
 
     // ── 4. Coverage, measured after the work rather than predicted ──────────
     //
@@ -221,13 +235,13 @@ async function run(apply: boolean): Promise<void> {
 
     if (apply) {
       await tx.commit();
-      log('backfill_committed', 'success', { ...linkCounts, persons_created: personsCreated ?? 0 });
+      log('backfill_committed', 'success', { ...linkCounts, persons_created: personsCreated });
     } else {
       await tx.rollback();
       log('backfill_rolled_back', 'success', {
         note: 'Dry run. Counts above are what --apply WOULD do. Nothing was written.',
         ...linkCounts,
-        persons_created: personsCreated ?? 0,
+        persons_created: personsCreated,
       });
     }
   } catch (error) {
