@@ -367,10 +367,16 @@
               // The form is the START of the conversation, not the end of it. What they
               // typed becomes the first thing said, and Project AI replies to it here.
               var idea = payload.message || '';
-              if (result.body && result.body.rawPayloadId && idea.trim()) {
+              // The wire format is snake_case. The service's TypeScript type says
+              // `rawPayloadId`, the controller serialises `raw_payload_id`, and reading the
+              // type instead of the actual response is what broke this the first time -
+              // silently, because an undefined id just took the other branch. Both are
+              // accepted so a future rename cannot break it again from either side.
+              var payloadId = (result.body && (result.body.raw_payload_id || result.body.rawPayloadId)) || null;
+              if (payloadId && idea.trim()) {
                 status.textContent = 'Got it. Project AI is reading that now \u2014 see below.';
                 status.setAttribute('data-state', 'ok');
-                startInterview(result.body.rawPayloadId, idea.trim());
+                startInterview(payloadId, idea.trim());
               } else {
                 // No id, or nothing typed: fall back to the old honest ending rather than
                 // opening a conversation that cannot be continued.
@@ -722,7 +728,11 @@
               status.textContent = 'Asked. Your phone should ring shortly — if it does not, we still have your details and will be in touch.';
               status.setAttribute('data-state', 'ok');
               form.reset();
-              if (result.body && result.body.rawPayloadId) startPreview(result.body.rawPayloadId);
+              // Same snake_case wire format as the written form above. This line has been
+              // wrong since the write-up panel shipped: the token was always undefined, so
+              // the panel never opened by itself and only ever worked from a ?token= link.
+              var callPayloadId = (result.body && (result.body.raw_payload_id || result.body.rawPayloadId)) || null;
+              if (callPayloadId) startPreview(callPayloadId);
             })
             .catch(function (err) {
               fail((err && err.message ? err.message : 'Something went wrong.') + ' Your details are still here — please try again.');
