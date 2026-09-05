@@ -165,3 +165,59 @@ regexes = [
   # wrong is worse than a false positive that gets read.
   '''(?i)\b(?:quota|cache|sort|group|partition|idempotency|dedup|primary|foreign|composite|translation|i18n)[_-]key\s*[:=]''',
 ]
+
+[[allowlists]]
+description = "Historical commits carrying secrets that have been triaged (CC-20260901-r3k7)"
+
+# WHY COMMITS AND NOT FINGERPRINTS OR PATHS.
+#
+# These findings were first silenced with .gitleaksignore fingerprints. That
+# did not hold. A gitleaks fingerprint is <commit>:<path>:<rule>:<line>, and
+# the same secret is reported once per commit that carries it, so the entries
+# only matched the commit set of the scan that produced them. A later sweep
+# walked more commits, emitted different SHAs for the identical file, rule and
+# line, and matched ZERO of 32 entries while reporting 184 findings.
+#
+# A PATH allowlist would hold, and is worse: excluding these files would also
+# stop the pre-commit hook catching a NEW secret pasted into them tomorrow.
+# The block above says exactly why test files are not path-excluded, and this
+# must not quietly undo that.
+#
+# Commits are immutable and bounded: 184 findings live in these 16. A secret
+# added in any FUTURE commit to any of these same files is still caught.
+#
+# WHAT IS IN THEM, all triaged 2026-09-02 to 2026-09-05:
+#
+#   - Test fixtures. Invented values. manifestValidator.secrets.test.ts is the
+#     sharpest case: its job is proving secret DETECTION works, so it has to
+#     contain realistic fakes or it is not testing anything.
+#   - A production JWT signing key in verifyInboxCosDigestFlow.js. DEAD:
+#     SHA-256 of the committed value does not match the running backend's
+#     JWT_SECRET, so it signs nothing. Compared by hash; neither value printed.
+#   - Two single-use portal tokens, a magic link pasted into PROGRESS.md and a
+#     test account link in an onboarding doc. Both absent from every token
+#     table in production, so neither can be redeemed.
+#   - An Opportunity Pulse password for ali@colaberry.com, public since
+#     2026-05-19. The code already reads OP_ADMIN_PASSWORD from the
+#     environment, which is why the working tree scans clean. Ali reviewed it
+#     on 2026-09-05 and chose NOT to rotate. If that changes, rotating in
+#     Opportunity Pulse is the entire fix; rewriting history is not, because
+#     forks, clones and caches already have it.
+commits = [
+  '''061c722f527f84232ed8a3d6c72c7e4d504db4d3''',
+  '''ad7359f5c9c459c86e5d37cae49f9fcfe45aa89e''',
+  '''e1467449277f937cdf52e1e0543ab95972e6a142''',
+  '''aae26b2a1f89c4eb6ec77f6ebb09d5a909765193''',
+  '''950f39bebdc66db3382c7314c5bdd46174705d82''',
+  '''5cf8419dd6f35abdcd6fb33208b718b738d92694''',
+  '''5fe1b8660f2d83b93b34461e23cc6215f0010579''',
+  '''b017e2b6a66994f032ed6ce6f6d6f21a3b8ceda1''',
+  '''15f4d1d0d50db7aa8113bc2e911d1edb59134e8a''',
+  '''dbf4ffa07329ff469465e5997c66fbbd1be8d5ca''',
+  '''939a5b98f19ec4232c331802f4f3af6f723abc8e''',
+  '''4de4d8f4d53a2ea30a0a42c1887ee4a2b3565f67''',
+  '''73b65e369d7fe74f7f5d34a5cd25da30551c29df''',
+  '''f4208fa642e968fa3a51d0c5fad8dc6948cee6fb''',
+  '''3352a0a2393223f9d6398dac15b39d7180c61715''',
+  '''c2f3656867986ecf5f1eb48902b42ec1c099adff''',
+]
