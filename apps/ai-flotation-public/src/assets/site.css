@@ -482,3 +482,105 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
 }
 
 .preview-note { margin-top: 1.75rem; }
+
+/* ── The interview ───────────────────────────────────────────────────
+   Styled as a conversation, not a chat widget: no bubbles, no avatars, no
+   typing dots. Two voices in a document, because the person is describing
+   their business and the page should feel like it is listening rather than
+   performing.
+
+   The speaker label is TEXT rather than alignment or colour, so who said what
+   survives a screen reader and does not depend on seeing the layout.
+   ------------------------------------------------------------------ */
+.interview {
+  margin-top: 2.5rem;
+  padding: 2rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  max-width: 46rem;
+}
+
+.interview-log {
+  max-height: 26rem;
+  overflow-y: auto;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.turn { padding: 0.85rem 0; border-bottom: 1px solid var(--line); }
+.turn:last-child { border-bottom: 0; }
+
+.turn-who {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.3rem;
+}
+
+.turn-user .turn-who { color: var(--accent); }
+
+.turn-text {
+  margin: 0;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.interview-form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.interview-form textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.interview-form textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.interview-form button {
+  flex: 0 0 auto;
+  padding: 0.7rem 1.25rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.interview-form button:disabled { opacity: 0.6; cursor: default; }
+.interview-form button:hover:not(:disabled) { background: var(--accent-hover); }
+
+.interview-note { margin-top: 1.25rem; }
+
+/* Visible to screen readers only — the reply field is labelled without a
+   redundant visual label above a textarea that already has placeholder text. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 30rem) {
+  .interview { padding: 1.25rem; }
+  .interview-form { flex-direction: column; align-items: stretch; }
+}

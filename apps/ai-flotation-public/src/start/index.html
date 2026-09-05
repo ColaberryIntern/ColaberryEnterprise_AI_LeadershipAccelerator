@@ -160,6 +160,32 @@
             Hidden until there is something to say. An empty panel that appears the moment
             the form is submitted would be a promise made before anything has happened.
           -->
+          <!--
+            THE INTERVIEW, RIGHT HERE.
+
+            Section 14's first door is "Chat with Project AI". Submitting the form does not end
+            the conversation, it starts one: what they typed becomes the first thing said, and
+            Project AI answers it.
+
+            Hidden until there is a conversation, because an empty chat box beside a form is a
+            second thing to fill in, and the point of section 15 is not asking for two.
+          -->
+          <section id="interview" class="interview" hidden>
+            <p class="eyebrow">Project AI</p>
+            <div id="interview-log" class="interview-log" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+            <form id="interview-form" class="interview-form">
+              <label class="sr-only" for="interview-input">Your reply</label>
+              <textarea id="interview-input" rows="2" placeholder="Type your reply..." required></textarea>
+              <button type="submit" id="interview-send" data-cta="Send">Send</button>
+            </form>
+
+            <p class="note interview-note">
+              This is a conversation, not a form. Say as much or as little as you like &mdash; when
+              there is enough to work with, your write-up appears below.
+            </p>
+          </section>
+
           <section id="preview" class="preview" hidden aria-live="polite">
             <p class="preview-status" id="preview-status"></p>
 
@@ -337,10 +363,20 @@
                 throw new Error(result.body && result.body.error ? result.body.error : 'We could not send that just now.');
               }
               if (window.rfxTrack) window.rfxTrack('form_submit', { form: 'workflow_intake' });
-              // Deliberately promises no email: outbound sending is not enabled for this
-              // brand, and a confirmation nobody receives is worse than none offered.
-              status.textContent = 'Thank you — we have your details and the team will be in touch.';
-              status.setAttribute('data-state', 'ok');
+
+              // The form is the START of the conversation, not the end of it. What they
+              // typed becomes the first thing said, and Project AI replies to it here.
+              var idea = payload.message || '';
+              if (result.body && result.body.rawPayloadId && idea.trim()) {
+                status.textContent = 'Got it. Project AI is reading that now \u2014 see below.';
+                status.setAttribute('data-state', 'ok');
+                startInterview(result.body.rawPayloadId, idea.trim());
+              } else {
+                // No id, or nothing typed: fall back to the old honest ending rather than
+                // opening a conversation that cannot be continued.
+                status.textContent = 'Thank you \u2014 we have your details and the team will be in touch.';
+                status.setAttribute('data-state', 'ok');
+              }
               form.reset();
             })
             .catch(function (err) {
@@ -487,6 +523,109 @@
           body.hidden = false;
           if (window.rfxTrack) window.rfxTrack('preview_ready', { items: (data.items || []).length });
         }
+
+        /*
+         * THE INTERVIEW CLIENT.
+         *
+         * Turns are held here and sent up each time. That keeps the server stateless for
+         * something explicitly temporary, and a reload does not lose the thread. The
+         * trade-off is written down in the controller: what someone could forge is their own
+         * account of their own business, and it extracts to `source_message` provenance,
+         * never `client_confirmed`, so it cannot become a governed requirement without them
+         * confirming it on screen first.
+         */
+        var interviewTurns = [];
+        var interviewToken = null;
+        var interviewBusy = false;
+
+        function interviewEl(id) { return document.getElementById(id); }
+
+        function appendTurn(role, text) {
+          var log = interviewEl('interview-log');
+          if (!log) return;
+          var row = document.createElement('div');
+          row.className = 'turn turn-' + role;
+          var who = document.createElement('span');
+          who.className = 'turn-who';
+          who.textContent = role === 'user' ? 'You' : 'Project AI';
+          var body = document.createElement('p');
+          body.className = 'turn-text';
+          body.textContent = text;
+          row.appendChild(who);
+          row.appendChild(body);
+          log.appendChild(row);
+          log.scrollTop = log.scrollHeight;
+        }
+
+        function setInterviewBusy(busy) {
+          interviewBusy = busy;
+          var send = interviewEl('interview-send');
+          var input = interviewEl('interview-input');
+          if (send) { send.disabled = busy; send.textContent = busy ? 'Thinking...' : 'Send'; }
+          if (input) input.disabled = busy;
+        }
+
+        function endInterview(understanding) {
+          var form = interviewEl('interview-form');
+          if (form) form.hidden = true;
+          var note = document.querySelector('.interview-note');
+          if (note) {
+            note.textContent = understanding === 'failed'
+              // Say what actually happens. Nothing automated retries this.
+              ? 'I could not write that up automatically. Someone from AI Flotation will pick it up.'
+              : 'Writing up what you told me...';
+          }
+          if (understanding !== 'failed' && interviewToken) startPreview(interviewToken);
+        }
+
+        function sendInterview() {
+          if (!interviewToken || interviewBusy) return;
+          setInterviewBusy(true);
+
+          fetch(API + '/api/flotation/interview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: interviewToken, turns: interviewTurns }),
+          })
+            .then(function (res) { return res.json().catch(function () { return {}; }); })
+            .then(function (data) {
+              if (!data || !data.message) throw new Error('no reply');
+              interviewTurns.push({ role: 'assistant', text: data.message });
+              appendTurn('assistant', data.message);
+              if (data.done) endInterview(data.understanding);
+            })
+            .catch(function () {
+              appendTurn('assistant', 'Sorry, I lost my connection there. Say that again and I will pick it up.');
+            })
+            .finally(function () { setInterviewBusy(false); });
+        }
+
+        function startInterview(token, firstMessage) {
+          interviewToken = token;
+          interviewTurns = [{ role: 'user', text: firstMessage }];
+          try { localStorage.setItem('flotation_preview_token', token); } catch (e) { /* private mode */ }
+
+          var section = interviewEl('interview');
+          if (section) section.hidden = false;
+          appendTurn('user', firstMessage);
+          sendInterview();
+          if (section && section.scrollIntoView) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        (function wireInterviewForm() {
+          var form = interviewEl('interview-form');
+          if (!form) return;
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var input = interviewEl('interview-input');
+            var text = (input.value || '').trim();
+            if (!text || interviewBusy) return;
+            interviewTurns.push({ role: 'user', text: text });
+            appendTurn('user', text);
+            input.value = '';
+            sendInterview();
+          });
+        })();
 
         // Someone who reloads the page mid-call should not lose their write-up, and
         // someone opening it on a second device has no localStorage to lose it from - so a
