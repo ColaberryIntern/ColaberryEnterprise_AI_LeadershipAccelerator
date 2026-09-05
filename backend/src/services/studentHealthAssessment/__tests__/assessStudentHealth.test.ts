@@ -7,7 +7,7 @@ jest.mock('../../runtime/runtimeAi', () => ({ chatJson: (...a: any[]) => mockCha
 const mockCreate = jest.fn();
 jest.mock('../../../models/StudentAssessment', () => ({ __esModule: true, default: { create: (...a: any[]) => mockCreate(...a) } }));
 
-import { assessStudentHealth } from '../index';
+import { assessStudentHealth } from '../assessStudentHealth';
 
 function known<T>(value: T): any {
   return { value, status: 'known', sourceSystem: 'x', sourceRecordIds: ['rec-1'], observedAt: new Date('2026-09-05T00:00:00Z'), freshnessPolicy: 'n/a', reliabilityState: 'healthy' };

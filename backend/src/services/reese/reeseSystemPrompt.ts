@@ -1,6 +1,7 @@
 import { buildAgentSystemPrompt } from '../agentBlueprint/agentSystemPrompt';
 import { getReeseAgentId } from './reeseIdentitySeed';
 import { getReeseStudentSuccessHighlights } from './reeseStudentSuccessHighlights';
+import { getReeseHealthAssessmentHighlight } from './reeseHealthAssessmentHighlights';
 
 /**
  * Reese's system prompt — voice/persona rules transplanted from the locked
@@ -70,6 +71,12 @@ GUARDRAILS (never do these):
  * OUTSIDE buildAgentSystemPrompt() deliberately — one of its 3 facts
  * (previous Reese communications) is real only for Reese specifically, not
  * safe to inject unconditionally into any future agent's generic prompt.
+ *
+ * Checkpoint D (2026-09-05) — also appends the student's most recent
+ * structured health assessment (Capability 4) when its status is notable
+ * (watch/at_risk/critical), silent otherwise. Read-only here (a cheap DB
+ * lookup, no LLM call) — the actual assessment-generation trigger lives in
+ * reeseReplyService.ts's fire-and-forget refresh after a real reply is sent.
  */
 export async function buildReeseSystemPrompt(enrollmentId: string): Promise<string> {
   let agentId: string | undefined;
@@ -90,5 +97,7 @@ export async function buildReeseSystemPrompt(enrollmentId: string): Promise<stri
   });
 
   const highlights = await getReeseStudentSuccessHighlights(enrollmentId);
-  return highlights ? `${base}\n\n${highlights}` : base;
+  const healthHighlight = await getReeseHealthAssessmentHighlight(enrollmentId);
+  const extraBlocks = [highlights, healthHighlight].filter(Boolean).join('\n\n');
+  return extraBlocks ? `${base}\n\n${extraBlocks}` : base;
 }
