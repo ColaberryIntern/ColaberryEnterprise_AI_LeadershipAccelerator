@@ -1,4 +1,10 @@
 import { BUILT_BY_LABELS } from '../../config/caseStudySurfaces';
+import { humanizeFacetLabel } from './facetLabels';
+
+/* Re-exported: this module is where callers already look for facet-group
+   helpers, and the humaniser is one. Its home is `facetLabels.ts` so the
+   sidebar and the word cloud share one implementation. */
+export { humanizeFacetLabel };
 import type { CaseStudyFilterState } from '../../services/caseStudyApi';
 import type {
   CaseStudyFilterGroup,
@@ -212,9 +218,7 @@ export function emptyStateFor(
 const toOptions = (facets: readonly PublicCaseStudyFacet[]): CaseStudyFilterOption[] =>
   facets.map((facet) => ({
     value: facet.slug,
-    // The server sends the slug as the label and says so: display copy belongs
-    // to the renderer. For an open vocabulary the slug IS the reader's word.
-    label: facet.label.length > 0 ? facet.label : facet.slug,
+    label: humanizeFacetLabel(facet.label.length > 0 ? facet.label : facet.slug),
     count: facet.count,
   }));
 

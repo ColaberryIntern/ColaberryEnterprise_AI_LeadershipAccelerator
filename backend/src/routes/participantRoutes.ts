@@ -53,6 +53,7 @@ import {
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import { listPodcastsPortal } from '../controllers/podcastController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
+import { getClassroomProjection } from '../services/classroom/classroomProjection';
 import { handleListCardComments, handleCreateCardComment } from '../controllers/timelineCommentController';
 import { handleCreateHandoff, handleExchangeHandoff, handleGetPortalFlags } from '../controllers/portalHandoffController';
 import {
@@ -109,6 +110,28 @@ router.get('/api/portal/podcasts', requireParticipant, listPodcastsPortal);
 // Today never calls, and <PageGate> blocks the Classroom page itself on the
 // frontend for a gated user in the common case.
 router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
+/**
+ * What each owning surface says to do next, resolved at request time.
+ *
+ * Separate from the feed on purpose: the week's cards are cacheable curriculum,
+ * this is live per-student state, and folding one into the other would make the
+ * whole feed uncacheable to keep a single line current. A failure here degrades
+ * one section rather than emptying the week, which is why it never 500s.
+ */
+router.get('/api/portal/classroom/projection', requireParticipant, async (req, res) => {
+  try {
+    const projection = await getClassroomProjection(req.participant!.sub);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(projection);
+  } catch (err: any) {
+    // Every surface already fails soft inside the service; reaching here means
+    // something outside them broke. The week must still render, so this answers
+    // with an all-degraded projection rather than an error the page must handle.
+    console.error('[classroom] projection failed', err?.message);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ project: null, cert_prep: null, degraded: ['project', 'cert_prep'], resolved_at: new Date().toISOString() });
+  }
+});
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 // Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
 router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);

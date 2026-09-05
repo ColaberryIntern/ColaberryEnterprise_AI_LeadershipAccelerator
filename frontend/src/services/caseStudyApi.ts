@@ -132,6 +132,8 @@ export interface CaseStudyFilterState {
   readonly verification: readonly PublicVerificationClass[];
   readonly verificationMethod: readonly CaseStudyVerificationMethod[];
   readonly status: readonly string[];
+  /** Free text. Empty string means no search, so the field is never null. */
+  readonly q: string;
   readonly featured: boolean | null;
   readonly sort: CaseStudySortKey | null;
   readonly page: number | null;
@@ -148,6 +150,7 @@ export const EMPTY_CASE_STUDY_FILTERS: CaseStudyFilterState = Object.freeze({
   verification: [],
   verificationMethod: [],
   status: [],
+  q: '',
   featured: null,
   sort: null,
   page: null,
@@ -166,6 +169,7 @@ const PARAM_OF: Record<keyof CaseStudyFilterState, string> = {
   verification: 'verification',
   verificationMethod: 'verification_method',
   status: 'status',
+  q: 'q',
   featured: 'featured',
   sort: 'sort',
   page: 'page',
@@ -187,6 +191,9 @@ export function serializeCaseStudyFilters(state: CaseStudyFilterState): URLSearc
     const values = (state[field] as readonly string[]).filter((v) => v.length > 0);
     if (values.length > 0) params.set(PARAM_OF[field], values.join(','));
   }
+  // Trimmed, and omitted when empty: `?q=` in a shared URL reads as a search
+  // that found everything rather than as no search at all.
+  if (state.q.trim().length > 0) params.set(PARAM_OF.q, state.q.trim());
   if (state.featured !== null) params.set(PARAM_OF.featured, state.featured ? 'true' : 'false');
   if (state.sort) params.set(PARAM_OF.sort, state.sort);
   if (state.page !== null && state.page > 1) params.set(PARAM_OF.page, String(state.page));
@@ -233,6 +240,7 @@ export function parseCaseStudyFilters(search: string | URLSearchParams): CaseStu
     verification: lists.verification as PublicVerificationClass[],
     verificationMethod: lists.verificationMethod as CaseStudyVerificationMethod[],
     status: lists.status,
+    q: params.get(PARAM_OF.q) ?? '',
     featured: featured === 'true' ? true : featured === 'false' ? false : null,
     sort: sort ? (sort as CaseStudySortKey) : null,
     page: readPositiveInt(params, PARAM_OF.page),
@@ -244,6 +252,7 @@ export function parseCaseStudyFilters(search: string | URLSearchParams): CaseStu
  *  result "nothing is published" apart from "your filters excluded it". */
 export function hasActiveCaseStudyFilters(state: CaseStudyFilterState): boolean {
   return LIST_FIELDS.some((field) => (state[field] as readonly string[]).length > 0)
+    || state.q.trim().length > 0
     || state.featured !== null;
 }
 

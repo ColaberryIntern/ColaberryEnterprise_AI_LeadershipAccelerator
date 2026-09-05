@@ -228,3 +228,118 @@
   font-size: var(--fs-body-sm);
   line-height: 1.6;
 }
+
+/* ================================================================= search ===
+   Type-to-filter. Sits at the head of the results column, directly above the
+   count it moves.
+   ========================================================================== */
+
+.cbv2-stories__search { display: grid; gap: var(--space-2); margin-bottom: var(--space-5); }
+
+.cbv2-stories__search-label {
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cbv2-stories__search-input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  color: var(--text-body);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.cbv2-stories__search-input::placeholder { color: var(--text-muted); }
+/* A visible focus ring, because this is the one control on the page a keyboard
+   reader is most likely to land on first. */
+.cbv2-stories__search-input:focus-visible {
+  outline: var(--border-2) solid var(--text-strong);
+  outline-offset: 2px;
+}
+
+/* Reserves its line whether or not it has text, so the count and cards below do
+   not jump by a row the first time a note appears. */
+.cbv2-stories__search-note {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+}
+
+/* ============================================================= word cloud ===
+   The same facets as the sidebar, weighted by count. Sits above the two-column
+   split because it describes the library rather than the current result set.
+   ========================================================================== */
+
+.cbv2-stories__cloud {
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.cbv2-stories__cloud-title { margin: 0 0 var(--space-1); font-size: var(--fs-body-lg); }
+.cbv2-stories__cloud-hint {
+  margin: 0 0 var(--space-4);
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
+}
+
+.cbv2-stories__cloud-terms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Sized inline from the count. Everything else about the chip is fixed here so
+   a heavier term reads as more prominent WITHOUT also becoming a different kind
+   of object - one vocabulary, one control, varying only in weight. */
+.cbv2-stories__cloud-term {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  font-family: inherit;
+  font-weight: var(--fw-medium);
+  line-height: 1.3;
+  color: var(--text-body);
+  background: var(--surface-sunken);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.cbv2-stories__cloud-term:hover { border-color: var(--text-muted); }
+.cbv2-stories__cloud-term:focus-visible {
+  outline: var(--border-2) solid var(--text-strong);
+  outline-offset: 2px;
+}
+
+/* SELECTED IS NOT SIGNALLED BY COLOUR ALONE. The chip inverts AND the button
+   carries aria-pressed, so the state survives a reader who cannot separate the
+   two backgrounds. */
+.cbv2-stories__cloud-term[data-on='true'] {
+  color: var(--text-on-inverse);
+  background: var(--surface-inverse);
+  border-color: var(--surface-inverse);
+}
+
+/* The weight, said in words. Smaller than its term but never below the body-sm
+   floor, because it is the accessible form of the size signal. */
+.cbv2-stories__cloud-count {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-regular);
+  color: var(--text-muted);
+}
+.cbv2-stories__cloud-term[data-on='true'] .cbv2-stories__cloud-count {
+  color: var(--text-on-inverse);
+}

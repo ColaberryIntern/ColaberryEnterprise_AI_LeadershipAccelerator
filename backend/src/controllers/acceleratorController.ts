@@ -11,6 +11,7 @@ import {
 } from '../services/sessionScheduleService';
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
+import { getStudentSuccessSnapshot } from '../services/studentSuccessSnapshot';
 import { buildSessionKit } from '../services/sessionKitService';
 import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, renderSessionTeachingGuide, getPresenterLink, KitDocMode } from '../services/sessionKitDocService';
 import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
@@ -473,5 +474,19 @@ export async function handleGetPersonHistory(req: Request, res: Response, next: 
     const history = await getEnrollmentHistory(req.params.id as string);
     if (!history) return res.status(404).json({ error: 'Enrollment not found' });
     res.json(history);
+  } catch (err) { next(err); }
+}
+
+// Student Success 360 (Reese Agentic AI Employee mission, Checkpoint C): the same
+// 15-category evidence snapshot Reese's own mentor prompt draws 3 facts from
+// (reeseStudentSuccessHighlights.ts), exposed whole for the admin drill-down UI.
+// getStudentSuccessSnapshot() never throws for a bad id — a missing enrollment
+// surfaces as identity.status !== 'known', mapped to 404 here the same way
+// handleGetPersonHistory above maps its own not-found case.
+export async function handleGetStudentSuccessSnapshot(req: Request, res: Response, next: NextFunction) {
+  try {
+    const snapshot = await getStudentSuccessSnapshot(req.params.id as string);
+    if (snapshot.identity.status !== 'known') return res.status(404).json({ error: 'Enrollment not found' });
+    res.json(snapshot);
   } catch (err) { next(err); }
 }

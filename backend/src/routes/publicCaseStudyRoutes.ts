@@ -53,6 +53,7 @@ import {
   sanitizeFiltersForAudience,
 } from '../services/caseStudy/caseStudyFilterService';
 import { projectPublicDetail, projectPublicSummary } from '../services/caseStudy/caseStudyPublicProjection';
+import { matchesSearch, searchTerms } from '../services/caseStudy/caseStudySearch';
 import { surfaceView } from '../services/caseStudy/caseStudySurfaceView';
 import {
   PUBLIC_SLUG,
@@ -261,7 +262,38 @@ async function respondWithList(
     }
 
     const records = await store.loadSurfacePublications(surfaceKey);
-    const visible = records.filter((r) => isCandidatePubliclyVisible(r.candidate, surfaceKey));
+    const allVisible = records.filter((r) => isCandidatePubliclyVisible(r.candidate, surfaceKey));
+
+    /*
+     * FREE TEXT NARROWS THE SET BEFORE PAGING, AND IT MATCHES THE PROJECTION.
+     *
+     * Before paging, because a page is a window onto the filtered set: search
+     * applied after `runCaseStudyQuery` would only ever see the twelve records
+     * already on screen, and a reader on page 1 would be told there is no match
+     * for something sitting on page 2.
+     *
+     * Against the PROJECTED summary, because that is the consent-resolved text -
+     * the words actually printed on the card. Searching the snapshot instead
+     * would let anyone confirm an organization name that consent had replaced
+     * with a descriptor, by typing it and watching the record appear.
+     * `caseStudySearch.ts` carries the full argument.
+     *
+     * The projection only runs over the whole set when a query is present, so an
+     * ordinary page load pays nothing for this.
+     */
+    const terms = searchTerms(parsed.data.q ?? null);
+    const visible = terms.length === 0
+      ? allVisible
+      : allVisible.filter((record) => matchesSearch(
+        projectPublicSummary({
+          surfaceKey,
+          slug: record.candidate.slug,
+          content: record.content,
+          publication: record.publication,
+          canonicalBaseUrl: env.publicAppUrl,
+        }),
+        terms,
+      ));
     const filters = sanitizeFiltersForAudience(
       { ...mergeCaseStudyFilters(base, toPublicFilterInput(parsed.data)), surface: surfaceKey },
       'public',
@@ -287,7 +319,15 @@ async function respondWithList(
       limit: paged.limit,
       total: paged.total,
       hasMore: paged.hasMore,
-      ledger: buildCaseStudyLedger(visible.map((r) => r.candidate)),
+      /*
+       * `allVisible`, NOT the searched set. The ledger is what the library
+       * HOLDS, and it already ignores the facet filters - it was built from the
+       * pre-filter set before search existed. Feeding it the searched set would
+       * make one masthead figure react to the search box while the rest of it
+       * ignored the sidebar, which is worse than either rule applied
+       * consistently. The result count above the cards is what moves.
+       */
+      ledger: buildCaseStudyLedger(allVisible.map((r) => r.candidate)),
     };
     log(event, 'success', correlationId, { surface: surfaceKey, returned: body.items.length });
     res.json(body);

@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import TimelineCard, { TimelineFeedCard } from './TimelineCard';
+import { TimelineFeedCard } from './TimelineCard';
 import TimelineFeed from './TimelineFeed';
 import { groupIntoBuckets, RAIL_VISIBLE, BucketSection } from '../../pages/portal/classroomBuckets';
+import type { ClassroomProjection, SurfaceNextAction } from '../../pages/portal/classroomProjectionApi';
+import { SURFACE_BY_BUCKET } from '../../pages/portal/classroomProjectionApi';
 
 /**
  * The classroom week, rendered as the sections the platform already defines.
@@ -34,6 +36,8 @@ interface Props {
   onWorkspace?: (card: TimelineFeedCard) => void;
   /** Render sections with no cards this week, with their empty line. */
   showEmptySections?: boolean;
+  /** What each owning surface says to do next. Absent = sections render as before. */
+  projection?: ClassroomProjection | null;
 }
 
 const minutes = (card: TimelineFeedCard): string | null => {
@@ -105,8 +109,24 @@ const Rail: React.FC<{ section: BucketSection; onOpen?: (c: TimelineFeedCard) =>
   );
 };
 
+/**
+ * The owning surface's own next action, shown at the head of its section.
+ *
+ * This is the projection made visible: the Build section says what the PROJECT
+ * thinks is next, not what the curriculum guessed months ago. When the surface
+ * has nothing to offer it says why — an unopened certification lane names the
+ * week rather than showing a padlock.
+ */
+const NextFromSurface: React.FC<{ next: SurfaceNextAction }> = ({ next }) => (
+  <a className={`tl-next${next.available ? '' : ' is-unavailable'}`} href={next.href}>
+    <span className="tl-next-lab">{next.available ? 'Next, from your ' : ''}{next.surface === 'project' ? 'project' : 'certification track'}</span>
+    <span className="tl-next-h">{next.headline}</span>
+    {next.detail && <span className="tl-next-d">{next.detail}</span>}
+  </a>
+);
+
 const BucketSections: React.FC<Props> = ({
-  cards, compactCompleted, onOpen, onComplete, onComments, onWorkspace, showEmptySections,
+  cards, compactCompleted, onOpen, onComplete, onComments, onWorkspace, showEmptySections, projection,
 }) => {
   const { sections, unbucketed } = useMemo(
     () => groupIntoBuckets(cards, { includeEmpty: !!showEmptySections }),
@@ -124,6 +144,12 @@ const BucketSections: React.FC<Props> = ({
             <span className="tl-bucket-q">{section.meta.question}</span>
             <span className="tl-bucket-n">{section.cards.length}</span>
           </div>
+
+          {(() => {
+            const surface = SURFACE_BY_BUCKET[section.bucket];
+            const next = surface && projection ? projection[surface] : null;
+            return next ? <NextFromSurface next={next} /> : null;
+          })()}
 
           {section.cards.length === 0
             ? <p className="tl-bucket-empty tl-small">{section.meta.empty}</p>
