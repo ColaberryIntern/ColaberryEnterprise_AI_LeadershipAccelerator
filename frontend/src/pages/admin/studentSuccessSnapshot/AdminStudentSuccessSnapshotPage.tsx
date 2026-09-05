@@ -61,7 +61,7 @@ export default function AdminStudentSuccessSnapshotPage() {
       >
         <div className="row g-3">
           <div className="col-6 col-md-3">
-            <StatCard label="Attendance" value={snapshot.attendance.value ? `${Math.round(snapshot.attendance.value.attendancePct ?? 0)}%` : '—'} icon="calendar-check-line" tone="info" />
+            <StatCard label="Attendance" value={snapshot.attendance.value?.attendancePct != null ? `${Math.round(snapshot.attendance.value.attendancePct)}%` : '—'} icon="calendar-check-line" tone="info" />
           </div>
           <div className="col-6 col-md-3">
             <StatCard label="Open tickets" value={snapshot.ticketsInterventions.value?.openCount ?? '—'} icon="ticket-line" tone={snapshot.ticketsInterventions.value?.openCount ? 'warning' : 'success'} />
