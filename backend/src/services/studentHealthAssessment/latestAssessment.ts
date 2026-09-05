@@ -34,6 +34,20 @@ export async function getLatestStudentAssessment(enrollmentId: string): Promise<
   return row ? toResult(row) : null;
 }
 
+const HISTORY_LIMIT = 20;
+
+/** Read-only — every assessment ever run for one student, most recent first,
+ * for the admin drill-down UI (Checkpoint D's own explicit "assessment
+ * history" scope item). Capped at HISTORY_LIMIT rows; no LLM call. */
+export async function getAssessmentHistory(enrollmentId: string): Promise<StudentAssessmentResult[]> {
+  const rows = await StudentAssessment.findAll({
+    where: { enrollment_id: enrollmentId },
+    order: [['created_at', 'DESC']],
+    limit: HISTORY_LIMIT,
+  });
+  return rows.map(toResult);
+}
+
 /**
  * Opportunistic, cost-bounded refresh. Real trigger for Checkpoint D's engine
  * now that it's wired into Reese's reply pipeline (reeseReplyService.ts) as a
