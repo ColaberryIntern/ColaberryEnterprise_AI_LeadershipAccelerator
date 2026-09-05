@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Record &mdash; AI Flotation</title>
+    <meta name="description" content="A published delivery record." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="/assets/site.css" />
+    <link rel="stylesheet" href="/assets/case-studies.css" />
+
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true">
+            <circle class="mark-float" cx="12" cy="7" r="4"></circle>
+            <path class="mark-line" d="M2 15h20" stroke-width="2"></path>
+          </svg>
+          AI Flotation
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav" aria-label="Main">
+          <a href="/what-we-build/">What We Build</a>
+          <a href="/approach/">How It Works</a>
+          <a href="/trust-before-intelligence/">Trust</a>
+          <a href="/delivery-standard/">Delivery Standard</a>
+          <a href="/results/">Results</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/client/projects">Client Login</a>
+          <a class="btn btn-primary" href="/start/">Start a Project</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <!--
+        The record renders into this node from the platform projection. It is
+        EMPTY in the shipped HTML on purpose: the alternative is baking a copy
+        of a record into a static file, which goes stale the moment the record
+        is edited or withdrawn and cannot be told apart from the live one.
+      -->
+      <div class="wrap cs-record" id="cs-record"></div>
+    </main>
+
+    <footer class="site">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Company</p>
+            <a href="/about/">About</a>
+            <a href="/delivery-standard/">Delivery standard</a>
+            <a href="/pricing/">Membership</a>
+          <a href="/results/">Results</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Work</p>
+            <a href="/what-we-build/">What we build</a>
+            <a href="/approach/">How it works</a>
+            <a href="/trust-before-intelligence/">Trust Before Intelligence</a>
+            <a href="/pricing/">Build membership</a>
+            <a href="/start/">Start a project</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Clients</p>
+            <a href="{{brand.platformApiBase}}/client/projects">Client login</a>
+            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>
+          </div>
+        </div>
+        <p class="fine">AI Flotation &middot; {{brand.publicUrl}}</p>
+      </div>
+    </footer>
+
+    <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+    <script src="/assets/case-study-record.js" data-api="{{brand.platformApiBase}}"
+            data-surface="ai-flotation" data-index="/results/" defer></script>
+  </body>
+</html>
