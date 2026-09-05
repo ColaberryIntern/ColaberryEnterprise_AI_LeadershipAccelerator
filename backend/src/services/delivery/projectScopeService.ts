@@ -39,6 +39,7 @@ import {
 } from './projectUnderstanding';
 import { projectBlueprint, type BuildBlueprint } from './buildBlueprint';
 import { generateProposals, applyProposals } from './blueprintProposals';
+import { classifySteps, renderWorkflowSvg } from './scopeDiagram';
 
 export interface ScopeSection {
   key: string;
@@ -55,6 +56,11 @@ export interface ProjectScope {
   sections: ScopeSection[];
   /** Only counts that mean something. A zero is never shown. */
   figures: Array<{ label: string; value: number }>;
+  /**
+   * Their workflow, with the steps that stop being theirs marked. Empty when the
+   * conversation never described a sequence - a diagram of one box argues nothing.
+   */
+  workflow_svg: string;
   open_questions: string[];
   decisions: string[];
   heard: string[];
@@ -129,17 +135,38 @@ export function assembleScope(u: ProjectUnderstanding, bp: BuildBlueprint, gener
     // screen: a zero reads as broken software, not as an honest gap.
     .filter((f) => f.value > 0);
 
+  // The diagram earns its place only when there is a real sequence to draw. One box
+  // redraws their own process back at them, which is the failure the scope rewrite was
+  // about in the first place.
+  const workflowSteps = classifySteps({
+    workflow: entriesOf(bp, 'workflow_map'),
+    automations: entriesOf(bp, 'proposed_agents'),
+    decisions: entriesOf(bp, 'human_responsibilities'),
+  });
+
+  const workflow_svg = workflowSteps.length >= 2 ? renderWorkflowSvg(workflowSteps) : '';
+
   const problem = itemsFor(u, 'problem')[0]?.value || itemsFor(u, 'pain_points')[0]?.value || '';
   const outcome = itemsFor(u, 'desired_outcome')[0]?.value || '';
   const build = sections.find((s) => s.key === 'build')?.items[0] || '';
 
-  const summary = [problem, outcome ? `You want ${outcome.charAt(0).toLowerCase()}${outcome.slice(1)}` : '', build]
-    .filter(Boolean)
-    .join(' ');
+  // "You want the app should improve..." — the first live scope read exactly that, because
+  // "You want" was prepended to a sentence that already had its own subject, producing two.
+  // Outcomes come back as full sentences at least as often as noun phrases, so the prefix
+  // is only added where the sentence can actually take one.
+  const startsWithSubject = /^(the|a|an|we|they|it|our|their|i|you)\b/i.test(outcome.trim());
+  const outcomeSentence = !outcome
+    ? ''
+    : startsWithSubject
+      ? outcome
+      : `You want ${outcome.charAt(0).toLowerCase()}${outcome.slice(1)}`;
+
+  const summary = [problem, outcomeSentence, build].filter(Boolean).join(' ');
 
   return {
     title: u.title,
     summary,
+    workflow_svg,
     sections,
     figures,
     open_questions: openQuestions(u).map((q) => q.value),

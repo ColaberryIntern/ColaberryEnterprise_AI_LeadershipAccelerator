@@ -862,3 +862,21 @@ a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
   text-transform: uppercase;
   color: var(--fg-muted);
 }
+
+/* ── The workflow diagram ────────────────────────────────────────────
+   Server-generated SVG that references the page's own custom properties,
+   so it picks up light and dark without a second copy of the drawing.
+   ------------------------------------------------------------------ */
+.workflow { margin: 2.25rem 0 2.5rem; }
+
+.workflow-svg {
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+
+.workflow-svg svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 40rem;
+}
