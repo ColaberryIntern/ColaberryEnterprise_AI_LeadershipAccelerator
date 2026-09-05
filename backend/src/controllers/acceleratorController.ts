@@ -12,6 +12,7 @@ import {
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { getStudentSuccessSnapshot } from '../services/studentSuccessSnapshot';
+import { getAssessmentHistory } from '../services/studentHealthAssessment';
 import { buildSessionKit } from '../services/sessionKitService';
 import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, renderSessionTeachingGuide, getPresenterLink, KitDocMode } from '../services/sessionKitDocService';
 import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
@@ -488,5 +489,19 @@ export async function handleGetStudentSuccessSnapshot(req: Request, res: Respons
     const snapshot = await getStudentSuccessSnapshot(req.params.id as string);
     if (snapshot.identity.status !== 'known') return res.status(404).json({ error: 'Enrollment not found' });
     res.json(snapshot);
+  } catch (err) { next(err); }
+}
+
+// Assessment history (Reese Agentic AI Employee mission, Checkpoint D): every
+// structured health assessment ever run for one student, most recent first,
+// for the same admin drill-down page as handleGetStudentSuccessSnapshot above.
+// No separate 404 here — a student legitimately starts with zero assessments
+// (only Reese's own reply pipeline creates them), so an empty array is an
+// honest result, not a sign of a bad id. The page's own not-found state is
+// already driven by the sibling success-snapshot call for the same :id.
+export async function handleGetAssessmentHistory(req: Request, res: Response, next: NextFunction) {
+  try {
+    const assessments = await getAssessmentHistory(req.params.id as string);
+    res.json({ assessments });
   } catch (err) { next(err); }
 }

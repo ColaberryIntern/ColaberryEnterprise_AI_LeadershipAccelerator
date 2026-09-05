@@ -20,6 +20,7 @@ import {
   handleGetViewAsToken,
   handleGetPersonHistory,
   handleGetStudentSuccessSnapshot,
+  handleGetAssessmentHistory,
 } from '../../controllers/acceleratorController';
 import {
   handleAdminOverrideLessonStatus,
@@ -103,6 +104,8 @@ router.get('/api/admin/accelerator/enrollments/:id/view-as-token', requireAdmin,
 router.get('/api/admin/accelerator/enrollments/:id/history', requireAdmin, handleGetPersonHistory);
 // Student Success 360 — all 15 evidence categories for one enrollment, for the admin drill-down page.
 router.get('/api/admin/accelerator/enrollments/:id/success-snapshot', requireAdmin, handleGetStudentSuccessSnapshot);
+// Assessment history — every structured health assessment ever run for one student.
+router.get('/api/admin/accelerator/enrollments/:id/assessment-history', requireAdmin, handleGetAssessmentHistory);
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
 router.delete('/api/admin/accelerator/sessions/:id', requireAdmin, handleDeleteSession);

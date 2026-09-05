@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { PageHeader, StatCard } from '../../../components/admin/shell';
 import { fetchStudentSuccessSnapshot, StudentSuccessSnapshot } from '../../../services/studentSuccessSnapshotApi';
 import CategorySection from './fieldStatus';
+import AssessmentHistorySection from './AssessmentHistorySection';
 import {
   renderAssessmentTrend, renderArtifactsEvidence, renderAttendance, renderCertReadiness,
   renderCommunityActivity, renderCompetencyEvidence, renderIdentity, renderInstructorFeedback,
@@ -74,6 +75,10 @@ export default function AdminStudentSuccessSnapshotPage() {
           </div>
         </div>
       </PageHeader>
+
+      <div className="row g-3 mb-3">
+        <div className="col-12"><AssessmentHistorySection enrollmentId={snapshot.enrollmentId} /></div>
+      </div>
 
       <div className="row g-3">
         <div className="col-md-6"><CategorySection title="Identity & Cohort" icon="user-line" field={snapshot.identity} renderKnown={renderIdentity} /></div>

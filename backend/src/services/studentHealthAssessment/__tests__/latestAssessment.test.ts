@@ -1,10 +1,14 @@
 const mockFindOne = jest.fn();
-jest.mock('../../../models/StudentAssessment', () => ({ __esModule: true, default: { findOne: (...a: any[]) => mockFindOne(...a) } }));
+const mockFindAll = jest.fn();
+jest.mock('../../../models/StudentAssessment', () => ({
+  __esModule: true,
+  default: { findOne: (...a: any[]) => mockFindOne(...a), findAll: (...a: any[]) => mockFindAll(...a) },
+}));
 
 const mockAssessStudentHealth = jest.fn();
 jest.mock('../assessStudentHealth', () => ({ assessStudentHealth: (...a: any[]) => mockAssessStudentHealth(...a) }));
 
-import { getLatestStudentAssessment, maybeRefreshStudentAssessment } from '../latestAssessment';
+import { getAssessmentHistory, getLatestStudentAssessment, maybeRefreshStudentAssessment } from '../latestAssessment';
 
 function row(overrides: any = {}) {
   return {
@@ -42,6 +46,29 @@ describe('getLatestStudentAssessment', () => {
     const result = await getLatestStudentAssessment('enrollment-1');
 
     expect(result).toBeNull();
+  });
+});
+
+describe('getAssessmentHistory', () => {
+  it('happy path: returns every run for this student, most recent first', async () => {
+    mockFindAll.mockResolvedValue([row({ id: 'a2', status: 'critical' }), row({ id: 'a1', status: 'on_track' })]);
+
+    const result = await getAssessmentHistory('enrollment-1');
+
+    expect(mockFindAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { enrollment_id: 'enrollment-1' }, order: [['created_at', 'DESC']], limit: 20,
+    }));
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe('a2');
+    expect(result[1].status).toBe('on_track');
+  });
+
+  it('honesty boundary: no assessment has ever been run returns an empty array, not a fabricated entry', async () => {
+    mockFindAll.mockResolvedValue([]);
+
+    const result = await getAssessmentHistory('enrollment-1');
+
+    expect(result).toEqual([]);
   });
 });
 
