@@ -29,7 +29,13 @@ const SECTION_STAGES: Record<string, readonly LifecycleStage[]> = {
   // The lead queue and pipeline: acquisition, up to but not including enrolment.
   leads: ['anonymous_visitor', 'identified_visitor', 'lead', 'applicant'],
   // Revenue sees anyone who has or could have a billing relationship.
-  revenue: ['lead', 'applicant', 'enrolled_student', 'graduate', 'returning_customer'],
+  //
+  // `active_learner` is in this list because leaving it out put a HOLE in the
+  // middle of the range: revenue could see enrolled_student and graduate but not
+  // the stage between them, so a person currently mid-programme would vanish from
+  // a revenue roster and reappear on graduation. A stage set must be contiguous
+  // in LIFECYCLE_ORDER for exactly this reason, and a test enforces it.
+  revenue: ['lead', 'applicant', 'enrolled_student', 'active_learner', 'graduate', 'returning_customer'],
   // The Support student-story surface: enrolled people only, never prospects.
   students: ['enrolled_student', 'active_learner', 'graduate'],
   // Program/curriculum management sees the people in the programme.
@@ -50,6 +56,16 @@ export function visibleStagesForSections(sections: readonly string[]): Lifecycle
     for (const stage of SECTION_STAGES[section] ?? []) stages.add(stage);
   }
   return [...stages];
+}
+
+/** The stages a single section grants, for contiguity checks and audit. */
+export function stagesForSection(section: string): readonly LifecycleStage[] {
+  return SECTION_STAGES[section] ?? [];
+}
+
+/** Every section that grants person rows. */
+export function sectionsWithPersonAccess(): string[] {
+  return Object.keys(SECTION_STAGES);
 }
 
 /** May this identity see person records at this stage at all? */

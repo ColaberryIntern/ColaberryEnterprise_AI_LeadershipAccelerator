@@ -4,6 +4,8 @@ import {
   canSeeStage,
   hasAnyPersonScope,
   needsPerRecordScope,
+  sectionsWithPersonAccess,
+  stagesForSection,
   visibleStagesForSections,
 } from '../personScope';
 
@@ -46,6 +48,23 @@ describe('person scope', () => {
     const revenue = sectionsFor('revenue');
     expect(canSeeStage(revenue, 'lead')).toBe(true);
     expect(canSeeStage(revenue, 'enrolled_student')).toBe(true);
+  });
+
+  it('grants every section a CONTIGUOUS run of stages', () => {
+    // A gap means people vanish mid-journey and reappear later. Revenue had
+    // exactly that: enrolled_student and graduate, but not the active_learner
+    // stage between them, so anyone currently mid-programme dropped off a
+    // revenue roster and came back on graduation. Nothing in the UI would show
+    // it — the roster would just be quietly short.
+    for (const section of sectionsWithPersonAccess()) {
+      const indices = stagesForSection(section)
+        .map((stage) => LIFECYCLE_STAGES.indexOf(stage))
+        .sort((a, b) => a - b);
+      expect(indices).not.toContain(-1);
+      for (let i = 1; i < indices.length; i += 1) {
+        expect(indices[i] - indices[i - 1]).toBe(1);
+      }
+    }
   });
 
   it('shows a mentor learners only, and flags that mentors need a second narrowing', () => {
