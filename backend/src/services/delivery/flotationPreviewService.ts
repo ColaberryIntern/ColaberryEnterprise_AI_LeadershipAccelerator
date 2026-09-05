@@ -34,6 +34,7 @@
 import RawLeadPayload from '../../models/RawLeadPayload';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
 import { summarizeForWow, openQuestions, type ProjectUnderstanding } from './projectUnderstanding';
+import { getOrCreateScope, type ProjectScope } from './projectScopeService';
 import { confirmationProfile } from './understandingConfirmation';
 
 export type PreviewStatus = 'not_found' | 'pending' | 'ready' | 'failed';
@@ -53,6 +54,12 @@ export interface FlotationPreview {
   }>;
   still_open?: string[];
   confirmed?: ReturnType<typeof confirmationProfile>;
+  /**
+   * The scoped project: what we would build, in what order, what runs itself, and what
+   * still needs them. This is the artifact worth paying for. Everything above it is
+   * evidence that we listened.
+   */
+  scope?: ProjectScope;
   /** Why nothing is here yet, in words a person can read. */
   message?: string;
 }
@@ -102,8 +109,19 @@ export async function getFlotationPreview(token: string): Promise<FlotationPrevi
     items: record.items || [],
   };
 
+  // Generated once and cached on the record. A failure here degrades the page rather than
+  // breaking it: they still see what we heard.
+  let scope: ProjectScope | undefined;
+  try {
+    const scoped = await getOrCreateScope(record.id);
+    if (scoped.ok) scope = scoped.scope;
+  } catch (err: any) {
+    console.warn('[FlotationPreview] scope unavailable:', err?.message);
+  }
+
   return {
     status: 'ready',
+    scope,
     summary: summarizeForWow(understanding),
     items: understanding.items.map((item, index) => ({
       index,

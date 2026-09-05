@@ -41,6 +41,15 @@ export async function ensureProjectUnderstandingSchema(): Promise<void> {
        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
+    // The scoped project - blueprint plus the generated proposal half - cached on the
+    // understanding it derives from.
+    //
+    // Cached rather than regenerated per page load for two reasons: the proposal half costs
+    // a model call, and it is NOT deterministic, so a customer refreshing the page would
+    // watch the scope of their project quietly change. A scope that shifts while you read
+    // it is worse than one that took a moment to appear.
+    `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS scope JSONB`,
+    `ALTER TABLE project_understandings ADD COLUMN IF NOT EXISTS scope_generated_at TIMESTAMPTZ`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_project_understandings_source_ref
        ON project_understandings (source, source_ref)`,
     `CREATE INDEX IF NOT EXISTS idx_project_understandings_lead
