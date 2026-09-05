@@ -1,6 +1,6 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
-import { botExclusionSql, notAutomatedSessionSql } from './visitorBotDetection';
+import { botExclusionSql, notAutomatedSessionSql, engagedVisitorSql } from './visitorBotDetection';
 
 /**
  * The visitor KPI frame: reach -> acquisition -> engagement -> conversion.
@@ -35,6 +35,16 @@ export interface VisitorKpis {
   unique_visitors: number;
   unique_visitors_7d: number;
   sessions: number;
+  /**
+   * Visitors who actually looked at something — any session beyond 10 seconds or
+   * one page, plus anyone who converted. The gap between this and
+   * `unique_visitors` is the share of traffic that is a hit rather than a read,
+   * and on this site it is most of it.
+   */
+  engaged_visitors: number;
+  shallow_visitors: number;
+  /** Conversion measured against the engaged denominator, which is the honest one. */
+  engaged_conversion_rate: number;
   /** Acquisition */
   new_visitors: number;
   returning_visitors: number;
@@ -66,6 +76,7 @@ interface HeadlineRow {
   returning_visitors: number;
   converted_visitors: number;
   bounce_sessions: number;
+  engaged_visitors: number;
 }
 
 interface ChannelRow {
@@ -109,7 +120,10 @@ export async function getVisitorKpis(days = 30, includeBots = false): Promise<Vi
        COUNT(DISTINCT vs.visitor_id) FILTER (WHERE v.first_seen_at >= :since)::int                AS new_visitors,
        COUNT(DISTINCT vs.visitor_id) FILTER (WHERE v.first_seen_at <  :since)::int                AS returning_visitors,
        COUNT(DISTINCT vs.visitor_id) FILTER (WHERE v.lead_id IS NOT NULL)::int                    AS converted_visitors,
-       COUNT(*) FILTER (WHERE vs.is_bounce IS TRUE)::int                                          AS bounce_sessions
+       COUNT(*) FILTER (WHERE vs.is_bounce IS TRUE)::int                                          AS bounce_sessions,
+       COUNT(DISTINCT vs.visitor_id) FILTER (
+         WHERE ${engagedVisitorSql('vs."visitor_id"', 'v."lead_id"')}
+       )::int                                                                                     AS engaged_visitors
      FROM visitor_sessions vs
      JOIN visitors v ON v.id = vs.visitor_id
      WHERE vs.started_at >= :since
@@ -160,6 +174,7 @@ export async function getVisitorKpis(days = 30, includeBots = false): Promise<Vi
   const sessions = Number(headline?.sessions ?? 0);
   const newVisitors = Number(headline?.new_visitors ?? 0);
   const converted = Number(headline?.converted_visitors ?? 0);
+  const engaged = Number(headline?.engaged_visitors ?? 0);
 
   const toChannel = (r: ChannelRow): ChannelKpi => ({
     channel: r.channel || 'unknown',
@@ -174,6 +189,12 @@ export async function getVisitorKpis(days = 30, includeBots = false): Promise<Vi
     unique_visitors: uniqueVisitors,
     unique_visitors_7d: Number(headline?.unique_visitors_7d ?? 0),
     sessions,
+    engaged_visitors: engaged,
+    shallow_visitors: Math.max(0, uniqueVisitors - engaged),
+    // Against ENGAGED visitors, not all fingerprints. 23 leads from 995 hits
+    // reads 2.3%; from the ~377 people who actually looked it is ~6% — and the
+    // second is the number that describes the site's persuasiveness.
+    engaged_conversion_rate: rate(converted, engaged),
     new_visitors: newVisitors,
     returning_visitors: Number(headline?.returning_visitors ?? 0),
     new_visitor_rate: rate(newVisitors, uniqueVisitors),

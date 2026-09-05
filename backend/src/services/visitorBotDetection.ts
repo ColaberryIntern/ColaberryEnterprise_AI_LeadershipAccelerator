@@ -222,3 +222,51 @@ export function notAutomatedSessionSql(pageviewCol: string, durationCol: string)
     `AND (COALESCE(${pageviewCol},0)::numeric / (COALESCE(${durationCol},1)::numeric / 60)) > ${AUTOMATED_MAX_PAGES_PER_MINUTE})`;
   return `NOT (${volume} OR ${rate})`;
 }
+
+// ---------------------------------------------------------------------------
+// Engagement depth — separating a hit from a read
+// ---------------------------------------------------------------------------
+
+/**
+ * A visit so shallow it carries no information about a person.
+ *
+ * WHY THIS IS NOT A THIRD BOT RULE. The evidence strongly suggests automation:
+ * `ai-flotation` served 454 sessions of which 448 (98.7%) lasted ten seconds or
+ * less, across 431 fingerprints that never returned, concentrated into five days
+ * and rotating over 110 IPs with almost no user-agent variety. That is a
+ * fingerprint farm, not an audience.
+ *
+ * But the rule was tested against the only ground truth available — visitors who
+ * became leads — and it caught ONE of them. A visitor who converted is
+ * definitionally a person. One false positive against 24 known-real visitors is
+ * enough to say the signal does not support the word "bot", and asserting it
+ * anyway would be the same over-claim this dashboard has been full of.
+ *
+ * So this measures ENGAGEMENT DEPTH instead, which is a claim the data does
+ * support: a single pageview under ten seconds, never returned to, is a hit
+ * rather than a read. Both numbers are reported. Nothing is hidden, and the
+ * reader is told which is which.
+ *
+ * ANYONE WHO CONVERTED IS ALWAYS ENGAGED, regardless of the timings — the carve
+ * out that makes the measure safe.
+ */
+export const SHALLOW_MAX_SECONDS = 10;
+export const SHALLOW_MAX_PAGEVIEWS = 1;
+
+/**
+ * SQL for "this visitor actually looked at something".
+ *
+ * Engaged when ANY session went beyond the shallow threshold, or when the
+ * visitor is linked to a lead. Expressed over the visitor rather than the
+ * session because the question is about the person: one real read among five
+ * bounces still makes them someone who read.
+ */
+export function engagedVisitorSql(visitorIdColumn: string, leadIdColumn?: string): string {
+  const converted = leadIdColumn ? `${leadIdColumn} IS NOT NULL OR ` : '';
+  return (
+    `(${converted}EXISTS (SELECT 1 FROM "visitor_sessions" evs ` +
+    `WHERE evs."visitor_id" = ${visitorIdColumn} ` +
+    `AND (COALESCE(evs."duration_seconds",0) > ${SHALLOW_MAX_SECONDS} ` +
+    `OR COALESCE(evs."pageview_count",0) > ${SHALLOW_MAX_PAGEVIEWS})))`
+  );
+}

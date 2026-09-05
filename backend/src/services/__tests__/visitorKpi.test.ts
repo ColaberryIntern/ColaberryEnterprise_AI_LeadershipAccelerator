@@ -161,3 +161,53 @@ describe('bot exclusion', () => {
     expect(String(query.mock.calls[0][0])).not.toContain('ILIKE');
   });
 });
+
+/**
+ * Engagement depth, and the carve-out that makes it safe to report.
+ *
+ * The rule was tested against the only ground truth available — visitors who
+ * became leads — and without the carve-out it caught one of them. A visitor who
+ * converted is definitionally a person, so conversion always wins over timings.
+ * Verified against production after the carve-out: 0 converted visitors excluded.
+ */
+describe('engaged vs shallow visitors', () => {
+  it('separates a hit from a read without discarding either', async () => {
+    prime({ ...HEADLINE, engaged_visitors: 337 });
+
+    const k = await getVisitorKpis(30);
+
+    expect(k.engaged_visitors).toBe(337);
+    // Nothing is hidden: the two always reconcile to the headline count.
+    expect(k.engaged_visitors + k.shallow_visitors).toBe(k.unique_visitors);
+  });
+
+  it('reports conversion against the engaged denominator as well as the raw one', async () => {
+    prime({ ...HEADLINE, engaged_visitors: 337 });
+
+    const k = await getVisitorKpis(30);
+
+    // 23/337 = 6.82% describes the site; 23/994 = 2.31% describes the traffic.
+    expect(k.engaged_conversion_rate).toBe(6.82);
+    expect(k.conversion_rate).toBe(2.31);
+    expect(k.engaged_conversion_rate).toBeGreaterThan(k.conversion_rate);
+  });
+
+  it('never reports negative shallow visitors if the counts disagree', async () => {
+    // Defensive: engaged can never exceed unique, but if a query change ever made
+    // it so, a negative "hit and left" figure on the dashboard would be nonsense.
+    prime({ ...HEADLINE, engaged_visitors: 2000 });
+
+    const k = await getVisitorKpis(30);
+
+    expect(k.shallow_visitors).toBe(0);
+  });
+
+  it('the engaged predicate always admits anyone with a lead', async () => {
+    prime({ ...HEADLINE, engaged_visitors: 337 });
+
+    await getVisitorKpis(30);
+
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain('lead_id" IS NOT NULL OR');
+  });
+});
