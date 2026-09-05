@@ -9,7 +9,7 @@
  * software.
  */
 
-import { assembleScope } from '../projectScopeService';
+import { assembleScope, SCOPE_VERSION } from '../projectScopeService';
 import { parseUnderstanding } from '../projectUnderstanding';
 import { projectBlueprint } from '../buildBlueprint';
 import { applyProposals } from '../blueprintProposals';
@@ -165,5 +165,23 @@ describe('the summary reads like a sentence a person wrote', () => {
     });
 
     expect(assembleScope(u, projectBlueprint(u), AT).summary).not.toContain('You want');
+  });
+});
+
+/**
+ * A cached scope has no idea what code produced it. Without a version, a scope stored
+ * before the workflow diagram existed would never gain one — every prospect frozen at
+ * whatever the assembler did on the day they visited, and a deploy that visibly changes
+ * nothing.
+ */
+describe('cached scopes are versioned', () => {
+  it('stamps the assembler version on what it produces', () => {
+    const scope = assembleScope(understanding, withProposals(), AT);
+    expect(scope.version).toBe(SCOPE_VERSION);
+  });
+
+  it('has a version that is a real number, so a mismatch is detectable', () => {
+    expect(typeof SCOPE_VERSION).toBe('number');
+    expect(SCOPE_VERSION).toBeGreaterThan(0);
   });
 });
