@@ -188,14 +188,20 @@ export const METRICS: Record<string, MetricDef> = {
     formula: 'enrollments matching a lead / total enrollments',
     sources: ['enrollments', 'leads'],
     grain: 'person',
-    dimensions: ['cohort', 'period'],
+    // 'period' is mandatory in practice, not optional: rendering this metric
+    // without a time split reports a settled 83% for a funnel currently at 56%.
+    dimensions: ['cohort', 'period', 'tier', 'enrollment_type'],
     // Deliberately registered even though it is uncomfortable: it is the honest
     // measure of whether the 360 profile can keep its promise, and it should be
     // visible on the trust strip rather than discovered again later.
     status: 'partial',
     statusReason:
-      'Measured 2026-09-05: 431 of 517 enrolments (83.4%) match a lead by email. 86 students ' +
-      'cannot be traced to acquisition at all. Email is the only bridge and it is mutable.',
+      'Measured 2026-09-05: 431 of 517 enrolments (83.4%) match a lead by email. But the ' +
+      'lifetime figure HIDES A TREND and must not be shown alone — by month, coverage ran at ' +
+      '98% in July, 66% in August and 56% in September. The gap is widening, not settled. ' +
+      'Concentrated in the guest tier introduced 2026-07-19, which is 88% untraceable (37 of ' +
+      '42). Email is the only bridge that works: of the 86 unmatched, NONE carry a usable ' +
+      'phone and NONE match exactly one lead by name, so no matching rule can recover them.',
     drilldown: { target: 'people.roster', requiredFilters: ['unmatched'] },
   },
 };
