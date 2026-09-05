@@ -35,6 +35,7 @@ import RawLeadPayload from '../../models/RawLeadPayload';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
 import { summarizeForWow, openQuestions, type ProjectUnderstanding } from './projectUnderstanding';
 import { getOrCreateScope, type ProjectScope } from './projectScopeService';
+import { ensurePrototypes, prototypeLinks, type PrototypeLink } from './appPrototypeService';
 import { confirmationProfile } from './understandingConfirmation';
 
 export type PreviewStatus = 'not_found' | 'pending' | 'ready' | 'failed';
@@ -60,8 +61,26 @@ export interface FlotationPreview {
    * evidence that we listened.
    */
   scope?: ProjectScope;
+  /**
+   * Their app, as something they can open on a phone. This is the demonstration the scope
+   * document argues for: a prospect scans the code during the conversation and is looking
+   * at their own product.
+   */
+  prototypes?: PrototypeLink[];
   /** Why nothing is here yet, in words a person can read. */
   message?: string;
+}
+
+/**
+ * Where a phone should go.
+ *
+ * Deliberately NOT derived from the request host. A QR code is scanned by a device that has
+ * never talked to this server, so an internal hostname or a relative path produces a code
+ * that resolves to nothing. It comes from configuration, defaulting to the public API host
+ * this brand's forms already post to.
+ */
+function publicBaseUrl(): string {
+  return process.env.PUBLIC_API_BASE_URL || 'https://enterprise.colaberry.ai';
 }
 
 const PENDING_MESSAGE = 'We are still writing up your conversation. This page updates on its own.';
@@ -119,9 +138,20 @@ export async function getFlotationPreview(token: string): Promise<FlotationPrevi
     console.warn('[FlotationPreview] scope unavailable:', err?.message);
   }
 
+  // Concepts and their QR codes. Generated once, cached alongside the scope, and never
+  // allowed to fail the page: a scope without prototypes is still worth reading.
+  let prototypes: PrototypeLink[] | undefined;
+  try {
+    const set = await ensurePrototypes(record.id);
+    if (set) prototypes = await prototypeLinks(id, set, publicBaseUrl());
+  } catch (err: any) {
+    console.warn('[FlotationPreview] prototypes unavailable:', err?.message);
+  }
+
   return {
     status: 'ready',
     scope,
+    prototypes,
     summary: summarizeForWow(understanding),
     items: understanding.items.map((item, index) => ({
       index,
