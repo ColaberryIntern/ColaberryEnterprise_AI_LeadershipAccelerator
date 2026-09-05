@@ -41,6 +41,19 @@ import { projectBlueprint, type BuildBlueprint } from './buildBlueprint';
 import { generateProposals, applyProposals } from './blueprintProposals';
 import { classifySteps, renderWorkflowSvg } from './scopeDiagram';
 
+/**
+ * Bumped whenever the SHAPE of an assembled scope changes.
+ *
+ * A cached scope has no idea what code produced it. Without this, a scope stored before the
+ * workflow diagram existed would never gain one — every prospect frozen at whatever the
+ * assembler did on the day they visited, and a deploy that changes the code while visibly
+ * changing nothing. That is a confusing hour to spend, and it is avoidable with an integer.
+ *
+ * Bump it for shape changes, not for copy tweaks: a bump costs one model call per active
+ * prospect, because regenerating is how a scope gets rebuilt.
+ */
+export const SCOPE_VERSION = 2;
+
 export interface ScopeSection {
   key: string;
   title: string;
@@ -65,6 +78,8 @@ export interface ProjectScope {
   decisions: string[];
   heard: string[];
   generated_at: string;
+  /** Which assembler produced this. See SCOPE_VERSION. */
+  version: number;
 }
 
 const entriesOf = (bp: BuildBlueprint, key: string): string[] =>
@@ -173,6 +188,7 @@ export function assembleScope(u: ProjectUnderstanding, bp: BuildBlueprint, gener
     decisions: decisionsForCustomer(u).map((d) => d.value),
     heard: u.items.filter((i) => i.classification === 'FACT').map((i) => i.value),
     generated_at: generatedAt,
+    version: SCOPE_VERSION,
   };
 }
 
@@ -192,7 +208,12 @@ export async function getOrCreateScope(recordId: string): Promise<ScopeResult> {
   const record: any = await ProjectUnderstandingRecord.findByPk(recordId);
   if (!record || record.status !== 'extracted') return { ok: false, error: 'no understanding to scope' };
 
-  if (record.scope) return { ok: true, scope: record.scope as ProjectScope, cached: true };
+  // A scope from an older assembler is refused rather than served: the alternative is a
+  // deploy that changes the code and visibly changes nothing.
+  const cachedScope = record.scope as ProjectScope | null;
+  if (cachedScope && cachedScope.version === SCOPE_VERSION) {
+    return { ok: true, scope: cachedScope, cached: true };
+  }
 
   const understanding: ProjectUnderstanding = {
     title: record.title || 'Your project',
