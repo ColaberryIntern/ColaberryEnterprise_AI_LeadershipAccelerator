@@ -53,6 +53,9 @@ class ProjectUnderstandingRecord extends Model {
   declare error: string | null;
   declare cost_usd: number | null;
   declare runtime_ms: number | null;
+  /** The scoped project: blueprint plus the generated proposal half. Cached, see below. */
+  declare scope: unknown | null;
+  declare scope_generated_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -73,6 +76,8 @@ ProjectUnderstandingRecord.init(
     error: { type: DataTypes.TEXT, allowNull: true },
     cost_usd: { type: DataTypes.DOUBLE, allowNull: true },
     runtime_ms: { type: DataTypes.INTEGER, allowNull: true },
+    scope: { type: DataTypes.JSONB, allowNull: true },
+    scope_generated_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,

@@ -204,28 +204,41 @@
             <p class="preview-status" id="preview-status"></p>
 
             <div id="preview-body" hidden>
-              <p class="eyebrow">I think you're building</p>
+              <!--
+                THE SCOPE LEADS. What we heard sits underneath, collapsed.
+
+                The first version of this panel led with four counts and a list of things
+                the person had just said. Tested on a real submission it returned
+                "PRIMARY USERS 0 - AI OPPORTUNITIES 0 - HUMAN DECISION POINTS 0", which
+                reads as broken software at the exact moment somebody is deciding whether we
+                can build software. And even without the zeros it told them only what they
+                already knew.
+
+                What earns a monthly commitment is the part they could not write themselves:
+                what we would build, in what order, what runs without them, and where they
+                still decide.
+              -->
+              <p class="eyebrow">Your project, scoped</p>
               <h2 class="preview-title" id="preview-title"></h2>
+              <p class="scope-summary" id="scope-summary"></p>
 
               <dl class="preview-counts" id="preview-counts"></dl>
 
-              <div id="preview-surfaces-wrap" hidden>
-                <h3 class="preview-h3">Proposed surfaces</h3>
-                <ul class="preview-surfaces" id="preview-surfaces"></ul>
-              </div>
-
-              <h3 class="preview-h3">What we heard</h3>
-              <ul class="preview-items" id="preview-items"></ul>
+              <div id="scope-sections"></div>
 
               <div id="preview-open-wrap" hidden>
                 <h3 class="preview-h3">Still open</h3>
                 <ul class="preview-open" id="preview-open"></ul>
               </div>
 
+              <details class="scope-heard">
+                <summary>What we heard from you</summary>
+                <ul class="preview-items" id="preview-items"></ul>
+              </details>
+
               <p class="note preview-note">
-                Anything marked <span class="tag tag-inferred">we inferred this</span> is our
-                reading, not something you said. Tell us on the call, or reply to us, and we
-                will correct it.
+                A scope, not a quote. Anything marked <span class="tag tag-inferred">we inferred this</span>
+                is our reading rather than something you said &mdash; tell us and we will correct it.
               </p>
             </div>
           </section>
@@ -499,39 +512,68 @@
           section.hidden = false;
           if (statusEl) statusEl.textContent = '';
 
+          var scope = data.scope || null;
           var summary = data.summary || {};
-          document.getElementById('preview-title').textContent = summary.title || 'Your project';
 
-          var counts = [
-            ['Primary users', summary.primary_users],
-            ['Core workflows', summary.core_workflows],
-            ['AI opportunities', summary.ai_opportunities],
-            ['Human decision points', summary.human_decision_points]
-          ];
+          document.getElementById('preview-title').textContent =
+            (scope && scope.title) || summary.title || 'Your project';
+
+          var summaryEl = document.getElementById('scope-summary');
+          summaryEl.textContent = (scope && scope.summary) || '';
+          summaryEl.hidden = !summaryEl.textContent;
+
+          /*
+           * Figures come from the scope, which has already dropped every zero. A count of
+           * nothing is not an honest gap on this screen, it is a broken-looking number in
+           * front of somebody deciding whether we can build software.
+           */
           var dl = document.getElementById('preview-counts');
           dl.textContent = '';
-          counts.forEach(function (pair) {
-            // A zero here is information, not an omission: it means the conversation never
-            // got to that, and hiding it would overstate how much we understood.
+          var figures = (scope && scope.figures) || [];
+          figures.forEach(function (f) {
             var dt = document.createElement('dt');
-            dt.textContent = pair[0];
+            dt.textContent = f.label;
             var dd = document.createElement('dd');
-            dd.textContent = String(pair[1] === undefined ? 0 : pair[1]);
+            dd.textContent = String(f.value);
             dl.appendChild(dt);
             dl.appendChild(dd);
           });
+          dl.hidden = figures.length === 0;
 
-          fillList('preview-surfaces', 'preview-surfaces-wrap', summary.proposed_surfaces || []);
-          fillList('preview-open', 'preview-open-wrap', data.still_open || []);
+          // The scope itself: what we would build, in what order, what runs itself.
+          var wrap = document.getElementById('scope-sections');
+          wrap.textContent = '';
+          ((scope && scope.sections) || []).forEach(function (sec) {
+            var h = document.createElement('h3');
+            h.className = 'preview-h3';
+            h.textContent = sec.title;
 
+            var lead = document.createElement('p');
+            lead.className = 'scope-lead';
+            lead.textContent = sec.lead;
+
+            var ul = document.createElement('ul');
+            ul.className = 'preview-items';
+            sec.items.forEach(function (item) {
+              var li = document.createElement('li');
+              li.textContent = item;
+              ul.appendChild(li);
+            });
+
+            wrap.appendChild(h);
+            wrap.appendChild(lead);
+            wrap.appendChild(ul);
+          });
+
+          fillList('preview-open', 'preview-open-wrap', (scope && scope.open_questions) || data.still_open || []);
+
+          // Their own words, kept and collapsed. Evidence that we listened, not the headline.
           var items = document.getElementById('preview-items');
           items.textContent = '';
           (data.items || []).forEach(function (item) {
             var li = document.createElement('li');
             li.textContent = item.value;
             if (item.inferred) {
-              // Marked, always. An inference shown beside things they actually said, with
-              // no way to tell them apart, is the failure this whole build guards against.
               var tag = document.createElement('span');
               tag.className = 'tag tag-inferred';
               tag.textContent = 'we inferred this';
@@ -542,7 +584,9 @@
           });
 
           body.hidden = false;
-          if (window.rfxTrack) window.rfxTrack('preview_ready', { items: (data.items || []).length });
+          if (window.rfxTrack) {
+            window.rfxTrack('preview_ready', { sections: ((scope && scope.sections) || []).length });
+          }
         }
 
         /*
