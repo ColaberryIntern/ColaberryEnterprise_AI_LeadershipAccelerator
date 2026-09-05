@@ -140,6 +140,24 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
     }));
   }
 
+  // Cert Prep evidence write-back — same shape as the CAPE bridge above and for
+  // the same reason: additive, non-fatal, from this one choke point. A card
+  // whose TYPE carries a certification_mapping proposes evidence for the
+  // objectives that mapping names. Every row lands `pending`; readiness counts
+  // only what a named human verified, so this can never move a student's
+  // readiness by itself. proposeEvidenceFromCard swallows its own errors; this
+  // try/catch covers a failure in the dynamic import.
+  try {
+    const { proposeEvidenceFromCard } = await import('../certPrep/certEvidenceFromCard');
+    await proposeEvidenceFromCard(enrollmentId, { id: card.id, type: card.type });
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'cert_evidence_writeback_import_failed', error_class: err?.name || 'Error',
+      outcome: 'failure', context: { enrollment_id: enrollmentId, card_id: card.id },
+    }));
+  }
+
   await recomputeForEnrollment(enrollmentId);
   const promotion = await evaluateForEnrollment(enrollmentId);
 
