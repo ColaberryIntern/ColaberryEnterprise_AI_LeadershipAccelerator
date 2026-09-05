@@ -64,6 +64,9 @@ interface VisitorKpis {
   bounce_rate: number;
   converted_visitors: number;
   conversion_rate: number;
+  engaged_visitors: number;
+  shallow_visitors: number;
+  engaged_conversion_rate: number;
   by_site: ChannelKpi[];
   by_source: ChannelKpi[];
   source_attribution_pending: boolean;
@@ -376,10 +379,12 @@ function VisitorSankeyFlow(): React.ReactElement {
               </div>
               <div className="col-6 col-lg-3">
                 <div className="h-100 p-2 rounded" style={{ background: 'var(--surface-sunken, #f7f7f6)', borderLeft: '4px solid #2BA39A' }}>
-                  <div className="small text-muted">New visitors</div>
-                  <div className="fw-bold" style={{ fontSize: '1.5rem', lineHeight: 1.15 }}>{kpis.new_visitor_rate}%</div>
+                  <div className="small text-muted">Engaged visitors</div>
+                  <div className="fw-bold" style={{ fontSize: '1.5rem', lineHeight: 1.15 }}>
+                    {(kpis.engaged_visitors ?? 0).toLocaleString()}
+                  </div>
                   <div className="small text-muted">
-                    {kpis.new_visitors.toLocaleString()} new · {kpis.returning_visitors.toLocaleString()} returning
+                    {(kpis.shallow_visitors ?? 0).toLocaleString()} hit and left · {kpis.new_visitor_rate}% new
                   </div>
                 </div>
               </div>
@@ -392,12 +397,26 @@ function VisitorSankeyFlow(): React.ReactElement {
               </div>
               <div className="col-6 col-lg-3">
                 <div className="h-100 p-2 rounded" style={{ background: 'var(--surface-sunken, #f7f7f6)', borderLeft: '4px solid #5BA63C' }}>
-                  <div className="small text-muted">Visitor → lead</div>
-                  <div className="fw-bold" style={{ fontSize: '1.5rem', lineHeight: 1.15 }}>{kpis.conversion_rate}%</div>
-                  <div className="small text-muted">{kpis.converted_visitors.toLocaleString()} became leads</div>
+                  <div className="small text-muted">Engaged → lead</div>
+                  <div className="fw-bold" style={{ fontSize: '1.5rem', lineHeight: 1.15 }}>
+                    {kpis.engaged_conversion_rate ?? kpis.conversion_rate}%
+                  </div>
+                  <div className="small text-muted">
+                    {kpis.converted_visitors.toLocaleString()} leads · {kpis.conversion_rate}% of all visitors
+                  </div>
                 </div>
               </div>
             </div>
+          )}
+
+          {kpis && (kpis.shallow_visitors ?? 0) > 0 && (
+            <p className="small text-muted mb-3">
+              <strong>{(kpis.shallow_visitors ?? 0).toLocaleString()}</strong> of{' '}
+              {kpis.unique_visitors.toLocaleString()} visitors viewed one page for under ten seconds and
+              never returned — a hit rather than a read. They are counted but held separate, because
+              conversion measured against them describes the traffic, not the site. Anyone who became a
+              lead always counts as engaged.
+            </p>
           )}
 
           {/* The outcome column expressed as numbers, because a band's thickness
