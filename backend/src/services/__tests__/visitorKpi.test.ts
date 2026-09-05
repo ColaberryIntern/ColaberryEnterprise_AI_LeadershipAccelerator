@@ -211,3 +211,43 @@ describe('engaged vs shallow visitors', () => {
     expect(sql).toContain('lead_id" IS NOT NULL OR');
   });
 });
+
+/**
+ * Engagement must not depend on a timer that may not be running.
+ *
+ * `ai-flotation` emits zero heartbeat events, so `duration_seconds` never
+ * accumulates there and every session reads as ~5 seconds regardless of real
+ * dwell. A dwell-only rule wrote off 75 people — on the property that produced
+ * 25 form submissions in a week.
+ */
+describe('engagement counts deliberate actions, not just dwell', () => {
+  it('admits a visitor on interaction even with no dwell and one page', async () => {
+    prime({ ...HEADLINE, engaged_visitors: 413 });
+
+    await getVisitorKpis(30);
+
+    const sql = String(query.mock.calls[0][0]);
+    // The action events, not merely the duration test.
+    expect(sql).toContain("'form_submit'");
+    expect(sql).toContain("'cta_click'");
+    expect(sql).toContain('page_events');
+  });
+
+  it('still admits on dwell alone, so heartbeat-instrumented sites are unaffected', async () => {
+    prime({ ...HEADLINE, engaged_visitors: 413 });
+
+    await getVisitorKpis(30);
+
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain('duration_seconds');
+    expect(sql).toContain('pageview_count');
+  });
+
+  it('and conversion still always wins over both', async () => {
+    prime({ ...HEADLINE, engaged_visitors: 413 });
+
+    await getVisitorKpis(30);
+
+    expect(String(query.mock.calls[0][0])).toContain('lead_id" IS NOT NULL OR');
+  });
+});

@@ -261,12 +261,41 @@ export const SHALLOW_MAX_PAGEVIEWS = 1;
  * session because the question is about the person: one real read among five
  * bounces still makes them someone who read.
  */
+/**
+ * Events that prove a person did something deliberate.
+ *
+ * DWELL TIME ALONE WAS NOT ENOUGH, and the failure was instructive. Duration only
+ * accumulates while the tracker's 60-second heartbeat fires, and `ai-flotation`
+ * emits ZERO heartbeats — a gap in that site's integration, not a property of its
+ * audience. Every session there reads as roughly five seconds no matter how long
+ * the visitor actually stayed, so a dwell-only rule wrote off 75 people as "hit
+ * and left" while that same property produced 25 FORM SUBMISSIONS and 40 form
+ * starts in a week. Nobody submits a form by accident in five seconds.
+ *
+ * Engagement is therefore measured by what someone DID, not by what a timer that
+ * may not be running says. Every event here requires a deliberate act; none of
+ * them fire on page load.
+ */
+const ENGAGEMENT_EVENTS = [
+  'cta_click',
+  'form_start',
+  'form_submit',
+  'click',
+  'media_play',
+  'embed_click',
+  'scroll',
+] as const;
+
 export function engagedVisitorSql(visitorIdColumn: string, leadIdColumn?: string): string {
   const converted = leadIdColumn ? `${leadIdColumn} IS NOT NULL OR ` : '';
+  const events = ENGAGEMENT_EVENTS.map((e) => `'${e}'`).join(', ');
   return (
     `(${converted}EXISTS (SELECT 1 FROM "visitor_sessions" evs ` +
     `WHERE evs."visitor_id" = ${visitorIdColumn} ` +
     `AND (COALESCE(evs."duration_seconds",0) > ${SHALLOW_MAX_SECONDS} ` +
-    `OR COALESCE(evs."pageview_count",0) > ${SHALLOW_MAX_PAGEVIEWS})))`
+    `OR COALESCE(evs."pageview_count",0) > ${SHALLOW_MAX_PAGEVIEWS})) ` +
+    `OR EXISTS (SELECT 1 FROM "page_events" epe ` +
+    `WHERE epe."visitor_id" = ${visitorIdColumn} ` +
+    `AND epe."event_type" IN (${events})))`
   );
 }
