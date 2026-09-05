@@ -85,6 +85,37 @@ const failureListeners = new Set<SyncFailureListener>();
  * Subscribe to sync failures so the UI can surface a non-blocking "we couldn't
  * save your build" state with a retry. Returns an unsubscribe function.
  */
+/**
+ * The backend noticed the student is looking at the wrong project.
+ *
+ * Farhat Beig built STORY-001 in her SECOND project on 2026-09-05. It verified
+ * at 3 of 3 three minutes after she pushed, while her portal still rendered her
+ * FIRST project and showed 0 of 3. The switcher that fixes it already existed;
+ * nothing told her she needed it, so the only route left was emailing a human.
+ *
+ * Shaped like SyncFailure on purpose: a non-blocking notice the page can render
+ * without owning the query that produced it.
+ */
+export type ProjectDrift = {
+  code: 'work_elsewhere' | 'no_active_project' | 'active_archived';
+  /** The project currently on screen. */
+  showing: string | null;
+  /** Where their recent verified work actually is. */
+  working_in: string | null;
+  /** The id to switch to, so the banner can act and not merely inform. */
+  working_in_id: string | null;
+  detail: string;
+};
+
+type DriftListener = (drift: ProjectDrift | null) => void;
+const driftListeners = new Set<DriftListener>();
+
+/** Subscribe to drift notices. Returns an unsubscribe function. */
+export function onProjectDrift(fn: DriftListener): () => void {
+  driftListeners.add(fn);
+  return () => { driftListeners.delete(fn); };
+}
+
 export function onSyncFailure(fn: SyncFailureListener): () => void {
   failureListeners.add(fn);
   return () => { failureListeners.delete(fn); };
@@ -298,6 +329,11 @@ async function reconcileFromBackend(): Promise<void> {
       portalApi.get('/api/portal/projects/active'),
       fetchInventory(),
     ]);
+    // Published before the reconcile below: the notice is about which project
+    // the student is about to read, so it must not wait on unrelated work.
+    const drift = (treeRes.data && (treeRes.data as any).drift) || null;
+    driftListeners.forEach((fn) => { try { fn(drift); } catch { /* a listener must never break the pull */ } });
+
     const tree = (treeRes.data && Array.isArray(treeRes.data.lists))
       ? (treeRes.data as BackendProjectTree)
       : null;

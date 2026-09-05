@@ -77,6 +77,11 @@ export interface DriftFinding {
   showing: string | null;
   /** Where their recent verified work actually is. */
   working_in: string | null;
+  /**
+   * The id to switch TO. Names are for reading; a switcher needs an id, and a
+   * finding a UI cannot act on is only half a fix.
+   */
+  working_in_id: string | null;
   detail: string;
 }
 
@@ -107,6 +112,7 @@ export function detectActiveProjectDrift(input: DriftInput): DriftFinding[] {
       code: 'no_active_project',
       showing: null,
       working_in: published[0].name,
+      working_in_id: published[0].project_id,
       detail: `No active project is set, so the portal has nothing to render, `
         + `while ${published.length} published project(s) exist.`,
     }];
@@ -120,6 +126,7 @@ export function detectActiveProjectDrift(input: DriftInput): DriftFinding[] {
       code: 'active_archived',
       showing: active.name,
       working_in: alt?.name ?? null,
+      working_in_id: alt?.project_id ?? null,
       detail: `The portal is pointed at "${active.name}", which is archived.`,
     }];
   }
@@ -142,6 +149,7 @@ export function detectActiveProjectDrift(input: DriftInput): DriftFinding[] {
     code: 'work_elsewhere',
     showing: active.name,
     working_in: newest.name,
+    working_in_id: newest.project_id,
     detail: `The portal shows "${active.name}", which has no outstanding tasks, `
       + `while verified work is landing in "${newest.name}". `
       + `The student is most likely building one project and watching another.`,

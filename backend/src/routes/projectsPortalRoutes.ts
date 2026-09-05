@@ -97,7 +97,27 @@ router.get('/api/portal/projects', requireParticipant, async (req: Request, res:
 router.get('/api/portal/projects/active', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!gate(res)) return;
-    res.json(await getActiveProjectTree(eid(req)) ?? { project: null });
+    const tree = await getActiveProjectTree(eid(req)) ?? { project: null };
+    /**
+     * Tell the student when the page they are about to read is not where their
+     * work is going.
+     *
+     * Farhat Beig built STORY-001 in her SECOND project on 2026-09-05. It
+     * verified at 3 of 3 three minutes after she pushed. Her portal was still
+     * pointed at her FIRST project, so she read 0 of 3, had no way to see why,
+     * and emailed a human fifteen minutes after her work had been accepted.
+     * The switcher to fix it already existed; nothing told her she needed it.
+     *
+     * Attached here rather than served from its own endpoint because this is
+     * the call that decides what gets rendered, so the warning cannot arrive
+     * later than the thing it is warning about.
+     *
+     * `driftForEnrollment` never throws and returns null on failure, so a
+     * broken banner can never cost a student their project page.
+     */
+    const { driftForEnrollment } = await import('../services/sbp/activeProjectDriftService');
+    const drift = await driftForEnrollment(eid(req));
+    res.json(drift ? { ...tree, drift } : tree);
   } catch (e) { fail(res, e, next); }
 });
 
