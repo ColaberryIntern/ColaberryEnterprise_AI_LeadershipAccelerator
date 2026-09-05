@@ -33,6 +33,7 @@ const AdminTrackingEstatePage = lazy(() => import('../pages/admin/AdminTrackingE
 const AdminOpportunitiesPage = lazy(() => import('../pages/admin/AdminOpportunitiesPage'));
 const AdminAcceleratorPage = lazy(() => import('../pages/admin/AdminAcceleratorPage'));
 const AdminAcceleratorSessionTimelinePage = lazy(() => import('../pages/admin/AdminAcceleratorSessionTimelinePage'));
+const AdminStudentSuccessSnapshotPage = lazy(() => import('../pages/admin/studentSuccessSnapshot/AdminStudentSuccessSnapshotPage'));
 const AdminCommunityRolesPage = lazy(() => import('../pages/admin/AdminCommunityRolesPage'));
 const AdminStudentStoryPage = lazy(() => import('../pages/admin/AdminStudentStoryPage'));
 const AdminKnowledgeOpsPage = lazy(() => import('../pages/admin/AdminKnowledgeOpsPage'));
@@ -139,6 +140,7 @@ const adminRoutes = (
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
         <Route path="/admin/accelerator/sessions/:sessionId/timeline" element={<AdminAcceleratorSessionTimelinePage />} />
+        <Route path="/admin/accelerator/enrollments/:id/success-snapshot" element={<AdminStudentSuccessSnapshotPage />} />
         <Route path="/admin/community-roles" element={<AdminCommunityRolesPage />} />
         <Route path="/admin/students" element={<AdminStudentStoryPage />} />
         <Route path="/admin/knowledge-ops" element={<AdminKnowledgeOpsPage />} />

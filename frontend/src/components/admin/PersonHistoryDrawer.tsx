@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 
 interface TimelineEvent {
@@ -154,6 +155,13 @@ const PersonHistoryDrawer: React.FC<Props> = ({
                 ${Number(p?.total_paid).toLocaleString('en-US', { maximumFractionDigits: 2 })} collected
               </span>
             )}
+            <Link
+              to={`/admin/accelerator/enrollments/${enrollmentId}/success-snapshot`}
+              className={`btn btn-outline-secondary btn-sm${readOnly ? ' ms-auto' : ''}`}
+              title="Open the full Student Success 360 evidence page"
+            >
+              <i className="ri-dashboard-3-line me-1" aria-hidden="true"></i>Full Success 360
+            </Link>
             {!readOnly && (
               <>
                 <button
