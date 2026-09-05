@@ -54,7 +54,7 @@ describe('CategorySection', () => {
       />,
     );
     expect(called).toBe(false);
-    expect(container.textContent).toContain('could not be read');
+    expect(container.textContent).toContain('No data available for this category yet.');
     expect(container.textContent).toContain('Query timed out.');
   });
 

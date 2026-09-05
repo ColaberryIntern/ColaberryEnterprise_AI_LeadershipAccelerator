@@ -27,7 +27,7 @@ export const STATUS_LABEL: Record<FieldStatus, string> = {
 
 const STATUS_MESSAGE: Record<FieldStatus, string> = {
   known: '',
-  unknown: 'This source could not be read.',
+  unknown: 'No data available for this category yet.',
   not_applicable: 'No backing source exists for this category yet.',
   stale: 'This data is stale and excluded from decisions.',
   quarantined: 'This metric is currently quarantined and excluded from decisions.',
