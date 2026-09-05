@@ -1,6 +1,8 @@
 import React from 'react';
 import { SectionCard, StatusBadge } from '../shell';
 import { CASE_STUDY_CONTROLS, formatDate } from './caseStudyDesk';
+import CaseStudySurfacePublishRows from './CaseStudySurfacePublishRows';
+import type { CaseStudySurfaceKey } from '../../../config/caseStudySurfaces';
 import type {
   CaseStudyPublicationSummary, CaseStudyPublishBlocker, CaseStudySnapshotSummary, CaseStudySummary,
 } from '../../../services/caseStudyAdminTypes';
@@ -33,8 +35,8 @@ interface Props {
   blockerSource: 'publish' | 'preview' | null;
   busy: boolean;
   onApprove: () => void;
-  onPublish: () => void;
-  onUnpublish: () => void;
+  onPublish: (surfaceKey: CaseStudySurfaceKey) => void;
+  onUnpublish: (surfaceKey: CaseStudySurfaceKey) => void;
   onArchive: () => void;
 }
 
@@ -43,7 +45,10 @@ export default function CaseStudyPublishPanel({
   busy, onApprove, onPublish, onUnpublish, onArchive,
 }: Props): React.ReactElement {
   const enterprise = publications.find((p) => p.surfaceKey === 'enterprise') ?? null;
-  const isLive = enterprise?.status === 'published';
+  /* ANY surface, not just enterprise. Archive is refused while a record is live
+     ANYWHERE, so a note watching one brand would tell an operator archiving was
+     available seconds before the server refused it. */
+  const liveSomewhere = publications.some((p) => p.status === 'published');
 
   return (
     <SectionCard title="Approve and publish" icon="send-plane-line" className="mb-4">
@@ -116,6 +121,13 @@ export default function CaseStudyPublishPanel({
         </div>
       )}
 
+      <CaseStudySurfacePublishRows
+        publications={publications}
+        busy={busy}
+        onPublish={onPublish}
+        onUnpublish={onUnpublish}
+      />
+
       <div className="d-flex flex-wrap gap-2">
         <button
           type="button" className="btn btn-sm btn-outline-danger"
@@ -127,21 +139,10 @@ export default function CaseStudyPublishPanel({
         >
           Approve latest snapshot
         </button>
-        {/* Not disabled by readiness, by a band, or by any client-side opinion.
-            The gate answers this, on the server, on every call. */}
-        <button
-          type="button" className="btn btn-sm btn-danger"
-          data-testid={CASE_STUDY_CONTROLS.publish} onClick={onPublish} disabled={busy}
-        >
-          Publish to enterprise
-        </button>
-        <button
-          type="button" className="btn btn-sm btn-outline-secondary"
-          data-testid={CASE_STUDY_CONTROLS.unpublish} onClick={onUnpublish} disabled={busy}
-          title="Removes public visibility. Snapshots, evidence and history are kept."
-        >
-          Unpublish
-        </button>
+        {/* Publish and unpublish moved into the per-site rows above: a record
+            can be live on one brand and not another, and a single pair of
+            buttons could not say which. Approve and Archive stay here because
+            they act on the RECORD, not on a surface. */}
         <button
           type="button" className="btn btn-sm btn-outline-secondary"
           data-testid={CASE_STUDY_CONTROLS.archive} onClick={onArchive} disabled={busy}
@@ -152,8 +153,8 @@ export default function CaseStudyPublishPanel({
       </div>
 
       <p className="small text-muted mt-3 mb-0">
-        {isLive
-          ? 'This record is live on the enterprise surface. Unpublish before archiving; archiving a live record is refused.'
+        {liveSomewhere
+          ? 'This record is live on at least one site. Unpublish everywhere before archiving; archiving a live record is refused.'
           : 'Publishing pins the approved snapshot version. A later draft never moves what is live.'}
       </p>
     </SectionCard>

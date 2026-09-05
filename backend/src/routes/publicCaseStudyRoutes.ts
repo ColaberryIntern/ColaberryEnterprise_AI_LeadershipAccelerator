@@ -61,6 +61,7 @@ import {
   toPublicFilterInput,
 } from '../schemas/publicCaseStudySchema';
 import type { CaseStudySurfaceKey } from '../types/caseStudy';
+import { isCaseStudySurfaceKey } from '../types/caseStudyGuards';
 import type {
   CaseStudyFilterInput,
   CaseStudySortKey,
@@ -114,16 +115,32 @@ router.use('/api/public/case-study-collections', publicReadLimiter);
 /* --------------------------------------------------------------- surface --- */
 
 /**
- * Phase 1 resolves every public request to `enterprise`.
+ * Which brand's shelf a public request is reading.
  *
- * It is a FUNCTION rather than a constant on purpose: spec §31 requires one
- * filter engine serving the public index, the admin preview, saved collections
- * and a future Training renderer, and that only stays true while the surface is
- * a parameter. Adding Training is an edit to this resolver plus a publication
- * row - nothing downstream of here names a surface.
+ * IT WAS A CONSTANT AND IS NOW A LOOKUP, which is the change Phase 1 predicted
+ * in as many words: "adding Training is an edit to this resolver plus a
+ * publication row - nothing downstream of here names a surface". AI Flotation
+ * arrived first, and nothing downstream needed touching.
+ *
+ * THE SURFACE IS NOT A SECRET, AND MUST NOT BE TREATED AS ONE. Anyone can send
+ * `?surface=ai-flotation`; that is fine, because the surface selects a shelf and
+ * PUBLICATION decides what is on it. A record reaches a surface only through an
+ * approved publication row for that exact surface, checked downstream by
+ * `isCandidatePubliclyVisible`. So the worst a hand-typed surface can do is show
+ * a reader the same page they could have reached by visiting the site itself.
+ * Guessing it grants nothing, which is why this reads a query parameter rather
+ * than a Host header: the AI Flotation site calls this API cross-origin from its
+ * own domain, so its Host is not ours to read.
+ *
+ * AN UNKNOWN OR ABSENT VALUE FALLS BACK TO `enterprise` rather than 400ing. A
+ * malformed surface is a caller mistake, not an attack, and the honest response
+ * is the default shelf rather than an error page on a marketing site. A value
+ * that IS a real surface but has nothing published to it returns an empty list,
+ * which the page states plainly - see the AI Flotation results page.
  */
-export function resolveRequestSurface(_req: Request): CaseStudySurfaceKey {
-  return 'enterprise';
+export function resolveRequestSurface(req: Request): CaseStudySurfaceKey {
+  const raw = typeof req.query.surface === 'string' ? req.query.surface.trim() : '';
+  return isCaseStudySurfaceKey(raw) ? raw : 'enterprise';
 }
 
 /**

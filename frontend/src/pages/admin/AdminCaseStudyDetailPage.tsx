@@ -340,7 +340,7 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
               blockerSource={desk.blockerSource}
               busy={busy}
               onApprove={desk.onApprove}
-              onPublish={() => { void desk.onPublish(); }}
+              onPublish={(surfaceKey) => { void desk.onPublish(surfaceKey); }}
               onUnpublish={desk.onUnpublish}
               onArchive={() => desk.onArchive(record.title)}
             />

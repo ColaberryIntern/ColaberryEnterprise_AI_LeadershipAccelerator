@@ -77,6 +77,14 @@ export interface CaseStudySurfaceProfile {
    */
   readonly routed: boolean;
   readonly indexPath: string | null;
+  /**
+   * Where this surface's records are readable by the public, absolute.
+   * NOT derivable from `indexPath`: a surface can be a different SITE.
+   * AI Flotation is its own domain, on its own Cloudflare zone, and the
+   * admin has to be able to send an operator to the page they just
+   * published to rather than describe it.
+   */
+  readonly liveUrl: string | null;
   readonly detailPathPrefix: string | null;
   readonly ledgerLabels: CaseStudyLedgerLabels;
   /** Spec section 22: shown when filters exclude everything. */
@@ -103,6 +111,7 @@ const unrouted = (key: CaseStudySurfaceKey, label: string): CaseStudySurfaceProf
     label,
     routed: false,
     indexPath: null,
+    liveUrl: null,
     detailPathPrefix: null,
     ledgerLabels: LEDGER_LABELS,
     emptyFiltered: 'No published projects match these filters.',
@@ -115,16 +124,44 @@ export const CASE_STUDY_SURFACES: Readonly<Record<CaseStudySurfaceKey, CaseStudy
       key: 'enterprise' as CaseStudySurfaceKey,
       label: 'Shipped work',
       routed: true,
-      indexPath: '/stories',
+      // The records took the /proof route over on 2026-09-04; /stories now
+      // redirects to it. Detail pages did NOT move - `seo.canonicalUrl` is
+      // derived as /stories/<slug> and is baked into published snapshots.
+      indexPath: '/proof',
       detailPathPrefix: '/stories',
+      liveUrl: 'https://enterprise.colaberry.ai/proof',
       ledgerLabels: LEDGER_LABELS,
       emptyFiltered: 'No published projects match these filters.',
       emptyLibrary: "We're verifying the first project records for this proof library.",
     }),
     training: unrouted('training', 'Training'),
-    'ai-flotation': unrouted('ai-flotation', 'AI Flotation'),
+    /*
+     * AI FLOTATION IS A SEPARATE SITE, NOT A ROUTE IN THIS APP.
+     * `routed: false` and `indexPath: null` are therefore correct and stay
+     * that way - aiflotation.com is static HTML served by the same nginx from
+     * `apps/ai-flotation-public`, and its results page fetches this platform's
+     * public API with `?surface=ai-flotation`. What it needs from here is an
+     * address, so the admin can link an operator to what they published.
+     */
+    'ai-flotation': Object.freeze({
+      ...unrouted('ai-flotation', 'AI Flotation'),
+      liveUrl: 'https://aiflotation.com/results/',
+    }),
     refactored: unrouted('refactored', 'Refactored'),
   });
+
+/**
+ * The surfaces an operator may publish to, mirroring the backend's
+ * `PUBLISHABLE_SURFACE_KEYS`. It is a MIRROR and never the authority: the
+ * publish gate re-checks server-side on every call, so the worst a stale copy
+ * here can do is offer a button the server then refuses by name.
+ *
+ * `training` and `refactored` are absent because neither has a page to appear
+ * on. A surface that is publishable but unreachable is a record marked live
+ * that nobody can read.
+ */
+export const PUBLISHABLE_CASE_STUDY_SURFACES: readonly CaseStudySurfaceKey[] =
+  Object.freeze(['enterprise', 'ai-flotation']);
 
 /** Unknown keys resolve to the default surface rather than crashing a render. */
 export function resolveCaseStudySurfaceProfile(

@@ -48,7 +48,23 @@ jest.setTimeout(30000);
  */
 
 const ID = F.CASE_STUDY_ID;
-const control = (capability: CaseStudyCapability): string => CASE_STUDY_CONTROLS[capability];
+/**
+ * PUBLISH AND UNPUBLISH ARE PER-SITE CONTROLS SINCE 2026-09-05, so their test ids
+ * carry the surface: a record can be live on Enterprise and not on AI Flotation,
+ * and one shared `cs-publish` button could not say which one it acted on.
+ *
+ * The capability check is UNWEAKENED. Spec section 18 asks whether the capability
+ * is on screen and drives the API it claims to, and that is still exactly what is
+ * asserted - against the Enterprise row, which is the surface these journeys have
+ * always used. If the per-site rows ever stop rendering, this still goes red.
+ */
+const PER_SURFACE: Partial<Record<CaseStudyCapability, string>> = {
+  publish: `${CASE_STUDY_CONTROLS.publish}-enterprise`,
+  unpublish: `${CASE_STUDY_CONTROLS.unpublish}-enterprise`,
+};
+
+const control = (capability: CaseStudyCapability): string =>
+  PER_SURFACE[capability] ?? CASE_STUDY_CONTROLS[capability];
 
 beforeEach(() => {
   H.stubConfirm(true);

@@ -40,13 +40,14 @@
       <section class="hero">
         <div class="wrap">
           <p class="eyebrow">Results</p>
-          <h1 style="margin-top:.7rem">We have nothing to show you here yet.</h1>
-          <p class="sub" style="margin-top:1rem">This page exists to hold verified client outcomes. It is empty because there are none we can publish, and a page of invented metrics would contradict everything on the delivery standard.</p>
+          <h1 id="results-title" style="margin-top:.7rem">We have nothing to show you here yet.</h1>
+          <p class="sub" id="results-sub" style="margin-top:1rem">This page exists to hold verified client outcomes. It is empty because there are none we can publish, and a page of invented metrics would contradict everything on the delivery standard.</p>
         </div>
       </section>
-      <section class="band alt">
+      <section class="band alt" id="results-band">
         <div class="wrap">
-          <div class="empty">
+          <div class="grid" id="results-records" hidden></div>
+          <div class="empty" id="results-empty">
             <h3>No published results yet</h3>
             <p>
               When a client agrees to publication, this page will carry what was measured, over
@@ -54,7 +55,7 @@
               was not measured.
             </p>
           </div>
-          <p class="note measure" style="margin-top:1.5rem">
+          <p class="note measure" id="results-why-empty" style="margin-top:1.5rem">
             <b>Why this is empty rather than filled.</b> Logos we have no permission to use,
             percentages with no baseline, and case studies about work that has not shipped are all
             available to us. A delivery standard built on evidence has to survive its own
@@ -105,6 +106,80 @@
       </div>
     </footer>
 
+
+    <!--
+      RESULTS ARE FETCHED, AND THE EMPTY STATE IS THE DEFAULT THAT SHIPS.
+
+      The markup above is the honest empty page, exactly as it read before this
+      script existed. JS only ever UPGRADES it. So a failed request, a blocked
+      script or an API outage leaves a reader on a page that says we have nothing
+      to show rather than on a blank band or a spinner that never resolves -
+      which, on a page whose whole argument is that we do not overstate, is the
+      only acceptable failure mode.
+
+      `surface=ai-flotation` is what makes this AI Flotation's shelf rather than
+      Colaberry's. The parameter is not a secret and grants nothing: a record
+      appears here only if someone published it TO this surface in the admin.
+      Asking for a surface with nothing on it returns an empty list, and this
+      page then says so in its own words.
+
+      Every field rendered below is consent-resolved by the server before it is
+      sent. There is no client-side decision about what may be shown.
+    -->
+    <script>
+      (function () {
+        var API = '{{brand.platformApiBase}}';
+        var box = document.getElementById("results-records");
+        var empty = document.getElementById("results-empty");
+        var why = document.getElementById("results-why-empty");
+        var title = document.getElementById("results-title");
+        var sub = document.getElementById("results-sub");
+        if (!box || !empty) return;
+
+        function text(node, value) { node.textContent = value; return node; }
+
+        function card(record) {
+          var el = document.createElement("article");
+          el.className = "tile";
+          el.appendChild(text(document.createElement("h3"), record.title));
+          if (record.standfirst) {
+            el.appendChild(text(document.createElement("p"), record.standfirst));
+          }
+          /* The verification class, printed. A record that reaches this page
+             carries its own evidence class, and hiding it here would be the
+             delivery standard saying one thing and the results page another. */
+          if (record.verificationClass) {
+            var pill = text(document.createElement("p"), record.verificationClass);
+            pill.className = "eyebrow quiet";
+            pill.style.marginTop = ".8rem";
+            el.appendChild(pill);
+          }
+          return el;
+        }
+
+        fetch(API + "/api/public/case-studies?surface=ai-flotation&limit=24", {
+          headers: { Accept: "application/json" }
+        })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (body) {
+            var items = body && Array.isArray(body.items) ? body.items : [];
+            if (items.length === 0) return;
+
+            items.forEach(function (record) { box.appendChild(card(record)); });
+            box.hidden = false;
+            empty.hidden = true;
+            if (why) why.hidden = true;
+
+            /* The masthead is rewritten from the SURFACE the server returned, not
+               from a string typed here, so the page cannot claim a framing the
+               record was not published under. */
+            var hero = body.surface && body.surface.hero;
+            if (hero && title && hero.title) text(title, hero.title);
+            if (hero && sub && hero.description) text(sub, hero.description);
+          })
+          .catch(function () { /* Empty state already on the page. Nothing to do. */ });
+      })();
+    </script>
     <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
   </body>
 </html>
