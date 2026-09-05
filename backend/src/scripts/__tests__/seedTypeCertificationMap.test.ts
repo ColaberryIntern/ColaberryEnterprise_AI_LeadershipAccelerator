@@ -14,7 +14,10 @@
  * to a string built as {objective_ids, rationale, grain}. Two identical values,
  * two different strings.
  */
-import { canonicalJson } from '../seedTypeCertificationMap';
+// The seeders import this from utils/canonicalHash rather than carrying a copy.
+// These cases stay here because they document WHY the seeders need it: they are
+// the exact production values that broke, not generic hashing coverage.
+import { canonicalJson } from '../../utils/canonicalHash';
 
 describe('canonicalJson', () => {
   it('the production case: jsonb key order does not count as a change', () => {
