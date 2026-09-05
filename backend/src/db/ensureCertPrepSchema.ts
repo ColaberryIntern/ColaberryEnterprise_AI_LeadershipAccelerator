@@ -249,7 +249,23 @@ export async function ensureCertPrepSchema(): Promise<void> {
        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_evmap_unique ON cert_evidence_mappings (enrollment_id, domain_id, source_type, source_id)`,
+    /**
+     * Uniqueness is per OBJECTIVE, not per domain.
+     *
+     * The original index keyed on (enrollment, domain, source_type, source_id),
+     * which says "one source evidences one thing per domain". That is wrong for
+     * the entity: the row already carries `objective_id`, and one piece of work
+     * routinely evidences several objectives inside a domain — a Prompt Lab
+     * evidences D4.1, D4.2 and D4.3 at once. Under the old key the second and
+     * third silently no-opped through findOrCreate, so readiness under-counted
+     * and nothing anywhere said so.
+     *
+     * Relaxing a unique constraint can never fail on existing data: anything
+     * unique on four columns is unique on five. The old index is dropped after
+     * the new one exists so there is no window without either.
+     */
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_evmap_unique_obj ON cert_evidence_mappings (enrollment_id, objective_id, source_type, source_id)`,
+    `DROP INDEX IF EXISTS idx_cert_evmap_unique`,
     `CREATE INDEX IF NOT EXISTS idx_cert_evmap_state ON cert_evidence_mappings (enrollment_id, mapping_state)`,
   ];
 

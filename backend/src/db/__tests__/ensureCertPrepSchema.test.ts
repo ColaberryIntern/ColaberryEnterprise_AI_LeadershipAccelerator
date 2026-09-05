@@ -49,9 +49,16 @@ describe('ensureCertPrepSchema', () => {
     // a duplicate answer submit must not double-record
     expect(statements.some((s) =>
       /UNIQUE INDEX.*cert_responses \(session_id, question_key\)/.test(s))).toBe(true);
-    // one evidence mapping per (enrollment, domain, source)
+    // One evidence mapping per (enrollment, OBJECTIVE, source). This assertion
+    // used to name domain_id, and it passed while the defect it describes was
+    // live: a card evidencing D4.1, D4.2 and D4.3 wrote one row and the other
+    // two silently no-opped, because the index could not tell them apart.
+    // Readiness counts distinct objectives, so the under-count was invisible.
     expect(statements.some((s) =>
-      /UNIQUE INDEX.*cert_evidence_mappings \(enrollment_id, domain_id, source_type, source_id\)/.test(s))).toBe(true);
+      /UNIQUE INDEX.*cert_evidence_mappings \(enrollment_id, objective_id, source_type, source_id\)/.test(s))).toBe(true);
+    // and the domain-grained index is dropped, or the old constraint keeps
+    // refusing the second and third objective on an existing database
+    expect(statements.some((s) => /DROP INDEX IF EXISTS idx_cert_evmap_unique$/.test(s))).toBe(true);
     // question identity + one row per revision
     expect(statements.some((s) => /UNIQUE INDEX.*cert_questions \(question_key\)/.test(s))).toBe(true);
     expect(statements.some((s) =>
