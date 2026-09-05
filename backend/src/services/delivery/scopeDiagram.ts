@@ -27,6 +27,16 @@
  *   decision   it stays with a person on purpose (§3: authority stays human)
  */
 
+/**
+ * Matching thresholds.
+ *
+ * Both exist because the first live diagram marked every step of a real project as a human
+ * decision: in one domain every sentence shares vocabulary, so a raw count of two shared
+ * words matched everything against everything.
+ */
+export const MIN_SHARED_WORDS = 2;
+export const MIN_MATCH_RATIO = 0.4;
+
 export type StepState = 'manual' | 'automated' | 'decision';
 
 export interface DiagramStep {
@@ -185,20 +195,37 @@ export function classifySteps(params: {
   const autoWords = params.automations.map(significant);
   const decisionWords = params.decisions.map(significant);
 
-  const overlaps = (a: Set<string>, sets: Set<string>[]): boolean =>
-    sets.some((b) => {
+  /**
+   * How strongly a step matches a candidate, as a proportion rather than a raw count.
+   *
+   * A raw threshold of two shared words marked EVERY step of a real project as a human
+   * decision, because in a single domain every sentence shares vocabulary - "older",
+   * "adults", "family" appear in all of them. The resulting diagram said the customer's
+   * whole workflow stays manual, which argues against the product it is meant to sell.
+   *
+   * Proportion fixes that: the shared words have to be a real share of the shorter of the
+   * two phrasings, not just present somewhere in a long one.
+   */
+  const strength = (a: Set<string>, sets: Set<string>[]): number =>
+    sets.reduce((best, b) => {
+      if (a.size === 0 || b.size === 0) return best;
       let shared = 0;
       a.forEach((w) => {
         if (b.has(w)) shared += 1;
       });
-      // Two shared significant words. One is a coincidence — "report" appears everywhere.
-      return shared >= 2;
-    });
+      if (shared < MIN_SHARED_WORDS) return best;
+      return Math.max(best, shared / Math.min(a.size, b.size));
+    }, 0);
 
   return params.workflow.map((step) => {
     const words = significant(step);
-    if (overlaps(words, decisionWords)) return { label: step, state: 'decision' };
-    if (overlaps(words, autoWords)) return { label: step, state: 'automated' };
-    return { label: step, state: 'manual' };
+    const auto = strength(words, autoWords);
+    const decision = strength(words, decisionWords);
+
+    if (auto < MIN_MATCH_RATIO && decision < MIN_MATCH_RATIO) return { label: step, state: 'manual' };
+
+    // Ties go to the human. §3: authority stays human, so a step that could be read either
+    // way must not be drawn as running itself.
+    return { label: step, state: decision >= auto ? 'decision' : 'automated' };
   });
 }

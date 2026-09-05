@@ -133,3 +133,51 @@ describe('renderWorkflowSvg', () => {
     expect(renderWorkflowSvg([])).toBe('');
   });
 });
+
+/**
+ * The first live diagram marked EVERY step of a real project as a human decision.
+ *
+ * In one domain every sentence shares vocabulary — "older", "adults", "family" appeared in
+ * all of them — so a raw count of two shared words matched everything against everything.
+ * The resulting picture said the customer's whole workflow stays manual, which argues
+ * against the product it exists to sell.
+ */
+describe('shared domain vocabulary does not mark everything', () => {
+  const REAL = {
+    workflow: [
+      'Older adults open the app to find a step-free route across the city',
+      'The app shows the route and reads the next direction aloud',
+      'Family members check that the older adult arrived where they were going',
+    ],
+    automations: ['An agent notifies family members automatically when an older adult is late arriving'],
+    decisions: ['A person confirms an emergency alert before family members are contacted'],
+  };
+
+  const steps = classifySteps(REAL);
+
+  it('does not mark every step a decision', () => {
+    expect(steps.every((s) => s.state === 'decision')).toBe(false);
+  });
+
+  it('leaves steps manual when nothing proposed genuinely covers them', () => {
+    expect(steps.filter((s) => s.state === 'manual').length).toBeGreaterThan(0);
+  });
+
+  it('still marks a step automated on a genuinely strong match', () => {
+    const strong = classifySteps({
+      workflow: ['Family members are notified when someone is late arriving'],
+      automations: ['Family members are notified automatically when someone is late arriving'],
+      decisions: [],
+    });
+    expect(strong[0].state).toBe('automated');
+  });
+
+  it('keeps the tie going to the human', () => {
+    const tie = classifySteps({
+      workflow: ['Approving an emergency alert before contacting family'],
+      automations: ['Approving an emergency alert before contacting family'],
+      decisions: ['Approving an emergency alert before contacting family'],
+    });
+    expect(tie[0].state).toBe('decision');
+  });
+});
