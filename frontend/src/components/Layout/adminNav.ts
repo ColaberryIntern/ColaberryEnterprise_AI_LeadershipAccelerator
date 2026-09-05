@@ -131,6 +131,47 @@ export const ALL_LINKS: NavLink[] = [
 export const UNIVERSAL_ADMIN_PATHS: readonly string[] = ['/admin/change-password'];
 
 /**
+ * Admin routes that have a SECTION but deliberately no sidebar entry.
+ *
+ * Discovery for the Admin OS consolidation found 74 admin routes against 44 nav
+ * paths. Twelve live surfaces had no nav entry at all, and the two gates then
+ * disagreed about them: `sectionForPath()` returned null, so ProtectedRoute's
+ * `allowed = section ? canSection(section) : !isScopedRep` ADMITTED every
+ * mgmt-role identity, while the backend's `mgmtSectionGate` is deny-by-default
+ * and 403d them. Not a data leak — the API is the gate that holds — but a
+ * mentor could reach /admin/apollo and get a shell that failed every call with
+ * nothing explaining why. That is the latent 403 the mgmtSectionGate comments
+ * already warn about twice.
+ *
+ * Classifying them here fixes the disagreement without adding nine items to a
+ * sidebar that is about to be reorganised into six domains. Each row must have
+ * a matching prefix in the backend's PATH_SECTION, or the two gates drift
+ * apart again — which is the whole failure this closes.
+ *
+ * Three further orphans were retired outright rather than classified
+ * (/admin/refactored/builder, /admin/refactored/client, /admin/va-erp): each
+ * documented itself as a prototype or demo-scope surface.
+ */
+export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = [
+  // Acquisition tooling — sits with the lead-ingestion surfaces it feeds.
+  ['/admin/apollo', 'lead_ingestion'],
+  ['/admin/import', 'lead_ingestion'],
+  // Tracking estate across the properties — the same section as Visitors.
+  ['/admin/tracking-estate', 'campaigns'],
+  // Executive summary — the Command Center's own job, so the landing section.
+  ['/admin/executive-narrative', 'dashboard'],
+  // Audit ledger. Classified from what it QUERIES (event_type, actor,
+  // entity_type, entity_id, payload) rather than from its name — it is a
+  // system audit trail, not a marketing events page.
+  ['/admin/events', 'system'],
+  ['/admin/work-ledger-health', 'system'],
+  ['/admin/automation', 'system'],
+  // AI workforce and knowledge operations.
+  ['/admin/agent-orphans', 'intelligence'],
+  ['/admin/knowledge-ops', 'intelligence'],
+];
+
+/**
  * The RBAC section governing an admin route, or null when the path has no nav
  * entry (detail routes under a nav path resolve to their parent's section).
  *
@@ -140,14 +181,32 @@ export const UNIVERSAL_ADMIN_PATHS: readonly string[] = ['/admin/change-password
  * so they are skipped.
  */
 export function sectionForPath(pathname: string): string | null {
-  let best: NavLink | null = null;
+  let bestPath = '';
+  let bestSection: string | null = null;
+
   for (const link of ALL_LINKS) {
-    if (link.newTab) continue;
+    if (link.newTab || !link.section) continue;
     if (pathname === link.path || pathname.startsWith(link.path + '/')) {
-      if (!best || link.path.length > best.path.length) best = link;
+      if (link.path.length > bestPath.length) {
+        bestPath = link.path;
+        bestSection = link.section;
+      }
     }
   }
-  return (best?.section as string) ?? null;
+
+  // Routes with a section but no sidebar entry. Same longest-prefix rule, so a
+  // nav entry and an unlisted entry compete on specificity rather than on which
+  // list they happen to live in.
+  for (const [path, section] of UNLISTED_PATH_SECTIONS) {
+    if (pathname === path || pathname.startsWith(path + '/')) {
+      if (path.length > bestPath.length) {
+        bestPath = path;
+        bestSection = section;
+      }
+    }
+  }
+
+  return bestSection;
 }
 
 // Where a role would rather land, in order, before falling back to whatever it
