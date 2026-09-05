@@ -121,3 +121,32 @@ fb796c0205d4586dfecf96480a3488396e8549e3:docs/TEST_ACCOUNT_ONBOARDING_2026-05-20
 fb796c0205d4586dfecf96480a3488396e8549e3:docs/TEST_ACCOUNT_ONBOARDING_2026-05-20.html:generic-api-key:218
 d53d326e2f51364ca2e7e6b45600ff81c71144a0:docs/TEST_ACCOUNT_ONBOARDING_2026-05-20.html:generic-api-key:87
 d53d326e2f51364ca2e7e6b45600ff81c71144a0:docs/TEST_ACCOUNT_ONBOARDING_2026-05-20.html:generic-api-key:218
+
+# --------------------------------------------------------------------------
+# 4. An Opportunity Pulse password. REVIEWED AND ACCEPTED, NOT ROTATED.
+#
+# The password for ali@colaberry.com on Opportunity Pulse (95.216.199.47),
+# hardcoded as `password:` in three gov-bid scripts across 7 commits from
+# 2026-05-19.
+#
+# THE CODE IS ALREADY FIXED. Those scripts read OP_ADMIN_PASSWORD from the
+# environment today, which is why the working tree scans clean. The value
+# survives only in history, and this repository is public.
+#
+# These seven were deliberately left unsilenced on 2026-09-02 so the sweep
+# would stay red until the credential was rotated. Ali reviewed it on
+# 2026-09-05 and chose not to rotate. That is his call on his own account,
+# and it is recorded here rather than left as a permanently failing check:
+# a check that is always red is a check nobody reads, which is exactly how
+# 32 findings sat untriaged for a week.
+#
+# IF THAT DECISION CHANGES, rotating in Opportunity Pulse is the entire fix.
+# Rewriting history is not, because forks, clones and caches already have it.
+# --------------------------------------------------------------------------
+fb796c0205d4586dfecf96480a3488396e8549e3:backend/src/scripts/enrichProposalTasksDetailed.js:generic-api-key:237
+fb796c0205d4586dfecf96480a3488396e8549e3:backend/src/scripts/processGovBid.js:generic-api-key:96
+fb796c0205d4586dfecf96480a3488396e8549e3:backend/src/scripts/rebuildGovBidSprintFinal.js:generic-api-key:101
+f19103e4c4c702c6d557a404381a8783833a1b39:backend/src/scripts/enrichProposalTasksDetailed.js:generic-api-key:237
+b0c5520bf0a72dd27745a6f233b37405b035ecc2:backend/src/scripts/rebuildGovBidSprintFinal.js:generic-api-key:101
+191a7624b7f1a661f1375d7de32e7aab47f6bf52:backend/src/scripts/processGovBid.js:generic-api-key:96
+0ea00477ac575c49fd45ef8368d364db0cf738c6:backend/src/scripts/processGovBid.js:generic-api-key:158
