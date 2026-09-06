@@ -43,10 +43,36 @@ export interface MetricTile {
   errorClass?: string;
 }
 
+/** One item in the attention queue or the activity feed. */
+export interface FeedItem {
+  id: string;
+  label: string;
+  detail?: string;
+  at?: string;
+  severity?: number;
+}
+
+/**
+ * A list that knows whether it is empty or merely unread.
+ *
+ * `items: []` with `status: 'ok'` means genuinely nothing to show. The same
+ * empty array with `status: 'failed'` means we could not tell. Rendering both as
+ * "All clear" is how an outage looks like a calm morning.
+ */
+export interface FeedSection {
+  status: SourceStatus;
+  items: FeedItem[];
+  errorClass?: string;
+}
+
 export interface CommandCenterSummary {
   generatedAt: string;
   windowDays: number;
   tiles: MetricTile[];
+  /** What needs a human. Absorbed from the War Room. */
+  attention: FeedSection;
+  /** Cross-system activity. Absorbed from the War Room. */
+  activity: FeedSection;
   /** Sources that failed to read, named so the UI can say so out loud. */
   degraded: string[];
 }
@@ -61,6 +87,32 @@ export interface CommandCenterDeps {
   }>;
   countLiveVisitors: () => Promise<number>;
   getDashboardStats: () => Promise<Record<string, unknown>>;
+  /** Open alerts, newest first. Absorbed from the War Room's attention queue. */
+  getAlerts: () => Promise<Array<Record<string, unknown>>>;
+  /** Cross-system activity feed. */
+  getActivityFeed: () => Promise<Array<Record<string, unknown>>>;
+}
+
+/** Read a string field without inventing one. */
+function str(row: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = row[k];
+    if (typeof v === 'string' && v.trim()) return v;
+  }
+  return undefined;
+}
+
+function toSection(
+  read: { status: SourceStatus; value: Array<Record<string, unknown>> | null; errorClass?: string },
+  toItem: (row: Record<string, unknown>, index: number) => FeedItem,
+): FeedSection {
+  return {
+    status: read.status,
+    // [] on failure, but paired with status 'failed' so the UI can tell the
+    // difference between "nothing happened" and "we could not look".
+    items: (read.value ?? []).map(toItem),
+    errorClass: read.errorClass,
+  };
 }
 
 /**
@@ -138,10 +190,12 @@ export async function getCommandCenterSummary(
 ): Promise<CommandCenterSummary> {
   // Read every source concurrently, but settle each independently. One failure
   // must not take the page down or, worse, blank the tiles that did load.
-  const [visitors, live, dashboard] = await Promise.all([
+  const [visitors, live, dashboard, alerts, activity] = await Promise.all([
     settle('visitor_kpis', () => deps.getVisitorKpis(windowDays)),
     settle('live_visitors', () => deps.countLiveVisitors()),
     settle('dashboard_stats', () => deps.getDashboardStats()),
+    settle('alerts', () => deps.getAlerts()),
+    settle('activity_feed', () => deps.getActivityFeed()),
   ]);
 
   const tiles: MetricTile[] = [
@@ -160,12 +214,27 @@ export async function getCommandCenterSummary(
     visitors.status === 'failed' ? 'visitor metrics' : null,
     live.status === 'failed' ? 'live visitor count' : null,
     dashboard.status === 'failed' ? 'dashboard stats' : null,
+    alerts.status === 'failed' ? 'attention queue' : null,
+    activity.status === 'failed' ? 'activity feed' : null,
   ].filter((x): x is string => x !== null);
 
   return {
     generatedAt: new Date().toISOString(),
     windowDays,
     tiles,
+    attention: toSection(alerts, (row, i) => ({
+      id: String(row.id ?? `alert-${i}`),
+      label: str(row, 'title', 'subject', 'message') ?? 'Untitled alert',
+      detail: str(row, 'description', 'detail', 'department'),
+      at: str(row, 'created_at'),
+      severity: typeof row.severity === 'number' ? row.severity : undefined,
+    })),
+    activity: toSection(activity, (row, i) => ({
+      id: String(row.id ?? `${String(row.source ?? 'event')}-${i}`),
+      label: str(row, 'event_type') ?? 'event',
+      detail: str(row, 'detail', 'lead_name', 'lead_email'),
+      at: str(row, 'created_at'),
+    })),
     degraded,
   };
 }

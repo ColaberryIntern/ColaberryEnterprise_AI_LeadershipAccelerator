@@ -13,6 +13,12 @@ const okDeps = (): CommandCenterDeps => ({
   }),
   countLiveVisitors: jest.fn().mockResolvedValue(7),
   getDashboardStats: jest.fn().mockResolvedValue({ totalLeads: 24673 }),
+  getAlerts: jest.fn().mockResolvedValue([
+    { id: 'a1', title: 'Payment failed', severity: 3, created_at: '2026-09-06T10:00:00Z' },
+  ]),
+  getActivityFeed: jest.fn().mockResolvedValue([
+    { source: 'visitor', event_type: 'cta_click', detail: 'Pricing CTA', created_at: '2026-09-06T10:01:00Z' },
+  ]),
 });
 
 const tileFor = (summary: { tiles: Array<{ key: string }> }, key: string) =>
@@ -78,9 +84,11 @@ describe('command center summary', () => {
       getVisitorKpis: jest.fn().mockRejectedValue(new Error('x')),
       countLiveVisitors: jest.fn().mockRejectedValue(new Error('x')),
       getDashboardStats: jest.fn().mockRejectedValue(new Error('x')),
+      getAlerts: jest.fn().mockRejectedValue(new Error('x')),
+      getActivityFeed: jest.fn().mockRejectedValue(new Error('x')),
     };
     const summary = await getCommandCenterSummary(deps);
-    expect(summary.degraded).toHaveLength(3);
+    expect(summary.degraded).toHaveLength(5);
     // Still renders every tile, each honestly empty.
     expect(summary.tiles.length).toBeGreaterThan(0);
     for (const t of summary.tiles) {
@@ -140,6 +148,54 @@ describe('command center summary', () => {
     expect(t.note).toBeTruthy();
     // Still shown, with its real value — partial means caveated, not hidden.
     expect(t.value).toBe(2.31);
+  });
+
+  // ── The War Room sections, absorbed ──────────────────────────────────────
+
+  it('carries the attention queue and the activity feed', async () => {
+    const summary = await getCommandCenterSummary(okDeps());
+    expect(summary.attention.status).toBe('ok');
+    expect(summary.attention.items[0].label).toBe('Payment failed');
+    expect(summary.activity.status).toBe('ok');
+    expect(summary.activity.items[0].detail).toBe('Pricing CTA');
+  });
+
+  it('tells an empty queue apart from an unread one', async () => {
+    // THE POINT of FeedSection. `items: []` with status 'ok' means genuinely
+    // nothing to show; the same empty array with status 'failed' means we could
+    // not look. Rendering both as "All clear" is how an outage looks like a
+    // calm morning.
+    const quiet = okDeps();
+    quiet.getAlerts = jest.fn().mockResolvedValue([]);
+    const quietSummary = await getCommandCenterSummary(quiet);
+    expect(quietSummary.attention.status).toBe('ok');
+    expect(quietSummary.attention.items).toEqual([]);
+
+    const broken = okDeps();
+    broken.getAlerts = jest.fn().mockRejectedValue(new Error('db down'));
+    const brokenSummary = await getCommandCenterSummary(broken);
+    expect(brokenSummary.attention.status).toBe('failed');
+    expect(brokenSummary.attention.items).toEqual([]);
+    expect(brokenSummary.degraded).toContain('attention queue');
+  });
+
+  it('does not invent a label for an alert that has none', async () => {
+    // A row with no title must not silently borrow another field and present it
+    // as the alert's name.
+    const deps = okDeps();
+    deps.getAlerts = jest.fn().mockResolvedValue([{ id: 'a2' }]);
+    const summary = await getCommandCenterSummary(deps);
+    expect(summary.attention.items[0].label).toBe('Untitled alert');
+    expect(summary.attention.items[0].detail).toBeUndefined();
+  });
+
+  it('keeps the metric tiles when only the feed fails', async () => {
+    const deps = okDeps();
+    deps.getActivityFeed = jest.fn().mockRejectedValue(new Error('db down'));
+    const summary = await getCommandCenterSummary(deps);
+    expect(tileFor(summary, 'growth.unique_visitors').value).toBe(994);
+    expect(summary.activity.status).toBe('failed');
+    expect(summary.degraded).toEqual(['activity feed']);
   });
 
   it('passes the requested window through to the source', async () => {
