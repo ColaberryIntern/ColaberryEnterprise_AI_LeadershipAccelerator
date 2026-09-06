@@ -702,6 +702,7 @@ footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin
 .proto-open:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
 
 /* ============================================================ records index ===
    The published-records shelf on /results: a weighted word cloud, a filter
