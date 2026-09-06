@@ -17,6 +17,10 @@ jest.mock('../reeseTicketLinkService', () => ({
   logReeseExchangeActivity: jest.fn(),
 }));
 jest.mock('../../studentHealthAssessment', () => ({ maybeRefreshStudentAssessment: jest.fn() }));
+jest.mock('../reeseTools', () => ({
+  REESE_TOOLS: [{ type: 'function', function: { name: 'read_student_success_snapshot', parameters: {} } }],
+  executeReeseTool: jest.fn(),
+}));
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
@@ -26,6 +30,7 @@ import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { sendDmMessage } from '../../communityRooms/dmService';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from '../reeseTicketLinkService';
 import { maybeRefreshStudentAssessment } from '../../studentHealthAssessment';
+import { executeReeseTool } from '../reeseTools';
 import { maybeTriggerReeseReply } from '../reeseReplyService';
 
 const mockMembershipFindOne = RoomMembership.findOne as unknown as jest.Mock;
@@ -39,6 +44,7 @@ const mockSendDmMessage = sendDmMessage as unknown as jest.Mock;
 const mockEnsureTicket = ensureReeseTicketForRoom as unknown as jest.Mock;
 const mockLogExchange = logReeseExchangeActivity as unknown as jest.Mock;
 const mockMaybeRefreshAssessment = maybeRefreshStudentAssessment as unknown as jest.Mock;
+const mockExecuteReeseTool = executeReeseTool as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const REESE_AGENT_ID = 'reese-agent-1';
@@ -76,6 +82,7 @@ beforeEach(() => {
   mockEnsureTicket.mockResolvedValue({ id: 'ticket-1' });
   mockLogExchange.mockResolvedValue(undefined);
   mockMaybeRefreshAssessment.mockResolvedValue(undefined);
+  mockExecuteReeseTool.mockResolvedValue('{}');
 });
 
 describe('maybeTriggerReeseReply', () => {
@@ -179,6 +186,63 @@ describe('maybeTriggerReeseReply', () => {
 
     await expect(maybeTriggerReeseReply(ROOM_ID, STUDENT_ID)).resolves.toBeUndefined();
     expect(mockSendDmMessage).toHaveBeenCalledTimes(1); // the reply itself still went out
+  });
+
+  it('Checkpoint E happy path: a tool_calls response triggers real tool execution and a second completion call that produces the final reply', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockCreateCompletion
+      .mockResolvedValueOnce({
+        choices: [{ message: {
+          role: 'assistant', content: null,
+          tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'read_student_success_snapshot', arguments: '{}' } }],
+        } }],
+      })
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'Based on your progress, here is my suggestion.' } }] });
+    mockExecuteReeseTool.mockResolvedValue('{"known":[{"category":"attendance","summary":"8/10"}]}');
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockCreateCompletion).toHaveBeenCalledTimes(2);
+    expect(mockExecuteReeseTool).toHaveBeenCalledWith('read_student_success_snapshot', STUDENT_ID);
+    expect(mockSendDmMessage).toHaveBeenCalledWith(
+      { enrollmentId: REESE_ID, cohortId: null, isAdmin: false }, ROOM_ID, 'Based on your progress, here is my suggestion.',
+    );
+    // The second call must include the tool's real result and must NOT offer
+    // tools again — this is what makes a second tool-call round structurally
+    // impossible, not just unlikely.
+    const secondCallArgs = mockCreateCompletion.mock.calls[1][0];
+    expect(secondCallArgs.tools).toBeUndefined();
+    const toolMessage = secondCallArgs.messages.find((m: any) => m.role === 'tool');
+    expect(toolMessage.content).toBe('{"known":[{"category":"attendance","summary":"8/10"}]}');
+    expect(toolMessage.tool_call_id).toBe('call-1');
+  });
+
+  it('Checkpoint E boundary: no tool_calls in the response never triggers a second completion call (backward compatible with the pre-tool-calling path)', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockCreateCompletion).toHaveBeenCalledTimes(1);
+    expect(mockExecuteReeseTool).not.toHaveBeenCalled();
+  });
+
+  it('Checkpoint E security boundary: the tool always executes against the real sender enrollment id, never anything the model could supply', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockCreateCompletion
+      .mockResolvedValueOnce({
+        choices: [{ message: {
+          role: 'assistant', content: null,
+          // A malicious/confused model tries to pass an id in its arguments —
+          // executeReeseTool's real signature has no parameter for it to land in.
+          tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'assess_student_health', arguments: '{"enrollmentId":"someone-elses-enrollment"}' } }],
+        } }],
+      })
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'Here is what I found.' } }] });
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockExecuteReeseTool).toHaveBeenCalledWith('assess_student_health', STUDENT_ID);
+    expect(mockExecuteReeseTool).not.toHaveBeenCalledWith(expect.anything(), 'someone-elses-enrollment');
   });
 
   it('conversation history is passed to the LLM with correct role mapping (Reese = assistant, everyone else = user)', async () => {

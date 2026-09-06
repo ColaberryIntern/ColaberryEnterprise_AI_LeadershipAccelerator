@@ -9,6 +9,7 @@ import { agentHasTool } from '../agents/tools/agentToolRegistry';
 import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
 import type { AttachmentRef } from '../agents/tools/types';
 import { maybeRefreshStudentAssessment } from '../studentHealthAssessment';
+import { executeReeseTool, REESE_TOOLS } from './reeseTools';
 
 // Reese Phase 1 — the ONLY place Reese-authored DM content is ever produced.
 // Reactive, guarded, never proactive:
@@ -149,15 +150,44 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
     ];
 
     const openai = await getOpenAI();
-    const completion = await openai.chat.completions.create({
+    const completionModel = attach.parts.length ? (process.env.REESE_VISION_MODEL || 'gpt-4o') : MODEL;
+    let completion = await openai.chat.completions.create({
       // A text-only model 400s on image parts, which would take the whole reply
       // down instead of degrading — so a turn carrying images goes to a known
       // vision-capable model unless the operator named one.
-      model: attach.parts.length ? (process.env.REESE_VISION_MODEL || 'gpt-4o') : MODEL,
+      model: completionModel,
       messages: chatMessages,
       temperature: 0.7,
       max_tokens: 500,
+      tools: REESE_TOOLS,
+      tool_choice: 'auto',
     });
+
+    // Reese Agentic AI Employee mission, Checkpoint E — Reese's first real,
+    // LLM-invoked tool calls (read_student_success_snapshot,
+    // assess_student_health). At most one tool round: the model may call
+    // either or both tools once, then MUST answer — no further tool offers on
+    // the follow-up call, so a model that keeps requesting tools can never
+    // loop the reply pipeline indefinitely. enrollmentId is never taken from
+    // the model's arguments; executeReeseTool always runs against
+    // senderEnrollmentId, the student server-side-bound to this conversation
+    // (see reeseTools.ts's own header for why that boundary matters).
+    const requestedToolCalls = completion.choices[0]?.message?.tool_calls;
+    if (requestedToolCalls && requestedToolCalls.length > 0) {
+      chatMessages.push(completion.choices[0].message as OpenAI.Chat.ChatCompletionMessageParam);
+      for (const call of requestedToolCalls) {
+        if (call.type !== 'function') continue;
+        const result = await executeReeseTool(call.function.name, senderEnrollmentId);
+        chatMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
+      }
+      completion = await openai.chat.completions.create({
+        model: completionModel,
+        messages: chatMessages,
+        temperature: 0.7,
+        max_tokens: 500,
+      });
+    }
+
     const reply = completion.choices[0]?.message?.content?.trim();
     if (!reply) return;
 

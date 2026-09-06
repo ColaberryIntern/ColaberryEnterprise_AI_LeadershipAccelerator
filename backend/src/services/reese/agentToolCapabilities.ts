@@ -49,6 +49,17 @@ export const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
     reads: ['ProofDesk learner-progress signals (XP, competencies, timeline state) for the student in the conversation'],
     produces: [],
   },
+  // Checkpoint E (2026-09-06) — Reese's first genuinely LLM-invoked tools
+  // (reeseTools.ts). Autonomous read/assessment tier only: no side effect the
+  // student can see, no messaging, no ticket writes.
+  read_student_success_snapshot: {
+    reads: ['The student\'s full Student Success 360 evidence snapshot (attendance, timeline progress, assessments, project progress, certification readiness, community activity, support tickets)'],
+    produces: [],
+  },
+  assess_student_health: {
+    reads: ['The student\'s Student Success 360 snapshot and their most recent structured health assessment'],
+    produces: ['A fresh StudentAssessment row, only when the existing one is missing or past its own reassessment_date'],
+  },
 
   // --- cory-engine (autonomousEngine.ts's runAutonomousCycle(), 8-step pipeline —
   // grounded in agentRegistrySeed.ts's own re-verified comment) ---
