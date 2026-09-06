@@ -181,3 +181,43 @@ describe('shared domain vocabulary does not mark everything', () => {
     expect(tie[0].state).toBe('decision');
   });
 });
+
+/**
+ * "TODAY" is a claim about a present the customer may never have described.
+ *
+ * The tour-guide diagram labelled wished-for features TODAY — for an app that does not
+ * exist, described by somebody with no current process at all. A greenfield idea has no
+ * morning to redraw.
+ */
+describe('a flow with no present does not claim one', () => {
+  const steps = classifySteps({
+    workflow: ['The app should let families track a relative', 'Families should be told when someone is late'],
+    automations: [],
+    decisions: [],
+  });
+
+  it('says "in the build" rather than "today" for a proposed flow', () => {
+    const svg = renderWorkflowSvg(steps, 'proposed');
+    expect(svg).toContain('IN THE BUILD');
+    expect(svg).not.toContain('TODAY');
+  });
+
+  it('still says "today" when they described a process they run now', () => {
+    const svg = renderWorkflowSvg(steps, 'today');
+    expect(svg).toContain('TODAY');
+  });
+
+  it('titles the two modes differently, because they are different claims', () => {
+    expect(renderWorkflowSvg(steps, 'proposed')).toContain('How it would work');
+    expect(renderWorkflowSvg(steps, 'today')).toContain('Your workflow today');
+  });
+
+  it('leaves the earned states alone in either mode', () => {
+    const marked = classifySteps({
+      workflow: ['Families should be told automatically when someone is late arriving'],
+      automations: ['Families should be told automatically when someone is late arriving'],
+      decisions: [],
+    });
+    expect(renderWorkflowSvg([...marked, ...marked], 'proposed')).toContain('RUNS ITSELF');
+  });
+});

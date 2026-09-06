@@ -57,7 +57,7 @@ import { classifySteps, renderWorkflowSvg } from './scopeDiagram';
  * generator was fixed, but a corrected generator does nothing for a scope already cached,
  * so every prospect would have kept the picture that argued against buying.
  */
-export const SCOPE_VERSION = 3;
+export const SCOPE_VERSION = 4;
 
 export interface ScopeSection {
   key: string;
@@ -164,7 +164,12 @@ export function assembleScope(u: ProjectUnderstanding, bp: BuildBlueprint, gener
     decisions: entriesOf(bp, 'human_responsibilities'),
   });
 
-  const workflow_svg = workflowSteps.length >= 2 ? renderWorkflowSvg(workflowSteps) : '';
+  // "Today" is a claim about a present the customer may never have described. A greenfield
+  // idea has no current workflow, and the first live diagram for one labelled wished-for
+  // features TODAY, which was simply false. The mode comes from whether they actually
+  // described a process they run now.
+  const flowMode = itemsFor(u, 'current_workflow').length > 0 ? 'today' : 'proposed';
+  const workflow_svg = workflowSteps.length >= 2 ? renderWorkflowSvg(workflowSteps, flowMode) : '';
 
   const problem = itemsFor(u, 'problem')[0]?.value || itemsFor(u, 'pain_points')[0]?.value || '';
   const outcome = itemsFor(u, 'desired_outcome')[0]?.value || '';
