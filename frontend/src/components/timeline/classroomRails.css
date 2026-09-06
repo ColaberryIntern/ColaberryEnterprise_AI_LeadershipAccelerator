@@ -1,0 +1,134 @@
+/**
+ * Classroom rails.
+ *
+ * Scoped entirely under `.cr-` so nothing here can reach a curriculum card. The
+ * week's own cards are styled by TimelineCard and are deliberately untouched by
+ * this file — if a selector in here ever matches one of them, the feature has
+ * broken its central promise.
+ *
+ * The colour per surface is the navigation: a student learns within a week that
+ * amber is certification and teal means a room is open, and after that they are
+ * scanning rather than reading. Each rail carries its hue on a 4px left edge and
+ * a tinted ground, never on the tiles themselves — tinted tiles would compete
+ * with the curriculum cards they sit between.
+ */
+
+.cr-rail{
+  --cr:#6B7280;
+  --cr-soft:#F3F4F6;
+  border:1px solid var(--te-border,#E4E6EB);
+  border-left:4px solid var(--cr);
+  border-radius:14px;
+  background:var(--cr-soft);
+  margin:0 0 14px;
+  overflow:hidden;
+}
+
+.cr-events   { --cr:#E01F2B; --cr-soft:#FDECEC }
+.cr-project  { --cr:#0E6B54; --cr-soft:#E7F2EE }
+.cr-community{ --cr:#7A2E68; --cr-soft:#F6ECF4 }
+.cr-rooms    { --cr:#1F5F73; --cr-soft:#E7F1F4 }
+.cr-cert_prep{ --cr:#8A5A0B; --cr-soft:#FBF2E2 }
+.cr-portfolio{ --cr:#2B4B8C; --cr-soft:#EAEFF8 }
+.cr-timeline { --cr:#43506B; --cr-soft:#EDEFF4 }
+
+@media (prefers-color-scheme: dark){
+  .cr-events   { --cr:#FF7A83; --cr-soft:#2A1416 }
+  .cr-project  { --cr:#4FBF9C; --cr-soft:#0E211C }
+  .cr-community{ --cr:#D08BC0; --cr-soft:#231320 }
+  .cr-rooms    { --cr:#5FAFC7; --cr-soft:#111F25 }
+  .cr-cert_prep{ --cr:#D9A344; --cr-soft:#241E12 }
+  .cr-portfolio{ --cr:#7FA2E0; --cr-soft:#141B2B }
+  .cr-timeline { --cr:#93A2C0; --cr-soft:#1A1E27 }
+}
+
+.cr-hd{display:flex;align-items:center;gap:8px;padding:9px 12px 8px;flex-wrap:wrap}
+.cr-name{font-weight:700;font-size:.9rem;color:var(--cr);letter-spacing:.01em}
+.cr-count{font-size:.7rem;color:var(--te-muted,#6B7280);font-variant-numeric:tabular-nums}
+.cr-all{margin-left:auto;font-size:.7rem;font-weight:600;text-decoration:none;color:var(--cr);
+        background:var(--te-surface,#fff);border:1px solid var(--te-border,#E4E6EB);
+        border-radius:999px;padding:3px 10px;white-space:nowrap}
+.cr-all:hover{border-color:var(--cr)}
+
+.cr-wrap{position:relative}
+.cr-scroller{
+  display:flex;gap:10px;overflow-x:auto;padding:0 12px 12px;
+  scroll-snap-type:x proximity;scroll-behavior:smooth;scrollbar-width:thin;
+}
+.cr-scroller::-webkit-scrollbar{height:7px}
+.cr-scroller::-webkit-scrollbar-thumb{background:var(--te-border,#E4E6EB);border-radius:99px}
+.cr-scroller:focus-visible{outline:2px solid var(--cr);outline-offset:-2px;border-radius:8px}
+
+.cr-tile{
+  flex:0 0 232px;scroll-snap-align:start;display:flex;flex-direction:column;min-width:0;
+  background:var(--te-surface,#fff);border:1px solid var(--te-border,#E4E6EB);
+  border-radius:12px;overflow:hidden;
+  box-shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 12px rgba(16,24,40,.05);
+}
+.cr-tile.cr-featured{flex-basis:352px}
+
+.cr-pic{
+  height:78px;position:relative;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#D9E2EC,#C7D3E0);
+  border-bottom:1px solid var(--te-border-sub,#EDEFF3);overflow:hidden;
+}
+.cr-featured .cr-pic{height:118px}
+.cr-pic img{width:100%;height:100%;object-fit:cover;display:block}
+.cr-glyph{font-size:1.5rem;line-height:1}
+.cr-featured .cr-glyph{font-size:2rem}
+@media (prefers-color-scheme: dark){
+  .cr-pic{background:linear-gradient(135deg,#2A303C,#232936)}
+}
+.cr-stamp{
+  position:absolute;left:8px;bottom:8px;background:rgba(255,255,255,.94);color:#1A1A1A;
+  font-size:.6rem;font-weight:700;letter-spacing:.03em;padding:2px 7px;border-radius:5px;
+  font-variant-numeric:tabular-nums;max-width:calc(100% - 16px);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+.cr-in{padding:9px 11px 9px;flex:1;display:flex;flex-direction:column;min-width:0}
+.cr-title{
+  font-size:.84rem;font-weight:700;color:var(--te-strong,#1A1A1A);margin:0 0 3px;line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.cr-detail{
+  font-size:.75rem;color:var(--te-muted,#6B7280);margin:0;line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.cr-meta{font-size:.65rem;color:var(--te-faint,#9AA0AA);margin:6px 0 0;
+         font-variant-numeric:tabular-nums}
+.cr-spacer{flex:1;min-height:8px}
+
+.cr-act{
+  display:block;text-align:center;text-decoration:none;
+  background:var(--cr);color:#fff;font-size:.73rem;font-weight:700;
+  border-radius:7px;padding:6px 8px;
+}
+.cr-act:hover{filter:brightness(1.06)}
+.cr-act.cr-quiet{background:transparent;color:var(--te-muted,#6B7280);
+                 border:1px solid var(--te-border,#E4E6EB)}
+.cr-act.cr-quiet:hover{border-color:var(--cr);color:var(--cr)}
+.cr-act:focus-visible{outline:2px solid var(--cr);outline-offset:2px}
+
+.cr-fade{
+  position:absolute;top:0;bottom:12px;right:0;width:28px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.06));
+}
+.cr-arrow{
+  position:absolute;top:38%;width:27px;height:27px;border-radius:50%;z-index:2;padding:0;
+  background:var(--te-surface,#fff);border:1px solid var(--te-border,#E4E6EB);
+  box-shadow:0 1px 2px rgba(16,24,40,.05), 0 4px 12px rgba(16,24,40,.05);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-size:.85rem;color:var(--te-strong,#1A1A1A);line-height:1;
+}
+.cr-arrow:focus-visible{outline:2px solid var(--cr);outline-offset:2px}
+.cr-left{left:5px}
+.cr-right{right:5px}
+
+/* Touch devices scroll by swiping; the arrows are for pointer users and the
+   fade is enough of an edge cue there. */
+@media (hover:none){ .cr-arrow{display:none} }
+
+@media (prefers-reduced-motion: reduce){
+  .cr-scroller{scroll-behavior:auto}
+}
