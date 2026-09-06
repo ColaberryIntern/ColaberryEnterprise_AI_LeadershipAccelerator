@@ -48,6 +48,14 @@ jest.mock('../managerReliabilityIntentService', () => ({
   toPendingConfirmation: jest.fn(),
   applyConfirmedReliabilityChange: jest.fn(),
 }));
+// Same isolation reasoning as managerReliabilityIntentService above —
+// agentWorkStatusIntentService.ts imports Ticket/AdminUser model classes
+// directly; mocked wholesale here since this file only needs "not a
+// work-status message" for its own unrelated test messages.
+jest.mock('../agentWorkStatusIntentService', () => ({
+  detectWorkStatusQuery: jest.fn(() => null),
+  buildWorkStatusReply: jest.fn(),
+}));
 
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { buildAgentManagerConversationSystemPrompt } from '../agentBlueprint/agentManagerConversationPrompt';
