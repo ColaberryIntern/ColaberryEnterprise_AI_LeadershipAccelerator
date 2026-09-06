@@ -31,6 +31,7 @@ const CampaignBuilderPage = lazy(() => import('../pages/admin/CampaignBuilderPag
 const AdminICPInsightsPage = lazy(() => import('../pages/admin/AdminICPInsightsPage'));
 const AdminVisitorsPage = lazy(() => import('../pages/admin/AdminVisitorsPage'));
 const CommandCenterPage = lazy(() => import('../pages/admin/CommandCenterPage'));
+const PeoplePage = lazy(() => import('../pages/admin/PeoplePage'));
 const AdminTrackingEstatePage = lazy(() => import('../pages/admin/AdminTrackingEstatePage'));
 const AdminOpportunitiesPage = lazy(() => import('../pages/admin/AdminOpportunitiesPage'));
 const AdminAcceleratorPage = lazy(() => import('../pages/admin/AdminAcceleratorPage'));
@@ -98,6 +99,7 @@ const adminRoutes = (
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/command-center" element={<CommandCenterPage />} />
+        <Route path="/admin/people" element={<PeoplePage />} />
         {/* Portfolio review. INSIDE ProtectedRoute and AdminLayout: it first shipped
             beside /admin/login, outside the auth guard entirely, so the page was
             publicly loadable (the API still 401d, so no data leaked, but the surface

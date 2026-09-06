@@ -92,7 +92,24 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
 ];
 
 // Section-agnostic admin endpoints every mgmt role may hit (identity, not data).
-const AGNOSTIC = ['/api/admin/me', '/api/admin/login', '/api/admin/logout'];
+const AGNOSTIC = [
+  '/api/admin/me',
+  '/api/admin/login',
+  '/api/admin/logout',
+  // The one DATA path here, and a deliberate exception rather than an oversight.
+  // This table maps ONE section per path, and the People roster legitimately
+  // serves five: leads, revenue, students, program and career_review. Mapping it
+  // to any single one 403s the other four - picking 'students' locks out the
+  // revenue and admissions roles that personScope says should see people.
+  //
+  // It is NOT ungated. peopleRoutes re-checks with hasAnyPersonScope(), which is
+  // STRICTER than any single section here (it denies community_organizer, who
+  // holds 'dashboard'), and peopleService applies the row-level lifecycle scope
+  // inside the SQL so a caller only receives the stages their sections grant.
+  // The coarse check moves to the route because the route can express what this
+  // table cannot.
+  '/api/admin/people',
+];
 
 function matchesPrefix(path: string, prefix: string): boolean {
   return path === prefix || path.startsWith(prefix + '/');

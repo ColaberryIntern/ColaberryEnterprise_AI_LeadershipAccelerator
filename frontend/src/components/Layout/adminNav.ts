@@ -136,6 +136,29 @@ export const ALL_LINKS: NavLink[] = [
 export const UNIVERSAL_ADMIN_PATHS: readonly string[] = ['/admin/change-password'];
 
 /**
+ * Paths whose access the API decides, because one section key cannot express it.
+ *
+ * The nav's model is one section per path, and ProtectedRoute inherits it. The
+ * People roster breaks that model: it legitimately serves five sections (leads,
+ * revenue, students, program, career_review), so ANY single key here would bounce
+ * roles the API authorises - pick 'students' and a revenue identity is refused a
+ * page the backend would happily serve.
+ *
+ * Listing it here lets an authenticated admin reach the page, where the API makes
+ * the real decision. That is not a loosening: /api/admin/people re-checks with
+ * hasAnyPersonScope() - stricter than any single section, since it denies
+ * community_organizer, who holds 'dashboard' - and applies the row-level
+ * lifecycle scope inside the SQL. The page renders the 403 plainly when it comes.
+ *
+ * This mirrors the AGNOSTIC list in the backend's mgmtSectionGate deliberately,
+ * so the two gates cannot drift into disagreeing about this one path.
+ *
+ * Keep this list tiny. A path belongs here only when it genuinely serves several
+ * sections AND its API enforces scope itself.
+ */
+export const API_ENFORCED_PATHS: readonly string[] = ['/admin/people'];
+
+/**
  * Admin routes that have a SECTION but deliberately no sidebar entry.
  *
  * Discovery for the Admin OS consolidation found 74 admin routes against 44 nav

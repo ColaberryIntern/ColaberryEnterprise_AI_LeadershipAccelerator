@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   sectionForPath,
+  API_ENFORCED_PATHS,
   firstAccessiblePath,
   UNIVERSAL_ADMIN_PATHS,
 } from './Layout/adminNav';
@@ -40,6 +41,13 @@ function ProtectedRoute() {
 
   const pathname = location.pathname;
   if (UNIVERSAL_ADMIN_PATHS.includes(pathname)) {
+    return <Outlet />;
+  }
+
+  // Paths whose scope one section key cannot express, so the API decides. See
+  // API_ENFORCED_PATHS in adminNav.ts — bouncing here would refuse identities the
+  // backend authorises, and the page renders the API's 403 plainly when it comes.
+  if (API_ENFORCED_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     return <Outlet />;
   }
 
