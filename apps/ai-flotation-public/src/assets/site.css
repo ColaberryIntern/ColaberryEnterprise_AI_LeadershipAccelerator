@@ -899,3 +899,62 @@ a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
   --cs-accent-contrast: var(--accent-contrast);
   --cs-radius: calc(var(--radius) + 4px);
 }
+
+/* ── The design: one page, two widths ────────────────────────────────
+   The phone frame is narrow on purpose — it is the actual viewport the
+   design has to survive, not a decorative device mockup. Both frames are
+   sandboxed iframes of the same document, so what you see at 390px is
+   genuinely what a phone gets.
+   ------------------------------------------------------------------ */
+.design-views {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.design-frame { min-width: 0; }
+
+.design-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.design-iframe {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  display: block;
+}
+
+.design-desktop .design-iframe { height: 30rem; }
+
+.design-phone .design-iframe {
+  height: 30rem;
+  border-radius: 14px;
+}
+
+.design-aside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem 1.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.design-aside .proto-qr { width: 7.5rem; margin: 0; }
+.design-aside .proto-why { flex: 1 1 14rem; margin: 0; }
+.design-aside .proto-open { margin: 0; }
+
+@media (max-width: 46rem) {
+  /* Stack rather than shrink: two frames side by side on a phone makes both
+     unreadable, which defeats the point of showing the phone view at all. */
+  .design-views { grid-template-columns: 1fr; }
+  .design-phone .design-iframe { max-width: 22rem; }
+}

@@ -35,7 +35,7 @@ import QRCode from 'qrcode';
 import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord';
 import { projectBlueprint } from './buildBlueprint';
 import { buildDesignBrief } from './designBrief';
-import { generateConcepts, type GeneratedConcept } from './uiConceptGenerator';
+import { generateWebsiteDesign } from './websiteDesignGenerator';
 import type { ProjectUnderstanding } from './projectUnderstanding';
 
 /** §21 wants expiry. Fourteen days outlasts a sales conversation and not much else. */
@@ -55,6 +55,9 @@ export interface PrototypeSet {
   expires_at: string;
 }
 
+/** The single key the one-page design is stored and served under. */
+export const DESIGN_KEY = 'site';
+
 export interface PrototypeLink {
   key: string;
   title: string;
@@ -64,6 +67,8 @@ export interface PrototypeLink {
   url: string;
   /** The same URL as a scannable SVG, inlined so the page needs no extra request. */
   qr_svg: string;
+  /** The design itself, so the page can frame it at desktop and phone widths. */
+  html: string;
 }
 
 const isExpired = (set: PrototypeSet): boolean => new Date(set.expires_at).getTime() < Date.now();
@@ -102,22 +107,27 @@ export async function ensurePrototypes(recordId: string): Promise<PrototypeSet |
     console.warn('[AppPrototype] could not load contact for leak check:', err?.message);
   }
 
-  const result = await generateConcepts({ brief, contact });
+  // ONE design, shown later at two widths. Three concept variants were the wrong artifact:
+  // a prospect wants to see their own thing as a page they could navigate, not three
+  // variations on an internal dashboard.
+  const result = await generateWebsiteDesign({ brief, contact });
 
   if (!result.ok) {
-    console.warn('[AppPrototype] no concepts survived:', result.error);
+    console.warn('[AppPrototype] design refused:', result.error);
     return null;
   }
 
   const now = new Date();
   const set: PrototypeSet = {
-    concepts: result.concepts.map((c: GeneratedConcept) => ({
-      key: c.key,
-      title: c.title,
-      recommended: c.recommended,
-      rationale: c.rationale,
-      html: c.html,
-    })),
+    concepts: [
+      {
+        key: DESIGN_KEY,
+        title: `${understanding.title} — site`,
+        recommended: true,
+        rationale: result.design.rationale,
+        html: result.design.html,
+      },
+    ],
     generated_at: now.toISOString(),
     expires_at: new Date(now.getTime() + PROTOTYPE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
   };
@@ -150,7 +160,10 @@ export async function prototypeLinks(token: string, set: PrototypeSet, baseUrl: 
         color: { dark: '#1A1917', light: '#FFFFFF' },
       });
 
-      return { key: c.key, title: c.title, recommended: c.recommended, rationale: c.rationale, url, qr_svg };
+      // The HTML travels with the link so the page can frame it via srcdoc at two widths.
+      // Framing the served URL instead would be a cross-origin embed of a sandboxed
+      // document, which is a fight not worth having for markup we already hold.
+      return { key: c.key, title: c.title, recommended: c.recommended, rationale: c.rationale, url, qr_svg, html: c.html };
     }),
   );
 }
