@@ -296,3 +296,41 @@ describe('T000: the timestamps the state machine needs', () => {
     });
   });
 });
+
+describe('the enroll page category is read as intent', () => {
+  /**
+   * Added 2026-09-06, after a production review found `page_category = 'enroll'`
+   * carrying 196 events over seven days with 57 attributed to a person — the
+   * best-attributed category in the table, and unread by the mapping while
+   * `pricing` (0 attributed) and `program` (2 attributed) were both mapped.
+   *
+   * Someone on an enrolment page is acting, not browsing, so the signal was the
+   * clearest one available and it was being discarded.
+   */
+  it('maps enroll to enrollment_cta_click in the page_events query', () => {
+    // Asserting on the emitted SQL: the mapping is a CASE arm, and there is no
+    // other seam to read it from without a database.
+    const sql = String(
+      (require('fs') as typeof import('fs')).readFileSync(
+        require('path').join(__dirname, '..', 'explorerSignalReader.ts'),
+        'utf8',
+      ),
+    );
+    expect(sql).toContain("WHEN page_category = 'enroll' THEN 'enrollment_cta_click'");
+  });
+
+  it('keeps enroll BELOW the high-intent threshold', () => {
+    // `enrollment_cta_click` is tier 2. HIGH_INTENT requires tier 3 or above, so
+    // reaching an enrolment page must not on its own promote a learner into the
+    // overlay — that would make the strongest signal we have also the loosest.
+    const defs = String(
+      (require('fs') as typeof import('fs')).readFileSync(
+        require('path').join(__dirname, '..', 'explorerSignalDefinitions.ts'),
+        'utf8',
+      ),
+    );
+    const line = defs.split('\n').find((l) => l.includes('enrollment_cta_click:')) ?? '';
+    expect(line).toContain('tier: 2');
+    expect(line).not.toContain('tier: 3');
+  });
+});

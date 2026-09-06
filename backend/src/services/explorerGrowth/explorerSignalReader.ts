@@ -99,6 +99,20 @@ const LEARNER_SOURCES: Record<string, string> = {
 
 /**
  * Lead-keyed sources. Reachable only once the identity bridge has resolved.
+ *
+ * WHY `enroll` IS MAPPED AND THE OTHER CATEGORIES ARE NOT. Measured on
+ * production 2026-09-06, over seven days: `enroll` carried 196 events of which
+ * 57 were attributed to a person - the highest attribution rate of any
+ * category, and better in absolute terms than `pricing` (57 events, 0
+ * attributed) and `program` (64 events, 2 attributed) combined. Someone on an
+ * enrolment page is further down the funnel than someone reading a programme
+ * description, so leaving the best-attributed and most intent-bearing category
+ * unread was losing the clearest signal available.
+ *
+ * It maps to `enrollment_cta_click` (tier 2) rather than a tier-1 page view
+ * because reaching an enrolment page is an act, not a browse. Tier matters:
+ * HIGH_INTENT requires a tier-3+ signal, so this deliberately does NOT on its
+ * own promote a learner into the high-intent overlay.
  * page_events.lead_id exists because of EPIC 1's D1 fix.
  */
 const LEAD_SOURCES: Record<string, string> = {
@@ -109,6 +123,7 @@ const LEAD_SOURCES: Record<string, string> = {
              WHEN event_type = 'booking_modal_opened' THEN 'booking_modal_opened'
              WHEN event_type = 'booking_date_selected' THEN 'booking_date_selected'
              WHEN event_type = 'cta_click' THEN 'enrollment_cta_click'
+             WHEN page_category = 'enroll' THEN 'enrollment_cta_click'
              WHEN page_category = 'pricing' THEN 'pricing_page_view'
              WHEN page_category = 'program' THEN 'accelerator_page_view'
              ELSE NULL END AS signal,
