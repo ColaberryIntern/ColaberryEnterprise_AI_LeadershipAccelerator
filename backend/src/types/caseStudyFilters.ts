@@ -125,6 +125,22 @@ export interface CaseStudySurfaceProfile {
     readonly title: string;
     readonly description: string;
   };
+  /**
+   * WHERE THIS SURFACE IS READ, absolute, and null while it has no page.
+   *
+   * Each surface is a BRAND ON ITS OWN DOMAIN - AI Flotation runs its own
+   * Cloudflare zone specifically to keep the entity boundary clean - so a
+   * record published to two surfaces is genuinely two pages, not one page
+   * linked twice. `caseStudyPublicProjection` derives `seo.canonicalUrl` from
+   * this, which is what stops a reader on aiflotation.com being handed a
+   * canonical pointing at Colaberry and what lets each brand rank as itself.
+   *
+   * Null means the surface has no reader-facing page yet, and the projection
+   * falls back to the platform's own address rather than inventing one.
+   */
+  readonly publicBaseUrl: string | null;
+  /** Path segment before the slug on that domain, e.g. `/stories` or `/results`. */
+  readonly detailPathPrefix: string | null;
   readonly defaultFilters: CaseStudyFilterInput;
   readonly defaultSort: CaseStudySortKey;
   readonly sectionOrder: readonly CaseStudySectionKey[];

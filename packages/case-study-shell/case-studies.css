@@ -1,0 +1,194 @@
+/* ============================================================================
+   The case-study shell: structure for the published-records index and the
+   record page, shared by every brand app.
+
+   NOT ONE COLOUR IS DECIDED HERE. Every value below is a `--cs-*` custom
+   property the HOST app maps to its own palette, which is what lets one
+   stylesheet serve Colaberry Enterprise, AI Flotation and (next)
+   training.colaberry.com without any of them looking like each other. A literal
+   hex in this file would be one brand's decision imposed on the others.
+
+   Ali, 2026-09-05: the record page should "look almost identical to enterprise
+   but filtered, colored, etc... for this brand". Identical is the job of the
+   structure below; different is the job of the six variables above it.
+
+   THE HOST MUST DEFINE THESE, or the page renders unstyled rather than wrong:
+     --cs-fg, --cs-fg-muted, --cs-bg, --cs-surface, --cs-line, --cs-accent,
+     --cs-accent-contrast, --cs-radius
+   ========================================================================= */
+
+.cs-record { display: grid; gap: var(--cs-gap, 2.5rem); padding-block: 2.5rem; }
+
+/* --------------------------------------------------------------- masthead --- */
+
+/* Words left, cover right. The picture costs no vertical space there, and it
+   sits beside the standfirst that explains it. One column below 60rem, cover
+   last, because on a phone the title answers "what is this" fastest. */
+.cs-hero { display: grid; gap: 1.5rem; align-items: center; }
+@media (min-width: 60rem) {
+  .cs-hero { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 3rem; }
+}
+.cs-hero-copy { display: grid; gap: .75rem; justify-items: start; min-width: 0; }
+.cs-title { margin: 0; overflow-wrap: anywhere; }
+.cs-standfirst { margin: 0; color: var(--cs-fg-muted); max-width: 60ch; }
+.cs-eyebrow {
+  margin: 0;
+  font-size: .8rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.cs-back { color: var(--cs-fg-muted); text-decoration: underline; text-underline-offset: 2px; }
+
+.cs-cover { margin: 0; min-width: 0; }
+.cs-cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+
+/* The verification class, printed as a word. Colour is never the only carrier:
+   a reader who cannot see the accent still reads "verified". */
+.cs-verify {
+  margin: 0;
+  font-size: .78rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+
+/* ------------------------------------------------------------------ facts --- */
+
+/* Six short label/value pairs across one row, not two-across down three. The
+   Enterprise page shipped the narrow version once and left a screen-height void
+   beside it; the fix is a full-width row and it belongs in the shared shell so
+   no brand re-earns that bug. */
+.cs-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding-block: 1.5rem;
+  border-block: 1px solid var(--cs-line);
+}
+.cs-fact { display: grid; gap: .2rem; min-width: 0; }
+.cs-term {
+  margin: 0;
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+.cs-value { margin: 0; overflow-wrap: anywhere; }
+
+/* ------------------------------------------------------------------ bands --- */
+
+.cs-band { display: grid; gap: 1rem; }
+.cs-band-title { margin: 0; }
+.cs-sub { margin: .5rem 0 0; font-size: 1rem; }
+.cs-prose { margin: 0; max-width: 68ch; line-height: 1.65; }
+.cs-list { margin: 0; padding-left: 1.15rem; display: grid; gap: .4rem; max-width: 68ch; }
+
+/* ---------------------------------------------------------------- metrics --- */
+
+/* 24rem, not 20: a metric card carries a baseline, a unit, a sample and a
+   paragraph of methodology, so its floor has to be a width that paragraph can
+   be read at. Narrower and every card becomes a tower of forty-character lines. */
+.cs-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cs-metric {
+  display: grid;
+  gap: .6rem;
+  align-content: start;
+  padding: 1.5rem;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cs-metric-value { margin: 0; font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.cs-metric-label { margin: 0; color: var(--cs-fg-muted); }
+
+/* Label beside its value, not above it. Four rows printing a small-caps label
+   on its own line is eight lines of card height to carry four facts. */
+.cs-metric-context { display: grid; gap: .5rem; margin: 0; }
+@media (min-width: 34rem) {
+  .cs-metric-context > div {
+    display: grid;
+    grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+    column-gap: 1rem;
+    align-items: baseline;
+  }
+}
+.cs-limits {
+  margin: .3rem 0 0;
+  padding-left: 1.1rem;
+  font-size: .9rem;
+  color: var(--cs-fg-muted);
+}
+
+/* ------------------------------------------------- timeline, roadmap, chips --- */
+
+.cs-timeline, .cs-roadmap, .cs-people, .cs-repos, .cs-chips, .cs-artifacts {
+  margin: 0; padding: 0; list-style: none;
+}
+.cs-timeline, .cs-roadmap { display: grid; gap: .9rem; }
+.cs-timeline-item, .cs-roadmap-item {
+  display: grid;
+  gap: .2rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--cs-line);
+}
+.cs-timeline-date, .cs-roadmap-status {
+  font-size: .74rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.cs-timeline-label, .cs-roadmap-label { font-weight: 600; }
+.cs-timeline-detail, .cs-roadmap-detail { margin: 0; color: var(--cs-fg-muted); max-width: 68ch; }
+
+.cs-chipset { display: grid; gap: .5rem; }
+.cs-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.cs-chip {
+  padding: .15rem .6rem;
+  font-size: .85rem;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: 999px;
+}
+
+.cs-people, .cs-repos { display: grid; gap: .5rem; }
+.cs-repo { display: flex; gap: .75rem; align-items: baseline; }
+.cs-repo-date { font-size: .8rem; color: var(--cs-fg-muted); }
+
+/* -------------------------------------------------------------- artifacts --- */
+
+.cs-artifacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1.25rem;
+}
+.cs-artifact { display: grid; gap: .5rem; align-content: start; min-width: 0; }
+.cs-artifact img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+.cs-artifact-title { margin: 0; font-weight: 600; }
+.cs-artifact-note { margin: 0; font-size: .9rem; color: var(--cs-fg-muted); max-width: 60ch; }
+
+/* -------------------------------------------------------------- not found --- */
+
+.cs-notfound { display: grid; gap: 1rem; justify-items: start; padding-block: 3rem; }

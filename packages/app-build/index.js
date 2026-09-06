@@ -23,6 +23,19 @@ const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i;
 const REFERENCE = /(href=["']|src=["']|url\(["']?)([^"')?#]+)(\?v=[0-9a-f]+)?/gi;
 
 const TRACKER_SOURCE = path.join(__dirname, '..', 'tracking-sdk', 'track-v2.js');
+/*
+ * The case-study shell: ONE renderer for the published-records index and the
+ * record page, shipped to every brand app that wants them.
+ *
+ * A package rather than a file per app because this repeats - AI Flotation has
+ * it now and training.colaberry.com is next, and three hand-written copies of
+ * the same screens drift apart within a month. Structure lives here; every
+ * colour comes from CSS custom properties the host app maps to its own palette,
+ * so each page looks like its brand without the logic being rewritten.
+ */
+const SHELL_JS = path.join(__dirname, '..', 'case-study-shell', 'case-studies.js');
+const SHELL_RECORD = path.join(__dirname, '..', 'case-study-shell', 'case-study-record.js');
+const SHELL_CSS = path.join(__dirname, '..', 'case-study-shell', 'case-studies.css');
 
 function copyTree(from, to, transform) {
   fs.mkdirSync(to, { recursive: true });
@@ -133,6 +146,12 @@ function buildApp(options) {
   // so an extracted app keeps working when it no longer shares a host with the platform.
   fs.mkdirSync(path.join(distDir, 'assets'), { recursive: true });
   fs.copyFileSync(TRACKER_SOURCE, path.join(distDir, 'assets', 'track-v2.js'));
+
+  // Same reasoning as the tracker: it ships WITH the app, so an app that stops
+  // sharing a host with the platform keeps working.
+  for (const [source, name] of [[SHELL_JS, 'case-studies.js'], [SHELL_RECORD, 'case-study-record.js'], [SHELL_CSS, 'case-studies.css']]) {
+    if (fs.existsSync(source)) fs.copyFileSync(source, path.join(distDir, 'assets', name));
+  }
 
   // Last, so the tracker and every copied asset are on disk and hashable.
   fingerprintAssets(distDir);
