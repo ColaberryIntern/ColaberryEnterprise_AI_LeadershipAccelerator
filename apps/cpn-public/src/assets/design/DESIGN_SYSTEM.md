@@ -1,6 +1,8 @@
 # Career Pathways Network — Design System
 
-CPN is a nonprofit (501(c)(3), separate legal entity from Colaberry) offering scholarships and career pathways. Three audiences: scholarship applicants, church/community partners, donors. The design stance: **dignity and access, not charity** — confident and warm, institutional enough for a donor deck, human enough for a scholarship form. It is built for cheap phones in poor lighting: highest contrast, no thin weights, large type and 44px+ tap targets.
+CPN is a Texas nonprofit corporation offering scholarships and career pathways, operating publicly as **OpportunityLift** at opportunitylift.org. Three audiences: scholarship applicants, church/community partners, donors.
+
+> **This line used to say "501(c)(3)". It was wrong, and it mattered.** Career Pathways Network has no federal tax exempt determination and has not filed for one, so nothing built from this file may describe contributions as tax deductible or the organisation as a 501(c)(3). It is also not a "separate legal entity from Colaberry" in the arm's length sense that phrasing implies: CPN's president is Colaberry's managing director and CPN's principal office is Colaberry's office. A design system is the document people copy boilerplate out of, which is exactly why an incorrect legal claim sitting in its opening paragraph was worth correcting rather than leaving to the lawyers. The design stance: **dignity and access, not charity** — confident and warm, institutional enough for a donor deck, human enough for a scholarship form. It is built for cheap phones in poor lighting: highest contrast, no thin weights, large type and 44px+ tap targets.
 
 ## Source
 

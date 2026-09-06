@@ -1,10 +1,10 @@
 /*
- * Career Pathways Network — public site (opportunitylift.org).
+ * OpportunityLift - Career Pathways Network's public site (opportunitylift.org).
  *
  * The palette, type, spacing, radius, shadow and motion here are NOT invented. They come
  * from the CPN design system, vendored verbatim into `design/` from the Multi-Brand
- * Tokens source. Variant A ("Grove") is the default: a deep green accent on warm ivory,
- * Bitter headings over Atkinson Hyperlegible body, 12px radius.
+ * Tokens source. Variant A ("Grove") is the default and is what ships: a deep green
+ * accent on warm ivory, Bitter headings over Atkinson Hyperlegible body, 12px radius.
  *
  * Read `design/DESIGN_SYSTEM.md` before changing anything here. Two rules from it are
  * load-bearing and easy to break by accident:
@@ -20,7 +20,9 @@
  * requirement, so do not swap it for something that photographs better.
  *
  * Switching the whole site to variant B ("Vestry", purple) is one attribute on <html>:
- * data-variant="vestry". Nothing in this file needs to change for that to work.
+ * data-variant="vestry". Nothing in this file needs to change for that to work, but the
+ * font links in each page's <head> load Grove's faces only - swap those too, or Vestry
+ * falls back to Georgia and system-ui.
  *
  * Dependency-free by design. No framework, no build step beyond token substitution. This
  * file is copied verbatim by packages/app-build (only .html is transformed), which is why
@@ -74,52 +76,305 @@
 }
 
 :root {
-  /* A layout measure, not a brand token; the source takes no position on it. */
-  --wrap: 46rem;
+  /* Layout measures, not brand tokens; the source takes no position on them. */
+  --wrap: 68rem;
+  --measure: 38rem;
 }
-
-/* ---------------------------------------------------------------------------
-   Page. This is still the skeleton: it exists to prove domain resolution,
-   tracking, entry-point attribution and lead ingest end to end. What changed is
-   that it now wears CPN's real identity instead of a placeholder green I picked
-   before the design system existed. The real site is a separate design project.
-   --------------------------------------------------------------------------- */
 
 * { box-sizing: border-box; }
 
-main {
+/* ---------------------------------------------------------------------------
+   Skip link. First focusable thing on every page.
+   --------------------------------------------------------------------------- */
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  z-index: 10;
+}
+.skip:focus { left: var(--space-4); top: var(--space-4); }
+
+.wrap {
+  width: 100%;
   max-width: var(--wrap);
   margin: 0 auto;
-  padding: var(--space-12) var(--page-padding) var(--space-16);
+  padding-left: var(--page-padding);
+  padding-right: var(--page-padding);
 }
 
-h1 { letter-spacing: -0.01em; margin-bottom: var(--space-2); }
+/* A column held to a comfortable reading measure. Body copy uses this; full-width
+   grids do not. */
+.measure { max-width: var(--measure); }
 
-p.tagline {
-  color: var(--fg-muted);
+/* ---------------------------------------------------------------------------
+   Masthead. The nav wraps rather than collapsing into a menu button: five links
+   and one action fit on a phone across two rows, and a disclosure widget is a
+   control someone has to discover before they can navigate.
+   --------------------------------------------------------------------------- */
+.masthead {
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-4);
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: var(--fw-heading);
   font-size: var(--fs-h4);
-  margin: 0 0 var(--space-8);
+  color: var(--fg);
+  text-decoration: none;
+  line-height: 1;
 }
 
-.banner {
-  border-left: 3px solid var(--accent);
-  background: var(--accent-soft);
-  padding: var(--space-3) var(--space-4);
-  border-radius: 0 var(--radius) var(--radius) 0;
-  font-size: var(--fs-caption);
+/* Three ascending steps and a summit dot: the mark described in DESIGN_SYSTEM.md,
+   drawn in currentColor so it inherits the accent in light and dark alike. */
+.logo svg { color: var(--accent); flex: none; }
+
+.spacer { flex: 1 1 auto; }
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+/*
+   `:not(.btn)` IS LOAD-BEARING, NOT TIDINESS.
+
+   `.nav a` is specificity (0,1,1) and `.btn-primary` is (0,1,0), so an unscoped `.nav a`
+   colour rule wins against the button's own `color`. The nav's primary action rendered as
+   deep green text on the deep green accent fill: the single most important call to action
+   on every page, invisible. It passed a body-background check, a token audit and a build,
+   and was only caught by looking at a screenshot.
+
+   Excluding `.btn` here keeps the cascade honest without raising specificity elsewhere.
+   `buttonContrast` in the verification harness now measures this rather than trusting it.
+*/
+.nav a:not(.btn) {
   color: var(--fg-muted);
-  margin-bottom: var(--space-8);
+  text-decoration: none;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
 }
 
-form {
-  border: 1px solid var(--line);
-  border-radius: calc(var(--radius) + 4px);
-  padding: var(--space-6);
-  background: var(--bg-elevated);
+.nav a:not(.btn):hover { color: var(--accent); }
+.nav a[aria-current="page"] { color: var(--fg); text-decoration: underline; text-underline-offset: 4px; }
+
+/* The nav's button keeps the caption size so it sits on the same baseline as the links,
+   without inheriting their colour. */
+.nav a.btn { font-size: var(--fs-caption); }
+
+/* ---------------------------------------------------------------------------
+   Buttons. One filled primary per view (DESIGN_SYSTEM.md rule 2).
+   --------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-target);
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease);
+}
+
+.btn:active { transform: scale(var(--press-scale)); }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
   box-shadow: var(--shadow);
 }
+.btn-primary:hover { background: var(--accent-hover); color: var(--accent-contrast); }
+.btn-primary:active { background: var(--accent-press); }
 
-form h2 { margin: 0 0 var(--space-4); font-size: var(--fs-h4); }
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border-color: var(--line);
+}
+.btn-secondary:hover { background: var(--accent-soft); color: var(--fg); }
+
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ---------------------------------------------------------------------------
+   Sections and headings.
+   --------------------------------------------------------------------------- */
+section { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+section.tight { padding-top: var(--space-8); padding-bottom: var(--space-8); }
+
+.hero { padding-top: var(--space-16); padding-bottom: var(--space-12); }
+.hero h1 { max-width: 18ch; margin-bottom: var(--space-4); }
+.hero .lede { font-size: var(--fs-h4); color: var(--fg-muted); max-width: var(--measure); margin: 0 0 var(--space-8); }
+
+.eyebrow {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+
+p { max-width: var(--measure); }
+ul, ol { max-width: var(--measure); padding-left: var(--space-6); }
+li { margin-bottom: var(--space-2); }
+
+.lead { font-size: var(--fs-h4); color: var(--fg-muted); }
+.note { font-size: var(--fs-caption); color: var(--fg-muted); }
+
+/* ---------------------------------------------------------------------------
+   Status notice. Carries the things that are true today and would otherwise be
+   assumed: no federal tax exemption, applications not open, no automatic email.
+   Amber rather than green, because it is a caveat and not a feature.
+   --------------------------------------------------------------------------- */
+.notice {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--warning);
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: var(--space-4) var(--space-6);
+  margin: 0 0 var(--space-8);
+  max-width: var(--measure);
+}
+.notice h2 { font-size: var(--fs-h4); margin-bottom: var(--space-2); }
+.notice p { margin: 0 0 var(--space-2); font-size: var(--fs-caption); color: var(--fg-muted); }
+.notice p:last-child { margin-bottom: 0; }
+
+/* ---------------------------------------------------------------------------
+   Cards and grids.
+   --------------------------------------------------------------------------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+  box-shadow: var(--shadow);
+}
+.card h3 { font-size: var(--fs-h4); margin-bottom: var(--space-2); }
+.card p { margin: 0; color: var(--fg-muted); font-size: var(--fs-caption); max-width: none; }
+.card p + p { margin-top: var(--space-2); }
+.card ul { max-width: none; font-size: var(--fs-caption); color: var(--fg-muted); margin: 0; }
+
+/* Numbered steps. The number is decorative; the heading carries the meaning. */
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-heading);
+  font-weight: var(--fw-heading);
+  margin-bottom: var(--space-3);
+}
+
+/* ---------------------------------------------------------------------------
+   Money table. Every row is a real allocation, so it is a table and not a
+   graphic: a screen reader gets the same breakdown a sighted reader does.
+   --------------------------------------------------------------------------- */
+.table-scroll { overflow-x: auto; margin-top: var(--space-6); }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 30rem;
+  font-size: var(--fs-caption);
+}
+
+caption {
+  text-align: left;
+  color: var(--fg-muted);
+  font-size: var(--fs-caption);
+  padding-bottom: var(--space-3);
+}
+
+th, td {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+th { font-weight: 700; }
+td.amount, th.amount { text-align: right; font-variant-numeric: tabular-nums; }
+tfoot td { font-weight: 700; border-bottom: 0; }
+
+/*
+   ON A PHONE THE NUMBERS MUST BE ON SCREEN, NOT BEHIND A SCROLL.
+
+   `min-width: 30rem` keeps the columns from collapsing on a laptop, but at 360px it
+   pushed the Amount and Share columns outside the scroll container. The page had no
+   horizontal overflow - the container absorbed it correctly - so every automated check
+   passed while the only two columns that carry the actual breakdown were invisible unless
+   you discovered you could swipe the table sideways.
+
+   This is the money page, and the audience the design system names is on cheap phones. So
+   below the small breakpoint the minimum is dropped and the label column wraps instead.
+   `.table-scroll` stays for the widths in between.
+*/
+@media (max-width: 560px) {
+  table { min-width: 0; }
+  th, td { padding: var(--space-2); }
+}
+
+/* ---------------------------------------------------------------------------
+   Definition lists for entity facts.
+   --------------------------------------------------------------------------- */
+.facts { margin: var(--space-6) 0 0; max-width: var(--measure); }
+.facts div { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.facts dt { font-weight: 700; flex: 0 0 11rem; font-size: var(--fs-caption); }
+.facts dd { margin: 0; color: var(--fg-muted); font-size: var(--fs-caption); flex: 1 1 14rem; }
+
+/* ---------------------------------------------------------------------------
+   Forms.
+   --------------------------------------------------------------------------- */
+.intake {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+  box-shadow: var(--shadow);
+  max-width: var(--measure);
+  margin-top: var(--space-6);
+}
+
+.intake h2 { font-size: var(--fs-h4); margin-bottom: var(--space-2); }
+.intake > p:first-of-type { margin-top: 0; }
 
 label {
   display: block;
@@ -128,61 +383,54 @@ label {
   margin: var(--space-4) 0 var(--space-1);
 }
 
-input, textarea {
+input, textarea, select {
   width: 100%;
   min-height: var(--touch-target);
   padding: var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--bg-elevated);
+  background: var(--bg);
   color: var(--fg);
   font: inherit;
 }
 
-input:focus-visible, textarea:focus-visible, button:focus-visible {
+textarea { min-height: 7rem; }
+
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
   outline: none;
-  border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
 
 .consent {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-3);
   align-items: flex-start;
   margin-top: var(--space-4);
-  font-size: var(--fs-caption);
-  color: var(--fg-muted);
 }
+.consent input { width: auto; min-height: 0; margin-top: 0.35rem; flex: none; }
+.consent label { margin: 0; font-weight: 400; font-size: var(--fs-caption); color: var(--fg-muted); }
 
-.consent input { width: auto; min-height: 0; margin-top: 0.3rem; }
+.intake button[type="submit"] { margin-top: var(--space-6); width: 100%; }
+.intake button[disabled] { opacity: 0.55; cursor: progress; }
 
-button {
-  margin-top: var(--space-6);
-  width: 100%;
-  min-height: var(--touch-target);
-  padding: var(--space-3) var(--space-4);
-  border: 0;
-  border-radius: var(--radius);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background var(--motion-fast) var(--ease);
-}
+.status { margin-top: var(--space-4); font-size: var(--fs-caption); min-height: 1.4rem; }
+.status[data-state="ok"] { color: var(--success); }
+.status[data-state="error"] { color: var(--danger); }
 
-button:hover:not(:disabled) { background: var(--accent-hover); }
-button:active:not(:disabled) { background: var(--accent-press); }
-button:disabled { opacity: 0.55; cursor: progress; }
-
-#status { margin-top: var(--space-4); font-size: var(--fs-caption); min-height: 1.4rem; }
-#status[data-state="ok"] { color: var(--success); }
-#status[data-state="error"] { color: var(--danger); }
-
-footer {
-  margin-top: var(--space-12);
-  padding-top: var(--space-6);
+/* ---------------------------------------------------------------------------
+   Footer.
+   --------------------------------------------------------------------------- */
+.site-footer {
   border-top: 1px solid var(--line);
+  margin-top: var(--space-16);
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
   font-size: var(--fs-caption);
   color: var(--fg-muted);
 }
+.site-footer a { color: var(--fg-muted); }
+.site-footer a:hover { color: var(--accent); }
+.site-footer nav { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin-bottom: var(--space-6); }
+.site-footer nav a { min-height: var(--touch-target); display: inline-flex; align-items: center; font-weight: 700; }
+.site-footer .legal { max-width: 62rem; }
+.site-footer .legal p { max-width: none; margin: 0 0 var(--space-3); }

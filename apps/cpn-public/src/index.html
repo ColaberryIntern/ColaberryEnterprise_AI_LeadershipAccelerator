@@ -3,8 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Career Pathways Network</title>
-    <meta name="description" content="Career Pathways Network opens access and learning pathways for people who were never handed one." />
+    <title>OpportunityLift | Career Pathways Network</title>
+    <meta name="description" content="OpportunityLift is a Dallas Fort Worth scholarship program. We raise money so people who cannot pay for career training can start it and finish it." />
+    <link rel="canonical" href="{{brand.publicUrl}}/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Bitter + Atkinson Hyperlegible are the Grove variant's faces. Atkinson Hyperlegible
@@ -15,86 +16,244 @@
     <link rel="stylesheet" href="/assets/site.css" />
   </head>
   <body>
-    <main>
-      <h1>Career Pathways Network</h1>
-      <p class="tagline">Access and learning pathways for people who were never handed one.</p>
+    <a class="skip" href="#main">Skip to content</a>
 
-      <div class="banner">
-        Skeleton application. It exists to prove domain resolution, visitor tracking,
-        entry-point attribution, lead ingest and tenant context end to end &mdash; not to be
-        the finished site.
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg width="26" height="22" viewBox="0 0 26 22" aria-hidden="true" fill="currentColor">
+            <rect x="0" y="13" width="5" height="9" rx="2.5"></rect>
+            <rect x="7" y="8" width="5" height="14" rx="2.5"></rect>
+            <rect x="14" y="3" width="5" height="19" rx="2.5"></rect>
+            <circle cx="23" cy="3" r="3"></circle>
+          </svg>
+          OpportunityLift
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav" aria-label="Main">
+          <a href="/scholarships/">Scholarships</a>
+          <a href="/how-funds-work/">How funding works</a>
+          <a href="/partners/">Partners</a>
+          <a href="/support/">Support this work</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-primary" href="/scholarships/" data-cta="Register your interest">Register your interest</a>
+        </nav>
       </div>
+    </header>
 
-      <form id="intake" data-form="scholarship_interest">
-        <h2>Scholarship interest</h2>
-        <label for="name">Full name</label>
-        <input id="name" name="name" type="text" required />
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" required />
-        <label for="phone">Phone (optional)</label>
-        <input id="phone" name="phone" type="tel" />
-        <label for="city_state">City / State (optional)</label>
-        <input id="city_state" name="city_state" type="text" />
-        <div class="consent">
-          <input id="consent" name="consent_contact" type="checkbox" />
-          <label for="consent" style="margin:0;font-weight:400">
-            I agree to be contacted by Career Pathways Network about this enquiry.
-          </label>
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Dallas Fort Worth</p>
+          <h1>A year of training, paid for.</h1>
+          <p class="lede">
+            OpportunityLift is a scholarship program. We raise money so that people who
+            cannot pay for career training can start it, and finish it. The first pathway
+            we fund is AI.
+          </p>
+          <div class="actions">
+            <a class="btn btn-primary" href="/scholarships/" data-cta="See what a scholarship covers">See what a scholarship covers</a>
+            <a class="btn btn-secondary" href="/how-funds-work/" data-cta="See where the money goes">See where the money goes</a>
+          </div>
         </div>
-        <button type="submit" data-cta="Apply for a scholarship">Apply for a scholarship</button>
-        <div id="status" role="status" aria-live="polite"></div>
-      </form>
+      </section>
 
-      <footer>
-        Source <code>cpn</code> &middot; entry <code>scholarship_interest</code> &middot;
-        brand <code>cpn</code>. Tenant is resolved server-side and is never
-        sent by this page.
-      </footer>
+      <!--
+        THE STATUS PANEL SITS ABOVE EVERYTHING IT QUALIFIES.
+
+        Three things about this program are not yet true, and every one of them is a thing
+        a reader would otherwise assume: that a nonprofit website means deductible
+        donations, that a scholarship page means open applications, and that submitting a
+        form means an email arrives. Putting the caveats in a footer would be technically
+        honest and practically misleading, so they run second, under the promise.
+      -->
+      <section class="tight">
+        <div class="wrap">
+          <div class="notice">
+            <h2>Where this program is today</h2>
+            <p>
+              Career Pathways Network is a Texas nonprofit corporation, formed in February
+              2026. It does not yet have federal tax exempt status, so contributions are
+              not tax deductible at this time.
+            </p>
+            <p>
+              Applications are not open yet. We are still setting who is eligible, how many
+              scholarships we can fund, and how we will choose. You can tell us you are
+              interested now, and we will come back to you when there is something to apply
+              for.
+            </p>
+            <p>
+              We cannot send automatic email from this site yet. If you fill in a form, a
+              person reads it and follows up. Nothing lands in your inbox on its own.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="tight">
+        <div class="wrap">
+          <h2>What a scholarship is</h2>
+          <p>
+            A scholarship is twelve months of training at an approved provider, paid for by
+            OpportunityLift. It is not a loan and there is nothing to pay back. What it asks
+            from you is time: about 25 hours a week, every week, for a year.
+          </p>
+
+          <div class="grid">
+            <article class="card">
+              <h3>Twelve months, fully funded</h3>
+              <p>
+                We do not award a scholarship until the whole year is paid for. That way a
+                scholar is never told halfway through that the money ran out.
+              </p>
+            </article>
+            <article class="card">
+              <h3>About 25 hours a week</h3>
+              <p>
+                Training, projects and career preparation. This is the part we cannot do for
+                you, and it is the honest reason the program is not right for everyone.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Work you can show</h3>
+              <p>
+                The pathway is built around projects and a portfolio, so that at the end you
+                have something to point at rather than only a certificate.
+              </p>
+            </article>
+            <article class="card">
+              <h3>We check before we pay</h3>
+              <p>
+                We pay the provider monthly, after the month, and only once we have
+                confirmed the training was there and the scholar took part.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="tight">
+        <div class="wrap">
+          <h2>How it works</h2>
+
+          <div class="grid">
+            <article class="card">
+              <span class="step-number" aria-hidden="true">1</span>
+              <h3>Start learning for free</h3>
+              <p>
+                You do not need us to begin. The free introductory AI training is provided
+                by <a href="https://refactored.ai">refactored.ai</a>, which is operated by
+                Colaberry Inc.
+              </p>
+            </article>
+            <article class="card">
+              <span class="step-number" aria-hidden="true">2</span>
+              <h3>Tell us you are interested</h3>
+              <p>
+                Leave your details. When eligibility and dates are set, we come back to you
+                with what to do next.
+              </p>
+            </article>
+            <article class="card">
+              <span class="step-number" aria-hidden="true">3</span>
+              <h3>We fund a scholarship</h3>
+              <p>
+                Every 2,500 dollars raised and settled funds one more scholarship. We do not
+                award against money we only expect to receive.
+              </p>
+            </article>
+            <article class="card">
+              <span class="step-number" aria-hidden="true">4</span>
+              <h3>You train for a year</h3>
+              <p>
+                Twelve months with an approved provider, with the cost paid month by month
+                as the training is delivered.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="tight">
+        <div class="wrap">
+          <h2>Where the money goes</h2>
+          <p>
+            A fully funded scholarship is 2,500 dollars. Most of that, 1,800 dollars, pays
+            the training provider at 150 dollars a month for twelve months. The rest covers
+            running the scholarship, a small fund for scholar needs such as exam fees or
+            internet access, and payment fees.
+          </p>
+          <p>
+            Career Pathways Network holds and controls the money throughout. A donation is
+            never an account belonging to a named person, and money that is not used stays
+            in the scholarship program.
+          </p>
+          <div class="actions">
+            <a class="btn btn-secondary" href="/how-funds-work/" data-cta="See the full breakdown">See the full breakdown</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="tight">
+        <div class="wrap">
+          <h2>Who runs this</h2>
+          <p>
+            Career Pathways Network is run by a board of four. Colaberry is our training
+            provider, and that is not an arm's length relationship: our president is also
+            Colaberry's managing director, and our office is Colaberry's office. You should
+            know that before you read anything else we say about providers.
+          </p>
+          <div class="actions">
+            <a class="btn btn-secondary" href="/about/" data-cta="Read about the organization">Read about the organization</a>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Tell us you are interested</h2>
+          <p>
+            It takes a minute, it commits you to nothing, and it is how you hear first when
+            applications open.
+          </p>
+          <div class="actions">
+            <a class="btn btn-primary" href="/scholarships/" data-cta="Register your interest">Register your interest</a>
+          </div>
+        </div>
+      </section>
     </main>
 
+    <footer class="site-footer">
+      <div class="wrap">
+        <nav aria-label="Footer">
+          <a href="/scholarships/">Scholarships</a>
+          <a href="/how-funds-work/">How funding works</a>
+          <a href="/partners/">Partners</a>
+          <a href="/support/">Support this work</a>
+          <a href="/about/">About</a>
+          <a href="/privacy/">Privacy</a>
+        </nav>
+        <div class="legal">
+          <p>
+            OpportunityLift is the scholarship program of <strong>Career Pathways
+            Network</strong>, a Texas nonprofit corporation. 200 Chisholm Place, Suite 200,
+            Plano, Texas 75075. Contact
+            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>.
+          </p>
+          <p>
+            Career Pathways Network does not yet have federal tax exempt status.
+            Contributions are not tax deductible at this time. A scholarship may count as
+            taxable income to the person who receives it. We cannot give tax advice.
+          </p>
+          <p>
+            Colaberry Inc. is an approved training provider and is a related party: Career
+            Pathways Network's president is also Colaberry's managing director, and Career
+            Pathways Network's principal office is Colaberry's office.
+          </p>
+        </div>
+      </div>
+    </footer>
+
     <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
-    <script>
-      (function () {
-        var API = '{{brand.platformApiBase}}';
-        var form = document.getElementById('intake');
-        var status = document.getElementById('status');
-
-        form.addEventListener('submit', function (event) {
-          event.preventDefault();
-          var button = form.querySelector('button');
-          button.disabled = true;
-          status.textContent = 'Sending...';
-          status.removeAttribute('data-state');
-
-          var payload = {};
-          new FormData(form).forEach(function (value, key) { payload[key] = value; });
-          payload.consent_contact = form.querySelector('#consent').checked;
-          // Attribution the server cannot infer from the request alone.
-          payload.page_url = window.location.href;
-          try {
-            payload.visitor_fingerprint = localStorage.getItem('rfx_fp') || undefined;
-          } catch (e) { /* blocked storage: ingest still works, just unlinked */ }
-
-          fetch(API + '/api/leads/ingest?source={{brand.sourceSlug}}&entry=scholarship_interest', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          })
-            .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, body: b }; }); })
-            .then(function (result) {
-              if (!result.ok) throw new Error(result.body && result.body.error ? result.body.error : 'Submission failed');
-              if (window.rfxTrack) window.rfxTrack('form_submit', { form: 'scholarship_interest' });
-              status.textContent = 'Thank you. We have your details.';
-              status.setAttribute('data-state', 'ok');
-              form.reset();
-            })
-            .catch(function (err) {
-              status.textContent = err.message || 'Something went wrong.';
-              status.setAttribute('data-state', 'error');
-            })
-            .finally(function () { button.disabled = false; });
-        });
-      })();
-    </script>
   </body>
 </html>

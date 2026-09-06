@@ -11,9 +11,26 @@ apps/cpn-public/
 ├── package.json
 ├── brand.config.js
 ├── build.js
-├── src/index.html
-└── EXTRACTION.md
+├── README.md
+├── EXTRACTION.md
+└── src/
+    ├── index.html
+    ├── scholarships/index.html      form: scholarship_interest
+    ├── how-funds-work/index.html
+    ├── partners/index.html          form: community_partner_interest
+    ├── support/index.html           form: champion_interest
+    ├── about/index.html
+    ├── privacy/index.html
+    └── assets/
+        ├── site.css                 imports design/, holds page styling
+        ├── forms.js                 shared ingest handler for all three forms
+        └── design/                  vendored CPN token set + DESIGN_SYSTEM.md
 ```
+
+Routes are directories because nginx resolves them that way
+(`try_files $uri $uri/ $uri.html`). A page added as `src/<slug>.html` rather than
+`src/<slug>/index.html` will resolve, but at `/slug` without the trailing slash, which is
+not the URL the rest of the site links to.
 
 ## Workspace dependencies
 
@@ -30,7 +47,7 @@ No dependency on `apps/*`, `frontend/*` or `backend/*`. Enforced by
 
 | Endpoint | Use |
 |---|---|
-| `POST /api/ingest?source=cpn&entry=<entry>` | lead capture |
+| `POST /api/leads/ingest?source=cpn&entry=<entry>` | lead capture |
 | `POST /api/t/event` | pageview, cta_click, form_start, form_submit |
 | `POST /api/t/identify` | signed `jx` cross-domain journey token |
 
@@ -70,9 +87,16 @@ No dependency on `apps/*`, `frontend/*` or `backend/*`. Enforced by
 
 **Brand domains**
 
+CPN's domain is `opportunitylift.org`, **not** `cpn.org`. The nonprofit does not own
+`cpn.org` — it resolves to a different Cloudflare account — and mail as `@cpn.org` could
+never have authenticated, because SPF and DKIM can only be published for a domain you
+control. `opportunitylift.org` was registered under CPN's own Cloudflare account on
+2026-08-31, kept separate from Colaberry's and AI Flotation's because the nonprofit's
+independence is a donor and grant commitment.
+
 | hostname | purpose |
 |---|---|
-| `cpn.org` | web |
+| `opportunitylift.org` | web |
 
 **Sender profile**
 

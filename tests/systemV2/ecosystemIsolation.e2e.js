@@ -99,7 +99,7 @@ async function main() {
       email: TEST_EMAIL,
       consent_contact: true,
       visitor_fingerprint: FINGERPRINT,
-      page_url: 'https://cpn.org/scholarships',
+      page_url: 'https://opportunitylift.org/scholarships/',
     }),
   });
 
@@ -162,7 +162,7 @@ async function main() {
       // A hostile page would send these hoping to write into another tenant.
       tenant_id: SPOOFED_TENANT,
       brand_id: '00000000-0000-4000-8000-000000000001',
-      page_url: 'https://cpn.org/scholarships',
+      page_url: 'https://opportunitylift.org/scholarships/',
     }),
   });
   check('submission still accepted', spoofed.status === 200, `status ${spoofed.status}`);
