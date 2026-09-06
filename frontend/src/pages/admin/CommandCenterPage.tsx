@@ -33,10 +33,25 @@ interface MetricTile {
   errorClass?: string;
 }
 
+interface FeedItem {
+  id: string;
+  label: string;
+  detail?: string;
+  at?: string;
+  severity?: number;
+}
+
+interface FeedSection {
+  status: SourceStatus;
+  items: FeedItem[];
+}
+
 interface Summary {
   generatedAt: string;
   windowDays: number;
   tiles: MetricTile[];
+  attention: FeedSection;
+  activity: FeedSection;
   degraded: string[];
 }
 
@@ -79,6 +94,54 @@ function drilldownFor(tile: MetricTile, days: number): string | undefined {
     metricKey: tile.key,
     filters: { period: `${days}d`, includeBots: false },
   });
+}
+
+/**
+ * A list that says which kind of empty it is.
+ *
+ * An empty list from a healthy source means nothing is happening. An empty list
+ * from a failed source means we could not look. Rendering both as "All clear" is
+ * how an outage reads as a calm morning, so the two are drawn differently.
+ */
+function FeedList({
+  section,
+  emptyText,
+  showSeverity = false,
+}: {
+  section: FeedSection;
+  emptyText: string;
+  showSeverity?: boolean;
+}) {
+  if (section.status === 'failed') {
+    return (
+      <p className="text-danger mb-0 small">
+        Couldn&apos;t load this list. It is not empty — we just can&apos;t see it right now.
+      </p>
+    );
+  }
+  if (section.items.length === 0) {
+    return <p className="text-muted mb-0 small">{emptyText}</p>;
+  }
+  return (
+    <ul className="list-unstyled mb-0">
+      {section.items.slice(0, 12).map((item) => (
+        <li key={item.id} className="d-flex justify-content-between gap-3 py-2 border-bottom">
+          <span>
+            {showSeverity && item.severity !== undefined && (
+              <span className="badge text-bg-secondary me-2">S{item.severity}</span>
+            )}
+            <span className="fw-semibold">{item.label}</span>
+            {item.detail && <span className="text-muted small ms-2">{item.detail}</span>}
+          </span>
+          {item.at && (
+            <span className="text-muted small text-nowrap">
+              {new Date(item.at).toLocaleString()}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export default function CommandCenterPage() {
@@ -170,6 +233,23 @@ export default function CommandCenterPage() {
                 </div>
               );
             })}
+          </div>
+
+          <div className="row g-3 mb-4">
+            <div className="col-12 col-lg-6">
+              <SectionCard title="Needs attention">
+                <FeedList
+                  section={summary.attention}
+                  emptyText="Nothing needs attention right now."
+                  showSeverity
+                />
+              </SectionCard>
+            </div>
+            <div className="col-12 col-lg-6">
+              <SectionCard title="Recent activity">
+                <FeedList section={summary.activity} emptyText="No activity recorded yet." />
+              </SectionCard>
+            </div>
           </div>
 
           {/* Every caveat, stated once, in full. A footnote a reader has to hover

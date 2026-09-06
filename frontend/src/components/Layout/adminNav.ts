@@ -29,7 +29,6 @@ export const PINNED_LINKS: NavLink[] = [
   // domains hang off.
   { path: '/admin/command-center', label: 'Command Center', icon: 'radar-line', section: 'dashboard' },
   { path: '/admin/trust', label: 'Trust Center', icon: 'shield-check-line', section: 'trust' },
-  { path: '/admin/war-room', label: 'War Room', icon: 'radar-line', section: 'war_room' },
   // Support role's sole surface (also visible to owner/admin who hold 'students').
   { path: '/admin/students', label: 'Student Story', icon: 'file-user-line', section: 'students' },
   // Portfolio review. Its own section so a Mentor can be granted THIS and nothing
@@ -159,6 +158,10 @@ export const UNIVERSAL_ADMIN_PATHS: readonly string[] = ['/admin/change-password
  * documented itself as a prototype or demo-scope surface.
  */
 export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = [
+  // Redirects to /admin/command-center. Keeps its original section so the
+  // guard still evaluates the path correctly on the way through, rather than
+  // falling into the null-section branch that admits every mgmt role.
+  ['/admin/war-room', 'war_room'],
   // Acquisition tooling — sits with the lead-ingestion surfaces it feeds.
   ['/admin/apollo', 'lead_ingestion'],
   ['/admin/import', 'lead_ingestion'],

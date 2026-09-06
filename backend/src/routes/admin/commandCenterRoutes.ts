@@ -5,6 +5,8 @@ import { getCommandCenterSummary } from '../../services/adminOs/commandCenterSer
 import { getVisitorKpis } from '../../services/visitorKpiService';
 import { countLiveVisitors } from '../../services/visitorAnalyticsService';
 import { getDashboardStats } from '../../services/cohortService';
+import { getAlerts } from '../../services/alertService';
+import { getActivityFeed } from '../../services/adminOs/warRoomFeedService';
 
 /**
  * Command Center — the executive home for the Admin OS.
@@ -40,6 +42,13 @@ router.get('/api/admin/command-center/summary', requireAdmin, async (req: Reques
         getVisitorKpis: (days) => getVisitorKpis(days) as never,
         countLiveVisitors: () => countLiveVisitors(),
         getDashboardStats: () => getDashboardStats() as Promise<Record<string, unknown>>,
+        // Only what still needs a human. The War Room asked for status=new and
+        // capped at 20; the attention queue is a triage list, not an archive.
+        getAlerts: async () =>
+          (await getAlerts({ status: 'new', limit: 20, offset: 0 }))
+            .alerts as unknown as Array<Record<string, unknown>>,
+        getActivityFeed: async () =>
+          (await getActivityFeed()) as unknown as Array<Record<string, unknown>>,
       },
       parsed.data.days,
     );

@@ -154,16 +154,33 @@ describe('War Room feed allowlist (AC7)', () => {
   });
 
   it('is actually wired into the feed query, not merely declared', () => {
-    // A constant nobody interpolates is a comment. This reads the route file
+    // A constant nobody interpolates is a comment. This reads the source file
     // because the query is a raw `sequelize.query` template literal - there is
-    // no exported value to assert on, and mounting the route would need a
-    // database.
+    // no exported value to assert on, and running it would need a database.
+    //
+    // The query moved out of routes/admin/cohortRoutes.ts on 2026-09-06, when the
+    // Command Center needed the same feed and a second copy of 4,000 characters
+    // of union SQL would have drifted from the first. This test caught that move,
+    // which is exactly what it is for - so it follows the query rather than being
+    // relaxed.
+    const feedSource = fs.readFileSync(
+      path.resolve(__dirname, '..', '..', 'services', 'adminOs', 'warRoomFeedService.ts'),
+      'utf8',
+    );
+    expect(feedSource).toContain('pe.event_type IN (${toSqlInList(WAR_ROOM_PAGE_EVENT_TYPES)})');
+    // And the hardcoded list it replaced is gone, so the two cannot drift.
+    expect(feedSource).not.toContain("'demo_skip', 'scroll', 'booking_modal_opened')");
+  });
+
+  it('has exactly one copy of the feed query', () => {
+    // The reason the query was extracted. Two copies of the allowlist filter
+    // would let one be updated and the other quietly keep serving the old set,
+    // and the test above would still pass by reading whichever copy it happened
+    // to point at.
     const routeSource = fs.readFileSync(
       path.resolve(__dirname, '..', '..', 'routes', 'admin', 'cohortRoutes.ts'),
       'utf8',
     );
-    expect(routeSource).toContain('pe.event_type IN (${toSqlInList(WAR_ROOM_PAGE_EVENT_TYPES)})');
-    // And the hardcoded list it replaced is gone, so the two cannot drift.
-    expect(routeSource).not.toContain("'demo_skip', 'scroll', 'booking_modal_opened')");
+    expect(routeSource).not.toContain('pe.event_type IN (');
   });
 });
