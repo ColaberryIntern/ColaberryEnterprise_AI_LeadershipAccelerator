@@ -19,7 +19,12 @@ import { ALL_SECTIONS, type SectionKey } from '../services/access/mgmtRoles';
 // Admin API path prefix → section key. Longest-meaningful prefixes; matched with
 // a segment boundary so '/api/admin/community' never captures '/communications'.
 const PATH_SECTION: Array<[string, SectionKey]> = [
-  ['/api/admin/dashboard', 'dashboard'],
+  ['/api/admin/dashboard', 'dashboard'],
+  // Command Center, the Admin OS executive home. On 'dashboard' and not
+  // 'war_room' because every scoped role holds the former and none holds the
+  // latter — see commandCenterRoutes.ts. Registered with the route rather than
+  // after someone hits a 403 nothing explains.
+  ['/api/admin/command-center', 'dashboard'],
   ['/api/admin/trust', 'trust'],
   ['/api/admin/war-room', 'war_room'],
   ['/api/admin/revenue', 'revenue'], ['/api/admin/refunds', 'revenue'], ['/api/admin/pipeline', 'revenue'],

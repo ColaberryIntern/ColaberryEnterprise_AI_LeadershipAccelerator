@@ -22,6 +22,12 @@ export interface NavGroup { label: string | null; section: string; links: NavLin
 /** Always-visible quick set above the collapsible groups. */
 export const PINNED_LINKS: NavLink[] = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard-line', section: 'dashboard' },
+  // Admin OS executive home. On 'dashboard' and NOT 'war_room': every scoped
+  // role holds the former and none holds the latter, so building it on the War
+  // Room's section would have stripped the landing page from five of eight
+  // roles. Pinned rather than grouped because it is the destination the other
+  // domains hang off.
+  { path: '/admin/command-center', label: 'Command Center', icon: 'radar-line', section: 'dashboard' },
   { path: '/admin/trust', label: 'Trust Center', icon: 'shield-check-line', section: 'trust' },
   { path: '/admin/war-room', label: 'War Room', icon: 'radar-line', section: 'war_room' },
   // Support role's sole surface (also visible to owner/admin who hold 'students').
