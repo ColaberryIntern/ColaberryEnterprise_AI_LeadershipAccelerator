@@ -461,6 +461,9 @@ export async function previewSurfaceProjection(input: unknown): Promise<CaseStud
         content: (shown.content ?? {}) as unknown as CaseStudySnapshotContent,
         status: record.status as CaseStudyStatus,
         snapshotStatus: shown.status as 'draft' | 'approved' | 'superseded',
+        // A surface preview asks "how would this look on `data.surfaceKey`", so that
+        // surface is the declared target for the purposes of this score.
+        publications: [{ surfaceKey: data.surfaceKey }],
       });
     } catch {
       readiness = null; // advisory: a scoring failure must not break a preview

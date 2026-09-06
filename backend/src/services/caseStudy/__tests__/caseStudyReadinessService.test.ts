@@ -138,7 +138,7 @@ const perfectInput = (): CaseStudyReadinessInput => ({
   content: perfectContent(),
   status: 'approved',
   snapshotStatus: 'approved',
-  publication: { surfaceKey: 'enterprise' },
+  publications: [{ surfaceKey: 'enterprise' }],
 });
 
 /** The other end of the scale: a brand-new candidate with nothing filled in. */
@@ -160,6 +160,64 @@ const categoryScore = (r: CaseStudyReadinessReport, c: CaseStudyReadinessCategor
 
 const SERVICE_DIR = path.join(__dirname, '..');
 const readSource = (f: string) => fs.readFileSync(path.join(SERVICE_DIR, f), 'utf8');
+
+/* ── publication surfaces — a record may be live on several ──────────────── */
+
+describe('publication surface checks score over the whole set', () => {
+  const withPublications = (
+    publications: readonly { surfaceKey?: string }[],
+  ): CaseStudyReadinessInput => ({ ...perfectInput(), publications });
+
+  it('awards the full publication category to a record live on TWO surfaces', () => {
+    // The case that exposed the defect: a real record published to enterprise AND
+    // ai-flotation was scored as having declared no surface at all.
+    const report = scoreCaseStudyReadiness(
+      withPublications([{ surfaceKey: 'enterprise' }, { surfaceKey: 'ai-flotation' }]),
+    );
+    expect(categoryScore(report, 'publication')).toBe(5);
+  });
+
+  it('awards the surface checks for EITHER publishable surface on its own', () => {
+    for (const surfaceKey of ['enterprise', 'ai-flotation']) {
+      const report = scoreCaseStudyReadiness(withPublications([{ surfaceKey }]));
+      expect(categoryScore(report, 'publication')).toBe(5);
+    }
+  });
+
+  it('counts a surface as DECLARED even when it is not publishable', () => {
+    // Two separate questions: has a target been chosen, and is that target one we
+    // can publish to. A contract-only surface answers yes to the first and no to
+    // the second, so 2 of the 3 surface points are still earned.
+    const report = scoreCaseStudyReadiness(withPublications([{ surfaceKey: 'training' }]));
+    const gaps = report.gaps.map((g) => g.checkKey);
+    expect(gaps).not.toContain('publication.surface_declared');
+    expect(gaps).toContain('publication.surface_publishable');
+  });
+
+  it('takes the publishable surface when the set MIXES publishable and not', () => {
+    const report = scoreCaseStudyReadiness(
+      withPublications([{ surfaceKey: 'training' }, { surfaceKey: 'enterprise' }]),
+    );
+    expect(categoryScore(report, 'publication')).toBe(5);
+  });
+
+  it('reports both surface gaps when the record has no publications at all', () => {
+    const gaps = scoreCaseStudyReadiness(withPublications([])).gaps.map((g) => g.checkKey);
+    expect(gaps).toContain('publication.surface_declared');
+    expect(gaps).toContain('publication.surface_publishable');
+  });
+
+  it.each([
+    ['a missing surfaceKey', [{}]],
+    ['an empty surfaceKey', [{ surfaceKey: '' }]],
+    ['whitespace only', [{ surfaceKey: '   ' }]],
+  ])('does not count %s as a declared surface', (_label, publications) => {
+    const gaps = scoreCaseStudyReadiness(
+      withPublications(publications as { surfaceKey?: string }[]),
+    ).gaps.map((g) => g.checkKey);
+    expect(gaps).toContain('publication.surface_declared');
+  });
+});
 
 /* ── AC1 — the weights sum to exactly 100, computed from the table ────────── */
 

@@ -82,7 +82,15 @@ export const CASE_STUDY_READINESS_ADVISORY =
 
 /** The `case_study_publications` fields readiness can see. Nothing else is scored. */
 export interface CaseStudyReadinessPublicationSetup {
-  readonly surfaceKey?: CaseStudySurfaceKey;
+  /**
+   * The raw `case_study_publications.surface_key`, which is a `STRING(40)` column.
+   *
+   * Typed as `string` rather than `CaseStudySurfaceKey` on purpose: it arrives from the
+   * database as text, `isPublishableSurfaceKey` is the thing that decides whether it
+   * means anything, and a narrow type here bought nothing except a cast at every call
+   * site. This whole defect began with a type that did not describe the data.
+   */
+  readonly surfaceKey?: string;
 }
 
 /**
@@ -94,7 +102,18 @@ export interface CaseStudyReadinessInput {
   readonly content: CaseStudySnapshotContent;
   readonly status: CaseStudyStatus;
   readonly snapshotStatus?: CaseStudySnapshotStatus;
-  readonly publication?: CaseStudyReadinessPublicationSetup;
+  /**
+   * EVERY publication row for this record, in any status.
+   *
+   * PLURAL, AND THAT IS THE FIX. This was one optional `publication`, from when a record
+   * targeted a single surface. Records now publish PER SURFACE - one can be live on
+   * `enterprise` and `ai-flotation` at the same time - so a singular field could not
+   * describe them and both callers simply left it out. Because it was optional, nothing
+   * failed: every Case Study on the platform scored 0 on the two surface checks below,
+   * losing 3 of 100 forever, and was advised to "create the publication row and choose
+   * its surface" while already published to two of them.
+   */
+  readonly publications?: readonly CaseStudyReadinessPublicationSetup[];
 }
 
 /* ─────────────────────────────────────────────────────────────── helpers ──── */
@@ -213,6 +232,20 @@ export interface ReadinessCheck {
   readonly detail: string;
   /** What would close it. Surfaced verbatim in the gap. */
   readonly remedy: string;
+}
+
+/**
+ * The surfaces this record has actually declared a publication row for.
+ *
+ * Status is deliberately not consulted. The two publication checks ask whether a target
+ * has been CHOSEN, not whether it is live right now - an unpublished row still names a
+ * surface, and telling someone to create a publication row they already have, merely
+ * paused, would be a new version of the false advice this replaced.
+ */
+function declaredSurfaces(input: CaseStudyReadinessInput): string[] {
+  return (input.publications ?? [])
+    .map((p) => (typeof p?.surfaceKey === 'string' ? p.surfaceKey.trim() : ''))
+    .filter((k) => k.length > 0);
 }
 
 export const CASE_STUDY_READINESS_CHECKS: readonly ReadinessCheck[] = [
@@ -371,11 +404,11 @@ export const CASE_STUDY_READINESS_CHECKS: readonly ReadinessCheck[] = [
 
   /* Publication setup — 2 + 1 + 1 + 1 = 5 */
   { key: 'publication.surface_declared', category: 'publication', points: 2,
-    score: (c) => (c.input.publication?.surfaceKey ? 2 : 0),
+    score: (c) => (declaredSurfaces(c.input).length > 0 ? 2 : 0),
     detail: 'no target surface is declared',
     remedy: 'create the publication row and choose its surface' },
   { key: 'publication.surface_publishable', category: 'publication', points: 1,
-    score: (c) => (isPublishableSurfaceKey(c.input.publication?.surfaceKey) ? 1 : 0),
+    score: (c) => (declaredSurfaces(c.input).some(isPublishableSurfaceKey) ? 1 : 0),
     detail: 'the declared surface has no page to appear on',
     remedy: 'target a surface that is published: enterprise, or ai-flotation' },
   { key: 'publication.snapshot_approved', category: 'publication', points: 1,

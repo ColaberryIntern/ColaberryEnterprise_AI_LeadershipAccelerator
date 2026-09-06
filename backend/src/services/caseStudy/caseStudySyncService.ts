@@ -362,6 +362,15 @@ export async function syncCaseStudy(input: SyncCaseStudyInput): Promise<CaseStud
         unknownProvenance = findUnknownProvenanceFields(draft.content, draft.provenance)
           .slice(0, MAX_REPORTED_PROVENANCE_GAPS);
         try {
+          // NO `publications` HERE, DELIBERATELY - not the omission that was just fixed
+          // in `caseStudyAdminService` and `caseStudyAdminReview`. Those two RENDER the
+          // readiness panel, so being told "no target surface is declared" about a record
+          // live on two surfaces was false advice a human then acted on. This score is a
+          // stored `{score, band}` on the sync run, and reaching it would mean a
+          // publications query per record inside a batch loop. The cost of that belongs to
+          // a decision of its own, not to a drive-by. CONSEQUENCE, stated so nobody has to
+          // rediscover it: this number can read up to 3 points BELOW the panel's for the
+          // same record, because the two publication surface checks cannot score here.
           const report = scoreCaseStudyReadiness({ content: draft.content, status: record.status });
           readiness = { score: report.score, band: report.band };
         } catch (err) {

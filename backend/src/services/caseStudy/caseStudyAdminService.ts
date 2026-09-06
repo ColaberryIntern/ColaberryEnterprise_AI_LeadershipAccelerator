@@ -217,6 +217,9 @@ export async function getCaseStudy(input: unknown): Promise<CaseStudyDetail> {
         content: latest.content as unknown as CaseStudySnapshotContent,
         status: row.status as CaseStudyStatus,
         snapshotStatus: latest.status,
+        // Loaded twenty lines above and previously never passed, which is the whole
+        // reason a record live on two surfaces was told it had declared none.
+        publications: (publications ?? []).map((p) => ({ surfaceKey: p.surface_key })),
       });
     } catch {
       readiness = null; // advisory: a scoring failure is not a read failure
