@@ -39,7 +39,7 @@ import {
 } from './projectUnderstanding';
 import { projectBlueprint, type BuildBlueprint } from './buildBlueprint';
 import { generateProposals, applyProposals } from './blueprintProposals';
-import { classifySteps, renderWorkflowSvg } from './scopeDiagram';
+import { classifySteps, renderWorkflowSvg, inferFlowMode } from './scopeDiagram';
 
 /**
  * Bumped whenever the SHAPE of an assembled scope changes.
@@ -57,7 +57,7 @@ import { classifySteps, renderWorkflowSvg } from './scopeDiagram';
  * generator was fixed, but a corrected generator does nothing for a scope already cached,
  * so every prospect would have kept the picture that argued against buying.
  */
-export const SCOPE_VERSION = 4;
+export const SCOPE_VERSION = 5;
 
 export interface ScopeSection {
   key: string;
@@ -168,7 +168,10 @@ export function assembleScope(u: ProjectUnderstanding, bp: BuildBlueprint, gener
   // idea has no current workflow, and the first live diagram for one labelled wished-for
   // features TODAY, which was simply false. The mode comes from whether they actually
   // described a process they run now.
-  const flowMode = itemsFor(u, 'current_workflow').length > 0 ? 'today' : 'proposed';
+  // Inferred from the step TEXT, not from the dimension it was filed under: the extractor
+  // put "The app should allow families to track..." under current_workflow, and trusting
+  // that label made the diagram announce TODAY over a list of future-tense wishes.
+  const flowMode = inferFlowMode(workflowSteps.map((s) => s.label));
   const workflow_svg = workflowSteps.length >= 2 ? renderWorkflowSvg(workflowSteps, flowMode) : '';
 
   const problem = itemsFor(u, 'problem')[0]?.value || itemsFor(u, 'pain_points')[0]?.value || '';
