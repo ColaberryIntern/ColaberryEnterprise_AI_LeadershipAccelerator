@@ -349,3 +349,63 @@ describe('malformed content degrades rather than throwing', () => {
     expect(projectPublicSummary(input(junk)).capabilities).toEqual([]);
   });
 });
+
+/* -------------------------------------------------- the surface builder default --- */
+
+/**
+ * A DEFAULT FILLS A BLANK. IT DOES NOT PAINT OVER AN ANSWER.
+ *
+ * Ali asked for AI Flotation to default "Who built" to its own team. The risk
+ * that request carries is not the default - it is the override one keystroke
+ * away from it, because an override would let AI Flotation's masthead sit above
+ * a record whose snapshot says `learner` and read as a claim of authorship. No
+ * copy would change; the page would simply become false.
+ *
+ * These four cases pin the boundary from both sides, and the last one is the
+ * one that matters: the SAME record, projected on both surfaces, must name the
+ * same builder. If a future edit turns the `??` chain into an assignment, that
+ * case is what fails.
+ */
+describe('the surface builder default', () => {
+  function withBuilder(builtByType: 'learner' | undefined): CaseStudySnapshotContent {
+    const base = internalSnapshotContent();
+    return {
+      ...base,
+      taxonomy: { ...(base.taxonomy ?? {}), builtByType },
+      identity: { ...(base.identity ?? {}), builtByType },
+    } as CaseStudySnapshotContent;
+  }
+
+  it('fills an unstated builder on AI Flotation with its own team', () => {
+    const projected = projectPublicSummary({
+      ...input(withBuilder(undefined)),
+      surfaceKey: 'ai-flotation',
+    });
+    expect(projected.builtBy).toBe('ai_flotation_team');
+  });
+
+  it('leaves an unstated builder null on a surface with no default', () => {
+    // Enterprise declares none, so the blank stays a blank rather than
+    // inheriting whatever the last surface added to the table happened to set.
+    const projected = projectPublicSummary(input(withBuilder(undefined)));
+    expect(projected.builtBy).toBeNull();
+  });
+
+  it('never overrides a builder the record states, on the defaulting surface', () => {
+    const projected = projectPublicSummary({
+      ...input(withBuilder('learner')),
+      surfaceKey: 'ai-flotation',
+    });
+    expect(projected.builtBy).toBe('learner');
+  });
+
+  it('names the same builder on both surfaces for a record that states one', () => {
+    const content = withBuilder('learner');
+    const summary = projectPublicSummary({ ...input(content), surfaceKey: 'ai-flotation' });
+    const detail = projectPublicDetail({ ...input(content), surfaceKey: 'ai-flotation' });
+    const enterprise = projectPublicSummary(input(content));
+    // Summary and detail together, because they were two separate `??` chains
+    // before this change and only one of them being fixed is a silent divergence.
+    expect([summary.builtBy, detail.builtBy]).toEqual([enterprise.builtBy, enterprise.builtBy]);
+  });
+});
