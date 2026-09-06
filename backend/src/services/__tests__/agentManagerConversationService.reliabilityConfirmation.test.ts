@@ -43,6 +43,14 @@ jest.mock('../ticketService', () => ({
   addTicketComment: jest.fn(),
 }));
 
+// Checkpoint F's work-status query is unrelated to this file's reliability
+// scenarios — mocked wholesale so none of these tests need to also stub the
+// Ticket/AdminUser models agentWorkStatusIntentService.ts queries directly.
+jest.mock('../agentWorkStatusIntentService', () => ({
+  detectWorkStatusQuery: jest.fn(() => null),
+  buildWorkStatusReply: jest.fn(),
+}));
+
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { sendManagerMessage } from '../agentManagerConversationService';
 

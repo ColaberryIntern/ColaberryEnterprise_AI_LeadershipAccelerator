@@ -6,6 +6,7 @@ import { buildAgentManagerConversationSystemPrompt } from './agentBlueprint/agen
 import {
   applyConfirmedReliabilityChange, buildConfirmationCardText, detectConfirmationReply, detectReliabilityIntent, toPendingConfirmation,
 } from './managerReliabilityIntentService';
+import { detectWorkStatusQuery, buildWorkStatusReply } from './agentWorkStatusIntentService';
 
 // AI Workforce Management, Checkpoint C — Direct Agent Communication, first
 // slice. Generic by construction — works off AiAgent.id, not hardcoded to
@@ -122,6 +123,36 @@ async function handlePendingOrNewReliabilityIntent(
 }
 
 /**
+ * Reese Agentic AI Employee mission, Checkpoint F — a manager asking about
+ * this agent's real workload ("what are you working on" / "what's
+ * overdue") gets a deterministic answer built from real Ticket rows, never
+ * an LLM guess. Checked AFTER the reliability flow (which owns any pending
+ * multi-turn confirmation) and BEFORE the normal LLM path.
+ */
+async function handleWorkStatusQuery(agent: AiAgent, messageText: string): Promise<string | null> {
+  const queryType = detectWorkStatusQuery(messageText);
+  if (!queryType) return null;
+  return buildWorkStatusReply(agent, queryType);
+}
+
+/** Persists the agent's turn and returns the refreshed conversation view —
+ * the one shared tail every reply path (reliability card, work-status
+ * answer, normal LLM reply) ends with. */
+async function persistAgentReplyAndReturnView(
+  conversation: AgentManagerConversation,
+  agentId: string,
+  replyText: string,
+): Promise<ConversationView> {
+  await AgentManagerMessage.create({ conversation_id: conversation.id, role: 'agent', content: replyText });
+  const rows = await AgentManagerMessage.findAll({
+    where: { conversation_id: conversation.id },
+    order: [['created_at', 'ASC']],
+    limit: HISTORY_LIMIT,
+  });
+  return { conversationId: conversation.id, agentId, messages: rows.map(toMessageView) };
+}
+
+/**
  * Sends a manager's message and returns the agent's real reply. Persists
  * both turns. Real per-call cost is tracked against this agent's real id
  * (getInstrumentedOpenAI's agent_id tag) — same fix this session already
@@ -147,13 +178,12 @@ export async function sendManagerMessage(
   // handled deterministically, never left to an LLM to phrase or forget.
   const reliabilityReply = await handlePendingOrNewReliabilityIntent(conversation, messageText, participantEmail);
   if (reliabilityReply !== null) {
-    await AgentManagerMessage.create({ conversation_id: conversation.id, role: 'agent', content: reliabilityReply });
-    const rows = await AgentManagerMessage.findAll({
-      where: { conversation_id: conversation.id },
-      order: [['created_at', 'ASC']],
-      limit: HISTORY_LIMIT,
-    });
-    return { conversationId: conversation.id, agentId, messages: rows.map(toMessageView) };
+    return persistAgentReplyAndReturnView(conversation, agentId, reliabilityReply);
+  }
+
+  const workStatusReply = await handleWorkStatusQuery(agent, messageText);
+  if (workStatusReply !== null) {
+    return persistAgentReplyAndReturnView(conversation, agentId, workStatusReply);
   }
 
   const recent = await AgentManagerMessage.findAll({
@@ -176,12 +206,5 @@ export async function sendManagerMessage(
   });
   const replyText = completion.choices[0]?.message?.content?.trim() || "I don't have a reply for that right now.";
 
-  await AgentManagerMessage.create({ conversation_id: conversation.id, role: 'agent', content: replyText });
-
-  const finalRows = await AgentManagerMessage.findAll({
-    where: { conversation_id: conversation.id },
-    order: [['created_at', 'ASC']],
-    limit: HISTORY_LIMIT,
-  });
-  return { conversationId: conversation.id, agentId, messages: finalRows.map(toMessageView) };
+  return persistAgentReplyAndReturnView(conversation, agentId, replyText);
 }
