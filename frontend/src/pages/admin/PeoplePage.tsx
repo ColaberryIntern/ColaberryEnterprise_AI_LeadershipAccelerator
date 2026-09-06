@@ -48,24 +48,30 @@ const STAGE_LABEL: Record<string, string> = {
 
 export default function PeoplePage() {
   const location = useLocation();
+
+  /**
+   * A drill-down arriving from a KPI, read from the URL as the INITIAL state.
+   *
+   * Deliberately a useState initialiser rather than an effect. An effect would
+   * need its dependency list suppressed to run only on mount, and a suppression
+   * comment is a note saying "this is wrong but leave it" — whereas an
+   * initialiser genuinely runs once and needs no excuse. It also avoids a first
+   * render with the wrong filter followed by a correcting one.
+   */
+  const [untracedOnly, setUntracedOnly] = useState(() => {
+    const drilldown = fromDrilldownUrl(location.pathname, location.search);
+    if (!drilldown) return false;
+    return (
+      drilldown.filters.unmatched !== undefined ||
+      drilldown.metricKey === 'people.identity_coverage'
+    );
+  });
+
   const [roster, setRoster] = useState<Roster | null>(null);
   const [search, setSearch] = useState('');
-  const [untracedOnly, setUntracedOnly] = useState(false);
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // A drill-down arriving from a KPI. Read once, from the URL, so a refresh or a
-  // shared link reproduces the same filtered view.
-  const drilldown = fromDrilldownUrl(location.pathname, location.search);
-
-  useEffect(() => {
-    if (drilldown?.filters.unmatched || drilldown?.metricKey === 'people.identity_coverage') {
-      setUntracedOnly(true);
-    }
-    // Only on the initial URL read; later changes come from the controls.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
