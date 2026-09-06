@@ -1070,7 +1070,7 @@ describe('the refusal is actionable and complete', () => {
 describe('a high readiness score authorises nothing', () => {
   const readinessInput = (content: CaseStudySnapshotContent) => ({
     content, status: 'approved' as const, snapshotStatus: 'approved' as const,
-    publication: { surfaceKey: 'enterprise' as const },
+    publications: [{ surfaceKey: 'enterprise' as const }],
   });
 
   it('scores the reference record 100/100 and the gate allows it', () => {

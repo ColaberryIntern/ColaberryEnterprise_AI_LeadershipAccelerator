@@ -210,6 +210,41 @@ describe('getCaseStudy', () => {
     expect(detail.readiness).toMatchObject({ score: 61 });
   });
 
+  it('HANDS THE PUBLICATIONS to readiness, so a live record is not told it declared none', async () => {
+    // THE REGRESSION. Both admin callers omitted `publications` entirely; being an
+    // optional field, nothing failed and every Case Study on the platform lost the
+    // two surface checks forever while being advised to "create the publication row
+    // and choose its surface" — on records already published to two of them.
+    caseStudy.findByPk.mockResolvedValue(caseStudyRow());
+    snapshots.findAll.mockResolvedValue([snapshotRow()]);
+    publications.findAll.mockResolvedValue([
+      { surface_key: 'enterprise', status: 'published' },
+      { surface_key: 'ai-flotation', status: 'published' },
+    ]);
+    scoreCaseStudyReadiness.mockReturnValue({ score: 100, band: 'ready', gaps: [] });
+
+    await getCaseStudy({ caseStudyId: ID });
+
+    expect(scoreCaseStudyReadiness).toHaveBeenCalledWith(expect.objectContaining({
+      publications: [{ surfaceKey: 'enterprise' }, { surfaceKey: 'ai-flotation' }],
+    }));
+  });
+
+  it('passes an EMPTY list rather than nothing when there are no publications', async () => {
+    // "I looked and found none" and "I never looked" must not arrive as the same
+    // input. The second is what the bug was.
+    caseStudy.findByPk.mockResolvedValue(caseStudyRow());
+    snapshots.findAll.mockResolvedValue([snapshotRow()]);
+    publications.findAll.mockResolvedValue([]);
+    scoreCaseStudyReadiness.mockReturnValue({ score: 61, band: 'developing', gaps: [] });
+
+    await getCaseStudy({ caseStudyId: ID });
+
+    const arg = scoreCaseStudyReadiness.mock.calls.at(-1)?.[0];
+    expect(arg).toHaveProperty('publications');
+    expect(arg.publications).toEqual([]);
+  });
+
   it('still returns the record when readiness scoring throws — the score authorises nothing', async () => {
     caseStudy.findByPk.mockResolvedValue(caseStudyRow());
     snapshots.findAll.mockResolvedValue([snapshotRow()]);
@@ -645,6 +680,24 @@ describe('previewSurfaceProjection (§34)', () => {
     expect(preview.decision.blockers[0].remedy).toContain('link verified evidence');
     expect(preview.source).toBe('none');
     expect(persistCaseStudySnapshot).not.toHaveBeenCalled();
+  });
+
+  it('scores readiness against the SURFACE BEING PREVIEWED', async () => {
+    // A preview asks "how would this look on this surface", so that surface is the
+    // declared target for scoring. Previously nothing was passed and the preview
+    // reported a missing target surface on every record.
+    caseStudy.findByPk.mockResolvedValue(caseStudyRow());
+    snapshots.findOne.mockResolvedValue(snapshotRow({ status: 'approved' }));
+    evaluateCaseStudyPublication.mockResolvedValue({
+      allowed: true, codes: [], blockers: [], summary: '',
+    });
+    scoreCaseStudyReadiness.mockReturnValue({ score: 100, band: 'ready', gaps: [] });
+
+    await previewSurfaceProjection({ caseStudyId: ID, surfaceKey: 'ai-flotation' });
+
+    expect(scoreCaseStudyReadiness).toHaveBeenCalledWith(expect.objectContaining({
+      publications: [{ surfaceKey: 'ai-flotation' }],
+    }));
   });
 
   it('WIRES the public projection — the preview is what a visitor would see (§34)', async () => {
