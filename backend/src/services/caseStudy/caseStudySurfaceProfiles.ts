@@ -163,12 +163,17 @@ function profile(
   hero: { eyebrow: string; title: string; description: string },
   cta: { eyebrow: string; heading: string; buttonLabel: string; href: string },
   emphasis: readonly string[],
+  /* Where this surface is read. Null while it has no page - see the field. */
+  address: { publicBaseUrl: string | null; detailPathPrefix: string | null }
+    = { publicBaseUrl: null, detailPathPrefix: null },
 ): CaseStudySurfaceProfile {
   return {
     surfaceKey,
     brandLabel,
     publishable,
     hero,
+    publicBaseUrl: address.publicBaseUrl,
+    detailPathPrefix: address.detailPathPrefix,
     defaultFilters: { surface: surfaceKey, verificationClass: PROVEN_ONLY },
     defaultSort: 'featured',
     sectionOrder,
@@ -202,6 +207,9 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
     },
     ['business problem', 'team capability', 'outcome', 'measurement', 'architecture',
       'roadmap', 'ownership'],
+    /* The address Enterprise already publishes at. Stated rather than assumed,
+       so the canonical stops depending on which surface happens to be default. */
+    { publicBaseUrl: 'https://enterprise.colaberry.ai', detailPathPrefix: '/stories' },
   ),
   training: profile(
     'training', 'Colaberry Training', false, TRAINING_ORDER,
@@ -232,6 +240,10 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
       href: '/contact',
     },
     ['workflow', 'what shipped', 'architecture', 'delivery', 'production', 'technical proof'],
+    /* Its own domain, on its own Cloudflare zone. A record published here is a
+       page ON AI FLOTATION, so its canonical says so - a canonical pointing at
+       Colaberry would hand this brand's ranking to another company's site. */
+    { publicBaseUrl: 'https://aiflotation.com', detailPathPrefix: '/results' },
   ),
   refactored: profile(
     'refactored', 'Refactored', false, REFACTORED_ORDER,

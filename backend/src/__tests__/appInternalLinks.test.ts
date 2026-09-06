@@ -40,12 +40,36 @@ const PROXIED_TO_LEGACY = [
   /^\/cdn-cgi\//,
 ];
 
+/**
+ * Assets `app-build` copies in from `packages/` rather than the app's own `src/`.
+ *
+ * They are not in `src/`, so the resolver below cannot find them - but they ARE
+ * served, from `dist/assets/`, on every app the builder touches. Without this the
+ * check reports a broken link for a stylesheet that resolves perfectly in
+ * production, which is the kind of false red that teaches people to ignore a test.
+ *
+ * The list is deliberately EXACT rather than a wildcard on `/assets/`: an asset
+ * the app genuinely forgot to add to `src/assets/` must still fail. Each entry
+ * here is a promise that `packages/app-build` copies that exact filename, and the
+ * test below asserts the source file exists so the promise cannot rot.
+ */
+const BUILD_PROVIDED_ASSETS: readonly [string, string][] = [
+  ['/assets/track-v2.js', 'tracking-sdk/track-v2.js'],
+  ['/assets/case-studies.js', 'case-study-shell/case-studies.js'],
+  ['/assets/case-study-record.js', 'case-study-shell/case-study-record.js'],
+  ['/assets/case-studies.css', 'case-study-shell/case-studies.css'],
+];
+
 /** Resolve a URL path against a built app directory, the way `try_files` would. */
 function resolves(appSrc: string, urlPath: string): boolean {
   // Trim first: the captured markup contains `href="/ "` with a trailing space, which a
   // browser treats as "/". Comparing it untrimmed reports a broken link that works fine.
   const clean = urlPath.trim().split('#')[0].split('?')[0];
   if (clean === '/' || clean === '') return fs.existsSync(path.join(appSrc, 'index.html'));
+
+  // Shipped by the builder from packages/, so it resolves in dist even though it
+  // is absent from src/.
+  if (BUILD_PROVIDED_ASSETS.some(([href]) => href === clean)) return true;
 
   const rel = clean.replace(/^\//, '').replace(/\/$/, '');
   const candidates = [
@@ -72,6 +96,15 @@ function appsWithSrc(): string[] {
 }
 
 describe('internal links in the public apps resolve to pages we serve', () => {
+  it('every build-provided asset names a package file that exists', () => {
+    // Without this, the allow-list above could quietly become a way to mark any
+    // missing asset as fine. Each entry must point at a real file in packages/.
+    const missing = BUILD_PROVIDED_ASSETS
+      .filter(([, rel]) => !fs.existsSync(path.join(REPO_ROOT, 'packages', rel)))
+      .map(([href]) => href);
+    expect(missing).toEqual([]);
+  });
+
   const apps = appsWithSrc();
 
   it('finds apps and links at all — a green run over nothing proves nothing', () => {

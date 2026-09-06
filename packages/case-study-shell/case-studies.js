@@ -33,6 +33,11 @@
   var API = document.currentScript && document.currentScript.getAttribute('data-api');
   var SURFACE = 'ai-flotation';
   var DEBOUNCE_MS = 250;
+  /* Where this brand serves a single record. Configured rather than derived,
+     because each site chooses its own path: /results/ here, and the training
+     site will choose its own without this file changing. */
+  var DETAIL_BASE = (document.currentScript
+    && document.currentScript.getAttribute('data-detail')) || '/results/';
 
   /* Which facet groups become words, and in which order they are offered as
      filters. Verification and Built-by are two or three fixed values each and
@@ -126,10 +131,12 @@
   function card(record) {
     var a = document.createElement('a');
     a.className = 'tile record';
-    /* The detail page lives on the platform, not on this domain: these records
-       are rendered from one canonical projection and `seo.canonicalUrl` points
-       there. Linking anywhere else would mint a second address for one page. */
-    a.href = API + '/stories/' + encodeURIComponent(record.slug);
+    /* THE RECORD PAGE IS ON THIS DOMAIN, and that is the whole point of the
+       change. This used to link to the platform, which threw a reader browsing
+       one brand onto another company's site - different logo, different menu -
+       halfway through their own journey. `data-detail` names this brand's own
+       record path, and the server's canonical for this surface agrees with it. */
+    a.href = DETAIL_BASE + encodeURIComponent(record.slug) + '/';
     a.appendChild(text(document.createElement('h3'), record.title));
     if (record.standfirst) a.appendChild(text(document.createElement('p'), record.standfirst));
     if (record.verificationClass) {

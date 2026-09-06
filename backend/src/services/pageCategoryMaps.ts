@@ -61,9 +61,14 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       '/what-we-build': 'program',
       '/approach': 'program',
       '/delivery-standard': 'program',
-      // Currently reads "We have nothing to show you here yet." The category describes
-      // the surface, not its fill state, so it stays correct as the page gains content.
+      // The category describes the SURFACE, not its fill state, so it stayed correct
+      // through this page going from "We have nothing to show you here yet" to a
+      // filterable index of published records.
       '/results': 'case_studies',
+      // One record, on this brand's own domain. It is a single shell that reads the
+      // slug from the path, so every /results/<slug>/ a reader ever opens is this
+      // page - which is why one entry covers a set that grows without a deploy.
+      '/results/record': 'case_studies',
       // Added 2026-09-03, and it is the page this brand was missing. "Build membership
       // ... why it is priced this way" is a genuine pricing page, so it earns `pricing`
       // (35) directly - but the larger effect is combinatorial: with `/start` already
