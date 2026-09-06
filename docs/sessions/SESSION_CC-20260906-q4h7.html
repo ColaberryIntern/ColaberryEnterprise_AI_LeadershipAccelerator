@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260906-q4h7 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Sunday, September 6, 2026 at 4:23 PM</div>
+    <div><span class="sid">CC-20260906-q4h7</span><span class="count">4 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Build the seven-page OpportunityLift public site</h2>
+          <span class="badge">2026-09-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`apps/cpn-public` was one 5KB page whose own `package.json` called it &quot;proves ecosystem plumbing, not a marketing site&quot;. It is now the real site: `/`, `/scholarships/`, `/how-funds-work/`, `/partners/`, `/support/`, `/about/`, `/privacy/`, all directory-shaped because that is how `nginx/opportunitylift.conf` resolves them. Built on the vendored CPN design system, Grove (`#1D6A4C`), which resolved Ali&#39;s &quot;use CPN&#39;s own scheme&quot; instruction: the only CPN palette in the repository is `src/assets/design/colors.css`, extracted from `exports/cpn.tokens.json`, whose default scope is Grove. Every page greps to **zero hex**, so `data-variant=&quot;vestry&quot;` still repaints the whole site and dark mode still works in both scopes. Three forms share one handler (`src/assets/forms.js`) declaring the entry slug in markup as `data-form`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">78 tests across 5 suites under `jest -c jest.ci.config.ts`; `tsc --noEmit` clean on TypeScript 5.9.3 (the local binary - bare `npx tsc` resolves a stale 4.9.5 here); boundary validator OK, 13 files. A Playwright harness served `dist` under nginx&#39;s own `try_files $uri $uri/ $uri.html` rule and drove all 7 routes at 360/768/1440/1920 in light and dark: no horizontal overflow, no tap target under 44px, no console errors, every measured contrast pair at or above AA, one primary action per view, first Tab lands on a visible skip link, unknown route returns 404, and every route survives direct navigation, refresh and the no-trailing-slash form. 32 screenshots captured and inspected.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The worst defect was invisible to every automated check and was found by looking at a screenshot.** `.nav a` is specificity (0,1,1) and `.btn-primary` is (0,1,0), so the nav link colour overrode the button&#39;s own and the primary call to action on every page rendered as deep green text on the deep green accent - **1.00:1**, on the single element the site exists to get pressed. Every token was individually correct; the cascade put two of them together that were never a pair. It survived the build, the boundary validator, a token audit and a body-background check. Fixed with `.nav a:not(.btn)`, and the harness now *measures* WCAG contrast per element instead of trusting the token set - proven to bite by reintroducing the exact bug in a throwaway `dist` copy, where it reported `1.00:1 (needs 4.5)` on 32 page/viewport combinations. **Second screenshot-only find:** the 2,500 dollar allocation table set `min-width: 30rem`, so at 360px the Amount and Share columns sat outside the scroll container. The page had *no* horizontal overflow - the container absorbed it exactly as designed - so nothing failed while the only two columns carrying the breakdown were invisible unless you discovered you could swipe. This is the money page and the design system names cheap phones as the target; the minimum is dropped below 560px and the table now measures 328px inside a 360px viewport with no amount cell offscreen.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Seed the two entry points the pages need, and correct CPN&#39;s domain</h2>
+          <span class="badge">2026-09-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`seedLeadSources.ts` had `cpn` with a single entry point. `EXTRACTION.md` has listed `community_partner_interest` and `champion_interest` since the app was written and nothing ever created them, so shipping `/partners/` and `/support/` without seeding would have produced forms that validate client-side, post, and are rejected with &quot;Unknown or inactive entry point&quot; - exactly what happened to AI Flotation&#39;s &quot;Call me now&quot; button. Both are seeded here. The CPN `domain` was still `cpn.org`, which the nonprofit does not own; corrected to `opportunitylift.org`. `phone` and `city_state` were added to the scholarship field map: the skeleton form had been posting both and they were silently dropped before the lead row.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`appSourcesAreSeeded` 4/4 and `leadContextService` green under `jest -c jest.ci.config.ts`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Evidence for the domain correction is `nginx/opportunitylift.conf` and `ecosystemSeedData.ts`, which both already document that `cpn.org` resolves to a different Cloudflare account and that mail as `@cpn.org` could never have authenticated. The seed row was simply left behind when the rest was corrected on 2026-08-31 - which is precisely the drift its own neighbouring comment warns about (&quot;if they drift apart, a submission resolves to a brand that does not own it&quot;).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Stop the unseeded-form guard from going silently blind</h2>
+          <span class="badge">2026-09-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`appSourcesAreSeeded.test.ts` finds entry points by matching `ingest?source=…&amp;entry=…` in page HTML. Moving the three forms onto one shared `forms.js` puts that URL in JavaScript, so the guard written to stop unseeded forms would have stopped seeing the brand it was written for. It now also reads `data-form` off each `&lt;form&gt;`, and walks `.js` as well as `.html`, recursively, for the wrong-path check - which was still non-recursive and reading one file per app.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">4/4 under `jest -c jest.ci.config.ts`. Proven to bite by breaking one seeded slug in a scratch copy of the seeder: the suite failed and named the exact page and pair, `cpn-public/support\index.html posts to source=cpn&amp;entry=champion_interest`. Restored from the scratch copy, never via `git checkout`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**A guard that stops matching does not fail, it passes over less.** `appPairs()` would have returned fewer rows and every assertion would still have been green - the same shape as the bug the test&#39;s own header describes, where it &quot;could not see three quarters of the pages it was guarding&quot;. So a named assertion pins that the three CPN slugs are actually found, because the aggregate assertions cannot distinguish &quot;all correct&quot; from &quot;nothing looked at&quot;. Checked first that every `data-form` value across all three apps is already a real seeded slug, so widening the match could not turn an unrelated attribute into a false failure.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Correct three stale documents, one of which made a false legal claim</h2>
+          <span class="badge">2026-09-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`DESIGN_SYSTEM.md` opened with &quot;CPN is a nonprofit (501(c)(3), separate legal entity from Colaberry)&quot;. Both halves are false: there is no determination and it has not been filed, and the relationship is not arm&#39;s length. Corrected, with the reasoning kept inline because a design system is the document people copy boilerplate out of. `EXTRACTION.md` pointed at `POST /api/ingest`, which is not a route (`leadRoutes.ts:79` is `/api/leads/ingest`), and listed `cpn.org` as the web domain. `README.md` described a skeleton and pointed at `https://cpn.org`. The e2e&#39;s two `page_url` fixtures also said `cpn.org`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Repo-wide sweep for `cpn.org` now returns only deliberate explanatory text (the nginx comment, the seed comment, my EXTRACTION note) plus illustrative doc comments in `BrandDomain.ts`, `ensureMultiTenantSchema.ts` and `journeyLinkService.ts`, and test fixtures unrelated to CPN config.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">No wrong variant of the legal name exists anywhere in this repository - not &quot;Career Pathway Network&quot;, not &quot;Community-to-Career Network&quot; - and the site&#39;s copy uses only the correct plural form. The verification harness checks both variants as forbidden regexes so a future edit cannot reintroduce one quietly.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260906-q4h7.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
