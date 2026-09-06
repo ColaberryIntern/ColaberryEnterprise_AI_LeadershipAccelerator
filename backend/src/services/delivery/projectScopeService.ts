@@ -51,8 +51,13 @@ import { classifySteps, renderWorkflowSvg } from './scopeDiagram';
  *
  * Bump it for shape changes, not for copy tweaks: a bump costs one model call per active
  * prospect, because regenerating is how a scope gets rebuilt.
+ *
+ * A WRONG generated field counts as a reason to bump, not just a new one. Version 3 exists
+ * because version 2 stored a workflow diagram that marked every step "You decide" - the
+ * generator was fixed, but a corrected generator does nothing for a scope already cached,
+ * so every prospect would have kept the picture that argued against buying.
  */
-export const SCOPE_VERSION = 2;
+export const SCOPE_VERSION = 3;
 
 export interface ScopeSection {
   key: string;
