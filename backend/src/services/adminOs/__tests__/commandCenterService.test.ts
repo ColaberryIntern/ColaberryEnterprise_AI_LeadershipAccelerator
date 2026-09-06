@@ -198,6 +198,40 @@ describe('command center summary', () => {
     expect(summary.degraded).toEqual(['activity feed']);
   });
 
+  // ── A hang is not a failure, which is what made it dangerous ─────────────
+
+  it('treats a source that never responds as failed rather than waiting', async () => {
+    // On 2026-09-06 the visitor-KPI query took 72 seconds on production, so this
+    // endpoint never responded and the page sat on "Loading…" forever. Every
+    // other failure mode here was built to be visible; that one was invisible
+    // because nothing ever returned.
+    jest.useFakeTimers();
+    const deps = okDeps();
+    deps.getVisitorKpis = jest.fn().mockReturnValue(new Promise(() => {})); // never settles
+
+    const promise = getCommandCenterSummary(deps);
+    await jest.advanceTimersByTimeAsync(11_000);
+    const summary = await promise;
+    jest.useRealTimers();
+
+    const t = tileFor(summary, 'growth.unique_visitors');
+    expect(t.status).toBe('failed');
+    expect(t.value).toBeNull();
+    expect(t.errorClass).toBe('SourceTimeoutError');
+    expect(summary.degraded).toContain('visitor metrics');
+  });
+
+  it('does not time out a source that answers in time', async () => {
+    jest.useFakeTimers();
+    const deps = okDeps();
+    const promise = getCommandCenterSummary(deps);
+    await jest.advanceTimersByTimeAsync(50);
+    const summary = await promise;
+    jest.useRealTimers();
+    expect(tileFor(summary, 'growth.unique_visitors').value).toBe(994);
+    expect(summary.degraded).toEqual([]);
+  });
+
   it('passes the requested window through to the source', async () => {
     const deps = okDeps();
     const summary = await getCommandCenterSummary(deps, 7);

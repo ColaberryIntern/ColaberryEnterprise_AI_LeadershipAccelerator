@@ -122,12 +122,44 @@ function toSection(
  * an error into a plausible number, which is exactly how the Visitors dashboard
  * reported 0 live visitors for weeks while the site had people on it.
  */
+/**
+ * How long any one source may take before it is treated as failed.
+ *
+ * A HANG IS NOT A FAILURE, and that is what made it dangerous. On 2026-09-06
+ * the visitor-KPI query took 72 seconds on production, so this endpoint never
+ * responded and the page sat on "Loading…" forever — no error, no tile, nothing
+ * to diagnose from. Every other failure mode here was designed to be visible;
+ * this one was invisible because nothing ever returned.
+ *
+ * Ten seconds is well above any healthy source measured (the feed is ~220ms,
+ * dashboard stats ~20ms) and well below a person's patience.
+ */
+const SOURCE_TIMEOUT_MS = 10_000;
+
+class SourceTimeoutError extends Error {
+  constructor(label: string) {
+    super(`Source '${label}' did not respond within ${SOURCE_TIMEOUT_MS}ms`);
+    this.name = 'SourceTimeoutError';
+  }
+}
+
+/** Reject if a read outruns the budget, so a slow source degrades to a failed one. */
+function withTimeout<T>(label: string, read: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new SourceTimeoutError(label)), SOURCE_TIMEOUT_MS);
+    read().then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 async function settle<T>(
   label: string,
   read: () => Promise<T>,
 ): Promise<{ status: SourceStatus; value: T | null; errorClass?: string }> {
   try {
-    return { status: 'ok', value: await read() };
+    return { status: 'ok', value: await withTimeout(label, read) };
   } catch (error) {
     const errorClass = error instanceof Error ? error.constructor.name : 'Unknown';
     process.stdout.write(
