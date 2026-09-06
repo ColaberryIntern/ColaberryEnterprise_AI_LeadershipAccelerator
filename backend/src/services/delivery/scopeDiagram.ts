@@ -87,6 +87,24 @@ export function wrapLabel(text: string, maxChars = MAX_CHARS): string[] {
   return lines;
 }
 
+/**
+ * Two kinds of flow, because two kinds of customer.
+ *
+ * A dispatcher describes a morning that already exists: the useful picture is THAT morning
+ * with the parts that stop being theirs marked. Somebody describing an app that does not
+ * exist yet has no morning to draw - and the first live diagram for one labelled their
+ * wished-for features "TODAY", which is simply false.
+ *
+ * So a flow with no current workflow behind it is drawn as what it is: how the thing would
+ * work, claiming nothing about a present that was never described.
+ */
+export type FlowMode = 'today' | 'proposed';
+
+const NEUTRAL_LABEL: Record<FlowMode, string> = {
+  today: 'Today',
+  proposed: 'In the build',
+};
+
 const STATE_STYLE: Record<StepState, { fill: string; stroke: string; label: string; labelFill: string }> = {
   // Colours come through CSS custom properties with literal fallbacks, so the diagram picks
   // up the page's theme where there is one and still renders standalone where there is not.
@@ -117,7 +135,11 @@ const STATE_STYLE: Record<StepState, { fill: string; stroke: string; label: stri
  * laptop, and a horizontal flow of five steps either scrolls sideways or shrinks the text
  * past reading.
  */
-export function renderWorkflowSvg(steps: DiagramStep[], title = 'Your workflow today'): string {
+export function renderWorkflowSvg(
+  steps: DiagramStep[],
+  mode: FlowMode = 'today',
+  title = mode === 'today' ? 'Your workflow today' : 'How it would work',
+): string {
   if (steps.length === 0) return '';
 
   const wrapped = steps.map((s) => ({ ...s, lines: wrapLabel(s.label) }));
@@ -140,7 +162,7 @@ export function renderWorkflowSvg(steps: DiagramStep[], title = 'Your workflow t
     // anyone who cannot see it (WCAG 1.4.1), and this diagram's whole argument is carried
     // by which steps are marked.
     parts.push(
-      `<text x="${x + 16}" y="${y + 20}" font-family="ui-monospace, monospace" font-size="9.5" letter-spacing="0.08em" fill="${style.labelFill}">${escapeXml(style.label.toUpperCase())}</text>`,
+      `<text x="${x + 16}" y="${y + 20}" font-family="ui-monospace, monospace" font-size="9.5" letter-spacing="0.08em" fill="${style.labelFill}">${escapeXml((step.state === 'manual' ? NEUTRAL_LABEL[mode] : style.label).toUpperCase())}</text>`,
     );
 
     step.lines.forEach((line, li) => {
