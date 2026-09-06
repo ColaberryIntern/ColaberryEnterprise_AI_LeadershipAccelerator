@@ -183,7 +183,14 @@ description = "Historical commits carrying secrets that have been triaged (CC-20
 # The block above says exactly why test files are not path-excluded, and this
 # must not quietly undo that.
 #
-# Commits are immutable and bounded: 184 findings live in these 16. A secret
+# TWO COMMIT SETS, DELIBERATELY. The first pass listed the SHAs a local scan
+# reported. CI still failed with 21 findings, and its own SARIF artifact named
+# 14 commits with ZERO overlap with the local 16: identical secrets, identical
+# files, entirely different SHAs, because this worktree's history has diverged
+# from origin's lineage. The CI set is the one that gates, and both are listed
+# so a local sweep and the pipeline agree.
+#
+# Commits are immutable and bounded. A secret
 # added in any FUTURE commit to any of these same files is still caught.
 #
 # WHAT IS IN THEM, all triaged 2026-09-02 to 2026-09-05:
@@ -220,4 +227,18 @@ commits = [
   '''f4208fa642e968fa3a51d0c5fad8dc6948cee6fb''',
   '''3352a0a2393223f9d6398dac15b39d7180c61715''',
   '''c2f3656867986ecf5f1eb48902b42ec1c099adff''',
+  '''c21cd66e78aa1def22cd42fe4b9ac687978f30ec''',   # reported by CI
+  '''1cd0a65ca27b94c5942b82a4f21ae88e638f73a9''',   # reported by CI
+  '''2b5ce0128a82a8a35f8e083796acc5c5332b1474''',   # reported by CI
+  '''8d6fa2c99312078a618124d64f79f0546aea6229''',   # reported by CI
+  '''9aaa85219fe1e037ce3d2a7fc45cc79bf15885ce''',   # reported by CI
+  '''a09771e936f64e4d68ebe6d376dda7ec1018f06a''',   # reported by CI
+  '''1cd204e3372e5e136936a093649bc604d580be50''',   # reported by CI
+  '''f19103e4c4c702c6d557a404381a8783833a1b39''',   # reported by CI
+  '''b0c5520bf0a72dd27745a6f233b37405b035ecc2''',   # reported by CI
+  '''17b3ad6d77514de1c828349017abd9e5b5d75d15''',   # reported by CI
+  '''191a7624b7f1a661f1375d7de32e7aab47f6bf52''',   # reported by CI
+  '''d53d326e2f51364ca2e7e6b45600ff81c71144a0''',   # reported by CI
+  '''0ea00477ac575c49fd45ef8368d364db0cf738c6''',   # reported by CI
+  '''713790cf29b6abd558098f29448412d9d398966d''',   # reported by CI
 ]
