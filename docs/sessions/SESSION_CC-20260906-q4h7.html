@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, September 6, 2026 at 4:23 PM</div>
-    <div><span class="sid">CC-20260906-q4h7</span><span class="count">4 changes</span></div>
+    <div class="meta">Generated Sunday, September 6, 2026 at 5:55 PM</div>
+    <div><span class="sid">CC-20260906-q4h7</span><span class="count">5 changes</span></div>
   </header>
   <main>
     
@@ -117,6 +117,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Repo-wide sweep for `cpn.org` now returns only deliberate explanatory text (the nginx comment, the seed comment, my EXTRACTION note) plus illustrative doc comments in `BrandDomain.ts`, `ensureMultiTenantSchema.ts` and `journeyLinkService.ts`, and test fixtures unrelated to CPN config.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">No wrong variant of the legal name exists anywhere in this repository - not &quot;Career Pathway Network&quot;, not &quot;Community-to-Career Network&quot; - and the site&#39;s copy uses only the correct plural form. The verification harness checks both variants as forbidden regexes so a future edit cannot reintroduce one quietly.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Deploy opportunitylift.org, and make the two new forms actually work</h2>
+          <span class="badge">2026-09-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali merged PR #2207 (`56af5b22`) and said &quot;deploy now&quot;. Pulled `origin/main` on the prod VPS and rebuilt nginx with `up -d --build --no-deps nginx`. `--no-deps` held: the backend was not bounced. All seven pages went live. **Then the deploy turned out to be half done.** The two new lead entry points are seed data, and seeds do not run at boot, so `/partners/` and `/support/` were live and rejecting every submission. The prod backend image had been built at 22:13:09Z, five minutes *before* the 22:18:41Z merge, so its compiled seed had neither slug. Ali chose a backend rebuild over a hand-patch; `up -d --build backend` shipped the correct seed, and `node dist/seeds/seedLeadSources.js` created both entry points and corrected the `cpn` source domain from `cpn.org` to `opportunitylift.org` in the database.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Proved broken before proving fixed.** Both endpoints returned HTTP 400 `Unknown or inactive entry point` beforehand. After the seed, all three CPN entry points return `Missing required field(s): email` instead — which resolves the entry point while creating no lead, so the fix is proven end to end without writing test data into production. DB confirms `domain=opportunitylift.org` and three active entry points with active form definitions (`scholarship_interest` at v3 for the new phone/city_state map). The full browser harness was re-run against the **live origin** through Cloudflare at 360 and 1440 in a real browser: all seven pages, correct h1 on each, all three forms present, no contrast failure, no horizontal overflow, no table cell offscreen, no console errors, no failed requests, no forbidden copy. Live CSS confirmed to carry the `.nav a:not(.btn)` contrast fix at its content-hashed URL.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**A page rendering is not a form working, and only the static half of this deploy was self-verifying.** The nginx build ships the markup, so the pages looked completely correct while two of the three things they exist to do were broken — and nothing on the page said so. The guard test catches an unseeded entry point at build time; nothing catches an unseeded entry point at *deploy* time, because the seed is a separate manual step nobody is prompted to take. **The seeder touched seven sources, not one.** It supersedes any form definition whose JSON differs from the file, so five other brands got new active form-definition versions. Nothing was destroyed - superseded rows are marked inactive rather than deleted - and `ai-flotation`, `refactored` and `colaberry` entry points were each probed afterwards and still resolve, with `request_demo_form` correctly still requiring email *and* company. **A file was uploaded to the prod host and then not used:** the first plan was to patch only the compiled seed into the running container, which the auto-mode classifier blocked; the stray `/tmp` file was removed, and the container&#39;s `dist` is its image&#39;s, not hand-patched.</span></div>
           
         </div>
       </article>
