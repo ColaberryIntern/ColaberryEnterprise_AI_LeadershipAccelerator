@@ -100,6 +100,28 @@ export function wrapLabel(text: string, maxChars = MAX_CHARS): string[] {
  */
 export type FlowMode = 'today' | 'proposed';
 
+/**
+ * Decide the mode from the STEPS THEMSELVES, not from the dimension they were filed under.
+ *
+ * The first attempt trusted `current_workflow` to mean "a process they run today". It does
+ * not: the extractor filed "The app should allow family members to track..." there, and the
+ * diagram duly announced TODAY over a list of future-tense wishes for an app that does not
+ * exist.
+ *
+ * The extractor should be better, and separately will be. But the text is the evidence
+ * sitting right here, and a diagram that reads its own content cannot be wrong-footed by a
+ * mislabelled dimension upstream.
+ */
+const FUTURE_PHRASING = /\b(should|would|will|could|needs? to|want(?:s|ed)? to|plan(?:s|ned)? to|going to|must)\b/i;
+
+export function inferFlowMode(steps: string[]): FlowMode {
+  if (steps.length === 0) return 'today';
+  const future = steps.filter((s) => FUTURE_PHRASING.test(s)).length;
+  // A single aspirational sentence inside a described process is normal. A majority means
+  // they were describing what they want, not what they do.
+  return future * 2 > steps.length ? 'proposed' : 'today';
+}
+
 const NEUTRAL_LABEL: Record<FlowMode, string> = {
   today: 'Today',
   proposed: 'In the build',

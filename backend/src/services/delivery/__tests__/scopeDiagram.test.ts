@@ -6,7 +6,7 @@
  * So the classifier is deliberately conservative, and these tests hold it there.
  */
 
-import { renderWorkflowSvg, classifySteps, wrapLabel } from '../scopeDiagram';
+import { renderWorkflowSvg, classifySteps, wrapLabel, inferFlowMode } from '../scopeDiagram';
 
 describe('classifySteps — a mark has to be earned', () => {
   it('marks a step automated when an automation clearly refers to it', () => {
@@ -219,5 +219,46 @@ describe('a flow with no present does not claim one', () => {
       decisions: [],
     });
     expect(renderWorkflowSvg([...marked, ...marked], 'proposed')).toContain('RUNS ITSELF');
+  });
+});
+
+/**
+ * The mode must come from the STEPS, not from the dimension they were filed under.
+ *
+ * Trusting `current_workflow` to mean "a process they run today" failed on the first real
+ * greenfield project: the extractor filed "The app should allow family members to track…"
+ * there, and the diagram announced TODAY over a list of wishes for an app that does not
+ * exist.
+ */
+describe('inferFlowMode reads the text, not the label', () => {
+  it('calls a majority of future-tense sentences a proposed flow', () => {
+    expect(
+      inferFlowMode([
+        'The app should allow family members to track older adults',
+        'Family members should receive notifications when someone is late',
+        'Older adults often get lost and miss transport',
+      ]),
+    ).toBe('proposed');
+  });
+
+  it('calls a described process today, even with one aspirational line', () => {
+    // A single "we want it to email us" inside a real morning is normal.
+    expect(
+      inferFlowMode([
+        'Ralph rebuilds the Power BI report every morning',
+        'The team meets to discuss operations',
+        'We want it to email us the report automatically',
+      ]),
+    ).toBe('today');
+  });
+
+  it('treats an empty flow as today rather than inventing a claim', () => {
+    expect(inferFlowMode([])).toBe('today');
+  });
+
+  it('catches the modal verbs a wish actually uses', () => {
+    ['should', 'would', 'will', 'needs to', 'wants to', 'must'].forEach((verb) => {
+      expect(inferFlowMode([`The system ${verb} notify the family`])).toBe('proposed');
+    });
   });
 });
