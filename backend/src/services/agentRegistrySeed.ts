@@ -2432,8 +2432,10 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     config: { pilot_cohort_ids: [] },
     enabled: true,
     system_prompt: REESE_PERSONA_BLOCK,
-    // Honest, non-aspirational — reflects exactly what Phase 1 code lets Reese do.
-    tools_granted: ['respond_to_dm', 'read_learner_context'],
+    // Honest, non-aspirational — reflects exactly what the code lets Reese do.
+    // Checkpoint E (2026-09-06) added her first 2 genuinely LLM-invoked tools
+    // (reeseTools.ts) — real function-calling, not just a system-prompt fact.
+    tools_granted: ['respond_to_dm', 'read_learner_context', 'read_student_success_snapshot', 'assess_student_health'],
     persona_version: '2026-08-06',
   },
   // --- SBP GitHub: repository-invitation sweep ---

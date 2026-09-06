@@ -106,6 +106,14 @@ describe('deriveAgentCapabilities', () => {
     expect(result.produces).toEqual(['Ticket status -> done (initiative completed) or cancelled (initiative cancelled)']);
   });
 
+  it('happy path: Reese\'s real 2 Checkpoint E tools (2026-09-06, first LLM-invoked tools) resolve fully documented', () => {
+    const result = deriveAgentCapabilities(['respond_to_dm', 'read_learner_context', 'read_student_success_snapshot', 'assess_student_health']);
+
+    expect(result.undocumentedTools).toEqual([]);
+    expect(result.reads.some((r) => r.includes('Student Success 360'))).toBe(true);
+    expect(result.produces).toContain('A fresh StudentAssessment row, only when the existing one is missing or past its own reassessment_date');
+  });
+
   it('every entry in TOOL_CAPABILITIES has at least one read or produce fact (no dead/empty entries)', () => {
     for (const [tool, capability] of Object.entries(TOOL_CAPABILITIES)) {
       const hasContent = capability.reads.length > 0 || capability.produces.length > 0;
