@@ -6,8 +6,7 @@ const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePas
 const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
 const AdminLoginPage = lazy(() => import('../pages/admin/AdminLoginPage'));
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
-// WarRoomPage is no longer routed — /admin/war-room redirects to the Command
-// Center. The file stays in the tree until the Command Center has proven itself.
+const WarRoomPage = lazy(() => import('../pages/admin/WarRoomPage'));
 const AdminCohortDetailPage = lazy(() => import('../pages/admin/AdminCohortDetailPage'));
 const AdminLeadsPage = lazy(() => import('../pages/admin/AdminLeadsPage'));
 const AdminBusinessAccountsPage = lazy(() => import('../pages/admin/AdminBusinessAccountsPage'));
@@ -109,19 +108,15 @@ const adminRoutes = (
         {/* Account self-service: reachable by every admin identity regardless
             of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
         <Route path="/admin/change-password" element={<AdminChangePasswordPage />} />
-        {/* War Room folds into the Command Center, which now carries its
-            attention queue and activity feed alongside the metric tiles. The URL
-            keeps working — a redirect rather than a deletion, so anyone with it
-            bookmarked lands somewhere real, and the page file stays in the tree
-            until the Command Center has been used in anger for a while.
-
-            /admin/dashboard is deliberately NOT redirected yet. It is the first
-            entry in LANDING_PREFERENCE and therefore where every role lands on
-            login; folding it in before the Command Center has been exercised
-            would put every user's first screen behind a change nobody has
-            stress-tested. War Room is the safe one to move first — only owner
-            and admin hold `war_room` at all. */}
-        <Route path="/admin/war-room" element={<Navigate to="/admin/command-center" replace />} />
+        {/* War Room stays. It was redirected into the Command Center on 2026-09-06 and
+            that was wrong: War Room composes six sources (admin stats, revenue
+            dashboard, live metrics, alerts, feed, visitor stats) and the Command
+            Center had absorbed two of them. Redirecting a richer page into a
+            thinner one loses working tooling, and "only owner and admin hold
+            war_room" was an argument about who is affected, not about what is
+            lost. The redirect is reverted until the Command Center actually
+            covers what this page does. */}
+        <Route path="/admin/war-room" element={<WarRoomPage />} />
         <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
         <Route path="/admin/pipeline" element={<AdminPipelinePage />} />
         <Route path="/admin/leads" element={<AdminLeadsPage />} />

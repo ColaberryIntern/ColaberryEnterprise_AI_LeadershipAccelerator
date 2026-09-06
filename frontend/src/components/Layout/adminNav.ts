@@ -27,7 +27,8 @@ export const PINNED_LINKS: NavLink[] = [
   // Room's section would have stripped the landing page from five of eight
   // roles. Pinned rather than grouped because it is the destination the other
   // domains hang off.
-  { path: '/admin/command-center', label: 'Command Center', icon: 'radar-line', section: 'dashboard' },
+  { path: '/admin/war-room', label: 'War Room', icon: 'radar-line', section: 'war_room' },
+  { path: '/admin/command-center', label: 'Command Center', icon: 'compass-3-line', section: 'dashboard' },
   { path: '/admin/trust', label: 'Trust Center', icon: 'shield-check-line', section: 'trust' },
   // Support role's sole surface (also visible to owner/admin who hold 'students').
   { path: '/admin/students', label: 'Student Story', icon: 'file-user-line', section: 'students' },
@@ -181,10 +182,6 @@ export const API_ENFORCED_PATHS: readonly string[] = ['/admin/people'];
  * documented itself as a prototype or demo-scope surface.
  */
 export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = [
-  // Redirects to /admin/command-center. Keeps its original section so the
-  // guard still evaluates the path correctly on the way through, rather than
-  // falling into the null-section branch that admits every mgmt role.
-  ['/admin/war-room', 'war_room'],
   // Acquisition tooling — sits with the lead-ingestion surfaces it feeds.
   ['/admin/apollo', 'lead_ingestion'],
   ['/admin/import', 'lead_ingestion'],

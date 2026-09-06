@@ -1,6 +1,6 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
-import { botExclusionSql, notAutomatedSessionSql, engagedVisitorSql } from './visitorBotDetection';
+import { botExclusionSql, notAutomatedSessionSql, engagedVisitorSetSql } from './visitorBotDetection';
 
 /**
  * The visitor KPI frame: reach -> acquisition -> engagement -> conversion.
@@ -122,10 +122,11 @@ export async function getVisitorKpis(days = 30, includeBots = false): Promise<Vi
        COUNT(DISTINCT vs.visitor_id) FILTER (WHERE v.lead_id IS NOT NULL)::int                    AS converted_visitors,
        COUNT(*) FILTER (WHERE vs.is_bounce IS TRUE)::int                                          AS bounce_sessions,
        COUNT(DISTINCT vs.visitor_id) FILTER (
-         WHERE ${engagedVisitorSql('vs."visitor_id"', 'v."lead_id"')}
+         WHERE eng.visitor_id IS NOT NULL OR v.lead_id IS NOT NULL
        )::int                                                                                     AS engaged_visitors
      FROM visitor_sessions vs
      JOIN visitors v ON v.id = vs.visitor_id
+     LEFT JOIN (${engagedVisitorSetSql()}) eng ON eng.visitor_id = vs.visitor_id
      WHERE vs.started_at >= :since
        ${filter}`,
     { replacements: { since, since7 }, type: QueryTypes.SELECT }

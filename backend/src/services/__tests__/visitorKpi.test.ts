@@ -207,8 +207,15 @@ describe('engaged vs shallow visitors', () => {
 
     await getVisitorKpis(30);
 
+    // The carve-out moved on 2026-09-06 when the correlated EXISTS was replaced
+    // by a joined set — inside an aggregate FILTER the correlated form could not
+    // be rewritten by the planner and took 72 SECONDS on production, hanging the
+    // Command Center on "Loading…". The rule is unchanged and was verified
+    // against production before and after: both forms return 488 engaged
+    // visitors over 30 days. Only where the lead test sits changed.
     const sql = String(query.mock.calls[0][0]);
-    expect(sql).toContain('lead_id" IS NOT NULL OR');
+    expect(sql).toContain('v.lead_id IS NOT NULL');
+    expect(sql).toContain('eng.visitor_id IS NOT NULL OR');
   });
 });
 
@@ -248,6 +255,9 @@ describe('engagement counts deliberate actions, not just dwell', () => {
 
     await getVisitorKpis(30);
 
-    expect(String(query.mock.calls[0][0])).toContain('lead_id" IS NOT NULL OR');
+    // Same rule, new shape: the engaged SET covers dwell and interaction, and
+    // the lead test sits beside it in the FILTER.
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain('eng.visitor_id IS NOT NULL OR v.lead_id IS NOT NULL');
   });
 });

@@ -286,6 +286,37 @@ const ENGAGEMENT_EVENTS = [
   'scroll',
 ] as const;
 
+/**
+ * The engaged-visitor rule as a SET of visitor ids, for use as a CTE.
+ *
+ * WHY THIS EXISTS ALONGSIDE engagedVisitorSql. The correlated EXISTS form is
+ * fine in a WHERE clause — Postgres rewrites it into a hash semi-join and it
+ * runs in tens of milliseconds. Inside an aggregate FILTER it CANNOT be
+ * rewritten, so it is evaluated once per row: on production that turned a
+ * visitor-KPI query into a **72 second** one, which hung the Command Center on
+ * "Loading…" with no error, because a hang is not a failure.
+ *
+ * Measured 2026-09-06 on accelerator_prod:
+ *   EXISTS in WHERE                68 ms
+ *   same EXISTS inside COUNT FILTER  72,418 ms
+ *
+ * So a query that needs engagement per row joins THIS instead: the set is built
+ * once from two scans and joined, rather than re-derived per row. The thresholds
+ * and event list stay here so the two forms cannot disagree about what
+ * "engaged" means.
+ */
+export function engagedVisitorSetSql(): string {
+  const events = ENGAGEMENT_EVENTS.map((e) => `'${e}'`).join(', ');
+  return (
+    `SELECT DISTINCT evs."visitor_id" AS visitor_id FROM "visitor_sessions" evs ` +
+    `WHERE COALESCE(evs."duration_seconds",0) > ${SHALLOW_MAX_SECONDS} ` +
+    `OR COALESCE(evs."pageview_count",0) > ${SHALLOW_MAX_PAGEVIEWS} ` +
+    `UNION ` +
+    `SELECT DISTINCT epe."visitor_id" AS visitor_id FROM "page_events" epe ` +
+    `WHERE epe."event_type" IN (${events})`
+  );
+}
+
 export function engagedVisitorSql(visitorIdColumn: string, leadIdColumn?: string): string {
   const converted = leadIdColumn ? `${leadIdColumn} IS NOT NULL OR ` : '';
   const events = ENGAGEMENT_EVENTS.map((e) => `'${e}'`).join(', ');
