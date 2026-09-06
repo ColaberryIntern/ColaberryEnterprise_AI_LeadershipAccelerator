@@ -2,7 +2,7 @@
   "name": "@refactored/cpn-public",
   "version": "0.1.0",
   "private": true,
-  "description": "Career Pathways Network public skeleton — proves ecosystem plumbing, not a marketing site.",
+  "description": "OpportunityLift - Career Pathways Network public site (opportunitylift.org).",
   "scripts": {
     "build": "node build.js",
     "validate:boundaries": "node ../../scripts/validate-app-boundaries.js"

@@ -89,18 +89,50 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
   },
 
   /**
-   * Career Pathways Network - opportunitylift.org. One page today.
+   * Career Pathways Network - opportunitylift.org. Seven pages.
    *
-   * The scholarship intake form lives ON the homepage rather than behind its own route,
-   * so `/` stays `homepage` and is NOT promoted to `enroll` to manufacture intent. The
-   * form is already covered by the mechanism built for forms: `form_started` (30) and
-   * `form_submitted` (50) fire from the form's own events regardless of page category.
-   * Labelling a homepage as an enrollment page to reach a number would make every bounce
-   * look like an application.
+   * THIS BRAND HAS THREE AUDIENCES AND ONLY ONE OF THEM IS A LEARNER. Scholarship
+   * applicants, community partners and donors all arrive here, and the signal vocabulary
+   * below was built for a single commercial funnel. The categories are therefore chosen
+   * so that a donor reading about money never scores as an applicant about to enrol - a
+   * confident wrong answer is worse than no answer, which is the whole reason this file
+   * exists.
    */
   cpn: {
     exact: {
+      // The homepage no longer carries the intake form; it moved to `/scholarships`,
+      // which is where `lead_entry_points` said it lived all along. So `/` is finally a
+      // plain homepage rather than a homepage with a conversion on it.
       '/': 'homepage',
+      // The conversion page: the scholarship interest form and its submit CTA. Same
+      // shape as ai-flotation `/start` and refactored `/platform-interest`, so it earns
+      // the same category - `enroll`, strength 45, the strongest single page-visit
+      // signal. This is the one page on the site where somebody commits to anything.
+      '/scholarships': 'enroll',
+      // Deliberately NOT `pricing`, even though it is literally a page of prices.
+      // `pricing` (35) combines with `enroll` to fire `evaluation_pattern` (45), and the
+      // person reading this page is usually a DONOR evaluating the charity while the
+      // person on `/scholarships` is an APPLICANT. Labelling it `pricing` would fuse two
+      // different people into one purchase intent. It explains how the organisation
+      // handles money, so it is categorised with the other pages that explain the
+      // organisation.
+      '/how-funds-work': 'about',
+      // What partnering means for a church, employer or community group. It explains the
+      // offering to an audience, which is what `program` means for the other brands. It
+      // does carry a form, but forms are already covered: `form_started` (30) and
+      // `form_submitted` (50) fire from the form's own events regardless of category.
+      '/partners': 'program',
+      // The supporter page. NOT `enroll`: it has a form and a submit CTA, but treating a
+      // donor's interest as an enrolment would put the funnel's strongest signal behind
+      // the wrong intent entirely. Its actual promise is "a person will follow up", which
+      // is what `contact` means everywhere else in this map.
+      '/support': 'contact',
+      // Deliberately NOT `homepage`. That is Colaberry's rule for its own /about, and
+      // inheriting it here is the exact cross-brand leak this module exists to stop.
+      '/about': 'about',
+      // Named rather than left to fall through, so the uncategorised bucket keeps
+      // meaning "we have not looked at this page yet".
+      '/privacy': 'legal',
     },
   },
 

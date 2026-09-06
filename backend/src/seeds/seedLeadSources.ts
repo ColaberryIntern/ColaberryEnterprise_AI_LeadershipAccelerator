@@ -158,8 +158,9 @@ const SEEDS: SeedSource[] = [
   // did. So `/api/ingest?source=cpn` answered "Unknown or inactive source" and
   // neither brand could capture a lead at all.
   //
-  // Domains match `ecosystemSeedData.ts` exactly (cpn.org, aiflotation.com); if
-  // they drift apart, a submission resolves to a brand that does not own it.
+  // Domains match `ecosystemSeedData.ts` exactly (opportunitylift.org,
+  // aiflotation.com); if they drift apart, a submission resolves to a brand that
+  // does not own it.
   //
   // No HMAC, for the same reason as `trustbeforeintelligence` above: these are
   // public marketing pages that cannot hold a shared secret. Abuse protection
@@ -167,17 +168,74 @@ const SEEDS: SeedSource[] = [
   {
     slug: 'cpn',
     name: 'Career Pathways Network',
-    domain: 'cpn.org',
+    // NOT cpn.org. The nonprofit does not own that domain - it resolves to a
+    // different Cloudflare account - and `ecosystemSeedData.ts` was corrected to
+    // opportunitylift.org when the domain was registered on 2026-08-31. This row
+    // was left behind, which is exactly the drift the comment above warns about.
+    domain: 'opportunitylift.org',
     entry_points: [
       {
         slug: 'scholarship_interest',
         name: 'Scholarship Interest',
         page: '/scholarships',
         form_name: 'scholarship-interest',
-        description: 'Scholarship interest form on the CPN site',
+        description: 'Scholarship interest form on the OpportunityLift site',
         field_map: {
           name: 'name',
           email: 'email',
+          // The skeleton form posted `phone` and `city_state` and this map never
+          // carried them, so both were accepted and then dropped before the lead
+          // row - the same silent loss the `call_me_now` entry below was written
+          // to prevent. A phone number nobody can dial is worse than not asking.
+          phone: 'phone',
+          city_state: 'metadata.city_state',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+      {
+        // /partners/. An entry point is DATA: ingest refuses any slug it does not
+        // know, so shipping the page without this row produces a form that
+        // validates client-side, posts, and is rejected with "Unknown or inactive
+        // entry point". EXTRACTION.md has listed this slug since the app was
+        // written; nothing ever created it.
+        slug: 'community_partner_interest',
+        name: 'Community Partner Interest',
+        page: '/partners',
+        form_name: 'community-partner-interest',
+        description: 'Church, employer and community organisation partner enquiry',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          role: 'role',
+          phone: 'phone',
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+      {
+        // /support/. Named `champion_interest` rather than `donor_interest`
+        // because that is the slug EXTRACTION.md already declared, and renaming a
+        // published identifier to read better is how attribution breaks.
+        //
+        // This captures INTEREST ONLY. There is no checkout on that page and no
+        // payment is taken: Career Pathways Network has no federal tax exempt
+        // determination, and payment processing is gated behind it.
+        slug: 'champion_interest',
+        name: 'Supporter Interest',
+        page: '/support',
+        form_name: 'supporter-interest',
+        description: 'Supporter and sponsor enquiry on the OpportunityLift site',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          phone: 'phone',
+          message: 'metadata.message',
           consent_contact: 'consent_contact',
           page_url: 'metadata.page_url',
         },
