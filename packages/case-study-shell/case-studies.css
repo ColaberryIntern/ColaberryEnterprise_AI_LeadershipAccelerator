@@ -192,3 +192,128 @@
 /* -------------------------------------------------------------- not found --- */
 
 .cs-notfound { display: grid; gap: 1rem; justify-items: start; padding-block: 3rem; }
+
+/* ========================================================== the record card ===
+   Shaped like the portal's event cards: picture, a line of context, the title,
+   the summary. Ali, 2026-09-06: "make them look like Event cards and use the
+   picture."
+
+   THE WHOLE CARD IS THE LINK. An event card offers "Register" because
+   registering is a different act from reading about the event. A record has one
+   thing you can do with it, so a small button would be a smaller target for the
+   only available action. The `record-cta` below is an affordance, not a control.
+
+   Colour comes from the host's `--cs-*` mapping, as everywhere else here.
+   ========================================================================== */
+
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.record-card:hover { border-color: var(--cs-accent); transform: translateY(-2px); }
+.record-card:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .record-card { transition: none; }
+  .record-card:hover { transform: none; }
+}
+
+/* A FIXED ASPECT, so a grid of records is a row of equal objects rather than a
+   ragged edge set by whatever proportions each screenshot happened to have.
+   `cover` crops rather than letterboxes: a band of empty surface around a
+   screenshot reads as a loading failure. */
+.record-media {
+  /* `position: relative` is doing real work here, not tidiness. The image is
+     sized `height: 100%`, and a PERCENTAGE HEIGHT NEEDS A DEFINITE PARENT
+     HEIGHT to resolve against. A height that `aspect-ratio` derives from the
+     width is not definite, so the percentage silently falls back to `auto`, the
+     image takes its own intrinsic height, and it pushes the box past the ratio
+     it was told to hold - a 16/9 rule that measured 368x318. Taking the image
+     out of flow leaves the box's own height as the only thing to size it from. */
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--cs-bg);
+  border-bottom: 1px solid var(--cs-line);
+}
+.record-media img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* TOP, not centre. Almost every cover here is a screenshot of a screen,
+     and a screen puts its title bar and its first heading at the top. A
+     centred 16/9 crop of a tall page throws both away and frames whatever
+     happened to be halfway down - here, six rows out of the middle of a
+     requirements table, which tells a reader nothing about the record. */
+  object-position: center top;
+}
+/* A record with no approved cover keeps the card's shape instead of collapsing
+   it, so one missing picture does not break the row. */
+.record-media[data-empty='true'] { background: var(--cs-bg); }
+
+.record-body { display: flex; flex-direction: column; gap: .5rem; flex: 1; padding: 1.1rem 1.25rem 1.25rem; }
+
+.record-meta {
+  margin: 0;
+  font-size: .78rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.record-title { margin: 0; font-size: 1.1rem; line-height: 1.3; }
+.record-summary {
+  margin: 0;
+  font-size: .95rem;
+  line-height: 1.55;
+  color: var(--cs-fg-muted);
+  /* Four lines, so a long standfirst cannot make one card twice the height of
+     its neighbours. The full text is on the record page, one click away. */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Pushed to the bottom so the verification word and the affordance line up
+   across cards of different summary lengths. */
+.record-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: auto;
+  padding-top: .6rem;
+}
+.record-verify {
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+.record-cta { font-size: .9rem; font-weight: 600; color: var(--cs-accent); }
+.record-cta::after { content: ' \2192'; }
+
+/* The byline sits with the summary, not in the foot: it is part of what the
+   record IS, where the foot carries what you can do about it. */
+.record-byline {
+  margin: 0;
+  font-size: .85rem;
+  color: var(--cs-fg-muted);
+}

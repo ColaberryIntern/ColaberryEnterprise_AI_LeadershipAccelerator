@@ -141,6 +141,22 @@ export interface CaseStudySurfaceProfile {
   readonly publicBaseUrl: string | null;
   /** Path segment before the slug on that domain, e.g. `/stories` or `/results`. */
   readonly detailPathPrefix: string | null;
+  /**
+   * WHO BUILT IT, when the record itself does not say — and ONLY then.
+   *
+   * Ali, 2026-09-06: "Default 'Who Built' would be AI Flotation team for
+   * anything that comes through AI Flotation." Read that word literally: this
+   * fills a blank, it does not paint over an answer. A record whose snapshot
+   * carries `builtByType: 'learner'` keeps saying learner on every surface it
+   * appears on, because that is what happened.
+   *
+   * The distinction is the whole point of the attribution floor below. A
+   * surface-wide OVERRIDE would let AI Flotation's masthead claim authorship of
+   * work `builtBy` says belongs to someone else, which is the exact failure the
+   * floor exists to make structurally impossible. A DEFAULT cannot: the only
+   * records it can speak for are the ones with nothing to contradict.
+   */
+  readonly defaultBuiltBy: CaseStudyBuiltByType | null;
   readonly defaultFilters: CaseStudyFilterInput;
   readonly defaultSort: CaseStudySortKey;
   readonly sectionOrder: readonly CaseStudySectionKey[];

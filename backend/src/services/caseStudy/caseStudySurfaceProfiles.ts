@@ -16,7 +16,11 @@
  * LEAF MODULE: type-only imports, no I/O, nothing that can fail.
  */
 
-import type { CaseStudySectionKey, CaseStudySurfaceKey } from '../../types/caseStudy';
+import type {
+  CaseStudyBuiltByType,
+  CaseStudySectionKey,
+  CaseStudySurfaceKey,
+} from '../../types/caseStudy';
 import type { CaseStudySurfaceProfile } from '../../types/caseStudyFilters';
 import type { PublicVerificationClass } from '../../types/caseStudyPublic';
 
@@ -166,6 +170,8 @@ function profile(
   /* Where this surface is read. Null while it has no page - see the field. */
   address: { publicBaseUrl: string | null; detailPathPrefix: string | null }
     = { publicBaseUrl: null, detailPathPrefix: null },
+  /* Fills a MISSING builder, never replaces a stated one - see the field. */
+  defaultBuiltBy: CaseStudyBuiltByType | null = null,
 ): CaseStudySurfaceProfile {
   return {
     surfaceKey,
@@ -174,6 +180,7 @@ function profile(
     hero,
     publicBaseUrl: address.publicBaseUrl,
     detailPathPrefix: address.detailPathPrefix,
+    defaultBuiltBy,
     defaultFilters: { surface: surfaceKey, verificationClass: PROVEN_ONLY },
     defaultSort: 'featured',
     sectionOrder,
@@ -244,6 +251,9 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
        page ON AI FLOTATION, so its canonical says so - a canonical pointing at
        Colaberry would hand this brand's ranking to another company's site. */
     { publicBaseUrl: 'https://aiflotation.com', detailPathPrefix: '/results' },
+    // Records that come through AI Flotation and name no builder are AI
+    // Flotation's own delivery team. Records that DO name one keep it.
+    'ai_flotation_team',
   ),
   refactored: profile(
     'refactored', 'Refactored', false, REFACTORED_ORDER,

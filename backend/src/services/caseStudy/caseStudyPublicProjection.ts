@@ -63,6 +63,7 @@ import {
 } from './caseStudyPublicSections';
 import type { PublicVerificationPair } from './caseStudyPublicSections';
 import type {
+  CaseStudyBuiltByType,
   CaseStudySnapshotContent,
   CaseStudySurfaceKey,
   IsoDateTime,
@@ -158,6 +159,25 @@ function common(input: PublicProjectionInput): CommonFields {
 /* ---------------------------------------------------------- projections --- */
 
 /** One card on the index. Every key below is a key of `PublicCaseStudySummary`. */
+/**
+ * WHO BUILT IT. The record's own answer wins; the surface only fills a blank.
+ *
+ * Ali, 2026-09-06, on AI Flotation: "Default 'Who Built' would be AI Flotation
+ * team for anything that comes through AI Flotation." The word is DEFAULT, and
+ * the `??` chain is what keeps it one. A surface that could overwrite a stated
+ * builder could put AI Flotation's name on Colaberry's work without a single
+ * word of copy changing - the same misattribution the attribution floor on
+ * `CaseStudySurfaceProfile.requiredSections` exists to make impossible.
+ * Reaching the last term means the snapshot said nothing at all, and a surface
+ * answering for its own unattributed delivery is a statement of fact.
+ */
+function builtBy(input: PublicProjectionInput): CaseStudyBuiltByType | null {
+  return input.content?.taxonomy?.builtByType
+    ?? input.content?.identity?.builtByType
+    ?? getCaseStudySurfaceProfile(input.surfaceKey).defaultBuiltBy
+    ?? null;
+}
+
 export function projectPublicSummary(input: PublicProjectionInput): PublicCaseStudySummary {
   const c = common(input);
   const content = input.content;
@@ -178,7 +198,7 @@ export function projectPublicSummary(input: PublicProjectionInput): PublicCaseSt
     capabilities: c.capabilities,
     stack: c.stack,
     programLabel: c.programLabel,
-    builtBy: content?.taxonomy?.builtByType ?? content?.identity?.builtByType ?? null,
+    builtBy: builtBy(input),
     verificationClass: c.verification.verificationClass,
     verificationMethod: c.verification.verificationMethod,
     headlineMetric: headline,
@@ -213,7 +233,7 @@ export function projectPublicDetail(input: PublicProjectionInput): PublicCaseStu
     capabilities: c.capabilities,
     stack: c.stack,
     programLabel: c.programLabel,
-    builtBy: content?.taxonomy?.builtByType ?? content?.identity?.builtByType ?? null,
+    builtBy: builtBy(input),
     verificationClass: c.verification.verificationClass,
     verificationMethod: c.verification.verificationMethod,
     publishedAt: input.publication.publishedAt,

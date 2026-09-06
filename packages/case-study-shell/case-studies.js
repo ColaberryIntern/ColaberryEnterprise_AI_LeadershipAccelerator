@@ -128,25 +128,110 @@
 
   function text(node, value) { node.textContent = value; return node; }
 
-  function card(record) {
-    var a = document.createElement('a');
-    a.className = 'tile record';
-    /* THE RECORD PAGE IS ON THIS DOMAIN, and that is the whole point of the
-       change. This used to link to the platform, which threw a reader browsing
-       one brand onto another company's site - different logo, different menu -
-       halfway through their own journey. `data-detail` names this brand's own
-       record path, and the server's canonical for this surface agrees with it. */
-    a.href = DETAIL_BASE + encodeURIComponent(record.slug) + '/';
-    a.appendChild(text(document.createElement('h3'), record.title));
-    if (record.standfirst) a.appendChild(text(document.createElement('p'), record.standfirst));
-    if (record.verificationClass) {
-      var v = text(document.createElement('span'), record.verificationClass);
-      v.className = 'record-verify';
-      a.appendChild(v);
-    }
-    return a;
+  /* NOT named `el`: that name is already the object holding this page's nodes
+     (`el.grid`, `el.empty`), and a function of the same name shadows it so every
+     call throws and the list silently never renders. */
+  function make(tag, className, textContent) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (textContent !== undefined && textContent !== null) node.textContent = textContent;
+    return node;
   }
 
+  /* Month and year only. A published date is a rough marker of currency, and a
+     day-level date on a card invites a reader to compute an age the record is not
+     making a claim about. Falls back to the raw string rather than printing
+     'Invalid Date' if a value ever arrives in another shape. */
+  function formatDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso || '');
+    try {
+      return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    } catch (e) {
+      return String(iso).slice(0, 10);
+    }
+  }
+
+  /*
+   * THE RECORD CARD, SHAPED LIKE AN EVENT CARD. Ali, 2026-09-06: "I would like
+   * to have cards instead. Can we make them look like Event cards and use the
+   * picture."
+   *
+   * Picture first, then a line of context, then the title, then the summary -
+   * the order the portal's event cards already use, because a reader scanning a
+   * grid recognises the shape before they read a word of it.
+   *
+   * THE WHOLE CARD IS THE LINK, not a button at the bottom. An event card offers
+   * "Register" because registering is a different act from reading about it; a
+   * record has only one thing you can do with it, so making the reader aim at a
+   * small target to do the only available action is a tax with no purpose.
+   */
+  /* The builder, as words. `builtBy` is a controlled vocabulary and
+     `organizationLabel` has ALREADY passed consent resolution on the server -
+     by the time it reaches this file it is a name the person agreed to, a
+     descriptor, or null. Nothing here re-decides that. */
+  function builderLabel(record) {
+    if (record.builtBy) return humanize(record.builtBy);
+    if (record.organizationLabel) return record.organizationLabel;
+    return '';
+  }
+
+  function card(record) {
+    var a = document.createElement('a');
+    a.className = 'record-card';
+    /* THE RECORD PAGE IS ON THIS DOMAIN. This used to link to the platform,
+       which threw a reader browsing one brand onto another company's site
+       halfway through their own journey. */
+    a.href = DETAIL_BASE + encodeURIComponent(record.slug) + '/';
+
+    /* The cover, when the record has one that survived artifact approval. A card
+       with no picture keeps the same shape rather than collapsing, so a grid of
+       mixed records still reads as one row of objects. */
+    var media = make('div', 'record-media');
+    if (record.heroImageUrl) {
+      var img = document.createElement('img');
+      img.src = record.heroImageUrl;
+      /* Decorative HERE and only here: the title sits directly beneath it in the
+         same link, so a screen reader that announced both would say the record
+         name twice. The record page gives this image its real alt text. */
+      img.alt = '';
+      img.loading = 'lazy';
+      media.appendChild(img);
+    } else {
+      media.setAttribute('data-empty', 'true');
+    }
+    a.appendChild(media);
+
+    var body = make('div', 'record-body');
+
+    /* The event card's date line, in the place a reader already looks for
+       context. A record's equivalent is what it is ABOUT plus when it went up. */
+    var meta = [];
+    if (record.primaryCapability) meta.push(humanize(record.primaryCapability));
+    if (record.publishedAt) meta.push(formatDate(record.publishedAt));
+    if (meta.length) body.appendChild(make('p', 'record-meta', meta.join(' · ')));
+
+    body.appendChild(make('h3', 'record-title', record.title));
+    if (record.standfirst) body.appendChild(make('p', 'record-summary', record.standfirst));
+
+    /* WHO BUILT IT, on the card rather than one click inside it. The server
+       decides this value, and it is the record's own answer wherever the record
+       has one - a surface only fills a blank (see `defaultBuiltBy`). So the line
+       below can be read literally: it never says this brand built something
+       another brand's team delivered. */
+    var byline = builderLabel(record);
+    if (byline) body.appendChild(make('p', 'record-byline', 'Built by ' + byline));
+
+    var foot = make('div', 'record-foot');
+    if (record.verificationClass) {
+      foot.appendChild(make('span', 'record-verify', record.verificationClass));
+    }
+    foot.appendChild(make('span', 'record-cta', 'Read the record'));
+    body.appendChild(foot);
+
+    a.appendChild(body);
+    return a;
+  }
   function renderCloud(state) {
     if (!el.cloud || !facets) return;
     var terms = [];
