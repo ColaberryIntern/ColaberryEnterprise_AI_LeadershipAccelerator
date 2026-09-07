@@ -107,6 +107,33 @@
             );
           }
           if (window.rfxTrack) window.rfxTrack('form_submit', { form: entry });
+
+          /*
+            HAND OFF TO THE INTERVIEW, IF THIS FORM OPENS ONE.
+
+            `/api/leads/ingest` returns `raw_payload_id`, and that is the token the
+            interview is keyed on - so the form, the conversation and the stored
+            record all hang off one identity for one person, with no second session.
+
+            Dispatched as an event rather than called directly: this file's job is
+            capturing a lead, and it should not know what happens next. A page with
+            no interview script listening simply shows the thank-you, which is what
+            every other form on the site does.
+          */
+          var opensInterview = form.hasAttribute('data-interview');
+          var token = result.body && result.body.raw_payload_id;
+          if (opensInterview && token) {
+            document.dispatchEvent(new CustomEvent('cpn:lead-captured', {
+              detail: {
+                entry: entry,
+                token: token,
+                // Their own words, which become the interview's opening turn.
+                firstMessage: (form.querySelector('[name="message"]') || {}).value || '',
+              },
+            }));
+            return;
+          }
+
           if (status) {
             status.textContent = thanks;
             status.setAttribute('data-state', 'ok');

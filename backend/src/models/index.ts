@@ -217,6 +217,7 @@ import EntryPoint from './EntryPoint';
 import FormDefinition from './FormDefinition';
 import RoutingRule from './RoutingRule';
 import RawLeadPayload from './RawLeadPayload';
+import ScholarshipInterview from './ScholarshipInterview';
 
 // Anthropic Intelligence Layer (L1 + L2)
 import AnthropicContentRegistry from './AnthropicContentRegistry';
@@ -262,6 +263,8 @@ LeadSource.hasMany(Lead, { foreignKey: 'source_id', as: 'leads' });
 Lead.belongsTo(EntryPoint, { foreignKey: 'entry_point_id', as: 'entryPoint', onDelete: 'SET NULL' });
 EntryPoint.hasMany(Lead, { foreignKey: 'entry_point_id', as: 'leads' });
 
+ScholarshipInterview.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead', onDelete: 'CASCADE' });
+Lead.hasMany(ScholarshipInterview, { foreignKey: 'lead_id', as: 'scholarshipInterviews' });
 RawLeadPayload.belongsTo(Lead, { foreignKey: 'resulting_lead_id', as: 'lead', onDelete: 'SET NULL' });
 Lead.hasMany(RawLeadPayload, { foreignKey: 'resulting_lead_id', as: 'rawPayloads' });
 
@@ -1413,6 +1416,7 @@ export {
   FormDefinition,
   RoutingRule,
   RawLeadPayload,
+  ScholarshipInterview,
   AiCompany,
   CompanyGoal,
   DepartmentKpi,

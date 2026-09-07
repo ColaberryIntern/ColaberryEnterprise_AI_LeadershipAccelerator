@@ -796,6 +796,66 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .status[data-state="error"] { color: var(--danger); }
 
 /* ---------------------------------------------------------------------------
+   The scholarship interview.
+
+   Deliberately NOT styled as a messaging app. No avatars, no bubbles with tails,
+   no typing dots. This is a person telling a nonprofit what they want to do with
+   their life, and dressing it as a chat client makes it feel less consequential
+   than it is. Two clearly attributed columns of text, and a reply box.
+   --------------------------------------------------------------------------- */
+.interview {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 8px);
+  padding: var(--space-8);
+  box-shadow: var(--shadow);
+  max-width: var(--measure);
+  margin-top: var(--space-6);
+}
+.interview h2 { font-size: var(--fs-h3); margin: var(--space-4) 0 var(--space-3); }
+.interview > .note { margin-bottom: var(--space-6); }
+
+.iv-log { display: flex; flex-direction: column; gap: var(--space-4); }
+.iv-log:empty { display: none; }
+
+.iv-turn { display: flex; flex-direction: column; gap: var(--space-1); }
+.iv-turn p { margin: 0; max-width: none; }
+
+/* Attribution is a label, not a colour: it has to survive greyscale, and it has
+   to be read out rather than inferred from which side a bubble sits on. */
+.iv-who {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.iv-assistant .iv-who { color: var(--accent); }
+.iv-user p {
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+}
+.iv-thinking p { color: var(--fg-muted); font-style: italic; }
+
+.iv-form { margin-top: var(--space-6); }
+.iv-label {
+  /* Present for a screen reader, absent for everyone else: the placeholder and
+     the conversation above it already say what this box is for. */
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.iv-send { margin-top: var(--space-4); width: 100%; }
+.iv-send:disabled { opacity: 0.55; cursor: progress; }
+.iv-note:not(:empty) {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+/* ---------------------------------------------------------------------------
    Closing block. A tinted panel, from the prototype's final call to action.
    --------------------------------------------------------------------------- */
 .closing {
