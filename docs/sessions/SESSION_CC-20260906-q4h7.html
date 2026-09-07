@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, September 6, 2026 at 5:55 PM</div>
-    <div><span class="sid">CC-20260906-q4h7</span><span class="count">5 changes</span></div>
+    <div class="meta">Generated Monday, September 7, 2026 at 5:36 AM</div>
+    <div><span class="sid">CC-20260906-q4h7</span><span class="count">6 changes</span></div>
   </header>
   <main>
     
@@ -132,6 +132,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**Proved broken before proving fixed.** Both endpoints returned HTTP 400 `Unknown or inactive entry point` beforehand. After the seed, all three CPN entry points return `Missing required field(s): email` instead — which resolves the entry point while creating no lead, so the fix is proven end to end without writing test data into production. DB confirms `domain=opportunitylift.org` and three active entry points with active form definitions (`scholarship_interest` at v3 for the new phone/city_state map). The full browser harness was re-run against the **live origin** through Cloudflare at 360 and 1440 in a real browser: all seven pages, correct h1 on each, all three forms present, no contrast failure, no horizontal overflow, no table cell offscreen, no console errors, no failed requests, no forbidden copy. Live CSS confirmed to carry the `.nav a:not(.btn)` contrast fix at its content-hashed URL.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**A page rendering is not a form working, and only the static half of this deploy was self-verifying.** The nginx build ships the markup, so the pages looked completely correct while two of the three things they exist to do were broken — and nothing on the page said so. The guard test catches an unseeded entry point at build time; nothing catches an unseeded entry point at *deploy* time, because the seed is a separate manual step nobody is prompted to take. **The seeder touched seven sources, not one.** It supersedes any form definition whose JSON differs from the file, so five other brands got new active form-definition versions. Nothing was destroyed - superseded rows are marked inactive rather than deleted - and `ai-flotation`, `refactored` and `colaberry` entry points were each probed afterwards and still resolve, with `request_demo_form` correctly still requiring email *and* company. **A file was uploaded to the prod host and then not used:** the first plan was to patch only the compiled seed into the running container, which the auto-mode classifier blocked; the stray `/tmp` file was removed, and the container&#39;s `dist` is its image&#39;s, not hand-patched.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**OpportunityLift: adopt the prototype&#39;s format, without adopting its placeholder data**</h2>
+          <span class="badge">2026-09-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali, on the live site: &quot;Overall the prototype design looks much better. In terms of format, can we get closer to the design.&quot; The prototype&#39;s format is now implemented: an announcement strip, a sticky masthead, a two-column hero with a card in the right half, fluid display type (`--fs-display`, above the token scale&#39;s 54px ceiling), a four-across proof strip, two-column section heads, numbered cards with the numeral in the display face, a **full-bleed accent band**, tinted figure blocks, pill buttons with a hard offset shadow, a tinted closing block and an **inverted four-column footer**. The hero&#39;s right half had been empty and the status panel was in a lonely box below it; the panel is now the hero card, which is what that column was drawn for. Two new surface groups (`--band-*`, `--foot-*`) are declared as tokens for both themes rather than painted inline. **None of the prototype&#39;s illustrative content came across** - no invented scholar, no mock dashboards, no agent grid - so the site gained the format and no new claims.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">All checks pass across 7 routes x 4 viewports x light/dark under the local harness; boundary validator OK, 14 files; build clean. The hero&#39;s two buttons were **measured** onto one row at 1440 and 1920 rather than eyeballed, after the first attempt wrapped them.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The harness reported 32 contrast failures that were all false, and the bug was in the harness.** `color-mix()` makes Chromium compute a background as `color(srgb 1 0.99 0.97 / 0.92)` - channels 0-1, where `rgb()` is 0-255 - so the parser read near-white as near-black and flagged the nav at 2.39:1 against a ground that is actually `#FFFDF8`. Fixed by parsing both syntaxes and by **compositing translucent layers** instead of stopping at the first painted one, which a sticky translucent header requires. The loosened parser was then re-proven against the original nav bug and still reports it at 1.00:1, so the fix removed the false positive without blinding the check. **A second real defect was found by looking, not by measuring, for the third time on this site.** On the accent band `.btn-primary` inverts to `--band-fg`; inside the band&#39;s white card that is white-on-white, so the primary action lost its fill entirely and rendered as bare green text. Contrast was 6.5:1 and every check passed - the failure was not legibility but that a button stopped looking like a button. The harness now compares each filled button&#39;s own background against the surface behind it, proven to bite at delta 0.</span></div>
           
         </div>
       </article>
