@@ -59,9 +59,18 @@ export async function resolveEventsRail(_ctx: RailContext, now: Date = new Date(
       stamp: soon ? stampFor(e.starts_at) : dateStamp(e.starts_at),
       // Registration happens in Eventbrite, exactly as the Events page says. We
       // link out rather than pretending to register somebody from a tile.
+      //
+      // THE FALLBACK CARRIES THE EVENT ID. It used to be a bare `/portal/events`,
+      // which made this the only rail in the set that dropped its identifier:
+      // community sends `?post=`, portfolio `?artifact=`, rooms `/rooms/<id>`,
+      // cert-prep `?start=`. "See details" therefore landed you on a list of
+      // every event with the one you had just clicked nowhere in particular -
+      // the exact "a tile that only navigated to an index would have moved the
+      // problem rather than solved it" failure this feature's own contract
+      // warns against, in the one rail that did it.
       action: e.registration_url
         ? { label: i === 0 ? 'Register' : 'Register', href: e.registration_url, kind: i === 0 ? 'primary' : 'quiet' }
-        : { label: 'See details', href: '/portal/events', kind: 'quiet' },
+        : { label: 'See details', href: `/portal/events?event=${encodeURIComponent(e.id)}`, kind: 'quiet' },
       featured: i === 0,
     };
   });

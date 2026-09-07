@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import { fetchPublicEvents, OpenHouseView } from '../../../services/onboardingApi';
@@ -70,12 +71,26 @@ export function groupByMonth(events: OpenHouseView[]): Array<{ key: string; labe
   return out;
 }
 
-const EventCard: React.FC<{ ev: OpenHouseView }> = ({ ev }) => {
+/**
+ * @param focused The visitor arrived on `?event=<id>` naming this card. It is
+ *   scrolled into view, marked, and shows its description IN FULL rather than
+ *   the list's truncation - "open the thing", not "land near the thing".
+ */
+const EventCard: React.FC<{ ev: OpenHouseView; focused?: boolean }> = ({ ev, focused = false }) => {
   // An Eventbrite CDN URL can 404 or be blocked; fall back to the lettered tile
   // rather than leaving a broken-image frame in the grid.
   const [imgBroken, setImgBroken] = useState(false);
   const blurb = truncateBlurb(ev.description);
   const showImage = Boolean(ev.image_url) && !imgBroken;
+
+  // Only ever fires when `focused` flips true, so a reader who scrolls away
+  // after arriving is never yanked back by an unrelated re-render.
+  const ref = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (focused) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focused]);
+
+  const full = focused && Boolean(ev.description);
   // Badge only a real, positive count. `null` means the count is unknown (the
   // Postgres fallback has no attendee mirror) and 0 is true but reads as a
   // discouraging "nobody is coming" on the 40-odd events that are simply new —
@@ -84,7 +99,15 @@ const EventCard: React.FC<{ ev: OpenHouseView }> = ({ ev }) => {
   const showSignups = typeof ev.signup_count === 'number' && ev.signup_count > 0;
 
   return (
-    <article className={ev.is_registered ? 'evt-card is-registered' : 'evt-card'}>
+    <article
+      ref={ref}
+      className={[
+        'evt-card',
+        ev.is_registered ? 'is-registered' : '',
+        focused ? 'is-focused' : '',
+      ].filter(Boolean).join(' ')}
+      aria-current={focused ? 'true' : undefined}
+    >
       <div className="evt-thumb">
         {showImage ? (
           <img
@@ -122,10 +145,10 @@ const EventCard: React.FC<{ ev: OpenHouseView }> = ({ ev }) => {
             )}
           </p>
         )}
-        {blurb.text && (
+        {(full ? ev.description : blurb.text) && (
           <p className="evt-blurb">
-            {blurb.text}
-            {blurb.cut && <span className="evt-ellipsis"> ...</span>}
+            {full ? ev.description : blurb.text}
+            {!full && blurb.cut && <span className="evt-ellipsis"> ...</span>}
           </p>
         )}
       </div>
@@ -150,6 +173,20 @@ const EventCard: React.FC<{ ev: OpenHouseView }> = ({ ev }) => {
 };
 
 const EventsPage: React.FC = () => {
+  /**
+   * `?event=<id>` names the event the visitor asked for, from a classroom rail
+   * tile or the Today strip. Both used to link to a bare `/portal/events`,
+   * which dropped the identifier and left somebody who had just clicked one
+   * event looking at a list of forty.
+   *
+   * The param is KEPT rather than consumed. ClassroomPage deletes its `?open=`
+   * because opening a card is a one-shot action, but an event is a place: this
+   * URL is worth sharing and worth surviving a refresh, and the card staying
+   * open on reload is the correct behaviour rather than a leak.
+   */
+  const [searchParams] = useSearchParams();
+  const focusedEventId = searchParams.get('event');
+
   const [events, setEvents] = useState<OpenHouseView[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -225,7 +262,9 @@ const EventsPage: React.FC = () => {
           <section className="evt-month" key={m.key}>
             <h2 className="evt-month-label">{m.label}</h2>
             <div className="evt-grid">
-              {m.items.map((ev) => <EventCard ev={ev} key={ev.id} />)}
+              {m.items.map((ev) => (
+                <EventCard ev={ev} key={ev.id} focused={ev.id === focusedEventId} />
+              ))}
             </div>
           </section>
         ))}
