@@ -456,27 +456,19 @@ describe('§40 — surface isolation', () => {
     expect((await request(app).get(detailUrl())).status).toBe(404);
   });
 
-  it('a Training-only publication is invisible to Enterprise, and the gate refuses Training today', async () => {
-    const { caseStudyId, snapshotId } = await approvedRecord();
+  it('a Training-only publication is invisible to Enterprise', async () => {
+    const { caseStudyId } = await approvedRecord();
 
-    // Phase 1: only `enterprise` is publishable, so the Training row cannot be
-    // created through the service at all.
-    const refused = await publishCaseStudy({ caseStudyId, surfaceKey: 'training', actor: ACTOR })
-      .catch((e: unknown) => e);
-    expect((refused as { details: { codes?: readonly string[] } }).details.codes)
-      .toEqual(['surface_not_publishable']);
-
-    // The row a future Training renderer WOULD write, inserted directly. The
-    // Enterprise API must not see it — the surface scope is what keeps the two
-    // audiences apart, and this is the only way to test it before Training ships.
-    db.publications.seed({
-      case_study_id: caseStudyId, surface_key: 'training', status: 'published',
-      published_snapshot_id: snapshotId, featured: false, featured_rank: null,
-      surface_title_override: null, surface_summary_override: null,
-      published_at: new Date('2026-08-22T10:00:00.000Z'),
-      created_at: new Date('2026-08-22T10:00:00.000Z'),
-      updated_at: new Date('2026-08-22T10:00:00.000Z'),
+    // Training went live on 2026-09-06 with training.colaberry.com's
+    // /student-projects page, so this row is now created THE REAL WAY — through
+    // the service, past the gate — where it used to be seeded directly because
+    // the gate refused the surface. That makes the isolation assertion below
+    // stronger rather than weaker: it is now testing a row the production path
+    // actually produces, not a hand-built approximation of one.
+    const published = await publishCaseStudy({
+      caseStudyId, surfaceKey: 'training', actor: ACTOR,
     });
+    expect(published.surfaceKey).toBe('training');
 
     expect((await request(app).get(LIST)).body.items).toEqual([]);
     expect((await request(app).get(detailUrl())).status).toBe(404);

@@ -901,12 +901,20 @@ describe('AC9 — an unverified production / ROI / outcome claim exists', () => 
  * said so - "the other surfaces exist so that adding one later is a publication
  * row rather than a schema change".
  *
- * The boundary still exists and is still tested. `training` and `refactored`
- * have no page to appear on, so they stay refused, and the two tests below are
- * what stop the allowed list quietly growing to everything.
+ * The boundary still exists and is still tested. Training joined the publishable
+ * list on 2026-09-06 when training.colaberry.com got its /student-projects page,
+ * so `refactored` is now the last surface with nowhere to appear, and it carries
+ * the refusal case on its own.
+ *
+ * THAT IS THE POINT OF THESE TESTS, not an inconvenience in them. Each time a
+ * surface goes live one of them fails, which is a deliberate stop-and-look: a
+ * surface becomes publishable only alongside a real page, and the allowed list
+ * cannot quietly grow to everything while nobody notices. When `refactored`
+ * ships, replace it here rather than deleting the case - the boundary must keep
+ * being asserted by something.
  */
 describe('AC13 — surface control', () => {
-  it.each(['training', 'refactored'] as const)(
+  it.each(['refactored'] as const)(
     'accepts "%s" in the contract and refuses it at the gate', (surfaceKey) => {
       const decision = evaluate({ surfaceKey });
       expect(decision.allowed).toBe(false);
@@ -916,7 +924,7 @@ describe('AC13 — surface control', () => {
     },
   );
 
-  it.each(['enterprise', 'ai-flotation'] as const)(
+  it.each(['enterprise', 'ai-flotation', 'training'] as const)(
     'raises no surface blocker for "%s", which has a page to appear on', (surfaceKey) => {
       const decision = evaluate({ surfaceKey });
       expect(withCode(decision, 'surface_not_publishable')).toEqual([]);
@@ -926,7 +934,7 @@ describe('AC13 — surface control', () => {
   it('refuses the non-enterprise surface through the service too, before any write', async () => {
     const { caseStudyId } = seedPublishable();
     await expect(publishCaseStudy({
-      caseStudyId, surfaceKey: 'training', actor: 'ali@colaberry.com',
+      caseStudyId, surfaceKey: 'refactored', actor: 'ali@colaberry.com',
     })).rejects.toMatchObject({ error_class: 'PublishBlocked' });
     expect(publications.writes).toBe(0);
   });
@@ -960,7 +968,7 @@ describe('the refusal is actionable and complete', () => {
       ...content.repositories![0], visibility: 'private', allowPublicRepoLink: true,
     }];
     const decision = evaluate({
-      surfaceKey: 'training',
+      surfaceKey: 'refactored',
       record: { status: 'draft', organizationIdentityMode: 'named' },
       content,
     });
@@ -1004,7 +1012,7 @@ describe('the refusal is actionable and complete', () => {
 
     const inputs: Array<Parameters<typeof evaluate>[0]> = [
       // surface_not_publishable + case_study_not_approved + snapshot_not_approved
-      { record: { status: 'draft' }, surfaceKey: 'training', noSnapshot: true },
+      { record: { status: 'draft' }, surfaceKey: 'refactored', noSnapshot: true },
       // metric_pending
       { content: bend((c) => { (c.heroMetrics as any)[0].verification = { class: 'pending', method: 'repo' }; }) },
       // organization_consent
@@ -1291,7 +1299,7 @@ describe('the publish path mutates nothing it does not own', () => {
     await publishCaseStudy({ caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
     await unpublishCaseStudy({ caseStudyId, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
     await expect(publishCaseStudy({
-      caseStudyId, surfaceKey: 'training', actor: 'ali@colaberry.com',
+      caseStudyId, surfaceKey: 'refactored', actor: 'ali@colaberry.com',
     })).rejects.toBeInstanceOf(CaseStudyPublicationError);
 
     for (const [name, model] of Object.entries(foreign)) {
