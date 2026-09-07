@@ -91,6 +91,12 @@ jobs:
         run: npx jest -c jest.ci.config.ts --ci
 
   guards:
+    # DO NOT RENAME. This job also runs the Explorer copy lint now, so the name
+    # reads short — but "Secret scan + route-auth lint" is a REQUIRED status
+    # check on main (branch protection, verified 2026-09-07). Renaming the job
+    # renames the check, main then waits forever on a context that no longer
+    # reports, and every PR is blocked until someone edits branch protection.
+    # The stale name is deliberate; update protection first if it must change.
     name: Secret scan + route-auth lint
     runs-on: ubuntu-latest
     steps:
@@ -102,6 +108,15 @@ jobs:
         run: node scripts/secret-scan.js
       - name: Admin route-auth lint
         run: node scripts/lint-route-auth.js
+      # Explorer copy lint (plan §11.4, the April-14 rule). The self-test runs
+      # FIRST and as its own step: the lint's patterns are the thing being
+      # trusted here, and a matcher that has silently stopped matching reports
+      # a clean pass over copy it never read. Its first draft did exactly that
+      # — 1 value scanned instead of 77 — so this ordering is not ceremony.
+      - name: Explorer copy lint self-test
+        run: node scripts/lint-explorer-copy.js --self-test
+      - name: Explorer copy lint
+        run: node scripts/lint-explorer-copy.js
 
   security-scan:
     name: Static security scan
