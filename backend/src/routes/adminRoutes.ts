@@ -6,6 +6,7 @@ import { caseStudySurfaceLabGate } from '../middlewares/caseStudySurfaceLabGate'
 import authRoutes from './admin/authRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import peopleRoutes from './admin/peopleRoutes';
+import personProfileRoutes from './admin/personProfileRoutes';
 import leadRoutes from './admin/leadRoutes';
 import organizationRoutes from './admin/organizationRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
@@ -117,6 +118,7 @@ router.use(auditMiddleware);
 router.use(mgmtSectionGate);
 router.use(authRoutes);
 router.use(cohortRoutes);
+router.use(personProfileRoutes);
 router.use(peopleRoutes);
 router.use(leadRoutes);
 router.use(organizationRoutes);
