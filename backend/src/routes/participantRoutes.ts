@@ -152,7 +152,8 @@ router.get('/api/portal/classroom/rails', requireParticipant, async (req, res) =
   try {
     const { getClassroomRails } = await import('../services/classroom/rails');
     const { deriveProgramWeek } = await import('../services/certPrep/certAvailabilityService');
-    const enrollment: any = await Enrollment.findByPk(req.participant!.sub, {
+    const { default: EnrollmentModel } = await import('../models/Enrollment');
+    const enrollment: any = await EnrollmentModel.findByPk(req.participant!.sub, {
       include: [{ association: 'cohort', required: false }],
     });
     // The week the student is actually in, derived server-side from the cohort

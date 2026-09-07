@@ -39,7 +39,7 @@ const transporter = env.mandrillApiKey
  * switch state cannot be read (a transient settings-DB error must not halt all transactional
  * mail). Returns a SentMessageInfo-shaped stub when blocked so callers keep working.
  */
-async function guardedSendMail(options: nodemailer.SendMailOptions): Promise<nodemailer.SentMessageInfo> {
+export async function guardedSendMail(options: nodemailer.SendMailOptions): Promise<nodemailer.SentMessageInfo> {
   if (await isKillSwitchActive()) {
     const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
     console.warn(`[Email] BLOCKED by kill switch — not sending to ${redactForLogs(to)} (subject: ${options.subject ?? ''})`);
@@ -138,7 +138,7 @@ export async function resolveDeliveryAddress(intended: string): Promise<string> 
   return (await resolveTestRedirect()) ?? intended;
 }
 
-async function resolveEmailRecipient(
+export async function resolveEmailRecipient(
   intended: string,
   subject: string
 ): Promise<{ to: string; subject: string }> {
@@ -160,7 +160,7 @@ async function getAdminRecipients(): Promise<string> {
   return env.emailFrom;
 }
 
-function htmlToPlainText(html: string): string {
+export function htmlToPlainText(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -179,7 +179,7 @@ function htmlToPlainText(html: string): string {
     .trim();
 }
 
-function emailHeaders(tag: string) {
+export function emailHeaders(tag: string) {
   return {
     'List-Unsubscribe': `<mailto:${env.emailFrom}?subject=unsubscribe>`,
     'X-MC-Tags': tag,
