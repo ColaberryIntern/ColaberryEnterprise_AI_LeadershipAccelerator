@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import Modal from '../../components/ui/Modal';
-import CampaignGraphTab from '../../components/admin/intelligence/entityPanel/CampaignGraphTab';
+import OutreachJourneyFlow from '../../components/admin/campaigns/journey/OutreachJourneyFlow';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 
@@ -260,21 +260,12 @@ function AdminCampaignsPage() {
         </li>
       </ul>
 
-      {/* Campaign Intelligence Graph — full viewport */}
-      {activeTab === 'intelligence' && (
-        <div style={{ height: 'calc(100vh - 220px)', minHeight: 400 }}>
-          <SectionCard
-            title="Campaign Intelligence Graph"
-            actions={<span className="text-muted" style={{ fontSize: '0.65rem' }}>Click nodes for details</span>}
-            padded={false}
-            className="d-flex flex-column"
-          >
-            <div className="p-0" style={{ flex: '1 1 0', minHeight: 0, height: '100%' }}>
-              <CampaignGraphTab fullWidth />
-            </div>
-          </SectionCard>
-        </div>
-      )}
+      {/* Outreach Journey Flow.
+          Brings its own SectionCard and its own controls, so the fixed-height
+          viewport wrapper the force graph needed is gone: a Sankey plus its table,
+          KPI strip and insight rail is a page that scrolls, not a canvas that must
+          be sized to the window. */}
+      {activeTab === 'intelligence' && <OutreachJourneyFlow />}
 
       {/* Campaign List Tab */}
       {activeTab === 'campaigns' && (

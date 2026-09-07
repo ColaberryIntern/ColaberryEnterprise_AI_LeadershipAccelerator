@@ -447,6 +447,9 @@ export interface CampaignGraphNode {
     velocity?: NodeVelocityMetrics;
   };
   source_breakdown?: Record<string, number>;
+  /** Present on `campaign` nodes only. Absent elsewhere by design, not by omission. */
+  brand_id?: string;
+  brand_name?: string;
 }
 
 export interface CampaignGraphEdge {
@@ -473,12 +476,24 @@ export interface CampaignGraphValidation {
   warnings: string[];
 }
 
+export interface BrandSummary {
+  brand_id: string;
+  brand_name: string;
+  /** false for the "Unattributed" bucket, which is a gap rather than a brand. */
+  attributed: boolean;
+  campaign_count: number;
+  lead_count: number;
+}
+
 export interface CampaignGraphData {
   nodes: CampaignGraphNode[];
   edges: CampaignGraphEdge[];
   validation?: CampaignGraphValidation;
   time_window?: string;
   timeline_buckets?: TimelineBucket[];
+  /** Always the brands of the UNFILTERED window, so the selector keeps its options. */
+  brands?: BrandSummary[];
+  brand_filter?: string | null;
 }
 
 export interface GraphUserRecord {
@@ -504,12 +519,16 @@ const adminHeaders = () => ({
   headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
 });
 
-export const getCampaignGraph = (timeWindow?: string, timeline?: boolean) =>
+export const getCampaignGraph = (timeWindow?: string, timeline?: boolean, brandId?: string | null) =>
   axios.get<CampaignGraphData>('/api/admin/campaign-intelligence/graph', {
     ...adminHeaders(),
     params: {
       ...(timeWindow && timeWindow !== 'all' ? { timeWindow } : {}),
       ...(timeline ? { timeline: 'true' } : {}),
+      // Omitted rather than sent empty when no brand is selected, so the server
+      // sees the same request the unfiltered call has always made and keeps using
+      // its cache.
+      ...(brandId ? { brandId } : {}),
     },
   });
 
