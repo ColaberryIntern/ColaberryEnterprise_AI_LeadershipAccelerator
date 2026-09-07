@@ -1,6 +1,9 @@
 const mockGetLatestStudentAssessment = jest.fn();
 jest.mock('../../studentHealthAssessment', () => ({ getLatestStudentAssessment: (...a: any[]) => mockGetLatestStudentAssessment(...a) }));
 
+const mockGetChecklistForSubject = jest.fn();
+jest.mock('../../checklist/checklistLookup', () => ({ getChecklistForSubject: (...a: any[]) => mockGetChecklistForSubject(...a) }));
+
 import { getReeseHealthAssessmentHighlight } from '../reeseHealthAssessmentHighlights';
 
 function assessment(overrides: any = {}) {
@@ -16,6 +19,10 @@ function assessment(overrides: any = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default: no checklist instance recorded for this assessment — fail-open,
+  // matches assessmentChecklist.ts's own posture. Existing tests below never
+  // set this up, so this default keeps them passing unchanged.
+  mockGetChecklistForSubject.mockResolvedValue(null);
 });
 
 describe('getReeseHealthAssessmentHighlight', () => {
@@ -67,5 +74,52 @@ describe('getReeseHealthAssessmentHighlight', () => {
     const block = await getReeseHealthAssessmentHighlight('enrollment-1');
 
     expect(block).toBe('');
+  });
+
+  describe('Capability 6 gate', () => {
+    it('a notable status with an INCOMPLETE, non-bypassed checklist is suppressed — Reese must not act on it', async () => {
+      mockGetLatestStudentAssessment.mockResolvedValue(assessment({ status: 'at_risk' }));
+      mockGetChecklistForSubject.mockResolvedValue({ complete: false, bypassed_at: null });
+
+      const block = await getReeseHealthAssessmentHighlight('enrollment-1');
+
+      expect(block).toBe('');
+    });
+
+    it('a notable status with a COMPLETE checklist renders normally', async () => {
+      mockGetLatestStudentAssessment.mockResolvedValue(assessment({ status: 'at_risk' }));
+      mockGetChecklistForSubject.mockResolvedValue({ complete: true, bypassed_at: null });
+
+      const block = await getReeseHealthAssessmentHighlight('enrollment-1');
+
+      expect(block).toContain('RECENT HEALTH ASSESSMENT');
+    });
+
+    it('an INCOMPLETE checklist that has been explicitly bypassed still renders — a real, audited bypass authorizes the material action', async () => {
+      mockGetLatestStudentAssessment.mockResolvedValue(assessment({ status: 'at_risk' }));
+      mockGetChecklistForSubject.mockResolvedValue({ complete: false, bypassed_at: new Date('2026-09-07T00:00:00Z') });
+
+      const block = await getReeseHealthAssessmentHighlight('enrollment-1');
+
+      expect(block).toContain('RECENT HEALTH ASSESSMENT');
+    });
+
+    it('fail-open: no checklist instance recorded at all (bookkeeping failure) never blocks the highlight', async () => {
+      mockGetLatestStudentAssessment.mockResolvedValue(assessment({ status: 'at_risk' }));
+      mockGetChecklistForSubject.mockResolvedValue(null);
+
+      const block = await getReeseHealthAssessmentHighlight('enrollment-1');
+
+      expect(block).toContain('RECENT HEALTH ASSESSMENT');
+    });
+
+    it('looks up the checklist keyed on the real assessment id, scoped to the student_assessment subject type', async () => {
+      mockGetLatestStudentAssessment.mockResolvedValue(assessment({ id: 'assessment-42', status: 'at_risk' }));
+      mockGetChecklistForSubject.mockResolvedValue({ complete: true, bypassed_at: null });
+
+      await getReeseHealthAssessmentHighlight('enrollment-1');
+
+      expect(mockGetChecklistForSubject).toHaveBeenCalledWith('student_assessment', 'assessment-42');
+    });
   });
 });

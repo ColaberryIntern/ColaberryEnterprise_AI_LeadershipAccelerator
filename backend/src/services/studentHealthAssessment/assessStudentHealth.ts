@@ -5,6 +5,7 @@ import StudentAssessment from '../../models/StudentAssessment';
 import { assembleEvidence } from './evidenceAssembly';
 import { buildAssessmentSystemPrompt, buildAssessmentUserPrompt, parseAssessmentResponse } from './assessmentPrompt';
 import { EvidenceCitation, LlmAssessmentJudgment, StudentAssessmentResult } from './types';
+import { createAssessmentChecklistInstance } from './assessmentChecklist';
 
 /**
  * studentHealthAssessment — Reese Agentic AI Employee mission, Checkpoint D
@@ -112,6 +113,19 @@ export async function assessStudentHealth(enrollmentId: string): Promise<Student
     model,
     llm_cost_usd: llmCostUsd,
   });
+
+  // Reese Agentic AI Employee mission, Capability 6 — a real, persisted
+  // checklist instance per assessment run (see assessmentChecklist.ts).
+  // Fail-open: a checklist bookkeeping failure must never break the
+  // assessment result this function's callers are waiting on.
+  try {
+    await createAssessmentChecklistInstance(row.id, snapshot, evidence, judgment, reassessmentDate);
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'studentHealthAssessment', event: 'checklist_instance_failed',
+      assessment_id: row.id, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
 
   return {
     id: row.id,
